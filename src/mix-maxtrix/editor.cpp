@@ -438,7 +438,7 @@ public:
     static constexpr float col_separation_divs = 2.5f;
     static constexpr float row_separation_divs = 1.f;
 
-    static constexpr float header_row_divs = 1 * sqr_btn_divs;
+    static constexpr float header_row_divs = 1.25f * sqr_btn_divs;
 
     static constexpr float header_sep_row_divs      = 1.;
     static constexpr float about_row_divs           = 9.;

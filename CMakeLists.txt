@@ -230,8 +230,8 @@ FetchContent_MakeAvailable (googletest)
 set (HIIR_REPO ${CMAKE_BINARY_DIR}/hiir-git)
 ExternalProject_Add(
     hiir_fetch
-    GIT_REPOSITORY https://github.com/unevens/hiir.git
-    GIT_TAG        73a7b1f1c9a50f56fe85d71313223c5d4e61e889
+    URL http://ldesoras.free.fr/src/hiir-1.33.zip
+    URL_HASH SHA256=2a354da24f20361ebd16c1d276b4d91485478f31fde9df5e6efd7ac82212bdb6
     SOURCE_DIR     "${HIIR_REPO}"
     UPDATE_COMMAND    ""
     CONFIGURE_COMMAND ""
@@ -537,6 +537,7 @@ function (add_mix_maxtrix_plugin_target target channels)
         PUBLIC
         common
         juce::juce_audio_utils
+        hiir
         mufft-all
         dragonfly
         tal_reverb2

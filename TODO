@@ -1,3 +1,10 @@
+<<<<<<< HEAD
+=======
+- TODO: When public. Add a link on the credits to the 3RD-PARTY-LICENSES file.
+
+- Check O2 vs O3 performance.
+
+>>>>>>> editor: make main LCD bigger
 - Oversampling. The heavy lifting, which was doing latency compensation, is
   done. The main problem is that thre is not enough vertical space on the GUI.
 
