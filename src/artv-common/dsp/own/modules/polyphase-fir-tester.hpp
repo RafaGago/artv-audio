@@ -49,27 +49,29 @@ public:
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
-    _up.reset (lowpass_coeffs, 2, 2);
-    _down.reset (lowpass_coeffs, 2, 2);
+    _up.reset (lowpass_coeffs, 2);
+    _down.reset (lowpass_coeffs, 2);
     _gain = 1.f;
   }
   //----------------------------------------------------------------------------
   void process_block_replacing (std::array<float*, 2> chnls, uint block_samples)
   {
     for (uint i = 0; i < block_samples; ++i) {
+      std::array<double, 2>                in = {chnls[0][i], chnls[1][i]};
       std::array<std::array<double, 2>, 2> upsampled;
-      _up.tick (upsampled[0], chnls[0][i], 0);
-      _up.tick (upsampled[1], chnls[1][i], 1);
-      chnls[0][i] = _down.tick (upsampled[0], 0) * _gain;
-      chnls[1][i] = _down.tick (upsampled[1], 1) * _gain;
+      _up.tick ({make_crange (upsampled[0]), make_crange (upsampled[1])}, in);
+      auto ret
+        = _down.tick ({make_crange (upsampled[0]), make_crange (upsampled[1])});
+      chnls[0][i] = ret[0] * _gain;
+      chnls[1][i] = ret[1] * _gain;
     }
   }
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  fir_decimator<double>    _down;
-  fir_interpolator<double> _up;
-  float                    _gain = 1.;
+  fir_decimator<double, 2>    _down;
+  fir_interpolator<double, 2> _up;
+  float                       _gain = 1.;
   //----------------------------------------------------------------------------
 };
 
