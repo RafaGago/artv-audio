@@ -82,7 +82,9 @@ endif()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set (
         ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST
-        ${ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST} -fdenormal-fp-math=positive-zero
+        ${ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST}
+        -fdenormal-fp-math=positive-zero
+        #-Rpass-analysis=loop-vectorize
         )
     if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
         list (TRANSFORM ARTV_DSP_COMPILE_OPTIONS   PREPEND "/clang:")
@@ -475,6 +477,12 @@ add_executable(
     test/common/delay_compensation_buffers.cpp
     )
 target_link_libraries (common-test PUBLIC test mufft-all wdl-fft)
+#-- Oversampr utility ----------------------------------------------------------
+add_executable(
+    oversampler-util
+    src/oversampler-util/main.cpp
+    )
+target_link_libraries (oversampler-util PUBLIC common hiir)
 #-- Mix-maxtrix ----------------------------------------------------------------
 set (MIXMAXTRIX_VERSION_MAJOR 1)
 set (MIXMAXTRIX_VERSION_MINOR 0)

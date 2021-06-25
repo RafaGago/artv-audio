@@ -17,6 +17,7 @@ enum class dsp_types {
   waveshaper,
   upsampler,
   downsampler,
+  other
 };
 
 }

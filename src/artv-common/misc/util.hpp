@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <type_traits>
+#include <vector>
 
 #include <gcem.hpp>
 

@@ -78,6 +78,9 @@
 #include "artv-common/dsp/own/modules/saturation.hpp"
 #endif
 #include "artv-common/dsp/own/modules/sound_delay.hpp"
+#if 1
+#include "artv-common/dsp/own/modules/polyphase-fir-tester.hpp"
+#endif
 
 #include "artv-common/dsp/own/modules/mix.hpp"
 #include "artv-common/juce/effect_base.hpp"
@@ -4914,10 +4917,24 @@ using saturation_params = mp_list<
   saturation_hi_cut>;
 #endif
 //------------------------------------------------------------------------------
-#define TWEAK_BUILD 0
+#if 1
+parameter_cpp_class_define (
+  polyphase_fir_test_gain,
+  n_stereo_busses,
+  param_common (
+    "Gain",
+    declptr<polyphase_fir_test>(),
+    declptr<polyphase_fir_test::gain_tag>()),
+  polyphase_fir_test::get_parameter (polyphase_fir_test::gain_tag {}),
+  slider_ext);
+
+using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
+#endif
+//------------------------------------------------------------------------------
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<transience_params>;
+using all_fx_typelists = mp_list<polyphase_fir_test_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 
