@@ -5196,8 +5196,8 @@ static constexpr char const* about_text =
 "Some code is ported from DISHTRO-ports instead of its original repos:\n"
 "https://github.com/DISTRHO/DISTRHO-Ports\n"
 "\n"
-"See accompanying 3RD-PARTY-LICENSES file.\n"
-"TODO: link to the file in the repo for this.\n"
+"For the full licenses of each used project see the 3RD-PARTY-LICENSES file:\n"
+"https://github.com/RafaGago/artv-audio/blob/master/3RD-PARTY-LICENSES.\n"
 ;
 // clang-format on
 }} // namespace artv::parameters

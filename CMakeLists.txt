@@ -1,5 +1,5 @@
 # HINT for a recent version on Debian "pip3 install cmake"
-cmake_minimum_required(VERSION 3.12.0)
+cmake_minimum_required (VERSION 3.12.0)
 
 include (FetchContent)
 include (ExternalProject)
@@ -476,9 +476,9 @@ add_executable(
     )
 target_link_libraries (common-test PUBLIC test mufft-all wdl-fft)
 #-- Mix-maxtrix ----------------------------------------------------------------
-set (MIXMAXTRIX_VERSION_MAJOR 0)
+set (MIXMAXTRIX_VERSION_MAJOR 1)
 set (MIXMAXTRIX_VERSION_MINOR 0)
-set (MIXMAXTRIX_VERSION_REV 1)
+set (MIXMAXTRIX_VERSION_REV 0)
 set (MIXMAXTRIX_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_REV}")
 
 function (add_mix_maxtrix_plugin_target target channels)

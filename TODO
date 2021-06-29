@@ -1,24 +1,20 @@
-- TODO: When public. Add a link on the credits to the 3RD-PARTY-LICENSES file.
-
 - Oversampling. The heavy lifting, which was doing latency compensation, is
-  done.
+  done. The main problem is that thre is not enough vertical space on the GUI.
 
-- Still unfixed memory leaks on TAL Reverb 2's original code (mix-maxtrix-test
+- Still unfixed memory leaks on original TAL Reverb 2's code (mix-maxtrix-test
   catches them).
 
-- Compressors. Use discrete ratios by using parameterchoice(?).
-
-- Upwards compressor with clipper.
-
-- Channel labels. Añadir a presets.
+- Channel labels (?).
 
 - Now that latency compensation is implemented, plugins like Sonic Anomaly's
-  Bass Professor mkII and VOLA are viable and many that I ignored because of
-  high latencies are suitable again.
+  Bass Professor mkII and VOLA are viable. Many that I ignored because of
+  latencies are suitable again.
 
 - Free Clip/Peak Eater (?). https://gitlab.com/JHVenn/Free-Clip
 
 - Saike Space on FM Filter 2 (?).
+
+- Upwards compressor with clipper.
 
 - Variation of the filters module with envelope follower on the cutoff.
 
@@ -33,11 +29,10 @@
    with uppercase?)
 
 - EQ:
-  -analog reeq bands (?).
-  -Big booty + exciter on EQ?
+  -Port analog reeq bands (?).
 
-- Atlantis crashes sometimes when changing FX. (Fixed? Not found in a long
-  while, generate again (?))
+- Atlantis crashes sometimes when changing FX. (Automatically fixed? Not found
+  in a long while)
 
 - If worth, performance optimizations. Math operations on fast paths, suboptimal
   memory layouts as on Ripple phaser. Vectorizations, Use the FMA intrinsic on
