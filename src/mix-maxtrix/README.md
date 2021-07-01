@@ -162,7 +162,7 @@ Modulation
 Reverb
 -------
 
-- Atlantis Reverb: By "Lubomir I. Ivanov". Ported from JSFX.
+- Atlantis Reverb: By "Geraint Luff". Ported from JSFX.
 
 - Dragonfly Early: By "Michael Willis".
 
