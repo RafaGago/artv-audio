@@ -395,7 +395,7 @@ public:
     float width  = height * ratio;
     if (width > area.getWidth()) {
       width  = factor * (float) area.getWidth();
-      height = width / factor;
+      height = width / ratio;
     }
     setSize (width, height);
   }
