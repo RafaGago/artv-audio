@@ -382,9 +382,22 @@ public:
     }
 
     // size
+    constexpr float ratio  = sizes::w_divs / sizes::h_divs;
+    constexpr float factor = 0.9f;
+
     setResizable (true, true);
-    getConstrainer()->setFixedAspectRatio (sizes::w_divs / sizes::h_divs);
-    setSize (sizes::w_divs * 10, sizes::h_divs * 10);
+    getConstrainer()->setFixedAspectRatio (ratio);
+    auto area = juce::Desktop::getInstance()
+                  .getDisplays()
+                  .getDisplayForPoint ({0, 0})
+                  ->userArea;
+    float height = factor * (float) area.getHeight();
+    float width  = height * ratio;
+    if (width > area.getWidth()) {
+      width  = factor * (float) area.getWidth();
+      height = width / factor;
+    }
+    setSize (width, height);
   }
   //----------------------------------------------------------------------------
   ~editor() override
