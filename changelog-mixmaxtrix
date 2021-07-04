@@ -1,0 +1,10 @@
+1.0.1
+
+- Fix wrong autorship on Atlantis Reverb (Geraint Luff).
+- Fix sometimes too big initial plugin window size.
+- Fix missing settings on the L/R M/S EQ preset.
+- Increase mixer horizontal separation.
+
+1.0.0
+
+- Initial release

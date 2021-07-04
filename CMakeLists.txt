@@ -478,9 +478,11 @@ target_link_libraries (common-test PUBLIC test mufft-all wdl-fft)
 #-- Mix-maxtrix ----------------------------------------------------------------
 set (MIXMAXTRIX_VERSION_MAJOR 1)
 set (MIXMAXTRIX_VERSION_MINOR 0)
-set (MIXMAXTRIX_VERSION_REV 0)
-set (MIXMAXTRIX_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_REV}")
-
+set (MIXMAXTRIX_VERSION_REV 1)
+set(
+    MIXMAXTRIX_VERSION
+    "${MIXMAXTRIX_VERSION_MAJOR}.${MIXMAXTRIX_VERSION_MINOR}.${MIXMAXTRIX_VERSION_REV}"
+    )
 function (add_mix_maxtrix_plugin_target target channels)
     juce_add_plugin(
         ${target}
@@ -495,7 +497,7 @@ function (add_mix_maxtrix_plugin_target target channels)
         FORMATS ${PLUGIN_FORMATS}
         NEEDS_MIDI_INPUT 0
         VST_NUM_MIDI_INS 0
-        LV2_URI https://github.com/RafaGago/artv-audio-stuff
+        LV2_URI https://github.com/RafaGago/artv-audio
         )
     target_sources(
         ${target}
