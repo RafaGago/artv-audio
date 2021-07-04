@@ -161,6 +161,10 @@ static constexpr preset presets[] = {
     <PARAM id="out_selection_07" value="1.0" />
     <PARAM id="out_selection_08" value="0.0" />
     <PARAM id="routing" value="2.0" />
+    <PARAM id="wet_balance_03" value="-100.0" />
+    <PARAM id="wet_balance_04" value="100.0" />
+    <PARAM id="wet_pan_01" value="-100.0" />
+    <PARAM id="wet_pan_02" value="100.0" />
 </params>
      )END"},
   {.name = "FX: Phased Delay",
