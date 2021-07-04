@@ -221,6 +221,7 @@ public:
     for (uint i = 0; i < _ratio; ++i) {
       auto smpl_arr = _filters[i].tick (_delay);
       for (uint c = 0; c < channels; ++c) {
+        smpl_arr[c] *= (T) _ratio; // gain loss compensation
         out[c][i] = smpl_arr[c];
       }
     }
