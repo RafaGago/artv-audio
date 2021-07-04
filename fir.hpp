@@ -8,6 +8,9 @@
 //
 // -Handrolled SSE version. Some performance might be gained if some time is
 //    spent optimizing this.
+//
+// - An up/downsampler class that reuses the filtering kernels and allocates all
+//   memory in one chunk.
 
 #include <cassert>
 

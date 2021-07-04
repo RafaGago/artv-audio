@@ -1,7 +1,7 @@
 #pragma once
 // An FX that just upsamples and downsamples. It was just useful when developing
 
-#include "artv-common/dsp/own/polyphase-fir.hpp"
+#include "artv-common/dsp/own/fir.hpp"
 
 namespace artv {
 
