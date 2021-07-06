@@ -256,8 +256,8 @@ public:
         // dry
         T dm = *c[0] + *c[1];
         T ds = *c[0] - *c[1];
-        dm *= _ms[wet].m.getNextValue();
-        ds *= _ms[wet].s.getNextValue();
+        dm *= _ms[dry].m.getNextValue();
+        ds *= _ms[dry].s.getNextValue();
         auto dl = (dm - ds) * _gain[dry].l.getNextValue();
         auto dr = (dm + ds) * _gain[dry].r.getNextValue();
         // wet
