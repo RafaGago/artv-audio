@@ -188,42 +188,42 @@ parameter_cpp_class_define (
 parameter_cpp_class_define (
   fx_mix,
   n_stereo_busses,
-  param_common ("FX Mix"),
+  param_common ("Mix"),
   dry_wet_mixer::get_parameter (dry_wet_mixer::dry_wet_ratio_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   wet_pan,
   n_stereo_busses,
-  param_common ("FX Pan"),
+  param_common ("Pan"),
   dry_wet_mixer::get_parameter (dry_wet_mixer::wet_pan_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   wet_balance,
   n_stereo_busses,
-  param_common ("FX M/S"),
+  param_common ("M/S"),
   dry_wet_mixer::get_parameter (dry_wet_mixer::wet_ms_ratio_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   dry_pan,
   n_stereo_busses,
-  param_common ("Dry Pan"),
+  param_common ("Pan"),
   dry_wet_mixer::get_parameter (dry_wet_mixer::dry_pan_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   pan,
   n_stereo_busses,
-  param_common ("Pan"),
+  param_common ("GPan"),
   dry_wet_mixer::get_parameter (dry_wet_mixer::pan_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   dry_balance,
   n_stereo_busses,
-  param_common ("Dry M/S"),
+  param_common ("M/S"),
   dry_wet_mixer::get_parameter (dry_wet_mixer::dry_ms_ratio_tag {}),
   slider_ext);
 

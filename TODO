@@ -1,6 +1,9 @@
 - Oversampling. The heavy lifting, which was doing latency compensation, is
   done. The main problem is that thre is not enough vertical space on the GUI.
 
+- Now that there are 3 FX pages. Add the missing width parameter on the
+  dragonfly reverb that is missing it.
+
 - Still unfixed memory leaks on original TAL Reverb 2's code (mix-maxtrix-test
   catches them).
 
