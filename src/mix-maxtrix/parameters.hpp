@@ -188,42 +188,42 @@ parameter_cpp_class_define (
 parameter_cpp_class_define (
   fx_mix,
   n_stereo_busses,
-  param_common ("Mix"),
+  param_common ("FX Mix"),
   dry_wet_mixer::get_parameter (dry_wet_mixer::dry_wet_ratio_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   wet_pan,
   n_stereo_busses,
-  param_common ("Pan"),
+  param_common ("FX Pan"),
   dry_wet_mixer::get_parameter (dry_wet_mixer::wet_pan_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   wet_balance,
   n_stereo_busses,
-  param_common ("M/S"),
+  param_common ("FX M/S"),
   dry_wet_mixer::get_parameter (dry_wet_mixer::wet_ms_ratio_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   dry_pan,
   n_stereo_busses,
-  param_common ("Pan"),
+  param_common ("Dry Pan"),
   dry_wet_mixer::get_parameter (dry_wet_mixer::dry_pan_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   pan,
   n_stereo_busses,
-  param_common ("GPan"),
+  param_common ("Pan"),
   dry_wet_mixer::get_parameter (dry_wet_mixer::pan_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   dry_balance,
   n_stereo_busses,
-  param_common ("M/S"),
+  param_common ("Dry M/S"),
   dry_wet_mixer::get_parameter (dry_wet_mixer::dry_ms_ratio_tag {}),
   slider_ext);
 
@@ -5036,8 +5036,11 @@ parameter_cpp_class_define (
 //------------------------------------------------------------------------------
 using channel_fx_sliders_typelist = mp11::mp_flatten<all_fx_typelists>;
 
-using channel_sliders_typelist = mp11::
-  mp_list<volume, pan, dry_pan, dry_balance, fx_mix, wet_pan, wet_balance>;
+using main_page_sliders_typelist
+  = mp11::mp_list<dry_pan, dry_balance, wet_pan, wet_balance, fx_mix, pan>;
+
+using channel_sliders_typelist
+  = mp11::mp_push_front<main_page_sliders_typelist, volume>;
 
 using global_controls_typelist = mp_list<
   global_volume,

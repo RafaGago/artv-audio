@@ -29,7 +29,7 @@
 namespace artv {
 
 // -----------------------------------------------------------------------------
-struct VerticalLine : public juce::Component {
+struct vertical_line : public juce::Component {
   //----------------------------------------------------------------------------
   bool left = true;
   //----------------------------------------------------------------------------
@@ -184,7 +184,6 @@ public:
           = std::bind (&editor::mouse_event, this, _1, _2, _3, _4);
       }
     }
-
     // setup page buttons.
     for (uint chnl = 0; chnl < _page_buttons.size(); ++chnl) {
       uint pb_size = _page_buttons[0].size();
@@ -193,14 +192,24 @@ public:
         auto& btn = _page_buttons[chnl][b];
         char  str[64];
         str[0] = 0;
-        snprintf (str, sizeof str, "Page %u", b + 1);
-        btn.setButtonText (str);
-        snprintf (str, sizeof str, "Show fx page %u", b + 1);
+        if (b == 0) {
+          // main page
+          snprintf (str, sizeof str, "Main");
+          btn.setButtonText (str);
+          snprintf (str, sizeof str, "Show channel controls");
+        }
+        else {
+          // FX page
+          snprintf (str, sizeof str, "FX %u", b);
+          btn.setButtonText (str);
+          snprintf (str, sizeof str, "Show FX params page %u", b);
+        }
+
         btn.setName (str);
         btn.setClickingTogglesState (true);
         btn.setToggleState (
           b == 0, juce::NotificationType::dontSendNotification);
-        btn.onStateChange = [=]() { on_fx_type_or_page_change (chnl, false); };
+        btn.onClick = [=]() { on_fx_type_or_page_change (chnl, b); };
         uint right = b < (pb_size - 1) ? juce::TextButton::ConnectedOnRight : 0;
         uint left  = (b != 0) ? juce::TextButton::ConnectedOnLeft : 0;
         btn.setConnectedEdges (left | right);
@@ -211,7 +220,6 @@ public:
         addAndMakeVisible (btn);
       }
     }
-
     // initialize header elements label
     _about.setLookAndFeel (&_lookfeel);
     _parameter_value_frame.setLookAndFeel (&_lookfeel);
@@ -354,8 +362,7 @@ public:
       mutesolo[i]->set_radio_group (radio_id::solo_mute_beg + i, true);
       mods[i]->set_radio_group (radio_id::stereo_cfg_beg + i, 1, 3, true);
       for (auto& btn : _page_buttons[i]) {
-        btn.setRadioGroupId (
-          radio_id::page_beg + i, juce::NotificationType::dontSendNotification);
+        btn.setRadioGroupId (radio_id::page_beg + i);
       }
     }
 
@@ -372,8 +379,8 @@ public:
     for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
       auto& combo = p_get (parameters::fx_type {})[i]->combo;
       // fx change
-      combo.onChange = [=] { on_fx_type_or_page_change (i, true); };
-      on_fx_type_or_page_change (i, true);
+      combo.onChange = [=] { on_fx_type_or_page_change (i, -1); };
+      on_fx_type_or_page_change (i, -2);
       // drag drop
       using namespace std::placeholders;
       combo.is_drag_source = true;
@@ -383,7 +390,7 @@ public:
 
     // size
     constexpr float ratio  = sizes::w_divs / sizes::h_divs;
-    constexpr float factor = 0.9f;
+    constexpr float factor = 0.75f;
 
     setResizable (true, true);
     getConstrainer()->setFixedAspectRatio (ratio);
@@ -463,11 +470,6 @@ public:
     // referencing to the width of the 4 buttons
     static constexpr float col_divs = sqr_btn_divs * btns_per_column;
 
-    static constexpr float dry_wet_knobs_slider_row_divs = col_divs / 3.;
-    static constexpr float dry_wet_knobs_label_row_divs  = sqr_btn_divs / 2.;
-    static constexpr float dry_wet_knobs_row_divs
-      = dry_wet_knobs_slider_row_divs + dry_wet_knobs_label_row_divs;
-
     static constexpr float fx_param_page_row_divs = sqr_btn_divs;
 
     static constexpr float fx_param_row_divs       = col_divs / 2.;
@@ -502,15 +504,12 @@ public:
       row_separation_divs + // margin
       fx_combobox_row_divs + // Fx
       fx_combobox_prevnext_divs + // Fx prev/next
-      dry_wet_knobs_row_divs + // Fx mod rotaries
       row_separation_divs + // margin
       fx_param_page_row_divs + //
       row_separation_divs + // margin
       fx_params_row_divs + // params
       row_separation_divs + // margin
       fader_sect_row_divs + // fader
-      row_separation_divs + // margin
-      dry_wet_knobs_row_divs + // Fx mod rotaries
       row_separation_divs + // margin
       mute_solo_button_row_divs + // mute/solo
       row_separation_divs + // margin
@@ -638,28 +637,7 @@ public:
 
     area.removeFromTop (sep_h); // separator
 
-    // fx modifiers
-    auto dry_wet_mods_slider_h = sizes::dry_wet_knobs_slider_row_divs * h;
-    auto dry_wet_mods_label_h  = sizes::dry_wet_knobs_label_row_divs * h;
-    auto fx_dry_wet_mods
-      = area.removeFromTop (dry_wet_mods_slider_h + dry_wet_mods_label_h);
-    columns = get_columns (fx_dry_wet_mods);
-
-    for (uint i = 0; i < columns.size(); ++i) {
-      _fx_lines[i * 2].setBounds (columns[i]);
-      _fx_lines[(i * 2) + 1].setBounds (columns[i]);
-      grid (
-        columns[i],
-        (float) columns[0].getWidth() / 3.,
-        make_array (dry_wet_mods_slider_h, dry_wet_mods_label_h),
-        *p_get (parameters::wet_balance {})[i],
-        *p_get (parameters::wet_pan {})[i],
-        *p_get (parameters::fx_mix {})[i]);
-    }
-
-    area.removeFromTop (sep_h); // separator
-
-    // fx page
+    // main/fx pages
     auto fx_page_h = sizes::fx_param_page_row_divs * h;
     auto fx_page   = area.removeFromTop (fx_page_h);
     columns        = get_columns (fx_page);
@@ -667,7 +645,7 @@ public:
     for (uint i = 0; i < columns.size(); ++i) {
       grid (
         columns[i],
-        (float) columns[i].getWidth() / 2.,
+        (float) columns[i].getWidth() / 3.,
         make_array (fx_page_h),
         make_contiguous_range (_page_buttons[i]));
     }
@@ -711,7 +689,7 @@ public:
     auto cp_slider_ex_bounds
       = [&] (uint row, uint col, auto t) { using dst_type = decltype (t); };
 
-    // positioning  all fx parameter sliders on top of each respective
+    // positioning all fx parameter sliders on top of each respective
     // _fx_off_slider object
     mp11::mp_for_each<parameters::all_fx_typelists> ([&] (auto fx_tlist) {
       uint param_idx = 0;
@@ -720,15 +698,33 @@ public:
         for (uint chnl = 0; chnl < param_arr.size(); ++chnl) {
 
           param_arr[chnl]->slider.setBounds (
-            _fx_off_sliders[chnl][param_idx % num_fx_page_params]
+            _fx_off_sliders[chnl][param_idx % num_page_params]
               .slider.getBounds());
 
           param_arr[chnl]->label.setBounds (
-            _fx_off_sliders[chnl][param_idx % num_fx_page_params]
+            _fx_off_sliders[chnl][param_idx % num_page_params]
               .label.getBounds());
         }
         ++param_idx;
       });
+    });
+
+    // positioning all main page sliders on top of each respective
+    // _fx_off_slider object
+    uint param_idx = 0;
+    mp11::mp_for_each<parameters::main_page_sliders_typelist> ([&] (
+                                                                 auto param) {
+      auto& param_arr = p_get (param);
+      for (uint chnl = 0; chnl < param_arr.size(); ++chnl) {
+
+        param_arr[chnl]->slider.setBounds (
+          _fx_off_sliders[chnl][param_idx % num_page_params]
+            .slider.getBounds());
+
+        param_arr[chnl]->label.setBounds (
+          _fx_off_sliders[chnl][param_idx % num_page_params].label.getBounds());
+      }
+      ++param_idx;
     });
 
     // Fader section
@@ -755,22 +751,6 @@ public:
         (float) fader_area.getWidth(),
         make_array (fader_h, fader_label_h),
         *p_get (parameters::volume {})[i]);
-    }
-
-    area.removeFromTop (sep_h); // separator
-    // pan + width
-    auto dry_mods
-      = area.removeFromTop (dry_wet_mods_slider_h + dry_wet_mods_label_h);
-    columns = get_columns (dry_mods);
-
-    for (uint i = 0; i < columns.size(); ++i) {
-      grid (
-        columns[i],
-        (float) columns[0].getWidth() / 3.,
-        make_array (dry_wet_mods_slider_h, dry_wet_mods_label_h),
-        *p_get (parameters::dry_balance {})[i],
-        *p_get (parameters::dry_pan {})[i],
-        *p_get (parameters::pan {})[i]);
     }
 
     auto mix_snd_btn_rm_footer = area.getHeight();
@@ -857,79 +837,117 @@ public:
       getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
   }
   //----------------------------------------------------------------------------
-  void on_fx_type_or_page_change (uint chnl, bool fx_change)
+  void on_fx_type_or_page_change (uint chnl, int action)
   {
+    static constexpr int on_init      = -2;
+    static constexpr int on_fx_change = -1;
+    static constexpr int main_page    = 0;
+    static constexpr int fx1_page     = 1;
+    static constexpr int fx2_page     = 2;
+
     auto set_visible = [] (juce::Component& c) { c.setVisible (true); };
     auto set_hidden  = [] (juce::Component& c) { c.setVisible (false); };
 
-    for (uint i = 0; i < num_fx_page_params; ++i) {
+    // hide and disable sliders before starting
+    for (uint i = 0; i < num_page_params; ++i) {
       _fx_off_sliders[chnl][i].foreach_component (set_hidden);
     }
-
     mp11::mp_for_each<parameters::all_fx_typelists> ([=] (auto fxtl) {
       mp11::mp_for_each<decltype (fxtl)> ([=] (auto param) {
         p_get (param)[chnl]->foreach_component (set_hidden);
       });
     });
+    mp11::mp_for_each<parameters::main_page_sliders_typelist> (
+      [=] (auto param) {
+        p_get (param)[chnl]->foreach_component (set_hidden);
+      });
 
+    // get FX
     auto&          combo  = p_get (parameters::fx_type {})[chnl]->combo;
     auto           fx_id  = combo.getSelectedId();
     constexpr auto fx_val = parameters::fx_type {};
-    if (fx_id <= 1 || fx_id > fx_val.type.choices.size()) {
-      // No fx value: dummy sliders
+    bool           no_fx  = fx_id <= 1 || fx_id > fx_val.type.choices.size();
+    if (no_fx) {
+      // loading a corrupted preset fixup
       combo.setSelectedId (1, juce::NotificationType::dontSendNotification);
-      for (uint i = 0; i < num_fx_page_params; ++i) {
-        _fx_off_sliders[chnl][i].foreach_component (set_visible);
-      }
-
-      for (auto& b : _page_buttons[chnl]) {
-        b.setToggleState (false, juce::NotificationType::dontSendNotification);
-        b.setEnabled (false);
-      }
-      return;
     }
 
-    static_assert (num_fx_pages <= 2, "");
-    uint page_idx      = _page_buttons[chnl][1].getToggleState();
-    uint param_idx_beg = page_idx * num_fx_page_params;
-    uint param_idx_end = param_idx_beg + num_fx_page_params;
+    auto& btns = _page_buttons[chnl];
 
+    // FX iteration, this need to run always to enable the FX page buttons
     uint fx_idx = 0;
-    mp11::mp_for_each<parameters::all_fx_typelists> ([=, &fx_idx] (auto fxtl) {
+    mp11::mp_for_each<parameters::all_fx_typelists> ([=, &fx_idx, &btns] (
+                                                       auto fxtl) {
       // 2 = combobox unset (juce) + no fx value.
       if (fx_idx++ != fx_id - 2) {
         return; // next
       }
 
-      uint p_idx  = 0;
-      uint p_last = 0;
-      mp11::mp_for_each<decltype (fxtl)> ([=, &p_idx, &p_last] (auto param) {
-        if (p_idx >= param_idx_beg && p_idx < param_idx_end) {
-          p_get (param)[chnl]->foreach_component (set_visible);
-          ++p_last;
-        }
-        ++p_idx;
-      });
-      for (; (param_idx_beg + p_last) < param_idx_end; ++p_last) {
-        _fx_off_sliders[chnl][p_last % num_fx_page_params].foreach_component (
-          set_visible);
-      }
-      static_assert (num_fx_pages <= 2, "");
-      _page_buttons[chnl][0].setEnabled (true);
-      _page_buttons[chnl][1].setEnabled (true);
+      using fx_tl_t                        = decltype (fxtl);
+      static constexpr uint n_total_params = mp11::mp_size<fx_tl_t>::value;
+      using page1
+        = mp11::mp_take_c<fx_tl_t, std::min (n_total_params, num_page_params)>;
+      using page2
+        = mp11::mp_drop_c<fx_tl_t, std::min (n_total_params, num_page_params)>;
+      constexpr std::array<size_t, num_fx_pages> n_params
+        = {mp11::mp_size<page1>::value, mp11::mp_size<page2>::value};
 
-      if (fx_change) {
-        _page_buttons[chnl][0].setToggleState (
-          true, juce::NotificationType::sendNotification);
+      btns[fx1_page].setEnabled (!!n_params[0]);
+      btns[fx2_page].setEnabled (!!n_params[1]);
+
+      bool change_w_fx1
+        = action == on_fx_change && btns[fx1_page].getToggleState();
+      bool change_w_fx2
+        = action == on_fx_change && btns[fx2_page].getToggleState();
+
+      if (
+        action == fx1_page || change_w_fx1
+        || (change_w_fx2 && n_params[1] == 0)) {
+
+        mp11::mp_for_each<page1> ([=] (auto param) {
+          p_get (param)[chnl]->foreach_component (set_visible);
+        });
+        for (uint i = n_params[0]; i < num_page_params; ++i) {
+          _fx_off_sliders[chnl][i].foreach_component (set_visible);
+        }
+        if (change_w_fx2) {
+          btns[fx2_page].setToggleState (
+            false, juce::NotificationType::sendNotification);
+          btns[fx1_page].setToggleState (
+            true, juce::NotificationType::sendNotification);
+        }
       }
-      if (p_idx <= num_fx_page_params) {
-        _page_buttons[chnl][0].setToggleState (
-          true, juce::NotificationType::sendNotification);
-        _page_buttons[chnl][1].setEnabled (false);
-        _page_buttons[chnl][1].setToggleState (
-          false, juce::NotificationType::dontSendNotification);
+      else if (action == fx2_page || (change_w_fx2 && n_params[1] > 0)) {
+        mp11::mp_for_each<page2> ([=] (auto param) {
+          p_get (param)[chnl]->foreach_component (set_visible);
+        });
+        for (uint i = n_params[1]; i < num_page_params; ++i) {
+          _fx_off_sliders[chnl][i].foreach_component (set_visible);
+        }
       }
     });
+
+    if (
+      no_fx || action == main_page || action == on_init
+      || (action == on_fx_change && btns[main_page].getToggleState())) {
+      if (no_fx) {
+        btns[fx1_page].setEnabled (false);
+        btns[fx2_page].setEnabled (false);
+        if (on_fx_change) {
+          btns[main_page].setToggleState (
+            true, juce::NotificationType::sendNotification);
+        }
+      }
+      mp11::mp_for_each<parameters::main_page_sliders_typelist> (
+        [=] (auto param) {
+          p_get (param)[chnl]->foreach_component (set_visible);
+        });
+      constexpr uint n_main_sliders
+        = mp11::mp_size<parameters::main_page_sliders_typelist>::value;
+      for (uint i = n_main_sliders; i < num_page_params; ++i) {
+        _fx_off_sliders[chnl][i].foreach_component (set_visible);
+      }
+    }
   }
   //----------------------------------------------------------------------------
   void mouse_event (
@@ -1139,25 +1157,25 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  static constexpr uint num_fx_params      = 16;
-  static constexpr uint num_fx_pages       = 2;
-  static constexpr uint num_fx_page_params = num_fx_params / num_fx_pages;
+  static constexpr uint num_fx_params   = 16;
+  static constexpr uint num_fx_pages    = 2;
+  static constexpr uint num_page_params = num_fx_params / num_fx_pages;
 
   juce::AudioProcessor& _processor; // unused
   look_and_feel         _lookfeel;
 
-  using chnl_slider_array = std::array<slider_ext, num_fx_page_params>;
-  using chnl_fx_page_btns
-    = std::array<add_juce_callbacks<juce::TextButton>, num_fx_pages>;
+  using chnl_slider_array = std::array<slider_ext, num_page_params>;
+  using chnl_page_btns
+    = std::array<add_juce_callbacks<juce::TextButton>, num_fx_pages + 1>;
 
   std::array<chnl_slider_array, parameters::n_stereo_busses> _fx_off_sliders;
-  std::array<chnl_fx_page_btns, parameters::n_stereo_busses> _page_buttons;
+  std::array<chnl_page_btns, parameters::n_stereo_busses>    _page_buttons;
 
-  juce::Label                 _parameter_value;
-  juce::TextButton            _parameter_value_frame;
-  juce::TextButton            _about;
-  std::array<VerticalLine, 2> _side_lines;
-  std::array<VerticalLine, parameters::n_stereo_busses * 2> _fx_lines;
+  juce::Label                  _parameter_value;
+  juce::TextButton             _parameter_value_frame;
+  juce::TextButton             _about;
+  std::array<vertical_line, 2> _side_lines;
+  std::array<vertical_line, parameters::n_stereo_busses * 2> _fx_lines;
 
   std::array<foleys::LevelMeterLookAndFeel, parameters::n_stereo_busses>
                                                               _meters_look_feel;
