@@ -9,6 +9,7 @@
 #include <juce_dsp/juce_dsp.h>
 
 #include "artv-common/dsp/own/blocks/filters/onepole.hpp"
+#include "artv-common/dsp/own/delay_line.hpp"
 #include "artv-common/dsp/own/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_types.hpp"
@@ -21,95 +22,6 @@ namespace artv {
 
 #define SOUND_DELAY_LEAN 1
 
-//------------------------------------------------------------------------------
-// just a single allocation multichannel delay line.
-template <class T>
-class delay_line {
-public:
-  //----------------------------------------------------------------------------
-  void reset (uint channels, uint max_samples)
-  {
-    _samples.clear();
-    // + 1 is because the allpass states are stored on the tail
-    _samples.resize ((max_samples + SOUND_DELAY_LEAN) * channels); // 0 fill
-    _wpos     = 0;
-    _capacity = max_samples;
-    _channels = channels;
-#if !SOUND_DELAY_LEAN
-    _allpass_states = &_samples[_samples.size() - channels];
-#endif
-  }
-  //----------------------------------------------------------------------------
-  void get (crange<T> channels_out, uint idx) // idx 0 is prev pushed
-  {
-    assert (channels_out.size() >= _channels);
-    assert (idx < _capacity);
-
-    uint pos = ((_wpos + idx) % _capacity) * _channels;
-    memcpy (channels_out.data(), &_samples[pos], sizeof (T) * _channels);
-  }
-  //----------------------------------------------------------------------------
-  T get (uint channel, uint idx)
-  {
-    assert (channel < _channels);
-    assert (idx < _capacity);
-
-    return _samples[(((_wpos + idx) % _capacity) * _channels) + channel];
-  }
-#if !SOUND_DELAY_LEAN
-  //----------------------------------------------------------------------------
-  T get_interpolated (uint channel, float idx)
-  {
-    assert (channel < _channels);
-    assert (idx < _capacity);
-
-    uint  i_idx = (float) idx;
-    float fract = idx - i_idx;
-
-    std::array<T, 2> points;
-    points[0] = get (channel, i_idx);
-    points[1] = get (channel, i_idx + 1);
-
-    // this is built based on 1 push 1 retrieval
-    return warped_allpass_interpolate (
-      fract, *(_allpass_states + channel), points);
-  }
-#endif
-  //----------------------------------------------------------------------------
-  void push (crange<const T> channels_in)
-  {
-    assert (channels_in.size() >= _channels);
-
-    --_wpos;
-    uint pos = (_wpos % _capacity) * _channels;
-    memcpy (&_samples[pos], channels_in.data(), sizeof (T) * _channels);
-  }
-  //----------------------------------------------------------------------------
-  uint max_delay_samples() const { return _capacity; }
-  //----------------------------------------------------------------------------
-  uint n_channels() const { return _channels; }
-  //----------------------------------------------------------------------------
-private:
-#if !SOUND_DELAY_LEAN
-  // magic from RS-MET's library.
-  double warped_allpass_interpolate (
-    float            frac,
-    float&           prev,
-    std::array<T, 2> points)
-  {
-    double coeff = (1.0 - frac) / (1.0 + frac);
-    double ret   = points[0] + (coeff * points[1]) - (0.999 * coeff * prev);
-    prev         = ret;
-    return ret;
-  }
-  //------------------------------------------------------------------------
-  T* _allpass_states;
-#endif
-  std::vector<T> _samples;
-  uint           _wpos;
-  uint           _capacity;
-  uint           _channels;
-};
 //------------------------------------------------------------------------------
 class sound_delay {
 public:

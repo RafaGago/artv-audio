@@ -149,4 +149,20 @@ inline bool is_pow2 (T v)
   return (v != 0) && ((v & (v - 1)) == 0);
 }
 
+template <class T>
+inline T pow2_round_floor (T v)
+{
+  static_assert (std::is_integral<T>::value, "");
+  uint lsb = last_bit_set (v);
+  return lsb ? bit<T> (lsb - 1) : v;
+}
+
+template <class T>
+inline T pow2_round_ceil (T v)
+{
+  static_assert (std::is_integral<T>::value, "");
+  uint lsb = last_bit_set (v);
+  return (is_pow2 (v) || !v) ? v : bit<T> (lsb);
+}
+
 } // namespace artv
