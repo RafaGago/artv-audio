@@ -75,6 +75,10 @@ struct is_same_template<T, const T<Ts...>> : public std::true_type {};
 
 template <template <class...> class T, class U>
 using is_same_template_t = typename is_same_template<T, U>::type;
+
+template <template <class...> class T, class U>
+static constexpr bool is_same_template_v = is_same_template<T, U>::value;
+
 //------------------------------------------------------------------------------
 template <class T = void, class... Ts>
 static constexpr auto make_array (Ts&&... args)
@@ -101,8 +105,14 @@ class contiguous_range // std might have something like this. Check.
 private:
   //----------------------------------------------------------------------------
   template <class U>
-  static constexpr bool same_or_non_const_to_const = std::is_same<T, U>::value
-    || std::is_same<std::remove_const_t<T>, U>::value;
+  static constexpr bool same_or_non_const_to_const
+    = std::is_same_v<T, U> || std::is_same_v<std::remove_const_t<T>, U>;
+  //----------------------------------------------------------------------------
+  // This one gets "U" just to have a dependant type for SFINAE. It decides
+  // based on "T".
+  template <class U>
+  static constexpr bool      crange_type_is_const
+    = std::is_same_v<U, U>&& std::is_const_v<T>;
   //----------------------------------------------------------------------------
 public:
   using value_type     = T;
@@ -130,8 +140,6 @@ public:
     return *this;
   }
 
-  // Notice that only binding to lvalues is supported to avoid binding to
-  // dangled objects.
   template <
     class U,
     uint N,
@@ -142,8 +150,26 @@ public:
   template <
     class U,
     uint N,
+    std::enable_if_t<crange_type_is_const<U>>* = nullptr>
+  contiguous_range (U const (&arr)[N]) : contiguous_range {&arr[0], N}
+  {}
+
+  template <
+    class U,
+    uint N,
     std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
   contiguous_range<T>& operator= (U (&arr)[N])
+  {
+    _start = &arr[0];
+    _size  = N;
+    return *this;
+  }
+
+  template <
+    class U,
+    uint N,
+    std::enable_if_t<crange_type_is_const<U>>* = nullptr>
+  contiguous_range<T>& operator= (U const (&arr)[N])
   {
     _start = &arr[0];
     _size  = N;
@@ -161,11 +187,43 @@ public:
   template <
     class U,
     size_t N,
+    std::enable_if_t<crange_type_is_const<U>>* = nullptr>
+  contiguous_range (std::array<U, N> const& arr)
+    : contiguous_range {arr.data(), arr.size()}
+  {}
+
+  template <class U, size_t N>
+  contiguous_range (std::array<U, N>&& arr)
+  {
+    static_assert (!std::is_same_v<U, U>, "No binding to rvalues");
+  }
+
+  template <
+    class U,
+    size_t N,
     std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
   contiguous_range<T>& operator= (std::array<U, N>& arr)
   {
     _start = arr.data();
     _size  = N;
+    return *this;
+  }
+
+  template <
+    class U,
+    size_t N,
+    std::enable_if_t<crange_type_is_const<U>>* = nullptr>
+  contiguous_range<T>& operator= (std::array<U, N> const& arr)
+  {
+    _start = arr.data();
+    _size  = N;
+    return *this;
+  }
+
+  template <class U, size_t N>
+  contiguous_range<T>& operator= (std::array<U, N>&& arr)
+  {
+    static_assert (!std::is_same_v<U, U>, "No binding to rvalues");
     return *this;
   }
 
@@ -182,11 +240,43 @@ public:
   template <
     class U,
     class Alloc,
+    std::enable_if_t<crange_type_is_const<U>>* = nullptr>
+  contiguous_range (std::vector<U, Alloc> const& vec)
+    : contiguous_range {vec.data(), vec.size()}
+  {}
+
+  template <class U, class Alloc>
+  contiguous_range (std::vector<U, Alloc>&& vec)
+  {
+    static_assert (!std::is_same_v<U, U>, "No binding to rvalues");
+  }
+
+  template <
+    class U,
+    class Alloc,
     std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
   contiguous_range<T>& operator= (std::vector<U, Alloc>& vec)
   {
     _start = vec.data();
     _size  = vec.size();
+    return *this;
+  }
+
+  template <
+    class U,
+    class Alloc,
+    std::enable_if_t<crange_type_is_const<U>>* = nullptr>
+  contiguous_range<T>& operator= (std::vector<U, Alloc>& vec)
+  {
+    _start = vec.data();
+    _size  = vec.size();
+    return *this;
+  }
+
+  template <class U, class Alloc>
+  contiguous_range<T>& operator= (std::vector<U, Alloc>&& vec)
+  {
+    static_assert (!std::is_same_v<U, U>, "No binding to rvalues");
     return *this;
   }
 
@@ -244,14 +334,44 @@ static contiguous_range<T> make_contiguous_range (T* mem, size_t count)
 };
 
 template <class T>
+static contiguous_range<const T> make_contiguous_range (
+  T const* mem,
+  size_t   count)
+{
+  return {mem, count};
+};
+
+template <class T>
 static contiguous_range<T> make_contiguous_range (T& mem)
 {
   return {&mem, 1};
 };
 
+template <class T>
+static contiguous_range<const T> make_contiguous_range (T const& mem)
+{
+  return {&mem, 1};
+};
+
+template <class T>
+static void make_contiguous_range (T&& mem)
+{
+  static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
+};
+
 template <class T, size_t N>
 static contiguous_range<T> make_contiguous_range (
   T (&arr)[N],
+  size_t count      = N,
+  size_t offset_idx = 0)
+{
+  assert (count + offset_idx <= N && "out of bounds");
+  return {arr.data() + offset_idx, count};
+};
+
+template <class T, size_t N>
+static contiguous_range<const T> make_contiguous_range (
+  T const (&arr)[N],
   size_t count      = N,
   size_t offset_idx = 0)
 {
@@ -269,10 +389,42 @@ static contiguous_range<T> make_contiguous_range (
   return {arr.data() + offset_idx, count};
 };
 
+template <class T, size_t N>
+static contiguous_range<const T> make_contiguous_range (
+  std::array<T, N> const& arr,
+  size_t                  count      = N,
+  size_t                  offset_idx = 0)
+{
+  assert ((count + offset_idx) <= N && "out of bounds");
+  return {arr.data() + offset_idx, count};
+};
+
+template <class T, size_t N>
+static void make_contiguous_range (
+  std::array<T, N>&& arr,
+  size_t             count      = N,
+  size_t             offset_idx = 0)
+{
+  static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
+};
+
 template <class T>
 static contiguous_range<T> make_contiguous_range (std::vector<T>& vec)
 {
   return {vec.data(), vec.size()};
+};
+
+template <class T>
+static contiguous_range<const T> make_contiguous_range (
+  std::vector<T> const& vec)
+{
+  return {vec.data(), vec.size()};
+};
+
+template <class T>
+static void make_contiguous_range (std::vector<T>&& vec)
+{
+  static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
 };
 
 template <class T>
@@ -286,7 +438,36 @@ static contiguous_range<T> make_contiguous_range (
 };
 
 template <class T>
+static contiguous_range<const T> make_contiguous_range (
+  std::vector<T> const& vec,
+  size_t                count,
+  size_t                offset_idx = 0)
+{
+  assert (count + offset_idx <= vec.size() && "out of bounds");
+  return {vec.data() + offset_idx, count};
+};
+
+template <class T>
+static void make_contiguous_range (
+  std::vector<T>&& vec,
+  size_t           count,
+  size_t           offset_idx = 0)
+{
+  static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
+};
+
+template <class T>
 static contiguous_range<T> make_contiguous_range (
+  contiguous_range<T> range,
+  size_t              count,
+  size_t              offset_idx = 0)
+{
+  assert (count + offset_idx <= range.size() && "out of bounds");
+  return {&range[offset_idx], count};
+};
+
+template <class T>
+static contiguous_range<const T> make_contiguous_range (
   contiguous_range<T> range,
   size_t              count,
   size_t              offset_idx = 0)
