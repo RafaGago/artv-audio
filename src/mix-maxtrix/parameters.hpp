@@ -920,7 +920,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Gain",
-    declptr<sonic_anomaly::slax>(),
+    declptr<oversampled<sonic_anomaly::slax>>(),
     declptr<sonic_anomaly::slax::gain_tag>()),
   sonic_anomaly::slax::get_parameter (sonic_anomaly::slax::gain_tag {}),
   slider_ext);
@@ -930,7 +930,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Peak",
-    declptr<sonic_anomaly::slax>(),
+    declptr<oversampled<sonic_anomaly::slax>>(),
     declptr<sonic_anomaly::slax::peak_tag>()),
   sonic_anomaly::slax::get_parameter (sonic_anomaly::slax::peak_tag {}),
   slider_ext);
@@ -940,7 +940,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Emphasis",
-    declptr<sonic_anomaly::slax>(),
+    declptr<oversampled<sonic_anomaly::slax>>(),
     declptr<sonic_anomaly::slax::emphasis_tag>()),
   sonic_anomaly::slax::get_parameter (sonic_anomaly::slax::emphasis_tag {}),
   slider_ext);
@@ -950,7 +950,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Ratio",
-    declptr<sonic_anomaly::slax>(),
+    declptr<oversampled<sonic_anomaly::slax>>(),
     declptr<sonic_anomaly::slax::comp_lim_tag>()),
   sonic_anomaly::slax::get_parameter (sonic_anomaly::slax::comp_lim_tag {}),
   slider_ext);
@@ -960,13 +960,29 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Mode",
-    declptr<sonic_anomaly::slax>(),
+    declptr<oversampled<sonic_anomaly::slax>>(),
     declptr<sonic_anomaly::slax::mode_tag>()),
   sonic_anomaly::slax::get_parameter (sonic_anomaly::slax::mode_tag {}),
   slider_ext);
 
-using slax_params
-  = mp_list<slax_gain, slax_peak, slax_ratio, slax_mode, slax_emphasis>;
+parameter_cpp_class_define (
+  slax_oversampling,
+  n_stereo_busses,
+  param_common (
+    "OverSmpl",
+    declptr<oversampled<sonic_anomaly::slax>>(),
+    declptr<oversampled<sonic_anomaly::slax>::oversampling_tag>()),
+  oversampled<sonic_anomaly::slax>::get_parameter (
+    oversampled<sonic_anomaly::slax>::oversampling_tag {}),
+  slider_ext);
+
+using slax_params = mp_list<
+  slax_gain,
+  slax_peak,
+  slax_ratio,
+  slax_mode,
+  slax_emphasis,
+  slax_oversampling>;
 //------------------------------------------------------------------------------
 #if 0
 // Has latency...
@@ -5007,7 +5023,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<major_tom_params>;
+using all_fx_typelists = mp_list<slax_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 
