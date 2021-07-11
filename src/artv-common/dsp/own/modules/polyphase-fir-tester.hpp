@@ -9,7 +9,7 @@ namespace artv {
 //------------------------------------------------------------------------------
 class polyphase_fir_test {
 private:
-  static constexpr uint ratio    = 4;
+  static constexpr uint ratio    = 2;
   static constexpr uint channels = 2;
   using sample_type              = float;
 
@@ -30,7 +30,7 @@ public:
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
-    _up.reset (linear_phase_fir_coeffs<ratio>::data(), ratio);
+    _up.reset (linear_phase_fir_coeffs<ratio>::data(), ratio, true);
     _down.reset (linear_phase_fir_coeffs<ratio>::data(), ratio);
     _gain = 1.f;
   }
@@ -56,9 +56,9 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  fir_decimator<sample_type, channels>    _down;
-  fir_interpolator<sample_type, channels> _up;
-  float                                   _gain = 1.;
+  lth_band_fir_decimator<sample_type, channels> _down;
+  fir_interpolator<sample_type, channels>       _up;
+  float                                         _gain = 1.;
   //----------------------------------------------------------------------------
 };
 

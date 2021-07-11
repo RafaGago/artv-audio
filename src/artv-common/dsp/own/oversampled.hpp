@@ -169,8 +169,8 @@ private:
   {
     _oversampler_delay = linear_phase_fir_coeffs<ratio>::latency();
     _oversampler_delay *= 2; // Up and downsampler, 2 times the latency
+    _interpolator.reset (linear_phase_fir_coeffs<ratio>::data(), ratio, true);
     _decimator.reset (linear_phase_fir_coeffs<ratio>::data(), ratio);
-    _interpolator.reset (linear_phase_fir_coeffs<ratio>::data(), ratio);
   }
   //----------------------------------------------------------------------------
   void reset_predelay()
@@ -213,16 +213,16 @@ private:
     return _oversampler_delay + module_delay;
   }
   //----------------------------------------------------------------------------
-  fx                         _fx;
-  oversampled_plugin_context _pc;
-  delay_line<T>              _predelay_line;
-  uint                       _predelay_samples;
-  uint                       _module_delay;
-  uint                       _oversampler_delay;
-  uint                       _informed_delay;
-  fir_decimator<T, 2>        _decimator;
-  fir_interpolator<T, 2>     _interpolator;
-  crange<T>                  _work_buffer;
+  fx                           _fx;
+  oversampled_plugin_context   _pc;
+  delay_line<T>                _predelay_line;
+  uint                         _predelay_samples;
+  uint                         _module_delay;
+  uint                         _oversampler_delay;
+  uint                         _informed_delay;
+  lth_band_fir_decimator<T, 2> _decimator;
+  fir_interpolator<T, 2>       _interpolator;
+  crange<T>                    _work_buffer;
 };
 //------------------------------------------------------------------------------
 

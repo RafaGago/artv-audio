@@ -1,16 +1,9 @@
 #pragma once
 
-// Possible optimizations:
+// Possible (known) optimizations left:
 //
-// -Zero coeff skipping: When setting the FC at FS/4 (2x) every other
-//    coefficient is zero. At FC at FS/8 one of every 4 coefficients is
-//    zero, etc. Interesting?
-//
-// -Handrolled SSE version. Some performance might be gained if some time is
-//    spent optimizing this.
-//
-// - An up/downsampler class that reuses the filtering kernels and allocates all
-//   memory in one chunk.
+// -Handrolled SSE version. Some performance might be gained if some dev time is
+//    spent optimizing this. Worth?
 
 #include <cassert>
 
@@ -70,7 +63,8 @@ public:
   void reset (crange<const T> kernel_mem) { _h = kernel_mem.data(); }
   //----------------------------------------------------------------------------
   std::array<T, n_channels> tick (
-    convolution_delay_line<T, n_channels> const& dl)
+    convolution_delay_line<T, n_channels> const& dl,
+    uint                                         start_idx = 0)
   {
     std::array<T, n_channels> out {};
     auto                      z = dl.samples();
@@ -88,8 +82,8 @@ private:
 
 } // namespace detail
 //------------------------------------------------------------------------------
-// A convolution/FIR filter. The kernel and delay line memory are not owned by
-// the class.
+// A non-FFT convolution/FIR filter. The kernel and delay line memory are not
+// owned by the class.
 template <class T, uint channels = 1>
 class convolution {
 public:
@@ -114,9 +108,34 @@ private:
   detail::convolution_block<T, n_channels>      _impl;
   detail::convolution_delay_line<T, n_channels> _dl;
 };
-
 //------------------------------------------------------------------------------
-// Naive-ish polyphase implementation of a FIR decimator
+// class for verifying if a filter kernel (set of coefficients) can be used
+// on a lth-band filter.
+struct lth_band {
+  template <class T>
+  static bool verify_coeffs (crange<const T> kernel, uint ratio)
+  {
+    for (uint i = 0; i < kernel.size(); ++i) {
+      if (i % ratio) {
+        continue;
+      }
+      if (i != (kernel.size() / 2)) {
+        if (kernel[i] != (T) 0) {
+          return false;
+        }
+      }
+      else {
+        T expected = ((T) 1) / ((T) ratio);
+        if (std::abs (kernel[i] - expected) > 0.0001) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+};
+//------------------------------------------------------------------------------
+// Polyphase FIR decimator
 template <class T, uint channels = 1>
 class fir_decimator {
 public:
@@ -126,8 +145,8 @@ public:
   void reset (crange<const T> kernel, uint ratio)
   {
     // To make it polyphase, we ensure that the coefficients are multiples of
-    // "ratio" the unused parts of the kernel will have zeros that don't
-    // contribute.
+    // "ratio". This is done by adding zeros coefficients that don't contribute
+    // to the response.
     uint ksize      = round_ceil<uint> (kernel.size(), ratio);
     uint kernel_mem = ksize;
     // magic "2" reminder: delay line buffer has to be double the required size
@@ -136,8 +155,8 @@ public:
     _mem.clear();
     _mem.resize (kernel_mem + delay_lines_mem);
     _ratio = ratio;
-    // On the decimator the inactive parts of the filtering kernel sits at the
-    // front.
+    // On the decimator the zero coefficients only added for the filter to be
+    // polyphase decomposable have to be at the front.
     memcpy (
       _mem.data() + (ksize - kernel.size()),
       kernel.data(),
@@ -152,6 +171,8 @@ public:
     for (auto& r : in) {
       assert (r.size() == _ratio);
     }
+    // interleaving channel samples and pushing them to the delay lines (inverts
+    // order).
     for (uint i = 0; i < _ratio; ++i) {
       std::array<T, n_channels> interleaved_in;
       for (uint c = 0; c < n_channels; ++c) {
@@ -159,6 +180,7 @@ public:
       }
       _delay.push (interleaved_in);
     }
+    // filtering
     return _filter.tick (_delay);
   }
   //----------------------------------------------------------------------------
@@ -172,36 +194,143 @@ private:
   std::vector<T>                                _mem;
   uint                                          _ratio;
 };
-
 //------------------------------------------------------------------------------
-// Naive-ish polyphase implementation of a polyphase FIR interpolator
+// Polyphase FIR decimator optimized for L-th band decimation type of
+// coefficients (skipping zero coefficients).
 template <class T, uint channels = 1>
-class fir_interpolator {
+class lth_band_fir_decimator {
 public:
   using value_type                 = T;
   static constexpr uint n_channels = channels;
   //----------------------------------------------------------------------------
   void reset (crange<const T> kernel, uint ratio)
   {
+    assert (lth_band::verify_coeffs (kernel, ratio));
+
+    uint ksize      = round_ceil<uint> (kernel.size(), ratio);
+    uint subk_size  = ksize / ratio;
+    uint kernel_mem = ksize - subk_size;
+    // magic "2" reminder: delay line buffer has to be double the required size
+    uint delay_lines_mem  = 2 * ksize * n_channels;
+    uint zero_dl_size     = 2 * subk_size * n_channels;
+    uint non_zero_dl_size = delay_lines_mem - zero_dl_size;
+
+    _mem.clear();
+    _mem.resize (kernel_mem + delay_lines_mem);
+
+    // Copy skipping the coefficients multiple of the ratio: the (zeros or
+    // the central coefficient).
+    //
+    // On the decimator the zero coefficients only added for the filter to be
+    // polyphase decomposable have to be at the front.
+    uint wr_pos = ratio - 1;
+    for (uint i = 0; i < kernel.size(); ++i) {
+      if ((i % ratio) == 0) {
+        continue;
+      }
+      _mem[wr_pos] = kernel[i];
+      ++wr_pos;
+    }
+
+    _ratio        = ratio;
+    _center_coeff = kernel[kernel.size() / 2];
+
+    _filter.reset (make_crange (&_mem[0], kernel_mem));
+
+    _delays[0].reset (
+      make_crange (&_mem[kernel_mem], non_zero_dl_size), ksize - subk_size);
+    _delays[1].reset (
+      make_crange (&_mem[kernel_mem + non_zero_dl_size], zero_dl_size),
+      subk_size);
+  }
+  //----------------------------------------------------------------------------
+  std::array<T, n_channels> tick (std::array<crange<const T>, n_channels> in)
+  {
+    for (auto& r : in) {
+      assert (r.size() == _ratio);
+    }
+    // interleaving channel samples and pushing them to the delay lines (inverts
+    // order).
+    for (uint i = 0; i < _ratio; ++i) {
+      std::array<T, n_channels> interleaved_in;
+      for (uint c = 0; c < n_channels; ++c) {
+        interleaved_in[c] = in[c][i];
+      }
+      _delays[i == 0].push (interleaved_in);
+    }
+    // filtering branches with non zero coefficients
+    uint                      n_trailing_zero_coeffs = _ratio - 1;
+    std::array<T, n_channels> ret
+      = _filter.tick (_delays[0], n_trailing_zero_coeffs);
+
+    // adding the only non zero coeff at the center of the remaining branch.
+    T const* center = _delays[1].samples().data();
+    center += (_delays[1].size() / 2) * channels;
+    for (uint c = 0; c < n_channels; ++c) {
+      ret[c] += center[c] * _center_coeff;
+    }
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+  uint ratio() const { return _ratio; }
+  //----------------------------------------------------------------------------
+  uint order() const { return (_filter.order() / (_ratio - 1)) * _ratio; }
+  //----------------------------------------------------------------------------
+private:
+  detail::convolution_block<T, n_channels>                     _filter;
+  std::array<detail::convolution_delay_line<T, n_channels>, 2> _delays;
+  std::vector<T>                                               _mem;
+  T                                                            _center_coeff;
+  uint                                                         _ratio;
+};
+//------------------------------------------------------------------------------
+// Polyphase FIR interpolator with selectable L-th band optimization (in case
+// the coefficients are suitable for Lth band optimization (skipping zeroes)).
+//
+// As the decimator is always decomposed in branches, adding the Lth band
+// optimization doesn't add too much bloat to the class, so it is done in place.
+template <class T, uint channels = 1>
+class fir_interpolator {
+public:
+  using value_type                 = T;
+  static constexpr uint n_channels = channels;
+  //----------------------------------------------------------------------------
+  // If the filter cutoff frequency is Fs/4 and the number of coefficients minus
+  // one is a multiple of 4 then this is Lth-band filter. Lth band filters have
+  // 1/ratio of the coefficients as zeros, so they can be skipped. A polyphase
+  // FIR is structured in a way that the skipping the zeroed branch is trivial,
+  // so it is all done on the same class.
+  void reset (
+    crange<const T> kernel,
+    uint            ratio,
+    bool            enable_lth_band_optimization = false)
+  {
     // To make it polyphase, we ensure that the coefficients are multiples of
     // "ratio" the unused parts of the kernel will have zeros that don't
     // contribute.
+
+    _is_lth_band = enable_lth_band_optimization;
+    _ratio       = ratio;
+
+    assert (!_is_lth_band || lth_band::verify_coeffs (kernel, ratio));
+
     uint ksize      = round_ceil<uint> (kernel.size(), ratio);
     uint subk_size  = ksize / ratio;
     uint kernel_mem = ksize;
+    kernel_mem -= (_is_lth_band) ? subk_size : 0;
     // magic "2" reminder: delay line buffer has to be double the required size
     uint delay_lines_mem = 2 * subk_size * n_channels;
 
     _mem.clear();
     _mem.resize (kernel_mem + delay_lines_mem);
     _filters.clear();
-    _filters.resize (ratio);
-    _ratio = ratio;
+    _filters.resize (ratio - _is_lth_band);
 
     // One delay line is shared between all subfilters.
     _delay.reset (make_crange (&_mem[kernel_mem], delay_lines_mem), subk_size);
 
-    for (uint subk = 0, offset = 0; subk < ratio; ++subk, offset += subk_size) {
+    for (uint subk = _is_lth_band, offset = 0; subk < ratio;
+         ++subk, offset += subk_size) {
       // polyphase subkernel interleaving.
       // The interpolator has the inactive parts of the filtering kernel at the
       // back.
@@ -210,7 +339,8 @@ public:
         _mem[offset + dst] *= (T) _ratio; // gain loss compensation
       }
       // filter initialization
-      _filters[subk].reset (make_crange (&_mem[offset], subk_size));
+      _filters[subk - _is_lth_band].reset (
+        make_crange (&_mem[offset], subk_size));
     }
   }
   //----------------------------------------------------------------------------
@@ -222,15 +352,25 @@ public:
       assert (r.size() >= _ratio);
     }
     _delay.push (in);
-    for (uint i = 0; i < _ratio; ++i) {
-      auto smpl_arr = _filters[i].tick (_delay);
+    uint is_lth_band = _is_lth_band;
+    for (uint i = is_lth_band; i < _ratio; ++i) {
+      auto smpl_arr = _filters[i - is_lth_band].tick (_delay, is_lth_band);
       for (uint c = 0; c < channels; ++c) {
         out[c][i] = smpl_arr[c];
       }
     }
+    if (is_lth_band) {
+      // Handle the central coefficient, as this class is normalizing the
+      // kernel, the center coefficient is always 1, so it is a direct copy.
+      const T* center = _delay.samples().data();
+      center += (_delay.size() / 2) * channels;
+      for (uint c = 0; c < channels; ++c) {
+        out[c][0] = center[c];
+      }
+    }
   }
   //----------------------------------------------------------------------------
-  uint ratio() const { return _filters.size(); }
+  uint ratio() const { return _ratio; }
   //----------------------------------------------------------------------------
   uint order() const { return _delay.size() * _ratio; }
   //----------------------------------------------------------------------------
@@ -239,6 +379,7 @@ private:
   detail::convolution_delay_line<T, n_channels>         _delay;
   std::vector<T>                                        _mem;
   uint                                                  _ratio;
+  bool                                                  _is_lth_band;
 };
 //------------------------------------------------------------------------------
 
