@@ -3170,7 +3170,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Mode",
-    declptr<chokehold::consolidator>(),
+    declptr<oversampled<chokehold::consolidator>>(),
     declptr<chokehold::consolidator::operation_tag>()),
   chokehold::consolidator::get_parameter (
     chokehold::consolidator::operation_tag {}),
@@ -3181,7 +3181,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "In Gain",
-    declptr<chokehold::consolidator>(),
+    declptr<oversampled<chokehold::consolidator>>(),
     declptr<chokehold::consolidator::dbgain_tag>()),
   chokehold::consolidator::get_parameter (
     chokehold::consolidator::dbgain_tag {}),
@@ -3192,7 +3192,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "SC HP",
-    declptr<chokehold::consolidator>(),
+    declptr<oversampled<chokehold::consolidator>>(),
     declptr<chokehold::consolidator::scfreq_tag>()),
   chokehold::consolidator::get_parameter (
     chokehold::consolidator::scfreq_tag {}),
@@ -3203,7 +3203,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Out Gain",
-    declptr<chokehold::consolidator>(),
+    declptr<oversampled<chokehold::consolidator>>(),
     declptr<chokehold::consolidator::dbtrim_tag>()),
   chokehold::consolidator::get_parameter (
     chokehold::consolidator::dbtrim_tag {}),
@@ -3214,7 +3214,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "St Mode",
-    declptr<chokehold::consolidator>(),
+    declptr<oversampled<chokehold::consolidator>>(),
     declptr<chokehold::consolidator::midside_tag>()),
   chokehold::consolidator::get_parameter (
     chokehold::consolidator::midside_tag {}),
@@ -3225,10 +3225,21 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "St Mode",
-    declptr<chokehold::consolidator>(),
+    declptr<oversampled<chokehold::consolidator>>(),
     declptr<chokehold::consolidator::linkamount_tag>()),
   chokehold::consolidator::get_parameter (
     chokehold::consolidator::linkamount_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  consolidator_oversampling,
+  n_stereo_busses,
+  param_common (
+    "OverSmpl",
+    declptr<oversampled<chokehold::consolidator>>(),
+    declptr<oversampled<chokehold::consolidator>::oversampling_tag>()),
+  oversampled<chokehold::consolidator>::get_parameter (
+    oversampled<chokehold::consolidator>::oversampling_tag {}),
   slider_ext);
 
 using consolidator_params = mp_list<
@@ -3237,7 +3248,8 @@ using consolidator_params = mp_list<
   consolidator_sidechain_freq,
   consolidator_trim,
   consolidator_channel_link,
-  consolidator_st_mode>;
+  consolidator_st_mode,
+  consolidator_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   gate_expander_mode,
@@ -4959,7 +4971,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<_1175_params>;
+using all_fx_typelists = mp_list<consolidator_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 
