@@ -902,9 +902,8 @@ parameter_cpp_class_define (
   param_common (
     "OverSmpl",
     declptr<updownsampled<saike::transience>>(),
-    declptr<updownsampled<saike::transience>::oversampling_tag>()),
-  updownsampled<saike::transience>::get_parameter (
-    updownsampled<saike::transience>::oversampling_tag {}),
+    declptr<oversampled_amount_tag>()),
+  updownsampled<saike::transience>::get_parameter (oversampled_amount_tag {}),
   slider_ext);
 
 using transience_params = mp_list<
@@ -972,9 +971,8 @@ parameter_cpp_class_define (
   param_common (
     "OverSmpl",
     declptr<updownsampled<sonic_anomaly::slax>>(),
-    declptr<updownsampled<sonic_anomaly::slax>::oversampling_tag>()),
-  updownsampled<sonic_anomaly::slax>::get_parameter (
-    updownsampled<sonic_anomaly::slax>::oversampling_tag {}),
+    declptr<oversampled_amount_tag>()),
+  updownsampled<sonic_anomaly::slax>::get_parameter (oversampled_amount_tag {}),
   slider_ext);
 
 using slax_params = mp_list<
@@ -2763,9 +2761,8 @@ parameter_cpp_class_define (
   param_common (
     "OverSmpl",
     declptr<updownsampled<sstillwell::_1175>>(),
-    declptr<updownsampled<sstillwell::_1175>::oversampling_tag>()),
-  updownsampled<sstillwell::_1175>::get_parameter (
-    updownsampled<sstillwell::_1175>::oversampling_tag {}),
+    declptr<oversampled_amount_tag>()),
+  updownsampled<sstillwell::_1175>::get_parameter (oversampled_amount_tag {}),
   slider_ext);
 
 using _1175_params = mp_list<
@@ -2848,9 +2845,9 @@ parameter_cpp_class_define (
   param_common (
     "OverSmpl",
     declptr<updownsampled<sstillwell::fairly_childish>>(),
-    declptr<updownsampled<sstillwell::fairly_childish>::oversampling_tag>()),
+    declptr<oversampled_amount_tag>()),
   updownsampled<sstillwell::fairly_childish>::get_parameter (
-    updownsampled<sstillwell::fairly_childish>::oversampling_tag {}),
+    oversampled_amount_tag {}),
   slider_ext);
 
 using fairly_childish_params = mp_list<
@@ -2976,9 +2973,9 @@ parameter_cpp_class_define (
   param_common (
     "OverSmpl",
     declptr<updownsampled<sstillwell::major_tom>>(),
-    declptr<updownsampled<sstillwell::major_tom>::oversampling_tag>()),
+    declptr<oversampled_amount_tag>()),
   updownsampled<sstillwell::major_tom>::get_parameter (
-    updownsampled<sstillwell::major_tom>::oversampling_tag {}),
+    oversampled_amount_tag {}),
   slider_ext);
 
 using major_tom_params = mp_list<
@@ -3115,9 +3112,9 @@ parameter_cpp_class_define (
   param_common (
     "OverSmpl",
     declptr<updownsampled<sstillwell::event_horizon_2>>(),
-    declptr<updownsampled<sstillwell::event_horizon_2>::oversampling_tag>()),
+    declptr<oversampled_amount_tag>()),
   updownsampled<sstillwell::event_horizon_2>::get_parameter (
-    updownsampled<sstillwell::event_horizon_2>::oversampling_tag {}),
+    oversampled_amount_tag {}),
   slider_ext);
 
 using event_horizon_2_params = mp11::mp_list<
@@ -3278,9 +3275,9 @@ parameter_cpp_class_define (
   param_common (
     "OverSmpl",
     declptr<updownsampled<chokehold::consolidator>>(),
-    declptr<updownsampled<chokehold::consolidator>::oversampling_tag>()),
+    declptr<oversampled_amount_tag>()),
   updownsampled<chokehold::consolidator>::get_parameter (
-    updownsampled<chokehold::consolidator>::oversampling_tag {}),
+    oversampled_amount_tag {}),
   slider_ext);
 
 using consolidator_params = mp_list<
@@ -3397,9 +3394,9 @@ parameter_cpp_class_define (
   param_common (
     "OverSmpl",
     declptr<updownsampled<chokehold::gate_expander>>(),
-    declptr<updownsampled<chokehold::gate_expander>::oversampling_tag>()),
+    declptr<oversampled_amount_tag>()),
   updownsampled<chokehold::gate_expander>::get_parameter (
-    updownsampled<chokehold::gate_expander>::oversampling_tag {}),
+    oversampled_amount_tag {}),
   slider_ext);
 
 using gate_expander_params = mp_list<
@@ -4646,113 +4643,171 @@ using myphaser_params = mp_list<
 parameter_cpp_class_define (
   eq4x_band1_type,
   n_stereo_busses,
-  param_common ("1.Type", declptr<eq4x>(), declptr<eq4x::band1_type_tag>()),
+  param_common (
+    "1.Type",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band1_type_tag>()),
   eq4x::get_parameter (eq4x::band1_type_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band1_freq,
   n_stereo_busses,
-  param_common ("1.Freq", declptr<eq4x>(), declptr<eq4x::band1_freq_tag>()),
+  param_common (
+    "1.Freq",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band1_freq_tag>()),
   eq4x::get_parameter (eq4x::band1_freq_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band1_q,
   n_stereo_busses,
-  param_common ("1.Q/Order", declptr<eq4x>(), declptr<eq4x::band1_q_tag>()),
+  param_common (
+    "1.Q/Order",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band1_q_tag>()),
   eq4x::get_parameter (eq4x::band1_q_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band1_gain,
   n_stereo_busses,
-  param_common ("1.Gain", declptr<eq4x>(), declptr<eq4x::band1_gain_tag>()),
+  param_common (
+    "1.Gain",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band1_gain_tag>()),
   eq4x::get_parameter (eq4x::band1_gain_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band2_type,
   n_stereo_busses,
-  param_common ("2.Type", declptr<eq4x>(), declptr<eq4x::band2_type_tag>()),
+  param_common (
+    "2.Type",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band2_type_tag>()),
   eq4x::get_parameter (eq4x::band2_type_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band2_freq,
   n_stereo_busses,
-  param_common ("2.Freq", declptr<eq4x>(), declptr<eq4x::band2_freq_tag>()),
+  param_common (
+    "2.Freq",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band2_freq_tag>()),
   eq4x::get_parameter (eq4x::band2_freq_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band2_q,
   n_stereo_busses,
-  param_common ("2.Q/Order", declptr<eq4x>(), declptr<eq4x::band2_q_tag>()),
+  param_common (
+    "2.Q/Order",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band2_q_tag>()),
   eq4x::get_parameter (eq4x::band2_q_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band2_gain,
   n_stereo_busses,
-  param_common ("2.Gain", declptr<eq4x>(), declptr<eq4x::band2_gain_tag>()),
+  param_common (
+    "2.Gain",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band2_gain_tag>()),
   eq4x::get_parameter (eq4x::band2_gain_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band3_type,
   n_stereo_busses,
-  param_common ("3.Type", declptr<eq4x>(), declptr<eq4x::band3_type_tag>()),
+  param_common (
+    "3.Type",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band3_type_tag>()),
   eq4x::get_parameter (eq4x::band3_type_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band3_freq,
   n_stereo_busses,
-  param_common ("3.Freq", declptr<eq4x>(), declptr<eq4x::band3_freq_tag>()),
+  param_common (
+    "3.Freq",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band3_freq_tag>()),
   eq4x::get_parameter (eq4x::band3_freq_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band3_q,
   n_stereo_busses,
-  param_common ("3.Q/Order", declptr<eq4x>(), declptr<eq4x::band3_q_tag>()),
+  param_common (
+    "3.Q/Order",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band3_q_tag>()),
   eq4x::get_parameter (eq4x::band3_q_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band3_gain,
   n_stereo_busses,
-  param_common ("3.Gain", declptr<eq4x>(), declptr<eq4x::band3_gain_tag>()),
+  param_common (
+    "3.Gain",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band3_gain_tag>()),
   eq4x::get_parameter (eq4x::band3_gain_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band4_type,
   n_stereo_busses,
-  param_common ("4.Type", declptr<eq4x>(), declptr<eq4x::band4_type_tag>()),
+  param_common (
+    "4.Type",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band4_type_tag>()),
   eq4x::get_parameter (eq4x::band4_type_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band4_freq,
   n_stereo_busses,
-  param_common ("4.Freq", declptr<eq4x>(), declptr<eq4x::band4_freq_tag>()),
+  param_common (
+    "4.Freq",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band4_freq_tag>()),
   eq4x::get_parameter (eq4x::band4_freq_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band4_q,
   n_stereo_busses,
-  param_common ("4.Q/Order", declptr<eq4x>(), declptr<eq4x::band4_q_tag>()),
+  param_common (
+    "4.Q/Order",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band4_q_tag>()),
   eq4x::get_parameter (eq4x::band4_q_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   eq4x_band4_gain,
   n_stereo_busses,
-  param_common ("4.Gain", declptr<eq4x>(), declptr<eq4x::band4_gain_tag>()),
+  param_common (
+    "4.Gain",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band4_gain_tag>()),
   eq4x::get_parameter (eq4x::band4_gain_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  eq4x_upsampling,
+  n_stereo_busses,
+  param_common (
+    "Upsample",
+    declptr<upsampled<eq4x>>(),
+    declptr<oversampled_amount_tag>()),
+  upsampled<eq4x>::get_parameter (oversampled_amount_tag {}),
   slider_ext);
 
 using eq4x_params = mp_list<
@@ -4771,7 +4826,8 @@ using eq4x_params = mp_list<
   eq4x_band4_type,
   eq4x_band4_gain,
   eq4x_band4_freq,
-  eq4x_band4_q>;
+  eq4x_band4_q,
+  eq4x_upsampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   filter2x_band1_type,
@@ -5024,7 +5080,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<transience_params>;
+using all_fx_typelists = mp_list<eq4x_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 

@@ -50,6 +50,9 @@ public:
 // (reminder: builtin constants break variadic template args).
 static constexpr uint oversampled_max_oversampling = 16;
 struct oversampled_mode_downsample_tag {};
+
+struct oversampled_amount_tag {};
+
 template <class fx, class mode = void, class T = float>
 class oversampled {
 public:
@@ -60,9 +63,7 @@ public:
   static constexpr dsp_types dsp_type         = fx::dsp_type;
   using fx_type                               = fx;
   //----------------------------------------------------------------------------
-  struct oversampling_tag {};
-
-  void set (oversampling_tag, int v)
+  void set (oversampled_amount_tag, int v)
   {
     // design flaw, changing the oversample rate requires all the parameters to
     // be set manually. As on JUCE they aren't event based, but set once per
@@ -80,14 +81,14 @@ public:
     }
   }
 
-  static constexpr auto get_parameter (oversampling_tag)
+  static constexpr auto get_parameter (oversampled_amount_tag)
   {
     return choice_param (
       0, make_cstr_array ("1x", "2x", "4x", "8x", "16x"), 30);
   }
   //----------------------------------------------------------------------------
   using parameters
-    = mp11::mp_push_back<typename fx::parameters, oversampling_tag>;
+    = mp11::mp_push_back<typename fx::parameters, oversampled_amount_tag>;
   //----------------------------------------------------------------------------
   template <class Tag, class U>
   void set (Tag t, U v)

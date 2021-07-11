@@ -22,6 +22,9 @@
 - Sonic Enhancer: It seems as if the envelopes speeds when triggering the CV are
   samplerate dependant. This seems to be designed for 44.1kHz only.
 
+- Chow Phaser: It seems as if the FX is be designed for 44.1kHz only. It
+  distorts badly on high samplerates. Both the port and the original.
+
 - Variation of the filters module with envelope follower on the cutoff.
 
 - Optimization of Saike's filters (CPU hog).

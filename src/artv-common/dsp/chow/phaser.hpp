@@ -2,12 +2,18 @@
 
 // Chow Phaser's DSP code is very-tightly coupled to JUCE, GUI objects, etc, so
 // I unfortunately had to manually port it.
+//
+// From commit 9bf9cda60de10a591288c29a2ab2227cc971fe68
+//
+// It seems that both the original and the port don't behave well at high
+// samplerates. Wild guess: Feedback delay changing? Does the feedback need a
+// fractional delay line?
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 
 #include "artv-common/dsp/own/blocks/filters/onepole.hpp"
-#include "artv-common/dsp/own/blocks/oscillators/cheap_sine.hpp"
+#include "artv-common/dsp/own/blocks/oscillators/lfo.hpp"
 #include "artv-common/dsp/own/misc.hpp"
 #include "artv-common/dsp/own/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"
@@ -209,7 +215,7 @@ public:
 
     v                = midi_note_to_hz (v); // FIX clang-format too many spaces
     _params.lfo_freq = v;
-    reset_lfo_coeff();
+    reset_lfo();
   }
 
   static constexpr auto get_parameter (lfo_freq_tag)
@@ -228,7 +234,7 @@ public:
   void set (freq_mult_tag, int v)
   {
     _params.freq_mult = (bool) v;
-    reset_lfo_coeff();
+    reset_lfo();
   }
 
   static constexpr auto get_parameter (freq_mult_tag)
@@ -300,12 +306,11 @@ public:
 
     memset (&_ph_coeffs, 0, sizeof _ph_coeffs);
     memset (&_fb_coeffs, 0, sizeof _fb_coeffs);
-    memset (&_lfo_coeffs, 0, sizeof _ph_coeffs);
 
     fb_section::reset_states (_fb_states);
     phase_section::reset_states (_ph_states);
-    sin_osc::reset_states (_lfo_states);
     memset (&_param_state, 0, sizeof _param_state);
+    _lfo.reset();
 
     _params.freq_mult = (bool) get_parameter (freq_mult_tag {}).defaultv;
     _params.lfo_depth = get_parameter (lfo_depth_tag {}).defaultv;
@@ -319,7 +324,7 @@ public:
     _params.d3        = get_parameter (d3_tag {}).defaultv;
     _params.src       = get_parameter (src_channel_tag {}).defaultv;
 
-    reset_lfo_coeff();
+    reset_lfo();
     param_targets_to_array (_param_state);
   }
   //----------------------------------------------------------------------------
@@ -344,7 +349,7 @@ public:
         out.store_aligned (&smooth.arr[j]);
       }
 
-      float lfo = sin_osc::tick (make_crange (smooth.p.lfo_coeff), _lfo_states);
+      float lfo = _lfo.tick_sine();
       lfo *= smooth.p.lfo_depth;
       float lfo_shape = light_shape (lfo, smooth.p.skew);
 
@@ -407,7 +412,6 @@ private:
   struct smoothed_params {
     float fb;
     float mod;
-    float lfo_coeff;
     float lfo_depth;
     float skew;
     float stages;
@@ -424,13 +428,9 @@ private:
   using smoother      = onepole_smoother;
   using phase_section = detail::chow_phaser_phase_section;
   using fb_section    = detail::chow_phaser_fb_section;
-  using sin_osc       = cheap_sin_osc;
   //----------------------------------------------------------------------------
   void param_targets_to_array (param_state_array& pa)
   {
-    static_assert (sin_osc::n_coeffs == 1, "");
-
-    pa.p.lfo_coeff = _lfo_coeffs[0];
     pa.p.lfo_depth = _params.lfo_depth * (_params.freq_mult ? 0.8 : 1.);
     pa.p.d1        = _params.d1;
     pa.p.d2        = _params.d2;
@@ -441,12 +441,11 @@ private:
     pa.p.fb        = _params.fb;
   }
   //----------------------------------------------------------------------------
-  void reset_lfo_coeff()
+  void reset_lfo()
   {
     // the LFO coefficient is placed with the parameter smoothing....
     float mult = _params.freq_mult ? 10.f : 1.f;
-    sin_osc::calc_coefs (
-      _lfo_coeffs, _params.lfo_freq * mult, _plugcontext->get_sample_rate());
+    _lfo.set_freq (_params.lfo_freq * mult, _plugcontext->get_sample_rate());
   }
   //----------------------------------------------------------------------------
   inline float light_shape (float x, float skewpow) noexcept
@@ -456,12 +455,11 @@ private:
   //----------------------------------------------------------------------------
   std::array<float, phase_section::n_states> _ph_states;
   std::array<float, fb_section::n_states>    _fb_states;
-  std::array<float, sin_osc::n_states>       _lfo_states;
   alignas (sse_bytes) param_state_array _param_state;
 
   std::array<float, phase_section::n_coeffs> _ph_coeffs;
   std::array<float, fb_section::n_coeffs>    _fb_coeffs;
-  std::array<float, sin_osc::n_coeffs>       _lfo_coeffs;
+  lfo                                        _lfo;
 
   static_assert (smoother::n_states == 1, "");
   float           _smooth_coeff;

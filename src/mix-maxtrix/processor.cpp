@@ -416,8 +416,7 @@ private:
           using paramtype = decltype (param);
           using dsp_param = typename decltype (paramtype::common)::dsp_param;
           static constexpr bool is_oversampling_param =
-            std::is_same_v<
-              dsp_param, typename stereo_processor_type::oversampling_tag>;
+            std::is_same_v<dsp_param, oversampled_amount_tag>;
 
           if constexpr (is_oversampling_param) {
             auto v = p_refresh (param, channel);
