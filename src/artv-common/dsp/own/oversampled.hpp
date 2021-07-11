@@ -79,10 +79,7 @@ public:
   static constexpr auto get_parameter (oversampling_tag)
   {
     return choice_param (
-      0,
-      make_cstr_array (
-        "1x", "2x linphase", "4x linphase", "8x linphase", "16x linphase"),
-      30);
+      0, make_cstr_array ("1x", "2x", "4x", "8x", "16x"), 30);
   }
   //----------------------------------------------------------------------------
   using parameters

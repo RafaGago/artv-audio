@@ -604,7 +604,7 @@ parameter_cpp_class_define (
   tanh_aa_oversampling,
   n_stereo_busses,
   param_common (
-    "Overspl",
+    "OverSmpl",
     declptr<saike::tanh_aa>(),
     declptr<saike::tanh_aa::oversampling_tag>()),
   saike::tanh_aa::get_parameter (saike::tanh_aa::oversampling_tag {}),
@@ -2695,7 +2695,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Threshold",
-    declptr<sstillwell::_1175>(),
+    declptr<oversampled<sstillwell::_1175>>(),
     declptr<sstillwell::_1175::threshold_tag>()),
   sstillwell::_1175::get_parameter (sstillwell::_1175::threshold_tag {}),
   slider_ext);
@@ -2705,7 +2705,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Ratio",
-    declptr<sstillwell::_1175>(),
+    declptr<oversampled<sstillwell::_1175>>(),
     declptr<sstillwell::_1175::ratio_tag>()),
   sstillwell::_1175::get_parameter (sstillwell::_1175::ratio_tag {}),
   slider_ext);
@@ -2715,7 +2715,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Attack",
-    declptr<sstillwell::_1175>(),
+    declptr<oversampled<sstillwell::_1175>>(),
     declptr<sstillwell::_1175::attack_tag>()),
   sstillwell::_1175::get_parameter (sstillwell::_1175::attack_tag {}),
   slider_ext);
@@ -2725,7 +2725,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Release",
-    declptr<sstillwell::_1175>(),
+    declptr<oversampled<sstillwell::_1175>>(),
     declptr<sstillwell::_1175::release_tag>()),
   sstillwell::_1175::get_parameter (sstillwell::_1175::release_tag {}),
   slider_ext);
@@ -2735,9 +2735,20 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Gain",
-    declptr<sstillwell::_1175>(),
+    declptr<oversampled<sstillwell::_1175>>(),
     declptr<sstillwell::_1175::gain_tag>()),
   sstillwell::_1175::get_parameter (sstillwell::_1175::gain_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  _1175_oversampling,
+  n_stereo_busses,
+  param_common (
+    "OverSmpl",
+    declptr<oversampled<sstillwell::_1175>>(),
+    declptr<oversampled<sstillwell::_1175>::oversampling_tag>()),
+  oversampled<sstillwell::_1175>::get_parameter (
+    oversampled<sstillwell::_1175>::oversampling_tag {}),
   slider_ext);
 
 using _1175_params = mp_list<
@@ -2745,7 +2756,8 @@ using _1175_params = mp_list<
   _1175_ratio,
   _1175_attack,
   _1175_release,
-  _1175_gain>;
+  _1175_gain,
+  _1175_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   fairly_childish_threshold,
@@ -3060,7 +3072,7 @@ parameter_cpp_class_define (
   event_horizon_2_oversampling,
   n_stereo_busses,
   param_common (
-    "OverSpl",
+    "OverSmpl",
     declptr<oversampled<sstillwell::event_horizon_2>>(),
     declptr<oversampled<sstillwell::event_horizon_2>::oversampling_tag>()),
   oversampled<sstillwell::event_horizon_2>::get_parameter (
@@ -4947,7 +4959,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<polyphase_fir_test_params>;
+using all_fx_typelists = mp_list<_1175_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 
@@ -4968,7 +4980,7 @@ using all_fx_typelists = mp_list<
   fairly_childish_params,
   major_tom_params,
   slax_params,
-  transience_params, // has 32 samples of uncompensated latency when oversampled
+  transience_params,
   event_horizon_2_params,
   _4x4_params,
   bass_professor_params,
