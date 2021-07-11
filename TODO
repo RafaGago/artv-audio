@@ -74,6 +74,9 @@
 
 - mda. DUB delay 02. Ambience? De-esser?
 
+- Transience: regenerate with the last version of jsfx2cpp. The generated source
+  is a mess.
+
 - Fix clang format issues, e.g. column alignments bigger than 3 or 4 chars. Then:
 
 "for f in $(find src -name '*.hpp' -o -name '*.cpp'); do clang-format-12 $f -i -style=file; done"

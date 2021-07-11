@@ -841,7 +841,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Mode",
-    declptr<saike::transience>(),
+    declptr<oversampled<saike::transience>>(),
     declptr<saike::transience::mode_tag>()),
   saike::transience::get_parameter (saike::transience::mode_tag {}),
   slider_ext);
@@ -851,7 +851,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Attack",
-    declptr<saike::transience>(),
+    declptr<oversampled<saike::transience>>(),
     declptr<saike::transience::sattack_tag>()),
   saike::transience::get_parameter (saike::transience::sattack_tag {}),
   slider_ext);
@@ -861,7 +861,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Attack Amt",
-    declptr<saike::transience>(),
+    declptr<oversampled<saike::transience>>(),
     declptr<saike::transience::strength_tag>()),
   saike::transience::get_parameter (saike::transience::strength_tag {}),
   slider_ext);
@@ -871,7 +871,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Decay",
-    declptr<saike::transience>(),
+    declptr<oversampled<saike::transience>>(),
     declptr<saike::transience::sdecay_tag>()),
   saike::transience::get_parameter (saike::transience::sdecay_tag {}),
   slider_ext);
@@ -881,7 +881,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Decay Amt",
-    declptr<saike::transience>(),
+    declptr<oversampled<saike::transience>>(),
     declptr<saike::transience::strength2_tag>()),
   saike::transience::get_parameter (saike::transience::strength2_tag {}),
   slider_ext);
@@ -891,7 +891,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "G Smooth",
-    declptr<saike::transience>(),
+    declptr<oversampled<saike::transience>>(),
     declptr<saike::transience::gainsmoothing_tag>()),
   saike::transience::get_parameter (saike::transience::gainsmoothing_tag {}),
   slider_ext);
@@ -901,9 +901,10 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "OverSmpl",
-    declptr<saike::transience>(),
-    declptr<saike::transience::oversampling_tag>()),
-  saike::transience::get_parameter (saike::transience::oversampling_tag {}),
+    declptr<oversampled<saike::transience>>(),
+    declptr<oversampled<saike::transience>::oversampling_tag>()),
+  oversampled<saike::transience>::get_parameter (
+    oversampled<saike::transience>::oversampling_tag {}),
   slider_ext);
 
 using transience_params = mp_list<
@@ -5023,7 +5024,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<slax_params>;
+using all_fx_typelists = mp_list<transience_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 

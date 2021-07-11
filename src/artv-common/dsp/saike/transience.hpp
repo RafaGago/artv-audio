@@ -141,7 +141,8 @@ public:
   {
     return choice_param (0, make_cstr_array ("Peak", "Squared"));
   }
-  //----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
   double get_slider_oversampling()
   {
     // TODO: stub, add code for getting "oversampling"
@@ -167,6 +168,7 @@ public:
   {
     return float_param ("", 1.0, 4.0, 1.0, 1.0);
   }
+#endif
   //----------------------------------------------------------------------------
   double get_slider_sattack()
   {
@@ -279,8 +281,13 @@ public:
     sdecay_tag,
     strength2_tag,
     mode_tag,
-    gainsmoothing_tag,
+    gainsmoothing_tag
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
+    ,
     oversampling_tag>;
+#else
+    >;
+#endif
   //----------------------------------------------------------------------------
 private:
   // global/stateful variables for section "init"
@@ -345,6 +352,7 @@ private:
   double curpdc;
   double dbgain;
   double dbgaincur;
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
   double downl$h0;
   double downl$h1;
   double downl$h10;
@@ -863,6 +871,7 @@ private:
   double downr$h98;
   double downr$h99;
   double downr$idx;
+#endif
   double envdesiredattack$at;
   double envdesiredattack$rt;
   double envdesiredattack$state;
@@ -885,6 +894,7 @@ private:
   double movout;
   double outl;
   double outr;
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
   double upsamplel$h0;
   double upsamplel$h1;
   double upsamplel$h10;
@@ -953,534 +963,537 @@ private:
   double upsampler$h8;
   double upsampler$h9;
   double upsampler$idx;
+#endif
   //----------------------------------------------------------------------------
   void init_block_variables()
   {
-    alpha_gain             = 0;
-    cenv                   = 0;
-    ctargetatk             = 0;
-    ctargetdecay           = 0;
-    curpdc                 = 0;
-    dbgain                 = 0;
-    dbgaincur              = 0;
-    downl$h0               = 0;
-    downl$h1               = 0;
-    downl$h10              = 0;
-    downl$h100             = 0;
-    downl$h101             = 0;
-    downl$h102             = 0;
-    downl$h103             = 0;
-    downl$h104             = 0;
-    downl$h105             = 0;
-    downl$h106             = 0;
-    downl$h107             = 0;
-    downl$h108             = 0;
-    downl$h109             = 0;
-    downl$h11              = 0;
-    downl$h110             = 0;
-    downl$h111             = 0;
-    downl$h112             = 0;
-    downl$h113             = 0;
-    downl$h114             = 0;
-    downl$h115             = 0;
-    downl$h116             = 0;
-    downl$h117             = 0;
-    downl$h118             = 0;
-    downl$h119             = 0;
-    downl$h12              = 0;
-    downl$h120             = 0;
-    downl$h121             = 0;
-    downl$h122             = 0;
-    downl$h123             = 0;
-    downl$h124             = 0;
-    downl$h125             = 0;
-    downl$h126             = 0;
-    downl$h127             = 0;
-    downl$h128             = 0;
-    downl$h129             = 0;
-    downl$h13              = 0;
-    downl$h130             = 0;
-    downl$h131             = 0;
-    downl$h132             = 0;
-    downl$h133             = 0;
-    downl$h134             = 0;
-    downl$h135             = 0;
-    downl$h136             = 0;
-    downl$h137             = 0;
-    downl$h138             = 0;
-    downl$h139             = 0;
-    downl$h14              = 0;
-    downl$h140             = 0;
-    downl$h141             = 0;
-    downl$h142             = 0;
-    downl$h143             = 0;
-    downl$h144             = 0;
-    downl$h145             = 0;
-    downl$h146             = 0;
-    downl$h147             = 0;
-    downl$h148             = 0;
-    downl$h149             = 0;
-    downl$h15              = 0;
-    downl$h150             = 0;
-    downl$h151             = 0;
-    downl$h152             = 0;
-    downl$h153             = 0;
-    downl$h154             = 0;
-    downl$h155             = 0;
-    downl$h156             = 0;
-    downl$h157             = 0;
-    downl$h158             = 0;
-    downl$h159             = 0;
-    downl$h16              = 0;
-    downl$h160             = 0;
-    downl$h161             = 0;
-    downl$h162             = 0;
-    downl$h163             = 0;
-    downl$h164             = 0;
-    downl$h165             = 0;
-    downl$h166             = 0;
-    downl$h167             = 0;
-    downl$h168             = 0;
-    downl$h169             = 0;
-    downl$h17              = 0;
-    downl$h170             = 0;
-    downl$h171             = 0;
-    downl$h172             = 0;
-    downl$h173             = 0;
-    downl$h174             = 0;
-    downl$h175             = 0;
-    downl$h176             = 0;
-    downl$h177             = 0;
-    downl$h178             = 0;
-    downl$h179             = 0;
-    downl$h18              = 0;
-    downl$h180             = 0;
-    downl$h181             = 0;
-    downl$h182             = 0;
-    downl$h183             = 0;
-    downl$h184             = 0;
-    downl$h185             = 0;
-    downl$h186             = 0;
-    downl$h187             = 0;
-    downl$h188             = 0;
-    downl$h189             = 0;
-    downl$h19              = 0;
-    downl$h190             = 0;
-    downl$h191             = 0;
-    downl$h192             = 0;
-    downl$h193             = 0;
-    downl$h194             = 0;
-    downl$h195             = 0;
-    downl$h196             = 0;
-    downl$h197             = 0;
-    downl$h198             = 0;
-    downl$h199             = 0;
-    downl$h2               = 0;
-    downl$h20              = 0;
-    downl$h200             = 0;
-    downl$h201             = 0;
-    downl$h202             = 0;
-    downl$h203             = 0;
-    downl$h204             = 0;
-    downl$h205             = 0;
-    downl$h206             = 0;
-    downl$h207             = 0;
-    downl$h208             = 0;
-    downl$h209             = 0;
-    downl$h21              = 0;
-    downl$h210             = 0;
-    downl$h211             = 0;
-    downl$h212             = 0;
-    downl$h213             = 0;
-    downl$h214             = 0;
-    downl$h215             = 0;
-    downl$h216             = 0;
-    downl$h217             = 0;
-    downl$h218             = 0;
-    downl$h219             = 0;
-    downl$h22              = 0;
-    downl$h220             = 0;
-    downl$h221             = 0;
-    downl$h222             = 0;
-    downl$h223             = 0;
-    downl$h224             = 0;
-    downl$h225             = 0;
-    downl$h226             = 0;
-    downl$h227             = 0;
-    downl$h228             = 0;
-    downl$h229             = 0;
-    downl$h23              = 0;
-    downl$h230             = 0;
-    downl$h231             = 0;
-    downl$h232             = 0;
-    downl$h233             = 0;
-    downl$h234             = 0;
-    downl$h235             = 0;
-    downl$h236             = 0;
-    downl$h237             = 0;
-    downl$h238             = 0;
-    downl$h239             = 0;
-    downl$h24              = 0;
-    downl$h240             = 0;
-    downl$h241             = 0;
-    downl$h242             = 0;
-    downl$h243             = 0;
-    downl$h244             = 0;
-    downl$h245             = 0;
-    downl$h246             = 0;
-    downl$h247             = 0;
-    downl$h248             = 0;
-    downl$h249             = 0;
-    downl$h25              = 0;
-    downl$h250             = 0;
-    downl$h251             = 0;
-    downl$h252             = 0;
-    downl$h253             = 0;
-    downl$h254             = 0;
-    downl$h255             = 0;
-    downl$h256             = 0;
-    downl$h257             = 0;
-    downl$h26              = 0;
-    downl$h27              = 0;
-    downl$h28              = 0;
-    downl$h29              = 0;
-    downl$h3               = 0;
-    downl$h30              = 0;
-    downl$h31              = 0;
-    downl$h32              = 0;
-    downl$h33              = 0;
-    downl$h34              = 0;
-    downl$h35              = 0;
-    downl$h36              = 0;
-    downl$h37              = 0;
-    downl$h38              = 0;
-    downl$h39              = 0;
-    downl$h4               = 0;
-    downl$h40              = 0;
-    downl$h41              = 0;
-    downl$h42              = 0;
-    downl$h43              = 0;
-    downl$h44              = 0;
-    downl$h45              = 0;
-    downl$h46              = 0;
-    downl$h47              = 0;
-    downl$h48              = 0;
-    downl$h49              = 0;
-    downl$h5               = 0;
-    downl$h50              = 0;
-    downl$h51              = 0;
-    downl$h52              = 0;
-    downl$h53              = 0;
-    downl$h54              = 0;
-    downl$h55              = 0;
-    downl$h56              = 0;
-    downl$h57              = 0;
-    downl$h58              = 0;
-    downl$h59              = 0;
-    downl$h6               = 0;
-    downl$h60              = 0;
-    downl$h61              = 0;
-    downl$h62              = 0;
-    downl$h63              = 0;
-    downl$h64              = 0;
-    downl$h65              = 0;
-    downl$h66              = 0;
-    downl$h67              = 0;
-    downl$h68              = 0;
-    downl$h69              = 0;
-    downl$h7               = 0;
-    downl$h70              = 0;
-    downl$h71              = 0;
-    downl$h72              = 0;
-    downl$h73              = 0;
-    downl$h74              = 0;
-    downl$h75              = 0;
-    downl$h76              = 0;
-    downl$h77              = 0;
-    downl$h78              = 0;
-    downl$h79              = 0;
-    downl$h8               = 0;
-    downl$h80              = 0;
-    downl$h81              = 0;
-    downl$h82              = 0;
-    downl$h83              = 0;
-    downl$h84              = 0;
-    downl$h85              = 0;
-    downl$h86              = 0;
-    downl$h87              = 0;
-    downl$h88              = 0;
-    downl$h89              = 0;
-    downl$h9               = 0;
-    downl$h90              = 0;
-    downl$h91              = 0;
-    downl$h92              = 0;
-    downl$h93              = 0;
-    downl$h94              = 0;
-    downl$h95              = 0;
-    downl$h96              = 0;
-    downl$h97              = 0;
-    downl$h98              = 0;
-    downl$h99              = 0;
-    downl$idx              = 0;
-    downr$h0               = 0;
-    downr$h1               = 0;
-    downr$h10              = 0;
-    downr$h100             = 0;
-    downr$h101             = 0;
-    downr$h102             = 0;
-    downr$h103             = 0;
-    downr$h104             = 0;
-    downr$h105             = 0;
-    downr$h106             = 0;
-    downr$h107             = 0;
-    downr$h108             = 0;
-    downr$h109             = 0;
-    downr$h11              = 0;
-    downr$h110             = 0;
-    downr$h111             = 0;
-    downr$h112             = 0;
-    downr$h113             = 0;
-    downr$h114             = 0;
-    downr$h115             = 0;
-    downr$h116             = 0;
-    downr$h117             = 0;
-    downr$h118             = 0;
-    downr$h119             = 0;
-    downr$h12              = 0;
-    downr$h120             = 0;
-    downr$h121             = 0;
-    downr$h122             = 0;
-    downr$h123             = 0;
-    downr$h124             = 0;
-    downr$h125             = 0;
-    downr$h126             = 0;
-    downr$h127             = 0;
-    downr$h128             = 0;
-    downr$h129             = 0;
-    downr$h13              = 0;
-    downr$h130             = 0;
-    downr$h131             = 0;
-    downr$h132             = 0;
-    downr$h133             = 0;
-    downr$h134             = 0;
-    downr$h135             = 0;
-    downr$h136             = 0;
-    downr$h137             = 0;
-    downr$h138             = 0;
-    downr$h139             = 0;
-    downr$h14              = 0;
-    downr$h140             = 0;
-    downr$h141             = 0;
-    downr$h142             = 0;
-    downr$h143             = 0;
-    downr$h144             = 0;
-    downr$h145             = 0;
-    downr$h146             = 0;
-    downr$h147             = 0;
-    downr$h148             = 0;
-    downr$h149             = 0;
-    downr$h15              = 0;
-    downr$h150             = 0;
-    downr$h151             = 0;
-    downr$h152             = 0;
-    downr$h153             = 0;
-    downr$h154             = 0;
-    downr$h155             = 0;
-    downr$h156             = 0;
-    downr$h157             = 0;
-    downr$h158             = 0;
-    downr$h159             = 0;
-    downr$h16              = 0;
-    downr$h160             = 0;
-    downr$h161             = 0;
-    downr$h162             = 0;
-    downr$h163             = 0;
-    downr$h164             = 0;
-    downr$h165             = 0;
-    downr$h166             = 0;
-    downr$h167             = 0;
-    downr$h168             = 0;
-    downr$h169             = 0;
-    downr$h17              = 0;
-    downr$h170             = 0;
-    downr$h171             = 0;
-    downr$h172             = 0;
-    downr$h173             = 0;
-    downr$h174             = 0;
-    downr$h175             = 0;
-    downr$h176             = 0;
-    downr$h177             = 0;
-    downr$h178             = 0;
-    downr$h179             = 0;
-    downr$h18              = 0;
-    downr$h180             = 0;
-    downr$h181             = 0;
-    downr$h182             = 0;
-    downr$h183             = 0;
-    downr$h184             = 0;
-    downr$h185             = 0;
-    downr$h186             = 0;
-    downr$h187             = 0;
-    downr$h188             = 0;
-    downr$h189             = 0;
-    downr$h19              = 0;
-    downr$h190             = 0;
-    downr$h191             = 0;
-    downr$h192             = 0;
-    downr$h193             = 0;
-    downr$h194             = 0;
-    downr$h195             = 0;
-    downr$h196             = 0;
-    downr$h197             = 0;
-    downr$h198             = 0;
-    downr$h199             = 0;
-    downr$h2               = 0;
-    downr$h20              = 0;
-    downr$h200             = 0;
-    downr$h201             = 0;
-    downr$h202             = 0;
-    downr$h203             = 0;
-    downr$h204             = 0;
-    downr$h205             = 0;
-    downr$h206             = 0;
-    downr$h207             = 0;
-    downr$h208             = 0;
-    downr$h209             = 0;
-    downr$h21              = 0;
-    downr$h210             = 0;
-    downr$h211             = 0;
-    downr$h212             = 0;
-    downr$h213             = 0;
-    downr$h214             = 0;
-    downr$h215             = 0;
-    downr$h216             = 0;
-    downr$h217             = 0;
-    downr$h218             = 0;
-    downr$h219             = 0;
-    downr$h22              = 0;
-    downr$h220             = 0;
-    downr$h221             = 0;
-    downr$h222             = 0;
-    downr$h223             = 0;
-    downr$h224             = 0;
-    downr$h225             = 0;
-    downr$h226             = 0;
-    downr$h227             = 0;
-    downr$h228             = 0;
-    downr$h229             = 0;
-    downr$h23              = 0;
-    downr$h230             = 0;
-    downr$h231             = 0;
-    downr$h232             = 0;
-    downr$h233             = 0;
-    downr$h234             = 0;
-    downr$h235             = 0;
-    downr$h236             = 0;
-    downr$h237             = 0;
-    downr$h238             = 0;
-    downr$h239             = 0;
-    downr$h24              = 0;
-    downr$h240             = 0;
-    downr$h241             = 0;
-    downr$h242             = 0;
-    downr$h243             = 0;
-    downr$h244             = 0;
-    downr$h245             = 0;
-    downr$h246             = 0;
-    downr$h247             = 0;
-    downr$h248             = 0;
-    downr$h249             = 0;
-    downr$h25              = 0;
-    downr$h250             = 0;
-    downr$h251             = 0;
-    downr$h252             = 0;
-    downr$h253             = 0;
-    downr$h254             = 0;
-    downr$h255             = 0;
-    downr$h256             = 0;
-    downr$h257             = 0;
-    downr$h26              = 0;
-    downr$h27              = 0;
-    downr$h28              = 0;
-    downr$h29              = 0;
-    downr$h3               = 0;
-    downr$h30              = 0;
-    downr$h31              = 0;
-    downr$h32              = 0;
-    downr$h33              = 0;
-    downr$h34              = 0;
-    downr$h35              = 0;
-    downr$h36              = 0;
-    downr$h37              = 0;
-    downr$h38              = 0;
-    downr$h39              = 0;
-    downr$h4               = 0;
-    downr$h40              = 0;
-    downr$h41              = 0;
-    downr$h42              = 0;
-    downr$h43              = 0;
-    downr$h44              = 0;
-    downr$h45              = 0;
-    downr$h46              = 0;
-    downr$h47              = 0;
-    downr$h48              = 0;
-    downr$h49              = 0;
-    downr$h5               = 0;
-    downr$h50              = 0;
-    downr$h51              = 0;
-    downr$h52              = 0;
-    downr$h53              = 0;
-    downr$h54              = 0;
-    downr$h55              = 0;
-    downr$h56              = 0;
-    downr$h57              = 0;
-    downr$h58              = 0;
-    downr$h59              = 0;
-    downr$h6               = 0;
-    downr$h60              = 0;
-    downr$h61              = 0;
-    downr$h62              = 0;
-    downr$h63              = 0;
-    downr$h64              = 0;
-    downr$h65              = 0;
-    downr$h66              = 0;
-    downr$h67              = 0;
-    downr$h68              = 0;
-    downr$h69              = 0;
-    downr$h7               = 0;
-    downr$h70              = 0;
-    downr$h71              = 0;
-    downr$h72              = 0;
-    downr$h73              = 0;
-    downr$h74              = 0;
-    downr$h75              = 0;
-    downr$h76              = 0;
-    downr$h77              = 0;
-    downr$h78              = 0;
-    downr$h79              = 0;
-    downr$h8               = 0;
-    downr$h80              = 0;
-    downr$h81              = 0;
-    downr$h82              = 0;
-    downr$h83              = 0;
-    downr$h84              = 0;
-    downr$h85              = 0;
-    downr$h86              = 0;
-    downr$h87              = 0;
-    downr$h88              = 0;
-    downr$h89              = 0;
-    downr$h9               = 0;
-    downr$h90              = 0;
-    downr$h91              = 0;
-    downr$h92              = 0;
-    downr$h93              = 0;
-    downr$h94              = 0;
-    downr$h95              = 0;
-    downr$h96              = 0;
-    downr$h97              = 0;
-    downr$h98              = 0;
-    downr$h99              = 0;
-    downr$idx              = 0;
+    alpha_gain   = 0;
+    cenv         = 0;
+    ctargetatk   = 0;
+    ctargetdecay = 0;
+    curpdc       = 0;
+    dbgain       = 0;
+    dbgaincur    = 0;
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
+    downl$h0   = 0;
+    downl$h1   = 0;
+    downl$h10  = 0;
+    downl$h100 = 0;
+    downl$h101 = 0;
+    downl$h102 = 0;
+    downl$h103 = 0;
+    downl$h104 = 0;
+    downl$h105 = 0;
+    downl$h106 = 0;
+    downl$h107 = 0;
+    downl$h108 = 0;
+    downl$h109 = 0;
+    downl$h11  = 0;
+    downl$h110 = 0;
+    downl$h111 = 0;
+    downl$h112 = 0;
+    downl$h113 = 0;
+    downl$h114 = 0;
+    downl$h115 = 0;
+    downl$h116 = 0;
+    downl$h117 = 0;
+    downl$h118 = 0;
+    downl$h119 = 0;
+    downl$h12  = 0;
+    downl$h120 = 0;
+    downl$h121 = 0;
+    downl$h122 = 0;
+    downl$h123 = 0;
+    downl$h124 = 0;
+    downl$h125 = 0;
+    downl$h126 = 0;
+    downl$h127 = 0;
+    downl$h128 = 0;
+    downl$h129 = 0;
+    downl$h13  = 0;
+    downl$h130 = 0;
+    downl$h131 = 0;
+    downl$h132 = 0;
+    downl$h133 = 0;
+    downl$h134 = 0;
+    downl$h135 = 0;
+    downl$h136 = 0;
+    downl$h137 = 0;
+    downl$h138 = 0;
+    downl$h139 = 0;
+    downl$h14  = 0;
+    downl$h140 = 0;
+    downl$h141 = 0;
+    downl$h142 = 0;
+    downl$h143 = 0;
+    downl$h144 = 0;
+    downl$h145 = 0;
+    downl$h146 = 0;
+    downl$h147 = 0;
+    downl$h148 = 0;
+    downl$h149 = 0;
+    downl$h15  = 0;
+    downl$h150 = 0;
+    downl$h151 = 0;
+    downl$h152 = 0;
+    downl$h153 = 0;
+    downl$h154 = 0;
+    downl$h155 = 0;
+    downl$h156 = 0;
+    downl$h157 = 0;
+    downl$h158 = 0;
+    downl$h159 = 0;
+    downl$h16  = 0;
+    downl$h160 = 0;
+    downl$h161 = 0;
+    downl$h162 = 0;
+    downl$h163 = 0;
+    downl$h164 = 0;
+    downl$h165 = 0;
+    downl$h166 = 0;
+    downl$h167 = 0;
+    downl$h168 = 0;
+    downl$h169 = 0;
+    downl$h17  = 0;
+    downl$h170 = 0;
+    downl$h171 = 0;
+    downl$h172 = 0;
+    downl$h173 = 0;
+    downl$h174 = 0;
+    downl$h175 = 0;
+    downl$h176 = 0;
+    downl$h177 = 0;
+    downl$h178 = 0;
+    downl$h179 = 0;
+    downl$h18  = 0;
+    downl$h180 = 0;
+    downl$h181 = 0;
+    downl$h182 = 0;
+    downl$h183 = 0;
+    downl$h184 = 0;
+    downl$h185 = 0;
+    downl$h186 = 0;
+    downl$h187 = 0;
+    downl$h188 = 0;
+    downl$h189 = 0;
+    downl$h19  = 0;
+    downl$h190 = 0;
+    downl$h191 = 0;
+    downl$h192 = 0;
+    downl$h193 = 0;
+    downl$h194 = 0;
+    downl$h195 = 0;
+    downl$h196 = 0;
+    downl$h197 = 0;
+    downl$h198 = 0;
+    downl$h199 = 0;
+    downl$h2   = 0;
+    downl$h20  = 0;
+    downl$h200 = 0;
+    downl$h201 = 0;
+    downl$h202 = 0;
+    downl$h203 = 0;
+    downl$h204 = 0;
+    downl$h205 = 0;
+    downl$h206 = 0;
+    downl$h207 = 0;
+    downl$h208 = 0;
+    downl$h209 = 0;
+    downl$h21  = 0;
+    downl$h210 = 0;
+    downl$h211 = 0;
+    downl$h212 = 0;
+    downl$h213 = 0;
+    downl$h214 = 0;
+    downl$h215 = 0;
+    downl$h216 = 0;
+    downl$h217 = 0;
+    downl$h218 = 0;
+    downl$h219 = 0;
+    downl$h22  = 0;
+    downl$h220 = 0;
+    downl$h221 = 0;
+    downl$h222 = 0;
+    downl$h223 = 0;
+    downl$h224 = 0;
+    downl$h225 = 0;
+    downl$h226 = 0;
+    downl$h227 = 0;
+    downl$h228 = 0;
+    downl$h229 = 0;
+    downl$h23  = 0;
+    downl$h230 = 0;
+    downl$h231 = 0;
+    downl$h232 = 0;
+    downl$h233 = 0;
+    downl$h234 = 0;
+    downl$h235 = 0;
+    downl$h236 = 0;
+    downl$h237 = 0;
+    downl$h238 = 0;
+    downl$h239 = 0;
+    downl$h24  = 0;
+    downl$h240 = 0;
+    downl$h241 = 0;
+    downl$h242 = 0;
+    downl$h243 = 0;
+    downl$h244 = 0;
+    downl$h245 = 0;
+    downl$h246 = 0;
+    downl$h247 = 0;
+    downl$h248 = 0;
+    downl$h249 = 0;
+    downl$h25  = 0;
+    downl$h250 = 0;
+    downl$h251 = 0;
+    downl$h252 = 0;
+    downl$h253 = 0;
+    downl$h254 = 0;
+    downl$h255 = 0;
+    downl$h256 = 0;
+    downl$h257 = 0;
+    downl$h26  = 0;
+    downl$h27  = 0;
+    downl$h28  = 0;
+    downl$h29  = 0;
+    downl$h3   = 0;
+    downl$h30  = 0;
+    downl$h31  = 0;
+    downl$h32  = 0;
+    downl$h33  = 0;
+    downl$h34  = 0;
+    downl$h35  = 0;
+    downl$h36  = 0;
+    downl$h37  = 0;
+    downl$h38  = 0;
+    downl$h39  = 0;
+    downl$h4   = 0;
+    downl$h40  = 0;
+    downl$h41  = 0;
+    downl$h42  = 0;
+    downl$h43  = 0;
+    downl$h44  = 0;
+    downl$h45  = 0;
+    downl$h46  = 0;
+    downl$h47  = 0;
+    downl$h48  = 0;
+    downl$h49  = 0;
+    downl$h5   = 0;
+    downl$h50  = 0;
+    downl$h51  = 0;
+    downl$h52  = 0;
+    downl$h53  = 0;
+    downl$h54  = 0;
+    downl$h55  = 0;
+    downl$h56  = 0;
+    downl$h57  = 0;
+    downl$h58  = 0;
+    downl$h59  = 0;
+    downl$h6   = 0;
+    downl$h60  = 0;
+    downl$h61  = 0;
+    downl$h62  = 0;
+    downl$h63  = 0;
+    downl$h64  = 0;
+    downl$h65  = 0;
+    downl$h66  = 0;
+    downl$h67  = 0;
+    downl$h68  = 0;
+    downl$h69  = 0;
+    downl$h7   = 0;
+    downl$h70  = 0;
+    downl$h71  = 0;
+    downl$h72  = 0;
+    downl$h73  = 0;
+    downl$h74  = 0;
+    downl$h75  = 0;
+    downl$h76  = 0;
+    downl$h77  = 0;
+    downl$h78  = 0;
+    downl$h79  = 0;
+    downl$h8   = 0;
+    downl$h80  = 0;
+    downl$h81  = 0;
+    downl$h82  = 0;
+    downl$h83  = 0;
+    downl$h84  = 0;
+    downl$h85  = 0;
+    downl$h86  = 0;
+    downl$h87  = 0;
+    downl$h88  = 0;
+    downl$h89  = 0;
+    downl$h9   = 0;
+    downl$h90  = 0;
+    downl$h91  = 0;
+    downl$h92  = 0;
+    downl$h93  = 0;
+    downl$h94  = 0;
+    downl$h95  = 0;
+    downl$h96  = 0;
+    downl$h97  = 0;
+    downl$h98  = 0;
+    downl$h99  = 0;
+    downl$idx  = 0;
+    downr$h0   = 0;
+    downr$h1   = 0;
+    downr$h10  = 0;
+    downr$h100 = 0;
+    downr$h101 = 0;
+    downr$h102 = 0;
+    downr$h103 = 0;
+    downr$h104 = 0;
+    downr$h105 = 0;
+    downr$h106 = 0;
+    downr$h107 = 0;
+    downr$h108 = 0;
+    downr$h109 = 0;
+    downr$h11  = 0;
+    downr$h110 = 0;
+    downr$h111 = 0;
+    downr$h112 = 0;
+    downr$h113 = 0;
+    downr$h114 = 0;
+    downr$h115 = 0;
+    downr$h116 = 0;
+    downr$h117 = 0;
+    downr$h118 = 0;
+    downr$h119 = 0;
+    downr$h12  = 0;
+    downr$h120 = 0;
+    downr$h121 = 0;
+    downr$h122 = 0;
+    downr$h123 = 0;
+    downr$h124 = 0;
+    downr$h125 = 0;
+    downr$h126 = 0;
+    downr$h127 = 0;
+    downr$h128 = 0;
+    downr$h129 = 0;
+    downr$h13  = 0;
+    downr$h130 = 0;
+    downr$h131 = 0;
+    downr$h132 = 0;
+    downr$h133 = 0;
+    downr$h134 = 0;
+    downr$h135 = 0;
+    downr$h136 = 0;
+    downr$h137 = 0;
+    downr$h138 = 0;
+    downr$h139 = 0;
+    downr$h14  = 0;
+    downr$h140 = 0;
+    downr$h141 = 0;
+    downr$h142 = 0;
+    downr$h143 = 0;
+    downr$h144 = 0;
+    downr$h145 = 0;
+    downr$h146 = 0;
+    downr$h147 = 0;
+    downr$h148 = 0;
+    downr$h149 = 0;
+    downr$h15  = 0;
+    downr$h150 = 0;
+    downr$h151 = 0;
+    downr$h152 = 0;
+    downr$h153 = 0;
+    downr$h154 = 0;
+    downr$h155 = 0;
+    downr$h156 = 0;
+    downr$h157 = 0;
+    downr$h158 = 0;
+    downr$h159 = 0;
+    downr$h16  = 0;
+    downr$h160 = 0;
+    downr$h161 = 0;
+    downr$h162 = 0;
+    downr$h163 = 0;
+    downr$h164 = 0;
+    downr$h165 = 0;
+    downr$h166 = 0;
+    downr$h167 = 0;
+    downr$h168 = 0;
+    downr$h169 = 0;
+    downr$h17  = 0;
+    downr$h170 = 0;
+    downr$h171 = 0;
+    downr$h172 = 0;
+    downr$h173 = 0;
+    downr$h174 = 0;
+    downr$h175 = 0;
+    downr$h176 = 0;
+    downr$h177 = 0;
+    downr$h178 = 0;
+    downr$h179 = 0;
+    downr$h18  = 0;
+    downr$h180 = 0;
+    downr$h181 = 0;
+    downr$h182 = 0;
+    downr$h183 = 0;
+    downr$h184 = 0;
+    downr$h185 = 0;
+    downr$h186 = 0;
+    downr$h187 = 0;
+    downr$h188 = 0;
+    downr$h189 = 0;
+    downr$h19  = 0;
+    downr$h190 = 0;
+    downr$h191 = 0;
+    downr$h192 = 0;
+    downr$h193 = 0;
+    downr$h194 = 0;
+    downr$h195 = 0;
+    downr$h196 = 0;
+    downr$h197 = 0;
+    downr$h198 = 0;
+    downr$h199 = 0;
+    downr$h2   = 0;
+    downr$h20  = 0;
+    downr$h200 = 0;
+    downr$h201 = 0;
+    downr$h202 = 0;
+    downr$h203 = 0;
+    downr$h204 = 0;
+    downr$h205 = 0;
+    downr$h206 = 0;
+    downr$h207 = 0;
+    downr$h208 = 0;
+    downr$h209 = 0;
+    downr$h21  = 0;
+    downr$h210 = 0;
+    downr$h211 = 0;
+    downr$h212 = 0;
+    downr$h213 = 0;
+    downr$h214 = 0;
+    downr$h215 = 0;
+    downr$h216 = 0;
+    downr$h217 = 0;
+    downr$h218 = 0;
+    downr$h219 = 0;
+    downr$h22  = 0;
+    downr$h220 = 0;
+    downr$h221 = 0;
+    downr$h222 = 0;
+    downr$h223 = 0;
+    downr$h224 = 0;
+    downr$h225 = 0;
+    downr$h226 = 0;
+    downr$h227 = 0;
+    downr$h228 = 0;
+    downr$h229 = 0;
+    downr$h23  = 0;
+    downr$h230 = 0;
+    downr$h231 = 0;
+    downr$h232 = 0;
+    downr$h233 = 0;
+    downr$h234 = 0;
+    downr$h235 = 0;
+    downr$h236 = 0;
+    downr$h237 = 0;
+    downr$h238 = 0;
+    downr$h239 = 0;
+    downr$h24  = 0;
+    downr$h240 = 0;
+    downr$h241 = 0;
+    downr$h242 = 0;
+    downr$h243 = 0;
+    downr$h244 = 0;
+    downr$h245 = 0;
+    downr$h246 = 0;
+    downr$h247 = 0;
+    downr$h248 = 0;
+    downr$h249 = 0;
+    downr$h25  = 0;
+    downr$h250 = 0;
+    downr$h251 = 0;
+    downr$h252 = 0;
+    downr$h253 = 0;
+    downr$h254 = 0;
+    downr$h255 = 0;
+    downr$h256 = 0;
+    downr$h257 = 0;
+    downr$h26  = 0;
+    downr$h27  = 0;
+    downr$h28  = 0;
+    downr$h29  = 0;
+    downr$h3   = 0;
+    downr$h30  = 0;
+    downr$h31  = 0;
+    downr$h32  = 0;
+    downr$h33  = 0;
+    downr$h34  = 0;
+    downr$h35  = 0;
+    downr$h36  = 0;
+    downr$h37  = 0;
+    downr$h38  = 0;
+    downr$h39  = 0;
+    downr$h4   = 0;
+    downr$h40  = 0;
+    downr$h41  = 0;
+    downr$h42  = 0;
+    downr$h43  = 0;
+    downr$h44  = 0;
+    downr$h45  = 0;
+    downr$h46  = 0;
+    downr$h47  = 0;
+    downr$h48  = 0;
+    downr$h49  = 0;
+    downr$h5   = 0;
+    downr$h50  = 0;
+    downr$h51  = 0;
+    downr$h52  = 0;
+    downr$h53  = 0;
+    downr$h54  = 0;
+    downr$h55  = 0;
+    downr$h56  = 0;
+    downr$h57  = 0;
+    downr$h58  = 0;
+    downr$h59  = 0;
+    downr$h6   = 0;
+    downr$h60  = 0;
+    downr$h61  = 0;
+    downr$h62  = 0;
+    downr$h63  = 0;
+    downr$h64  = 0;
+    downr$h65  = 0;
+    downr$h66  = 0;
+    downr$h67  = 0;
+    downr$h68  = 0;
+    downr$h69  = 0;
+    downr$h7   = 0;
+    downr$h70  = 0;
+    downr$h71  = 0;
+    downr$h72  = 0;
+    downr$h73  = 0;
+    downr$h74  = 0;
+    downr$h75  = 0;
+    downr$h76  = 0;
+    downr$h77  = 0;
+    downr$h78  = 0;
+    downr$h79  = 0;
+    downr$h8   = 0;
+    downr$h80  = 0;
+    downr$h81  = 0;
+    downr$h82  = 0;
+    downr$h83  = 0;
+    downr$h84  = 0;
+    downr$h85  = 0;
+    downr$h86  = 0;
+    downr$h87  = 0;
+    downr$h88  = 0;
+    downr$h89  = 0;
+    downr$h9   = 0;
+    downr$h90  = 0;
+    downr$h91  = 0;
+    downr$h92  = 0;
+    downr$h93  = 0;
+    downr$h94  = 0;
+    downr$h95  = 0;
+    downr$h96  = 0;
+    downr$h97  = 0;
+    downr$h98  = 0;
+    downr$h99  = 0;
+    downr$idx  = 0;
+#endif
     envdesiredattack$at    = 0;
     envdesiredattack$rt    = 0;
     envdesiredattack$state = 0;
@@ -1503,74 +1516,76 @@ private:
     movout                 = 0;
     outl                   = 0;
     outr                   = 0;
-    upsamplel$h0           = 0;
-    upsamplel$h1           = 0;
-    upsamplel$h10          = 0;
-    upsamplel$h11          = 0;
-    upsamplel$h12          = 0;
-    upsamplel$h13          = 0;
-    upsamplel$h14          = 0;
-    upsamplel$h15          = 0;
-    upsamplel$h16          = 0;
-    upsamplel$h17          = 0;
-    upsamplel$h18          = 0;
-    upsamplel$h19          = 0;
-    upsamplel$h2           = 0;
-    upsamplel$h20          = 0;
-    upsamplel$h21          = 0;
-    upsamplel$h22          = 0;
-    upsamplel$h23          = 0;
-    upsamplel$h24          = 0;
-    upsamplel$h25          = 0;
-    upsamplel$h26          = 0;
-    upsamplel$h27          = 0;
-    upsamplel$h28          = 0;
-    upsamplel$h29          = 0;
-    upsamplel$h3           = 0;
-    upsamplel$h30          = 0;
-    upsamplel$h31          = 0;
-    upsamplel$h32          = 0;
-    upsamplel$h4           = 0;
-    upsamplel$h5           = 0;
-    upsamplel$h6           = 0;
-    upsamplel$h7           = 0;
-    upsamplel$h8           = 0;
-    upsamplel$h9           = 0;
-    upsamplel$idx          = 0;
-    upsampler$h0           = 0;
-    upsampler$h1           = 0;
-    upsampler$h10          = 0;
-    upsampler$h11          = 0;
-    upsampler$h12          = 0;
-    upsampler$h13          = 0;
-    upsampler$h14          = 0;
-    upsampler$h15          = 0;
-    upsampler$h16          = 0;
-    upsampler$h17          = 0;
-    upsampler$h18          = 0;
-    upsampler$h19          = 0;
-    upsampler$h2           = 0;
-    upsampler$h20          = 0;
-    upsampler$h21          = 0;
-    upsampler$h22          = 0;
-    upsampler$h23          = 0;
-    upsampler$h24          = 0;
-    upsampler$h25          = 0;
-    upsampler$h26          = 0;
-    upsampler$h27          = 0;
-    upsampler$h28          = 0;
-    upsampler$h29          = 0;
-    upsampler$h3           = 0;
-    upsampler$h30          = 0;
-    upsampler$h31          = 0;
-    upsampler$h32          = 0;
-    upsampler$h4           = 0;
-    upsampler$h5           = 0;
-    upsampler$h6           = 0;
-    upsampler$h7           = 0;
-    upsampler$h8           = 0;
-    upsampler$h9           = 0;
-    upsampler$idx          = 0;
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
+    upsamplel$h0  = 0;
+    upsamplel$h1  = 0;
+    upsamplel$h10 = 0;
+    upsamplel$h11 = 0;
+    upsamplel$h12 = 0;
+    upsamplel$h13 = 0;
+    upsamplel$h14 = 0;
+    upsamplel$h15 = 0;
+    upsamplel$h16 = 0;
+    upsamplel$h17 = 0;
+    upsamplel$h18 = 0;
+    upsamplel$h19 = 0;
+    upsamplel$h2  = 0;
+    upsamplel$h20 = 0;
+    upsamplel$h21 = 0;
+    upsamplel$h22 = 0;
+    upsamplel$h23 = 0;
+    upsamplel$h24 = 0;
+    upsamplel$h25 = 0;
+    upsamplel$h26 = 0;
+    upsamplel$h27 = 0;
+    upsamplel$h28 = 0;
+    upsamplel$h29 = 0;
+    upsamplel$h3  = 0;
+    upsamplel$h30 = 0;
+    upsamplel$h31 = 0;
+    upsamplel$h32 = 0;
+    upsamplel$h4  = 0;
+    upsamplel$h5  = 0;
+    upsamplel$h6  = 0;
+    upsamplel$h7  = 0;
+    upsamplel$h8  = 0;
+    upsamplel$h9  = 0;
+    upsamplel$idx = 0;
+    upsampler$h0  = 0;
+    upsampler$h1  = 0;
+    upsampler$h10 = 0;
+    upsampler$h11 = 0;
+    upsampler$h12 = 0;
+    upsampler$h13 = 0;
+    upsampler$h14 = 0;
+    upsampler$h15 = 0;
+    upsampler$h16 = 0;
+    upsampler$h17 = 0;
+    upsampler$h18 = 0;
+    upsampler$h19 = 0;
+    upsampler$h2  = 0;
+    upsampler$h20 = 0;
+    upsampler$h21 = 0;
+    upsampler$h22 = 0;
+    upsampler$h23 = 0;
+    upsampler$h24 = 0;
+    upsampler$h25 = 0;
+    upsampler$h26 = 0;
+    upsampler$h27 = 0;
+    upsampler$h28 = 0;
+    upsampler$h29 = 0;
+    upsampler$h3  = 0;
+    upsampler$h30 = 0;
+    upsampler$h31 = 0;
+    upsampler$h32 = 0;
+    upsampler$h4  = 0;
+    upsampler$h5  = 0;
+    upsampler$h6  = 0;
+    upsampler$h7  = 0;
+    upsampler$h8  = 0;
+    upsampler$h9  = 0;
+    upsampler$idx = 0;
+#endif
   }
   //----------------------------------------------------------------------------
   plugin_context* plugcontext = nullptr;
@@ -1593,6 +1608,7 @@ public:
     dynamics_out     = 200000.;
     dynamics_gain    = 300000.;
     dynamics_bufsize = 100000.;
+#if 0
     init$initbuffernoreset (
       dynamics_in,
       dynamics_in + dynamics_bufsize - 1.,
@@ -1612,6 +1628,7 @@ public:
       gainbuf$scopebuffermax,
       gainbuf$scopeptr);
     ;
+#endif
   }
   //----------------------------------------------------------------------------
 private:
@@ -1622,12 +1639,14 @@ public:
   template <class T>
   void process_block_replacing (std::array<T*, 2> chnls, uint samples)
   {
-    double alpha       = 0.;
-    double attack      = 0.;
-    double beta        = 0.;
+    double alpha  = 0.;
+    double attack = 0.;
+    double beta   = 0.;
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
     double curfirdelay = 0.;
-    double decay       = 0.;
-    double f           = 0.;
+#endif
+    double decay = 0.;
+    double f     = 0.;
 
     beta   = std::log (min_attack);
     alpha  = std::log (max_attack) - beta;
@@ -1635,6 +1654,8 @@ public:
     beta   = std::log (min_decay);
     alpha  = std::log (max_decay) - beta;
     decay  = std::exp (alpha * get_slider_sdecay() + beta);
+
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
     alpha_gain = std::exp (
       -1.
       / (.5 * .015 * get_slider_gainsmoothing() * get_slider_oversampling() * plugcontext->get_sample_rate()));
@@ -1644,6 +1665,10 @@ public:
       jsfx_specialvar_set_pdc_delay (curfirdelay);
       curpdc = curfirdelay;
     }
+#else
+    auto sr = plugcontext->get_sample_rate();
+    alpha_gain = std::exp (-1. / (.5 * .015 * get_slider_gainsmoothing() * sr));
+#endif
     init$init_follower (follow_atk, 120., envfollower$at, envfollower$rt);
     init$init_follower (follow_atk, 150., envfollowerout$at, envfollowerout$rt);
     init$init_follower (attack, 150., envdesiredattack$at, envdesiredattack$rt);
@@ -1655,6 +1680,7 @@ public:
       auto& spl1 = chnls[1][$$i];
       inl        = spl0;
       inr        = spl1;
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
       if (eel2_eq (get_slider_oversampling(), 1.)) {
         block$processsample();
         spl0 = outl;
@@ -2864,6 +2890,11 @@ public:
           }
         }
       }
+#else //#if TRANSIENCE_USE_OWN_OVERSAMPLING
+      block$processsample();
+      spl0 = outl;
+      spl1 = outr;
+#endif
 #if 0
       init$updatebuffer (
         cenv, inbuf$scopeptr, inbuf$scopebuffermax, inbuf$scopebuffer);
@@ -2877,6 +2908,7 @@ public:
   }
   // functions for section "init"
 private:
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
   //----------------------------------------------------------------------------
   double init$downsample (
     double  n,
@@ -6038,6 +6070,7 @@ private:
       + 0.1217780739691688707271310932 * (h127 + h129)
       + 0.1250000000000000000000000000 * h128;
   }
+#endif
 //----------------------------------------------------------------------------
 #if 0
   double init$draw_buffer_db (
@@ -6297,7 +6330,8 @@ private:
     }
     return state;
   }
-  //----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
   double init$getfirdelay (double n)
   {
     return [&] {
@@ -6358,12 +6392,17 @@ private:
       }
     }();
   }
+#endif
   //----------------------------------------------------------------------------
   double init$init_follower (double atk, double release, double& at, double& rt)
   {
     double csrate = 0.;
-    csrate        = get_slider_oversampling() * plugcontext->get_sample_rate();
-    at            = [&] {
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
+    csrate = get_slider_oversampling() * plugcontext->get_sample_rate();
+#else
+    csrate = plugcontext->get_sample_rate();
+#endif
+    at = [&] {
       if ((atk > 0.)) {
         return std::exp (-1. / (.5 * .001 * atk * csrate));
       }
@@ -6374,6 +6413,7 @@ private:
     rt = std::exp (-1. / (.5 * .001 * release * csrate));
     return rt;
   }
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
   //----------------------------------------------------------------------------
   double init$init_upsampler2 (
     double& h64,
@@ -11554,6 +11594,7 @@ private:
     idx = -1.;
     return idx;
   }
+#endif
 //----------------------------------------------------------------------------
 #if 0
   double init$updatebuffer (
@@ -11570,6 +11611,7 @@ private:
     return m;
   }
 #endif
+#if TRANSIENCE_USE_OWN_OVERSAMPLING
   //----------------------------------------------------------------------------
   double init$updatedownhist (
     double  n,
@@ -15172,7 +15214,7 @@ private:
     }();
   }
   // functions for section "block"
-
+#endif
   //----------------------------------------------------------------------------
   double block$processsample()
   {
@@ -15219,5 +15261,4 @@ private:
     return envout;
   }
 }; /* transience */
-
 }} // namespace artv::saike
