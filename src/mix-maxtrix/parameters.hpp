@@ -2764,7 +2764,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Threshold",
-    declptr<sstillwell::fairly_childish>(),
+    declptr<oversampled<sstillwell::fairly_childish>>(),
     declptr<sstillwell::fairly_childish::threshold_tag>()),
   sstillwell::fairly_childish::get_parameter (
     sstillwell::fairly_childish::threshold_tag {}),
@@ -2775,7 +2775,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Bias",
-    declptr<sstillwell::fairly_childish>(),
+    declptr<oversampled<sstillwell::fairly_childish>>(),
     declptr<sstillwell::fairly_childish::bias_tag>()),
   sstillwell::fairly_childish::get_parameter (
     sstillwell::fairly_childish::bias_tag {}),
@@ -2786,7 +2786,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "AGC Range",
-    declptr<sstillwell::fairly_childish>(),
+    declptr<oversampled<sstillwell::fairly_childish>>(),
     declptr<sstillwell::fairly_childish::agc_range_tag>()),
   sstillwell::fairly_childish::get_parameter (
     sstillwell::fairly_childish::agc_range_tag {}),
@@ -2797,7 +2797,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Gain",
-    declptr<sstillwell::fairly_childish>(),
+    declptr<oversampled<sstillwell::fairly_childish>>(),
     declptr<sstillwell::fairly_childish::makeup_tag>()),
   sstillwell::fairly_childish::get_parameter (
     sstillwell::fairly_childish::makeup_tag {}),
@@ -2808,7 +2808,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Time K",
-    declptr<sstillwell::fairly_childish>(),
+    declptr<oversampled<sstillwell::fairly_childish>>(),
     declptr<sstillwell::fairly_childish::time_constant_tag>()),
   sstillwell::fairly_childish::get_parameter (
     sstillwell::fairly_childish::time_constant_tag {}),
@@ -2819,10 +2819,21 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "RMS Win",
-    declptr<sstillwell::fairly_childish>(),
+    declptr<oversampled<sstillwell::fairly_childish>>(),
     declptr<sstillwell::fairly_childish::rms_window_tag>()),
   sstillwell::fairly_childish::get_parameter (
     sstillwell::fairly_childish::rms_window_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  fairly_childish_oversampling,
+  n_stereo_busses,
+  param_common (
+    "OverSmpl",
+    declptr<oversampled<sstillwell::fairly_childish>>(),
+    declptr<oversampled<sstillwell::fairly_childish>::oversampling_tag>()),
+  oversampled<sstillwell::fairly_childish>::get_parameter (
+    oversampled<sstillwell::fairly_childish>::oversampling_tag {}),
   slider_ext);
 
 using fairly_childish_params = mp_list<
@@ -2831,7 +2842,8 @@ using fairly_childish_params = mp_list<
   fairly_childish_time_constant,
   fairly_childish_rms_window,
   fairly_childish_makeup,
-  fairly_childish_agc_range>;
+  fairly_childish_agc_range,
+  fairly_childish_oversampling>;
 
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
@@ -4983,7 +4995,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<gate_expander_params>;
+using all_fx_typelists = mp_list<fairly_childish_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 
