@@ -295,11 +295,12 @@ public:
       auto& spl1 = chnls[1][i];
       in0        = spl0 * g_in;
       in1        = spl1 * g_in;
-      nf0        = 0.;
-      nf1        = 0.;
-#if 0
-      nf0        = (jsfx_rand (2.0) - 1.0) * nf_k;
-      nf1        = (jsfx_rand (2.0) - 1.0) * nf_k;
+#if 1
+      nf0 = (jsfx_rand (2.0) - 1.0) * nf_k;
+      nf1 = (jsfx_rand (2.0) - 1.0) * nf_k;
+#else
+      nf0 = 0.;
+      nf1 = 0.;
 #endif
       out_ap0 = a0_ap * in0 + a1_ap * x1_ap0 + a2_ap * x2_ap0 - b1_ap * y1_ap0
         - b2_ap * y2_ap0;

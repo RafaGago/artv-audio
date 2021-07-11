@@ -23,6 +23,9 @@
 
 - Upwards compressor with clipper.
 
+- Sonic Enhancer: It seems as if the envelopes speeds when triggering the CV are
+  samplerate dependant. This seems to be designed for 44.1kHz only.
+
 - Variation of the filters module with envelope follower on the cutoff.
 
 - Optimization of Saike's filters (CPU hog).
