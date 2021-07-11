@@ -135,7 +135,7 @@ public:
   static constexpr auto get_parameter (gaterange_tag)
   {
     // Original slider line: slider3:gateRange=-40<-40,0,0.1> Exp. Range [dB]
-    return float_param ("dB", -40.0, 0.0, -40.0, 0.01);
+    return float_param ("dB", -60.0, 0.0, -40.0, 0.01);
   }
 
 #endif
@@ -201,7 +201,7 @@ public:
   static constexpr auto get_parameter (gateattack_tag)
   {
     // Original slider line: slider5:gateAttack=5<1,50,0.1> Attack [ms]
-    return float_param ("ms", 1.0, 50.0, 5.0, 0.1);
+    return float_param ("ms", 1, 50.0, 5.0, 0.1);
   }
 
 #endif
@@ -234,7 +234,7 @@ public:
   static constexpr auto get_parameter (gaterelease_tag)
   {
     // Original slider line: slider6:gateRelease=300<50, 2500, 0.1> Release [ms]
-    return float_param ("ms", 50.0, 2500.0, 300.0, 0.1);
+    return float_param ("ms", 10.0, 2500.0, 300.0, 0.1);
   }
 
 #endif

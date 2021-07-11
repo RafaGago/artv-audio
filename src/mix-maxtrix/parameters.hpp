@@ -3256,7 +3256,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Mode",
-    declptr<chokehold::gate_expander>(),
+    declptr<oversampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::operation_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::operation_tag {}),
@@ -3267,7 +3267,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Threshold",
-    declptr<chokehold::gate_expander>(),
+    declptr<oversampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::gatethresh_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::gatethresh_tag {}),
@@ -3278,7 +3278,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Range",
-    declptr<chokehold::gate_expander>(),
+    declptr<oversampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::gaterange_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::gaterange_tag {}),
@@ -3289,7 +3289,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Hysteresis",
-    declptr<chokehold::gate_expander>(),
+    declptr<oversampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::gatehyst_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::gatehyst_tag {}),
@@ -3300,7 +3300,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Attack",
-    declptr<chokehold::gate_expander>(),
+    declptr<oversampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::gateattack_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::gateattack_tag {}),
@@ -3311,7 +3311,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Release",
-    declptr<chokehold::gate_expander>(),
+    declptr<oversampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::gaterelease_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::gaterelease_tag {}),
@@ -3322,7 +3322,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "SC Freq",
-    declptr<chokehold::gate_expander>(),
+    declptr<oversampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::scfreq_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::scfreq_tag {}),
@@ -3333,7 +3333,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Chnl Link",
-    declptr<chokehold::gate_expander>(),
+    declptr<oversampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::linkamount_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::linkamount_tag {}),
@@ -3344,10 +3344,21 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Chnl Mode",
-    declptr<chokehold::gate_expander>(),
+    declptr<oversampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::routing_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::routing_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  gate_expander_oversampling,
+  n_stereo_busses,
+  param_common (
+    "OverSmpl",
+    declptr<oversampled<chokehold::gate_expander>>(),
+    declptr<oversampled<chokehold::gate_expander>::oversampling_tag>()),
+  oversampled<chokehold::gate_expander>::get_parameter (
+    oversampled<chokehold::gate_expander>::oversampling_tag {}),
   slider_ext);
 
 using gate_expander_params = mp_list<
@@ -3359,7 +3370,8 @@ using gate_expander_params = mp_list<
   gate_expander_range,
   gate_expander_sidechain_freq,
   gate_expander_channel_link,
-  gate_expander_channel_mode>;
+  gate_expander_channel_mode,
+  gate_expander_oversampling>;
 
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
@@ -4971,7 +4983,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<consolidator_params>;
+using all_fx_typelists = mp_list<gate_expander_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 
