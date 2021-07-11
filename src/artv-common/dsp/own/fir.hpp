@@ -23,7 +23,8 @@ namespace detail {
 
 // A interleaved delay line that always return a contiguous chunk of previous
 // samples at the expense of using the double of the minimum required memory.
-// The delay memory is not owned by the class.
+// The last inserted sample comes first on the memory chunk. The delay memory
+// is not owned by the class.
 template <class T, uint channels = 1>
 class convolution_delay_line {
 public:
@@ -41,7 +42,7 @@ public:
   //----------------------------------------------------------------------------
   void push (std::array<T, n_channels> v)
   {
-    _head += _head == 0 ? (_size * n_channels) : 0;
+    _head = _head == 0 ? (_size * n_channels) : _head;
     _head -= n_channels;
     memcpy (_z + _head, v.data(), sizeof v[0] * n_channels);
     memcpy (
@@ -122,13 +123,14 @@ public:
   using value_type                 = T;
   static constexpr uint n_channels = channels;
   //----------------------------------------------------------------------------
-  void reset (crange<T> kernel, uint ratio)
+  void reset (crange<const T> kernel, uint ratio)
   {
     // To make it polyphase, we ensure that the coefficients are multiples of
     // "ratio" the unused parts of the kernel will have zeros that don't
     // contribute.
-    uint ksize           = round_ceil<uint> (kernel.size(), ratio);
-    uint kernel_mem      = ksize;
+    uint ksize      = round_ceil<uint> (kernel.size(), ratio);
+    uint kernel_mem = ksize;
+    // magic "2" reminder: delay line buffer has to be double the required size
     uint delay_lines_mem = 2 * ksize * n_channels;
 
     _mem.clear();
@@ -179,14 +181,15 @@ public:
   using value_type                 = T;
   static constexpr uint n_channels = channels;
   //----------------------------------------------------------------------------
-  void reset (crange<T> kernel, uint ratio)
+  void reset (crange<const T> kernel, uint ratio)
   {
     // To make it polyphase, we ensure that the coefficients are multiples of
     // "ratio" the unused parts of the kernel will have zeros that don't
     // contribute.
-    uint ksize           = round_ceil<uint> (kernel.size(), ratio);
-    uint subk_size       = ksize / ratio;
-    uint kernel_mem      = ksize;
+    uint ksize      = round_ceil<uint> (kernel.size(), ratio);
+    uint subk_size  = ksize / ratio;
+    uint kernel_mem = ksize;
+    // magic "2" reminder: delay line buffer has to be double the required size
     uint delay_lines_mem = 2 * subk_size * n_channels;
 
     _mem.clear();
@@ -204,6 +207,7 @@ public:
       // back.
       for (uint src = subk, dst = 0; src < kernel.size(); src += ratio, ++dst) {
         _mem[offset + dst] = kernel[src];
+        _mem[offset + dst] *= (T) _ratio; // gain loss compensation
       }
       // filter initialization
       _filters[subk].reset (make_crange (&_mem[offset], subk_size));
@@ -221,7 +225,6 @@ public:
     for (uint i = 0; i < _ratio; ++i) {
       auto smpl_arr = _filters[i].tick (_delay);
       for (uint c = 0; c < channels; ++c) {
-        smpl_arr[c] *= (T) _ratio; // gain loss compensation
         out[c][i] = smpl_arr[c];
       }
     }

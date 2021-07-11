@@ -25,7 +25,7 @@ public:
   void get (crange<T> channels_out, uint idx) // idx 0 is previously pushed
   {
     assert (channels_out.size() >= _channels);
-    assert (idx < capacity());
+    assert (idx < max_delay_samples());
 
     uint pos = ((_wpos + idx) & _capacity_mask) * _channels;
     memcpy (channels_out.data(), &_samples[pos], sizeof (T) * _channels);
@@ -34,7 +34,7 @@ public:
   T get (uint channel, uint idx)
   {
     assert (channel < _channels);
-    assert (idx < _capacity);
+    assert (idx < max_delay_samples());
 
     return _samples[(((_wpos + idx) & _capacity_mask) * _channels) + channel];
   }
@@ -104,13 +104,13 @@ public:
   // "get (uint channel, float idx)"
   T get (uint channel, uint idx, double fractional_coeff)
   {
-    assert (channel < _channels);
-    assert (idx < capacity());
+    assert (channel < this->n_channels());
+    assert (idx < (this->max_delay_samples() - 1));
 
     std::array<T, 2> points = {get (channel, idx), get (channel, idx + 1)};
     // this is built based on 1 push 1 retrieval
     return warped_allpass_interpolate (
-      fractional_coeff, *(_allpass_states + channel), points);
+      fractional_coeff, _allpass_states[channel], points);
   }
   //----------------------------------------------------------------------------
 private:

@@ -93,7 +93,7 @@ struct float_parameter_base {
     derived d {};
 
     static_assert (
-      is_same_template<parameter_common, decltype (d.common)>::value, "");
+      is_same_template_v<parameter_common, decltype (d.common)>, "");
 
     juce::NormalisableRange<float> range {
       d.type.min,
@@ -127,7 +127,7 @@ struct int_parameter_base {
   {
     derived d {};
     static_assert (
-      is_same_template<parameter_common, decltype (d.common)>::value, "");
+      is_same_template_v<parameter_common, decltype (d.common)>, "");
 
     using vsw = typename decltype (derived::type)::value_string_wrapper;
 
@@ -153,7 +153,7 @@ struct choice_parameter_base {
   {
     derived d {};
     static_assert (
-      is_same_template<parameter_common, decltype (d.common)>::value, "");
+      is_same_template_v<parameter_common, decltype (d.common)>, "");
 
     juce::StringArray choices;
     uint              i;

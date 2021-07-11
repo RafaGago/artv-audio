@@ -30,6 +30,7 @@ struct stereo_processor {
 template <class Impl, class T = float>
 struct stereo_processor_adapt : public Impl, public stereo_processor<T> {
 public:
+  using stereo_processor_type = Impl;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc) override { Impl::reset (pc); };
   //----------------------------------------------------------------------------

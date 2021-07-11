@@ -379,6 +379,7 @@ private:
       auto fx_idx              = type_with_index_index<param_tlist_widx_t> {};
       using param_tlist        = type_with_index_type<param_tlist_widx_t>;
       using dsp_class          = get_dsp_type<param_tlist>;
+      using stereo_processor_type = typename dsp_class::stereo_processor_type;
 
       if ((fx_idx.value + 1) != fx_type.current) {
         // +1 because the first entry is "none"/std::monostate
@@ -388,14 +389,42 @@ private:
       // setting the processing channel, so latencies get updated.
       _fx_context.set_processing_channel (channel);
 
+      static constexpr bool uses_oversampled =
+        is_same_template_v<oversampled, stereo_processor_type>;
+
       // refresh FX type.
       if (unlikely (fx_type.changed())) {
         _fx_dsp[channel] = dsp_class{};
-        std::get<dsp_class> (_fx_dsp[channel]).reset (_fx_context);
+        auto& fx = std::get<dsp_class> (_fx_dsp[channel]);
+        fx.reset (_fx_context);
+        if constexpr (uses_oversampled) {
+          fx.set_oversampling_work_buffer (_oversample_buffer);
+        }
       }
 
       // refresh FX parameters.
       auto& fx = std::get<dsp_class> (_fx_dsp[channel]);
+
+      if constexpr (uses_oversampled) {
+        // run the oversampling parameter first (if any)
+        //
+        // The "oversampled" class fully resets the FX on samplerate changes.
+        // This way all the parameters will be passed afterwards. The next loop
+        // of parameter setting sets the oversampling again, but "oversampled"
+        // just acts on changes, so it is OK to not handle the case.
+        mp11::mp_for_each<param_tlist> ([=, &fx] (auto param) {
+          using paramtype = decltype (param);
+          using dsp_param = typename decltype (paramtype::common)::dsp_param;
+          static constexpr bool is_oversampling_param =
+            std::is_same_v<
+              dsp_param, typename stereo_processor_type::oversampling_tag>;
+
+          if constexpr (is_oversampling_param) {
+            auto v = p_refresh (param, channel);
+            fx.set (dsp_param {}, v.current);
+          }
+        });
+      }
 
       mp11::mp_for_each<param_tlist> ([=, &fx] (auto param) {
         using paramtype = decltype (param);
@@ -664,8 +693,12 @@ private:
   std::array<dsp_variant, parameters::n_stereo_busses> _fx_dsp;
 
   static constexpr uint fx_blocksize = 128;
+  static constexpr uint oversample_blocksize
+    = fx_blocksize * oversampled_max_oversampling;
+
   alignas (32) std::array<std::array<float, fx_blocksize>, 4> _fx_mix_buffer;
-  delay_compensation_buffers<float, 2> _dly_comp_buffers;
+  std::array<float, oversample_blocksize * 2> _oversample_buffer;
+  delay_compensation_buffers<float, 2>        _dly_comp_buffers;
 
   std::array<foleys::LevelMeterSource, parameters::n_stereo_busses> _meters;
 
