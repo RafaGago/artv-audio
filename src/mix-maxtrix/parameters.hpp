@@ -71,6 +71,8 @@
 
 #include "artv-common/dsp/witti/bbd_echo_stereo.hpp"
 
+#include "artv-common/dsp/own/oversampled.hpp"
+
 #include "artv-common/dsp/own/modules/eq4x.hpp"
 #include "artv-common/dsp/own/modules/filter2x.hpp"
 #include "artv-common/dsp/own/modules/phaser.hpp"
@@ -3020,13 +3022,13 @@ using master_tom_params = mp_list<
   master_tom_detection,
   master_tom_detection_src>;
 #endif
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 parameter_cpp_class_define (
   event_horizon_2_threshold,
   n_stereo_busses,
   param_common (
     "Threshold",
-    declptr<sstillwell::event_horizon_2>(),
+    declptr<oversampled<sstillwell::event_horizon_2>>(),
     declptr<sstillwell::event_horizon_2::threshold_tag>()),
   sstillwell::event_horizon_2::get_parameter (
     sstillwell::event_horizon_2::threshold_tag {}),
@@ -3037,7 +3039,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Ceiling",
-    declptr<sstillwell::event_horizon_2>(),
+    declptr<oversampled<sstillwell::event_horizon_2>>(),
     declptr<sstillwell::event_horizon_2::ceiling_tag>()),
   sstillwell::event_horizon_2::get_parameter (
     sstillwell::event_horizon_2::ceiling_tag {}),
@@ -3048,17 +3050,28 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Release",
-    declptr<sstillwell::event_horizon_2>(),
+    declptr<oversampled<sstillwell::event_horizon_2>>(),
     declptr<sstillwell::event_horizon_2::release_tag>()),
   sstillwell::event_horizon_2::get_parameter (
     sstillwell::event_horizon_2::release_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  event_horizon_2_oversampling,
+  n_stereo_busses,
+  param_common (
+    "OverSpl",
+    declptr<oversampled<sstillwell::event_horizon_2>>(),
+    declptr<oversampled<sstillwell::event_horizon_2>::oversampling_tag>()),
+  oversampled<sstillwell::event_horizon_2>::get_parameter (
+    oversampled<sstillwell::event_horizon_2>::oversampling_tag {}),
+  slider_ext);
+
 using event_horizon_2_params = mp11::mp_list<
   event_horizon_2_threshold,
   event_horizon_2_ceiling,
-  event_horizon_2_release>;
-
+  event_horizon_2_release,
+  event_horizon_2_oversampling>;
 //----------------------------------------------------------------------------
 parameter_cpp_class_define (
   rbj1073_hpf,
@@ -4934,7 +4947,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<polyphase_fir_test_params>;
+using all_fx_typelists = mp_list<event_horizon_2_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 
