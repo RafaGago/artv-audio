@@ -2885,7 +2885,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Threshold",
-    declptr<sstillwell::major_tom>(),
+    declptr<oversampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::threshold_tag>()),
   sstillwell::major_tom::get_parameter (
     sstillwell::major_tom::threshold_tag {}),
@@ -2896,7 +2896,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Ratio",
-    declptr<sstillwell::major_tom>(),
+    declptr<oversampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::ratio_tag>()),
   sstillwell::major_tom::get_parameter (sstillwell::major_tom::ratio_tag {}),
   slider_ext);
@@ -2906,7 +2906,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Gain",
-    declptr<sstillwell::major_tom>(),
+    declptr<oversampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::gain_tag>()),
   sstillwell::major_tom::get_parameter (sstillwell::major_tom::gain_tag {}),
   slider_ext);
@@ -2916,7 +2916,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Knee",
-    declptr<sstillwell::major_tom>(),
+    declptr<oversampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::knee_tag>()),
   sstillwell::major_tom::get_parameter (sstillwell::major_tom::knee_tag {}),
   slider_ext);
@@ -2926,7 +2926,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "AGC",
-    declptr<sstillwell::major_tom>(),
+    declptr<oversampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::agc_tag>()),
   sstillwell::major_tom::get_parameter (sstillwell::major_tom::agc_tag {}),
   slider_ext);
@@ -2936,7 +2936,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Detector",
-    declptr<sstillwell::major_tom>(),
+    declptr<oversampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::detection_tag>()),
   sstillwell::major_tom::get_parameter (
     sstillwell::major_tom::detection_tag {}),
@@ -2947,10 +2947,21 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Detection",
-    declptr<sstillwell::major_tom>(),
+    declptr<oversampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::detection_src_tag>()),
   sstillwell::major_tom::get_parameter (
     sstillwell::major_tom::detection_src_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  major_tom_oversampling,
+  n_stereo_busses,
+  param_common (
+    "OverSmpl",
+    declptr<oversampled<sstillwell::major_tom>>(),
+    declptr<oversampled<sstillwell::major_tom>::oversampling_tag>()),
+  oversampled<sstillwell::major_tom>::get_parameter (
+    oversampled<sstillwell::major_tom>::oversampling_tag {}),
   slider_ext);
 
 using major_tom_params = mp_list<
@@ -2960,7 +2971,8 @@ using major_tom_params = mp_list<
   major_tom_knee,
   major_tom_agc,
   major_tom_detection,
-  major_tom_detection_src>;
+  major_tom_detection_src,
+  major_tom_oversampling>;
 
 //------------------------------------------------------------------------------
 #if 0
@@ -4995,7 +5007,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<fairly_childish_params>;
+using all_fx_typelists = mp_list<major_tom_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 
