@@ -841,7 +841,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Mode",
-    declptr<oversampled<saike::transience>>(),
+    declptr<updownsampled<saike::transience>>(),
     declptr<saike::transience::mode_tag>()),
   saike::transience::get_parameter (saike::transience::mode_tag {}),
   slider_ext);
@@ -851,7 +851,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Attack",
-    declptr<oversampled<saike::transience>>(),
+    declptr<updownsampled<saike::transience>>(),
     declptr<saike::transience::sattack_tag>()),
   saike::transience::get_parameter (saike::transience::sattack_tag {}),
   slider_ext);
@@ -861,7 +861,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Attack Amt",
-    declptr<oversampled<saike::transience>>(),
+    declptr<updownsampled<saike::transience>>(),
     declptr<saike::transience::strength_tag>()),
   saike::transience::get_parameter (saike::transience::strength_tag {}),
   slider_ext);
@@ -871,7 +871,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Decay",
-    declptr<oversampled<saike::transience>>(),
+    declptr<updownsampled<saike::transience>>(),
     declptr<saike::transience::sdecay_tag>()),
   saike::transience::get_parameter (saike::transience::sdecay_tag {}),
   slider_ext);
@@ -881,7 +881,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Decay Amt",
-    declptr<oversampled<saike::transience>>(),
+    declptr<updownsampled<saike::transience>>(),
     declptr<saike::transience::strength2_tag>()),
   saike::transience::get_parameter (saike::transience::strength2_tag {}),
   slider_ext);
@@ -891,7 +891,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "G Smooth",
-    declptr<oversampled<saike::transience>>(),
+    declptr<updownsampled<saike::transience>>(),
     declptr<saike::transience::gainsmoothing_tag>()),
   saike::transience::get_parameter (saike::transience::gainsmoothing_tag {}),
   slider_ext);
@@ -901,10 +901,10 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "OverSmpl",
-    declptr<oversampled<saike::transience>>(),
-    declptr<oversampled<saike::transience>::oversampling_tag>()),
-  oversampled<saike::transience>::get_parameter (
-    oversampled<saike::transience>::oversampling_tag {}),
+    declptr<updownsampled<saike::transience>>(),
+    declptr<updownsampled<saike::transience>::oversampling_tag>()),
+  updownsampled<saike::transience>::get_parameter (
+    updownsampled<saike::transience>::oversampling_tag {}),
   slider_ext);
 
 using transience_params = mp_list<
@@ -921,7 +921,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Gain",
-    declptr<oversampled<sonic_anomaly::slax>>(),
+    declptr<updownsampled<sonic_anomaly::slax>>(),
     declptr<sonic_anomaly::slax::gain_tag>()),
   sonic_anomaly::slax::get_parameter (sonic_anomaly::slax::gain_tag {}),
   slider_ext);
@@ -931,7 +931,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Peak",
-    declptr<oversampled<sonic_anomaly::slax>>(),
+    declptr<updownsampled<sonic_anomaly::slax>>(),
     declptr<sonic_anomaly::slax::peak_tag>()),
   sonic_anomaly::slax::get_parameter (sonic_anomaly::slax::peak_tag {}),
   slider_ext);
@@ -941,7 +941,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Emphasis",
-    declptr<oversampled<sonic_anomaly::slax>>(),
+    declptr<updownsampled<sonic_anomaly::slax>>(),
     declptr<sonic_anomaly::slax::emphasis_tag>()),
   sonic_anomaly::slax::get_parameter (sonic_anomaly::slax::emphasis_tag {}),
   slider_ext);
@@ -951,7 +951,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Ratio",
-    declptr<oversampled<sonic_anomaly::slax>>(),
+    declptr<updownsampled<sonic_anomaly::slax>>(),
     declptr<sonic_anomaly::slax::comp_lim_tag>()),
   sonic_anomaly::slax::get_parameter (sonic_anomaly::slax::comp_lim_tag {}),
   slider_ext);
@@ -961,7 +961,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Mode",
-    declptr<oversampled<sonic_anomaly::slax>>(),
+    declptr<updownsampled<sonic_anomaly::slax>>(),
     declptr<sonic_anomaly::slax::mode_tag>()),
   sonic_anomaly::slax::get_parameter (sonic_anomaly::slax::mode_tag {}),
   slider_ext);
@@ -971,10 +971,10 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "OverSmpl",
-    declptr<oversampled<sonic_anomaly::slax>>(),
-    declptr<oversampled<sonic_anomaly::slax>::oversampling_tag>()),
-  oversampled<sonic_anomaly::slax>::get_parameter (
-    oversampled<sonic_anomaly::slax>::oversampling_tag {}),
+    declptr<updownsampled<sonic_anomaly::slax>>(),
+    declptr<updownsampled<sonic_anomaly::slax>::oversampling_tag>()),
+  updownsampled<sonic_anomaly::slax>::get_parameter (
+    updownsampled<sonic_anomaly::slax>::oversampling_tag {}),
   slider_ext);
 
 using slax_params = mp_list<
@@ -2712,7 +2712,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Threshold",
-    declptr<oversampled<sstillwell::_1175>>(),
+    declptr<updownsampled<sstillwell::_1175>>(),
     declptr<sstillwell::_1175::threshold_tag>()),
   sstillwell::_1175::get_parameter (sstillwell::_1175::threshold_tag {}),
   slider_ext);
@@ -2722,7 +2722,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Ratio",
-    declptr<oversampled<sstillwell::_1175>>(),
+    declptr<updownsampled<sstillwell::_1175>>(),
     declptr<sstillwell::_1175::ratio_tag>()),
   sstillwell::_1175::get_parameter (sstillwell::_1175::ratio_tag {}),
   slider_ext);
@@ -2732,7 +2732,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Attack",
-    declptr<oversampled<sstillwell::_1175>>(),
+    declptr<updownsampled<sstillwell::_1175>>(),
     declptr<sstillwell::_1175::attack_tag>()),
   sstillwell::_1175::get_parameter (sstillwell::_1175::attack_tag {}),
   slider_ext);
@@ -2742,7 +2742,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Release",
-    declptr<oversampled<sstillwell::_1175>>(),
+    declptr<updownsampled<sstillwell::_1175>>(),
     declptr<sstillwell::_1175::release_tag>()),
   sstillwell::_1175::get_parameter (sstillwell::_1175::release_tag {}),
   slider_ext);
@@ -2752,7 +2752,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Gain",
-    declptr<oversampled<sstillwell::_1175>>(),
+    declptr<updownsampled<sstillwell::_1175>>(),
     declptr<sstillwell::_1175::gain_tag>()),
   sstillwell::_1175::get_parameter (sstillwell::_1175::gain_tag {}),
   slider_ext);
@@ -2762,10 +2762,10 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "OverSmpl",
-    declptr<oversampled<sstillwell::_1175>>(),
-    declptr<oversampled<sstillwell::_1175>::oversampling_tag>()),
-  oversampled<sstillwell::_1175>::get_parameter (
-    oversampled<sstillwell::_1175>::oversampling_tag {}),
+    declptr<updownsampled<sstillwell::_1175>>(),
+    declptr<updownsampled<sstillwell::_1175>::oversampling_tag>()),
+  updownsampled<sstillwell::_1175>::get_parameter (
+    updownsampled<sstillwell::_1175>::oversampling_tag {}),
   slider_ext);
 
 using _1175_params = mp_list<
@@ -2781,7 +2781,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Threshold",
-    declptr<oversampled<sstillwell::fairly_childish>>(),
+    declptr<updownsampled<sstillwell::fairly_childish>>(),
     declptr<sstillwell::fairly_childish::threshold_tag>()),
   sstillwell::fairly_childish::get_parameter (
     sstillwell::fairly_childish::threshold_tag {}),
@@ -2792,7 +2792,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Bias",
-    declptr<oversampled<sstillwell::fairly_childish>>(),
+    declptr<updownsampled<sstillwell::fairly_childish>>(),
     declptr<sstillwell::fairly_childish::bias_tag>()),
   sstillwell::fairly_childish::get_parameter (
     sstillwell::fairly_childish::bias_tag {}),
@@ -2803,7 +2803,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "AGC Range",
-    declptr<oversampled<sstillwell::fairly_childish>>(),
+    declptr<updownsampled<sstillwell::fairly_childish>>(),
     declptr<sstillwell::fairly_childish::agc_range_tag>()),
   sstillwell::fairly_childish::get_parameter (
     sstillwell::fairly_childish::agc_range_tag {}),
@@ -2814,7 +2814,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Gain",
-    declptr<oversampled<sstillwell::fairly_childish>>(),
+    declptr<updownsampled<sstillwell::fairly_childish>>(),
     declptr<sstillwell::fairly_childish::makeup_tag>()),
   sstillwell::fairly_childish::get_parameter (
     sstillwell::fairly_childish::makeup_tag {}),
@@ -2825,7 +2825,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Time K",
-    declptr<oversampled<sstillwell::fairly_childish>>(),
+    declptr<updownsampled<sstillwell::fairly_childish>>(),
     declptr<sstillwell::fairly_childish::time_constant_tag>()),
   sstillwell::fairly_childish::get_parameter (
     sstillwell::fairly_childish::time_constant_tag {}),
@@ -2836,7 +2836,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "RMS Win",
-    declptr<oversampled<sstillwell::fairly_childish>>(),
+    declptr<updownsampled<sstillwell::fairly_childish>>(),
     declptr<sstillwell::fairly_childish::rms_window_tag>()),
   sstillwell::fairly_childish::get_parameter (
     sstillwell::fairly_childish::rms_window_tag {}),
@@ -2847,10 +2847,10 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "OverSmpl",
-    declptr<oversampled<sstillwell::fairly_childish>>(),
-    declptr<oversampled<sstillwell::fairly_childish>::oversampling_tag>()),
-  oversampled<sstillwell::fairly_childish>::get_parameter (
-    oversampled<sstillwell::fairly_childish>::oversampling_tag {}),
+    declptr<updownsampled<sstillwell::fairly_childish>>(),
+    declptr<updownsampled<sstillwell::fairly_childish>::oversampling_tag>()),
+  updownsampled<sstillwell::fairly_childish>::get_parameter (
+    updownsampled<sstillwell::fairly_childish>::oversampling_tag {}),
   slider_ext);
 
 using fairly_childish_params = mp_list<
@@ -2902,7 +2902,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Threshold",
-    declptr<oversampled<sstillwell::major_tom>>(),
+    declptr<updownsampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::threshold_tag>()),
   sstillwell::major_tom::get_parameter (
     sstillwell::major_tom::threshold_tag {}),
@@ -2913,7 +2913,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Ratio",
-    declptr<oversampled<sstillwell::major_tom>>(),
+    declptr<updownsampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::ratio_tag>()),
   sstillwell::major_tom::get_parameter (sstillwell::major_tom::ratio_tag {}),
   slider_ext);
@@ -2923,7 +2923,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Gain",
-    declptr<oversampled<sstillwell::major_tom>>(),
+    declptr<updownsampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::gain_tag>()),
   sstillwell::major_tom::get_parameter (sstillwell::major_tom::gain_tag {}),
   slider_ext);
@@ -2933,7 +2933,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Knee",
-    declptr<oversampled<sstillwell::major_tom>>(),
+    declptr<updownsampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::knee_tag>()),
   sstillwell::major_tom::get_parameter (sstillwell::major_tom::knee_tag {}),
   slider_ext);
@@ -2943,7 +2943,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "AGC",
-    declptr<oversampled<sstillwell::major_tom>>(),
+    declptr<updownsampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::agc_tag>()),
   sstillwell::major_tom::get_parameter (sstillwell::major_tom::agc_tag {}),
   slider_ext);
@@ -2953,7 +2953,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Detector",
-    declptr<oversampled<sstillwell::major_tom>>(),
+    declptr<updownsampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::detection_tag>()),
   sstillwell::major_tom::get_parameter (
     sstillwell::major_tom::detection_tag {}),
@@ -2964,7 +2964,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Detection",
-    declptr<oversampled<sstillwell::major_tom>>(),
+    declptr<updownsampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::detection_src_tag>()),
   sstillwell::major_tom::get_parameter (
     sstillwell::major_tom::detection_src_tag {}),
@@ -2975,10 +2975,10 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "OverSmpl",
-    declptr<oversampled<sstillwell::major_tom>>(),
-    declptr<oversampled<sstillwell::major_tom>::oversampling_tag>()),
-  oversampled<sstillwell::major_tom>::get_parameter (
-    oversampled<sstillwell::major_tom>::oversampling_tag {}),
+    declptr<updownsampled<sstillwell::major_tom>>(),
+    declptr<updownsampled<sstillwell::major_tom>::oversampling_tag>()),
+  updownsampled<sstillwell::major_tom>::get_parameter (
+    updownsampled<sstillwell::major_tom>::oversampling_tag {}),
   slider_ext);
 
 using major_tom_params = mp_list<
@@ -3081,7 +3081,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Threshold",
-    declptr<oversampled<sstillwell::event_horizon_2>>(),
+    declptr<updownsampled<sstillwell::event_horizon_2>>(),
     declptr<sstillwell::event_horizon_2::threshold_tag>()),
   sstillwell::event_horizon_2::get_parameter (
     sstillwell::event_horizon_2::threshold_tag {}),
@@ -3092,7 +3092,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Ceiling",
-    declptr<oversampled<sstillwell::event_horizon_2>>(),
+    declptr<updownsampled<sstillwell::event_horizon_2>>(),
     declptr<sstillwell::event_horizon_2::ceiling_tag>()),
   sstillwell::event_horizon_2::get_parameter (
     sstillwell::event_horizon_2::ceiling_tag {}),
@@ -3103,7 +3103,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Release",
-    declptr<oversampled<sstillwell::event_horizon_2>>(),
+    declptr<updownsampled<sstillwell::event_horizon_2>>(),
     declptr<sstillwell::event_horizon_2::release_tag>()),
   sstillwell::event_horizon_2::get_parameter (
     sstillwell::event_horizon_2::release_tag {}),
@@ -3114,10 +3114,10 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "OverSmpl",
-    declptr<oversampled<sstillwell::event_horizon_2>>(),
-    declptr<oversampled<sstillwell::event_horizon_2>::oversampling_tag>()),
-  oversampled<sstillwell::event_horizon_2>::get_parameter (
-    oversampled<sstillwell::event_horizon_2>::oversampling_tag {}),
+    declptr<updownsampled<sstillwell::event_horizon_2>>(),
+    declptr<updownsampled<sstillwell::event_horizon_2>::oversampling_tag>()),
+  updownsampled<sstillwell::event_horizon_2>::get_parameter (
+    updownsampled<sstillwell::event_horizon_2>::oversampling_tag {}),
   slider_ext);
 
 using event_horizon_2_params = mp11::mp_list<
@@ -3211,7 +3211,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Mode",
-    declptr<oversampled<chokehold::consolidator>>(),
+    declptr<updownsampled<chokehold::consolidator>>(),
     declptr<chokehold::consolidator::operation_tag>()),
   chokehold::consolidator::get_parameter (
     chokehold::consolidator::operation_tag {}),
@@ -3222,7 +3222,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "In Gain",
-    declptr<oversampled<chokehold::consolidator>>(),
+    declptr<updownsampled<chokehold::consolidator>>(),
     declptr<chokehold::consolidator::dbgain_tag>()),
   chokehold::consolidator::get_parameter (
     chokehold::consolidator::dbgain_tag {}),
@@ -3233,7 +3233,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "SC HP",
-    declptr<oversampled<chokehold::consolidator>>(),
+    declptr<updownsampled<chokehold::consolidator>>(),
     declptr<chokehold::consolidator::scfreq_tag>()),
   chokehold::consolidator::get_parameter (
     chokehold::consolidator::scfreq_tag {}),
@@ -3244,7 +3244,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Out Gain",
-    declptr<oversampled<chokehold::consolidator>>(),
+    declptr<updownsampled<chokehold::consolidator>>(),
     declptr<chokehold::consolidator::dbtrim_tag>()),
   chokehold::consolidator::get_parameter (
     chokehold::consolidator::dbtrim_tag {}),
@@ -3255,7 +3255,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "St Mode",
-    declptr<oversampled<chokehold::consolidator>>(),
+    declptr<updownsampled<chokehold::consolidator>>(),
     declptr<chokehold::consolidator::midside_tag>()),
   chokehold::consolidator::get_parameter (
     chokehold::consolidator::midside_tag {}),
@@ -3266,7 +3266,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "St Mode",
-    declptr<oversampled<chokehold::consolidator>>(),
+    declptr<updownsampled<chokehold::consolidator>>(),
     declptr<chokehold::consolidator::linkamount_tag>()),
   chokehold::consolidator::get_parameter (
     chokehold::consolidator::linkamount_tag {}),
@@ -3277,10 +3277,10 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "OverSmpl",
-    declptr<oversampled<chokehold::consolidator>>(),
-    declptr<oversampled<chokehold::consolidator>::oversampling_tag>()),
-  oversampled<chokehold::consolidator>::get_parameter (
-    oversampled<chokehold::consolidator>::oversampling_tag {}),
+    declptr<updownsampled<chokehold::consolidator>>(),
+    declptr<updownsampled<chokehold::consolidator>::oversampling_tag>()),
+  updownsampled<chokehold::consolidator>::get_parameter (
+    updownsampled<chokehold::consolidator>::oversampling_tag {}),
   slider_ext);
 
 using consolidator_params = mp_list<
@@ -3297,7 +3297,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Mode",
-    declptr<oversampled<chokehold::gate_expander>>(),
+    declptr<updownsampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::operation_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::operation_tag {}),
@@ -3308,7 +3308,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Threshold",
-    declptr<oversampled<chokehold::gate_expander>>(),
+    declptr<updownsampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::gatethresh_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::gatethresh_tag {}),
@@ -3319,7 +3319,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Range",
-    declptr<oversampled<chokehold::gate_expander>>(),
+    declptr<updownsampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::gaterange_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::gaterange_tag {}),
@@ -3330,7 +3330,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Hysteresis",
-    declptr<oversampled<chokehold::gate_expander>>(),
+    declptr<updownsampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::gatehyst_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::gatehyst_tag {}),
@@ -3341,7 +3341,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Attack",
-    declptr<oversampled<chokehold::gate_expander>>(),
+    declptr<updownsampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::gateattack_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::gateattack_tag {}),
@@ -3352,7 +3352,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Release",
-    declptr<oversampled<chokehold::gate_expander>>(),
+    declptr<updownsampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::gaterelease_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::gaterelease_tag {}),
@@ -3363,7 +3363,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "SC Freq",
-    declptr<oversampled<chokehold::gate_expander>>(),
+    declptr<updownsampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::scfreq_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::scfreq_tag {}),
@@ -3374,7 +3374,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Chnl Link",
-    declptr<oversampled<chokehold::gate_expander>>(),
+    declptr<updownsampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::linkamount_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::linkamount_tag {}),
@@ -3385,7 +3385,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Chnl Mode",
-    declptr<oversampled<chokehold::gate_expander>>(),
+    declptr<updownsampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::routing_tag>()),
   chokehold::gate_expander::get_parameter (
     chokehold::gate_expander::routing_tag {}),
@@ -3396,10 +3396,10 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "OverSmpl",
-    declptr<oversampled<chokehold::gate_expander>>(),
-    declptr<oversampled<chokehold::gate_expander>::oversampling_tag>()),
-  oversampled<chokehold::gate_expander>::get_parameter (
-    oversampled<chokehold::gate_expander>::oversampling_tag {}),
+    declptr<updownsampled<chokehold::gate_expander>>(),
+    declptr<updownsampled<chokehold::gate_expander>::oversampling_tag>()),
+  updownsampled<chokehold::gate_expander>::get_parameter (
+    updownsampled<chokehold::gate_expander>::oversampling_tag {}),
   slider_ext);
 
 using gate_expander_params = mp_list<

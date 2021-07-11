@@ -46,11 +46,15 @@ public:
 };
 //------------------------------------------------------------------------------
 // an external adaptor class to oversample a DSP module.
+// notice that "op_mode" gets a tag class so "is_same_template" can be used
+// (reminder: builtin constants break variadic template args).
 static constexpr uint oversampled_max_oversampling = 16;
-
-template <class fx, class T = float>
+struct oversampled_mode_downsample_tag {};
+template <class fx, class mode = void, class T = float>
 class oversampled {
 public:
+  static constexpr bool downsample
+    = std::is_same_v<mode, oversampled_mode_downsample_tag>;
   static constexpr uint      max_oversampling = oversampled_max_oversampling;
   static constexpr uint      num_channels     = 2;
   static constexpr dsp_types dsp_type         = fx::dsp_type;
@@ -105,7 +109,7 @@ public:
     _pc.oversampling_order = 0;
     _predelay_samples      = 0;
     _module_delay          = 0;
-    _oversampler_delay     = 0;
+    _oversample_delay      = 0;
     _predelay_line.reset (num_channels, max_oversampling);
     _fx.reset (_pc);
   }
@@ -140,12 +144,19 @@ public:
     _fx.process_block_replacing (upsampled, (samples << oversampling_order));
 
     for (uint i = 0; i < samples; ++i) {
-      uint idx    = (i << oversampling_order);
-      auto l      = make_crange (upsampled[0] + idx, ratio);
-      auto r      = make_crange (upsampled[1] + idx, ratio);
-      auto ret    = _decimator.tick ({l, r});
-      chnls[0][i] = ret[0];
-      chnls[1][i] = ret[1];
+      uint idx = (i << oversampling_order);
+      if constexpr (downsample) {
+        auto l      = make_crange (upsampled[0] + idx, ratio);
+        auto r      = make_crange (upsampled[1] + idx, ratio);
+        auto ret    = _decimator.tick ({l, r});
+        chnls[0][i] = ret[0];
+        chnls[1][i] = ret[1];
+      }
+      else {
+        // just drop samples, the process is assumed to not introduce aliasing
+        chnls[0][i] = upsampled[0][idx];
+        chnls[1][i] = upsampled[1][idx];
+      }
     }
   }
   //----------------------------------------------------------------------------
@@ -164,10 +175,12 @@ private:
   template <uint ratio>
   void reset_oversamplers()
   {
-    _oversampler_delay = linear_phase_fir_coeffs<ratio>::latency();
-    _oversampler_delay *= 2; // Up and downsampler, 2 times the latency
+    _oversample_delay = linear_phase_fir_coeffs<ratio>::latency();
     _interpolator.reset (linear_phase_fir_coeffs<ratio>::data(), ratio, true);
-    _decimator.reset (linear_phase_fir_coeffs<ratio>::data(), ratio);
+    if constexpr (downsample) {
+      _oversample_delay *= 2; // Up and downsampler, 2 times the latency
+      _decimator.reset (linear_phase_fir_coeffs<ratio>::data(), ratio);
+    }
   }
   //----------------------------------------------------------------------------
   void reset_predelay()
@@ -183,7 +196,7 @@ private:
   {
     switch (_pc.oversampling_order) {
     case 0:
-      _oversampler_delay = 0;
+      _oversample_delay = 0;
       break;
     case 1:
       // TODO: halfband optimization
@@ -207,20 +220,26 @@ private:
   {
     uint module_delay
       = (_module_delay + _predelay_samples) / _pc.get_oversampling();
-    return _oversampler_delay + module_delay;
+    return _oversample_delay + module_delay;
   }
   //----------------------------------------------------------------------------
-  fx                           _fx;
-  oversampled_plugin_context   _pc;
-  delay_line<T>                _predelay_line;
-  uint                         _predelay_samples;
-  uint                         _module_delay;
-  uint                         _oversampler_delay;
-  uint                         _informed_delay;
-  lth_band_fir_decimator<T, 2> _decimator;
-  fir_interpolator<T, 2>       _interpolator;
-  crange<T>                    _work_buffer;
+  using maybe_downsampler_type = std::
+    conditional_t<downsample, lth_band_fir_decimator<T, 2>, std::monostate>;
+  fx                         _fx;
+  oversampled_plugin_context _pc;
+  delay_line<T>              _predelay_line;
+  uint                       _predelay_samples;
+  uint                       _module_delay;
+  uint                       _oversample_delay;
+  maybe_downsampler_type     _decimator;
+  fir_interpolator<T, 2>     _interpolator;
+  crange<T>                  _work_buffer;
 };
 //------------------------------------------------------------------------------
+template <class fx, class T = float>
+using updownsampled = oversampled<fx, oversampled_mode_downsample_tag, T>;
+
+template <class fx, class T = float>
+using upsampled = oversampled<fx, void, T>;
 
 } // namespace artv
