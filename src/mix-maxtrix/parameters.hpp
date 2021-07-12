@@ -3429,7 +3429,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "In Gain",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::dbgain_tag>()),
   chokehold::track_comp::get_parameter (chokehold::track_comp::dbgain_tag {}),
   slider_ext);
@@ -3439,7 +3439,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Feedback",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::compfeedbk_tag>()),
   chokehold::track_comp::get_parameter (
     chokehold::track_comp::compfeedbk_tag {}),
@@ -3450,7 +3450,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Feedb RMS",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::compwindow_tag>()),
   chokehold::track_comp::get_parameter (
     chokehold::track_comp::compwindow_tag {}),
@@ -3461,7 +3461,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Threshold",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::compthresh_tag>()),
   chokehold::track_comp::get_parameter (
     chokehold::track_comp::compthresh_tag {}),
@@ -3472,7 +3472,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Ratio",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::compratio_tag>()),
   chokehold::track_comp::get_parameter (
     chokehold::track_comp::compratio_tag {}),
@@ -3483,7 +3483,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Attack",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::compattack_tag>()),
   chokehold::track_comp::get_parameter (
     chokehold::track_comp::compattack_tag {}),
@@ -3494,7 +3494,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Release",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::comprelease_tag>()),
   chokehold::track_comp::get_parameter (
     chokehold::track_comp::comprelease_tag {}),
@@ -3505,7 +3505,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Knee",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::compknee_tag>()),
   chokehold::track_comp::get_parameter (chokehold::track_comp::compknee_tag {}),
   slider_ext);
@@ -3515,7 +3515,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Range",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::comprange_tag>()),
   chokehold::track_comp::get_parameter (
     chokehold::track_comp::comprange_tag {}),
@@ -3526,7 +3526,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "St Link",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::linkamount_tag>()),
   chokehold::track_comp::get_parameter (
     chokehold::track_comp::linkamount_tag {}),
@@ -3537,7 +3537,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Sidech HP",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::scfreq_tag>()),
   chokehold::track_comp::get_parameter (chokehold::track_comp::scfreq_tag {}),
   slider_ext);
@@ -3547,7 +3547,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "AGC",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::autogain_tag>()),
   chokehold::track_comp::get_parameter (chokehold::track_comp::autogain_tag {}),
   slider_ext);
@@ -3557,7 +3557,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Saturation",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::saturation_tag>()),
   chokehold::track_comp::get_parameter (
     chokehold::track_comp::saturation_tag {}),
@@ -3568,9 +3568,20 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Out Gain",
-    declptr<chokehold::track_comp>(),
+    declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::dbtrim_tag>()),
   chokehold::track_comp::get_parameter (chokehold::track_comp::dbtrim_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  track_comp_oversampling,
+  n_stereo_busses,
+  param_common (
+    "OverSmpl",
+    declptr<updownsampled<chokehold::track_comp>>(),
+    declptr<oversampled_amount_tag>()),
+  updownsampled<chokehold::track_comp>::get_parameter (
+    oversampled_amount_tag {}),
   slider_ext);
 
 using track_comp_params = mp11::mp_list<
@@ -3587,8 +3598,8 @@ using track_comp_params = mp11::mp_list<
   track_comp_comprange,
   track_comp_saturation,
   track_comp_linkamount,
-  track_comp_autogain>;
-
+  track_comp_autogain,
+  track_comp_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   signal_crusher_down,
@@ -5149,7 +5160,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<filter2x_params>;
+using all_fx_typelists = mp_list<track_comp_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 
