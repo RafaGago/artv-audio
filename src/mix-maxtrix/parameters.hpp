@@ -2425,7 +2425,6 @@ using df_hall_params = mp_list<
   df_hall_predelay,
   df_hall_decay,
   df_hall_size,
-  // df_hall_width,
   df_hall_diffuse,
   df_hall_spin,
   df_hall_wander,
@@ -2435,7 +2434,8 @@ using df_hall_params = mp_list<
   df_hall_low_x_over,
   df_hall_high_x_over,
   df_hall_low_mult,
-  df_hall_high_mult>;
+  df_hall_high_mult,
+  df_hall_width>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   df_room_dry,
@@ -2617,14 +2617,14 @@ using df_room_params = mp_list<
   df_room_size,
   df_room_early_damp,
   df_room_late_damp,
-  // df_room_width,
   df_room_low_cut,
   df_room_high_cut,
   df_room_low_boost_freq,
   df_room_low_boost,
   df_room_diffuse,
   df_room_spin,
-  df_room_wander>;
+  df_room_wander,
+  df_room_width>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   _4x4_low_drive,
@@ -5160,7 +5160,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<track_comp_params>;
+using all_fx_typelists = mp_list<df_hall_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 

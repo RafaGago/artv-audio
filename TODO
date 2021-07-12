@@ -1,6 +1,3 @@
-- Oversampling. The heavy lifting, which was doing latency compensation, is
-  done. The main problem is that thre is not enough vertical space on the GUI.
-
 - Still unfixed memory leaks on original TAL Reverb 2's code (mix-maxtrix-test
   catches them).
 
@@ -10,8 +7,8 @@
   Bass Professor mkII and VOLA are viable. Many that I ignored because of
   latencies are suitable again.
 
-- Now that there are 3 FX pages. Add the missing width parameter on the
-  Dragonfly reverb that is missing it. Saike's multiband ravager becomes viable.
+- Now that there are 3 FX pages more fx like e.g. Saike's multiband ravager
+  becomes viable.
 
 - Free Clip/Peak Eater (?). https://gitlab.com/JHVenn/Free-Clip
 
