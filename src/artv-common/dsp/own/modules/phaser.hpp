@@ -11,6 +11,7 @@
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"
+#include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
@@ -250,10 +251,18 @@ public:
 
     _n_processed_samples = 0;
 
-    auto srate        = pc.get_sample_rate();
-    _update_freq_mask = srate < 176220 ? 31 : 63;
-    _update_freq_mask = srate <= 48000 ? 15 : srate;
-
+    uint sr_order = pc.get_sample_rate();
+    if ((sr_order % 44100) != 0) {
+      // assuming multiple of 48Khz
+      auto srate_f = (double) sr_order;
+      srate_f *= 44100. / 48000.;
+      sr_order = (uint) srate_f;
+      assert (sr_order % 44100 == 0 && "precission issues");
+    }
+    sr_order /= 44100; // 1, 2, 4, 8, 16, 32 ...
+    sr_order = last_bit_set (sr_order); // 0, 1, 2, 3, 4, 5 ...
+    sr_order += 3; // Sample rates 44100 multiples update every 362.811us
+    _control_rate_mask   = lsb_mask<uint> (sr_order);
     _feedback_samples[0] = _feedback_samples[1] = 0.;
   }
   //----------------------------------------------------------------------------
@@ -281,7 +290,7 @@ public:
       *((unsmoothed_parameters*) &pars) = _params.unsmoothed;
 
       // control rate refresh block
-      if ((_n_processed_samples & _update_freq_mask) == 0) {
+      if ((_n_processed_samples & _control_rate_mask) == 0) {
         _lfos[0].set_freq (pars.lfo_hz_final, _plugcontext->get_sample_rate());
         _lfos[1].set_freq (pars.lfo_hz_final, _plugcontext->get_sample_rate());
 
@@ -295,7 +304,7 @@ public:
           _lfos[0].set_phase (start_ph);
           _lfos[1].set_phase (start_ph + stereo_ph);
         }
-        auto                 n_samples = _update_freq_mask + 1;
+        auto                 n_samples = _control_rate_mask + 1;
         std::array<float, 2> lfov;
         switch (pars.lfo_wave) {
         case 0:
@@ -527,7 +536,7 @@ private:
 
   std::array<lfo, 2> _lfos; // 0 = L, 1 = R
   uint               _n_processed_samples;
-  uint               _update_freq_mask;
+  uint               _control_rate_mask;
 
   float _lp_smooth_coeff;
 
