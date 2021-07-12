@@ -4065,7 +4065,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Depth",
-    declptr<chow::phaser>(),
+    declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::lfo_depth_tag>()),
   chow::phaser::get_parameter (chow::phaser::lfo_depth_tag {}),
   slider_ext);
@@ -4075,7 +4075,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Freq",
-    declptr<chow::phaser>(),
+    declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::lfo_freq_tag>()),
   chow::phaser::get_parameter (chow::phaser::lfo_freq_tag {}),
   slider_ext);
@@ -4085,7 +4085,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Feedback",
-    declptr<chow::phaser>(),
+    declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::feedback_tag>()),
   chow::phaser::get_parameter (chow::phaser::feedback_tag {}),
   slider_ext);
@@ -4095,7 +4095,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Modulation",
-    declptr<chow::phaser>(),
+    declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::modulation_tag>()),
   chow::phaser::get_parameter (chow::phaser::modulation_tag {}),
   slider_ext);
@@ -4105,7 +4105,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Stages",
-    declptr<chow::phaser>(),
+    declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::stages_tag>()),
   chow::phaser::get_parameter (chow::phaser::stages_tag {}),
   slider_ext);
@@ -4115,7 +4115,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Freq Mult",
-    declptr<chow::phaser>(),
+    declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::freq_mult_tag>()),
   chow::phaser::get_parameter (chow::phaser::freq_mult_tag {}),
   slider_ext);
@@ -4125,7 +4125,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Skew",
-    declptr<chow::phaser>(),
+    declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::skew_tag>()),
   chow::phaser::get_parameter (chow::phaser::skew_tag {}),
   slider_ext);
@@ -4135,7 +4135,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Channel In",
-    declptr<chow::phaser>(),
+    declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::src_channel_tag>()),
   chow::phaser::get_parameter (chow::phaser::src_channel_tag {}),
   slider_ext);
@@ -4145,7 +4145,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Drive",
-    declptr<chow::phaser>(),
+    declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::d1_tag>()),
   chow::phaser::get_parameter (chow::phaser::d1_tag {}),
   slider_ext);
@@ -4155,7 +4155,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Trash",
-    declptr<chow::phaser>(),
+    declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::d2_tag>()),
   chow::phaser::get_parameter (chow::phaser::d2_tag {}),
   slider_ext);
@@ -4165,9 +4165,19 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Dirt",
-    declptr<chow::phaser>(),
+    declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::d3_tag>()),
   chow::phaser::get_parameter (chow::phaser::d3_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  chow_phaser_oversampling,
+  n_stereo_busses,
+  param_common (
+    "OverSmpl",
+    declptr<updownsampled<chow::phaser>>(),
+    declptr<oversampled_amount_tag>()),
+  updownsampled<chow::phaser>::get_parameter (oversampled_amount_tag {}),
   slider_ext);
 
 using chow_phaser_params = mp_list<
@@ -4181,7 +4191,8 @@ using chow_phaser_params = mp_list<
   chow_phaser_src_channel,
   chow_phaser_d1,
   chow_phaser_d2,
-  chow_phaser_d3>;
+  chow_phaser_d3,
+  chow_phaser_oversampling>;
 
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
@@ -4536,14 +4547,20 @@ using fdnverb_params = mp_list<
 parameter_cpp_class_define (
   myphaser_stages,
   n_stereo_busses,
-  param_common ("Stages", declptr<phaser>(), declptr<phaser::stages_tag>()),
+  param_common (
+    "Stages",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::stages_tag>()),
   phaser::get_parameter (phaser::stages_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   myphaser_lfo_rate,
   n_stereo_busses,
-  param_common ("LFO Freq", declptr<phaser>(), declptr<phaser::lfo_rate_tag>()),
+  param_common (
+    "LFO Freq",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::lfo_rate_tag>()),
   phaser::get_parameter (phaser::lfo_rate_tag {}),
   slider_ext);
 
@@ -4552,7 +4569,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "LFO Sync",
-    declptr<phaser>(),
+    declptr<upsampled<phaser>>(),
     declptr<phaser::lfo_rate_sync_tag>()),
   phaser::get_parameter (phaser::lfo_rate_sync_tag {}),
   slider_ext);
@@ -4560,7 +4577,10 @@ parameter_cpp_class_define (
 parameter_cpp_class_define (
   myphaser_lfo_depth,
   n_stereo_busses,
-  param_common ("LFO Amt", declptr<phaser>(), declptr<phaser::lfo_depth_tag>()),
+  param_common (
+    "LFO Amt",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::lfo_depth_tag>()),
   phaser::get_parameter (phaser::lfo_depth_tag {}),
   slider_ext);
 
@@ -4569,7 +4589,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "LFO Phase",
-    declptr<phaser>(),
+    declptr<upsampled<phaser>>(),
     declptr<phaser::lfo_start_phase_tag>()),
   phaser::get_parameter (phaser::lfo_start_phase_tag {}),
   slider_ext);
@@ -4577,21 +4597,30 @@ parameter_cpp_class_define (
 parameter_cpp_class_define (
   myphaser_lfo_stereo,
   n_stereo_busses,
-  param_common ("LFO St", declptr<phaser>(), declptr<phaser::lfo_stereo_tag>()),
+  param_common (
+    "LFO St",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::lfo_stereo_tag>()),
   phaser::get_parameter (phaser::lfo_stereo_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   myphaser_lfo_wave,
   n_stereo_busses,
-  param_common ("LFO Wave", declptr<phaser>(), declptr<phaser::lfo_wave_tag>()),
+  param_common (
+    "LFO Wave",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::lfo_wave_tag>()),
   phaser::get_parameter (phaser::lfo_wave_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   myphaser_low_freq,
   n_stereo_busses,
-  param_common ("Low Freq", declptr<phaser>(), declptr<phaser::low_freq_tag>()),
+  param_common (
+    "Low Freq",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::low_freq_tag>()),
   phaser::get_parameter (phaser::low_freq_tag {}),
   slider_ext);
 
@@ -4600,7 +4629,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "High Freq",
-    declptr<phaser>(),
+    declptr<upsampled<phaser>>(),
     declptr<phaser::high_freq_tag>()),
   phaser::get_parameter (phaser::high_freq_tag {}),
   slider_ext);
@@ -4608,22 +4637,38 @@ parameter_cpp_class_define (
 parameter_cpp_class_define (
   myphaser_feedback,
   n_stereo_busses,
-  param_common ("Feedback", declptr<phaser>(), declptr<phaser::feedback_tag>()),
+  param_common (
+    "Feedback",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::feedback_tag>()),
   phaser::get_parameter (phaser::feedback_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   myphaser_q,
   n_stereo_busses,
-  param_common ("Q", declptr<phaser>(), declptr<phaser::q_tag>()),
+  param_common ("Q", declptr<upsampled<phaser>>(), declptr<phaser::q_tag>()),
   phaser::get_parameter (phaser::q_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   myphaser_stages_mode,
   n_stereo_busses,
-  param_common ("Mode", declptr<phaser>(), declptr<phaser::stages_mode_tag>()),
+  param_common (
+    "Mode",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::stages_mode_tag>()),
   phaser::get_parameter (phaser::stages_mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  myphaser_oversampling,
+  n_stereo_busses,
+  param_common (
+    "Upsample",
+    declptr<upsampled<phaser>>(),
+    declptr<oversampled_amount_tag>()),
+  upsampled<phaser>::get_parameter (oversampled_amount_tag {}),
   slider_ext);
 
 using myphaser_params = mp_list<
@@ -4638,7 +4683,8 @@ using myphaser_params = mp_list<
   myphaser_lfo_stereo,
   myphaser_lfo_wave,
   myphaser_stages_mode,
-  myphaser_lfo_start_phase>;
+  myphaser_lfo_start_phase,
+  myphaser_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   eq4x_band1_type,
@@ -5077,10 +5123,10 @@ parameter_cpp_class_define (
 using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #endif
 //------------------------------------------------------------------------------
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<eq4x_params>;
+using all_fx_typelists = mp_list<myphaser_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 
