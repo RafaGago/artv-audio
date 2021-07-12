@@ -1523,7 +1523,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Bands",
-    declptr<geraint_luff::ripple>(),
+    declptr<upsampled<geraint_luff::ripple>>(),
     declptr<geraint_luff::ripple::control_band_count_tag>()),
   geraint_luff::ripple::get_parameter (
     geraint_luff::ripple::control_band_count_tag {}),
@@ -1534,7 +1534,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Low Freq",
-    declptr<geraint_luff::ripple>(),
+    declptr<upsampled<geraint_luff::ripple>>(),
     declptr<geraint_luff::ripple::low_freq_tag>()),
   geraint_luff::ripple::get_parameter (geraint_luff::ripple::low_freq_tag {}),
   slider_ext);
@@ -1544,7 +1544,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "High Freq",
-    declptr<geraint_luff::ripple>(),
+    declptr<upsampled<geraint_luff::ripple>>(),
     declptr<geraint_luff::ripple::high_freq_tag>()),
   geraint_luff::ripple::get_parameter (geraint_luff::ripple::high_freq_tag {}),
   slider_ext);
@@ -1554,7 +1554,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Ph Offset",
-    declptr<geraint_luff::ripple>(),
+    declptr<upsampled<geraint_luff::ripple>>(),
     declptr<geraint_luff::ripple::cycle_phase_offset_tag>()),
   geraint_luff::ripple::get_parameter (
     geraint_luff::ripple::cycle_phase_offset_tag {}),
@@ -1565,7 +1565,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Ph Stereo",
-    declptr<geraint_luff::ripple>(),
+    declptr<upsampled<geraint_luff::ripple>>(),
     declptr<geraint_luff::ripple::cycle_phase_stereo_offset_tag>()),
   geraint_luff::ripple::get_parameter (
     geraint_luff::ripple::cycle_phase_stereo_offset_tag {}),
@@ -1576,7 +1576,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "LFO",
-    declptr<geraint_luff::ripple>(),
+    declptr<upsampled<geraint_luff::ripple>>(),
     declptr<geraint_luff::ripple::cycle_phase_lfo_hz_tag>()),
   geraint_luff::ripple::get_parameter (
     geraint_luff::ripple::cycle_phase_lfo_hz_tag {}),
@@ -1587,7 +1587,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "LFO Sync",
-    declptr<geraint_luff::ripple>(),
+    declptr<upsampled<geraint_luff::ripple>>(),
     declptr<geraint_luff::ripple::cycle_phase_invbeat_tag>()),
   geraint_luff::ripple::get_parameter (
     geraint_luff::ripple::cycle_phase_invbeat_tag {}),
@@ -1598,7 +1598,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Filt Type",
-    declptr<geraint_luff::ripple>(),
+    declptr<upsampled<geraint_luff::ripple>>(),
     declptr<geraint_luff::ripple::control_filter_mode_tag>()),
   geraint_luff::ripple::get_parameter (
     geraint_luff::ripple::control_filter_mode_tag {}),
@@ -1609,7 +1609,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Filt Strength",
-    declptr<geraint_luff::ripple>(),
+    declptr<upsampled<geraint_luff::ripple>>(),
     declptr<geraint_luff::ripple::filter_db_tag>()),
   geraint_luff::ripple::get_parameter (geraint_luff::ripple::filter_db_tag {}),
   slider_ext);
@@ -1619,7 +1619,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Filt Width",
-    declptr<geraint_luff::ripple>(),
+    declptr<upsampled<geraint_luff::ripple>>(),
     declptr<geraint_luff::ripple::filter_width_factor_tag>()),
   geraint_luff::ripple::get_parameter (
     geraint_luff::ripple::filter_width_factor_tag {}),
@@ -1630,10 +1630,21 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Gain",
-    declptr<geraint_luff::ripple>(),
+    declptr<upsampled<geraint_luff::ripple>>(),
     declptr<geraint_luff::ripple::output_gain_db_tag>()),
   geraint_luff::ripple::get_parameter (
     geraint_luff::ripple::output_gain_db_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  ripple_oversampling,
+  n_stereo_busses,
+  param_common (
+    "Upsample",
+    declptr<upsampled<geraint_luff::ripple>>(),
+    declptr<oversampled_amount_tag>()),
+  updownsampled<geraint_luff::ripple>::get_parameter (
+    oversampled_amount_tag {}),
   slider_ext);
 
 using ripple_params = mp_list<
@@ -1647,7 +1658,8 @@ using ripple_params = mp_list<
   ripple_phase_invbeat,
   ripple_filter_db,
   ripple_filter_width_factor,
-  ripple_output_gain_db>;
+  ripple_output_gain_db,
+  ripple_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   spring_box_density,
@@ -5123,10 +5135,10 @@ parameter_cpp_class_define (
 using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #endif
 //------------------------------------------------------------------------------
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<myphaser_params>;
+using all_fx_typelists = mp_list<ripple_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 
