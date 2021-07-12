@@ -693,7 +693,7 @@ private:
 
   static constexpr uint fx_blocksize = 128;
   static constexpr uint oversample_blocksize
-    = fx_blocksize * oversampled_max_oversampling;
+    = fx_blocksize * oversampled_common<float>::max_oversampling;
 
   alignas (32) std::array<std::array<float, fx_blocksize>, 4> _fx_mix_buffer;
   std::array<float, oversample_blocksize * 2> _oversample_buffer;
