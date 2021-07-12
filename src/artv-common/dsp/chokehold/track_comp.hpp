@@ -195,7 +195,7 @@ public:
   static constexpr auto get_parameter (compratio_tag)
   {
     // Original slider line: slider4: compRatio=4<0.1, 20, 0.1> Ratio
-    return float_param ("1 to", 0.8, 20.0, 4.0, 0.1, 0.5);
+    return float_param ("", 0.8, 20.0, 4.0, 0.05, 0.6);
   }
 
 #endif
