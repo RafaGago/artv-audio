@@ -883,9 +883,8 @@ struct moog_1 {
     freq = std ::min (sr < 88200. ? 6000. : 20000., freq);
     freq = std ::min (sr < 48000. ? 5500. : 20000., freq);
 
-    double norm_freq = (freq / 20000.);
-    double fc        = .5 * sr * norm_freq;
-    double fs        = sr;
+    double fc = freq;
+    double fs = sr;
 
     co[k]    = reso * 3.9999999999999987;
     double g = std::tan (3.141592653589793 * fc / fs)
@@ -1056,9 +1055,8 @@ struct moog_2 {
     freq = std ::min (sr < 88200. ? 6000. : 20000., freq);
     freq = std ::min (sr < 48000. ? 5500. : 20000., freq);
 
-    double norm_freq = (freq / 20000.);
-    double fc        = .5 * sr * norm_freq;
-    double fs        = sr;
+    double fc = freq;
+    double fs = sr;
 
     co[k]    = reso * 120.;
     double g = std::tan (3.141592653589793 / fs * fc) / std::sqrt (1. + co[k]);

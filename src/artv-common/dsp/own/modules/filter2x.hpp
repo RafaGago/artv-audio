@@ -51,6 +51,7 @@ public:
     smoother::lowpass<double> (
       make_crange (_smooth_coeff), 1. / 0.08, pc.get_sample_rate());
     memset (&_smooth_state, 0, sizeof _smooth_state);
+    memset (&_state, 0, sizeof _state);
     memset (&_last_sample, 0, sizeof _last_sample);
   }
   //----------------------------------------------------------------------------
@@ -118,6 +119,10 @@ public:
 
           simd_dbl prev {_last_sample[b][0], _last_sample[b][1]};
           prev *= simd_dbl {smoothed_p.vars.feedback};
+          bool is_moog
+            = btype >= bandtype::moog_1_lp && btype <= bandtype::moog_2_br;
+          // moogs are extremely unstable reduce feedback
+          prev *= simd_dbl {is_moog ? 0.03 : 1.};
           in += prev;
 
           switch (btype) {
