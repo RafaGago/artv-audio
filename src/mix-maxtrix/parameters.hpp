@@ -240,7 +240,7 @@ parameter_cpp_class_define (
 
 // clang-format off
 static constexpr auto channel_modifs_names = make_cstr_array (
-  "P", "L ", "R", "RL");
+  "P", "L ", "R", "S");
 // clang-format on
 
 static constexpr uint n_channel_modifiers = channel_modifs_names.size();
