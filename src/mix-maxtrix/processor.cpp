@@ -397,9 +397,6 @@ private:
         _fx_dsp[channel] = dsp_class{};
         auto& fx = std::get<dsp_class> (_fx_dsp[channel]);
         fx.reset (_fx_context);
-        if constexpr (uses_oversampled) {
-          fx.set_oversampling_work_buffer (_oversample_buffer);
-        }
       }
 
       // refresh FX parameters.
@@ -692,12 +689,8 @@ private:
   std::array<dsp_variant, parameters::n_stereo_busses> _fx_dsp;
 
   static constexpr uint fx_blocksize = 128;
-  static constexpr uint oversample_blocksize
-    = fx_blocksize * oversampled_common<float>::max_oversampling;
-
   alignas (32) std::array<std::array<float, fx_blocksize>, 4> _fx_mix_buffer;
-  std::array<float, oversample_blocksize * 2> _oversample_buffer;
-  delay_compensation_buffers<float, 2>        _dly_comp_buffers;
+  delay_compensation_buffers<float, 2> _dly_comp_buffers;
 
   std::array<foleys::LevelMeterSource, parameters::n_stereo_busses> _meters;
 

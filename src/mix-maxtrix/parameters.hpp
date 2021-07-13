@@ -76,9 +76,8 @@
 #include "artv-common/dsp/own/modules/eq4x.hpp"
 #include "artv-common/dsp/own/modules/filter2x.hpp"
 #include "artv-common/dsp/own/modules/phaser.hpp"
-#if 0
 #include "artv-common/dsp/own/modules/saturation.hpp"
-#endif
+
 #include "artv-common/dsp/own/modules/sound_delay.hpp"
 #if 1
 #include "artv-common/dsp/own/modules/polyphase-fir-tester.hpp"
@@ -5087,13 +5086,12 @@ using filter2x_params = mp_list<
   filter2x_band2_tolerance,
   filter2x_oversampling>;
 //------------------------------------------------------------------------------
-#if 0
 parameter_cpp_class_define (
   saturation_drive,
   n_stereo_busses,
   param_common (
     "Drive",
-    declptr<saturation>(),
+    declptr<updownsampled<saturation>>(),
     declptr<saturation::drive_tag>()),
   saturation::get_parameter (saturation::drive_tag {}),
   slider_ext);
@@ -5103,7 +5101,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "EL Drive",
-    declptr<saturation>(),
+    declptr<updownsampled<saturation>>(),
     declptr<saturation::compensated_drive_tag>()),
   saturation::get_parameter (saturation::compensated_drive_tag {}),
   slider_ext);
@@ -5111,7 +5109,10 @@ parameter_cpp_class_define (
 parameter_cpp_class_define (
   saturation_type,
   n_stereo_busses,
-  param_common ("Type", declptr<saturation>(), declptr<saturation::type_tag>()),
+  param_common (
+    "Type",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::type_tag>()),
   saturation::get_parameter (saturation::type_tag {}),
   slider_ext);
 
@@ -5120,7 +5121,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Lo Cut",
-    declptr<saturation>(),
+    declptr<updownsampled<saturation>>(),
     declptr<saturation::lo_cut_tag>()),
   saturation::get_parameter (saturation::lo_cut_tag {}),
   slider_ext);
@@ -5130,9 +5131,19 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Hi Cut",
-    declptr<saturation>(),
+    declptr<updownsampled<saturation>>(),
     declptr<saturation::hi_cut_tag>()),
   saturation::get_parameter (saturation::hi_cut_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  saturation_oversampling,
+  n_stereo_busses,
+  param_common (
+    "Upsample",
+    declptr<updownsampled<saturation>>(),
+    declptr<oversampled_amount_tag>()),
+  updownsampled<saturation>::get_parameter (oversampled_amount_tag {}),
   slider_ext);
 
 using saturation_params = mp_list<
@@ -5140,8 +5151,8 @@ using saturation_params = mp_list<
   saturation_drive,
   saturation_compensated_drive,
   saturation_lo_cut,
-  saturation_hi_cut>;
-#endif
+  saturation_hi_cut,
+  saturation_oversampling>;
 //------------------------------------------------------------------------------
 #if 1
 parameter_cpp_class_define (
@@ -5160,7 +5171,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<df_hall_params>;
+using all_fx_typelists = mp_list<saturation_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 

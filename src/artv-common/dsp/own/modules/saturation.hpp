@@ -19,8 +19,8 @@
 #include "artv-common/misc/util.hpp"
 
 // TODO: latency. tanh
-
-#error "This requires at least 2x oversampling. Parameter smoothing is TBD too".
+//#error "This requires at least 2x oversampling. Parameter smoothing is TBD
+//too."
 
 namespace artv {
 
@@ -167,7 +167,7 @@ public:
           get_filt_states (hi_hp, 0)[onepole::z1],
           get_filt_states (hi_hp, 1)[onepole::z1]};
       }
-#if 1
+
       switch (p.type) {
       case sqrt_adaa:
         sat[0] = sqrt_waveshaper_adaa<adaa_order>::tick (
@@ -190,7 +190,7 @@ public:
       default:
         break;
       }
-
+#if 1
       // Q'n'D. From saike tanh saturator.
       constexpr auto nu = (1.0 - 0.5) / (1.0 + 0.5);
       _allpass_states[0].y0
@@ -280,4 +280,4 @@ private:
   plugin_context* _plugcontext = nullptr;
 };
 //------------------------------------------------------------------------------
-}; // namespace artv
+} // namespace artv

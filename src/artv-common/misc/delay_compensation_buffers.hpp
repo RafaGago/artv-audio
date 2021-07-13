@@ -9,7 +9,11 @@
 #include "artv-common/misc/util.hpp"
 
 namespace artv {
-
+// -----------------------------------------------------------------------------
+// This class is a helper for doing delay compensation on non-owned buffers,
+// buffers that for some reason can't have its size changed, so the only option
+// is to save reminders and do memory move operations on them instead of having
+// extra space.
 // -----------------------------------------------------------------------------
 template <class T, uint N_channels = 2, class Index = u32>
 class delay_compensation_buffers {
@@ -91,5 +95,51 @@ private:
   crange<T>                    _tmp_buff;
 };
 // -----------------------------------------------------------------------------
+// This class is a helper for doing delay compensation an owned buffers. The
+// owned buffer is ironically not owned by the class itself, the class just
+// manages them.
+//
+// The usage is basically calling:
+// -get_write_buffer, process and modify there
+// -get_read_buffer: to pass the delay compensated buffer somewhere.
+// -iteration_end: To prepare the buffer head for the next call
+//
+// The "delay" is a fixed paramter, but not owned by the class.
+// -----------------------------------------------------------------------------
+template <class T>
+class owned_delay_compensation_buffer {
+public:
+  //----------------------------------------------------------------------------
+  void reset (crange<T> buffer, uint max_delay)
+  {
+    _buff      = buffer;
+    _max_delay = max_delay;
+    memset (_buff.data(), 0, sizeof _buff[0] * _buff.size());
+  }
+  //----------------------------------------------------------------------------
+  void iteration_end (uint delay, uint total_bytes_written)
+  {
+    assert (total_bytes_written <= _buff.size());
+    memcpy (
+      &_buff[_max_delay - delay],
+      &_buff[_max_delay - delay + total_bytes_written],
+      delay * sizeof _buff[0]);
+  }
+  //----------------------------------------------------------------------------
+  crange<T> get_write_buffer()
+  {
+    return {&_buff[_max_delay], _buff.size() - _max_delay};
+  }
+  //----------------------------------------------------------------------------
+  crange<T> get_read_buffer (uint delay)
+  {
+    return {&_buff[_max_delay - delay], _buff.size() - _max_delay};
+  }
+  //----------------------------------------------------------------------------
+private:
+  crange<T> _buff;
+  uint      _max_delay;
+  // ---------------------------------------------------------------------------
+};
 
 } // namespace artv

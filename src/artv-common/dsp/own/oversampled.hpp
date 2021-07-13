@@ -7,6 +7,7 @@
 #include "artv-common/dsp/own/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_types.hpp"
+#include "artv-common/misc/delay_compensation_buffers.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
@@ -53,7 +54,7 @@ template <class T = float>
 class oversampled_common {
 public:
   static constexpr uint max_oversampling = 16;
-  static constexpr uint num_channels     = 2;
+  static constexpr uint n_channels       = 2;
   //----------------------------------------------------------------------------
   void set_oversampling_order (
     uint                                  order,
@@ -82,14 +83,19 @@ public:
     _pc.on_set_delay_compensation
       = [=] (uint samples) { return delay_compensation_changing (samples); };
     _pc.oversampling_order = 0;
-    _predelay_samples      = 0;
+    _n_samples_fractional  = 0;
     _module_delay          = 0;
     _oversample_delay      = 0;
-    _predelay_line.reset (num_channels, max_oversampling);
+    // the +1 there is to do fractional delay compensations.
+    uint bfsz = (pc.get_max_block_samples() + 1) * max_oversampling;
+    _work_buffers_mem.clear();
+    _work_buffers_mem.resize (bfsz * n_channels);
+    for (uint i = 0; i < n_channels; ++i) {
+      _work_buffers[i].reset (
+        {&_work_buffers_mem[i * bfsz], bfsz}, max_oversampling);
+    }
     fx_reset_fn (_pc);
   }
-  //----------------------------------------------------------------------------
-  void set_oversampling_work_buffer (crange<T> buff) { _work_buffer = buff; }
   //----------------------------------------------------------------------------
   void upsample (
     std::array<T*, 2>       chnls,
@@ -105,47 +111,57 @@ public:
     fir_interpolator<T, 2>&                       interpolator,
     lth_band_fir_decimator<T, 2>*                 decimator)
   {
-    assert (_work_buffer.size() >= (2 * samples * _pc.get_oversampling()));
     if (_pc.oversampling_order == 0) {
-      // fast path
+      // fast path, oversampling disabled
       fx_process_block_replacing (chnls, samples);
       return;
     }
+
     // tell the compiler that these won't change during the loop.
-    uint              predelay_samples   = _predelay_samples;
-    uint              oversampling_order = _pc.oversampling_order;
-    uint              ratio              = 1u << oversampling_order;
-    std::array<T*, 2> upsampled
-      = {&_work_buffer[0], &_work_buffer[_work_buffer.size() / 2]};
+    uint n_frac_spl         = _n_samples_fractional;
+    uint oversampling_order = _pc.oversampling_order;
+    uint ratio              = 1u << oversampling_order;
+
+    // the head of the work buffer is reserved for storing previous samples for
+    // fractional delay corrections.
+    std::array<T*, 2> upsampled = {
+      _work_buffers[0].get_write_buffer().data(),
+      _work_buffers[1].get_write_buffer().data()};
 
     for (uint i = 0; i < samples; ++i) {
       std::array<T, 2> interleaved {chnls[0][i], chnls[1][i]};
-      if (predelay_samples) {
-        _predelay_line.push (interleaved);
-        _predelay_line.get (interleaved, predelay_samples);
-      }
-      uint idx = (i << oversampling_order);
-      auto l   = make_crange (upsampled[0] + idx, ratio);
-      auto r   = make_crange (upsampled[1] + idx, ratio);
+      uint             idx = (i << oversampling_order);
+      auto             l   = make_crange (upsampled[0] + idx, ratio);
+      auto             r   = make_crange (upsampled[1] + idx, ratio);
       interpolator.tick ({l, r}, interleaved);
     }
+    // The fractional delay line is placed after the upsampler
+    std::array<T*, 2> upsampled_frac_corrected = {
+      _work_buffers[0].get_read_buffer (n_frac_spl).data(),
+      _work_buffers[1].get_read_buffer (n_frac_spl).data()};
 
-    fx_process_block_replacing (upsampled, (samples << oversampling_order));
+    fx_process_block_replacing (
+      upsampled_frac_corrected, (samples << oversampling_order));
 
     for (uint i = 0; i < samples; ++i) {
       uint idx = (i << oversampling_order);
       if constexpr (downsample) {
-        auto l      = make_crange (upsampled[0] + idx, ratio);
-        auto r      = make_crange (upsampled[1] + idx, ratio);
+        auto l      = make_crange (upsampled_frac_corrected[0] + idx, ratio);
+        auto r      = make_crange (upsampled_frac_corrected[1] + idx, ratio);
         auto ret    = decimator->tick ({l, r});
         chnls[0][i] = ret[0];
         chnls[1][i] = ret[1];
       }
       else {
-        // just drop samples, the process is assumed to not introduce aliasing
-        chnls[0][i] = upsampled[0][idx];
-        chnls[1][i] = upsampled[1][idx];
+        // just drop samples, on this configuration "fx_process_block_replacing"
+        // is assumed to not introduce aliasing
+        chnls[0][i] = upsampled_frac_corrected[0][idx];
+        chnls[1][i] = upsampled_frac_corrected[1][idx];
       }
+    }
+    for (uint c = 0; c < n_channels; ++c) {
+      _work_buffers[c].iteration_end (
+        n_frac_spl, samples << oversampling_order);
     }
   }
   //----------------------------------------------------------------------------
@@ -173,11 +189,11 @@ private:
   //----------------------------------------------------------------------------
   void reset_predelay()
   {
-    _predelay_samples   = 0;
-    uint next_int_delay = round_ceil (_module_delay, _pc.get_oversampling());
+    _n_samples_fractional = 0;
+    uint next_int_delay   = round_ceil (_module_delay, _pc.get_oversampling());
     // making the resulting latency an integer by adding util we reach a full
     // sample at the base sample rate
-    _predelay_samples = next_int_delay - _module_delay;
+    _n_samples_fractional = next_int_delay - _module_delay;
   }
   //----------------------------------------------------------------------------
   void reset_resamplers (
@@ -209,16 +225,16 @@ private:
   uint get_total_delay() const
   {
     uint module_delay
-      = (_module_delay + _predelay_samples) / _pc.get_oversampling();
+      = (_module_delay + _n_samples_fractional) / _pc.get_oversampling();
     return _oversample_delay + module_delay;
   }
   //----------------------------------------------------------------------------
   oversampled_plugin_context _pc;
-  delay_line<T>              _predelay_line;
-  uint                       _predelay_samples;
+  uint                       _n_samples_fractional;
   uint                       _module_delay;
   uint                       _oversample_delay;
-  crange<T>                  _work_buffer;
+  std::array<owned_delay_compensation_buffer<T>, n_channels> _work_buffers;
+  std::vector<T>                                             _work_buffers_mem;
 };
 //------------------------------------------------------------------------------
 // an external adaptor class to oversample a DSP module.
@@ -289,12 +305,6 @@ public:
       _common.template process_block_replacing<downsample> (
         chnls, samples, fx_process, _interpolator, nullptr);
     }
-  }
-  //----------------------------------------------------------------------------
-  // for cache friendliness this buffer is external.
-  void set_oversampling_work_buffer (crange<T> buff)
-  {
-    _common.set_oversampling_work_buffer (buff);
   }
   //----------------------------------------------------------------------------
 private:
