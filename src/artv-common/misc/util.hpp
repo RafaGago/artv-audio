@@ -119,21 +119,21 @@ public:
   using iterator       = value_type*;
   using const_iterator = value_type const*;
 
-  contiguous_range() = default;
+  constexpr contiguous_range() = default;
 
-  contiguous_range (value_type* start, size_t size)
+  constexpr contiguous_range (value_type* start, size_t size)
   {
     _start = start;
     _size  = start ? size : 0;
   }
 
   template <class U, std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  contiguous_range (contiguous_range<U> const& other)
+  constexpr contiguous_range (contiguous_range<U> const& other)
     : contiguous_range {other.data(), other.size()}
   {}
 
   template <class U, std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  contiguous_range<T>& operator= (contiguous_range<U> const& other)
+  constexpr contiguous_range<T>& operator= (contiguous_range<U> const& other)
   {
     _start = other.data();
     _size  = other.size();
@@ -144,21 +144,21 @@ public:
     class U,
     uint N,
     std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  contiguous_range (U (&arr)[N]) : contiguous_range {&arr[0], N}
+  constexpr contiguous_range (U (&arr)[N]) : contiguous_range {&arr[0], N}
   {}
 
   template <
     class U,
     uint N,
     std::enable_if_t<crange_type_is_const<U>>* = nullptr>
-  contiguous_range (U const (&arr)[N]) : contiguous_range {&arr[0], N}
+  constexpr contiguous_range (U const (&arr)[N]) : contiguous_range {&arr[0], N}
   {}
 
   template <
     class U,
     uint N,
     std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  contiguous_range<T>& operator= (U (&arr)[N])
+  constexpr contiguous_range<T>& operator= (U (&arr)[N])
   {
     _start = &arr[0];
     _size  = N;
@@ -169,7 +169,7 @@ public:
     class U,
     uint N,
     std::enable_if_t<crange_type_is_const<U>>* = nullptr>
-  contiguous_range<T>& operator= (U const (&arr)[N])
+  constexpr contiguous_range<T>& operator= (U const (&arr)[N])
   {
     _start = &arr[0];
     _size  = N;
@@ -180,7 +180,7 @@ public:
     class U,
     size_t N,
     std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  contiguous_range (std::array<U, N>& arr)
+  constexpr contiguous_range (std::array<U, N>& arr)
     : contiguous_range {arr.data(), arr.size()}
   {}
 
@@ -188,7 +188,7 @@ public:
     class U,
     size_t N,
     std::enable_if_t<crange_type_is_const<U>>* = nullptr>
-  contiguous_range (std::array<U, N> const& arr)
+  constexpr contiguous_range (std::array<U, N> const& arr)
     : contiguous_range {arr.data(), arr.size()}
   {}
 
@@ -202,7 +202,7 @@ public:
     class U,
     size_t N,
     std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  contiguous_range<T>& operator= (std::array<U, N>& arr)
+  constexpr contiguous_range<T>& operator= (std::array<U, N>& arr)
   {
     _start = arr.data();
     _size  = N;
@@ -213,7 +213,7 @@ public:
     class U,
     size_t N,
     std::enable_if_t<crange_type_is_const<U>>* = nullptr>
-  contiguous_range<T>& operator= (std::array<U, N> const& arr)
+  constexpr contiguous_range<T>& operator= (std::array<U, N> const& arr)
   {
     _start = arr.data();
     _size  = N;
@@ -280,46 +280,46 @@ public:
     return *this;
   }
 
-  value_type& operator[] (size_t idx)
+  constexpr value_type& operator[] (size_t idx)
   {
     assert (_start);
     assert (idx < size());
     return _start[idx];
   }
 
-  value_type const& operator[] (size_t idx) const
+  constexpr value_type const& operator[] (size_t idx) const
   {
     assert (_start);
     assert (idx < size());
     return _start[idx];
   }
 
-  void shrink_head (uint count)
+  constexpr void shrink_head (uint count)
   {
     assert (count <= size());
     _start += count;
     _size -= count;
   }
 
-  void shrink_tail (uint count)
+  constexpr void shrink_tail (uint count)
   {
     assert (count <= size());
     _size -= count;
   }
 
-  iterator       begin() { return _start; }
-  const_iterator cbegin() { return _start; }
-  const_iterator begin() const { return _start; }
+  constexpr iterator       begin() { return _start; }
+  constexpr const_iterator cbegin() { return _start; }
+  constexpr const_iterator begin() const { return _start; }
 
-  iterator       end() { return _start + _size; }
-  const_iterator cend() { return _start + _size; }
-  const_iterator end() const { return _start + _size; }
+  constexpr iterator       end() { return _start + _size; }
+  constexpr const_iterator cend() { return _start + _size; }
+  constexpr const_iterator end() const { return _start + _size; }
 
-  size_t   size() const { return _size; }
-  T*       data() { return _start; }
-  T const* data() const { return _start; }
+  constexpr size_t   size() const { return _size; }
+  constexpr T*       data() { return _start; }
+  constexpr T const* data() const { return _start; }
 
-  bool empty() const { return size() == 0; }
+  constexpr bool empty() const { return size() == 0; }
 
 private:
   //----------------------------------------------------------------------------
