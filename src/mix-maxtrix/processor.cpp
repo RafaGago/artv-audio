@@ -120,9 +120,7 @@ public:
 
     for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
       _mixer[i].reset (_fx_context);
-      mixer_parameters_update (i, false);
       _mixer[i].skip_smoothing();
-
       _meters[i].resize (2, samplerate * 0.1 / max_block_samples);
 
       mp11::mp_with_index<dsp_variant_size> (
@@ -133,9 +131,12 @@ public:
             fx.reset (_fx_context);
           }
         });
-
-      io_recompute (true, true);
     }
+    // for "io_recompute" to forcefully run on first block we set an invalid
+    // value on one variable affecting the routing, so when it is refreshed it
+    // // will always have a change. This hack is done to avoid code bloating
+    // this function.
+    p_get (parameters::in_selection {})[0] = 1 << parameters::n_stereo_busses;
   }
   //----------------------------------------------------------------------------
   bool isBusesLayoutSupported (const BusesLayout& buses) const override
@@ -205,77 +206,79 @@ private:
     bool changed;
     u64  bits;
   };
-
-  mutesolo_state io_recompute (
-    bool refresh_and_maybe_run,
-    bool force_run = false)
+  //----------------------------------------------------------------------------
+  void io_recompute (u64 mute_solo_bits)
   {
-    namespace param = parameters;
-
-    bool run       = force_run;
-    bool mutsolchg = force_run;
-
-    if (refresh_and_maybe_run) {
-      for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
-        run |= p_refresh (parameters::in_selection {}, i).changed();
-        run |= p_refresh (parameters::out_selection {}, i).changed();
-        mutsolchg |= p_refresh (parameters::mute_solo {}, i).changed();
-      }
-      run |= p_refresh (parameters::mixer_sends {}, 0).changed();
-      run |= p_refresh (parameters::routing {}, 0).changed();
-    }
     auto& ins_arr      = p_get (parameters::in_selection {});
     auto& outs_arr     = p_get (parameters::out_selection {});
-    auto& mutesolo_arr = p_get (parameters::mute_solo {});
     auto& mixsends_arr = p_get (parameters::mixer_sends {});
     auto& routing_arr  = p_get (parameters::routing {});
 
-    u64 ins      = 0;
-    u64 outs     = 0;
-    u64 mutesolo = 0;
+    u64 ins  = 0;
+    u64 outs = 0;
 
-    assert (
-      ins_arr.size() == outs_arr.size()
-      && ins_arr.size() == mutesolo_arr.size());
-
+    assert (ins_arr.size() == outs_arr.size());
     for (uint i = 0; i < ins_arr.size(); ++i) {
       ins |= (((u64) ins_arr[i]) << (i * parameters::n_stereo_busses));
       outs |= (((u64) outs_arr[i]) << (i * parameters::n_stereo_busses));
-      mutesolo |= (((u64) mutesolo_arr[i]) << (i * 2)); // 2 mute solo bits.
     }
 
-    if (run) {
-      // notice that mute solo changes don't affect this when "forced_run" is
-      // "false", as they crossfades before switching off.
-      auto latency_prev = _io.plugin_latency;
-      _io.recompute (
-        ins,
-        outs,
-        mutesolo,
-        mixsends_arr[0],
-        (uint) routing_arr[0],
-        _fx_context.fx_latencies);
+    auto latency_prev = _io.plugin_latency;
+    _io.recompute (
+      ins,
+      outs,
+      mute_solo_bits,
+      mixsends_arr[0],
+      (uint) routing_arr[0],
+      _fx_context.fx_latencies);
 
-      this->setLatencySamples (_io.plugin_latency);
-      _fx_context.fx_latencies_changed = false;
-      reset_latency_buffers();
-    }
-    return {mutsolchg, mutesolo};
+    this->setLatencySamples (_io.plugin_latency);
+    _fx_context.fx_latencies_changed = false;
+    reset_latency_buffers();
   }
   //----------------------------------------------------------------------------
   template <class T>
   void process_block (juce::AudioBuffer<T>& passed_buffers)
   {
     using value_type = T;
-    // I think that this is coarse grained/greedy, but "juce::ScopedNoDenormals"
-    // doesn't work (Reaper).
+    // I think that this is coarse grained/greedy, but
+    // "juce::ScopedNoDenormals" doesn't work (Reaper).
     juce::FloatVectorOperations::disableDenormalisedNumberSupport (true);
 
     auto& buffers = get_buffers (T {});
     buffers.on_block (passed_buffers);
 
-    // reminder: solo and muting don't trigger recomputation.
-    mutesolo_state mutesolo = io_recompute (true, false);
+    bool                                          routing_change = false;
+    mutesolo_state                                mutesolo {false, 0};
+    std::array<bool, parameters::n_stereo_busses> fx_type_changed;
+
+    // move (refresh) all non-fx parameters from JUCE's atomic_ptrs to local
+    // member variables, so we read the same value for the whole duration on
+    // this block. There is a substantial amount of parameters. These are
+    // refreshed in declaration order to avoid weird memory access orders.
+    p_refresh_many (
+      parameters::routing_controls_typelist {},
+      [&] (auto key, uint i, auto val) { routing_change |= val.changed(); });
+
+    p_refresh_many (
+      parameters::non_routing_controls_typelist {},
+      [&] (auto key, uint i, auto val) {
+        if constexpr (std::is_same_v<decltype (key), parameters::fx_type>) {
+          fx_type_changed[i] = val.changed();
+        }
+        if constexpr (std::is_same_v<decltype (key), parameters::mute_solo>) {
+          mutesolo.changed |= val.changed();
+          mutesolo.bits |= ((u64) val.current) << (i * 2); // 2 mute solo bits.
+        }
+      });
+
+    p_refresh_many (parameters::all_nonfx_sliders_typelist {});
+
+    if (routing_change) {
+      // not delaying mute and solo...
+      io_recompute (mutesolo.bits);
+      mutesolo.changed = false;
+    }
 
     channels_mute_solo<parameters::n_stereo_busses> mixer_crossfade;
 
@@ -302,11 +305,11 @@ private:
 
       auto bus_end = bus_beg + n_gbusses;
       // process mix
-      p_refresh_many (parameters::channel_modifs {});
       for (uint i = bus_beg; i < bus_end; ++i) {
         uint chnl = _io.order[i];
 
-        if (unlikely (!refresh_fx_type_and_mix_inputs (chnl, buffers))) {
+        if (unlikely (!refresh_fx_params_and_mix_inputs (
+              chnl, buffers, fx_type_changed[chnl]))) {
           zeroed[chnl] = true;
           continue; // content is 0.s (unconnected, etc.)
         }
@@ -345,25 +348,27 @@ private:
       //
       // We only do a recomputation here on latency changes to not affect the
       // mute solo state.
-      io_recompute (false, true);
+      io_recompute (mutesolo.bits);
     }
   }
   //----------------------------------------------------------------------------
   // these two seemingly unrelated things are done in place to avoid
   // generating unnecessary compile time switches on the fast-path.
   template <class T>
-  bool refresh_fx_type_and_mix_inputs (uint channel, buffers<T>& buffers)
+  bool refresh_fx_params_and_mix_inputs (
+    uint        channel,
+    buffers<T>& buffers,
+    bool        fx_type_changed)
   {
     // + 1 for the mixer 2 mixer sends
     static constexpr size_t n_mix_inputs = parameters::n_stereo_busses + 1;
     std::array<stereo_summing_processor*, n_mix_inputs> processors {};
 
-    auto           fx_type = p_refresh (parameters::fx_type {}, channel);
+    auto           fx_type = p_get (parameters::fx_type {})[channel];
     constexpr auto fx_val  = parameters::fx_type {};
 
-    if (unlikely (fx_type.changed())) {
-      if (
-        fx_type.current == 0 || fx_type.current >= fx_val.type.choices.size()) {
+    if (unlikely (fx_type_changed)) {
+      if (fx_type == 0 || fx_type >= fx_val.type.choices.size()) {
         _fx_dsp[channel] = std::monostate {};
         _fx_context.on_fx_disable (channel);
       }
@@ -381,7 +386,7 @@ private:
       using dsp_class          = get_dsp_type<param_tlist>;
       using stereo_processor_type = typename dsp_class::stereo_processor_type;
 
-      if ((fx_idx.value + 1) != fx_type.current) {
+      if ((fx_idx.value + 1) != fx_type) {
         // +1 because the first entry is "none"/std::monostate
         return; // not this fx type. Keep the linear search
       }
@@ -393,7 +398,7 @@ private:
         is_same_template_v<oversampled, stereo_processor_type>;
 
       // refresh FX type.
-      if (unlikely (fx_type.changed())) {
+      if (unlikely (fx_type_changed)) {
         _fx_dsp[channel] = dsp_class{};
         auto& fx = std::get<dsp_class> (_fx_dsp[channel]);
         fx.reset (_fx_context);
@@ -474,17 +479,17 @@ private:
   //----------------------------------------------------------------------------
   void mixer_parameters_update (uint channel, bool will_mute)
   {
-    float wet_pan = p_refresh (parameters::wet_pan {}, channel).current;
-    float dry_pan = p_refresh (parameters::dry_pan {}, channel).current;
+    float wet_pan = p_get (parameters::wet_pan {})[channel];
+    float dry_pan = p_get (parameters::dry_pan {})[channel];
 
-    float wet_ms_bal = p_refresh (parameters::wet_balance {}, channel).current;
-    float dry_ms_bal = p_refresh (parameters::dry_balance {}, channel).current;
+    float wet_ms_bal = p_get (parameters::wet_balance {})[channel];
+    float dry_ms_bal = p_get (parameters::dry_balance {})[channel];
 
-    float pan    = p_refresh (parameters::pan {}, channel).current;
-    float vol    = p_refresh (parameters::volume {}, channel).current;
-    float gvol   = p_refresh (parameters::global_volume {}, 0).current;
-    int   modifs = p_refresh (parameters::channel_modifs {}, channel).current;
-    float mix    = p_refresh (parameters::fx_mix {}, channel).current;
+    float pan    = p_get (parameters::pan {})[channel];
+    float vol    = p_get (parameters::volume {})[channel];
+    float gvol   = p_get (parameters::global_volume {})[0];
+    int   modifs = p_get (parameters::channel_modifs {})[channel];
+    float mix    = p_get (parameters::fx_mix {})[channel];
 
     vol  = db_to_gain (vol);
     gvol = db_to_gain (gvol);
@@ -542,11 +547,13 @@ private:
     // The same 128 bit buffer will be used. Then the upsampler and the
     // downsampler will take the same buffer as input and output.
     //
-    // On the upsampler, when calling, (Buffsize / Oversampling) samples at base
-    // rate will be placed on the bottom of the buffer so they don't overwite.
+    // On the upsampler, when calling, (Buffsize / Oversampling) samples at
+    // base rate will be placed on the bottom of the buffer so they don't
+    // overwite.
     //
     // When calling the downsampler, the passed buffer will have Buffsize
-    // samples at the upsampled rate. It will return (N / Oversampling) samples.
+    // samples at the upsampled rate. It will return (N / Oversampling)
+    // samples.
 
     assert (fx);
     auto& mix_buffer = get_mix_buffer (T {});

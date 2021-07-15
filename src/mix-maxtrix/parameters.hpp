@@ -5171,7 +5171,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<saturation_params>;
+using all_fx_typelists = mp_list<chow_phaser_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 
@@ -5296,21 +5296,23 @@ using main_page_sliders_typelist
 using channel_sliders_typelist
   = mp11::mp_push_front<main_page_sliders_typelist, volume>;
 
-using global_controls_typelist = mp_list<
-  global_volume,
-  routing,
-  in_selection,
-  out_selection,
-  mute_solo,
-  mixer_sends,
-  channel_modifs>;
+using all_nonfx_sliders_typelist
+  = mp11::mp_push_back<channel_sliders_typelist, global_volume>;
+
+using routing_controls_typelist
+  = mp11::mp_list<routing, in_selection, out_selection, mixer_sends>;
+
+using non_routing_controls_typelist
+  = mp11::mp_list<mute_solo, fx_type, channel_modifs>;
+
+using all_controls_typelist = mp11::mp_flatten<
+  mp11::mp_list<routing_controls_typelist, non_routing_controls_typelist>>;
 
 using all_channel_sliders_typelist = mp11::mp_flatten<
-  mp_list<channel_sliders_typelist, channel_fx_sliders_typelist>>;
+  mp11::mp_list<all_nonfx_sliders_typelist, channel_fx_sliders_typelist>>;
 
 using parameters_typelist = mp11::mp_flatten<
-  mp11::
-    mp_list<global_controls_typelist, fx_type, all_channel_sliders_typelist>>;
+  mp11::mp_list<all_controls_typelist, all_channel_sliders_typelist>>;
 
 // clang-format off
 static constexpr char const* about_text =
