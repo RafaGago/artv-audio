@@ -376,12 +376,20 @@ class has_processor_params<mp_list<types...>>
   : public has_content_map<
       mp_list<types...>,
       mp_list<typename decltype (types::type)::value_type...>> {
+private:
+  //----------------------------------------------------------------------------
+  static constexpr auto get_default_visitor()
+  {
+    return [] (auto key, uint arr_idx, auto refresh_result_v) {};
+  }
+
 public:
   //----------------------------------------------------------------------------
   template <class T>
   struct refresh_result {
-    bool changed() const { return previous != current; }
-    T    previous, current;
+    using value_type = T;
+    bool       changed() const { return previous != current; }
+    value_type previous, current;
   };
   //----------------------------------------------------------------------------
   static juce::AudioProcessorValueTreeState::ParameterLayout make_apvts_layout()
@@ -422,44 +430,49 @@ public:
   }
   //----------------------------------------------------------------------------
   // fetches all array values on a single tag parameter type
-  template <class T>
-  void p_refresh_many()
+  template <class T, class V = decltype (get_default_visitor())>
+  void p_refresh_many (V visitor = get_default_visitor())
   {
     auto& varray = this->template p_get<T>();
     for (uint i = 0; i < varray.size(); ++i) {
-      do_fetch (T {}, varray, i);
+      visitor (T {}, i, do_fetch (T {}, varray, i));
     }
   }
   //----------------------------------------------------------------------------
   // fetches all array values on a single tag parameter type
-  template <class T>
-  void p_refresh_many (T)
+  template <class T, class V = decltype (get_default_visitor())>
+  void p_refresh_many (T, V visitor = get_default_visitor())
   {
-    p_refresh_many<T>();
+    p_refresh_many<T> (visitor);
   }
   //----------------------------------------------------------------------------
   // fetches all array values on a multiple tag parameter type
-  template <class... Ts>
-  void p_refresh_many (mp_list<Ts...> fetch_list)
+  template <class... Ts, class V = decltype (get_default_visitor())>
+  void p_refresh_many (
+    mp_list<Ts...> fetch_list,
+    V              visitor = get_default_visitor())
   {
-    this->template pforeach (fetch_list, [=] (auto key, auto& varray) {
-      for (uint i = 0; i < varray.size(); ++i) {
-        do_fetch (key, varray, i);
-      }
-    });
+    this->template pforeach (
+      fetch_list, [=, &visitor] (auto key, auto& varray) {
+        for (uint i = 0; i < varray.size(); ++i) {
+          visitor (key, i, do_fetch (key, varray, i));
+        }
+      });
   }
   //----------------------------------------------------------------------------
   // fetches all keys and values from the juce::APVTS.
-  void p_refresh_many()
+  template <class V = decltype (get_default_visitor())>
+  void p_refresh_all (V visitor = get_default_visitor())
   {
-    this->template pforeach ([this] (auto key, auto& varray) {
+    this->template pforeach ([this, &visitor] (auto key, auto& varray) {
       for (uint i = 0; i < varray.size(); ++i) {
-        do_fetch (key, varray, i);
+        visitor (key, i, do_fetch (key, varray, i));
       }
     });
   }
   //----------------------------------------------------------------------------
 private:
+  //----------------------------------------------------------------------------
   template <class T, class U, size_t N>
   auto do_fetch (T key, std::array<U, N>& values, uint idx)
   {
