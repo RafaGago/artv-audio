@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "artv-common/dsp/own/blocks/filters/composite/butterworth.hpp"
+#include "artv-common/dsp/own/blocks/misc/interpolators.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/hardclip.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/sqrt2_sigmoid.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/sqrt_sigmoid.hpp"
@@ -20,7 +21,7 @@
 
 // TODO: latency. tanh
 //#error "This requires at least 2x oversampling. Parameter smoothing is TBD
-//too."
+// too."
 
 namespace artv {
 
@@ -57,7 +58,7 @@ public:
 
   static constexpr auto get_parameter (compensated_drive_tag)
   {
-    return float_param ("dB", -15.0, 15, 0.0, 0.25, 0.6, true);
+    return float_param ("dB", -20.0, 20, 0.0, 0.25, 0.6, true);
   }
   //----------------------------------------------------------------------------
   static constexpr float lo_cut_min_hz = 10.;
@@ -112,6 +113,8 @@ public:
     memset (&_wsh_states, 0, sizeof _wsh_states);
     memset (&_filt_states, 0, sizeof _filt_states);
     memset (&_filt_coeffs, 0, sizeof _filt_coeffs);
+    memset (&_allpass_states, 0, sizeof _allpass_states);
+    allpass_interpolator::init<float> (make_crange (_allpass_coeff), 0.5);
 
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
@@ -174,12 +177,16 @@ public:
           {}, make_crange (_wsh_states[0]), sat[0]);
         sat[1] = sqrt_waveshaper_adaa<adaa_order>::tick (
           {}, make_crange (_wsh_states[1]), sat[1]);
+        // Found empirically. TODO: improve
+        sat *= simd_dbl {constexpr_db_to_gain (0.2)};
         break;
       case sqrt2_adaa:
         sat[0] = sqrt2_waveshaper_adaa<adaa_order>::tick (
           {}, make_crange (_wsh_states[0]), sat[0]);
         sat[1] = sqrt2_waveshaper_adaa<adaa_order>::tick (
           {}, make_crange (_wsh_states[1]), sat[1]);
+        // Found empirically. TODO: improve
+        sat *= simd_dbl {constexpr_db_to_gain (-2.6)};
         break;
       case hardclip_adaa:
         sat[0] = hardclip_waveshaper_adaa<adaa_order>::tick (
@@ -190,21 +197,18 @@ public:
       default:
         break;
       }
-#if 1
-      // Q'n'D. From saike tanh saturator.
-      constexpr auto nu = (1.0 - 0.5) / (1.0 + 0.5);
-      _allpass_states[0].y0
-        = nu * sat[0] + _allpass_states[0].d0 - nu * _allpass_states[0].y0;
-      _allpass_states[0].d0 = sat[0];
-      sat[0]                = _allpass_states[0].y0;
 
-      _allpass_states[1].y0
-        = nu * sat[1] + _allpass_states[1].d0 - nu * _allpass_states[1].y0;
-      _allpass_states[1].d0 = sat[1];
-      sat[1]                = _allpass_states[1].y0;
-
-#endif
-      // 1 - sample delay mix
+      if constexpr (adaa_order == 1) {
+        // half sample delay
+        sat[0] = allpass_interpolator::tick<float> (
+          make_crange (_allpass_coeff),
+          make_crange (_allpass_states[0]),
+          sat[0]);
+        sat[1] = allpass_interpolator::tick<float> (
+          make_crange (_allpass_coeff),
+          make_crange (_allpass_states[1]),
+          sat[1]);
+      }
       sat += lo + hi;
       sat *= inv_cdrive;
       chnls[0][i] = sat[0];
@@ -265,17 +269,16 @@ private:
     = simd_array<double, butterworth_type::n_states * n_filters, sse_bytes>;
   using crossv_coeff_array
     = simd_array<double, butterworth_type::n_coeffs * n_filters, sse_bytes>;
-
-  struct allpass_delay {
-    double y0 = 0.;
-    double d0 = 0.;
-  };
+  using allpass_state_array
+    = simd_array<float, allpass_interpolator::n_states, sse_bytes>;
 
   // using unaligned as of now...
-  crossv_state_array                _filt_coeffs;
-  std::array<crossv_coeff_array, 2> _filt_states;
-  std::array<wsh_state_array, 2>    _wsh_states;
-  std::array<allpass_delay, 2>      _allpass_states;
+  crossv_state_array                 _filt_coeffs;
+  std::array<crossv_coeff_array, 2>  _filt_states;
+  std::array<wsh_state_array, 2>     _wsh_states;
+  std::array<allpass_state_array, 2> _allpass_states;
+  static_assert (allpass_interpolator::n_coeffs == 1, "");
+  float _allpass_coeff;
 
   plugin_context* _plugcontext = nullptr;
 };
