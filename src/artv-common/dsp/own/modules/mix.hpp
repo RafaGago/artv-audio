@@ -317,7 +317,7 @@ public:
         dl  = dl - dr;
         dr  = reg + dr;
         dl *= _gain[global].l.skip (simd_elems);
-        dr *= _gain[global].l.skip (simd_elems);
+        dr *= _gain[global].r.skip (simd_elems);
 
         dl.copyToRawArray (c[0]);
         dr.copyToRawArray (c[1]);
