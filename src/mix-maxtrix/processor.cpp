@@ -100,6 +100,25 @@ public:
     params.state.setProperty (
       juce::Identifier ("plugin_version"), VERSION_INT, nullptr);
     this->setCurrentProgram (0);
+
+    // register listeners for parameter changes.
+    mp11::mp_for_each<parameters::routing_controls_typelist> ([=] (auto param) {
+      for (char const* id : param.juce_ids) {
+        params.addParameterListener (id, &_routing_maybe_changed);
+      }
+    });
+    mp11::mp_for_each<parameters::non_routing_controls_typelist> (
+      [=] (auto param) {
+        for (char const* id : param.juce_ids) {
+          params.addParameterListener (id, &_non_routing_maybe_changed);
+        }
+      });
+    mp11::mp_for_each<parameters::all_nonfx_sliders_typelist> (
+      [=] (auto param) {
+        for (char const* id : param.juce_ids) {
+          params.addParameterListener (id, &_non_fx_slider_maybe_changed);
+        }
+      });
   }
   //----------------------------------------------------------------------------
   juce::AudioProcessorEditor* createEditor() override
@@ -137,6 +156,10 @@ public:
     // // will always have a change. This hack is done to avoid code bloating
     // this function.
     p_get (parameters::in_selection {})[0] = 1 << parameters::n_stereo_busses;
+    // force reloading of all parameters
+    _routing_maybe_changed.parameterChanged ("", 0.f);
+    _non_routing_maybe_changed.parameterChanged ("", 0.f);
+    _non_fx_slider_maybe_changed.parameterChanged ("", 0.f);
   }
   //----------------------------------------------------------------------------
   bool isBusesLayoutSupported (const BusesLayout& buses) const override
@@ -250,31 +273,38 @@ private:
 
     bool                                          routing_change = false;
     mutesolo_state                                mutesolo {false, 0};
-    std::array<bool, parameters::n_stereo_busses> fx_type_changed;
+    std::array<bool, parameters::n_stereo_busses> fx_type_changed = {};
 
     // move (refresh) all non-fx parameters from JUCE's atomic_ptrs to local
     // member variables, so we read the same value for the whole duration on
     // this block. There is a substantial amount of parameters. These are
     // refreshed in declaration order to avoid weird memory access orders.
-    p_refresh_many (
-      parameters::routing_controls_typelist {},
-      [&] (auto key, uint i, auto val) { routing_change |= val.changed(); });
+    if (unlikely (_routing_maybe_changed.get_and_clear())) {
+      p_refresh_many (
+        parameters::routing_controls_typelist {},
+        [&] (auto key, uint i, auto val) { routing_change |= val.changed(); });
+    }
 
-    p_refresh_many (
-      parameters::non_routing_controls_typelist {},
-      [&] (auto key, uint i, auto val) {
-        if constexpr (std::is_same_v<decltype (key), parameters::fx_type>) {
-          fx_type_changed[i] = val.changed();
-        }
-        if constexpr (std::is_same_v<decltype (key), parameters::mute_solo>) {
-          mutesolo.changed |= val.changed();
-          mutesolo.bits |= ((u64) val.current) << (i * 2); // 2 mute solo bits.
-        }
-      });
+    if (unlikely (_non_routing_maybe_changed.get_and_clear())) {
+      p_refresh_many (
+        parameters::non_routing_controls_typelist {},
+        [&] (auto key, uint i, auto val) {
+          if constexpr (std::is_same_v<decltype (key), parameters::fx_type>) {
+            fx_type_changed[i] = val.changed();
+          }
+          if constexpr (std::is_same_v<decltype (key), parameters::mute_solo>) {
+            mutesolo.changed |= val.changed();
+            mutesolo.bits |= ((u64) val.current)
+              << (i * 2); // 2 mute solo bits.
+          }
+        });
+    }
 
-    p_refresh_many (parameters::all_nonfx_sliders_typelist {});
+    if (unlikely (_non_fx_slider_maybe_changed.get_and_clear())) {
+      p_refresh_many (parameters::all_nonfx_sliders_typelist {});
+    }
 
-    if (routing_change) {
+    if (unlikely (routing_change)) {
       // not delaying mute and solo...
       io_recompute (mutesolo.bits);
       mutesolo.changed = false;
@@ -282,7 +312,7 @@ private:
 
     channels_mute_solo<parameters::n_stereo_busses> mixer_crossfade;
 
-    if (!mutesolo.changed) {
+    if (likely (!mutesolo.changed)) {
       mixer_crossfade = _io.mute_solo;
     }
     else {
@@ -340,7 +370,7 @@ private:
       }
     }
 
-    if (mutesolo.changed || _fx_context.fx_latencies_changed) {
+    if (unlikely (mutesolo.changed || _fx_context.fx_latencies_changed)) {
       // delay IO recomputation until we have crossfaded a mute. This will
       // cause a 1 audio buffer delay when unmuting + 1 audio buffer crossfade
       // when unmuting, but it is the only sensible way to do when having a
@@ -686,6 +716,23 @@ private:
     _dly_comp_buffers.compensate (id_r, make_crange (chnlptrs[1], samples));
   }
   //----------------------------------------------------------------------------
+  struct param_change_counter
+    : public juce::AudioProcessorValueTreeState::Listener {
+    virtual ~param_change_counter() {};
+    virtual void parameterChanged (juce::String const&, float) override
+    {
+      _count.fetch_add (1, std::memory_order_release);
+    }
+
+    uint get_and_clear()
+    {
+      return _count.exchange (0, std::memory_order_acquire);
+    }
+
+  private:
+    std::atomic<uint> _count {0};
+  };
+  //----------------------------------------------------------------------------
   using io_engine = order_and_buffering<parameters::n_stereo_busses>;
 
   mix_maxtrix_fx_context                                 _fx_context;
@@ -699,9 +746,15 @@ private:
   alignas (32) std::array<std::array<float, fx_blocksize>, 4> _fx_mix_buffer;
   delay_compensation_buffers<float, 2> _dly_comp_buffers;
 
-  std::array<foleys::LevelMeterSource, parameters::n_stereo_busses> _meters;
-
   uint _program = 0;
+
+  std::array<char, 128> _cache_padding_1;
+  std::array<foleys::LevelMeterSource, parameters::n_stereo_busses> _meters;
+  std::array<char, 128> _cache_padding_2;
+
+  param_change_counter _routing_maybe_changed;
+  param_change_counter _non_routing_maybe_changed;
+  param_change_counter _non_fx_slider_maybe_changed;
 };
 
 } // namespace artv
