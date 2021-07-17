@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "artv-common/dsp/own/blocks/filters/andy_swf.hpp"
+#include "artv-common/dsp/own/blocks/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/blocks/filters/composite/butterworth.hpp"
 #include "artv-common/dsp/own/blocks/filters/composite/tilt.hpp"
 #include "artv-common/dsp/own/blocks/filters/onepole.hpp"

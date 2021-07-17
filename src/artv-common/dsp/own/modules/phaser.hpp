@@ -3,7 +3,7 @@
 #include <array>
 #include <cstdint>
 
-#include "artv-common/dsp/own/blocks/filters/andy_swf.hpp"
+#include "artv-common/dsp/own/blocks/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/blocks/filters/onepole.hpp"
 #include "artv-common/dsp/own/blocks/oscillators/lfo.hpp"
 #include "artv-common/dsp/own/misc.hpp"
