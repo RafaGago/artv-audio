@@ -83,7 +83,7 @@ public:
 
   static constexpr auto get_parameter (lo_cut_tag)
   {
-    return frequency_parameter (lo_cut_min_hz, 1000., lo_cut_min_hz);
+    return frequency_parameter (lo_cut_min_hz, 10000., lo_cut_min_hz);
   }
   //----------------------------------------------------------------------------
   static constexpr float hi_cut_max_hz = 20000.;
@@ -102,7 +102,7 @@ public:
 
   static constexpr auto get_parameter (hi_cut_tag)
   {
-    return frequency_parameter (2000., hi_cut_max_hz, hi_cut_max_hz);
+    return frequency_parameter (60., hi_cut_max_hz, hi_cut_max_hz);
   }
   //----------------------------------------------------------------------------
   using parameters = mp_list<
