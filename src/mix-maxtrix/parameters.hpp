@@ -5140,7 +5140,7 @@ parameter_cpp_class_define (
   saturation_oversampling,
   n_stereo_busses,
   param_common (
-    "Upsample",
+    "OverSmpl",
     declptr<updownsampled<saturation>>(),
     declptr<oversampled_amount_tag>()),
   updownsampled<saturation>::get_parameter (oversampled_amount_tag {}),

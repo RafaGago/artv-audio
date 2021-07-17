@@ -116,7 +116,7 @@ public:
   {
     _plugcontext = &pc;
     pc.set_delay_compensation (1);
-    memset (&_wsh_states, 0, sizeof _wsh_states);
+    memset (&_wvsh_states, 0, sizeof _wvsh_states);
     memset (&_filt_states, 0, sizeof _filt_states);
     memset (&_filt_coeffs, 0, sizeof _filt_coeffs);
     memset (&_allpass_states, 0, sizeof _allpass_states);
@@ -178,28 +178,53 @@ public:
           get_filt_states (hi_hp, 1)[onepole::z1]};
       }
 
+      // ARTV_SATURATION_USE_SSE has detrimental effects, the code is kept as a
+      // reminder for future me that this was already tried.
       switch (p.type) {
-      case sqrt_adaa:
+      case sqrt_adaa: {
+#if ARTV_SATURATION_USE_SSE
+        sat = sqrt_waveshaper_adaa<adaa_order>::tick_aligned<sse_bytes> (
+          {},
+          make_crange (_wvsh_states),
+          make_crange ((const double*) &sat[0], decltype (sat)::size));
+#else
         sat[0] = sqrt_waveshaper_adaa<adaa_order>::tick (
-          {}, make_crange (_wsh_states[0]), sat[0]);
+          {}, get_waveshaper_states (0), sat[0]);
         sat[1] = sqrt_waveshaper_adaa<adaa_order>::tick (
-          {}, make_crange (_wsh_states[1]), sat[1]);
+          {}, get_waveshaper_states (1), sat[1]);
+#endif
         // Found empirically. TODO: improve
-        sat *= simd_dbl {constexpr_db_to_gain (0.2)};
-        break;
-      case sqrt2_adaa:
+        static constexpr double gain = constexpr_db_to_gain (0.2);
+        sat *= simd_dbl {gain};
+      } break;
+      case sqrt2_adaa: {
+#if ARTV_SATURATION_USE_SSE
+        sat = sqrt2_waveshaper_adaa<adaa_order>::tick_aligned<sse_bytes> (
+          {},
+          make_crange (_wvsh_states),
+          make_crange ((const double*) &sat[0], decltype (sat)::size));
+#else
         sat[0] = sqrt2_waveshaper_adaa<adaa_order>::tick (
-          {}, make_crange (_wsh_states[0]), sat[0]);
+          {}, get_waveshaper_states (0), sat[0]);
         sat[1] = sqrt2_waveshaper_adaa<adaa_order>::tick (
-          {}, make_crange (_wsh_states[1]), sat[1]);
+          {}, get_waveshaper_states (1), sat[1]);
+#endif
         // Found empirically. TODO: improve
-        sat *= simd_dbl {constexpr_db_to_gain (-2.6)};
-        break;
+        static constexpr double gain = constexpr_db_to_gain (-2.6);
+        sat *= simd_dbl {gain};
+      } break;
       case hardclip_adaa:
+#if ARTV_SATURATION_USE_SSE
+        sat = hardclip_waveshaper_adaa<adaa_order>::tick_aligned<sse_bytes> (
+          {},
+          make_crange (_wvsh_states),
+          make_crange ((const double*) &sat[0], decltype (sat)::size));
+#else
         sat[0] = hardclip_waveshaper_adaa<adaa_order>::tick (
-          {}, make_crange (_wsh_states[0]), sat[0]);
+          {}, get_waveshaper_states (0), sat[0]);
         sat[1] = hardclip_waveshaper_adaa<adaa_order>::tick (
-          {}, make_crange (_wsh_states[1]), sat[1]);
+          {}, get_waveshaper_states (1), sat[1]);
+#endif
         break;
       default:
         break;
@@ -269,8 +294,16 @@ private:
     static constexpr uint n_states = butterworth_type::n_states;
     return {&_filt_states[channel][filt_idx * n_states], n_states};
   }
+
+  crange<double> get_waveshaper_states (uint channel)
+  {
+    return {&_wvsh_states[wsh_max_states * channel], wsh_max_states};
+  }
+
   //----------------------------------------------------------------------------
-  using wsh_state_array = simd_array<double, wsh_max_states, sse_bytes>;
+  static constexpr uint n_channels = 2;
+  using wsh_state_array
+    = simd_array<double, wsh_max_states * n_channels, sse_bytes>;
   // using coeff_array = simd_array<double, max_coeffs, sse_bytes>;
   using crossv_state_array
     = simd_array<double, butterworth_type::n_states * n_filters, sse_bytes>;
@@ -279,10 +312,9 @@ private:
   using allpass_state_array
     = simd_array<float, allpass_interpolator::n_states, sse_bytes>;
 
-  // using unaligned as of now...
+  alignas (sse_bytes) wsh_state_array _wvsh_states;
   crossv_coeff_array                 _filt_coeffs;
   std::array<crossv_state_array, 2>  _filt_states;
-  std::array<wsh_state_array, 2>     _wsh_states;
   std::array<allpass_state_array, 2> _allpass_states;
   static_assert (allpass_interpolator::n_coeffs == 1, "");
   float _allpass_coeff;

@@ -44,8 +44,42 @@ public:
       return (x_int - x1v_int) / diff;
     }
     else {
-      return (functions::fn ((x + x1v) / (T) 2.));
+      return (functions::fn ((x + x1v) * (T) 0.5));
     }
+  }
+  //----------------------------------------------------------------------------
+  template <uint simd_bytes, class T>
+  static simd_reg<T, simd_bytes> tick_aligned (
+    crange<const T>,
+    crange<T>       st,
+    crange<const T> x_range)
+  {
+    // as this has to calculate both branches, it might not be worth bothering.
+    static_assert (std::is_floating_point<T>::value, "");
+    using regtype                    = simd_reg<T, simd_bytes>;
+    static constexpr auto n_builtins = regtype::size;
+
+    assert (st.size() >= n_builtins * n_states);
+    assert (x_range.size() >= n_builtins);
+
+    T* x1v_ptr     = &st[x1 * n_builtins];
+    T* x1v_int_ptr = &st[x1_int * n_builtins];
+
+    regtype x, x1v, x1v_int;
+    x.load_aligned (x_range.data());
+    x1v.load_aligned (x1v_ptr);
+    x1v_int.load_aligned (x1v_int_ptr);
+
+    regtype x_int = functions::int_fn (x);
+
+    x.store_aligned (x1v_ptr);
+    x_int.store_aligned (x1v_int_ptr);
+
+    regtype diff  = x - x1v;
+    regtype big   = (x_int - x1v_int) / diff;
+    regtype small = functions::fn ((x + x1v) * (T) 0.5);
+    return xsimd::select (
+      xsimd::abs (diff) >= regtype {epsilon (T {})}, big, small);
   }
   //----------------------------------------------------------------------------
 };
@@ -89,6 +123,17 @@ public:
     st[x2_der] = x1v_der;
 
     return ret;
+  }
+  //----------------------------------------------------------------------------
+  template <uint simd_bytes, class T>
+  static simd_reg<T, simd_bytes> tick_aligned (
+    crange<const T>,
+    crange<T>       st,
+    crange<const T> x_range)
+  {
+    // Real SIMD: TODO. Might not be worth because of the high number of
+    // branches.
+    static_assert (!std::is_same_v<T, T>, "To be implemented");
   }
   //----------------------------------------------------------------------------
 private:

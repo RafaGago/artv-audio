@@ -5,6 +5,7 @@
 
 #include "artv-common/dsp/own/blocks/waveshapers/adaa.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
 
 namespace artv {
@@ -13,22 +14,44 @@ namespace artv {
 // sqrt waveshaper with first derivative AA. Based on this thread:
 // https://www.kvraudio.com/forum/viewtopic.php?f=33&t=521377&sid=18fa45082ea11269f4c29c3ccf36becd
 struct sqrt_sigmoid_functions {
-  template <class T>
+  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T fn (T x)
   {
     return x / sqrt (x * x + T (1.));
   }
   //----------------------------------------------------------------------------
-  template <class T>
+  template <class T, size_t N>
+  static simd_batch<T, N> fn (simd_batch<T, N> x)
+  {
+    using batch = simd_batch<T, N>;
+    return x / xsimd::sqrt (x * x + batch {(T) 1.});
+  }
+  //----------------------------------------------------------------------------
+  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T int_fn (T x)
   {
     return sqrt (x * x + T (1.));
   }
   //----------------------------------------------------------------------------
-  template <class T>
+  template <class T, size_t N>
+  static simd_batch<T, N> int_fn (simd_batch<T, N> x)
+  {
+    using batch = simd_batch<T, N>;
+    return xsimd::sqrt (x * x + batch {(T) 1.});
+  }
+  //----------------------------------------------------------------------------
+  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T int2_fn (T x)
   {
     return ((x * sqrt (x * x + T (1.))) + asinh (x)) * T (0.5);
+  }
+  //----------------------------------------------------------------------------
+  template <class T, size_t N>
+  static simd_batch<T, N> int2_fn (simd_batch<T, N> x)
+  {
+    using batch = simd_batch<T, N>;
+    return (x * xsimd::sqrt (x * x + batch {(T) 1.}) + xsimd::asinh (x))
+      * batch {(T) 0.5};
   }
 };
 //------------------------------------------------------------------------------
@@ -56,34 +79,35 @@ public:
 
     return (x + x1v) / (xsqrt + x1vsqrt);
   }
-#if 0
   //----------------------------------------------------------------------------
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_aligned (
+  template <size_t sse_bytes, class T>
+  static simd_reg<T, sse_bytes> tick_aligned (
     crange<const T>,
-    crange<T>       z,
-    crange<const T> x)
+    crange<T>       st,
+    crange<const T> x_range)
   {
-    static_assert (std::is_floating_point<T>::value, "");
-    using simdreg             = simd_reg<T, simd_bytes>;
-    constexpr auto n_builtins = simdreg::size;
+    static_assert (std::is_floating_point_v<T>, "");
+    using batch                      = simd_reg<T, sse_bytes>;
+    static constexpr auto n_builtins = batch::size;
 
-    assert (z.size() >= n_builtins * n_states);
-    assert (x.size() >= n_builtins);
+    assert (st.size() >= n_builtins * n_states);
+    assert (x_range.size() >= n_builtins);
 
-    simdreg x_v {x.data(), xsimd::aligned_mode {}};
-    simdreg x1_v {z.data(), xsimd::aligned_mode {}};
-    // this SIMD version may not translate to faster code depending on how the
-    // simple version is translated (if the machine has harware inverse
-    // reciprocal).
-    auto ret = (x_v + x1_v)
-      / (xsimd::sqrt (x_v * x_v + (T) 1.) + xsimd::sqrt (x1_v * x1_v + (T) 1.));
+    T* x1v_ptr      = &st[x1 * n_builtins];
+    T* x1v_sqrt_ptr = &st[x1_sqrt * n_builtins];
 
-    x_v.store_aligned (z.data());
-    return ret;
+    batch x, x1v, x1vsqrt;
+    x.load_aligned (x_range.data());
+    x1v.load_aligned (x1v_ptr);
+    x1vsqrt.load_aligned (x1v_sqrt_ptr);
+
+    batch xsqrt = xsimd::sqrt (batch {(T) 1.} + x * x);
+
+    x.store_aligned (x1v_ptr);
+    xsqrt.store_aligned (x1v_sqrt_ptr);
+
+    return (x + x1v) / (xsqrt + x1vsqrt);
   }
-  //----------------------------------------------------------------------------
-#endif
 };
 
 template <uint order>

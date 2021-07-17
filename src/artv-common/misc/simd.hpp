@@ -115,8 +115,11 @@ public:
 //------------------------------------------------------------------------------
 #endif
 
+template <class T, size_t size>
+using simd_batch = xsimd::batch<T, size>;
+
 template <class T, size_t instr_set_bytes>
-using simd_reg = xsimd::batch<T, instr_set_bytes / sizeof (T)>;
+using simd_reg = simd_batch<T, instr_set_bytes / sizeof (T)>;
 
 static constexpr uint sse_bytes  = 16;
 static constexpr uint avx_bytes  = 32;
