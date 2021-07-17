@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <type_traits>
 
 #include "artv-common/dsp/own/blocks/waveshapers/adaa.hpp"
 #include "artv-common/misc/short_ints.hpp"
@@ -31,12 +32,13 @@ struct sqrt_sigmoid_functions {
   }
 };
 //------------------------------------------------------------------------------
-#if 1
+// This is special cased, so it doesn't have to branch on the problematic
+// division:
+// https://www.kvraudio.com/forum/viewtopic.php?t=521377&start=30
+// message by "martinvicanek"
+// (sqrt(1 + x^2) - sqrt(1+ x1^2))/(x - x1) =
+//    (x + x1)/(sqrt(1 + x^2) + sqrt(1 + x1^2))
 
-template <uint order>
-using sqrt_waveshaper_adaa = adaa::waveshaper<sqrt_sigmoid_functions, order>;
-
-#else
 class sqrt_waveshaper_adaa_1 {
 public:
   enum coeffs { n_coeffs };
@@ -45,8 +47,6 @@ public:
   template <class T>
   static T tick (crange<const T>, crange<T> st, T x)
   {
-    // Converted to not have a problematic division:
-    //
     T x1v     = st[x1];
     T x1vsqrt = st[x1_sqrt];
     T xsqrt   = sqrt ((T) 1. + x * x);
@@ -85,6 +85,11 @@ public:
   //----------------------------------------------------------------------------
 #endif
 };
-#endif
+
+template <uint order>
+using sqrt_waveshaper_adaa = std::conditional_t<
+  order == 1,
+  sqrt_waveshaper_adaa_1,
+  adaa::waveshaper<sqrt_sigmoid_functions, order>>;
 //------------------------------------------------------------------------------
 } // namespace artv

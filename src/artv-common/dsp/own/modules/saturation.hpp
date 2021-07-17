@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "artv-common/dsp/own/blocks/filters/composite/butterworth.hpp"
+#include "artv-common/dsp/own/blocks/filters/onepole.hpp"
 #include "artv-common/dsp/own/blocks/misc/interpolators.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/hardclip.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/sqrt2_sigmoid.hpp"
@@ -19,9 +20,14 @@
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
 
-// TODO: latency. tanh
-//#error "This requires at least 2x oversampling. Parameter smoothing is TBD
-// too."
+// TODO: -tanh
+//       -parameter smoothing.
+//       -As there is a downsampling FIR already, the high frequency correction
+//        could be done simpultaneously on the downsampling filter by adding the
+//        coefficients of a matched filter computed using Parks–McClellan/Remez
+//        (scipy.signal.remez) with the same amount of taps. As both filters are
+//        linear phase, the coefficients can just be summed (and the resulting
+//        magnitude halved).
 
 namespace artv {
 
@@ -114,6 +120,7 @@ public:
     memset (&_filt_states, 0, sizeof _filt_states);
     memset (&_filt_coeffs, 0, sizeof _filt_coeffs);
     memset (&_allpass_states, 0, sizeof _allpass_states);
+
     allpass_interpolator::init<float> (make_crange (_allpass_coeff), 0.5);
 
     mp11::mp_for_each<parameters> ([&] (auto type) {
