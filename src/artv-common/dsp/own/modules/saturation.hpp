@@ -273,8 +273,8 @@ private:
     = simd_array<float, allpass_interpolator::n_states, sse_bytes>;
 
   // using unaligned as of now...
-  crossv_state_array                 _filt_coeffs;
-  std::array<crossv_coeff_array, 2>  _filt_states;
+  crossv_coeff_array                 _filt_coeffs;
+  std::array<crossv_state_array, 2>  _filt_states;
   std::array<wsh_state_array, 2>     _wsh_states;
   std::array<allpass_state_array, 2> _allpass_states;
   static_assert (allpass_interpolator::n_coeffs == 1, "");
