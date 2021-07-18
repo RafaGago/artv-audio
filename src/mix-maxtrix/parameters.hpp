@@ -5171,7 +5171,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<saturation_params>;
+using all_fx_typelists = mp_list<filter2x_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 

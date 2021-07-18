@@ -670,33 +670,41 @@ private:
       switch (btype) {
         // TODO: substitute these corections by constants when they have
         // settled.
-      case bandtype::moog_1_lp:
-        tame = constexpr_db_to_gain (-23.);
-        break;
-      case bandtype::moog_1_hp:
+      case bandtype::moog_1_lp: {
+        constexpr double tame_k = constexpr_db_to_gain (-23.);
+        tame                    = tame_k;
+      } break;
+      case bandtype::moog_1_hp: {
         _cfg[band].pre_drive_l *= 0.25;
-        tame = constexpr_db_to_gain (-37.);
-        break;
-      case bandtype::moog_1_bp:
+        constexpr double tame_k = constexpr_db_to_gain (-37.);
+        tame                    = tame_k;
+      } break;
+      case bandtype::moog_1_bp: {
         _cfg[band].pre_drive_l *= 0.25;
-        tame = constexpr_db_to_gain (-44.);
-        break;
-      case bandtype::moog_1_br:
+        constexpr double tame_k = constexpr_db_to_gain (-44.);
+        tame                    = tame_k;
+      } break;
+      case bandtype::moog_1_br: {
         _cfg[band].pre_drive_l *= 0.25;
-        tame = constexpr_db_to_gain (-39.);
-        break;
-      case bandtype::moog_2_lp:
-        tame = constexpr_db_to_gain (-25.);
-        break;
-      case bandtype::moog_2_hp:
-        tame = constexpr_db_to_gain (-43.);
-        break;
-      case bandtype::moog_2_bp:
-        tame = constexpr_db_to_gain (-62.);
-        break;
-      case bandtype::moog_2_br:
-        tame = constexpr_db_to_gain (-44.);
-        break;
+        constexpr double tame_k = constexpr_db_to_gain (-39.);
+        tame                    = tame_k;
+      } break;
+      case bandtype::moog_2_lp: {
+        constexpr double tame_k = constexpr_db_to_gain (-25.);
+        tame                    = tame_k;
+      } break;
+      case bandtype::moog_2_hp: {
+        constexpr double tame_k = constexpr_db_to_gain (-43.);
+        tame                    = tame_k;
+      } break;
+      case bandtype::moog_2_bp: {
+        constexpr double tame_k = constexpr_db_to_gain (-62.);
+        tame                    = tame_k;
+      } break;
+      case bandtype::moog_2_br: {
+        constexpr double tame_k = constexpr_db_to_gain (-44.);
+        tame                    = tame_k;
+      } break;
       }
       _cfg[band].post_drive *= tame;
     }
