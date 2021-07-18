@@ -25,14 +25,12 @@ bool read_double (double& result, char const* str)
   return true;
 }
 //------------------------------------------------------------------------------
-void hiir_print (
-  crange<double> coeffs,
-  double         att_db,
-  double         transition_width_percent)
+void hiir_print (crange<double> coeffs, double att_db, double transition_width)
 {
   printf ("Order: %lu\n", (coeffs.size() * 2) + 1);
   printf ("Passband Att (fB): %lf\n", att_db);
-  printf ("Transition Width (%%): %lf\n", transition_width_percent);
+  printf ("Transition Width (FS/2(low)): %lf%%\n", transition_width * 200.);
+  printf ("BW at 44.1kHz: %lf\n", 22050. - (44100. * transition_width));
 
   printf ("[] = { \n");
   for (double coeff : coeffs) {
@@ -40,14 +38,14 @@ void hiir_print (
   }
   printf ("}\n");
 
-  double tp = 0.25 - (transition_width_percent / (2. * 2. * 100.));
-  auto   freqs
-    = make_array (0.0005, 0.005, 0.01, 0.05, .1, .15, .2, .24, .25, tp);
+  double tp    = 0.5 - transition_width;
+  auto   freqs = make_array (
+    0.0005, 0.005, 0.01, 0.02, 0.03, 0.05, .1, .15, .2, .24, .25, tp);
   for (auto freq : freqs) {
     double gd = hiir::PolyphaseIir2Designer::compute_group_delay (
       coeffs.data(), coeffs.size(), freq, false);
-    float hz_44100 = 44100. * 2. * freq;
-    float hz_48000 = 48000. * 2. * freq;
+    float hz_44100 = 44100. * freq;
+    float hz_48000 = 48000. * freq;
 
     printf (
       "group delay at (%lg x FS(2x), (%g Hz(44k)), (%g Hz(48k))): %lf\n",
@@ -62,12 +60,12 @@ constexpr uint hiir_max_coeffs
   = (hiir::PolyphaseIir2Designer::_max_order - 1) / 2;
 //------------------------------------------------------------------------------
 void hiir_calculate (
-  double transition_width_percent,
+  double transition_width_percent, // relative to FS/2(Low)
   double order,
   double att_db)
 {
   std::array<double, hiir_max_coeffs> coeffs;
-  auto transition = transition_width_percent / (2. * 100.); // F / FS, max 0.5
+  auto transition = transition_width_percent * 0.01 * 0.5; // relative to FS(L)
 
   int n_coeffs;
   if (order != 0.) {
@@ -75,17 +73,17 @@ void hiir_calculate (
     if ((((uint) order) % 2) != 1) {
       puts ("Warning: Orders are always odd. Reducing order");
     }
-    att_db = hiir::PolyphaseIir2Designer::compute_atten_from_order_tbw (
-      n_coeffs, transition);
-    hiir::PolyphaseIir2Designer::compute_coefs_spec_order_tbw (
-      coeffs.data(), n_coeffs, transition);
   }
   else {
-    n_coeffs = hiir::PolyphaseIir2Designer::compute_coefs (
-      coeffs.data(), att_db, transition);
+    n_coeffs = hiir::PolyphaseIir2Designer::compute_nbr_coefs_from_proto (
+      att_db, transition);
   }
+  att_db = hiir::PolyphaseIir2Designer::compute_atten_from_order_tbw (
+    n_coeffs, transition);
+  hiir::PolyphaseIir2Designer::compute_coefs_spec_order_tbw (
+    coeffs.data(), n_coeffs, transition);
 
-  hiir_print (make_crange (coeffs, n_coeffs), att_db, transition_width_percent);
+  hiir_print (make_crange (coeffs, n_coeffs), att_db, transition);
 }
 //------------------------------------------------------------------------------
 int oversample_util (int argnum, char const** args)
@@ -93,7 +91,7 @@ int oversample_util (int argnum, char const** args)
   if (argnum == 3 && strcmp (args[0], "hiir-calculate") == 0) {
     double att_db, transition;
 
-    if (read_double (att_db, args[1]) && read_double (transition, args[2])) {
+    if (read_double (transition, args[1]) && read_double (att_db, args[2])) {
       hiir_calculate (transition, 0., att_db);
       return 0;
     }
@@ -104,7 +102,7 @@ int oversample_util (int argnum, char const** args)
   if (argnum == 3 && strcmp (args[0], "hiir-calculate-best") == 0) {
     double order, transition;
 
-    if (read_double (order, args[1]) && read_double (transition, args[2])) {
+    if (read_double (transition, args[1]) && read_double (order, args[2])) {
       hiir_calculate (transition, order, 0.);
       return 0;
     }
@@ -113,15 +111,17 @@ int oversample_util (int argnum, char const** args)
     }
   }
 
-  puts (R"END(Usage:
+  puts (R"END(Subcommands:
+    hiir-calculate <transition width(%FS(low)/2)> <min Att dB>
+    hiir-calculate-best <transition width(%FS(low)/2)> <order>
  )END");
-  return strcmp (args[0], "help") == 0 ? 0 : 1;
+  return (argnum && strcmp (args[0], "help")) == 0 ? 0 : 1;
 }
 
 } // namespace artv
 //------------------------------------------------------------------------------
 int main (int argc, char const* argv[])
 {
-  return artv::oversample_util (argc - 1, &argv[1]);
+  return artv::oversample_util (argc ? argc - 1 : 0, &argv[1]);
 }
 //------------------------------------------------------------------------------
