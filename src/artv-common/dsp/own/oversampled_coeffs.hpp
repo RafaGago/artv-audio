@@ -8,12 +8,16 @@ namespace artv {
 template <uint os_factor>
 struct linear_phase_fir_coeffs;
 
+// -----------------------------------------------------------------------------
+// Linear phase coefficients for an acceptable realtime and perceptual
+// performance but with non perfect specs when measured/plotted.
+//
 // All the coefficients are made to result on filters that:
 //
 // - Are linear phase.
 // - All have a latency of 32 samples at base rate.
-// - (-96dB) of aliasing rejection at 18kHz. More aliasing upwards 18kHz (
-//   inaudible range).
+// - (-96dB) of aliasing rejection at 18kHz 441KHz SR (worst case). More
+//   aliasing upwards 18kHz (inaudible range).
 // - The number of coefficients minus one is divisible by 4, so some
 //   coefficients become 0. (Especially interesting for the half band filters/
 //   decimators).
@@ -21,7 +25,7 @@ struct linear_phase_fir_coeffs;
 
 template <>
 struct linear_phase_fir_coeffs<2> {
-  static auto const& data()
+  static crange<const float> data()
   {
     // scripts/fir-oversampling.py -s 88200 -c 22050 -t 4250 -a 96 --float
     static const std::array<float, 65> coeffs = {
@@ -98,7 +102,7 @@ struct linear_phase_fir_coeffs<2> {
 
 template <>
 struct linear_phase_fir_coeffs<4> {
-  static const auto const& data()
+  static crange<const float> data()
   {
     // scripts/fir-oversampling.py -s 176400 -c 22050 -t 4250 -a 96 --float
     static const std::array<float, 129> coeffs = {
@@ -239,7 +243,7 @@ struct linear_phase_fir_coeffs<4> {
 
 template <>
 struct linear_phase_fir_coeffs<8> {
-  static auto const& data()
+  static crange<const float> data()
   {
     static const std::array<float, 257> coeffs = {
       0.f,
@@ -509,7 +513,7 @@ struct linear_phase_fir_coeffs<8> {
 
 template <>
 struct linear_phase_fir_coeffs<16> {
-  static auto const& data()
+  static crange<const float> data()
   {
     // scripts/fir-oversampling.py -s 705600 -c 22050 -t 4226 -a 96 --float
     static const std::array<float, 513> coeffs = {
@@ -1030,6 +1034,211 @@ struct linear_phase_fir_coeffs<16> {
     return coeffs;
   }
   static uint latency() { return (data().size() - 1) / (2 * 16); };
+};
+
+// -----------------------------------------------------------------------------
+// Minimum phase low latency oversampling.
+//
+// Optimized for low latency at the expense of CPU and phase performace.
+//
+// It goes up to 4x by using 2 path polyphase IIR halfband filters. Once the
+// transition width requirements are relaxed(*) it uses FIR filters with a low
+// number of coefficients (latency).
+//
+// (*) Cascading half-band filters results in decreasing transition width
+// requirements. Quoting from the HIIR lib (Soras).
+//
+// "For example, let’s suppose one wants 16x downsampling, with 96 dB of
+//  stopband attenuation and a 0.49*Fs passband. You’ll need the following
+//  specifications for the TBW of each stage:
+//
+//   2x <-> 1x: TBW = (0.50-0.49)                      = 0.01
+//   4x <-> 2x: TBW = (0.50-0.49)/2 + 1/4              = 0.255
+//   8x <-> 4x: TBW = (0.50-0.49)/4 + 1/8  + 1/4       = 0.3775
+//  16x <-> 8x: TBW = (0.50-0.49)/8 + 1/16 + 1/8 + 1/4 = 0.43865"
+
+template <uint os_factor>
+struct min_phase_coeffs;
+
+template <>
+struct min_phase_coeffs<2> {
+  static crange<const crange<const float>> iir()
+  {
+    // filter from the IIR docs (oversampling.txt):
+    //
+    // 2x, 118 dB
+    // ¯¯¯¯¯¯¯¯¯¯
+    //
+    // Total GD : 4.0 spl
+    // Bandwidth: 19052 Hz
+    //
+    // Coefficients: 8
+    // Attenuation : 118.478 dB
+    // Trans BW:     0.0679698
+    // Group delay:  4 spl
+    // GD rel freq:  0.0113379
+    // Coefficient list:
+    //         ...
+    static const std::array<float, 8> x2 = {
+      0.029771566661791642f,
+      0.11293802507590323f,
+      0.23389457050522444f,
+      0.37412196640361606f,
+      0.51845353417401152f,
+      0.65849242953158127f,
+      0.79323734846738669f,
+      0.92851085864352823f};
+    static const std::array<crange<const float>, 1> range = {x2};
+    return range;
+  };
+
+  static crange<const float> fir() { return {}; }
+
+  static uint latency() { return 4; };
+};
+
+template <>
+struct min_phase_coeffs<4> {
+  static crange<const crange<const float>> iir()
+  {
+    // filter from the IIR docs (oversampling.txt):
+    //
+    // 4x, 103 dB
+    // ¯¯¯¯¯¯¯¯¯¯
+    //
+    // Total GD : 5.0 spl
+    // Bandwidth: 20041 Hz
+    //
+    // Coefficients: 4
+    // Attenuation : 105.433 dB
+    // Trans BW:     0.216404
+    // Group delay:  2.65 spl
+    // GD rel freq:  0.00566893
+    // Coefficient list:
+    //   ...
+    //
+    // Coefficients: 8
+    // Attenuation : 103.419 dB
+    // Trans BW:     0.0455352
+    // Group delay:  3.675 spl
+    // GD rel freq:  0.0113379
+    // Coefficient list:
+    //         ...
+
+    static const std::array<float, 4> x4 = {
+      0.046884154411851092,
+      0.18507704297612981,
+      0.41449099059428018,
+      0.75938167397962619};
+
+    static const std::array<float, 8> x2 = {
+      0.03780557945623593,
+      0.14087155204706456,
+      0.28399647240907816,
+      0.43963962549399588,
+      0.58794744313411706,
+      0.72007394134794878,
+      0.8366526760248606,
+      0.94507809950113342};
+
+    static const std::array<crange<const float>, 2> range = {x2, x4};
+    return range;
+  };
+
+  static crange<const float> fir() { return {}; }
+
+  static uint latency() { return 5; };
+};
+
+template <>
+struct min_phase_coeffs<8> {
+  static crange<const crange<const float>> iir()
+  {
+    return min_phase_coeffs<4>::iir();
+  }
+
+  static crange<const float> fir()
+  {
+    // scripts/fir-oversampling.py -s 352800 -c 88200 -t 66850 -a 95 --float
+    static const std::array<float, 34> coeffs = {
+      0.f,
+      -0.00049213485052400829f,
+      0.f,
+      0.00898310420722679f,
+      0.f,
+      -0.055116636092137232f,
+      0.f,
+      0.29662801941721662f,
+      0.49999529463643572f,
+      0.29662801941721662f,
+      0.f,
+      -0.055116636092137232f,
+      0.f,
+      0.00898310420722679f,
+      0.f,
+      -0.00049213485052400829f,
+      0.f};
+    return coeffs;
+  }
+
+  static uint latency()
+  {
+    return ((fir().size() - 1) / 2 * 8) + min_phase_coeffs<4>::latency();
+  };
+};
+
+template <>
+struct min_phase_coeffs<16> {
+  static crange<const crange<const float>> iir()
+  {
+    return min_phase_coeffs<4>::iir();
+  }
+
+  static crange<const float> fir()
+  {
+    // scripts/fir-oversampling.py -s 705600 -c 88200 -t 66850 -a 95 --float
+    static const std::array<float, 33> coeffs = {
+      0.f,
+      -5.3320211196815005e-05f,
+      -0.00024606732601848108f,
+      -0.00043447861139870572f,
+      0.f,
+      0.0017864204765752306f,
+      0.0044915502920877355f,
+      0.0053135775351163921f,
+      0.f,
+      -0.013024889643956981f,
+      -0.027558306931291559f,
+      -0.028708215581807511f,
+      0.f,
+      0.063967601354860085f,
+      0.14831394989083752f,
+      0.22115340551141113f,
+      0.24999754648956388f,
+      0.22115340551141113f,
+      0.14831394989083752f,
+      0.063967601354860085f,
+      0.f,
+      -0.028708215581807511f,
+      -0.027558306931291559f,
+      -0.013024889643956981f,
+      0.f,
+      0.0053135775351163921f,
+      0.0044915502920877355f,
+      0.0017864204765752306f,
+      0.f,
+      -0.00043447861139870572f,
+      -0.00024606732601848108f,
+      -5.3320211196815005e-05f,
+      0.f,
+    };
+    return coeffs;
+  }
+
+  static uint latency()
+  {
+    return ((fir().size() - 1) / 2 * 16) + min_phase_coeffs<4>::latency();
+  };
 };
 
 } // namespace artv
