@@ -91,18 +91,18 @@ jobs:
         if: runner.os == 'Linux'
         with:
           name: mix-maxtrix-linux-lv2-latest
-          path: ${{github.workspace}}/build/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/LV2/MixMaxTrix.lv2
+          path: ${{github.workspace}}/build/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/LV2/MixMaxTrix*.lv2/**
 
       # VST3 Linux
       - uses: actions/upload-artifact@v2
         if: runner.os == 'Linux'
         with:
           name: mix-maxtrix-linux-vst3-latest
-          path: ${{github.workspace}}/build/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix.vst3
+          path: ${{github.workspace}}/build/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
 
       # VST3 Windows
       - uses: actions/upload-artifact@v2
         if: runner.os == 'Windows'
         with:
           name: mix-maxtrix-windows-vst3-latest
-          path: ${{github.workspace}}/build/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix.vst3
+          path: ${{github.workspace}}/build/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
