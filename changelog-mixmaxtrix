@@ -1,3 +1,25 @@
+1.0.2
+
+- download artifact: Include missing MixMaxtrix.vst3/MixMaxtrix.lv2 folders
+   on the binary zip file.
+- mix: Fix M/S smoothing unlikely to happen bug (required non power of 2
+   buffers).
+- mix: Fix main mixer pan (GPan knob) bug. Both L and R channels were using the
+   gain of the L channel, making the control mostly useless.
+- editor: Add third FX page. Now unused. In preparation for 1.1, which can't
+   happen now before DC21 is over because it adds oversampling to all FX that
+   don't have delay lines (dynamics processors, eqs, phasers...). Not adding
+   on this release would require a manual rebase, that would be a bad way to
+   spend the little dev time I have.
+- editor: Make main LCD bigger.
+- editor: Replace "LR" (for LR swap) button text by "S", so it is seen when
+   resizing the editor to small sizes.
+- sonic_enhancer: Fix wrong "rand" calls commented when porting from JSFX.
+- phaser: Fix complete broken behavior on samplerates other than 41/48K.
+- fiters2x: Fix moog filter frequency setting bugs on samplerates other than
+   41/48K. The filter was unstable/unusable at those sample rates before.
+- track compressor: Workaround bad ratio display.
+
 1.0.1
 
 - Fix wrong autorship on Atlantis Reverb (Geraint Luff).

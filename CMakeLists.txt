@@ -36,9 +36,10 @@ function (configure_memory_sanitizer target)
     target_link_options(${target} PUBLIC -fsanitize=address)
 endfunction()
 #-------------------------------------------------------------------------------
-set (VERSION_MAJOR 0)
+# This version number is mostly unused now...
+set (VERSION_MAJOR 1)
 set (VERSION_MINOR 0)
-set (VERSION_REV 1)
+set (VERSION_REV 0)
 set (VERSION_FULL "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_REV}")
 set (CMAKE_CXX_STANDARD 17)
 
@@ -486,7 +487,7 @@ target_link_libraries (oversampler-util PUBLIC common hiir)
 #-- Mix-maxtrix ----------------------------------------------------------------
 set (MIXMAXTRIX_VERSION_MAJOR 1)
 set (MIXMAXTRIX_VERSION_MINOR 0)
-set (MIXMAXTRIX_VERSION_REV 1)
+set (MIXMAXTRIX_VERSION_REV 2)
 set(
     MIXMAXTRIX_VERSION
     "${MIXMAXTRIX_VERSION_MAJOR}.${MIXMAXTRIX_VERSION_MINOR}.${MIXMAXTRIX_VERSION_REV}"
