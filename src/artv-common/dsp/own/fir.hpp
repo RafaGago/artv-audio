@@ -14,10 +14,16 @@
 namespace artv {
 namespace detail {
 
-// A interleaved delay line that always return a contiguous chunk of previous
-// samples at the expense of using the double of the minimum required memory.
-// The last inserted sample comes first on the memory chunk. The delay memory
-// is not owned by the class.
+// A interleaved delay line that always returns a contiguous chunk of previous
+// samples without needing to reshuffle the memory on each sample. Basically the
+// head pointer slides backwards and then jumps to the center. It requires
+// double the memory for when the pointer jumps from the head to the center, but
+// each insertion is only two (predictable) writes instead of a full reshuffle
+// of the delay line.
+//
+// The last inserted sample comes first on the samples memory chunk. The delay
+// memory is not owned by the class, this is so because the most optimal memory
+// layout is not known at this abstraction level.
 template <class T, uint channels = 1>
 class convolution_delay_line {
 public:
@@ -53,7 +59,8 @@ private:
 };
 //------------------------------------------------------------------------------
 // A convolution where the delay line is externally controlled. The kernel is
-// not owned by the class.
+// not owned by the class. This doesn't own memory because the most optimal
+// memory layout is not known at this abstraction depth.
 template <class T, uint channels = 1>
 class convolution_block {
 public:
@@ -83,7 +90,8 @@ private:
 } // namespace detail
 //------------------------------------------------------------------------------
 // A non-FFT convolution/FIR filter. The kernel and delay line memory are not
-// owned by the class.
+// owned by the class. This is so because the most optimal memory layout is not
+// known at this abstraction level.
 template <class T, uint channels = 1>
 class convolution {
 public:
@@ -195,8 +203,8 @@ private:
   uint                                          _ratio;
 };
 //------------------------------------------------------------------------------
-// Polyphase FIR decimator optimized for L-th band decimation type of
-// coefficients (skipping zero coefficients).
+// Polyphase FIR decimator optimized for L-th band decimation (coefficients with
+// a regular pattern of zeros).
 template <class T, uint channels = 1>
 class lth_band_fir_decimator {
 public:
@@ -287,7 +295,7 @@ private:
 // Polyphase FIR interpolator with selectable L-th band optimization (in case
 // the coefficients are suitable for Lth band optimization (skipping zeroes)).
 //
-// As the decimator is always decomposed in branches, adding the Lth band
+// As the interpolator is always decomposed in branches, adding the Lth band
 // optimization doesn't add too much bloat to the class, so it is done in place.
 template <class T, uint channels = 1>
 class fir_interpolator {
@@ -298,8 +306,9 @@ public:
   // If the filter cutoff frequency is Fs/4 and the number of coefficients minus
   // one is a multiple of 4 then this is Lth-band filter. Lth band filters have
   // 1/ratio of the coefficients as zeros, so they can be skipped. A polyphase
-  // FIR is structured in a way that the skipping the zeroed branch is trivial,
-  // so it is all done on the same class.
+  // FIR interpolator is structured in a way that the skipping the zeroed branch
+  // is trivial, so it doesn't have a separate implementation as the decimator
+  // does.
   void reset (
     crange<const T> kernel,
     uint            ratio,
@@ -307,7 +316,7 @@ public:
   {
     // To make it polyphase, we ensure that the coefficients are multiples of
     // "ratio" the unused parts of the kernel will have zeros that don't
-    // contribute.
+    // contribute to the response.
 
     _is_lth_band = enable_lth_band_optimization;
     _ratio       = ratio;
@@ -361,7 +370,10 @@ public:
     }
     if (is_lth_band) {
       // Handle the central coefficient, as this class is normalizing the
-      // kernel, the center coefficient is always 1, so it is a direct copy.
+      // kernel to compensate for the energy spread on the upsampling imaging,
+      // the center coefficient on a L-th band linear phase lowpass is always 1,
+      // so it is a direct copy of the sample, as multiplying by one has no
+      // effect.
       const T* center = _delay.samples().data();
       center += (_delay.size() / 2) * channels;
       for (uint c = 0; c < channels; ++c) {
