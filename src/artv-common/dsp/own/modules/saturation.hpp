@@ -45,7 +45,17 @@ public:
   static constexpr auto get_parameter (type_tag)
   {
     return choice_param (
-      0, make_cstr_array ("Sqrt", "Tanh", "Hardclip", "SqrtSin"), 20);
+      0,
+      make_cstr_array (
+        "Sqrt",
+        "Sqrt ADAA",
+        "Tanh",
+        "Tanh ADAA",
+        "Hardclip",
+        "Hardclip ADAA",
+        "SqrtSin",
+        "SqrtSin ADAA"),
+      40);
   }
   //----------------------------------------------------------------------------
   struct drive_tag {};
@@ -189,10 +199,18 @@ public:
           get_filt_states (hi_hp, 1)[onepole::z1]};
       }
 
-      // ARTV_SATURATION_USE_SSE has detrimental effects, the code is kept as a
-      // reminder for future me that this was already tried.
+      // ARTV_SATURATION_USE_SSE has detrimental effects when ADAA enabled, the
+      // current implementation always takes both branches.
+      // The code is kept as a reminder for future me that this was already
+      // tried.
       switch (p.type) {
-      case sqrt_adaa: {
+      case sat_sqrt: {
+        sat = sqrt_waveshaper_adaa<0>::tick_aligned<sse_bytes> (
+          {},
+          make_crange (_wvsh_states),
+          make_crange ((const double*) &sat[0], decltype (sat)::size));
+      } break;
+      case sat_sqrt_adaa: {
 #if ARTV_SATURATION_USE_SSE
         sat = sqrt_waveshaper_adaa<adaa_order>::tick_aligned<sse_bytes> (
           {},
@@ -208,7 +226,18 @@ public:
         static constexpr double gain = constexpr_db_to_gain (0.2);
         sat *= simd_dbl {gain};
       } break;
-      case tanh_adaa: {
+      case sat_tanh: {
+        // At the point of writing my code or xsimd seems broken on tanh? works
+        // well with others.
+        sat[0] = tanh_waveshaper_adaa<0>::tick (
+          {}, get_waveshaper_states (0), sat[0]);
+        sat[1] = tanh_waveshaper_adaa<0>::tick (
+          {}, get_waveshaper_states (1), sat[1]);
+        // Found empirically. TODO: improve
+        // static constexpr double gain = constexpr_db_to_gain (-2.6);
+        // sat *= simd_dbl {gain};
+      } break;
+      case sat_tanh_adaa: {
 #if ARTV_SATURATION_USE_SSE
         // At the point of writing my code or xsimd seems broken on tanh? works
         // well with others.
@@ -226,7 +255,13 @@ public:
         // static constexpr double gain = constexpr_db_to_gain (-2.6);
         // sat *= simd_dbl {gain};
       } break;
-      case hardclip_adaa:
+      case sat_hardclip:
+        sat = hardclip_waveshaper_adaa<0>::tick_aligned<sse_bytes> (
+          {},
+          make_crange (_wvsh_states),
+          make_crange ((const double*) &sat[0], decltype (sat)::size));
+        break;
+      case sat_hardclip_adaa:
 #if ARTV_SATURATION_USE_SSE
         sat = hardclip_waveshaper_adaa<adaa_order>::tick_aligned<sse_bytes> (
           {},
@@ -239,7 +274,13 @@ public:
           {}, get_waveshaper_states (1), sat[1]);
 #endif
         break;
-      case sqrt_sin_adaa:
+      case sat_sqrt_sin:
+        sat = sqrt_sin_waveshaper_adaa<0>::tick_aligned<sse_bytes> (
+          {},
+          make_crange (_wvsh_states),
+          make_crange ((const double*) &sat[0], decltype (sat)::size));
+        break;
+      case sat_sqrt_sin_adaa:
 #if ARTV_SATURATION_USE_SSE
         sat = sqrt_sin_waveshaper_adaa<adaa_order>::tick_aligned<sse_bytes> (
           {},
@@ -272,21 +313,18 @@ public:
       chnls[0][i] = sat[0];
       chnls[1][i] = sat[1];
     };
-#if 0
-    float in = (float) rand() / (float) RAND_MAX;
-    auto  ra = xsimd::tanh (xsimd::batch<double, 2> {in});
-    printf ("dbl: %f %f, in: %f \n", ra[0], ra[1], in);
-    auto rb = xsimd::tanh (xsimd::batch<float, 4> {in});
-    printf ("flt: %f %f %f %f, in: %f \n", rb[0], rb[1], rb[2], rb[3], in);
-#endif
   }
   //----------------------------------------------------------------------------
 private:
   enum sat_type {
-    sqrt_adaa,
-    tanh_adaa,
-    hardclip_adaa,
-    sqrt_sin_adaa,
+    sat_sqrt,
+    sat_sqrt_adaa,
+    sat_tanh,
+    sat_tanh_adaa,
+    sat_hardclip,
+    sat_hardclip_adaa,
+    sat_sqrt_sin,
+    sat_sqrt_sin_adaa,
     sat_type_count,
   };
 
