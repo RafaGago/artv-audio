@@ -10,8 +10,9 @@
 #include "artv-common/dsp/own/blocks/filters/onepole.hpp"
 #include "artv-common/dsp/own/blocks/misc/interpolators.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/hardclip.hpp"
-#include "artv-common/dsp/own/blocks/waveshapers/sqrt2_sigmoid.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/sqrt_sigmoid.hpp"
+#include "artv-common/dsp/own/blocks/waveshapers/sqrt_sin.hpp"
+#include "artv-common/dsp/own/blocks/waveshapers/tanh.hpp"
 #include "artv-common/dsp/own/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_types.hpp"
@@ -43,7 +44,8 @@ public:
 
   static constexpr auto get_parameter (type_tag)
   {
-    return choice_param (0, make_cstr_array ("Sqrt", "Sqrt2", "Hardclip"), 20);
+    return choice_param (
+      0, make_cstr_array ("Sqrt", "Tanh", "Hardclip", "SqrtSin"), 20);
   }
   //----------------------------------------------------------------------------
   struct drive_tag {};
@@ -126,6 +128,7 @@ public:
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
     });
+    _p.type_prev = sat_type_count; // force initial click removal routine.
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -136,9 +139,17 @@ public:
     if (unlikely (p.type_prev != p.type)) {
       // some waveshapers will create peaks, as the integral on 0 might not be
       // 0. Running them for some samples of silence to initialize.
-      static constexpr uint n_samples = 4;
+      static constexpr uint n_samples = 8;
       _p.type_prev                    = _p.type;
+      std::array<T, 2> value_increment {
+        chnls[0][0] * 1 / n_samples, chnls[1][0] * 1 / n_samples};
       std::array<T, n_samples * 2> in {};
+      for (uint i = 1; i < n_samples; ++i) {
+        in[i] = in[i - 1] + value_increment[0];
+      }
+      for (uint i = n_samples + 1; i < (n_samples * 2); ++i) {
+        in[i] = in[i - 1] + value_increment[1];
+      }
       process_block_replacing<T> ({&in[0], &in[n_samples]}, n_samples);
     }
 
@@ -197,21 +208,23 @@ public:
         static constexpr double gain = constexpr_db_to_gain (0.2);
         sat *= simd_dbl {gain};
       } break;
-      case sqrt2_adaa: {
+      case tanh_adaa: {
 #if ARTV_SATURATION_USE_SSE
-        sat = sqrt2_waveshaper_adaa<adaa_order>::tick_aligned<sse_bytes> (
+        // At the point of writing my code or xsimd seems broken on tanh? works
+        // well with others.
+        sat = tanh_waveshaper_adaa<adaa_order>::tick_aligned<sse_bytes> (
           {},
           make_crange (_wvsh_states),
           make_crange ((const double*) &sat[0], decltype (sat)::size));
 #else
-        sat[0] = sqrt2_waveshaper_adaa<adaa_order>::tick (
+        sat[0] = tanh_waveshaper_adaa<adaa_order>::tick (
           {}, get_waveshaper_states (0), sat[0]);
-        sat[1] = sqrt2_waveshaper_adaa<adaa_order>::tick (
+        sat[1] = tanh_waveshaper_adaa<adaa_order>::tick (
           {}, get_waveshaper_states (1), sat[1]);
 #endif
         // Found empirically. TODO: improve
-        static constexpr double gain = constexpr_db_to_gain (-2.6);
-        sat *= simd_dbl {gain};
+        // static constexpr double gain = constexpr_db_to_gain (-2.6);
+        // sat *= simd_dbl {gain};
       } break;
       case hardclip_adaa:
 #if ARTV_SATURATION_USE_SSE
@@ -223,6 +236,19 @@ public:
         sat[0] = hardclip_waveshaper_adaa<adaa_order>::tick (
           {}, get_waveshaper_states (0), sat[0]);
         sat[1] = hardclip_waveshaper_adaa<adaa_order>::tick (
+          {}, get_waveshaper_states (1), sat[1]);
+#endif
+        break;
+      case sqrt_sin_adaa:
+#if ARTV_SATURATION_USE_SSE
+        sat = sqrt_sin_waveshaper_adaa<adaa_order>::tick_aligned<sse_bytes> (
+          {},
+          make_crange (_wvsh_states),
+          make_crange ((const double*) &sat[0], decltype (sat)::size));
+#else
+        sat[0] = sqrt_sin_waveshaper_adaa<adaa_order>::tick (
+          {}, get_waveshaper_states (0), sat[0]);
+        sat[1] = sqrt_sin_waveshaper_adaa<adaa_order>::tick (
           {}, get_waveshaper_states (1), sat[1]);
 #endif
         break;
@@ -245,14 +271,23 @@ public:
       sat *= inv_cdrive;
       chnls[0][i] = sat[0];
       chnls[1][i] = sat[1];
-    }
+    };
+#if 0
+    float in = (float) rand() / (float) RAND_MAX;
+    auto  ra = xsimd::tanh (xsimd::batch<double, 2> {in});
+    printf ("dbl: %f %f, in: %f \n", ra[0], ra[1], in);
+    auto rb = xsimd::tanh (xsimd::batch<float, 4> {in});
+    printf ("flt: %f %f %f %f, in: %f \n", rb[0], rb[1], rb[2], rb[3], in);
+#endif
   }
   //----------------------------------------------------------------------------
 private:
   enum sat_type {
     sqrt_adaa,
-    sqrt2_adaa,
+    tanh_adaa,
     hardclip_adaa,
+    sqrt_sin_adaa,
+    sat_type_count,
   };
 
   enum filter_indexes { lo_lp, hi_hp, n_filters };
@@ -270,8 +305,9 @@ private:
 
   using shapers = mp_list<
     sqrt_waveshaper_adaa<adaa_order>,
-    sqrt2_waveshaper_adaa<adaa_order>,
-    hardclip_waveshaper_adaa<adaa_order>>;
+    tanh_waveshaper_adaa<adaa_order>,
+    hardclip_waveshaper_adaa<adaa_order>,
+    sqrt_sin_waveshaper_adaa<adaa_order>>;
 
   template <class T>
   using wsh_to_n_states    = std::integral_constant<int, T::n_states>;

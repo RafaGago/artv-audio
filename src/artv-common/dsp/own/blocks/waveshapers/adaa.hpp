@@ -24,6 +24,32 @@ template <class functions, uint order>
 class waveshaper;
 //------------------------------------------------------------------------------
 template <class functions>
+class waveshaper<functions, 0> {
+public:
+  enum coeffs { n_coeffs };
+  enum state { n_states };
+  //----------------------------------------------------------------------------
+  template <class T>
+  static T tick (crange<const T>, crange<T>, T x)
+  {
+    return functions::fn (x);
+  }
+  //----------------------------------------------------------------------------
+  template <uint simd_bytes, class T>
+  static simd_reg<T, simd_bytes> tick_aligned (
+    crange<const T>,
+    crange<T>,
+    // simd_reg<T, simd_bytes> x)
+    crange<const T> x_range)
+  {
+    simd_reg<T, simd_bytes> x;
+    x.load_aligned (x_range.data());
+    return functions::fn (x);
+  }
+  //----------------------------------------------------------------------------
+};
+//------------------------------------------------------------------------------
+template <class functions>
 class waveshaper<functions, 1> {
 public:
   enum coeffs { n_coeffs };
