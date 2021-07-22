@@ -228,32 +228,11 @@ public:
       simd_dbl hi {0.};
 
       if (p.lo_cut_hz > lo_cut_min_hz) {
-        lo = butterworth_type::tick (
-          get_filt_coeffs (lo_lp),
-          {get_filt_states (lo_lp, 0), get_filt_states (lo_lp, 1)},
-          sat);
-        sat -= lo;
-
-        // 1 sample delay mix. Hack by retrieving a previous state... To
-        // compensate for adaa.
-        static_assert (std::is_same_v<butterworth_type, butterworth<1>>, "");
-        lo = simd_dbl {
-          get_filt_states (lo_lp, 0)[onepole::z1],
-          get_filt_states (lo_lp, 1)[onepole::z1]};
+        lo = run_hp_or_lp (sat, p, true);
       }
 
       if (p.hi_cut_hz < hi_cut_max_hz) {
-        hi = butterworth_type::tick (
-          get_filt_coeffs (hi_hp),
-          {get_filt_states (hi_hp, 0), get_filt_states (hi_hp, 1)},
-          {sat[0], sat[1]});
-        sat -= hi;
-        // 1 sample delay mix. Hack by retrieving a previous state... To
-        // compensate for adaa.
-        static_assert (std::is_same_v<butterworth_type, butterworth<1>>, "");
-        hi = simd_dbl {
-          get_filt_states (hi_hp, 0)[onepole::z1],
-          get_filt_states (hi_hp, 1)[onepole::z1]};
+        hi = run_hp_or_lp (sat, p, false);
       }
 
       sat = andy::svf::tick_multi_aligned<sse_bytes, double> (
@@ -426,6 +405,8 @@ private:
     return {&_wvsh_states[wsh_max_states * channel], wsh_max_states};
   }
   //----------------------------------------------------------------------------
+  bool waveshaper_type_is_adaa (params const& p) const { return p.type & 1; }
+  //----------------------------------------------------------------------------
   void update_emphasis()
   {
     simd_batch<double, 2> f  = {_p.emphasis_freq, _p.emphasis_freq};
@@ -440,6 +421,25 @@ private:
 
     andy::svf::bell_multi_aligned<sse_bytes, double> (
       _post_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
+  }
+  //----------------------------------------------------------------------------
+  simd_dbl run_hp_or_lp (simd_dbl& sat, params const& p, bool is_lp)
+  {
+    uint     f_idx = is_lp ? lo_lp : hi_hp;
+    simd_dbl out   = butterworth_type::tick (
+      get_filt_coeffs (f_idx),
+      {get_filt_states (f_idx, 0), get_filt_states (f_idx, 1)},
+      sat);
+    auto out_prev = out;
+    if (waveshaper_type_is_adaa (p)) {
+      // 1 sample delay mix. Splitting on previous sample, joining on next.
+      static_assert (std::is_same_v<butterworth_type, butterworth<1>>, "");
+      out_prev = simd_dbl {
+        get_filt_states (f_idx, 0)[onepole::z1],
+        get_filt_states (f_idx, 1)[onepole::z1]};
+    }
+    sat -= out_prev;
+    return out;
   }
   //----------------------------------------------------------------------------
   static constexpr uint n_channels = 2;

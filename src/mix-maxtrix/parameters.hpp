@@ -5187,7 +5187,7 @@ using saturation_params = mp_list<
   saturation_hi_cut,
   saturation_oversampling>;
 //------------------------------------------------------------------------------
-#if 1
+#if 0
 parameter_cpp_class_define (
   polyphase_fir_test_gain,
   n_stereo_busses,
