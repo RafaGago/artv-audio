@@ -78,9 +78,9 @@ struct onepole_smoother {
   //----------------------------------------------------------------------------
   template <uint simd_bytes, class T>
   static simd_reg<T, simd_bytes> tick_aligned (
-    crange<const T> c, // coeffs, just 'b1'
-    crange<T>       z, // state 'z1' 1 to N
-    crange<const T> in) // in' 1 to N
+    crange<const T>         c, // coeffs, just 'b1'
+    crange<T>               z, // state 'z1' 1 to N
+    simd_reg<T, simd_bytes> in) // in' 1 to N
   {
     static_assert (std::is_floating_point<T>::value, "");
     using simdreg             = simd_reg<T, simd_bytes>;
@@ -88,14 +88,12 @@ struct onepole_smoother {
 
     assert (z.size() >= n_builtins * n_states);
     assert (c.size() >= n_coeffs);
-    assert (in.size() >= n_builtins);
 
     simdreg a0_v {((T) 1.) - c[b1]};
     simdreg b1_v {c[b1]};
-    simdreg in_v {in.data(), xsimd::aligned_mode {}};
     simdreg z1_v {z.data(), xsimd::aligned_mode {}};
 
-    z1_v = (in_v * a0_v) + (z1_v * b1_v);
+    z1_v = (in * a0_v) + (z1_v * b1_v);
 
     z1_v.store_aligned (z.data());
 
@@ -153,7 +151,7 @@ struct onepole {
   static simd_dbl tick (
     crange<const double>          co, // coeffs
     std::array<crange<double>, 2> st, // state
-    std::array<double, 2>         in)
+    simd_dbl                      in)
   {
     assert (st.size() >= 2);
     assert (co.size() >= n_coeffs);
@@ -164,11 +162,10 @@ struct onepole {
     simd_dbl a1_v {co[a1]};
     simd_dbl b0_v {co[b0]};
     simd_dbl b1_v {co[b1]};
-    simd_dbl in_v {in[0], in[1]};
     simd_dbl z0_v {st[0][z0], st[1][z0]};
     simd_dbl z1_v {st[0][z1], st[1][z1]};
 
-    z1_v      = (in_v * b0_v) + (z0_v * b1_v) - (z1_v * a1_v);
+    z1_v      = (in * b0_v) + (z0_v * b1_v) - (z1_v * a1_v);
     st[0][z1] = z1_v[0];
     st[0][z0] = in[0];
     st[1][z1] = z1_v[1];

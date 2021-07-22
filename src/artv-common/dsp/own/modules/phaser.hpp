@@ -274,18 +274,25 @@ public:
       // parameter smoothing.
       auto smooth_iter = _params.smooth_target.arr.size() / simd_flt::size;
       for (uint j = 0; j < smooth_iter; ++j) {
+        // HACKish encapsulation violation: this one isn't assigning the result,
+        // but getting the -1 state from the one pole filter directly (copied by
+        // value). See "static_assert" on the code below. 1-pole digital filters
+        // are NEVER going to change so this is IMO acceptable.
+        auto in = make_crange (
+          _params.smooth_target.arr, simd_flt::size, simd_flt::size * j);
         onepole_smoother::tick_aligned<sse_bytes, float> (
           make_crange (_lp_smooth_coeff),
           make_crange (
             _params.smooth_state.arr, simd_flt::size, simd_flt::size * j),
-          make_crange (
-            _params.smooth_target.arr, simd_flt::size, simd_flt::size * j));
+          simd_flt {in.data(), xsimd::aligned_mode {}});
       }
-
       // from now on access parameters without caring if they are smoothed or
       // not. This copy also has the aditional advantage of telling the compiler
       // that it can keep parameters on registers.
       all_parameters pars;
+      static_assert (
+        onepole_smoother::n_states == 1,
+        "For the assignment below to work only the Z-1 state has to exist");
       *((smoothed_parameters*) &pars)   = _params.smooth_state.value;
       *((unsmoothed_parameters*) &pars) = _params.unsmoothed;
 
@@ -376,7 +383,7 @@ public:
 
         assert ((pars.n_allpasses % simd_flt::size) == 0 && "bug!");
         for (uint s = 0; s < (pars.n_allpasses / simd_flt::size); ++s) {
-          std::array<float, simd_flt::size> freqs, qs;
+          simd_batch<float, 4> freqs, qs;
           // fill Q. Same for now they don't LFO oscillate (TODO?).
           for (auto& v : qs) {
             v = pars.q;
@@ -433,17 +440,16 @@ public:
       }
 
       // regular processing
-      alignas (sse_bytes) auto out = make_array<float> (
+      simd_batch<float, 4> out {
         chnls[0][i] + (_feedback_samples[0] * pars.feedback),
         chnls[1][i] + (_feedback_samples[1] * pars.feedback),
         chnls[0][i] + (_feedback_samples[0] * pars.feedback),
-        chnls[1][i] + (_feedback_samples[1] * pars.feedback));
+        chnls[1][i] + (_feedback_samples[1] * pars.feedback)};
 
       for (uint g = 0; g < (pars.n_allpasses / simd_flt::size); ++g) {
         // as of now this processes both in parallel and in series.
-        auto v = andy::svf::tick_multi_aligned<sse_bytes, float> (
+        out = andy::svf::tick_multi_aligned<sse_bytes, float> (
           get_allpass_group_coeffs (g), get_allpass_group_states (g), out);
-        v.store_aligned (out.data());
       }
       assert (
         (pars.n_allpasses % simd_flt::size) == 0

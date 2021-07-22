@@ -231,9 +231,11 @@ public:
         lo = butterworth_type::tick (
           get_filt_coeffs (lo_lp),
           {get_filt_states (lo_lp, 0), get_filt_states (lo_lp, 1)},
-          {sat[0], sat[1]});
+          sat);
         sat -= lo;
-        // 1 sample delay mix. Hack by retrieving a previous state...
+
+        // 1 sample delay mix. Hack by retrieving a previous state... To
+        // compensate for adaa.
         static_assert (std::is_same_v<butterworth_type, butterworth<1>>, "");
         lo = simd_dbl {
           get_filt_states (lo_lp, 0)[onepole::z1],
@@ -246,7 +248,8 @@ public:
           {get_filt_states (hi_hp, 0), get_filt_states (hi_hp, 1)},
           {sat[0], sat[1]});
         sat -= hi;
-        // 1 sample delay mix. Hack by retrieving a previous state...
+        // 1 sample delay mix. Hack by retrieving a previous state... To
+        // compensate for adaa.
         static_assert (std::is_same_v<butterworth_type, butterworth<1>>, "");
         hi = simd_dbl {
           get_filt_states (hi_hp, 0)[onepole::z1],
@@ -254,9 +257,7 @@ public:
       }
 
       sat = andy::svf::tick_multi_aligned<sse_bytes, double> (
-        _pre_emphasis_coeffs,
-        _pre_emphasis_states,
-        make_crange ((const double*) &sat[0], decltype (sat)::size));
+        _pre_emphasis_coeffs, _pre_emphasis_states, sat);
 
 #define ARTV_SATURATION_USE_SSE 0
       // ARTV_SATURATION_USE_SSE has detrimental effects when ADAA enabled,
@@ -266,16 +267,12 @@ public:
       switch (p.type) {
       case sat_sqrt: {
         sat = sqrt_waveshaper_adaa<0>::tick_aligned<sse_bytes> (
-          {},
-          make_crange (_wvsh_states),
-          make_crange ((const double*) &sat[0], decltype (sat)::size));
+          {}, make_crange (_wvsh_states), sat);
       } break;
       case sat_sqrt_adaa: {
 #if ARTV_SATURATION_USE_SSE
         sat = sqrt_waveshaper_adaa<adaa_order>::tick_aligned<sse_bytes> (
-          {},
-          make_crange (_wvsh_states),
-          make_crange ((const double*) &sat[0], decltype (sat)::size));
+          {}, make_crange (_wvsh_states), sat);
 #else
         sat[0] = sqrt_waveshaper_adaa<adaa_order>::tick (
           {}, get_waveshaper_states (0), sat[0]);
@@ -293,18 +290,13 @@ public:
           {}, get_waveshaper_states (0), sat[0]);
         sat[1] = tanh_waveshaper_adaa<0>::tick (
           {}, get_waveshaper_states (1), sat[1]);
-        // Found empirically. TODO: improve
-        // static constexpr double gain = constexpr_db_to_gain (-2.6);
-        // sat *= simd_dbl {gain};
       } break;
       case sat_tanh_adaa: {
 #if ARTV_SATURATION_USE_SSE
         // At the point of writing my code or xsimd seems broken on tanh?
         // works well with others.
         sat = tanh_waveshaper_adaa<adaa_order>::tick_aligned<sse_bytes> (
-          {},
-          make_crange (_wvsh_states),
-          make_crange ((const double*) &sat[0], decltype (sat)::size));
+          {}, make_crange (_wvsh_states), sat);
 #else
         sat[0] = tanh_waveshaper_adaa<adaa_order>::tick (
           {}, get_waveshaper_states (0), sat[0]);
@@ -317,16 +309,12 @@ public:
       } break;
       case sat_hardclip:
         sat = hardclip_waveshaper_adaa<0>::tick_aligned<sse_bytes> (
-          {},
-          make_crange (_wvsh_states),
-          make_crange ((const double*) &sat[0], decltype (sat)::size));
+          {}, make_crange (_wvsh_states), sat);
         break;
       case sat_hardclip_adaa:
 #if ARTV_SATURATION_USE_SSE
         sat = hardclip_waveshaper_adaa<adaa_order>::tick_aligned<sse_bytes> (
-          {},
-          make_crange (_wvsh_states),
-          make_crange ((const double*) &sat[0], decltype (sat)::size));
+          {}, make_crange (_wvsh_states), sat);
 #else
         sat[0] = hardclip_waveshaper_adaa<adaa_order>::tick (
           {}, get_waveshaper_states (0), sat[0]);
@@ -336,9 +324,7 @@ public:
         break;
       case sat_sqrt_sin:
         sat = sqrt_sin_waveshaper_adaa<0>::tick_aligned<sse_bytes> (
-          {},
-          make_crange (_wvsh_states),
-          make_crange ((const double*) &sat[0], decltype (sat)::size));
+          {}, make_crange (_wvsh_states), sat);
         break;
       case sat_sqrt_sin_adaa:
 #if ARTV_SATURATION_USE_SSE
@@ -358,9 +344,7 @@ public:
       }
 
       sat = andy::svf::tick_multi_aligned<sse_bytes, double> (
-        _post_emphasis_coeffs,
-        _post_emphasis_states,
-        make_crange ((const double*) &sat[0], decltype (sat)::size));
+        _post_emphasis_coeffs, _post_emphasis_states, sat);
 
       if constexpr (adaa_order == 1) {
         // half sample delay
@@ -444,9 +428,9 @@ private:
   //----------------------------------------------------------------------------
   void update_emphasis()
   {
-    std::array<double, 2> f  = {_p.emphasis_freq, _p.emphasis_freq};
-    std::array<double, 2> q  = {_p.emphasis_q, _p.emphasis_q};
-    std::array<double, 2> db = {_p.emphasis_amount, _p.emphasis_amount};
+    simd_batch<double, 2> f  = {_p.emphasis_freq, _p.emphasis_freq};
+    simd_batch<double, 2> q  = {_p.emphasis_q, _p.emphasis_q};
+    simd_batch<double, 2> db = {_p.emphasis_amount, _p.emphasis_amount};
 
     andy::svf::bell_multi_aligned<sse_bytes, double> (
       _pre_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());

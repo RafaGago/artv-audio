@@ -39,11 +39,8 @@ public:
   static simd_reg<T, simd_bytes> tick_aligned (
     crange<const T>,
     crange<T>,
-    // simd_reg<T, simd_bytes> x)
-    crange<const T> x_range)
+    simd_reg<T, simd_bytes> x)
   {
-    simd_reg<T, simd_bytes> x;
-    x.load_aligned (x_range.data());
     return functions::fn (x);
   }
   //----------------------------------------------------------------------------
@@ -77,8 +74,8 @@ public:
   template <uint simd_bytes, class T>
   static simd_reg<T, simd_bytes> tick_aligned (
     crange<const T>,
-    crange<T>       st,
-    crange<const T> x_range)
+    crange<T>               st,
+    simd_reg<T, simd_bytes> x)
   {
     // as this has to calculate both branches, it might not be worth bothering.
     static_assert (std::is_floating_point<T>::value, "");
@@ -86,13 +83,11 @@ public:
     static constexpr auto n_builtins = regtype::size;
 
     assert (st.size() >= n_builtins * n_states);
-    assert (x_range.size() >= n_builtins);
 
     T* x1v_ptr     = &st[x1 * n_builtins];
     T* x1v_int_ptr = &st[x1_int * n_builtins];
 
-    regtype x, x1v, x1v_int;
-    x.load_aligned (x_range.data());
+    regtype x1v, x1v_int;
     x1v.load_aligned (x1v_ptr);
     x1v_int.load_aligned (x1v_int_ptr);
 
@@ -154,8 +149,8 @@ public:
   template <uint simd_bytes, class T>
   static simd_reg<T, simd_bytes> tick_aligned (
     crange<const T>,
-    crange<T>       st,
-    crange<const T> x_range)
+    crange<T>               st,
+    simd_reg<T, simd_bytes> x)
   {
     // Real SIMD: TODO. Might not be worth because of the high number of
     // branches.

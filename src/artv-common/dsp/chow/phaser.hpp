@@ -345,7 +345,7 @@ public:
         simd_flt out = smoother::tick_aligned<16, float> (
           make_crange (_smooth_coeff),
           make_crange (&_param_state.arr[j], sse_step),
-          make_crange (&param_tgt.arr[j], sse_step));
+          simd_flt {&param_tgt.arr[j], xsimd::aligned_mode {}});
         out.store_aligned (&smooth.arr[j]);
       }
 

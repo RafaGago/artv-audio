@@ -93,7 +93,7 @@ public:
   static simd_dbl tick (
     crange<double const>          co, // coeffs
     std::array<crange<double>, 2> st, // state
-    std::array<double, 2>         v0s,
+    simd_dbl                      v0,
     uint                          order)
   {
     assert (st.size() >= 2);
@@ -101,10 +101,10 @@ public:
     assert (st[0].size() >= n_states_for_order (order));
     assert (st[1].size() >= n_states_for_order (order));
 
-    simd_dbl v0s_v {v0s[0], v0s[1]};
+    auto out = v0;
 
     if (order & 1) {
-      v0s_v = onepole::tick (co, st, {v0s_v[0], v0s_v[1]});
+      out = onepole::tick (co, st, out);
       co.shrink_head (onepole::n_coeffs);
       st[0].shrink_head (onepole::n_states);
       st[1].shrink_head (onepole::n_states);
@@ -112,12 +112,12 @@ public:
     }
 
     for (uint i = 0; i < (order / 2); i++) {
-      v0s_v = andy::svf::tick<16, double> (co, st, {v0s_v[0], v0s_v[1]});
+      out = andy::svf::tick<16, double> (co, st, out);
       co.shrink_head (andy::svf::n_coeffs);
       st[0].shrink_head (andy::svf::n_states);
       st[1].shrink_head (andy::svf::n_states);
     }
-    return v0s_v;
+    return out;
   }
   //----------------------------------------------------------------------------
 private:
@@ -212,7 +212,7 @@ public:
   static simd_dbl tick (
     crange<double const>          co, // coeffs
     std::array<crange<double>, 2> st, // state
-    std::array<double, 2>         v0s)
+    simd_dbl                      v0s)
   {
     return butterworth_any_order::tick (co, st, v0s, order);
   }

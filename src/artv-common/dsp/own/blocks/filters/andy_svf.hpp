@@ -44,24 +44,19 @@ struct svf {
   //----------------------------------------------------------------------------
   template <size_t simd_bytes, class T>
   static void lowpass_multi_aligned (
-    crange<T>       c,
-    crange<const T> freq, // no alignment required
-    crange<const T> q, // no alignment required
-    T               sr)
+    crange<T>               c,
+    simd_reg<T, simd_bytes> freq,
+    simd_reg<T, simd_bytes> q,
+    T                       sr)
   {
     static_assert (std::is_floating_point<T>::value, "");
     using simdreg                    = simd_reg<T, simd_bytes>;
     static constexpr auto n_builtins = simdreg::size;
 
     assert (c.size() >= (n_coeffs * n_builtins));
-    assert (freq.size() >= n_builtins);
-    assert (q.size() >= n_builtins);
 
-    simdreg f {freq.data(), xsimd::unaligned_mode {}};
-    simdreg g = xsimd::tan (f * ((T) M_PI) / sr);
-
-    simdreg qsimd {q.data(), xsimd::unaligned_mode {}};
-    simdreg k {((T) 1.0) / qsimd};
+    simdreg g = xsimd::tan (freq * ((T) M_PI) / sr);
+    simdreg k {((T) 1.0) / q};
 
     simdreg a1_v {(T) 1.0};
     a1_v /= g * (g + k) + ((T) 1.);
@@ -200,24 +195,19 @@ struct svf {
   //----------------------------------------------------------------------------
   template <size_t simd_bytes, class T>
   static void allpass_multi_aligned (
-    crange<T>       c,
-    crange<const T> freq, // no alignment required
-    crange<const T> q, // no alignment required
-    T               sr)
+    crange<T>               c,
+    simd_reg<T, simd_bytes> freq, // no alignment required
+    simd_reg<T, simd_bytes> q, // no alignment required
+    T                       sr)
   {
     static_assert (std::is_floating_point<T>::value, "");
     using simdreg                    = simd_reg<T, simd_bytes>;
     static constexpr auto n_builtins = simdreg::size;
 
     assert (c.size() >= (n_coeffs * n_builtins));
-    assert (freq.size() >= n_builtins);
-    assert (q.size() >= n_builtins);
 
-    simdreg f {freq.data(), xsimd::unaligned_mode {}};
-    simdreg g = xsimd::tan (f * ((T) M_PI) / sr);
-
-    simdreg qsimd {q.data(), xsimd::unaligned_mode {}};
-    simdreg k {((T) 1.0) / qsimd};
+    simdreg g = xsimd::tan (freq * ((T) M_PI) / sr);
+    simdreg k {((T) 1.0) / q};
 
     simdreg a1_v {(T) 1.0};
     a1_v /= g * (g + k) + ((T) 1.);
@@ -267,28 +257,21 @@ struct svf {
   //----------------------------------------------------------------------------
   template <size_t simd_bytes, class T>
   static void bell_multi_aligned (
-    crange<T>       c,
-    crange<const T> freq, // no alignment required
-    crange<const T> q, // no alignment required
-    crange<const T> dB, // no alignment required
-    T               sr)
+    crange<T>               c,
+    simd_reg<T, simd_bytes> freq,
+    simd_reg<T, simd_bytes> q,
+    simd_reg<T, simd_bytes> db,
+    T                       sr)
   {
     static_assert (std::is_floating_point<T>::value, "");
     using simdreg                    = simd_reg<T, simd_bytes>;
     static constexpr auto n_builtins = simdreg::size;
 
     assert (c.size() >= (n_coeffs * n_builtins));
-    assert (freq.size() >= n_builtins);
-    assert (q.size() >= n_builtins);
-    assert (dB.size() >= n_builtins);
 
-    auto freq_simd = simdreg {freq.data(), xsimd::unaligned_mode {}};
-    auto q_simd    = simdreg {q.data(), xsimd::unaligned_mode {}};
-    auto dB_simd   = simdreg {dB.data(), xsimd::unaligned_mode {}};
-
-    auto A = xsimd::pow (simdreg {(T) 10.}, dB_simd * simdreg {(T) (1. / 40.)});
-    auto g = xsimd::tan (simdreg {(T) M_PI} * freq_simd / simdreg {(T) sr});
-    auto k = simdreg {(T) 1.} / (q_simd * A);
+    auto A = xsimd::pow (simdreg {(T) 10.}, db * simdreg {(T) (1. / 40.)});
+    auto g = xsimd::tan (simdreg {(T) M_PI} * freq / simdreg {(T) sr});
+    auto k = simdreg {(T) 1.} / (q * A);
 
     simdreg a1_v {(T) 1.0};
     a1_v /= g * (g + k) + ((T) 1.);
@@ -393,7 +376,7 @@ struct svf {
   static simd_reg<T, simd_bytes> tick (
     crange<const T>                                      c, // coeffs
     std::array<crange<T>, simd_reg<T, simd_bytes>::size> s, // state
-    std::array<T, simd_reg<T, simd_bytes>::size>         v0s)
+    simd_reg<T, simd_bytes>                              v0)
   {
     static_assert (std::is_floating_point<T>::value, "");
     using simdreg                    = simd_reg<T, simd_bytes>;
@@ -405,12 +388,11 @@ struct svf {
       assert (s[i].size() >= n_states);
     }
 
-    simdreg ic1eq_v, ic2eq_v, v0;
+    simdreg ic1eq_v, ic2eq_v;
 
     for (uint i = 0; i < n_builtins; ++i) {
       ic1eq_v[i] = s[i][ic1eq];
       ic2eq_v[i] = s[i][ic2eq];
-      v0[i]      = v0s[i];
     }
 
     simdreg out = calc<simdreg> (
@@ -434,9 +416,9 @@ struct svf {
   // 1 set of coeffs, N outs. (E.g. stereo filter using double)
   template <uint simd_bytes, class T>
   static simd_reg<T, simd_bytes> tick_aligned (
-    crange<const T> c, // coeffs
-    crange<T>       s, // coefficients interleaved, ready to SIMD load
-    crange<const T> v0s) // N inputs ready to SIMD load
+    crange<const T>         c, // coeffs
+    crange<T>               s, // coefficients interleaved, ready to SIMD load
+    simd_reg<T, simd_bytes> v0)
   {
     static_assert (std::is_floating_point<T>::value, "");
     using simdreg                    = simd_reg<T, simd_bytes>;
@@ -444,13 +426,11 @@ struct svf {
 
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_builtins * n_states);
-    assert (v0s.size() >= n_builtins);
 
-    simdreg ic1eq_v, ic2eq_v, v0;
+    simdreg ic1eq_v, ic2eq_v;
 
     ic1eq_v.load_aligned (&s[ic1eq * n_builtins]);
     ic2eq_v.load_aligned (&s[ic2eq * n_builtins]);
-    v0.load_aligned (v0s.data());
 
     simdreg out = calc<simdreg> (
       ic1eq_v,
@@ -472,9 +452,9 @@ struct svf {
   // N sets of coeffs, N outs calculated at once.
   template <uint simd_bytes, class T>
   static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T> c, // coeffs interleaved, ready to SIMD load
-    crange<T>       s, // coefficients interleaved, ready to SIMD load
-    crange<const T> v0s) // N inputs ready to SIMD load
+    crange<const T>         c, // coeffs interleaved, ready to SIMD load
+    crange<T>               s, // coefficients interleaved, ready to SIMD load
+    simd_reg<T, simd_bytes> v0) // N inputs ready to SIMD load
   {
     static_assert (std::is_floating_point<T>::value, "");
     using simdreg                    = simd_reg<T, simd_bytes>;
@@ -482,13 +462,11 @@ struct svf {
 
     assert (c.size() >= n_builtins * n_coeffs);
     assert (s.size() >= n_builtins * n_states);
-    assert (v0s.size() >= n_builtins);
 
-    simdreg m0_v, m1_v, m2_v, a1_v, a2_v, a3_v, ic1eq_v, ic2eq_v, v0;
+    simdreg m0_v, m1_v, m2_v, a1_v, a2_v, a3_v, ic1eq_v, ic2eq_v;
 
     ic1eq_v.load_aligned (&s[ic1eq * n_builtins]);
     ic2eq_v.load_aligned (&s[ic2eq * n_builtins]);
-    v0.load_aligned (v0s.data());
 
     m0_v.load_aligned (&c[m0 * n_builtins]);
     m1_v.load_aligned (&c[m1 * n_builtins]);

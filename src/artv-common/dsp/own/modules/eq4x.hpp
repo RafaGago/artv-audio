@@ -66,7 +66,7 @@ public:
           simd_dbl out = smoother::tick_aligned<sse_bytes, double> (
             make_crange (_smooth_coeff),
             make_crange (&_smooth_state[b].filter[j], sse_step),
-            make_crange (&_coeffs[b][j], sse_step));
+            simd_dbl {&_coeffs[b][j], xsimd::aligned_mode {}});
           out.store_aligned (&smoothed_band_coefs[j]);
         }
 

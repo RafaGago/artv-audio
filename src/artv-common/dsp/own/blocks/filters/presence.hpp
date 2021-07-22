@@ -157,7 +157,7 @@ struct presence_high_shelf {
   static simd_dbl tick (
     crange<const double>          co, // coeffs
     std::array<crange<double>, 2> st, // state
-    std::array<double, 2>         in)
+    simd_dbl                      in)
   {
     assert (st.size() >= 2);
     assert (co.size() >= n_coeffs);
