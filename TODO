@@ -1,6 +1,9 @@
 - Still unfixed memory leaks on original TAL Reverb 2's code (mix-maxtrix-test
   catches them).
 
+- Make all simd processing filters, DSP, etc to take a "simd_reg" instead of
+  raw memory.
+
 - Channel labels (? The plugin is too cluttered vertically).
 
 - Now that latency compensation is implemented, plugins like Sonic Anomaly's
