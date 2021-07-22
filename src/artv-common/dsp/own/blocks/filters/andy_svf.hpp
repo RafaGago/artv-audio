@@ -29,7 +29,7 @@ struct svf {
     uint      coeff_distance = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset);
+    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
     auto co = unpack_interleaved_coeffs (c, coeff_distance);
 
     double g = tan (M_PI * freq / sr);
@@ -116,7 +116,7 @@ struct svf {
     uint      coeff_distance = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset);
+    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
     auto co = unpack_interleaved_coeffs (c, coeff_distance);
 
     double g = tan (M_PI * freq / sr);
@@ -139,7 +139,7 @@ struct svf {
     uint      coeff_distance = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset);
+    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
     auto co = unpack_interleaved_coeffs (c, coeff_distance);
 
     double g = tan (M_PI * freq / sr);
@@ -162,7 +162,7 @@ struct svf {
     uint      coeff_distance = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset);
+    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
     auto co = unpack_interleaved_coeffs (c, coeff_distance);
 
     double g = tan (M_PI * freq / sr);
@@ -185,7 +185,7 @@ struct svf {
     uint      coeff_distance = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset);
+    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
     auto co = unpack_interleaved_coeffs (c, coeff_distance);
 
     double g = tan (M_PI * freq / sr);
@@ -251,7 +251,7 @@ struct svf {
     uint      coeff_distance = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset);
+    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
     auto co = unpack_interleaved_coeffs (c, coeff_distance);
 
     double A = pow (10.f, belldB / 40.f);
@@ -321,7 +321,7 @@ struct svf {
     uint      coeff_distance = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset);
+    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
     auto co = unpack_interleaved_coeffs (c, coeff_distance);
 
     double A = pow (10.f, belldB / 40.f);
@@ -345,7 +345,8 @@ struct svf {
     uint      coeff_offset   = 0,
     uint      coeff_distance = 1)
   {
-    c.shrink_head (coeff_offset);
+    static_assert (std::is_floating_point<T>::value, "");
+    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
     auto co = unpack_interleaved_coeffs (c, coeff_distance);
 
     double A = pow (10.f, belldB / 40.f);
