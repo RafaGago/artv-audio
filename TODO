@@ -42,7 +42,13 @@
 
 - If worth, performance optimizations. Math operations on fast paths, suboptimal
   memory layouts as on Ripple phaser. Vectorizations, Use the FMA intrinsic on
-  XSIMD, etc.
+  XSIMD, etc. Optimized functions on KVR:
+
+  -https://www.kvraudio.com/forum/viewtopic.php?f=33&t=530167
+  -https://www.kvraudio.com/forum/viewtopic.php?f=33&t=519852
+  -https://www.kvraudio.com/forum/viewtopic.php?f=33&t=519728
+  -https://www.kvraudio.com/forum/viewtopic.php?f=33&t=532048&p=7524831#p7524831
+  -https://www.kvraudio.com/forum/viewtopic.php?f=33&t=510794
 
 - JSFX: "jsfx_invsqrt" is using Quake invsqrt instead of sse intrinsics or
   equivalent.

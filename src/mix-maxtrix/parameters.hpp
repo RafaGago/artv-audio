@@ -5137,6 +5137,36 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  saturation_emphasis_amount,
+  n_stereo_busses,
+  param_common (
+    "Emphasis",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::emphasis_amount_tag>()),
+  saturation::get_parameter (saturation::emphasis_amount_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  saturation_emphasis_freq,
+  n_stereo_busses,
+  param_common (
+    "Emphas F",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::emphasis_freq_tag>()),
+  saturation::get_parameter (saturation::emphasis_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  saturation_emphasis_q,
+  n_stereo_busses,
+  param_common (
+    "Emphas Q",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::emphasis_q_tag>()),
+  saturation::get_parameter (saturation::emphasis_q_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   saturation_oversampling,
   n_stereo_busses,
   param_common (
@@ -5148,6 +5178,9 @@ parameter_cpp_class_define (
 
 using saturation_params = mp_list<
   saturation_type,
+  saturation_emphasis_amount,
+  saturation_emphasis_freq,
+  saturation_emphasis_q,
   saturation_drive,
   saturation_compensated_drive,
   saturation_lo_cut,
@@ -5217,7 +5250,8 @@ using all_fx_typelists = mp_list<
   filter2x_params,
   fdnverb_params,
   track_comp_params,
-  signal_crusher_params
+  signal_crusher_params,
+  saturation_params
 #if 0
   saturation_params // 1 sample latency.
 #endif
@@ -5269,11 +5303,8 @@ static constexpr auto fx_choices = make_cstr_array (
   ":EQ Filters x2",
   ":Reverb FDN Verb Riser",
   ":Dynamics Track Comp",
-  ":Distortion Signal Crusher"
-#if 0
-  ":Distortion Saturation"
-#endif
-);
+  ":Distortion Signal Crusher",
+  ":Distortion Saturation");
 
 #endif // #if TWEAK_BUILD
 

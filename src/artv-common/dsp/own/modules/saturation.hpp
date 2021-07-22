@@ -6,6 +6,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "artv-common/dsp/own/blocks/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/blocks/filters/composite/butterworth.hpp"
 #include "artv-common/dsp/own/blocks/filters/onepole.hpp"
 #include "artv-common/dsp/own/blocks/misc/interpolators.hpp"
@@ -21,14 +22,14 @@
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
 
-// TODO: -tanh
-//       -parameter smoothing.
+// TODO: -parameter smoothing.
 //       -As there is a downsampling FIR already, the high frequency correction
 //        could be done simpultaneously on the downsampling filter by adding the
 //        coefficients of a matched filter computed using Parks–McClellan/Remez
 //        (scipy.signal.remez) with the same amount of taps. As both filters are
 //        linear phase, the coefficients can just be summed (and the resulting
 //        magnitude halved).
+//       - Parameter smoothing
 
 namespace artv {
 
@@ -117,10 +118,59 @@ public:
     return frequency_parameter (60., hi_cut_max_hz, hi_cut_max_hz);
   }
   //----------------------------------------------------------------------------
+  struct emphasis_freq_tag {};
+
+  void set (emphasis_freq_tag, float v)
+  {
+    v = midi_note_to_hz (v);
+    if (v != _p.emphasis_freq) {
+      _p.emphasis_freq = v;
+      update_emphasis();
+    }
+  }
+
+  static constexpr auto get_parameter (emphasis_freq_tag)
+  {
+    return frequency_parameter (lo_cut_min_hz, 6000., 200.);
+  }
+  //----------------------------------------------------------------------------
+  struct emphasis_amount_tag {};
+
+  void set (emphasis_amount_tag, float v)
+  {
+    if (v != _p.emphasis_amount) {
+      _p.emphasis_amount = v;
+      update_emphasis();
+    }
+  }
+
+  static constexpr auto get_parameter (emphasis_amount_tag)
+  {
+    return float_param ("dB", -30.0, 30, 0.0, 0.25, 0.6, true);
+  }
+  //----------------------------------------------------------------------------
+  struct emphasis_q_tag {};
+
+  void set (emphasis_q_tag, float v)
+  {
+    if (v != _p.emphasis_q) {
+      _p.emphasis_q = v;
+      update_emphasis();
+    }
+  }
+
+  static constexpr auto get_parameter (emphasis_q_tag)
+  {
+    return float_param ("", 0.01, 1, 0.5, 0.01);
+  }
+  //----------------------------------------------------------------------------
   using parameters = mp_list<
-    drive_tag,
-    compensated_drive_tag,
     type_tag,
+    emphasis_amount_tag,
+    emphasis_freq_tag,
+    emphasis_q_tag,
+    compensated_drive_tag,
+    drive_tag,
     lo_cut_tag,
     hi_cut_tag>;
   //----------------------------------------------------------------------------
@@ -132,6 +182,10 @@ public:
     memset (&_filt_states, 0, sizeof _filt_states);
     memset (&_filt_coeffs, 0, sizeof _filt_coeffs);
     memset (&_allpass_states, 0, sizeof _allpass_states);
+    memset (&_pre_emphasis_states, 0, sizeof _pre_emphasis_states);
+    memset (&_pre_emphasis_coeffs, 0, sizeof _pre_emphasis_coeffs);
+    memset (&_post_emphasis_states, 0, sizeof _post_emphasis_states);
+    memset (&_post_emphasis_coeffs, 0, sizeof _post_emphasis_coeffs);
 
     allpass_interpolator::init<float> (make_crange (_allpass_coeff), 0.5);
 
@@ -199,10 +253,16 @@ public:
           get_filt_states (hi_hp, 1)[onepole::z1]};
       }
 
-      // ARTV_SATURATION_USE_SSE has detrimental effects when ADAA enabled, the
-      // current implementation always takes both branches.
-      // The code is kept as a reminder for future me that this was already
-      // tried.
+      sat = andy::svf::tick_multi_aligned<sse_bytes, double> (
+        _pre_emphasis_coeffs,
+        _pre_emphasis_states,
+        make_crange ((const double*) &sat[0], decltype (sat)::size));
+
+#define ARTV_SATURATION_USE_SSE 0
+      // ARTV_SATURATION_USE_SSE has detrimental effects when ADAA enabled,
+      // the current implementation always takes both branches. The code is
+      // kept as a reminder for future me that this was already tried.
+
       switch (p.type) {
       case sat_sqrt: {
         sat = sqrt_waveshaper_adaa<0>::tick_aligned<sse_bytes> (
@@ -227,8 +287,8 @@ public:
         sat *= simd_dbl {gain};
       } break;
       case sat_tanh: {
-        // At the point of writing my code or xsimd seems broken on tanh? works
-        // well with others.
+        // At the point of writing my code or xsimd seems broken on tanh?
+        // works well with others.
         sat[0] = tanh_waveshaper_adaa<0>::tick (
           {}, get_waveshaper_states (0), sat[0]);
         sat[1] = tanh_waveshaper_adaa<0>::tick (
@@ -239,8 +299,8 @@ public:
       } break;
       case sat_tanh_adaa: {
 #if ARTV_SATURATION_USE_SSE
-        // At the point of writing my code or xsimd seems broken on tanh? works
-        // well with others.
+        // At the point of writing my code or xsimd seems broken on tanh?
+        // works well with others.
         sat = tanh_waveshaper_adaa<adaa_order>::tick_aligned<sse_bytes> (
           {},
           make_crange (_wvsh_states),
@@ -297,6 +357,11 @@ public:
         break;
       }
 
+      sat = andy::svf::tick_multi_aligned<sse_bytes, double> (
+        _post_emphasis_coeffs,
+        _post_emphasis_states,
+        make_crange ((const double*) &sat[0], decltype (sat)::size));
+
       if constexpr (adaa_order == 1) {
         // half sample delay
         sat[0] = allpass_interpolator::tick<float> (
@@ -335,6 +400,9 @@ private:
     float compensated_drive = 1.f;
     float lo_cut_hz         = -1.f;
     float hi_cut_hz         = -1.f;
+    float emphasis_freq     = 60.f;
+    float emphasis_amount   = 0.f;
+    float emphasis_q        = 0.5f;
     char  type              = 0;
     char  type_prev         = 1;
   } _p;
@@ -373,7 +441,22 @@ private:
   {
     return {&_wvsh_states[wsh_max_states * channel], wsh_max_states};
   }
+  //----------------------------------------------------------------------------
+  void update_emphasis()
+  {
+    std::array<double, 2> f  = {_p.emphasis_freq, _p.emphasis_freq};
+    std::array<double, 2> q  = {_p.emphasis_q, _p.emphasis_q};
+    std::array<double, 2> db = {_p.emphasis_amount, _p.emphasis_amount};
 
+    andy::svf::bell_multi_aligned<sse_bytes, double> (
+      _pre_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
+
+    db[0] = -db[0];
+    db[1] = -db[1];
+
+    andy::svf::bell_multi_aligned<sse_bytes, double> (
+      _post_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
+  }
   //----------------------------------------------------------------------------
   static constexpr uint n_channels = 2;
   using wsh_state_array
@@ -385,11 +468,22 @@ private:
     = simd_array<double, butterworth_type::n_coeffs * n_filters, sse_bytes>;
   using allpass_state_array
     = simd_array<float, allpass_interpolator::n_states, sse_bytes>;
+  using emphasis_coeff_array
+    = simd_array<double, andy::svf::n_coeffs * n_channels, sse_bytes>;
+  using emphasis_state_array
+    = simd_array<double, andy::svf::n_states * n_channels, sse_bytes>;
 
-  alignas (sse_bytes) wsh_state_array _wvsh_states;
-  crossv_coeff_array                 _filt_coeffs;
+  // all arrays are multiples of the simd size, no need to alignas on
+  // everything.
+  alignas (sse_bytes) crossv_coeff_array _filt_coeffs;
   std::array<crossv_state_array, 2>  _filt_states;
+  emphasis_coeff_array               _pre_emphasis_coeffs;
+  emphasis_state_array               _pre_emphasis_states;
+  wsh_state_array                    _wvsh_states;
+  emphasis_coeff_array               _post_emphasis_coeffs;
+  emphasis_state_array               _post_emphasis_states;
   std::array<allpass_state_array, 2> _allpass_states;
+
   static_assert (allpass_interpolator::n_coeffs == 1, "");
   float _allpass_coeff;
 
