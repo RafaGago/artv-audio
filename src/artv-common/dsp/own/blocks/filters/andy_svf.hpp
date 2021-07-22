@@ -265,6 +265,51 @@ struct svf {
     *co.m2   = 0.;
   }
   //----------------------------------------------------------------------------
+  template <size_t simd_bytes, class T>
+  static void bell_multi_aligned (
+    crange<T>       c,
+    crange<const T> freq, // no alignment required
+    crange<const T> q, // no alignment required
+    crange<const T> dB, // no alignment required
+    T               sr)
+  {
+    static_assert (std::is_floating_point<T>::value, "");
+    using simdreg                    = simd_reg<T, simd_bytes>;
+    static constexpr auto n_builtins = simdreg::size;
+
+    assert (c.size() >= (n_coeffs * n_builtins));
+    assert (freq.size() >= n_builtins);
+    assert (q.size() >= n_builtins);
+    assert (dB.size() >= n_builtins);
+
+    auto freq_simd = simdreg {freq.data(), xsimd::unaligned_mode {}};
+    auto q_simd    = simdreg {q.data(), xsimd::unaligned_mode {}};
+    auto dB_simd   = simdreg {dB.data(), xsimd::unaligned_mode {}};
+
+    auto A = xsimd::pow (simdreg {(T) 10.}, dB_simd * simdreg {(T) (1. / 40.)});
+    auto g = xsimd::tan (simdreg {(T) M_PI} * freq_simd / simdreg {(T) sr});
+    auto k = simdreg {(T) 1.} / (q_simd * A);
+
+    simdreg a1_v {(T) 1.0};
+    a1_v /= g * (g + k) + ((T) 1.);
+    a1_v.store_aligned (&c[a1 * n_builtins]);
+
+    simdreg a2_v = g * a1_v;
+    a2_v.store_aligned (&c[a2 * n_builtins]);
+
+    simdreg a3_v = g * a2_v;
+    a3_v.store_aligned (&c[a3 * n_builtins]);
+
+    simdreg m0_v {(T) 1.};
+    m0_v.store_aligned (&c[m0 * n_builtins]);
+
+    simdreg m1_v = k * (A * A - (T) 1.);
+    m1_v.store_aligned (&c[m1 * n_builtins]);
+
+    simdreg m2_v {(T) 0.};
+    m2_v.store_aligned (&c[m2 * n_builtins]);
+  }
+  //----------------------------------------------------------------------------
   template <class T>
   static void low_shelf (
     crange<T> c,
