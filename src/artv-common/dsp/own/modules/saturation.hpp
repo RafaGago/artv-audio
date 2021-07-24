@@ -8,6 +8,7 @@
 
 #include "artv-common/dsp/own/blocks/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/blocks/filters/composite/butterworth.hpp"
+#include "artv-common/dsp/own/blocks/filters/moving_average.hpp"
 #include "artv-common/dsp/own/blocks/filters/onepole.hpp"
 #include "artv-common/dsp/own/blocks/misc/interpolators.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/hardclip.hpp"
@@ -259,6 +260,7 @@ public:
     memset (&_crossv_enabled, 0, sizeof _crossv_enabled);
     memset (&_delay_coeffs, 0, sizeof _delay_coeffs);
     memset (&_delay_states, 0, sizeof _delay_states);
+    memset (&_wvsh_eq_states, 0, sizeof _wvsh_eq_states);
     memset (&_wvsh_states, 0, sizeof _wvsh_states);
     memset (&_filt_states, 0, sizeof _filt_states);
     memset (&_filt_coeffs, 0, sizeof _filt_coeffs);
@@ -305,18 +307,21 @@ public:
       simd_dbl sat {chnls[0][i], chnls[1][i]};
       sat *= simd_dbl {p.drive * p.compensated_drive};
 
-      simd_dbl lo {0.};
-      simd_dbl hi {0.};
+      simd_dbl lo {0.}, lo_prev {0.}, hi {0.}, hi_prev {0.};
 
       if (_crossv_enabled[lo_lp]) {
-        lo = butterworth_type::tick (
+        lo_prev[0] = get_crossv_states (lo_lp, 0)[onepole::z1];
+        lo_prev[1] = get_crossv_states (lo_lp, 1)[onepole::z1];
+        lo         = butterworth_type::tick (
           get_crossv_coeffs (lo_lp),
           {get_crossv_states (lo_lp, 0), get_crossv_states (lo_lp, 1)},
           sat);
         sat -= lo;
       }
       if (_crossv_enabled[hi_hp]) {
-        hi = butterworth_type::tick (
+        hi_prev[0] = get_crossv_states (hi_hp, 0)[onepole::z1];
+        hi_prev[1] = get_crossv_states (hi_hp, 1)[onepole::z1];
+        hi         = butterworth_type::tick (
           get_crossv_coeffs (hi_hp),
           {get_crossv_states (hi_hp, 0), get_crossv_states (hi_hp, 1)},
           sat);
@@ -324,21 +329,21 @@ public:
       }
 
       if (adaa_order == 1 && waveshaper_type_is_adaa (p.type)) {
-        // half sample delay, the ADAA whaveshaper will add another half sample
-        // delay
+        // Apply boxcar to the input, delays half sample
+        auto sat_boxcar
+          = moving_average<2>::tick_multi_aligned<sse_bytes, double> (
+            {}, _wvsh_eq_states, sat);
+        // Explicit half sample delay to the main signal, the ADAA whaveshaper
+        // will add another half sample, as it behaves as a boxcar of L=2 too
         sat = allpass_interpolator::tick_multi_aligned<sse_bytes, double> (
           _delay_coeffs, _delay_states, sat);
-
-        // one sample delay for hi and lo. Getting the previous value of the
-        // filter delay line. The states are guaranteed to be reset when the
-        // filters are inactive so it will contain zeros when filtering is
-        // disabled.
-        lo = simd_dbl {
-          get_crossv_states (lo_lp, 0)[onepole::z1],
-          get_crossv_states (lo_lp, 1)[onepole::z1]};
-        hi = simd_dbl {
-          get_crossv_states (hi_hp, 0)[onepole::z1],
-          get_crossv_states (hi_hp, 1)[onepole::z1]};
+        // As ADAA behaves undesirably as a boxcar too. Pre EQ boosting the
+        // frequencies it will remove.
+        sat += (sat - sat_boxcar);
+        // One sample delay for hi and lo, as the ADAA chain will add 1 sample
+        // delay we mix with the previous crossover outputs.
+        lo = lo_prev;
+        hi = hi_prev;
       }
 
       // compand signal
@@ -386,7 +391,7 @@ public:
 #endif
         // Found empirically. TODO: improve
         static constexpr double gain = constexpr_db_to_gain (0.2);
-        sat *= simd_dbl {gain};
+        // sat *= simd_dbl {gain};
       } break;
       case sat_tanh: {
         // At the point of writing my code or xsimd seems broken on tanh?
@@ -586,6 +591,8 @@ private:
     double,
     allpass_interpolator::n_states * n_channels,
     sse_bytes>;
+  using boxcar_state_array
+    = simd_array<double, moving_average<2>::n_states * n_channels, sse_bytes>;
 
   // all arrays are multiples of the simd size, no need to alignas on
   // everything.
@@ -594,6 +601,7 @@ private:
   std::array<crossv_state_array, 2> _filt_states;
   interp_coeff_array                _delay_coeffs;
   interp_state_array                _delay_states;
+  boxcar_state_array                _wvsh_eq_states;
   emphasis_coeff_array              _pre_emphasis_coeffs;
   emphasis_state_array              _pre_emphasis_states;
   wsh_state_array                   _wvsh_states;
