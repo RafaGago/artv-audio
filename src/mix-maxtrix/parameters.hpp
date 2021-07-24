@@ -5117,6 +5117,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  saturation_companding,
+  n_stereo_busses,
+  param_common (
+    "Compand",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::companding_tag>()),
+  saturation::get_parameter (saturation::companding_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   saturation_lo_cut,
   n_stereo_busses,
   param_common (
@@ -5178,6 +5188,7 @@ parameter_cpp_class_define (
 
 using saturation_params = mp_list<
   saturation_type,
+  saturation_companding,
   saturation_emphasis_amount,
   saturation_emphasis_freq,
   saturation_emphasis_q,

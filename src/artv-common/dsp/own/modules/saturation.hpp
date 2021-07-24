@@ -34,6 +34,47 @@
 namespace artv {
 
 //------------------------------------------------------------------------------
+// No unstable division for ADAA on sqrt(x). Simple math, but I prefer to write
+// a reminder
+//
+// 1st order ADDA formula:
+//
+//  ((3/2)(x**(3/2) - x1**(3/2))) /  (x - x1)
+//
+// Multiplying numerator and denominator by: "((3/2)(x**(3/2) - x1**(3/2)))"
+//
+// On Octave, with the symbolic package loaded and the x and x1 vars created we:
+// attack the numerator:
+//
+// expand (((3/2)*(x**(3/2)) - (3/2)*(x1**(3/2))) * ((3/2)*(x**(3/2)) +
+// (3/2)*(x1**(3/2))))
+//
+// Which returns:
+//
+// (9/4)(x**3 - x1**3)
+//
+// Expanding it:
+//
+// factor ((9/4)*(x**3 - x1**3))
+//
+// Which returns:
+//
+// (9/4) * (x - x1) * (x**2 + x*x1 + x1**2)
+//
+// So (x - x1) goes away from the denominator.
+//
+// simplify (9*(x**2 + x*x1 + x1**2)) / (4 * ((3/2)*(x**(3/2) + x1**(3/2))))
+//
+// (9 * (x**2 + x*x1 + x1**2)) / (6 * (x**3/2 + x1**3/2))
+//
+// x**3/2 is "x(2/2)*x(1/2)" so it becomes x * sqrt (x)
+//
+// Final. This is heavier but it doesn't have branching to care about;
+// 1 sqrt + 1 div (as the values for the prev sample are stored):
+//
+// (9 * (x**2 + x*x1 + x1**2)) / (6 * (x * sqrt (x) + x1 * sqrt (x1))
+
+//------------------------------------------------------------------------------
 class saturation {
 public:
   //----------------------------------------------------------------------------
@@ -41,7 +82,12 @@ public:
   //----------------------------------------------------------------------------
   struct type_tag {};
 
-  void set (type_tag, int v) { _p.type = (decltype (_p.type)) v; }
+  void set (type_tag, int v)
+  {
+    _p.type = (decltype (_p.type)) v;
+    _plugcontext->set_delay_compensation (
+      waveshaper_type_is_adaa (_p.type) ? 1 : 0);
+  }
 
   static constexpr auto get_parameter (type_tag)
   {
@@ -57,6 +103,19 @@ public:
         "SqrtSin",
         "SqrtSin ADAA"),
       40);
+  }
+  //----------------------------------------------------------------------------
+  struct companding_tag {};
+
+  void set (companding_tag, int v)
+  {
+    _p.companding_type = (decltype (_p.companding_type)) v;
+  }
+
+  static constexpr auto get_parameter (companding_tag)
+  {
+    return choice_param (
+      0, make_cstr_array ("Off", "Sqrt/Pow", "Pow/Sqrt"), 40);
   }
   //----------------------------------------------------------------------------
   struct drive_tag {};
@@ -87,10 +146,19 @@ public:
   void set (lo_cut_tag, float v)
   {
     v = midi_note_to_hz (v);
-    if (v != _p.lo_cut_hz) {
-      _p.lo_cut_hz = v;
+    if (v > _p.lo_cut_hz) {
+      _p.lo_cut_hz           = v;
+      _crossv_enabled[lo_lp] = true;
       butterworth_type::lowpass (
-        get_filt_coeffs (lo_lp), v, _plugcontext->get_sample_rate());
+        get_crossv_coeffs (lo_lp), v, _plugcontext->get_sample_rate());
+    }
+    else if (v == lo_cut_min_hz && _crossv_enabled[lo_lp]) {
+      _p.lo_cut_hz           = v;
+      _crossv_enabled[lo_lp] = false;
+      for (uint c = 0; c < n_channels; ++c) {
+        auto rang = get_crossv_states (lo_lp, c);
+        memset (rang.data(), 0, rang.size() * sizeof rang[0]);
+      }
     }
   }
 
@@ -106,10 +174,19 @@ public:
   void set (hi_cut_tag, float v)
   {
     v = midi_note_to_hz (v);
-    if (v != _p.hi_cut_hz) {
-      _p.hi_cut_hz = v;
+    if (v < _p.hi_cut_hz) {
+      _p.hi_cut_hz           = v;
+      _crossv_enabled[hi_hp] = true;
       butterworth_type::highpass (
-        get_filt_coeffs (hi_hp), v, _plugcontext->get_sample_rate());
+        get_crossv_coeffs (hi_hp), v, _plugcontext->get_sample_rate());
+    }
+    else if (v == hi_cut_max_hz && _crossv_enabled[hi_hp]) {
+      _p.hi_cut_hz           = v;
+      _crossv_enabled[hi_hp] = false;
+      for (uint c = 0; c < n_channels; ++c) {
+        auto rang = get_crossv_states (hi_hp, c);
+        memset (rang.data(), 0, rang.size() * sizeof rang[0]);
+      }
     }
   }
 
@@ -166,6 +243,7 @@ public:
   //----------------------------------------------------------------------------
   using parameters = mp_list<
     type_tag,
+    companding_tag,
     emphasis_amount_tag,
     emphasis_freq_tag,
     emphasis_q_tag,
@@ -177,17 +255,20 @@ public:
   void reset (plugin_context& pc)
   {
     _plugcontext = &pc;
-    pc.set_delay_compensation (1);
+
+    memset (&_crossv_enabled, 0, sizeof _crossv_enabled);
+    memset (&_delay_coeffs, 0, sizeof _delay_coeffs);
+    memset (&_delay_states, 0, sizeof _delay_states);
     memset (&_wvsh_states, 0, sizeof _wvsh_states);
     memset (&_filt_states, 0, sizeof _filt_states);
     memset (&_filt_coeffs, 0, sizeof _filt_coeffs);
-    memset (&_allpass_states, 0, sizeof _allpass_states);
     memset (&_pre_emphasis_states, 0, sizeof _pre_emphasis_states);
     memset (&_pre_emphasis_coeffs, 0, sizeof _pre_emphasis_coeffs);
     memset (&_post_emphasis_states, 0, sizeof _post_emphasis_states);
     memset (&_post_emphasis_coeffs, 0, sizeof _post_emphasis_coeffs);
 
-    allpass_interpolator::init<float> (make_crange (_allpass_coeff), 0.5);
+    allpass_interpolator::init_multi_aligned<sse_bytes, double> (
+      _delay_coeffs, simd_dbl {0.5});
 
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
@@ -227,12 +308,57 @@ public:
       simd_dbl lo {0.};
       simd_dbl hi {0.};
 
-      if (p.lo_cut_hz > lo_cut_min_hz) {
-        lo = run_hp_or_lp (sat, p, true);
+      if (_crossv_enabled[lo_lp]) {
+        lo = butterworth_type::tick (
+          get_crossv_coeffs (lo_lp),
+          {get_crossv_states (lo_lp, 0), get_crossv_states (lo_lp, 1)},
+          sat);
+        sat -= lo;
+      }
+      if (_crossv_enabled[hi_hp]) {
+        hi = butterworth_type::tick (
+          get_crossv_coeffs (hi_hp),
+          {get_crossv_states (hi_hp, 0), get_crossv_states (hi_hp, 1)},
+          sat);
+        sat -= hi;
       }
 
-      if (p.hi_cut_hz < hi_cut_max_hz) {
-        hi = run_hp_or_lp (sat, p, false);
+      if (adaa_order == 1 && waveshaper_type_is_adaa (p.type)) {
+        // half sample delay, the ADAA whaveshaper will add another half sample
+        // delay
+        sat = allpass_interpolator::tick_multi_aligned<sse_bytes, double> (
+          _delay_coeffs, _delay_states, sat);
+
+        // one sample delay for hi and lo. Getting the previous value of the
+        // filter delay line. The states are guaranteed to be reset when the
+        // filters are inactive so it will contain zeros when filtering is
+        // disabled.
+        lo = simd_dbl {
+          get_crossv_states (lo_lp, 0)[onepole::z1],
+          get_crossv_states (lo_lp, 1)[onepole::z1]};
+        hi = simd_dbl {
+          get_crossv_states (hi_hp, 0)[onepole::z1],
+          get_crossv_states (hi_hp, 1)[onepole::z1]};
+      }
+
+      // compand signal
+      simd_dbl sign
+        = xsimd::select (sat >= simd_dbl {0.}, simd_dbl {1.}, simd_dbl {-1.});
+      switch (p.companding_type) {
+      case comp_off:
+        break;
+      case comp_sqrt_pow:
+        sat = xsimd::sqrt (xsimd::abs (sat));
+        sat *= sign;
+        break;
+      case comp_pow_sqrt: {
+        sat *= sat;
+        sat *= sign;
+        break;
+      }
+      default:
+        assert (false);
+        break;
       }
 
       sat = andy::svf::tick_multi_aligned<sse_bytes, double> (
@@ -325,22 +451,29 @@ public:
       sat = andy::svf::tick_multi_aligned<sse_bytes, double> (
         _post_emphasis_coeffs, _post_emphasis_states, sat);
 
-      if constexpr (adaa_order == 1) {
-        // half sample delay
-        sat[0] = allpass_interpolator::tick<float> (
-          make_crange (_allpass_coeff),
-          make_crange (_allpass_states[0]),
-          sat[0]);
-        sat[1] = allpass_interpolator::tick<float> (
-          make_crange (_allpass_coeff),
-          make_crange (_allpass_states[1]),
-          sat[1]);
+      // expand signal
+      switch (p.companding_type) {
+      case comp_off:
+        break;
+      case comp_sqrt_pow:
+        sat *= sat;
+        sat *= sign;
+        break;
+      case comp_pow_sqrt:
+        sat = xsimd::sqrt (xsimd::abs (sat));
+        sat *= sign;
+        break;
+      default:
+        assert (false);
+        break;
       }
+
       sat += lo + hi;
       sat *= inv_cdrive;
+
       chnls[0][i] = sat[0];
       chnls[1][i] = sat[1];
-    };
+    }
   }
   //----------------------------------------------------------------------------
 private:
@@ -356,6 +489,13 @@ private:
     sat_type_count,
   };
 
+  enum comp_type {
+    comp_off,
+    comp_sqrt_pow,
+    comp_pow_sqrt,
+    comp_type_count,
+  };
+
   enum filter_indexes { lo_lp, hi_hp, n_filters };
 
   struct params {
@@ -368,6 +508,7 @@ private:
     float emphasis_q        = 0.5f;
     char  type              = 0;
     char  type_prev         = 1;
+    char  companding_type   = 0;
   } _p;
 
   static constexpr uint adaa_order = 1;
@@ -389,12 +530,12 @@ private:
   //----------------------------------------------------------------------------
   using butterworth_type = butterworth<1>;
 
-  crange<double> get_filt_coeffs (uint filt_idx)
+  crange<double> get_crossv_coeffs (uint filt_idx)
   {
     static constexpr uint n_coeffs = butterworth_type::n_coeffs;
     return {&_filt_coeffs[filt_idx * n_coeffs], n_coeffs};
   }
-  crange<double> get_filt_states (uint filt_idx, uint channel)
+  crange<double> get_crossv_states (uint filt_idx, uint channel)
   {
     static constexpr uint n_states = butterworth_type::n_states;
     return {&_filt_states[channel][filt_idx * n_states], n_states};
@@ -405,7 +546,7 @@ private:
     return {&_wvsh_states[wsh_max_states * channel], wsh_max_states};
   }
   //----------------------------------------------------------------------------
-  bool waveshaper_type_is_adaa (params const& p) const { return p.type & 1; }
+  bool waveshaper_type_is_adaa (char wsh_type) const { return wsh_type & 1; }
   //----------------------------------------------------------------------------
   void update_emphasis()
   {
@@ -423,25 +564,6 @@ private:
       _post_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
   }
   //----------------------------------------------------------------------------
-  simd_dbl run_hp_or_lp (simd_dbl& sat, params const& p, bool is_lp)
-  {
-    uint     f_idx = is_lp ? lo_lp : hi_hp;
-    simd_dbl out   = butterworth_type::tick (
-      get_filt_coeffs (f_idx),
-      {get_filt_states (f_idx, 0), get_filt_states (f_idx, 1)},
-      sat);
-    auto out_prev = out;
-    if (waveshaper_type_is_adaa (p)) {
-      // 1 sample delay mix. Splitting on previous sample, joining on next.
-      static_assert (std::is_same_v<butterworth_type, butterworth<1>>, "");
-      out_prev = simd_dbl {
-        get_filt_states (f_idx, 0)[onepole::z1],
-        get_filt_states (f_idx, 1)[onepole::z1]};
-    }
-    sat -= out_prev;
-    return out;
-  }
-  //----------------------------------------------------------------------------
   static constexpr uint n_channels = 2;
   using wsh_state_array
     = simd_array<double, wsh_max_states * n_channels, sse_bytes>;
@@ -456,20 +578,27 @@ private:
     = simd_array<double, andy::svf::n_coeffs * n_channels, sse_bytes>;
   using emphasis_state_array
     = simd_array<double, andy::svf::n_states * n_channels, sse_bytes>;
+  using interp_coeff_array = simd_array<
+    double,
+    allpass_interpolator::n_coeffs * n_channels,
+    sse_bytes>;
+  using interp_state_array = simd_array<
+    double,
+    allpass_interpolator::n_states * n_channels,
+    sse_bytes>;
 
   // all arrays are multiples of the simd size, no need to alignas on
   // everything.
+  std::array<bool, 2> _crossv_enabled;
   alignas (sse_bytes) crossv_coeff_array _filt_coeffs;
-  std::array<crossv_state_array, 2>  _filt_states;
-  emphasis_coeff_array               _pre_emphasis_coeffs;
-  emphasis_state_array               _pre_emphasis_states;
-  wsh_state_array                    _wvsh_states;
-  emphasis_coeff_array               _post_emphasis_coeffs;
-  emphasis_state_array               _post_emphasis_states;
-  std::array<allpass_state_array, 2> _allpass_states;
-
-  static_assert (allpass_interpolator::n_coeffs == 1, "");
-  float _allpass_coeff;
+  std::array<crossv_state_array, 2> _filt_states;
+  interp_coeff_array                _delay_coeffs;
+  interp_state_array                _delay_states;
+  emphasis_coeff_array              _pre_emphasis_coeffs;
+  emphasis_state_array              _pre_emphasis_states;
+  wsh_state_array                   _wvsh_states;
+  emphasis_coeff_array              _post_emphasis_coeffs;
+  emphasis_state_array              _post_emphasis_states;
 
   plugin_context* _plugcontext = nullptr;
 };

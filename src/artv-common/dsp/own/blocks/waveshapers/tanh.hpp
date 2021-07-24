@@ -37,6 +37,28 @@ ccode (horner (fn, x))
 ccode (horner (fd, x))
 
 At the end this was unused.
+
+
+Tan based on exp?
+
+tanh = exp(x) - exp(-x) / exp(x) + exp (-x)
+cosh = 0.5 * (exp(x) + exp(-x))
+
+Notice that:
+exp(-x) = 1/exp(x)
+
+So for ADAA it is needed:
+
+-exp (x)
+-exp (-x)
+-exp (x1)
+-exp (-x1)
+-exp (x1*x*0.5).
+-exp (-(x1*x*0.5)).
+
+exp(x1) and exp(-x1) are stored from the previous round.
+
+So 4 "exp" calls are needed, alternatively 2 exp calls and 2 divisions.
 */
 
 // clang-format on
