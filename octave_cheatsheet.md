@@ -38,3 +38,13 @@ Horner, optimize number of operations:
     f = fn / fd
     ccode (horner (fn, x))
     ccode (horner (fd, x))
+
+Factor/expand
+
+    To try simplifying denominators on polynomials:
+
+    E.g.
+
+    expand((sqrt(x**2 + 1) - sqrt(y**2 + 1)) * (sqrt(x**2 + 1) + sqrt(y**2 + 1)))
+
+    Ans: x**2 + y**2
