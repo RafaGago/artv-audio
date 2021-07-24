@@ -41,7 +41,7 @@ struct moving_average<2> {
 
     T ret = z[z1];
     z[z1] = in;
-    ret *= in;
+    ret += in;
     ret *= (T) 0.5;
     return ret;
   }
@@ -60,7 +60,7 @@ struct moving_average<2> {
 
     auto    z1_ptr = &z[z1 * n_builtins];
     simdreg ret {z1_ptr, xsimd::aligned_mode {}};
-    ret *= in;
+    ret += in;
     ret *= (T) 0.5;
 
     in.store_aligned (z1_ptr);
