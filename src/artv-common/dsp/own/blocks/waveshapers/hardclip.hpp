@@ -71,16 +71,9 @@ struct hardclip_functions {
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> sgn_no_zero (simd_batch<T, N> x)
-  {
-    using batch = simd_batch<T, N>;
-    return xsimd::select (x < batch {(T) 0.}, batch {(T) -1.}, batch {(T) 1.});
-  }
-  //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
 template <uint order>
-using hardclip_waveshaper_adaa = adaa::waveshaper<hardclip_functions, order>;
+using hardclip_adaa = adaa::waveshaper<hardclip_functions, order>;
 //------------------------------------------------------------------------------
 } // namespace artv

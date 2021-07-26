@@ -5110,20 +5110,20 @@ parameter_cpp_class_define (
   saturation_type,
   n_stereo_busses,
   param_common (
-    "Type",
+    "Shape",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::type_tag>()),
   saturation::get_parameter (saturation::type_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_companding,
+  saturation_mode,
   n_stereo_busses,
   param_common (
-    "Compand",
+    "Mode",
     declptr<updownsampled<saturation>>(),
-    declptr<saturation::companding_tag>()),
-  saturation::get_parameter (saturation::companding_tag {}),
+    declptr<saturation::mode_tag>()),
+  saturation::get_parameter (saturation::mode_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -5188,7 +5188,7 @@ parameter_cpp_class_define (
 
 using saturation_params = mp_list<
   saturation_type,
-  saturation_companding,
+  saturation_mode,
   saturation_emphasis_amount,
   saturation_emphasis_freq,
   saturation_emphasis_q,
@@ -5212,7 +5212,7 @@ parameter_cpp_class_define (
 using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #endif
 //------------------------------------------------------------------------------
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<saturation_params>;

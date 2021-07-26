@@ -149,5 +149,15 @@ template <class T, size_t N, size_t instr_set_bytes>
 using simd_array
   = std::array<T, round_ceil<size_t> (N, (instr_set_bytes / sizeof (T)))>;
 //------------------------------------------------------------------------------
+template <class T, size_t N>
+static simd_batch<T, N> sgn_no_zero (
+  simd_batch<T, N> x,
+  simd_batch<T, N> neg = simd_batch<T, N> {(T) -1.},
+  simd_batch<T, N> pos = simd_batch<T, N> {(T) 1.})
+{
+  using batch = simd_batch<T, N>;
+  return xsimd::select (x < batch {(T) 0.}, neg, pos);
+}
+//------------------------------------------------------------------------------
 
 } // namespace artv

@@ -11,7 +11,7 @@
 namespace artv {
 
 // clang-format on
-struct sqrt_sin_waveshaper_functions {
+struct sqrt_sin_sigmoid_functions {
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T fn (T x)
@@ -61,7 +61,7 @@ struct sqrt_sin_waveshaper_functions {
 };
 //------------------------------------------------------------------------------
 template <uint order>
-using sqrt_sin_waveshaper_adaa
-  = adaa::waveshaper<sqrt_sin_waveshaper_functions, order>;
+using sqrt_sin_sigmoid_adaa
+  = adaa::waveshaper<sqrt_sin_sigmoid_functions, order>;
 //------------------------------------------------------------------------------
 } // namespace artv

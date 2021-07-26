@@ -62,7 +62,7 @@ struct sqrt_sigmoid_functions {
 // (sqrt(1 + x^2) - sqrt(1+ x1^2))/(x - x1) =
 //    (x + x1)/(sqrt(1 + x^2) + sqrt(1 + x1^2))
 
-class sqrt_waveshaper_adaa_1 {
+class sqrt_sigmoid_adaa_1 {
 public:
   enum coeffs { n_coeffs };
   enum state { x1, x1_sqrt, n_states };
@@ -72,7 +72,7 @@ public:
   {
     T x1v     = st[x1];
     T x1vsqrt = st[x1_sqrt];
-    T xsqrt   = sqrt ((T) 1. + x * x);
+    T xsqrt   = sqrt (x * x + (T) 1);
 
     st[x1]      = x;
     st[x1_sqrt] = xsqrt;
@@ -80,28 +80,25 @@ public:
     return (x + x1v) / (xsqrt + x1vsqrt);
   }
   //----------------------------------------------------------------------------
-  template <size_t sse_bytes, class T>
-  static simd_reg<T, sse_bytes> tick_aligned (
+  template <size_t simd_bytes, class T>
+  static simd_reg<T, simd_bytes> tick_multi_aligned (
     crange<const T>,
-    crange<T>       st,
-    crange<const T> x_range)
+    crange<T>               st,
+    simd_reg<T, simd_bytes> x)
   {
     static_assert (std::is_floating_point_v<T>, "");
-    using batch                      = simd_reg<T, sse_bytes>;
+    using batch                      = simd_reg<T, simd_bytes>;
     static constexpr auto n_builtins = batch::size;
 
     assert (st.size() >= n_builtins * n_states);
-    assert (x_range.size() >= n_builtins);
 
     T* x1v_ptr      = &st[x1 * n_builtins];
     T* x1v_sqrt_ptr = &st[x1_sqrt * n_builtins];
 
-    batch x, x1v, x1vsqrt;
-    x.load_aligned (x_range.data());
-    x1v.load_aligned (x1v_ptr);
-    x1vsqrt.load_aligned (x1v_sqrt_ptr);
+    batch x1v {x1v_ptr, xsimd::aligned_mode {}};
+    batch x1vsqrt {x1v_sqrt_ptr, xsimd::aligned_mode {}};
 
-    batch xsqrt = xsimd::sqrt (batch {(T) 1.} + x * x);
+    batch xsqrt = xsimd::sqrt (x * x + (T) 1.);
 
     x.store_aligned (x1v_ptr);
     xsqrt.store_aligned (x1v_sqrt_ptr);
@@ -110,10 +107,15 @@ public:
   }
 };
 
+#if 0
 template <uint order>
-using sqrt_waveshaper_adaa = std::conditional_t<
+using sqrt_sigmoid_adaa = std::conditional_t<
   order == 1,
-  sqrt_waveshaper_adaa_1,
+  sqrt_sigmoid_adaa_1,
   adaa::waveshaper<sqrt_sigmoid_functions, order>>;
+#else
+template <uint order>
+using sqrt_sigmoid_adaa = adaa::waveshaper<sqrt_sigmoid_functions, order>;
+#endif
 //------------------------------------------------------------------------------
 } // namespace artv

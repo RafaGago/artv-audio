@@ -5,6 +5,9 @@
 
 #include <cmath>
 
+#include "artv-common/dsp/own/blocks/filters/moving_average.hpp"
+#include "artv-common/dsp/own/blocks/misc/interpolators.hpp"
+
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
 
@@ -36,7 +39,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_aligned (
+  static simd_reg<T, simd_bytes> tick_multi_aligned (
     crange<const T>,
     crange<T>,
     simd_reg<T, simd_bytes> x)
@@ -55,6 +58,8 @@ public:
   template <class T>
   static T tick (crange<const T>, crange<T> st, T x)
   {
+    assert (st.size() >= n_states);
+
     T x_int   = functions::int_fn (x);
     T x1v     = st[x1];
     T x1v_int = st[x1_int];
@@ -72,7 +77,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_aligned (
+  static simd_reg<T, simd_bytes> tick_multi_aligned (
     crange<const T>,
     crange<T>               st,
     simd_reg<T, simd_bytes> x)
@@ -147,7 +152,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_aligned (
+  static simd_reg<T, simd_bytes> tick_multi_aligned (
     crange<const T>,
     crange<T>               st,
     simd_reg<T, simd_bytes> x)
@@ -179,4 +184,125 @@ private:
   }
   //----------------------------------------------------------------------------
 };
+//------------------------------------------------------------------------------
+template <uint order, template <uint> class Impl>
+class fix_eq_and_delay;
+
+template <template <uint> class Impl>
+class fix_eq_and_delay<1, Impl> {
+public:
+  enum coeffs {
+    allpass_coeffs,
+    boxcar_coeffs = allpass_coeffs + allpass_interpolator::n_coeffs,
+    impl_coeffs   = boxcar_coeffs + moving_average<2>::n_coeffs,
+    n_coeffs      = impl_coeffs + Impl<1>::n_coeffs
+  };
+  enum state {
+    allpass_states,
+    boxcar_states = allpass_states + allpass_interpolator::n_states,
+    impl_states   = boxcar_states + moving_average<2>::n_states,
+    n_states      = impl_states + Impl<1>::n_states
+  };
+  //----------------------------------------------------------------------------
+  template <class T>
+  static void init (crange<T> c)
+  {
+    static_assert (std::is_floating_point<T>::value, "");
+    assert (c.size() >= n_coeffs);
+
+    static_assert (moving_average<2>::n_coeffs == 0, "Add initialization!");
+    static_assert (Impl<1>::n_coeffs == 0, "Add initialization!");
+
+    allpass_interpolator::init (c, (T) 0.5);
+  }
+  //----------------------------------------------------------------------------
+  template <size_t simd_bytes, class T>
+  static void init_multi_aligned (crange<T> c)
+  {
+    static_assert (std::is_floating_point<T>::value, "");
+    using simdreg                    = simd_reg<T, simd_bytes>;
+    static constexpr auto n_builtins = simdreg::size;
+
+    assert (c.size() >= (n_coeffs * n_builtins));
+
+    static_assert (moving_average<2>::n_coeffs == 0, "Add initialization!");
+    static_assert (Impl<1>::n_coeffs == 0, "Add initialization!");
+
+    allpass_interpolator::init_multi_aligned<simd_bytes, T> (
+      c, simdreg {(T) 0.5});
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  static T tick (crange<const T> c, crange<T> st, T x)
+  {
+    assert (c.size() >= n_coeffs);
+    assert (st.size() >= n_states);
+
+    // Explicit half sample delay to the main signal, the ADAA whaveshaper
+    // of first order will add another half sample, as it behaves as a boxcar of
+    // L=2. This makes the delay to happen at sample boundaries.
+    T delayed = allpass_interpolator::tick (c, st, x);
+    st.shrink_head (allpass_interpolator::n_states);
+    // Apply boxcar to the input, delays half sample and rolls of highs
+    T filtered = moving_average<2>::tick ({}, st, x);
+    st.shrink_head (moving_average<2>::n_states);
+    // As the ADAA implementation behaves as a boxcar, the input signal is
+    // pre-EQ'd to result in a flat frequency response after the ADAA process
+    // runs.
+    T eq = delayed + (delayed - filtered);
+    return Impl<1>::tick ({}, st, eq);
+  }
+  //----------------------------------------------------------------------------
+  template <uint simd_bytes, class T>
+  static simd_reg<T, simd_bytes> tick_multi_aligned (
+    crange<const T>         c,
+    crange<T>               st,
+    simd_reg<T, simd_bytes> x)
+  {
+    static_assert (std::is_floating_point<T>::value, "");
+    using regtype                    = simd_reg<T, simd_bytes>;
+    static constexpr auto n_builtins = regtype::size;
+
+    assert (c.size() >= (n_builtins * n_coeffs));
+    assert (st.size() >= (n_builtins * n_states));
+
+    // comments on the non-vectorized version
+    regtype delayed
+      = allpass_interpolator::tick_multi_aligned<simd_bytes, T> (c, st, x);
+    st.shrink_head (allpass_interpolator::n_states * n_builtins);
+
+    regtype filtered
+      = moving_average<2>::tick_multi_aligned<simd_bytes, T> ({}, st, x);
+    st.shrink_head (moving_average<2>::n_states * n_builtins);
+
+    regtype eq = delayed + (delayed - filtered);
+    return Impl<1>::template tick_multi_aligned<simd_bytes, T> ({}, st, eq);
+  }
+  //----------------------------------------------------------------------------
+};
+namespace detail {
+template <uint order>
+struct null_shaper {
+  enum coeffs { n_coeffs };
+  enum state { n_states };
+
+  template <class T>
+  static T tick (crange<const T>, crange<T> st, T x)
+  {}
+
+  template <uint simd_bytes, class T>
+  static simd_reg<T, simd_bytes> tick_multi_aligned (
+    crange<const T>,
+    crange<T>,
+    simd_reg<T, simd_bytes>)
+  {}
+};
+} // namespace detail
+
+// initialization for the coefficients of all "fix_eq_and_delay" classes is the
+// same, so "fix_eq_and_delay_coeff_initialization" can be used.
+template <uint order>
+struct fix_eq_and_delay_coeff_initialization
+  : public fix_eq_and_delay<order, detail::null_shaper> {};
+
 }} // namespace artv::adaa

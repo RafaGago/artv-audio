@@ -62,7 +62,7 @@ So 4 "exp" calls are needed, alternatively 2 exp calls and 2 divisions.
 */
 
 // clang-format on
-struct tanh_waveshaper_functions {
+struct tanh_functions {
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T fn (T x)
@@ -112,6 +112,6 @@ struct tanh_waveshaper_functions {
 };
 //------------------------------------------------------------------------------
 template <uint order>
-using tanh_waveshaper_adaa = adaa::waveshaper<tanh_waveshaper_functions, order>;
+using tanh_adaa = adaa::waveshaper<tanh_functions, order>;
 //------------------------------------------------------------------------------
 } // namespace artv

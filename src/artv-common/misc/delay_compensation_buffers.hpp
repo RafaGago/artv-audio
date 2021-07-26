@@ -122,7 +122,9 @@ public:
     assert (total_bytes_written <= _buff.size());
     memcpy (
       &_buff[_max_delay - delay],
-      &_buff[_max_delay - delay + total_bytes_written],
+      // Note: "total_bytes_written" outside to avoid assertions triggering if
+      // delay is 0, as it requests an out of bounds address.
+      &_buff[_max_delay - delay] + total_bytes_written,
       delay * sizeof _buff[0]);
   }
   //----------------------------------------------------------------------------

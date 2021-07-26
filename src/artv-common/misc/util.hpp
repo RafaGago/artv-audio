@@ -294,17 +294,19 @@ public:
     return _start[idx];
   }
 
-  constexpr void shrink_head (uint count)
+  constexpr contiguous_range<T> shrink_head (uint count)
   {
     assert (count <= size());
     _start += count;
     _size -= count;
+    return *this;
   }
 
-  constexpr void shrink_tail (uint count)
+  constexpr contiguous_range<T> shrink_tail (uint count)
   {
     assert (count <= size());
     _size -= count;
+    return *this;
   }
 
   constexpr iterator       begin() { return _start; }
@@ -599,9 +601,9 @@ static T gain_to_db (T gain, T m_inf_db = T {-130.})
 }
 //------------------------------------------------------------------------------
 template <class T>
-static T sgn_no_zero (T v)
+static T sgn_no_zero (T v, T neg = (T) -1., T pos_zero = (T) 1.)
 {
-  return (T) ((v < (T) 0) ? -1. : 1.);
+  return (T) ((v < (T) 0) ? neg : pos_zero);
 }
 //------------------------------------------------------------------------------
 template <class T>

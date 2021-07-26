@@ -17,40 +17,42 @@ struct pow2_functions {
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T fn (T x)
   {
-    return x * x * sgn_no_zero (x);
+    return abs (x) * x;
   }
   //----------------------------------------------------------------------------
   template <class T, size_t N>
   static simd_batch<T, N> fn (simd_batch<T, N> x)
   {
-    return x * x * sgn_no_zero (x);
+    return xsimd::abs (x) * x;
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T int_fn (T x)
   {
-    return x * x * x * sgn_no_zero (x, (T) (-1. / 3.), (T) (1. / 3.));
+    return xsimd::abs (x) * x * x * (T) (1. / 3.);
   }
   //----------------------------------------------------------------------------
   template <class T, size_t N>
   static simd_batch<T, N> int_fn (simd_batch<T, N> x)
   {
-    return x * x * x * sgn_no_zero (x, (T) (-1. / 3.), (T) (1. / 3.));
+    using batch = simd_batch<T, N>;
+    return xsimd::abs (x) * x * x * (T) (1. / 3.);
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T int2_fn (T x)
   {
-    return x * x * x * x * sgn_no_zero (x, (T) (-1. / 12.), (T) (1. / 12.));
+    return x * x * x * x * (T) (1. / 12.);
   }
   //----------------------------------------------------------------------------
   template <class T, size_t N>
   static simd_batch<T, N> int2_fn (simd_batch<T, N> x)
   {
-    return x * x * x * x * sgn_no_zero (x, (T) (-1. / 12.), (T) (1. / 12.));
+    return x * x * x * x * (T) (1. / 12.);
   }
   //----------------------------------------------------------------------------
 };
+#if 1
 // TODO: is the sign preservation breaking this?
 //------------------------------------------------------------------------------
 // This one has a trivial simplification, it doesn't require branches.
@@ -73,22 +75,23 @@ public:
     T x1v      = st[x1];
     T x1_pow2v = st[x1_pow2];
 
-    T xpow2 = x * x * sgn_no_zero (x);
+    T xpow2 = x * x;
 
     st[x1]      = x;
     st[x1_pow2] = xpow2;
 
-    return (xpow2 + (x1v * x) + x1_pow2v) * ((T) 1. / 6.);
+    return abs (xpow2 + (x1v * x) + x1_pow2v)
+      * sgn_no_zero (x, (T) -1. / 6., (T) 1. / 6.);
   }
   //----------------------------------------------------------------------------
-  template <size_t sse_bytes, class T>
-  static simd_reg<T, sse_bytes> tick_multi_aligned (
+  template <size_t simd_bytes, class T>
+  static simd_reg<T, simd_bytes> tick_multi_aligned (
     crange<const T>,
-    crange<T>              st,
-    simd_reg<T, sse_bytes> x)
+    crange<T>               st,
+    simd_reg<T, simd_bytes> x)
   {
     static_assert (std::is_floating_point_v<T>, "");
-    using batch                      = simd_reg<T, sse_bytes>;
+    using batch                      = simd_reg<T, simd_bytes>;
     static constexpr auto n_builtins = batch::size;
 
     assert (st.size() >= n_builtins * n_states);
@@ -99,12 +102,13 @@ public:
     batch x1v {x1v_ptr, xsimd::aligned_mode {}};
     batch x1_pow2v {x1_pow2_ptr, xsimd::aligned_mode {}};
 
-    batch xpow2 = x * x * sgn_no_zero (x);
+    batch xpow2 = x * x;
 
     x.store_aligned (x1v_ptr);
     xpow2.store_aligned (x1_pow2_ptr);
 
-    return (xpow2 + (x1v * x) + x1_pow2v) * ((T) 1. / 6.);
+    return xsimd::abs (xpow2 + (x1v * x) + x1_pow2v)
+      * sgn_no_zero (x, batch {(T) -1. / 6.}, batch {(T) 1. / 6.});
   }
 };
 //------------------------------------------------------------------------------
@@ -114,4 +118,8 @@ using pow2_adaa = std::conditional_t<
   pow2_adaa_1,
   adaa::waveshaper<pow2_functions, order>>;
 //------------------------------------------------------------------------------
+#else
+template <uint order>
+using pow2_adaa = adaa::waveshaper<pow2_functions, order>;
+#endif
 } // namespace artv
