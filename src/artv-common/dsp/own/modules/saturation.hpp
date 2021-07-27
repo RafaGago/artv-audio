@@ -252,11 +252,54 @@ public:
   template <class T>
   void process_block_replacing (std::array<T*, 2> chnls, uint block_samples)
   {
+#define ARTV_SATURATION_USE_SSE 1
+    // ARTV_SATURATION_USE_SSE has detrimental effects when ADAA enabled,
+    // the current implementation always takes both branches. The code is
+    // kept as a reminder for future me that this was already tried.
     params p = _p;
 
     if (unlikely (p.type_prev != p.type || p.mode_prev != p.mode)) {
       // some waveshapers will create peaks, as the integral on 0 might not be
       // 0. Running them for some samples of silence to initialize.
+      if (p.type_prev != p.type) {
+        switch (p.type) {
+          // initializing on all modes, it doesn't matter...
+        case sat_tanh:
+#if ARTV_SATURATION_USE_SSE
+          tanh_aa::init_states_multi_aligned<sse_bytes, double> (_wvsh_states);
+#else
+          tanh_aa::init_states<double> (_wvsh_states);
+#endif
+          break;
+        case sat_sqrt:
+#if ARTV_SATURATION_USE_SSE
+          sqrt_sigmoid_aa::init_states_multi_aligned<sse_bytes, double> (
+            _wvsh_states);
+#else
+          sqrt_sigmoid_aa::init_states<double> (_wvsh_states);
+#endif
+          break;
+        case sat_hardclip:
+#if ARTV_SATURATION_USE_SSE
+          hardclip_aa::init_states_multi_aligned<sse_bytes, double> (
+            _wvsh_states);
+#else
+          hardclip_aa::init_states<double> (_wvsh_states);
+#endif
+          break;
+        case sat_sqrt_sin:
+#if ARTV_SATURATION_USE_SSE
+          sqrt_sin_sigmoid_aa::init_states_multi_aligned<sse_bytes, double> (
+            _wvsh_states);
+#else
+          sqrt_sin_sigmoid_aa::init_states<double> (_wvsh_states);
+#endif
+          break;
+        default:
+          break;
+        }
+      }
+
       static constexpr uint n_samples = 8;
       _p.type_prev                    = _p.type;
       _p.mode_prev                    = _p.mode;
@@ -314,14 +357,12 @@ public:
       case mode_normal:
         break;
       case mode_sqrt_pow:
-        sat = adaa::fix_eq_and_delay<adaa_order, sqrt_adaa>::
-          tick_multi_aligned<sse_bytes, double> (
-            _adaa_fix_eq_delay_coeffs, _compressor_states, sat);
+        sat = sqrt_aa::tick_multi_aligned<sse_bytes, double> (
+          _adaa_fix_eq_delay_coeffs, _compressor_states, sat);
         break;
       case mode_pow_sqrt: {
-        sat = adaa::fix_eq_and_delay<adaa_order, pow2_adaa>::
-          tick_multi_aligned<sse_bytes, double> (
-            _adaa_fix_eq_delay_coeffs, _compressor_states, sat);
+        sat = pow2_aa::tick_multi_aligned<sse_bytes, double> (
+          _adaa_fix_eq_delay_coeffs, _compressor_states, sat);
         break;
       }
       default:
@@ -331,11 +372,6 @@ public:
 
       sat = andy::svf::tick_multi_aligned<sse_bytes, double> (
         _pre_emphasis_coeffs, _pre_emphasis_states, sat);
-
-#define ARTV_SATURATION_USE_SSE 0
-      // ARTV_SATURATION_USE_SSE has detrimental effects when ADAA enabled,
-      // the current implementation always takes both branches. The code is
-      // kept as a reminder for future me that this was already tried.
 
       auto wsh_type
         = p.type + (sat_type_count * (uint) waveshaper_type_is_adaa (p.mode));
@@ -363,52 +399,46 @@ public:
 #if ARTV_SATURATION_USE_SSE
         // At the point of writing my code or xsimd seems broken on tanh?
         // works well with others.
-        sat = adaa::fix_eq_and_delay<adaa_order, tanh_adaa>::
-          tick_multi_aligned<sse_bytes, double> (
-            _adaa_fix_eq_delay_coeffs, _wvsh_states, sat);
+        sat = tanh_aa::tick_multi_aligned<sse_bytes, double> (
+          _adaa_fix_eq_delay_coeffs, _wvsh_states, sat);
 #else
-        sat[0] = adaa::fix_eq_and_delay<adaa_order, tanh_adaa>::tick (
+        sat[0] = tanh_aa::tick (
           get_fix_eq_delay_coeffs (0), get_waveshaper_states (0), sat[0]);
-        sat[1] = adaa::fix_eq_and_delay<adaa_order, tanh_adaa>::tick (
+        sat[1] = tanh_aa::tick (
           get_fix_eq_delay_coeffs (1), get_waveshaper_states (1), sat[1]);
 #endif
         break;
       case sat_sqrt_adaa:
 #if ARTV_SATURATION_USE_SSE
-        sat = adaa::fix_eq_and_delay<adaa_order, sqrt_sigmoid_adaa>::
-          tick_multi_aligned<sse_bytes, double> (
-            _adaa_fix_eq_delay_coeffs, _wvsh_states, sat);
+        sat = sqrt_sigmoid_aa::tick_multi_aligned<sse_bytes, double> (
+          _adaa_fix_eq_delay_coeffs, _wvsh_states, sat);
 #else
-        sat[0] = adaa::fix_eq_and_delay<adaa_order, sqrt_sigmoid_adaa>::tick (
+        sat[0] = sqrt_sigmoid_aa::tick (
           get_fix_eq_delay_coeffs (0), get_waveshaper_states (0), sat[0]);
-        sat[1] = adaa::fix_eq_and_delay<adaa_order, sqrt_sigmoid_adaa>::tick (
+        sat[1] = sqrt_sigmoid_aa::tick (
           get_fix_eq_delay_coeffs (1), get_waveshaper_states (1), sat[1]);
 #endif
         break;
       case sat_hardclip_adaa:
 #if ARTV_SATURATION_USE_SSE
-        sat = adaa::fix_eq_and_delay<adaa_order, hardclip_adaa>::
-          tick_multi_aligned<sse_bytes, double> (
-            _adaa_fix_eq_delay_coeffs, _wvsh_states, sat);
+        sat = hardclip_aa::tick_multi_aligned<sse_bytes, double> (
+          _adaa_fix_eq_delay_coeffs, _wvsh_states, sat);
 #else
-        sat[0] = adaa::fix_eq_and_delay<adaa_order, hardclip_adaa>::tick (
+        sat[0] = hardclip_aa::tick (
           get_fix_eq_delay_coeffs (0), get_waveshaper_states (0), sat[0]);
-        sat[1] = adaa::fix_eq_and_delay<adaa_order, hardclip_adaa>::tick (
+        sat[1] = hardclip_aa::tick (
           get_fix_eq_delay_coeffs (1), get_waveshaper_states (1), sat[1]);
 #endif
         break;
       case sat_sqrt_sin_adaa:
 #if ARTV_SATURATION_USE_SSE
-        sat = adaa::fix_eq_and_delay<adaa_order, sqrt_sin_sigmoid_adaa>::
-          tick_multi_aligned<sse_bytes, double> (
-            _adaa_fix_eq_delay_coeffs, _wvsh_states, sat);
+        sat = sqrt_sin_sigmoid_aa::tick_multi_aligned<sse_bytes, double> (
+          _adaa_fix_eq_delay_coeffs, _wvsh_states, sat);
 #else
-        sat[0]
-          = adaa::fix_eq_and_delay<adaa_order, sqrt_sin_sigmoid_adaa>::tick (
-            get_fix_eq_delay_coeffs (0), get_waveshaper_states (0), sat[0]);
-        sat[1]
-          = adaa::fix_eq_and_delay<adaa_order, sqrt_sin_sigmoid_adaa>::tick (
-            get_fix_eq_delay_coeffs (1), get_waveshaper_states (1), sat[1]);
+        sat[0] = sqrt_sin_sigmoid_aa::tick (
+          get_fix_eq_delay_coeffs (0), get_waveshaper_states (0), sat[0]);
+        sat[1] = sqrt_sin_sigmoid_aa::tick (
+          get_fix_eq_delay_coeffs (1), get_waveshaper_states (1), sat[1]);
 #endif
         break;
       default:
@@ -424,14 +454,12 @@ public:
       case mode_normal:
         break;
       case mode_sqrt_pow:
-        sat = adaa::fix_eq_and_delay<adaa_order, pow2_adaa>::
-          tick_multi_aligned<sse_bytes, double> (
-            _adaa_fix_eq_delay_coeffs, _expander_states, sat);
+        sat = pow2_aa::tick_multi_aligned<sse_bytes, double> (
+          _adaa_fix_eq_delay_coeffs, _expander_states, sat);
         break;
       case mode_pow_sqrt:
-        sat = adaa::fix_eq_and_delay<adaa_order, sqrt_adaa>::
-          tick_multi_aligned<sse_bytes, double> (
-            _adaa_fix_eq_delay_coeffs, _expander_states, sat);
+        sat = sqrt_aa::tick_multi_aligned<sse_bytes, double> (
+          _adaa_fix_eq_delay_coeffs, _expander_states, sat);
         break;
       default:
         assert (false);
@@ -492,19 +520,23 @@ private:
 
   static constexpr uint adaa_order = 1;
 
-  using shapers = mp_list<
-    adaa::fix_eq_and_delay<adaa_order, sqrt_sigmoid_adaa>,
-    adaa::fix_eq_and_delay<adaa_order, tanh_adaa>,
-    adaa::fix_eq_and_delay<adaa_order, hardclip_adaa>,
-    adaa::fix_eq_and_delay<adaa_order, sqrt_sin_sigmoid_adaa>>;
+  using sqrt_sigmoid_aa = adaa::fix_eq_and_delay<adaa_order, sqrt_sigmoid_adaa>;
+  using tanh_aa         = adaa::fix_eq_and_delay<adaa_order, tanh_adaa>;
+  using hardclip_aa     = adaa::fix_eq_and_delay<adaa_order, hardclip_adaa>;
+  using sqrt_sin_sigmoid_aa
+    = adaa::fix_eq_and_delay<adaa_order, sqrt_sin_sigmoid_adaa>;
+
+  using shapers
+    = mp_list<sqrt_sigmoid_aa, tanh_aa, hardclip_aa, sqrt_sin_sigmoid_aa>;
 
   static constexpr uint wsh_max_states = mp11::mp_max_element<
     mp11::mp_transform<to_n_states, shapers>,
     mp11::mp_less>::value;
 
-  using companders = mp_list<
-    adaa::fix_eq_and_delay<adaa_order, sqrt_adaa>,
-    adaa::fix_eq_and_delay<adaa_order, pow2_adaa>>;
+  using sqrt_aa = adaa::fix_eq_and_delay<adaa_order, sqrt_adaa>;
+  using pow2_aa = adaa::fix_eq_and_delay<adaa_order, pow2_adaa>;
+
+  using companders = mp_list<sqrt_aa, pow2_aa>;
 
   static constexpr uint compander_max_states = mp11::mp_max_element<
     mp11::mp_transform<to_n_states, companders>,

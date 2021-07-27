@@ -56,6 +56,14 @@ public:
   enum state { x1, x1_int, n_states };
   //----------------------------------------------------------------------------
   template <class T>
+  static void init_states (crange<T> s)
+  {}
+  //----------------------------------------------------------------------------
+  template <size_t simd_bytes, class T>
+  static void init_states_multi_aligned (crange<T> s)
+  {}
+  //----------------------------------------------------------------------------
+  template <class T>
   static T tick (crange<const T>, crange<T> st, T x)
   {
     assert (st.size() >= n_states);
@@ -115,6 +123,14 @@ class waveshaper<functions, 2> {
 public:
   enum coeffs { n_coeffs };
   enum state { x1, x2, x2_der, x1_int2, n_states };
+  //----------------------------------------------------------------------------
+  template <class T>
+  static void init_states (crange<T> s)
+  {}
+  //----------------------------------------------------------------------------
+  template <size_t simd_bytes, class T>
+  static void init_states_multi_aligned (crange<T> s)
+  {}
   //----------------------------------------------------------------------------
   template <class T>
   static T tick (crange<const T>, crange<T> st, T x)
@@ -192,16 +208,16 @@ template <template <uint> class Impl>
 class fix_eq_and_delay<1, Impl> {
 public:
   enum coeffs {
-    allpass_coeffs,
-    boxcar_coeffs = allpass_coeffs + allpass_interpolator::n_coeffs,
-    impl_coeffs   = boxcar_coeffs + moving_average<2>::n_coeffs,
-    n_coeffs      = impl_coeffs + Impl<1>::n_coeffs
+    allpass_coeffs_idx,
+    boxcar_coeffs_idx = allpass_coeffs_idx + allpass_interpolator::n_coeffs,
+    impl_coeffs_idx   = boxcar_coeffs_idx + moving_average<2>::n_coeffs,
+    n_coeffs          = impl_coeffs_idx + Impl<1>::n_coeffs
   };
   enum state {
-    allpass_states,
-    boxcar_states = allpass_states + allpass_interpolator::n_states,
-    impl_states   = boxcar_states + moving_average<2>::n_states,
-    n_states      = impl_states + Impl<1>::n_states
+    allpass_states_idx,
+    boxcar_states_idx = allpass_states_idx + allpass_interpolator::n_states,
+    impl_states_idx   = boxcar_states_idx + moving_average<2>::n_states,
+    n_states          = impl_states_idx + Impl<1>::n_states
   };
   //----------------------------------------------------------------------------
   template <class T>
@@ -230,6 +246,21 @@ public:
 
     allpass_interpolator::init_multi_aligned<simd_bytes, T> (
       c, simdreg {(T) 0.5});
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  static void init_states (crange<T> s)
+  {
+    // maybe memset delay line and boxcar?
+    Impl<1>::init_states (s.shrink_head (impl_states_idx));
+  }
+  //----------------------------------------------------------------------------
+  template <size_t simd_bytes, class T>
+  static void init_states_multi_aligned (crange<T> s)
+  {
+    // maybe memset delay line and boxcar?
+    Impl<1>::template init_states_multi_aligned<simd_bytes, T> (
+      s.shrink_head (impl_states_idx));
   }
   //----------------------------------------------------------------------------
   template <class T>

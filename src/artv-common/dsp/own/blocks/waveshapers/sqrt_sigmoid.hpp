@@ -66,6 +66,14 @@ class sqrt_sigmoid_adaa_1 {
 public:
   enum coeffs { n_coeffs };
   enum state { x1, x1_sqrt, n_states };
+    //----------------------------------------------------------------------------
+  template <class T>
+  static void init_states (crange<T> s)
+  {}
+  //----------------------------------------------------------------------------
+  template <size_t simd_bytes, class T>
+  static void init_states_multi_aligned (crange<T> s)
+  {}
   //----------------------------------------------------------------------------
   template <class T>
   static T tick (crange<const T>, crange<T> st, T x)
