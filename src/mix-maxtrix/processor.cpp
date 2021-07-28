@@ -104,19 +104,19 @@ public:
     // register listeners for parameter changes.
     mp11::mp_for_each<parameters::routing_controls_typelist> ([=] (auto param) {
       for (char const* id : param.juce_ids) {
-        params.addParameterListener (id, &_routing_maybe_changed);
+        params.addParameterListener (id, &_routing_refreshed);
       }
     });
     mp11::mp_for_each<parameters::non_routing_controls_typelist> (
       [=] (auto param) {
         for (char const* id : param.juce_ids) {
-          params.addParameterListener (id, &_non_routing_maybe_changed);
+          params.addParameterListener (id, &_non_routing_refreshed);
         }
       });
     mp11::mp_for_each<parameters::all_nonfx_sliders_typelist> (
       [=] (auto param) {
         for (char const* id : param.juce_ids) {
-          params.addParameterListener (id, &_non_fx_slider_maybe_changed);
+          params.addParameterListener (id, &_non_fx_slider_refreshed);
         }
       });
   }
@@ -157,9 +157,9 @@ public:
     // this function.
     p_get (parameters::in_selection {})[0] = 1 << parameters::n_stereo_busses;
     // force reloading of all parameters
-    _routing_maybe_changed.parameterChanged ("", 0.f);
-    _non_routing_maybe_changed.parameterChanged ("", 0.f);
-    _non_fx_slider_maybe_changed.parameterChanged ("", 0.f);
+    _routing_refreshed.parameterChanged ("", 0.f);
+    _non_routing_refreshed.parameterChanged ("", 0.f);
+    _non_fx_slider_refreshed.parameterChanged ("", 0.f);
   }
   //----------------------------------------------------------------------------
   bool isBusesLayoutSupported (const BusesLayout& buses) const override
@@ -279,13 +279,17 @@ private:
     // member variables, so we read the same value for the whole duration on
     // this block. There is a substantial amount of parameters. These are
     // refreshed in declaration order to avoid weird memory access orders.
-    if (unlikely (_routing_maybe_changed.get_and_clear())) {
+    if (unlikely (_routing_refreshed.get_and_clear())) {
       p_refresh_many (
         parameters::routing_controls_typelist {},
         [&] (auto key, uint i, auto val) { routing_change |= val.changed(); });
     }
 
-    if (unlikely (_non_routing_maybe_changed.get_and_clear())) {
+    if (unlikely (
+          _non_routing_refreshed.get_and_clear() || routing_change
+          || _fx_context.fx_latencies_changed)) {
+      // routing or latency chanes have to re-read the mute solo state because
+      // io recompute will need the mute_solo bits.
       p_refresh_many (
         parameters::non_routing_controls_typelist {},
         [&] (auto key, uint i, auto val) {
@@ -300,11 +304,11 @@ private:
         });
     }
 
-    if (unlikely (_non_fx_slider_maybe_changed.get_and_clear())) {
+    if (unlikely (_non_fx_slider_refreshed.get_and_clear())) {
       p_refresh_many (parameters::all_nonfx_sliders_typelist {});
     }
 
-    if (unlikely (routing_change)) {
+    if (unlikely (routing_change || _fx_context.fx_latencies_changed)) {
       // not delaying mute and solo...
       io_recompute (mutesolo.bits);
       mutesolo.changed = false;
@@ -370,14 +374,11 @@ private:
       }
     }
 
-    if (unlikely (mutesolo.changed || _fx_context.fx_latencies_changed)) {
+    if (unlikely (mutesolo.changed)) {
       // delay IO recomputation until we have crossfaded a mute. This will
       // cause a 1 audio buffer delay when unmuting + 1 audio buffer crossfade
       // when unmuting, but it is the only sensible way to do when having a
       // dynamic buffer ordering optimization.
-      //
-      // We only do a recomputation here on latency changes to not affect the
-      // mute solo state.
       io_recompute (mutesolo.bits);
     }
   }
@@ -752,9 +753,9 @@ private:
   std::array<foleys::LevelMeterSource, parameters::n_stereo_busses> _meters;
   std::array<char, 128> _cache_padding_2;
 
-  param_change_counter _routing_maybe_changed;
-  param_change_counter _non_routing_maybe_changed;
-  param_change_counter _non_fx_slider_maybe_changed;
+  param_change_counter _routing_refreshed;
+  param_change_counter _non_routing_refreshed;
+  param_change_counter _non_fx_slider_refreshed;
 };
 
 } // namespace artv
