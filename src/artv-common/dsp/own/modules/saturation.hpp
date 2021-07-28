@@ -252,54 +252,12 @@ public:
   template <class T>
   void process_block_replacing (std::array<T*, 2> chnls, uint block_samples)
   {
-#define ARTV_SATURATION_USE_SSE 1
-    // ARTV_SATURATION_USE_SSE has detrimental effects when ADAA enabled,
-    // the current implementation always takes both branches. The code is
-    // kept as a reminder for future me that this was already tried.
     params p = _p;
 
     if (unlikely (p.type_prev != p.type || p.mode_prev != p.mode)) {
       // some waveshapers will create peaks, as the integral on 0 might not be
-      // 0. Running them for some samples of silence to initialize.
-      if (p.type_prev != p.type) {
-        switch (p.type) {
-          // initializing on all modes, it doesn't matter...
-        case sat_tanh:
-#if ARTV_SATURATION_USE_SSE
-          tanh_aa::init_states_multi_aligned<sse_bytes, double> (_wvsh_states);
-#else
-          tanh_aa::init_states<double> (_wvsh_states);
-#endif
-          break;
-        case sat_sqrt:
-#if ARTV_SATURATION_USE_SSE
-          sqrt_sigmoid_aa::init_states_multi_aligned<sse_bytes, double> (
-            _wvsh_states);
-#else
-          sqrt_sigmoid_aa::init_states<double> (_wvsh_states);
-#endif
-          break;
-        case sat_hardclip:
-#if ARTV_SATURATION_USE_SSE
-          hardclip_aa::init_states_multi_aligned<sse_bytes, double> (
-            _wvsh_states);
-#else
-          hardclip_aa::init_states<double> (_wvsh_states);
-#endif
-          break;
-        case sat_sqrt_sin:
-#if ARTV_SATURATION_USE_SSE
-          sqrt_sin_sigmoid_aa::init_states_multi_aligned<sse_bytes, double> (
-            _wvsh_states);
-#else
-          sqrt_sin_sigmoid_aa::init_states<double> (_wvsh_states);
-#endif
-          break;
-        default:
-          break;
-        }
-      }
-
+      // 0. Running them for some samples of silence to initialize. This avoids
+      // too having to run the "init_states" functions on the waveshapers.
       static constexpr uint n_samples = 8;
       _p.type_prev                    = _p.type;
       _p.mode_prev                    = _p.mode;
@@ -378,68 +336,30 @@ public:
 
       switch (wsh_type) {
       case sat_tanh:
-        // At the point of writing my code or xsimd seems broken on tanh?
-        // works well with others.
-        sat[0] = tanh_adaa<0>::tick ({}, get_waveshaper_states (0), sat[0]);
-        sat[1] = tanh_adaa<0>::tick ({}, get_waveshaper_states (1), sat[1]);
+        // TODO: change to "tick" when/if XSIMD is fixed for ffast-math
+        sat = wavesh_tick_no_simd<tanh_adaa<0>> (sat);
         break;
       case sat_sqrt:
-        sat = sqrt_sigmoid_adaa<0>::tick_multi_aligned<sse_bytes, double> (
-          {}, _wvsh_states, sat);
+        sat = wavesh_tick<sqrt_sigmoid_adaa<0>> (sat);
         break;
       case sat_hardclip:
-        sat = hardclip_adaa<0>::tick_multi_aligned<sse_bytes, double> (
-          {}, _wvsh_states, sat);
+        sat = wavesh_tick<hardclip_adaa<0>> (sat);
         break;
       case sat_sqrt_sin:
-        sat = sqrt_sin_sigmoid_adaa<0>::tick_multi_aligned<sse_bytes, double> (
-          {}, _wvsh_states, sat);
+        // TODO: change to "tick" when/if XSIMD is fixed for ffast-math
+        sat = wavesh_tick_no_simd<sqrt_sin_sigmoid_adaa<0>> (sat);
         break;
       case sat_tanh_adaa:
-#if ARTV_SATURATION_USE_SSE
-        // At the point of writing my code or xsimd seems broken on tanh?
-        // works well with others.
-        sat = tanh_aa::tick_multi_aligned<sse_bytes, double> (
-          _adaa_fix_eq_delay_coeffs, _wvsh_states, sat);
-#else
-        sat[0] = tanh_aa::tick (
-          get_fix_eq_delay_coeffs (0), get_waveshaper_states (0), sat[0]);
-        sat[1] = tanh_aa::tick (
-          get_fix_eq_delay_coeffs (1), get_waveshaper_states (1), sat[1]);
-#endif
+        sat = wavesh_tick_no_simd<tanh_aa> (sat);
         break;
       case sat_sqrt_adaa:
-#if ARTV_SATURATION_USE_SSE
-        sat = sqrt_sigmoid_aa::tick_multi_aligned<sse_bytes, double> (
-          _adaa_fix_eq_delay_coeffs, _wvsh_states, sat);
-#else
-        sat[0] = sqrt_sigmoid_aa::tick (
-          get_fix_eq_delay_coeffs (0), get_waveshaper_states (0), sat[0]);
-        sat[1] = sqrt_sigmoid_aa::tick (
-          get_fix_eq_delay_coeffs (1), get_waveshaper_states (1), sat[1]);
-#endif
+        sat = wavesh_tick<sqrt_sigmoid_aa> (sat);
         break;
       case sat_hardclip_adaa:
-#if ARTV_SATURATION_USE_SSE
-        sat = hardclip_aa::tick_multi_aligned<sse_bytes, double> (
-          _adaa_fix_eq_delay_coeffs, _wvsh_states, sat);
-#else
-        sat[0] = hardclip_aa::tick (
-          get_fix_eq_delay_coeffs (0), get_waveshaper_states (0), sat[0]);
-        sat[1] = hardclip_aa::tick (
-          get_fix_eq_delay_coeffs (1), get_waveshaper_states (1), sat[1]);
-#endif
+        sat = wavesh_tick<hardclip_aa> (sat);
         break;
       case sat_sqrt_sin_adaa:
-#if ARTV_SATURATION_USE_SSE
-        sat = sqrt_sin_sigmoid_aa::tick_multi_aligned<sse_bytes, double> (
-          _adaa_fix_eq_delay_coeffs, _wvsh_states, sat);
-#else
-        sat[0] = sqrt_sin_sigmoid_aa::tick (
-          get_fix_eq_delay_coeffs (0), get_waveshaper_states (0), sat[0]);
-        sat[1] = sqrt_sin_sigmoid_aa::tick (
-          get_fix_eq_delay_coeffs (1), get_waveshaper_states (1), sat[1]);
-#endif
+        sat = wavesh_tick_no_simd<hardclip_aa> (sat);
         break;
       default:
         break;
@@ -588,6 +508,40 @@ private:
 
     andy::svf::bell_multi_aligned<sse_bytes, double> (
       _post_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
+  }
+  //----------------------------------------------------------------------------
+  template <class wsh>
+  simd_batch<double, 2> wavesh_tick_simd (simd_batch<double, 2> x)
+  {
+    return wsh::template tick_multi_aligned<sse_bytes, double> (
+      _adaa_fix_eq_delay_coeffs, _wvsh_states, x);
+  }
+
+  template <class wsh>
+  simd_batch<double, 2> wavesh_tick_no_simd (simd_batch<double, 2> x)
+  {
+    decltype (x) ret;
+    ret[0] = wsh::tick (
+      get_fix_eq_delay_coeffs (0), get_waveshaper_states (0), x[0]);
+    ret[1] = wsh::tick (
+      get_fix_eq_delay_coeffs (1), get_waveshaper_states (1), x[1]);
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+#define ARTV_SATURATION_USE_SIMD 0
+  // ARTV_SATURATION_USE_simd has detrimental effects when ADAA enabled,
+  // the current implementation always takes both branches.
+  //
+  // As an extra, xsimd is broken with ffast-math.
+  // https://github.com/xtensor-stack/xsimd/issues/515
+  template <class wsh>
+  simd_batch<double, 2> wavesh_tick (simd_batch<double, 2> x)
+  {
+#if ARTV_SATURATION_USE_SIMD
+    return wavesh_tick_simd<wsh> (x);
+#else
+    return wavesh_tick_no_simd<wsh> (x);
+#endif
   }
   //----------------------------------------------------------------------------
   static constexpr uint n_channels = 2;

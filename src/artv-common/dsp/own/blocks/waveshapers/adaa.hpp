@@ -251,6 +251,7 @@ public:
   template <class T>
   static void init_states (crange<T> s)
   {
+    static_assert (std::is_floating_point<T>::value, "");
     // maybe memset delay line and boxcar?
     Impl<1>::init_states (s.shrink_head (impl_states_idx));
   }
@@ -258,9 +259,12 @@ public:
   template <size_t simd_bytes, class T>
   static void init_states_multi_aligned (crange<T> s)
   {
+    static_assert (std::is_floating_point<T>::value, "");
+    using simdreg                    = simd_reg<T, simd_bytes>;
+    static constexpr auto n_builtins = simdreg::size;
     // maybe memset delay line and boxcar?
     Impl<1>::template init_states_multi_aligned<simd_bytes, T> (
-      s.shrink_head (impl_states_idx));
+      s.shrink_head (impl_states_idx * n_builtins));
   }
   //----------------------------------------------------------------------------
   template <class T>

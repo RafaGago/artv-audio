@@ -79,12 +79,7 @@ struct tanh_functions {
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T int_fn (T x)
   {
-#if 0
     return log (cosh (x));
-#else
-    static constexpr T log2 = (T) 0.69314718056;
-    return log (exp (x) + exp (-x)) - log2;
-#endif
   }
   //----------------------------------------------------------------------------
   template <class T, size_t N>
@@ -211,22 +206,27 @@ public:
     batch x1_expv {x1_expv_ptr, xsimd::aligned_mode {}};
     batch x1_intv {x1_intv_ptr, xsimd::aligned_mode {}};
 
-    auto x_exp = xsimd::exp (x);
-    auto x_int = xsimd::log (x_exp + ((T) 1. / x_exp));
+    batch x_exp = xsimd::exp (x);
+    batch x_int = xsimd::log (x_exp + ((T) 1. / x_exp));
+    printf (
+      "s: %p, x: %f, x_exp: %f, x_int: %f\n",
+      st.data(),
+      x[0],
+      x_exp[0],
+      x_int[0]);
 
     x.store_aligned (x1v_ptr);
     x_exp.store_aligned (x1_expv_ptr);
     x_int.store_aligned (x1_intv_ptr);
 
-    auto num    = x_int - x1_intv;
-    auto den    = x - x1v;
-    auto num_fb = x_exp * x1_expv - (T) 1.;
-    auto den_fb = num_fb + (T) 2.;
+    batch num      = x_int - x1_intv;
+    batch den      = x - x1v;
+    batch fallback = x_exp * x1_expv - (T) 1.;
 
     auto no_fallback = xsimd::abs (den) > batch {adaa::epsilon (T {})};
 
-    num = xsimd::select (no_fallback, num, num_fb);
-    den = xsimd::select (no_fallback, den, den_fb);
+    num = xsimd::select (no_fallback, num, fallback);
+    den = xsimd::select (no_fallback, den, fallback + (T) 2.);
     return num / den;
   }
 };
