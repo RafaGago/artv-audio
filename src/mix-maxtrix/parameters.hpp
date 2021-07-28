@@ -5160,7 +5160,7 @@ parameter_cpp_class_define (
   saturation_emphasis_amount,
   n_stereo_busses,
   param_common (
-    "Emphasis",
+    "Tone Amt",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::emphasis_amount_tag>()),
   saturation::get_parameter (saturation::emphasis_amount_tag {}),
@@ -5170,7 +5170,7 @@ parameter_cpp_class_define (
   saturation_emphasis_freq,
   n_stereo_busses,
   param_common (
-    "Emphas F",
+    "Tone Frq",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::emphasis_freq_tag>()),
   saturation::get_parameter (saturation::emphasis_freq_tag {}),
@@ -5180,7 +5180,7 @@ parameter_cpp_class_define (
   saturation_emphasis_q,
   n_stereo_busses,
   param_common (
-    "Emphas Q",
+    "Tone Q",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::emphasis_q_tag>()),
   saturation::get_parameter (saturation::emphasis_q_tag {}),
