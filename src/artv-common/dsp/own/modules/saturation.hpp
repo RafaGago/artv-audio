@@ -294,7 +294,6 @@ public:
     for (uint i = 0; i < block_samples; ++i) {
       // TODO: drive and filter change smoothing
       simd_dbl sat {chnls[0][i], chnls[1][i]};
-      sat *= simd_dbl {p.drive} * cdrive;
 
       simd_dbl lo {0.}, lo_prev {0.}, hi {0.}, hi_prev {0.};
 
@@ -324,6 +323,8 @@ public:
         lo = lo_prev;
         hi = hi_prev;
       }
+
+      sat *= simd_dbl {p.drive} * cdrive;
 
       // mode pre process
       switch (p.mode) {
@@ -402,8 +403,8 @@ public:
         break;
       }
 
-      sat += lo + hi;
       sat *= inv_cdrive;
+      sat += lo + hi;
 
       chnls[0][i] = sat[0];
       chnls[1][i] = sat[1];
