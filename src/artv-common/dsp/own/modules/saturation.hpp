@@ -95,7 +95,7 @@ public:
 
   static constexpr auto get_parameter (drive_tag)
   {
-    return float_param ("dB", -15.0, 15., 0.0, 0.25, 0.6, true);
+    return float_param ("dB", -20.0, 20., 0.0, 0.25, 0.6, true);
   }
   //----------------------------------------------------------------------------
   struct compensated_drive_tag {};
@@ -108,6 +108,18 @@ public:
   static constexpr auto get_parameter (compensated_drive_tag)
   {
     return float_param ("dB", -30.0, 30, 0.0, 0.25, 0.6, true);
+  }
+  //----------------------------------------------------------------------------
+  struct compensated_drive_balance_tag {};
+
+  void set (compensated_drive_balance_tag, float v)
+  {
+    _p.compensated_drive_bal = (v * 0.7 * 0.01) + 1.;
+  }
+
+  static constexpr auto get_parameter (compensated_drive_balance_tag)
+  {
+    return float_param ("%", -100.0, 100., 0.0, 0.25, 0.6, true);
   }
   //----------------------------------------------------------------------------
   static constexpr float lo_cut_min_hz = 10.;
@@ -219,6 +231,7 @@ public:
     emphasis_freq_tag,
     emphasis_q_tag,
     compensated_drive_tag,
+    compensated_drive_balance_tag,
     drive_tag,
     lo_cut_tag,
     hi_cut_tag>;
@@ -273,12 +286,15 @@ public:
       process_block_replacing<T> ({&in[0], &in[n_samples]}, n_samples);
     }
 
-    float inv_cdrive = 1 / p.compensated_drive;
+    simd_dbl cdrive {
+      p.compensated_drive * (p.compensated_drive_bal),
+      p.compensated_drive * (2. - p.compensated_drive_bal)};
+    auto inv_cdrive = 1. / cdrive;
 
     for (uint i = 0; i < block_samples; ++i) {
       // TODO: drive and filter change smoothing
       simd_dbl sat {chnls[0][i], chnls[1][i]};
-      sat *= simd_dbl {p.drive * p.compensated_drive};
+      sat *= simd_dbl {p.drive} * cdrive;
 
       simd_dbl lo {0.}, lo_prev {0.}, hi {0.}, hi_prev {0.};
 
@@ -419,17 +435,18 @@ private:
   enum filter_indexes { lo_lp, hi_hp, n_filters };
 
   struct params {
-    float drive             = 1.f;
-    float compensated_drive = 1.f;
-    float lo_cut_hz         = -1.f;
-    float hi_cut_hz         = -1.f;
-    float emphasis_freq     = 60.f;
-    float emphasis_amount   = 0.f;
-    float emphasis_q        = 0.5f;
-    char  type              = 0;
-    char  type_prev         = 1;
-    char  mode              = 1;
-    char  mode_prev         = 0;
+    float drive                 = 1.f;
+    float compensated_drive     = 1.f;
+    float compensated_drive_bal = 0.f;
+    float lo_cut_hz             = -1.f;
+    float hi_cut_hz             = -1.f;
+    float emphasis_freq         = 60.f;
+    float emphasis_amount       = 0.f;
+    float emphasis_q            = 0.5f;
+    char  type                  = 0;
+    char  type_prev             = 1;
+    char  mode                  = 1;
+    char  mode_prev             = 0;
   } _p;
 
   template <class T>

@@ -5107,6 +5107,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  saturation_compensated_drive_balance,
+  n_stereo_busses,
+  param_common (
+    "EL Drv Bal",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::compensated_drive_balance_tag>()),
+  saturation::get_parameter (saturation::compensated_drive_balance_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   saturation_type,
   n_stereo_busses,
   param_common (
@@ -5189,11 +5199,12 @@ parameter_cpp_class_define (
 using saturation_params = mp_list<
   saturation_type,
   saturation_mode,
+  saturation_compensated_drive,
+  saturation_compensated_drive_balance,
+  saturation_drive,
   saturation_emphasis_amount,
   saturation_emphasis_freq,
   saturation_emphasis_q,
-  saturation_drive,
-  saturation_compensated_drive,
   saturation_lo_cut,
   saturation_hi_cut,
   saturation_oversampling>;
