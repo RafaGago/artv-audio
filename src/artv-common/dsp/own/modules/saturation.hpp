@@ -117,7 +117,7 @@ public:
   void set (lo_cut_tag, float v)
   {
     v = midi_note_to_hz (v);
-    if (v > _p.lo_cut_hz) {
+    if (v != _p.lo_cut_hz) {
       _p.lo_cut_hz           = v;
       _crossv_enabled[lo_lp] = true;
       butterworth_type::lowpass (
@@ -145,7 +145,7 @@ public:
   void set (hi_cut_tag, float v)
   {
     v = midi_note_to_hz (v);
-    if (v < _p.hi_cut_hz) {
+    if (v != _p.hi_cut_hz) {
       _p.hi_cut_hz           = v;
       _crossv_enabled[hi_hp] = true;
       butterworth_type::highpass (
