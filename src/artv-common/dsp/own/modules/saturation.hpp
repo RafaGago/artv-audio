@@ -11,6 +11,7 @@
 #include "artv-common/dsp/own/blocks/filters/moving_average.hpp"
 #include "artv-common/dsp/own/blocks/filters/onepole.hpp"
 #include "artv-common/dsp/own/blocks/misc/interpolators.hpp"
+#include "artv-common/dsp/own/blocks/misc/slew_limiter.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/hardclip.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/pow2.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/sqrt.hpp"
@@ -224,6 +225,56 @@ public:
     return float_param ("", 0.01, 1, 0.5, 0.01);
   }
   //----------------------------------------------------------------------------
+  struct envfollow_attack_tag {};
+
+  void set (envfollow_attack_tag, float v)
+  {
+    v *= 0.001f; // to seconds
+    if (v != _p.ef_attack) {
+      _p.ef_attack = v;
+      update_envelope_follower();
+    }
+  }
+
+  static constexpr auto get_parameter (envfollow_attack_tag)
+  {
+    return float_param ("ms", 1, 180., 20., 0.1);
+  }
+  //----------------------------------------------------------------------------
+  struct envfollow_release_tag {};
+
+  void set (envfollow_release_tag, float v)
+  {
+    v *= 0.001f; // to seconds
+    if (v != _p.ef_release) {
+      _p.ef_release = v;
+      update_envelope_follower();
+    }
+  }
+
+  static constexpr auto get_parameter (envfollow_release_tag)
+  {
+    return float_param ("ms", 100, 800., 150., 1.);
+  }
+  //----------------------------------------------------------------------------
+  struct envfollow_to_drive_tag {};
+
+  void set (envfollow_to_drive_tag, float v)
+  {
+    // -1 because the signal of the envelope follower has "1" added.
+    constexpr auto max_db = (constexpr_db_to_gain (40.) - 1.);
+
+    _p.ef_to_drive = v * 0.01; // max 1
+    _p.ef_to_drive *= _p.ef_to_drive; // quadratic, more resolution on small v
+    _p.ef_to_drive *= max_db; // adjust range
+    _p.ef_to_drive *= v < 0 ? -1.f : 1.f; // keep sign
+  }
+
+  static constexpr auto get_parameter (envfollow_to_drive_tag)
+  {
+    return float_param ("%", -100., 100., 0., 0.01);
+  }
+  //----------------------------------------------------------------------------
   using parameters = mp_list<
     type_tag,
     mode_tag,
@@ -234,13 +285,16 @@ public:
     compensated_drive_balance_tag,
     drive_tag,
     lo_cut_tag,
-    hi_cut_tag>;
+    hi_cut_tag,
+    envfollow_attack_tag,
+    envfollow_release_tag>;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
     _plugcontext = &pc;
 
     memset (&_crossv_enabled, 0, sizeof _crossv_enabled);
+    memset (&_envfollow_states, 0, sizeof _envfollow_states);
     memset (&_compressor_states, 0, sizeof _compressor_states);
     memset (&_expander_states, 0, sizeof _expander_states);
     memset (&_wvsh_states, 0, sizeof _wvsh_states);
@@ -286,10 +340,11 @@ public:
       process_block_replacing<T> ({&in[0], &in[n_samples]}, n_samples);
     }
 
-    simd_dbl cdrive {
+    simd_dbl compens_drive {
       p.compensated_drive * (p.compensated_drive_bal),
       p.compensated_drive * (2. - p.compensated_drive_bal)};
-    auto inv_cdrive = 1. / cdrive;
+
+    simd_dbl inv_compens_drive = 1. / compens_drive;
 
     for (uint i = 0; i < block_samples; ++i) {
       // TODO: drive and filter change smoothing
@@ -324,7 +379,27 @@ public:
         hi = hi_prev;
       }
 
-      sat *= simd_dbl {p.drive} * cdrive;
+      simd_dbl follow = xsimd::abs (sat * p.ef_to_drive);
+      // printf ("follow in: %f %f, ", follow[0], follow[1]);
+      follow = slew_limiter::tick_multi_aligned<sse_bytes, double> (
+        _envfollow_coeffs, _envfollow_states, follow);
+      // printf ("follow out: %f %f\n", follow[0], follow[1]);
+      follow += 1.; // 1 to N
+
+      simd_dbl drive     = compens_drive;
+      simd_dbl inv_drive = inv_compens_drive;
+
+      if (p.ef_to_drive >= 0.f) {
+        drive *= follow;
+        inv_drive /= follow;
+      }
+      else {
+        // inverse modulation
+        inv_drive *= follow;
+        drive /= follow;
+      }
+
+      sat *= simd_dbl {p.drive} * drive;
 
       // mode pre process
       switch (p.mode) {
@@ -405,7 +480,7 @@ public:
         break;
       }
 
-      sat *= inv_cdrive;
+      sat *= inv_drive;
       sat += lo + hi;
 
       chnls[0][i] = sat[0];
@@ -446,6 +521,9 @@ private:
     float emphasis_freq         = 60.f;
     float emphasis_amount       = 0.f;
     float emphasis_q            = 0.5f;
+    float ef_attack             = 0.;
+    float ef_release            = 0.f;
+    float ef_to_drive           = 1.f;
     char  type                  = 0;
     char  type_prev             = 1;
     char  mode                  = 1;
@@ -530,6 +608,15 @@ private:
       _post_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
   }
   //----------------------------------------------------------------------------
+  void update_envelope_follower()
+  {
+    slew_limiter::init_multi_aligned<sse_bytes, double> (
+      _envfollow_coeffs,
+      simd_dbl {_p.ef_attack},
+      simd_dbl {_p.ef_release},
+      _plugcontext->get_sample_rate());
+  }
+  //----------------------------------------------------------------------------
   template <class wsh>
   simd_batch<double, 2> wavesh_tick_simd (simd_batch<double, 2> x)
   {
@@ -586,10 +673,17 @@ private:
   using emphasis_state_array
     = simd_array<double, andy::svf::n_states * n_channels, sse_bytes>;
 
+  using envfollow_coeff_array
+    = simd_array<double, slew_limiter::n_coeffs * n_channels, sse_bytes>;
+  using envfollow_state_array
+    = simd_array<double, slew_limiter::n_states * n_channels, sse_bytes>;
+
   // all arrays are multiples of the simd size, no need to alignas on
   // everything.
   std::array<bool, 2> _crossv_enabled;
-  alignas (sse_bytes) crossv_coeff_array _filt_coeffs;
+  alignas (sse_bytes) envfollow_coeff_array _envfollow_coeffs;
+  envfollow_state_array             _envfollow_states;
+  crossv_coeff_array                _filt_coeffs;
   std::array<crossv_state_array, 2> _filt_states;
   fix_eq_and_delay_coeff_array      _adaa_fix_eq_delay_coeffs;
   compander_state_array             _compressor_states;

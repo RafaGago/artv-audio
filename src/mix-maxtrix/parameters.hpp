@@ -5187,6 +5187,36 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  saturation_envfollow_attack,
+  n_stereo_busses,
+  param_common (
+    "EF Attack",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::envfollow_attack_tag>()),
+  saturation::get_parameter (saturation::envfollow_attack_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  saturation_envfollow_release,
+  n_stereo_busses,
+  param_common (
+    "EF Rel",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::envfollow_release_tag>()),
+  saturation::get_parameter (saturation::envfollow_release_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  saturation_envfollow_to_drive,
+  n_stereo_busses,
+  param_common (
+    "EF->Drv",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::envfollow_to_drive_tag>()),
+  saturation::get_parameter (saturation::envfollow_to_drive_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   saturation_oversampling,
   n_stereo_busses,
   param_common (
@@ -5207,6 +5237,9 @@ using saturation_params = mp_list<
   saturation_emphasis_q,
   saturation_lo_cut,
   saturation_hi_cut,
+  saturation_envfollow_attack,
+  saturation_envfollow_release,
+  saturation_envfollow_to_drive,
   saturation_oversampling>;
 //------------------------------------------------------------------------------
 #if 0
