@@ -5207,6 +5207,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  saturation_envfollow_sensitivity,
+  n_stereo_busses,
+  param_common (
+    "EF Sens",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::envfollow_sensitivity_tag>()),
+  saturation::get_parameter (saturation::envfollow_sensitivity_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   saturation_envfollow_to_drive,
   n_stereo_busses,
   param_common (
@@ -5259,6 +5269,7 @@ using saturation_params = mp_list<
   saturation_hi_cut,
   saturation_envfollow_attack,
   saturation_envfollow_release,
+  saturation_envfollow_sensitivity,
   saturation_envfollow_to_drive,
   saturation_envfollow_to_emphasis_freq,
   saturation_envfollow_to_emphasis_amount,
@@ -5278,7 +5289,7 @@ parameter_cpp_class_define (
 using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #endif
 //------------------------------------------------------------------------------
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<saturation_params>;

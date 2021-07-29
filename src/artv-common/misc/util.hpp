@@ -585,14 +585,15 @@ static constexpr T constexpr_db_to_gain (T db, T m_inf_db = T {-130.})
 template <class T>
 static T db_to_gain (T db, T m_inf_db = T {-130.})
 {
-  return db > m_inf_db ? std::pow (T {10.0}, db * T {0.05}) : T {0.};
+  constexpr T ln10 = gcem::log (10.);
+  return db > m_inf_db ? std::exp (db * T {0.05} * ln10) : T {0.};
 }
 //------------------------------------------------------------------------------
 template <class T>
 static constexpr T constexpr_gain_to_db (T gain, T m_inf_db = T {-130.})
 {
-  constexpr auto inv_log10 = 1. / gcem::log (10.);
-  return gain > T {0.} ? gcem::log (gain) * *T {20. * inv_log10} : m_inf_db;
+  constexpr auto inv_ln10 = 1. / gcem::log (10.);
+  return gain > T {0.} ? gcem::log (gain) * *T {20. * inv_ln10} : m_inf_db;
 }
 //------------------------------------------------------------------------------
 template <class T>

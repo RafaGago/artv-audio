@@ -215,7 +215,7 @@ public:
 
   static constexpr auto get_parameter (emphasis_q_tag)
   {
-    return float_param ("", 0.01, 2., 0.5, 0.01);
+    return float_param ("", 0.01, 20., 0.5, 0.01, 0.6);
   }
   //----------------------------------------------------------------------------
   struct envfollow_attack_tag {};
@@ -247,7 +247,16 @@ public:
 
   static constexpr auto get_parameter (envfollow_release_tag)
   {
-    return float_param ("ms", 100, 800., 150., 1.);
+    return float_param ("ms", 40., 800., 150., 1.);
+  }
+  //----------------------------------------------------------------------------
+  struct envfollow_sensitivity_tag {};
+
+  void set (envfollow_sensitivity_tag, float v) { _p.ef_gain = db_to_gain (v); }
+
+  static constexpr auto get_parameter (envfollow_sensitivity_tag)
+  {
+    return float_param ("dB", -20., 20., 0.);
   }
   //----------------------------------------------------------------------------
   struct envfollow_to_drive_tag {};
@@ -255,11 +264,11 @@ public:
   void set (envfollow_to_drive_tag, float v)
   {
     // -1 because the signal of the envelope follower has "1" added.
-    constexpr auto max_db = (constexpr_db_to_gain (40.) - 1.);
+    constexpr auto max_db = (constexpr_db_to_gain (30.) - 1.);
 
     _p.ef_to_drive = v * 0.01; // max 1
-    _p.ef_to_drive *= fabs (_p.ef_to_drive);
-    _p.ef_to_drive *= max_db;
+    _p.ef_to_drive *= sqrt (fabs (_p.ef_to_drive));
+    _p.ef_to_drive *= (v < 0.) ? -max_db : max_db;
   }
 
   static constexpr auto get_parameter (envfollow_to_drive_tag)
@@ -307,6 +316,7 @@ public:
     hi_cut_tag,
     envfollow_attack_tag,
     envfollow_release_tag,
+    envfollow_sensitivity_tag,
     envfollow_to_drive_tag,
     envfollow_to_emphasis_freq_tag,
     envfollow_to_emphasis_amount_tag>;
@@ -337,8 +347,7 @@ public:
     });
     _p.type_prev = sat_type_count; // force initial click removal routine.
 
-    // Sample rates 44100 multiples update every 362.811us
-    uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
+    uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 2;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
     _n_processed_samples = 0;
   }
@@ -408,7 +417,9 @@ public:
 
       simd_dbl follow = slew_limiter::tick_multi_aligned<sse_bytes, double> (
         _envfollow_coeffs, _envfollow_states, xsimd::abs (sat));
-      follow = xsimd::min (follow, simd_dbl {1.}); // clipping too hot signals
+
+      follow *= simd_dbl {p.ef_gain};
+      follow = xsimd::min (follow, simd_dbl {1.}); // clipping at 1
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
         // expensive stuff at lower than audio rate
@@ -561,6 +572,7 @@ private:
     float emphasis_q            = 0.5f;
     float ef_attack             = 0.;
     float ef_release            = 0.f;
+    float ef_gain               = 1.f;
     float ef_to_drive           = 1.f;
     float ef_to_emphasis_freq   = 0.f;
     float ef_to_emphasis_amt    = 0.f;
