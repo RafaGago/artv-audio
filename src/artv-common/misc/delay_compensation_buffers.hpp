@@ -60,7 +60,8 @@ public:
       // save the tail of src samples that are to be delayed on the tmp buffer
       memcpy (&_tmp_buff[0], &src[src.size() - dly.size()], bytes);
       // shift backards the src samples
-      memmove (&src[dly.size()], &src[0], (src.size() * sizeof (T)) - bytes);
+      memmove (
+        &src[0] + dly.size(), &src[0], (src.size() * sizeof (T)) - bytes);
       // place the delayed samples from the previous round on top
       memcpy (&src[0], &dly[0], bytes);
       // save the src samples that are to be delayed for the next round
@@ -71,7 +72,8 @@ public:
       // save the head of the delayed samples
       memcpy (&_tmp_buff[0], &dly[0], bytes);
       // shift forwards the delayed samples
-      memmove (&dly[0], &dly[src.size()], (dly.size() * sizeof (T)) - bytes);
+      memmove (
+        &dly[0], &dly[0] + src.size(), (dly.size() * sizeof (T)) - bytes);
       // move the new samples to the tail of the delayed ones
       memcpy (&dly[dly.size() - src.size()], &src[0], bytes);
       // copy the saved head of the delayed samples to the current sample set
