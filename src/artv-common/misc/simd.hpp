@@ -159,5 +159,8 @@ static simd_batch<T, N> sgn_no_zero (
   return xsimd::select (x < batch {(T) 0.}, neg, pos);
 }
 //------------------------------------------------------------------------------
+#define XSIMD_BROKEN_W_FAST_MATH 1
+// https://github.com/xtensor-stack/xsimd/issues/515
+// at least "log, pow, exp, tanh" are broken with ffast-math enabled
 
 } // namespace artv

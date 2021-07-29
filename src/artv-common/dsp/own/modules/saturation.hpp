@@ -477,8 +477,7 @@ public:
 
       switch (wsh_type) {
       case sat_tanh:
-        // TODO: change to "tick" when/if XSIMD is fixed for ffast-math
-        sat = wavesh_tick_no_simd<tanh_adaa<0>> (sat);
+        sat = wavesh_tick<tanh_adaa<0>> (sat);
         break;
       case sat_sqrt:
         sat = wavesh_tick<sqrt_sigmoid_adaa<0>> (sat);
@@ -487,12 +486,10 @@ public:
         sat = wavesh_tick<hardclip_adaa<0>> (sat);
         break;
       case sat_sqrt_sin:
-        // TODO: change to "tick" when/if XSIMD is fixed for ffast-math
-        sat = wavesh_tick_no_simd<sqrt_sin_sigmoid_adaa<0>> (sat);
+        sat = wavesh_tick<sqrt_sin_sigmoid_adaa<0>> (sat);
         break;
       case sat_tanh_adaa:
-        // TODO: change to "tick" when/if XSIMD is fixed for ffast-math
-        sat = wavesh_tick_no_simd<tanh_aa> (sat);
+        sat = wavesh_tick<tanh_aa> (sat);
         break;
       case sat_sqrt_adaa:
         sat = wavesh_tick<sqrt_sigmoid_aa> (sat);
@@ -501,8 +498,7 @@ public:
         sat = wavesh_tick<hardclip_aa> (sat);
         break;
       case sat_sqrt_sin_adaa:
-        // TODO: change to "tick" when/if XSIMD is fixed for ffast-math
-        sat = wavesh_tick_no_simd<hardclip_aa> (sat);
+        sat = wavesh_tick<hardclip_aa> (sat);
         break;
       default:
         break;
@@ -692,9 +688,6 @@ private:
 #define ARTV_SATURATION_USE_SIMD 0
   // ARTV_SATURATION_USE_simd has detrimental effects when ADAA enabled,
   // the current implementation always takes both branches.
-  //
-  // As an extra, xsimd is broken with ffast-math.
-  // https://github.com/xtensor-stack/xsimd/issues/515
   template <class wsh>
   simd_batch<double, 2> wavesh_tick (simd_batch<double, 2> x)
   {

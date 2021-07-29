@@ -73,7 +73,14 @@ struct tanh_functions {
   template <class T, size_t N>
   static simd_batch<T, N> fn (simd_batch<T, N> x)
   {
+#if !XSIMD_BROKEN_W_FAST_MATH
     return xsimd::tanh (x);
+#else
+    simd_batch<T, N> r;
+    for (uint i = 0; i < simd_batch<T, N>::size; ++i) {
+      r[i] = tanh (x[i]);
+    }
+#endif
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
@@ -85,7 +92,14 @@ struct tanh_functions {
   template <class T, size_t N>
   static simd_batch<T, N> int_fn (simd_batch<T, N> x)
   {
+#if !XSIMD_BROKEN_W_FAST_MATH
     return xsimd::log (xsimd::cosh (x));
+#else
+    simd_batch<T, N> r;
+    for (uint i = 0; i < simd_batch<T, N>::size; ++i) {
+      r[i] = log (cosh (x[i]));
+    }
+#endif
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
@@ -226,8 +240,16 @@ public:
 
     static_assert (!std::is_same_v<T, T>, "XSIMD broken on ffast-math. TODO");
 
+#if !XSIMD_BROKEN_W_FAST_MATH
     batch x_exp = xsimd::exp (x);
     batch x_int = xsimd::log (x_exp + ((T) 1. / x_exp));
+#else
+    batch x_exp, x_int;
+    for (uint i = 0; i < n_builtins; ++i) {
+      x_exp[i] = exp (x);
+      x_int[i] = log (x_exp + ((T) 1. / x_exp));
+    }
+#endif
 
     x.store_aligned (x1v_ptr);
     x_exp.store_aligned (x1_expv_ptr);

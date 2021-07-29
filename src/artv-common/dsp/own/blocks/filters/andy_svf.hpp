@@ -270,7 +270,7 @@ struct svf {
 
     assert (c.size() >= (n_coeffs * n_builtins));
 
-#if 0
+#if !XSIMD_BROKEN_W_FAST_MATH
     // XSIMD broken on pow, exp, tanh...
     simdreg A = xsimd::exp (db * (T) (1. / 40.) * (T) M_LN10);
 #else

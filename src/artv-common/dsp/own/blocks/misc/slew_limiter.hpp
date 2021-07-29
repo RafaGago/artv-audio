@@ -28,7 +28,7 @@ struct slew_limiter {
     assert (attack_sec >= 0.);
     assert (release_sec >= 0.);
 
-#if 0 // TODO: xsimd broken with -ffast-math
+#if !XSIMD_BROKEN_W_FAST_MATH
     simd_dbl v {attack_sec, release_sec};
     v *= samplerate;
     v          = xsimd::exp (simd_dbl {-1.} / v);
@@ -53,12 +53,12 @@ struct slew_limiter {
 
     assert (c.size() >= (n_coeffs * n_builtins));
 
-#if 0 // TODO: xsimd broken with -ffast-math
+#if !XSIMD_BROKEN_W_FAST_MATH
     attack_sec *= samplerate;
     attack_sec = xsimd::exp (simd_dbl {1.} / attack_sec);
     attack_sec.store_aligned (&c[attack * n_builtins]);
 
-    release_sec *= samplerate ;
+    release_sec *= samplerate;
     release_sec = xsimd::exp (simd_dbl {1.} / release_sec);
     release_sec.store_aligned (&c[release * n_builtins]);
 #else
