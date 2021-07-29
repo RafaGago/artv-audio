@@ -170,6 +170,15 @@ public:
     T x1_expv = st[x1_exp];
     T x1_intv = st[x1_int];
 
+    // avoid exp going out of range by clipping the input. clipping at a point
+    // that allows "x_exp * x1_expv" to not result on infinity.
+    if constexpr (std::is_same_v<T, double>) {
+      x = std::clamp (x, -300., 300.);
+    }
+    else {
+      x = std::clamp (x, -150., 150.); // untested...
+    }
+
     T x_exp = exp (x);
     T x_int = log (x_exp + ((T) 1. / x_exp));
 
@@ -178,12 +187,14 @@ public:
     st[x1_int] = x_int;
 
     T diff = x - x1v;
+    T ret;
     if (abs (diff) >= adaa::epsilon (T {})) {
-      return (x_int - x1_intv) / diff;
+      ret = (x_int - x1_intv) / diff;
     }
     else {
-      return (x_exp * x1_expv - (T) 1.) / (x_exp * x1_expv + (T) 1);
+      ret = (x_exp * x1_expv - (T) 1.) / (x_exp * x1_expv + (T) 1);
     }
+    return ret;
   }
   //----------------------------------------------------------------------------
   template <size_t simd_bytes, class T>
@@ -198,6 +209,13 @@ public:
 
     assert (st.size() >= n_builtins * n_states);
 
+    if constexpr (std::is_same_v<T, double>) {
+      x = xsimd::clip (x, batch {(T) -300.}, batch {(T) 300.});
+    }
+    else {
+      x = xsimd::clip (x, batch {(T) -150.}, batch {(T) 150.}); // untested
+    }
+
     T* x1v_ptr     = &st[x1 * n_builtins];
     T* x1_expv_ptr = &st[x1_exp * n_builtins];
     T* x1_intv_ptr = &st[x1_int * n_builtins];
@@ -206,14 +224,10 @@ public:
     batch x1_expv {x1_expv_ptr, xsimd::aligned_mode {}};
     batch x1_intv {x1_intv_ptr, xsimd::aligned_mode {}};
 
+    static_assert (!std::is_same_v<T, T>, "XSIMD broken on ffast-math. TODO");
+
     batch x_exp = xsimd::exp (x);
     batch x_int = xsimd::log (x_exp + ((T) 1. / x_exp));
-    printf (
-      "s: %p, x: %f, x_exp: %f, x_int: %f\n",
-      st.data(),
-      x[0],
-      x_exp[0],
-      x_int[0]);
 
     x.store_aligned (x1v_ptr);
     x_exp.store_aligned (x1_expv_ptr);

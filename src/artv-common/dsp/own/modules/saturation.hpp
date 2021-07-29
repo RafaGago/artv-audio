@@ -367,6 +367,7 @@ public:
         sat = wavesh_tick_no_simd<sqrt_sin_sigmoid_adaa<0>> (sat);
         break;
       case sat_tanh_adaa:
+        // TODO: change to "tick" when/if XSIMD is fixed for ffast-math
         sat = wavesh_tick_no_simd<tanh_aa> (sat);
         break;
       case sat_sqrt_adaa:
@@ -376,6 +377,7 @@ public:
         sat = wavesh_tick<hardclip_aa> (sat);
         break;
       case sat_sqrt_sin_adaa:
+        // TODO: change to "tick" when/if XSIMD is fixed for ffast-math
         sat = wavesh_tick_no_simd<hardclip_aa> (sat);
         break;
       default:
