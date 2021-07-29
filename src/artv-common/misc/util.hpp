@@ -9,6 +9,7 @@
 
 #include <gcem.hpp>
 
+#include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/short_ints.hpp"
 
 namespace artv {
@@ -611,5 +612,21 @@ static T sgn (T v)
 {
   return (T) ((v > (T) 0) - (v < (T) 0));
 }
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// 0 to 44100/48000. 1 to 88/96KHz, etc... Assumes multiples of 44100 or 48000.
+static uint get_samplerate_order (uint sample_rate)
+{
+  uint sr_order = sample_rate;
+  if ((sr_order % 44100) != 0) {
+    // assuming multiple of 48Khz
+    auto srate_f = (double) sr_order;
+    srate_f *= 44100. / 48000.;
+    sr_order = (uint) srate_f;
+    assert (sr_order % 44100 == 0 && "precission issues");
+  }
+  sr_order /= 44100; // 1, 2, 4, 8, 16, 32 ...
+  sr_order = last_bit_set (sr_order); // 0, 1, 2, 3, 4, 5 ...
+  return sr_order;
+}
+//------------------------------------------------------------------------------
 } // namespace artv

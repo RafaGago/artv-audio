@@ -251,17 +251,8 @@ public:
 
     _n_processed_samples = 0;
 
-    uint sr_order = pc.get_sample_rate();
-    if ((sr_order % 44100) != 0) {
-      // assuming multiple of 48Khz
-      auto srate_f = (double) sr_order;
-      srate_f *= 44100. / 48000.;
-      sr_order = (uint) srate_f;
-      assert (sr_order % 44100 == 0 && "precission issues");
-    }
-    sr_order /= 44100; // 1, 2, 4, 8, 16, 32 ...
-    sr_order = last_bit_set (sr_order); // 0, 1, 2, 3, 4, 5 ...
-    sr_order += 3; // Sample rates 44100 multiples update every 362.811us
+    // Sample rates 44100 multiples update every 362.811us
+    uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
     _feedback_samples[0] = _feedback_samples[1] = 0.;
   }

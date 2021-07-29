@@ -26,14 +26,7 @@
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
 
-// TODO: -parameter smoothing.
-//       -As there is a downsampling FIR already, the high frequency correction
-//        could be done simpultaneously on the downsampling filter by adding the
-//        coefficients of a matched filter computed using Parks–McClellan/Remez
-//        (scipy.signal.remez) with the same amount of taps. As both filters are
-//        linear phase, the coefficients can just be summed (and the resulting
-//        magnitude halved).
-//       - Parameter smoothing
+// TODO: -parameter smoothing(?).
 
 namespace artv {
 
@@ -123,7 +116,7 @@ public:
     return float_param ("%", -100.0, 100., 0.0, 0.25, 0.6, true);
   }
   //----------------------------------------------------------------------------
-  static constexpr float lo_cut_min_hz = 10.;
+  static constexpr float lo_cut_min_hz = 2.;
 
   struct lo_cut_tag {};
 
@@ -222,7 +215,7 @@ public:
 
   static constexpr auto get_parameter (emphasis_q_tag)
   {
-    return float_param ("", 0.01, 1, 0.5, 0.01);
+    return float_param ("", 0.01, 2., 0.5, 0.01);
   }
   //----------------------------------------------------------------------------
   struct envfollow_attack_tag {};
@@ -265,12 +258,38 @@ public:
     constexpr auto max_db = (constexpr_db_to_gain (40.) - 1.);
 
     _p.ef_to_drive = v * 0.01; // max 1
-    _p.ef_to_drive *= _p.ef_to_drive; // quadratic, more resolution on small v
-    _p.ef_to_drive *= max_db; // adjust range
-    _p.ef_to_drive *= v < 0 ? -1.f : 1.f; // keep sign
+    _p.ef_to_drive *= fabs (_p.ef_to_drive);
+    _p.ef_to_drive *= max_db;
   }
 
   static constexpr auto get_parameter (envfollow_to_drive_tag)
+  {
+    return float_param ("%", -100., 100., 0., 0.01);
+  }
+  //----------------------------------------------------------------------------
+  struct envfollow_to_emphasis_freq_tag {};
+
+  void set (envfollow_to_emphasis_freq_tag, float v)
+  {
+    _p.ef_to_emphasis_freq = v * 0.01; // max 1
+    _p.ef_to_emphasis_freq *= 2.; // max one octave up or down
+  }
+
+  static constexpr auto get_parameter (envfollow_to_emphasis_freq_tag)
+  {
+    return float_param ("%", -100., 100., 0., 0.01);
+  }
+  //----------------------------------------------------------------------------
+  struct envfollow_to_emphasis_amount_tag {};
+
+  void set (envfollow_to_emphasis_amount_tag, float v)
+  {
+    _p.ef_to_emphasis_amt = v * 0.01; // max 1
+    _p.ef_to_emphasis_amt = sqrt (fabs (_p.ef_to_emphasis_amt));
+    _p.ef_to_emphasis_amt *= (v < 0.) ? -30 : 30;
+  }
+
+  static constexpr auto get_parameter (envfollow_to_emphasis_amount_tag)
   {
     return float_param ("%", -100., 100., 0., 0.01);
   }
@@ -287,7 +306,10 @@ public:
     lo_cut_tag,
     hi_cut_tag,
     envfollow_attack_tag,
-    envfollow_release_tag>;
+    envfollow_release_tag,
+    envfollow_to_drive_tag,
+    envfollow_to_emphasis_freq_tag,
+    envfollow_to_emphasis_amount_tag>;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -314,6 +336,11 @@ public:
       set (type, get_parameter (type).defaultv);
     });
     _p.type_prev = sat_type_count; // force initial click removal routine.
+
+    // Sample rates 44100 multiples update every 362.811us
+    uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
+    _control_rate_mask   = lsb_mask<uint> (sr_order);
+    _n_processed_samples = 0;
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -346,7 +373,7 @@ public:
 
     simd_dbl inv_compens_drive = 1. / compens_drive;
 
-    for (uint i = 0; i < block_samples; ++i) {
+    for (uint i = 0; i < block_samples; ++i, ++_n_processed_samples) {
       // TODO: drive and filter change smoothing
       simd_dbl sat {chnls[0][i], chnls[1][i]};
 
@@ -379,24 +406,35 @@ public:
         hi = hi_prev;
       }
 
-      simd_dbl follow = xsimd::abs (sat * p.ef_to_drive);
-      // printf ("follow in: %f %f, ", follow[0], follow[1]);
-      follow = slew_limiter::tick_multi_aligned<sse_bytes, double> (
-        _envfollow_coeffs, _envfollow_states, follow);
-      // printf ("follow out: %f %f\n", follow[0], follow[1]);
-      follow += 1.; // 1 to N
+      simd_dbl follow = slew_limiter::tick_multi_aligned<sse_bytes, double> (
+        _envfollow_coeffs, _envfollow_states, xsimd::abs (sat));
+      follow = xsimd::min (follow, simd_dbl {1.}); // clipping too hot signals
+
+      if ((_n_processed_samples & _control_rate_mask) == 0) {
+        // expensive stuff at lower than audio rate
+        if (p.ef_to_emphasis_amt != 0. || p.ef_to_emphasis_freq != 0.) {
+          update_emphasis (
+            follow * p.ef_to_emphasis_freq * p.emphasis_freq,
+            follow * p.ef_to_emphasis_amt);
+        }
+      }
 
       simd_dbl drive     = compens_drive;
       simd_dbl inv_drive = inv_compens_drive;
 
-      if (p.ef_to_drive >= 0.f) {
-        drive *= follow;
-        inv_drive /= follow;
-      }
-      else {
-        // inverse modulation
-        inv_drive *= follow;
-        drive /= follow;
+      if (p.ef_to_drive != 0.f) {
+        // gain modulation. Audio rate.
+        simd_dbl gainfollow
+          = (follow * abs (p.ef_to_drive)) + 1.; // 1 to N range
+        if (p.ef_to_drive > 0.f) {
+          drive *= gainfollow;
+          inv_drive /= gainfollow;
+        }
+        else {
+          // inverse modulation
+          inv_drive *= gainfollow;
+          drive /= gainfollow;
+        }
       }
 
       sat *= simd_dbl {p.drive} * drive;
@@ -524,6 +562,8 @@ private:
     float ef_attack             = 0.;
     float ef_release            = 0.f;
     float ef_to_drive           = 1.f;
+    float ef_to_emphasis_freq   = 0.f;
+    float ef_to_emphasis_amt    = 0.f;
     char  type                  = 0;
     char  type_prev             = 1;
     char  mode                  = 1;
@@ -592,20 +632,22 @@ private:
     return mode != mode_no_aa;
   }
   //----------------------------------------------------------------------------
-  void update_emphasis()
+  void update_emphasis (
+    simd_dbl freq_offset = simd_dbl {0.},
+    simd_dbl amt_offset  = simd_dbl {0.})
   {
-    simd_batch<double, 2> f  = {_p.emphasis_freq, _p.emphasis_freq};
-    simd_batch<double, 2> q  = {_p.emphasis_q, _p.emphasis_q};
-    simd_batch<double, 2> db = {_p.emphasis_amount, _p.emphasis_amount};
+    simd_dbl f  = {_p.emphasis_freq, _p.emphasis_freq};
+    simd_dbl q  = {_p.emphasis_q, _p.emphasis_q};
+    simd_dbl db = {_p.emphasis_amount, _p.emphasis_amount};
+
+    f += freq_offset;
+    db += amt_offset;
 
     andy::svf::bell_multi_aligned<sse_bytes, double> (
       _pre_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
 
-    db[0] = -db[0];
-    db[1] = -db[1];
-
     andy::svf::bell_multi_aligned<sse_bytes, double> (
-      _post_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
+      _post_emphasis_coeffs, f, q, -db, _plugcontext->get_sample_rate());
   }
   //----------------------------------------------------------------------------
   void update_envelope_follower()
@@ -693,6 +735,8 @@ private:
   emphasis_coeff_array              _post_emphasis_coeffs;
   emphasis_state_array              _post_emphasis_states;
   compander_state_array             _expander_states;
+  uint                              _n_processed_samples;
+  uint                              _control_rate_mask;
 
   plugin_context* _plugcontext = nullptr;
 };
