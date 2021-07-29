@@ -215,7 +215,7 @@ public:
 
   static constexpr auto get_parameter (emphasis_q_tag)
   {
-    return float_param ("", 0.01, 20., 0.5, 0.01, 0.6);
+    return float_param ("", 0.01, 10., 0.5, 0.01, 0.6);
   }
   //----------------------------------------------------------------------------
   struct envfollow_attack_tag {};
