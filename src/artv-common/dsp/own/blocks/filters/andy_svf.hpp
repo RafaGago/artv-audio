@@ -3,6 +3,7 @@
 /* Fiters from: https://cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf*/
 
 #include <cmath>
+#include <gcem.hpp>
 #include <type_traits>
 
 #include "artv-common/misc/short_ints.hpp"
@@ -25,12 +26,12 @@ struct svf {
     double    freq,
     double    q,
     double    sr,
-    uint      coeff_offset   = 0,
-    uint      coeff_distance = 1)
+    uint      interleaved_pack_offset = 0,
+    uint      interleaved_pack_size   = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
-    auto co = unpack_interleaved_coeffs (c, coeff_distance);
+    c.shrink_head (interleaved_pack_offset);
+    auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
     double g = tan (M_PI * freq / sr);
     double k = 1.0 / q;
@@ -84,12 +85,12 @@ struct svf {
     double    freq,
     double    q,
     double    sr,
-    uint      coeff_offset   = 0,
-    uint      coeff_distance = 1)
+    uint      interleaved_pack_offset = 0,
+    uint      interleaved_pack_size   = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset);
-    auto co = unpack_interleaved_coeffs (c, coeff_distance);
+    c.shrink_head (interleaved_pack_offset);
+    auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
     double g = tan (M_PI * freq / sr);
     double k = 1.0 / q;
@@ -107,12 +108,12 @@ struct svf {
     double    freq,
     double    q,
     double    sr,
-    uint      coeff_offset   = 0,
-    uint      coeff_distance = 1)
+    uint      interleaved_pack_offset = 0,
+    uint      interleaved_pack_size   = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
-    auto co = unpack_interleaved_coeffs (c, coeff_distance);
+    c.shrink_head (interleaved_pack_offset);
+    auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
     double g = tan (M_PI * freq / sr);
     double k = 1.0 / q;
@@ -130,12 +131,12 @@ struct svf {
     double    freq,
     double    q,
     double    sr,
-    uint      coeff_offset   = 0,
-    uint      coeff_distance = 1)
+    uint      interleaved_pack_offset = 0,
+    uint      interleaved_pack_size   = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
-    auto co = unpack_interleaved_coeffs (c, coeff_distance);
+    c.shrink_head (interleaved_pack_offset);
+    auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
     double g = tan (M_PI * freq / sr);
     double k = 1.0 / q;
@@ -153,12 +154,12 @@ struct svf {
     double    freq,
     double    q,
     double    sr,
-    uint      coeff_offset   = 0,
-    uint      coeff_distance = 1)
+    uint      interleaved_pack_offset = 0,
+    uint      interleaved_pack_size   = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
-    auto co = unpack_interleaved_coeffs (c, coeff_distance);
+    c.shrink_head (interleaved_pack_offset);
+    auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
     double g = tan (M_PI * freq / sr);
     double k = 1.0 / q;
@@ -176,12 +177,12 @@ struct svf {
     double    freq,
     double    q,
     double    sr,
-    uint      coeff_offset   = 0,
-    uint      coeff_distance = 1)
+    uint      interleaved_pack_offset = 0,
+    uint      interleaved_pack_size   = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
-    auto co = unpack_interleaved_coeffs (c, coeff_distance);
+    c.shrink_head (interleaved_pack_offset);
+    auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
     double g = tan (M_PI * freq / sr);
     double k = 1.0 / q;
@@ -235,16 +236,16 @@ struct svf {
     crange<T> c,
     double    freq,
     double    q,
-    double    belldB,
+    double    db,
     double    sr,
-    uint      coeff_offset   = 0,
-    uint      coeff_distance = 1)
+    uint      interleaved_pack_offset = 0,
+    uint      interleaved_pack_size   = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
-    auto co = unpack_interleaved_coeffs (c, coeff_distance);
+    c.shrink_head (interleaved_pack_offset);
+    auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
-    double A = pow (10.f, belldB / 40.f);
+    double A = exp (db * (T) (1. / 40.) * (T) M_LN10);
     double g = tan (M_PI * freq / sr);
     double k = 1.0 / (q * A);
     *co.a1   = 1.0 / (1.0 + g * (g + k));
@@ -269,7 +270,15 @@ struct svf {
 
     assert (c.size() >= (n_coeffs * n_builtins));
 
-    auto A = xsimd::pow (simdreg {(T) 10.}, db * simdreg {(T) (1. / 40.)});
+#if 0
+    // XSIMD broken on pow, exp, tanh...
+    simdreg A = xsimd::exp (db * (T) (1. / 40.) * (T) M_LN10);
+#else
+    simdreg A;
+    for (uint i = 0; i < n_builtins; ++i) {
+      A[i] = exp (db[i] * (T) (1. / 40.) * (T) M_LN10);
+    }
+#endif
     auto g = xsimd::tan (simdreg {(T) M_PI} * freq / simdreg {(T) sr});
     auto k = simdreg {(T) 1.} / (q * A);
 
@@ -298,7 +307,7 @@ struct svf {
     crange<T> c,
     double    freq,
     double    q,
-    double    belldB,
+    double    db,
     double    sr,
     uint      coeff_offset   = 0,
     uint      coeff_distance = 1)
@@ -307,7 +316,7 @@ struct svf {
     c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
     auto co = unpack_interleaved_coeffs (c, coeff_distance);
 
-    double A = pow (10.f, belldB / 40.f);
+    double A = exp (db * (T) (1. / 40.) * (T) M_LN10);
     double g = tan (M_PI * freq / sr) / sqrt (A);
     double k = 1.0 / q;
     *co.a1   = 1.0 / (1.0 + g * (g + k));
@@ -323,7 +332,7 @@ struct svf {
     crange<T> c,
     double    freq,
     double    q,
-    double    belldB,
+    double    db,
     double    sr,
     uint      coeff_offset   = 0,
     uint      coeff_distance = 1)
@@ -332,7 +341,9 @@ struct svf {
     c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
     auto co = unpack_interleaved_coeffs (c, coeff_distance);
 
-    double A = pow (10.f, belldB / 40.f);
+    constexpr T ln10 = (T) gcem::log (10.);
+
+    double A = exp (db * (T) (1. / 40.) * (T) M_LN10);
     double g = tan (M_PI * freq / sr) * sqrt (A);
     double k = 1.0 / q;
     *co.a1   = 1.0 / (1.0 + g * (g + k));
