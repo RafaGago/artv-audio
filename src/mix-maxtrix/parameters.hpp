@@ -5247,6 +5247,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  saturation_feedback,
+  n_stereo_busses,
+  param_common (
+    "Feedback",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::feedback_tag>()),
+  saturation::get_parameter (saturation::feedback_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   saturation_oversampling,
   n_stereo_busses,
   param_common (
@@ -5260,11 +5270,12 @@ using saturation_params = mp_list<
   saturation_type,
   saturation_mode,
   saturation_compensated_drive,
-  saturation_compensated_drive_balance,
   saturation_drive,
+  saturation_compensated_drive_balance,
   saturation_emphasis_amount,
   saturation_emphasis_freq,
   saturation_emphasis_q,
+
   saturation_lo_cut,
   saturation_hi_cut,
   saturation_envfollow_attack,
@@ -5273,6 +5284,8 @@ using saturation_params = mp_list<
   saturation_envfollow_to_drive,
   saturation_envfollow_to_emphasis_freq,
   saturation_envfollow_to_emphasis_amount,
+
+  saturation_feedback,
   saturation_oversampling>;
 //------------------------------------------------------------------------------
 #if 0

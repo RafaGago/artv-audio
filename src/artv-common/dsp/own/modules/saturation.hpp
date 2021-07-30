@@ -27,6 +27,8 @@
 #include "artv-common/misc/util.hpp"
 
 // TODO: -parameter smoothing(?).
+// TODO: -remove companding(?).
+// TODO: -Add derivator mode(?).
 
 namespace artv {
 
@@ -259,12 +261,14 @@ public:
     return float_param ("dB", -20., 20., 0.);
   }
   //----------------------------------------------------------------------------
+  static constexpr double envfollow_max_db = 30.;
+
   struct envfollow_to_drive_tag {};
 
   void set (envfollow_to_drive_tag, float v)
   {
     // -1 because the signal of the envelope follower has "1" added.
-    constexpr auto max_db = (constexpr_db_to_gain (30.) - 1.);
+    constexpr auto max_db = (constexpr_db_to_gain (envfollow_max_db) - 1.);
 
     _p.ef_to_drive = v * 0.01; // max 1
     _p.ef_to_drive *= sqrt (fabs (_p.ef_to_drive));
@@ -287,6 +291,22 @@ public:
   static constexpr auto get_parameter (envfollow_to_emphasis_freq_tag)
   {
     return float_param ("%", -100., 100., 0., 0.01);
+  }
+  //----------------------------------------------------------------------------
+  struct feedback_tag {};
+  void set (feedback_tag, float v)
+  {
+    bool neg = v < 0.f;
+    v *= 0.01;
+    v = sqrtf (fabs (v));
+    v *= 0.975f;
+    v           = neg ? -v : v;
+    _p.feedback = v;
+  }
+
+  static constexpr auto get_parameter (feedback_tag)
+  {
+    return float_param ("%", -100., 100, 0., 0.1);
   }
   //----------------------------------------------------------------------------
   struct envfollow_to_emphasis_amount_tag {};
@@ -347,9 +367,10 @@ public:
     });
     _p.type_prev = sat_type_count; // force initial click removal routine.
 
-    uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 2;
+    uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
     _n_processed_samples = 0;
+    _sat_prev            = simd_dbl {0.};
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -388,6 +409,7 @@ public:
 
       simd_dbl lo {0.}, lo_prev {0.}, hi {0.}, hi_prev {0.};
 
+      // crossover section
       if (_crossv_enabled[lo_lp]) {
         lo_prev[0] = get_crossv_states (lo_lp, 0)[onepole::z1];
         lo_prev[1] = get_crossv_states (lo_lp, 1)[onepole::z1];
@@ -415,6 +437,7 @@ public:
         hi = hi_prev;
       }
 
+      // Envelope follower/modulation
       simd_dbl follow = slew_limiter::tick_multi_aligned<sse_bytes, double> (
         _envfollow_coeffs, _envfollow_states, xsimd::abs (sat));
 
@@ -450,7 +473,7 @@ public:
 
       sat *= simd_dbl {p.drive} * drive;
 
-      // mode pre process
+      // pre process
       switch (p.mode) {
       case mode_no_aa:
       case mode_normal:
@@ -469,9 +492,27 @@ public:
         break;
       }
 
+      // pre emphasis
       sat = andy::svf::tick_multi_aligned<sse_bytes, double> (
         _pre_emphasis_coeffs, _pre_emphasis_states, sat);
 
+      // Feedback section
+      static constexpr auto fb_att
+        = constexpr_db_to_gain (-constexpr_db_to_gain (envfollow_max_db) - 1.);
+
+      auto feedback = _sat_prev * p.feedback;
+
+      simd_dbl feedback_follow = follow * p.ef_to_drive * fb_att;
+
+      double fbf0        = feedback_follow[0];
+      feedback_follow[0] = feedback_follow[1];
+      feedback_follow[0] = fbf0;
+
+      feedback += feedback * feedback_follow;
+
+      sat += feedback;
+
+      // waveshaping
       auto wsh_type
         = p.type + (sat_type_count * (uint) waveshaper_type_is_adaa (p.mode));
 
@@ -504,10 +545,13 @@ public:
         break;
       }
 
+      _sat_prev = sat;
+
+      // post emphasis
       sat = andy::svf::tick_multi_aligned<sse_bytes, double> (
         _post_emphasis_coeffs, _post_emphasis_states, sat);
 
-      // mode post process
+      // post process / restore
       switch (p.mode) {
       case mode_no_aa:
       case mode_normal:
@@ -525,6 +569,7 @@ public:
         break;
       }
 
+      // gain and crossover join
       sat *= inv_drive;
       sat += lo + hi;
 
@@ -572,6 +617,7 @@ private:
     float ef_to_drive           = 1.f;
     float ef_to_emphasis_freq   = 0.f;
     float ef_to_emphasis_amt    = 0.f;
+    float feedback              = 0.f;
     char  type                  = 0;
     char  type_prev             = 1;
     char  mode                  = 1;
@@ -740,6 +786,7 @@ private:
   emphasis_coeff_array              _post_emphasis_coeffs;
   emphasis_state_array              _post_emphasis_states;
   compander_state_array             _expander_states;
+  simd_dbl                          _sat_prev;
   uint                              _n_processed_samples;
   uint                              _control_rate_mask;
 
