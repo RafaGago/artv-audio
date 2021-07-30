@@ -1,8 +1,13 @@
+- Track the XSIMD -ffast-math bug.
+  https://github.com/xtensor-stack/xsimd/issues/515
+
+- Track Chow Phaser samplerate bug.
+  https://github.com/xtensor-stack/xsimd/issues/515
+
 - Still unfixed memory leaks on original TAL Reverb 2's code (mix-maxtrix-test
   catches them).
 
-- Make all simd processing filters, DSP, etc to take a "simd_reg" instead of
-  raw memory.
+- Add low latency (IIR) oversampling.
 
 - Channel labels (? The plugin is too cluttered vertically).
 
@@ -15,17 +20,12 @@
 
 - Free Clip/Peak Eater (?). https://gitlab.com/JHVenn/Free-Clip
 
-- Saike Space on FM Filter 2 (?).
-
-- Upwards compressor with clipper.
+- Saike Space on FM Filter 2 (?). Sounds good.
 
 - Sonic Enhancer: It seems as if the envelopes speeds when triggering the CV are
   samplerate dependant. This seems to be designed for 44.1kHz only.
 
-- Chow Phaser: It seems as if the FX is be designed for 44.1kHz only. It
-  distorts badly on high samplerates. Both the port and the original.
-
-- Variation of the filters module with envelope follower on the cutoff.
+- Add envelope follower on the filters module for the cutoff.
 
 - Optimization of Saike's filters (CPU hog).
 
@@ -40,9 +40,6 @@
 - EQ:
   -Port analog reeq bands (?).
 
-- Atlantis crashes sometimes when changing FX. (Automatically fixed? Not found
-  in a long while)
-
 - If worth, performance optimizations. Math operations on fast paths, suboptimal
   memory layouts as on Ripple phaser. Vectorizations, Use the FMA intrinsic on
   XSIMD, etc. Optimized functions on KVR:
@@ -53,35 +50,10 @@
   -https://www.kvraudio.com/forum/viewtopic.php?f=33&t=532048&p=7524831#p7524831
   -https://www.kvraudio.com/forum/viewtopic.php?f=33&t=510794
 
-- JSFX: "jsfx_invsqrt" is using Quake invsqrt instead of sse intrinsics or
-  equivalent.
+- JSFX: "jsfx_invsqrt" is using Quake invsqrt instead of sse intrinsics + newton
+  rhapson iterations (or equivalent).
 
 - Save window size on state.
-
-- Floaty delay.
-
-- Sonic anomaly. Leet delay.
-
-- Surge: Nimbus, Reverb 2, Ensemble.
-
-  I liked those effects, but it doesn't seem easy to pull from there:
-
-  * The DSP is tightly-coupled to extremely big classes that I'd actually rather
-    port manually (won't happen), as I see risk of a high level wrapper blowing
-    up. Even a Biquad there needs a "SurgeStorage" megabloat class on
-    construction.
-
-  * No DSP class has a parameter with the samples to process.
-
-  Then there are lots of small details about dynamic memory, LFOs, etc.
-
-- Airwindows: Pocket verbs?+
-
-- New Saike FX? SEQS reverb? Pitch Shifter?
-
-- NP1136 Peak Lim?
-
-- mda. DUB delay 02. Ambience? De-esser?
 
 - Transience: regenerate with the last version of jsfx2cpp. The generated source
   is a mess.
