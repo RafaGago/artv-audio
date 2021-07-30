@@ -27,8 +27,6 @@
 #include "artv-common/misc/util.hpp"
 
 // TODO: -parameter smoothing(?).
-// TODO: -remove companding(?).
-// TODO: -Add derivator mode(?).
 
 namespace artv {
 
@@ -62,7 +60,6 @@ public:
       case mode_normal:
         dc = 1;
         break;
-      case mode_sqrt_pow:
       case mode_pow_sqrt:
         dc = 3;
         break;
@@ -79,10 +76,7 @@ public:
   static constexpr auto get_parameter (mode_tag)
   {
     return choice_param (
-      0,
-      make_cstr_array (
-        "No AA", "Normal", "Sqrt/Pow Compand", "Pow/Sqrt Compand"),
-      40);
+      0, make_cstr_array ("No AA", "Normal", "Companded"), 40);
   }
   //----------------------------------------------------------------------------
   struct saturated_out_tag {};
@@ -474,15 +468,10 @@ public:
       case mode_no_aa:
       case mode_normal:
         break;
-      case mode_sqrt_pow:
-        sat = sqrt_aa::tick_multi_aligned<sse_bytes, double> (
-          _adaa_fix_eq_delay_coeffs, _compressor_states, sat);
-        break;
-      case mode_pow_sqrt: {
+      case mode_pow_sqrt:
         sat = pow2_aa::tick_multi_aligned<sse_bytes, double> (
           _adaa_fix_eq_delay_coeffs, _compressor_states, sat);
         break;
-      }
       default:
         assert (false);
         break;
@@ -552,10 +541,6 @@ public:
       case mode_no_aa:
       case mode_normal:
         break;
-      case mode_sqrt_pow:
-        sat = pow2_aa::tick_multi_aligned<sse_bytes, double> (
-          _adaa_fix_eq_delay_coeffs, _expander_states, sat);
-        break;
       case mode_pow_sqrt:
         sat = sqrt_aa::tick_multi_aligned<sse_bytes, double> (
           _adaa_fix_eq_delay_coeffs, _expander_states, sat);
@@ -591,7 +576,6 @@ private:
   enum mode_type {
     mode_no_aa,
     mode_normal,
-    mode_sqrt_pow,
     mode_pow_sqrt,
     mode_count,
   };
