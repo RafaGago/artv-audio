@@ -85,35 +85,32 @@ public:
       40);
   }
   //----------------------------------------------------------------------------
+  struct saturated_out_tag {};
+
+  void set (saturated_out_tag, float v) { _p.sat_out = db_to_gain (v); }
+
+  static constexpr auto get_parameter (saturated_out_tag)
+  {
+    return float_param ("dB", -20.0, 20., 0.0, 0.25, 0.6, true);
+  }
+  //----------------------------------------------------------------------------
   struct drive_tag {};
 
   void set (drive_tag, float v) { _p.drive = db_to_gain (v); }
 
   static constexpr auto get_parameter (drive_tag)
   {
-    return float_param ("dB", -20.0, 20., 0.0, 0.25, 0.6, true);
-  }
-  //----------------------------------------------------------------------------
-  struct compensated_drive_tag {};
-
-  void set (compensated_drive_tag, float v)
-  {
-    _p.compensated_drive = db_to_gain (v);
-  }
-
-  static constexpr auto get_parameter (compensated_drive_tag)
-  {
     return float_param ("dB", -30.0, 30, 0.0, 0.25, 0.6, true);
   }
   //----------------------------------------------------------------------------
-  struct compensated_drive_balance_tag {};
+  struct drive_balance_tag {};
 
-  void set (compensated_drive_balance_tag, float v)
+  void set (drive_balance_tag, float v)
   {
-    _p.compensated_drive_bal = (v * 0.7 * 0.01) + 1.;
+    _p.drive_bal = (v * 0.7 * 0.01) + 1.;
   }
 
-  static constexpr auto get_parameter (compensated_drive_balance_tag)
+  static constexpr auto get_parameter (drive_balance_tag)
   {
     return float_param ("%", -100.0, 100., 0.0, 0.25, 0.6, true);
   }
@@ -329,8 +326,8 @@ public:
     emphasis_amount_tag,
     emphasis_freq_tag,
     emphasis_q_tag,
-    compensated_drive_tag,
-    compensated_drive_balance_tag,
+    saturated_out_tag,
+    drive_balance_tag,
     drive_tag,
     lo_cut_tag,
     hi_cut_tag,
@@ -398,8 +395,7 @@ public:
     }
 
     simd_dbl compens_drive {
-      p.compensated_drive * (p.compensated_drive_bal),
-      p.compensated_drive * (2. - p.compensated_drive_bal)};
+      p.drive * (p.drive_bal), p.drive * (2. - p.drive_bal)};
 
     simd_dbl inv_compens_drive = 1. / compens_drive;
 
@@ -471,7 +467,7 @@ public:
         }
       }
 
-      sat *= simd_dbl {p.drive} * drive;
+      sat *= drive;
 
       // pre process
       switch (p.mode) {
@@ -570,7 +566,7 @@ public:
       }
 
       // gain and crossover join
-      sat *= inv_drive;
+      sat *= inv_drive * p.sat_out;
       sat += lo + hi;
 
       chnls[0][i] = sat[0];
@@ -603,25 +599,25 @@ private:
   enum filter_indexes { lo_lp, hi_hp, n_filters };
 
   struct params {
-    float drive                 = 1.f;
-    float compensated_drive     = 1.f;
-    float compensated_drive_bal = 0.f;
-    float lo_cut_hz             = -1.f;
-    float hi_cut_hz             = -1.f;
-    float emphasis_freq         = 60.f;
-    float emphasis_amount       = 0.f;
-    float emphasis_q            = 0.5f;
-    float ef_attack             = 0.;
-    float ef_release            = 0.f;
-    float ef_gain               = 1.f;
-    float ef_to_drive           = 1.f;
-    float ef_to_emphasis_freq   = 0.f;
-    float ef_to_emphasis_amt    = 0.f;
-    float feedback              = 0.f;
-    char  type                  = 0;
-    char  type_prev             = 1;
-    char  mode                  = 1;
-    char  mode_prev             = 0;
+    float sat_out             = 1.f;
+    float drive               = 1.f;
+    float drive_bal           = 0.f;
+    float lo_cut_hz           = -1.f;
+    float hi_cut_hz           = -1.f;
+    float emphasis_freq       = 60.f;
+    float emphasis_amount     = 0.f;
+    float emphasis_q          = 0.5f;
+    float ef_attack           = 0.;
+    float ef_release          = 0.f;
+    float ef_gain             = 1.f;
+    float ef_to_drive         = 1.f;
+    float ef_to_emphasis_freq = 0.f;
+    float ef_to_emphasis_amt  = 0.f;
+    float feedback            = 0.f;
+    char  type                = 0;
+    char  type_prev           = 1;
+    char  mode                = 1;
+    char  mode_prev           = 0;
   } _p;
 
   template <class T>

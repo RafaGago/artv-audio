@@ -5087,6 +5087,16 @@ using filter2x_params = mp_list<
   filter2x_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
+  saturation_out,
+  n_stereo_busses,
+  param_common (
+    "Sat Out",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::saturated_out_tag>()),
+  saturation::get_parameter (saturation::saturated_out_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   saturation_drive,
   n_stereo_busses,
   param_common (
@@ -5097,23 +5107,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_compensated_drive,
+  saturation_drive_balance,
   n_stereo_busses,
   param_common (
-    "EL Drive",
+    "Drive Bal",
     declptr<updownsampled<saturation>>(),
-    declptr<saturation::compensated_drive_tag>()),
-  saturation::get_parameter (saturation::compensated_drive_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
-  saturation_compensated_drive_balance,
-  n_stereo_busses,
-  param_common (
-    "EL Drv Bal",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::compensated_drive_balance_tag>()),
-  saturation::get_parameter (saturation::compensated_drive_balance_tag {}),
+    declptr<saturation::drive_balance_tag>()),
+  saturation::get_parameter (saturation::drive_balance_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -5220,7 +5220,7 @@ parameter_cpp_class_define (
   saturation_envfollow_to_drive,
   n_stereo_busses,
   param_common (
-    "EF->Drv",
+    "EF-Drive",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::envfollow_to_drive_tag>()),
   saturation::get_parameter (saturation::envfollow_to_drive_tag {}),
@@ -5230,7 +5230,7 @@ parameter_cpp_class_define (
   saturation_envfollow_to_emphasis_freq,
   n_stereo_busses,
   param_common (
-    "EF->Tone F",
+    "EF-Tone F",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::envfollow_to_emphasis_freq_tag>()),
   saturation::get_parameter (saturation::envfollow_to_emphasis_freq_tag {}),
@@ -5240,7 +5240,7 @@ parameter_cpp_class_define (
   saturation_envfollow_to_emphasis_amount,
   n_stereo_busses,
   param_common (
-    "EF->Tone A",
+    "EF-Tone A",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::envfollow_to_emphasis_amount_tag>()),
   saturation::get_parameter (saturation::envfollow_to_emphasis_amount_tag {}),
@@ -5269,9 +5269,9 @@ parameter_cpp_class_define (
 using saturation_params = mp_list<
   saturation_type,
   saturation_mode,
-  saturation_compensated_drive,
   saturation_drive,
-  saturation_compensated_drive_balance,
+  saturation_drive_balance,
+  saturation_feedback,
   saturation_emphasis_amount,
   saturation_emphasis_freq,
   saturation_emphasis_q,
@@ -5285,7 +5285,7 @@ using saturation_params = mp_list<
   saturation_envfollow_to_emphasis_freq,
   saturation_envfollow_to_emphasis_amount,
 
-  saturation_feedback,
+  saturation_out,
   saturation_oversampling>;
 //------------------------------------------------------------------------------
 #if 0
