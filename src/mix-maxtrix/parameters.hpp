@@ -5237,6 +5237,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  saturation_envfollow_to_emphasis_q,
+  n_stereo_busses,
+  param_common (
+    "EF-Tone F",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::envfollow_to_emphasis_q_tag>()),
+  saturation::get_parameter (saturation::envfollow_to_emphasis_q_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   saturation_envfollow_to_emphasis_amount,
   n_stereo_busses,
   param_common (
@@ -5284,6 +5294,7 @@ using saturation_params = mp_list<
   saturation_envfollow_to_drive,
   saturation_envfollow_to_emphasis_freq,
   saturation_envfollow_to_emphasis_amount,
+  saturation_envfollow_to_emphasis_q,
 
   saturation_out,
   saturation_oversampling>;

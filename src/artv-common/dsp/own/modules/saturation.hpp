@@ -60,7 +60,7 @@ public:
       case mode_normal:
         dc = 1;
         break;
-      case mode_pow_sqrt:
+      case mode_compand:
         dc = 3;
         break;
         break;
@@ -76,7 +76,10 @@ public:
   static constexpr auto get_parameter (mode_tag)
   {
     return choice_param (
-      0, make_cstr_array ("No AA", "Normal", "Companded"), 40);
+      0,
+      make_cstr_array (
+        "No AA", "ADAA", "Band No AA", "Band ADAA", "Companded ADAA"),
+      40);
   }
   //----------------------------------------------------------------------------
   struct saturated_out_tag {};
@@ -162,7 +165,7 @@ public:
 
   static constexpr auto get_parameter (hi_cut_tag)
   {
-    return frequency_parameter (60., hi_cut_max_hz, hi_cut_max_hz);
+    return frequency_parameter (30., hi_cut_max_hz, hi_cut_max_hz);
   }
   //----------------------------------------------------------------------------
   struct emphasis_freq_tag {};
@@ -179,6 +182,22 @@ public:
   static constexpr auto get_parameter (emphasis_freq_tag)
   {
     return frequency_parameter (lo_cut_min_hz, 6000., 200.);
+  }
+  //----------------------------------------------------------------------------
+  struct feedback_tag {};
+  void set (feedback_tag, float v)
+  {
+    bool neg = v < 0.f;
+    v *= 0.01;
+    v = sqrtf (fabs (v));
+    v *= 0.975f;
+    v           = neg ? -v : v;
+    _p.feedback = v;
+  }
+
+  static constexpr auto get_parameter (feedback_tag)
+  {
+    return float_param ("%", -100., 100, 0., 0.1);
   }
   //----------------------------------------------------------------------------
   struct emphasis_amount_tag {};
@@ -284,22 +303,6 @@ public:
     return float_param ("%", -100., 100., 0., 0.01);
   }
   //----------------------------------------------------------------------------
-  struct feedback_tag {};
-  void set (feedback_tag, float v)
-  {
-    bool neg = v < 0.f;
-    v *= 0.01;
-    v = sqrtf (fabs (v));
-    v *= 0.975f;
-    v           = neg ? -v : v;
-    _p.feedback = v;
-  }
-
-  static constexpr auto get_parameter (feedback_tag)
-  {
-    return float_param ("%", -100., 100, 0., 0.1);
-  }
-  //----------------------------------------------------------------------------
   struct envfollow_to_emphasis_amount_tag {};
 
   void set (envfollow_to_emphasis_amount_tag, float v)
@@ -310,6 +313,20 @@ public:
   }
 
   static constexpr auto get_parameter (envfollow_to_emphasis_amount_tag)
+  {
+    return float_param ("%", -100., 100., 0., 0.01);
+  }
+  //----------------------------------------------------------------------------
+  struct envfollow_to_emphasis_q_tag {};
+
+  void set (envfollow_to_emphasis_q_tag, float v)
+  {
+    _p.ef_to_emphasis_q = v * 0.01; // max 1
+    _p.ef_to_emphasis_q = sqrt (fabs (_p.ef_to_emphasis_amt));
+    _p.ef_to_emphasis_q *= (v < 0.) ? -3. : 3.;
+  }
+
+  static constexpr auto get_parameter (envfollow_to_emphasis_q_tag)
   {
     return float_param ("%", -100., 100., 0., 0.01);
   }
@@ -436,10 +453,13 @@ public:
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
         // expensive stuff at lower than audio rate
-        if (p.ef_to_emphasis_amt != 0. || p.ef_to_emphasis_freq != 0.) {
+        if (
+          p.ef_to_emphasis_amt != 0. || p.ef_to_emphasis_freq != 0.
+          || p.ef_to_emphasis_q != 0) {
           update_emphasis (
             follow * p.ef_to_emphasis_freq * p.emphasis_freq,
-            follow * p.ef_to_emphasis_amt);
+            follow * p.ef_to_emphasis_amt,
+            follow * p.ef_to_emphasis_q * p.emphasis_q);
         }
       }
 
@@ -464,17 +484,9 @@ public:
       sat *= drive;
 
       // pre process
-      switch (p.mode) {
-      case mode_no_aa:
-      case mode_normal:
-        break;
-      case mode_pow_sqrt:
+      if (p.mode == mode_compand) {
         sat = pow2_aa::tick_multi_aligned<sse_bytes, double> (
           _adaa_fix_eq_delay_coeffs, _compressor_states, sat);
-        break;
-      default:
-        assert (false);
-        break;
       }
 
       // pre emphasis
@@ -541,7 +553,11 @@ public:
       case mode_no_aa:
       case mode_normal:
         break;
-      case mode_pow_sqrt:
+      case mode_band_no_aa:
+      case mode_band_normal:
+        hi = lo = simd_dbl {0.};
+        break;
+      case mode_compand:
         sat = sqrt_aa::tick_multi_aligned<sse_bytes, double> (
           _adaa_fix_eq_delay_coeffs, _expander_states, sat);
         break;
@@ -576,7 +592,9 @@ private:
   enum mode_type {
     mode_no_aa,
     mode_normal,
-    mode_pow_sqrt,
+    mode_band_no_aa,
+    mode_band_normal,
+    mode_compand,
     mode_count,
   };
 
@@ -597,6 +615,7 @@ private:
     float ef_to_drive         = 1.f;
     float ef_to_emphasis_freq = 0.f;
     float ef_to_emphasis_amt  = 0.f;
+    float ef_to_emphasis_q    = 0.f;
     float feedback            = 0.f;
     char  type                = 0;
     char  type_prev           = 1;
@@ -663,12 +682,13 @@ private:
   //----------------------------------------------------------------------------
   static constexpr bool waveshaper_type_is_adaa (char mode)
   {
-    return mode != mode_no_aa;
+    return (mode & 1) || mode == mode_compand;
   }
   //----------------------------------------------------------------------------
   void update_emphasis (
     simd_dbl freq_offset = simd_dbl {0.},
-    simd_dbl amt_offset  = simd_dbl {0.})
+    simd_dbl amt_offset  = simd_dbl {0.},
+    simd_dbl q_offset    = simd_dbl {0.})
   {
     simd_dbl f  = {_p.emphasis_freq, _p.emphasis_freq};
     simd_dbl q  = {_p.emphasis_q, _p.emphasis_q};
@@ -676,6 +696,7 @@ private:
 
     f += freq_offset;
     db += amt_offset;
+    q += q_offset;
 
     andy::svf::bell_multi_aligned<sse_bytes, double> (
       _pre_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
