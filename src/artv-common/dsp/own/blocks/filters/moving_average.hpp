@@ -46,24 +46,23 @@ struct moving_average<2> {
     return ret;
   }
   //----------------------------------------------------------------------------
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T>,
-    crange<T>               z, // state 'z1' 1 to N
-    simd_reg<T, simd_bytes> in) // in' 1 to N
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>>,
+    crange<vec_value_type_t<V>> z, // state 'z1' 1 to N
+    V                           in) // in' 1 to N
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg             = simd_reg<T, simd_bytes>;
-    constexpr auto n_builtins = simdreg::size;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (z.size() >= n_builtins * n_states);
+    assert (z.size() >= (traits.size * n_states));
 
-    auto    z1_ptr = &z[z1 * n_builtins];
-    simdreg ret {z1_ptr, xsimd::aligned_mode {}};
+    auto z1_ptr = &z[z1 * traits.size];
+    V    ret    = vec_load<V> (z1_ptr);
     ret += in;
     ret *= (T) 0.5;
-
-    in.store_aligned (z1_ptr);
+    vec_store (z1_ptr, in);
     return ret;
   }
   //----------------------------------------------------------------------------

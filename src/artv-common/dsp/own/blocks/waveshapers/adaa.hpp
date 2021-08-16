@@ -38,11 +38,11 @@ public:
     return functions::fn (x);
   }
   //----------------------------------------------------------------------------
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T>,
-    crange<T>,
-    simd_reg<T, simd_bytes> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>>,
+    crange<vec_value_type_t<V>> st,
+    V                           x)
   {
     return functions::fn (x);
   }
@@ -59,8 +59,8 @@ public:
   static void init_states (crange<T> s)
   {}
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static void init_states_multi_aligned (crange<T> s)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void init_states_simd (crange<vec_value_type_t<V>> s)
   {}
   //----------------------------------------------------------------------------
   template <class T>
@@ -84,36 +84,34 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T>,
-    crange<T>               st,
-    simd_reg<T, simd_bytes> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>>,
+    crange<vec_value_type_t<V>> st,
+    V                           x)
   {
     // as this has to calculate both branches, it might not be worth bothering.
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using regtype                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = regtype::size;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (st.size() >= n_builtins * n_states);
+    assert (st.size() >= (traits.size * n_states));
 
-    T* x1v_ptr     = &st[x1 * n_builtins];
-    T* x1v_int_ptr = &st[x1_int * n_builtins];
+    T* x1v_ptr     = &st[x1 * traits.size];
+    T* x1v_int_ptr = &st[x1_int * traits.size];
 
-    regtype x1v, x1v_int;
-    x1v.load_aligned (x1v_ptr);
-    x1v_int.load_aligned (x1v_int_ptr);
+    V x1v     = vec_load<V> (x1v_ptr);
+    V x1v_int = vec_load<V> (x1v_int_ptr);
 
-    regtype x_int = functions::int_fn (x);
+    V x_int = functions::int_fn (x);
 
-    x.store_aligned (x1v_ptr);
-    x_int.store_aligned (x1v_int_ptr);
+    vec_store (x1v_ptr, x);
+    vec_store (x1v_int_ptr, x_int);
 
-    regtype diff  = x - x1v;
-    regtype big   = (x_int - x1v_int) / diff;
-    regtype small = functions::fn ((x + x1v) * (T) 0.5);
-    return xsimd::select (
-      xsimd::abs (diff) >= regtype {epsilon (T {})}, big, small);
+    V diff  = x - x1v;
+    V big   = (x_int - x1v_int) / diff;
+    V small = functions::fn ((x + x1v) * (T) 0.5);
+    return (vec_abs (diff) >= epsilon (T {})) ? big : small;
   }
   //----------------------------------------------------------------------------
 };
@@ -128,8 +126,8 @@ public:
   static void init_states (crange<T> s)
   {}
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static void init_states_multi_aligned (crange<T> s)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void init_states_simd (crange<vec_value_type_t<V>> s)
   {}
   //----------------------------------------------------------------------------
   template <class T>
@@ -167,15 +165,15 @@ public:
     return ret;
   }
   //----------------------------------------------------------------------------
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T>,
-    crange<T>               st,
-    simd_reg<T, simd_bytes> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>>,
+    crange<vec_value_type_t<V>> st,
+    V                           x)
   {
     // Real SIMD: TODO. Might not be worth because of the high number of
     // branches.
-    static_assert (!std::is_same_v<T, T>, "To be implemented");
+    static_assert (!std::is_same_v<V, V>, "To be implemented");
   }
   //----------------------------------------------------------------------------
 private:
@@ -232,20 +230,19 @@ public:
     allpass_interpolator::init (c, (T) 0.5);
   }
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static void init_multi_aligned (crange<T> c)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void init_simd (crange<vec_value_type_t<V>> c)
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = simdreg::size;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= (n_coeffs * n_builtins));
+    assert (c.size() >= (n_coeffs * traits.size));
 
     static_assert (moving_average<2>::n_coeffs == 0, "Add initialization!");
     static_assert (Impl<1>::n_coeffs == 0, "Add initialization!");
 
-    allpass_interpolator::init_multi_aligned<simd_bytes, T> (
-      c, simdreg {(T) 0.5});
+    allpass_interpolator::init_simd (c, vec_set<V> ((T) 0.5));
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -256,15 +253,15 @@ public:
     Impl<1>::init_states (s.shrink_head (impl_states_idx));
   }
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static void init_states_multi_aligned (crange<T> s)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void init_states_simd (crange<vec_value_type_t<V>> s)
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = simdreg::size;
+
     // maybe memset delay line and boxcar?
-    Impl<1>::template init_states_multi_aligned<simd_bytes, T> (
-      s.shrink_head (impl_states_idx * n_builtins));
+    Impl<1>::template init_states_simd<T, V> (
+      s.shrink_head (impl_states_idx * vec_traits<V>().size));
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -288,30 +285,28 @@ public:
     return Impl<1>::tick ({}, st, eq);
   }
   //----------------------------------------------------------------------------
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T>         c,
-    crange<T>               st,
-    simd_reg<T, simd_bytes> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>> c,
+    crange<vec_value_type_t<V>>       st,
+    V                                 x)
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using regtype                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = regtype::size;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= (n_builtins * n_coeffs));
-    assert (st.size() >= (n_builtins * n_states));
+    assert (c.size() >= (traits.size * n_coeffs));
+    assert (st.size() >= (traits.size * n_states));
 
     // comments on the non-vectorized version
-    regtype delayed
-      = allpass_interpolator::tick_multi_aligned<simd_bytes, T> (c, st, x);
-    st.shrink_head (allpass_interpolator::n_states * n_builtins);
+    V delayed = allpass_interpolator::tick_simd (c, st, x);
+    st.shrink_head (allpass_interpolator::n_states * traits.size);
 
-    regtype filtered
-      = moving_average<2>::tick_multi_aligned<simd_bytes, T> ({}, st, x);
-    st.shrink_head (moving_average<2>::n_states * n_builtins);
+    V filtered = moving_average<2>::tick_simd ({}, st, x);
+    st.shrink_head (moving_average<2>::n_states * traits.size);
 
-    regtype eq = delayed + (delayed - filtered);
-    return Impl<1>::template tick_multi_aligned<simd_bytes, T> ({}, st, eq);
+    V eq = delayed + (delayed - filtered);
+    return Impl<1>::tick_simd ({}, st, eq);
   }
   //----------------------------------------------------------------------------
 };
@@ -322,15 +317,17 @@ struct null_shaper {
   enum state { n_states };
 
   template <class T>
-  static T tick (crange<const T>, crange<T> st, T x)
+  static T tick (crange<const T>, crange<T>, T)
   {}
 
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T>,
-    crange<T>,
-    simd_reg<T, simd_bytes>)
-  {}
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>> c,
+    crange<vec_value_type_t<V>>       st,
+    V                                 x)
+  {
+    return x;
+  }
 };
 } // namespace detail
 

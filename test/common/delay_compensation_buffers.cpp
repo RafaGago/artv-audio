@@ -4,7 +4,7 @@
 #include "artv-common/misc/delay_compensation_buffers.hpp"
 
 namespace artv {
-
+//------------------------------------------------------------------------------
 TEST (delay_compensation_buffers, bigger_input)
 {
   delay_compensation_buffers<uint, 1> dly;
@@ -38,7 +38,7 @@ TEST (delay_compensation_buffers, bigger_input)
   ASSERT_EQ (in[2], 9);
   ASSERT_EQ (in[3], 10);
 }
-
+//------------------------------------------------------------------------------
 TEST (delay_compensation_buffers, bigger_delay)
 {
   delay_compensation_buffers<uint, 1> dly;
@@ -78,5 +78,5 @@ TEST (delay_compensation_buffers, bigger_delay)
   ASSERT_EQ (in[0], 5);
   ASSERT_EQ (in[1], 6);
 }
-
+//------------------------------------------------------------------------------
 } // namespace artv

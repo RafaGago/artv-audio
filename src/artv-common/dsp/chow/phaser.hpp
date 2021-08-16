@@ -337,16 +337,16 @@ public:
 
     float sr = (float) _plugcontext->get_sample_rate();
 
-    constexpr uint sse_step = simd_flt::size;
+    constexpr uint sse_step = vec_traits<float_x4>().size;
 
     for (uint i = 0; i < samples; ++i) {
       // block LP parameter smoothing. 4 = SSE float
       for (uint j = 0; j < param_tgt.arr.size(); j += sse_step) {
-        simd_flt out = smoother::tick_aligned<16, float> (
+        float_x4 out = smoother::tick_aligned (
           make_crange (_smooth_coeff),
           make_crange (&_param_state.arr[j], sse_step),
-          simd_flt {&param_tgt.arr[j], xsimd::aligned_mode {}});
-        out.store_aligned (&smooth.arr[j]);
+          vec_load<float_x4> (&param_tgt.arr[j]));
+        vec_store (&smooth.arr[j], out);
       }
 
       float lfo = _lfo.tick_sine();

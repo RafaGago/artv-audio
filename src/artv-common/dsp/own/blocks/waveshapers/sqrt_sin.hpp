@@ -20,19 +20,14 @@ struct sqrt_sin_sigmoid_functions {
     return (x / sqrt (x * x + T (1.))) + (sin (16 * x)) * (1. / 16.);
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V fn (V x)
   {
-    using batch = simd_batch<T, N>;
-    batch sq, sn;
-    sq = x / xsimd::sqrt (x * x + batch {(T) 1.});
-#if !XSIMD_BROKEN_W_FAST_MATH
-    sn = xsimd::sin (x * (T) 16.) * (T) (1. / 16.);
-#else
-    for (uint i = 0; i < batch::size; ++i) {
-      sn[i] = sin (x[i] * (T) 16.) * (T) (1. / 16.);
-    }
-#endif
+    using T = vec_value_type_t<V>;
+
+    V sq, sn;
+    sq = x / vec_sqrt (x * x + (T) 1.);
+    sn = vec_sin (x * (T) 16.) * (T) (1. / 16.);
     return sq + sn;
   }
   //----------------------------------------------------------------------------
@@ -42,22 +37,14 @@ struct sqrt_sin_sigmoid_functions {
     return sqrt (x * x + T (1.)) - (cos (16 * x)) * (1. / 256.);
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> int_fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V int_fn (V x)
   {
-    using batch = simd_batch<T, N>;
-    return (xsimd::sqrt (x * x + batch {(T) 1.}))
-      - xsimd::cos (x * batch {(T) 16.}) * batch {(T) 1. / 256.};
-    using batch = simd_batch<T, N>;
-    batch sq, cs;
-    sq = xsimd::sqrt (x * x + (T) 1.);
-#if !XSIMD_BROKEN_W_FAST_MATH
-    cs = xsimd::cos (x * (T) 16.) * ((T) 1. / 256.);
-#else
-    for (uint i = 0; i < batch::size; ++i) {
-      cs[i] = cos (x[i] * (T) 16.) * ((T) 1. / 256.);
-    }
-#endif
+    using T = vec_value_type_t<V>;
+
+    V sq, cs;
+    sq = vec_sqrt (x * x + (T) 1.);
+    cs = vec_cos (x * (T) 16.) * ((T) 1. / 256.);
     return sq + cs;
   }
   //----------------------------------------------------------------------------
@@ -68,25 +55,15 @@ struct sqrt_sin_sigmoid_functions {
       - (sin (16 * x)) * (1. / 4096.);
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> int2_fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V int2_fn (V x)
   {
-    using batch = simd_batch<T, N>;
-    return ((x * xsimd::sqrt (x * x + batch {(T) 1.}))
-            - xsimd::asinh (x) * xsimd::batch {(T) 0.5})
-      - xsimd::sin (x * batch {(T) 16.}) * batch {(T) 1. / 4096.};
-    using batch = simd_batch<T, N>;
-    batch sq, as, sn;
-    sq = xsimd::sqrt (x * x + (T) 1.) * x;
-#if !XSIMD_BROKEN_W_FAST_MATH
-    as = xsimd::asinh (x) * (T) 0.5;
-    sn = xsimd::sin (x * (T) 16.) * (T) (1. / 4096.);
-#else
-    for (uint i = 0; i < batch::size; ++i) {
-      as = asinh (x[i]) * (T) 0.5;
-      sn = sin (x[i] * (T) 16.) * (T) (1. / 4096.);
-    }
-#endif
+    using T = vec_value_type_t<V>;
+
+    V sq, as, sn;
+    sq = vec_sqrt (x * x + (T) 1.) * x;
+    as = vec_asinh (x) * (T) 0.5;
+    sn = vec_sin (x * (T) 16.) * (T) (1. / 4096.);
     return sq + as - sn;
   }
   //----------------------------------------------------------------------------

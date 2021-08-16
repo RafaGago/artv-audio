@@ -70,17 +70,10 @@ struct tanh_functions {
     return tanh (x);
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V fn (V x)
   {
-#if !XSIMD_BROKEN_W_FAST_MATH
-    return xsimd::tanh (x);
-#else
-    simd_batch<T, N> r;
-    for (uint i = 0; i < simd_batch<T, N>::size; ++i) {
-      r[i] = tanh (x[i]);
-    }
-#endif
+    return vec_tanh (x);
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
@@ -89,17 +82,10 @@ struct tanh_functions {
     return log (cosh (x));
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> int_fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V int_fn (V x)
   {
-#if !XSIMD_BROKEN_W_FAST_MATH
-    return xsimd::log (xsimd::cosh (x));
-#else
-    simd_batch<T, N> r;
-    for (uint i = 0; i < simd_batch<T, N>::size; ++i) {
-      r[i] = log (cosh (x[i]));
-    }
-#endif
+    return vec_log (vec_cosh (x));
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
@@ -110,12 +96,12 @@ struct tanh_functions {
     return (T) 0.;
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> int2_fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V int2_fn (V x)
   {
     // not solveable analitically in a practical/easy way.
-    static_assert (!std::is_same_v<T, T>, "TBI?");
-    return {(T) 0.};
+    static_assert (!std::is_same_v<V, V>, "TBI?");
+    return x;
   }
   //----------------------------------------------------------------------------
 };
@@ -151,26 +137,26 @@ public:
     st[x1_int] = (T) 0.6931471805599453; // log (2)
   }
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static void init_states_multi_aligned (crange<T> st)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void init_states_simd (crange<vec_value_type_t<V>> st)
   {
-    static_assert (std::is_floating_point_v<T>, "");
-    using batch                      = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = batch::size;
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
 
-    assert (st.size() >= n_builtins * n_states);
+    assert (st.size() >= (traits.size * n_states));
 
-    T* x1v_ptr     = &st[x1 * n_builtins];
-    T* x1_expv_ptr = &st[x1_exp * n_builtins];
-    T* x1_intv_ptr = &st[x1_int * n_builtins];
+    T* x1v_ptr     = &st[x1 * traits.size];
+    T* x1_expv_ptr = &st[x1_exp * traits.size];
+    T* x1_intv_ptr = &st[x1_int * traits.size];
 
-    auto x1v     = batch {(T) 0.};
-    auto x1_expv = batch {(T) 1.}; // exp (0)
-    auto x1_intv = batch {(T) 0.6931471805599453}; // log (2)
+    auto x1v     = vec_set ((T) 0.);
+    auto x1_expv = vec_set ((T) 1.); // exp (0)
+    auto x1_intv = vec_set ((T) 0.6931471805599453); // log (2)
 
-    x1v.store_aligned (x1v_ptr);
-    x1_expv.store_aligned (x1_expv_ptr);
-    x1_intv.store_aligned (x1_intv_ptr);
+    vec_store (x1v_ptr, x1v);
+    vec_store (x1_expv_ptr, x1_expv);
+    vec_store (x1_intv_ptr, x1_intv);
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -211,58 +197,51 @@ public:
     return ret;
   }
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T>,
-    crange<T>               st,
-    simd_reg<T, simd_bytes> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>>,
+    crange<vec_value_type_t<V>> st,
+    V                           x)
   {
-    static_assert (std::is_floating_point_v<T>, "");
-    using batch                      = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = batch::size;
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
 
-    assert (st.size() >= n_builtins * n_states);
+    assert (st.size() >= traits.size * n_states);
 
     if constexpr (std::is_same_v<T, double>) {
-      x = xsimd::clip (x, batch {(T) -300.}, batch {(T) 300.});
+      x = vec_clamp (x, vec_set<V> ((T) -300.), vec_set<V> ((T) 300.));
     }
     else {
-      x = xsimd::clip (x, batch {(T) -150.}, batch {(T) 150.}); // untested
+      x = vec_clamp (
+        x,
+        vec_set<V> ((T) -150.),
+        vec_set<V> ((T) 150.)); // untested
     }
 
-    T* x1v_ptr     = &st[x1 * n_builtins];
-    T* x1_expv_ptr = &st[x1_exp * n_builtins];
-    T* x1_intv_ptr = &st[x1_int * n_builtins];
+    T* x1v_ptr     = &st[x1 * traits.size];
+    T* x1_expv_ptr = &st[x1_exp * traits.size];
+    T* x1_intv_ptr = &st[x1_int * traits.size];
 
-    batch x1v {x1v_ptr, xsimd::aligned_mode {}};
-    batch x1_expv {x1_expv_ptr, xsimd::aligned_mode {}};
-    batch x1_intv {x1_intv_ptr, xsimd::aligned_mode {}};
+    V x1v     = vec_load (x1v_ptr);
+    V x1_expv = vec_load (x1_expv_ptr);
+    V x1_intv = vec_load (x1_intv_ptr);
 
-    static_assert (!std::is_same_v<T, T>, "XSIMD broken on ffast-math. TODO");
+    V x_exp = vec_exp (x);
+    V x_int = vec_log (x_exp + ((T) 1. / x_exp));
 
-#if !XSIMD_BROKEN_W_FAST_MATH
-    batch x_exp = xsimd::exp (x);
-    batch x_int = xsimd::log (x_exp + ((T) 1. / x_exp));
-#else
-    batch x_exp, x_int;
-    for (uint i = 0; i < n_builtins; ++i) {
-      x_exp[i] = exp (x);
-      x_int[i] = log (x_exp + ((T) 1. / x_exp));
-    }
-#endif
+    vec_store (x1v_ptr, x);
+    vec_store (x1_expv_ptr, x_exp);
+    vec_store (x1_intv_ptr, x_int);
 
-    x.store_aligned (x1v_ptr);
-    x_exp.store_aligned (x1_expv_ptr);
-    x_int.store_aligned (x1_intv_ptr);
+    V num      = x_int - x1_intv;
+    V den      = x - x1v;
+    V fallback = x_exp * x1_expv - (T) 1.;
 
-    batch num      = x_int - x1_intv;
-    batch den      = x - x1v;
-    batch fallback = x_exp * x1_expv - (T) 1.;
+    auto no_fallback = vec_abs (den) > adaa::epsilon (T {});
 
-    auto no_fallback = xsimd::abs (den) > batch {adaa::epsilon (T {})};
-
-    num = xsimd::select (no_fallback, num, fallback);
-    den = xsimd::select (no_fallback, den, fallback + (T) 2.);
+    num = no_fallback ? num : fallback;
+    den = no_fallback ? num : fallback + (T) 2.;
     return num / den;
   }
 };

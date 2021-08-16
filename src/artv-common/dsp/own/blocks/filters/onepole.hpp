@@ -41,62 +41,25 @@ struct onepole_smoother {
     return z[z1];
   }
   //----------------------------------------------------------------------------
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick (
-    crange<const T>                                      c, // coeffs
-    std::array<crange<T>, simd_reg<T, simd_bytes>::size> z, // state
-    std::array<T, simd_reg<T, simd_bytes>::size>         in)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_aligned (
+    crange<const vec_value_type_t<V>> c, // coeffs, just 'b1'
+    crange<vec_value_type_t<V>>       z, // state 'z1' 1 to N
+    V                                 in) // in' 1 to N
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg             = simd_reg<T, simd_bytes>;
-    constexpr auto n_builtins = simdreg::size;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= n_coeffs);
-    for (uint i = 0; i < n_builtins; ++i) {
-      assert (z[i].size() >= n_states);
-      assert (z[i].size() >= n_states);
-    }
-
-    // I don't know if it's actually worth to use unaligned SIMD for this
-    // actually.
-    simdreg a0_v {1. - c[b1]};
-    simdreg b1_v {c[b1]};
-    simdreg in_v {in.data(), xsimd::unaligned_mode {}};
-    simdreg z1_v;
-
-    for (uint i = 0; i < n_builtins; ++i) {
-      z1_v[i] = z[i][z1];
-    }
-
-    z1_v = (in_v * a0_v) + (z1_v * b1_v);
-
-    for (uint i = 0; i < n_builtins; ++i) {
-      z[i][z1] = z1_v[i];
-    }
-    return z1_v;
-  }
-  //----------------------------------------------------------------------------
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_aligned (
-    crange<const T>         c, // coeffs, just 'b1'
-    crange<T>               z, // state 'z1' 1 to N
-    simd_reg<T, simd_bytes> in) // in' 1 to N
-  {
-    static_assert (std::is_floating_point<T>::value, "");
-    using simdreg             = simd_reg<T, simd_bytes>;
-    constexpr auto n_builtins = simdreg::size;
-
-    assert (z.size() >= n_builtins * n_states);
+    assert (z.size() >= traits.size * n_states);
     assert (c.size() >= n_coeffs);
 
-    simdreg a0_v {((T) 1.) - c[b1]};
-    simdreg b1_v {c[b1]};
-    simdreg z1_v {z.data(), xsimd::aligned_mode {}};
+    V a0_v = vec_set<V> (((T) 1.) - c[b1]);
+    V b1_v = vec_set<V> (c[b1]);
+    V z1_v = vec_load<V> (z);
 
     z1_v = (in * a0_v) + (z1_v * b1_v);
-
-    z1_v.store_aligned (z.data());
-
+    vec_store (z, z1_v);
     return z1_v;
   }
   //----------------------------------------------------------------------------
@@ -148,10 +111,10 @@ struct onepole {
     return st[z1];
   }
   //----------------------------------------------------------------------------
-  static simd_dbl tick (
+  static double_x2 tick (
     crange<const double>          co, // coeffs
     std::array<crange<double>, 2> st, // state
-    simd_dbl                      in)
+    double_x2                     in)
   {
     assert (st.size() >= 2);
     assert (co.size() >= n_coeffs);
@@ -159,11 +122,11 @@ struct onepole {
     assert (st[1].size() >= n_states);
 
     // I don't know if it's worth to use SIMD for this actually.
-    simd_dbl a1_v {co[a1]};
-    simd_dbl b0_v {co[b0]};
-    simd_dbl b1_v {co[b1]};
-    simd_dbl z0_v {st[0][z0], st[1][z0]};
-    simd_dbl z1_v {st[0][z1], st[1][z1]};
+    double_x2 a1_v = vec_set<2> (co[a1]);
+    double_x2 b0_v = vec_set<2> (co[b0]);
+    double_x2 b1_v = vec_set<2> (co[b1]);
+    double_x2 z0_v = {st[0][z0], st[1][z0]};
+    double_x2 z1_v = {st[0][z1], st[1][z1]};
 
     z1_v      = (in * b0_v) + (z0_v * b1_v) - (z1_v * a1_v);
     st[0][z1] = z1_v[0];

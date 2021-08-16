@@ -20,11 +20,12 @@ struct sqrt_sigmoid_functions {
     return x / sqrt (x * x + T (1.));
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V fn (V x)
   {
-    using batch = simd_batch<T, N>;
-    return x / xsimd::sqrt (x * x + batch {(T) 1.});
+    using T = vec_value_type_t<V>;
+
+    return x / vec_sqrt (x * x + (T) 1.);
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
@@ -33,11 +34,12 @@ struct sqrt_sigmoid_functions {
     return sqrt (x * x + T (1.));
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> int_fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V int_fn (V x)
   {
-    using batch = simd_batch<T, N>;
-    return xsimd::sqrt (x * x + batch {(T) 1.});
+    using T = vec_value_type_t<V>;
+
+    return vec_sqrt (x * x + (T) 1.);
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
@@ -46,12 +48,12 @@ struct sqrt_sigmoid_functions {
     return ((x * sqrt (x * x + T (1.))) + asinh (x)) * T (0.5);
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> int2_fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V int2_fn (V x)
   {
-    using batch = simd_batch<T, N>;
-    return (x * xsimd::sqrt (x * x + batch {(T) 1.}) + xsimd::asinh (x))
-      * batch {(T) 0.5};
+    using T = vec_value_type_t<V>;
+
+    return ((x * vec_sqrt (x * x + T (1.))) + vec_asinh (x)) * T (0.5);
   }
 };
 //------------------------------------------------------------------------------
@@ -66,13 +68,13 @@ class sqrt_sigmoid_adaa_1 {
 public:
   enum coeffs { n_coeffs };
   enum state { x1, x1_sqrt, n_states };
-    //----------------------------------------------------------------------------
+  //----------------------------------------------------------------------------
   template <class T>
   static void init_states (crange<T> s)
   {}
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static void init_states_multi_aligned (crange<T> s)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void init_states_simd (crange<vec_value_type_t<V>> s)
   {}
   //----------------------------------------------------------------------------
   template <class T>
@@ -88,28 +90,28 @@ public:
     return (x + x1v) / (xsqrt + x1vsqrt);
   }
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T>,
-    crange<T>               st,
-    simd_reg<T, simd_bytes> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>>,
+    crange<vec_value_type_t<V>> st,
+    V                           x)
   {
-    static_assert (std::is_floating_point_v<T>, "");
-    using batch                      = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = batch::size;
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
 
-    assert (st.size() >= n_builtins * n_states);
+    assert (st.size() >= traits.size * n_states);
 
-    T* x1v_ptr      = &st[x1 * n_builtins];
-    T* x1v_sqrt_ptr = &st[x1_sqrt * n_builtins];
+    T* x1v_ptr      = &st[x1 * traits.size];
+    T* x1v_sqrt_ptr = &st[x1_sqrt * traits.size];
 
-    batch x1v {x1v_ptr, xsimd::aligned_mode {}};
-    batch x1vsqrt {x1v_sqrt_ptr, xsimd::aligned_mode {}};
+    V x1v     = vec_load<T> (x1v_ptr);
+    V x1vsqrt = vec_load<T> (x1v_sqrt_ptr);
 
-    batch xsqrt = xsimd::sqrt (x * x + (T) 1.);
+    V xsqrt = vec_sqrt (x * x + (T) 1.);
 
-    x.store_aligned (x1v_ptr);
-    xsqrt.store_aligned (x1v_sqrt_ptr);
+    vec_store (x1v_ptr, x);
+    vec_store (x1v_sqrt_ptr, xsqrt);
 
     return (x + x1v) / (xsqrt + x1vsqrt);
   }

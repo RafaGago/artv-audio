@@ -28,45 +28,33 @@ struct slew_limiter {
     assert (attack_sec >= 0.);
     assert (release_sec >= 0.);
 
-#if !XSIMD_BROKEN_W_FAST_MATH
-    simd_dbl v {attack_sec, release_sec};
+    double_x2 v = {attack_sec, release_sec};
     v *= samplerate;
-    v          = xsimd::exp (simd_dbl {-1.} / v);
+    v          = vec_exp ((T) -1. / v);
     c[attack]  = v[0];
     c[release] = v[1];
-#else
-    c[attack]  = exp (-1. / (samplerate * attack_sec));
-    c[release] = exp (-1. / (samplerate * release_sec));
-#endif
   }
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static void init_multi_aligned (
-    crange<T>               c,
-    simd_reg<T, simd_bytes> attack_sec,
-    simd_reg<T, simd_bytes> release_sec,
-    T                       samplerate)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void init_simd (
+    crange<vec_value_type_t<V>> c,
+    V                           attack_sec,
+    V                           release_sec,
+    vec_value_type_t<V>         samplerate)
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = simdreg::size;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= (n_coeffs * n_builtins));
+    assert (c.size() >= (n_coeffs * traits.size));
 
-#if !XSIMD_BROKEN_W_FAST_MATH
     attack_sec *= samplerate;
-    attack_sec = xsimd::exp (simd_dbl {1.} / attack_sec);
-    attack_sec.store_aligned (&c[attack * n_builtins]);
+    attack_sec = vec_exp ((T) -1. / attack_sec);
+    vec_store (&c[attack * traits.size], attack_sec);
 
     release_sec *= samplerate;
-    release_sec = xsimd::exp (simd_dbl {1.} / release_sec);
-    release_sec.store_aligned (&c[release * n_builtins]);
-#else
-    for (uint i = 0; i < n_builtins; ++i) {
-      c[(attack * n_builtins) + i]  = exp (-1. / (samplerate * attack_sec[i]));
-      c[(release * n_builtins) + i] = exp (-1. / (samplerate * release_sec[i]));
-    }
-#endif
+    release_sec = vec_exp ((T) -1. / release_sec);
+    vec_store (&c[release * traits.size], release_sec);
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -86,27 +74,27 @@ struct slew_limiter {
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T>         c, // coeffs interleaved, ready to SIMD load
-    crange<T>               s, // states interleaved, ready to SIMD load
-    simd_reg<T, simd_bytes> in)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>>
+                                c, // coeffs interleaved, ready to SIMD load
+    crange<vec_value_type_t<V>> s, // states interleaved, ready to SIMD load
+    V                           in)
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = simdreg::size;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= n_builtins * n_coeffs);
-    assert (s.size() >= n_builtins * n_states);
+    assert (c.size() >= (traits.size * n_coeffs));
+    assert (s.size() >= (traits.size * n_states));
 
-    simdreg in_prev, att, rel;
-    in_prev.load_aligned (&s[prev * n_builtins]);
-    att.load_aligned (&c[attack * n_builtins]);
-    rel.load_aligned (&c[release * n_builtins]);
+    V in_prev = vec_load<V> (&s[prev * traits.size]);
+    V att     = vec_load<V> (&c[attack * traits.size]);
+    V rel     = vec_load<V> (&c[release * traits.size]);
 
-    auto coeffs = xsimd::select (in_prev < in, att, rel);
+    auto coeffs = in_prev < in ? att : rel;
     in_prev     = in + coeffs * (in_prev - in);
-    in_prev.store_aligned (&s[prev * n_builtins]);
+    vec_store (&s[prev * traits.size], in_prev);
     return in_prev;
   }
 };

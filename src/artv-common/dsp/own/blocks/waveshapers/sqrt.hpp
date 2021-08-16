@@ -21,10 +21,10 @@ struct sqrt_functions {
     return sqrt (abs (x)) * sgn_no_zero (x);
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V fn (V x)
   {
-    return xsimd::sqrt (xsimd::abs (x)) * sgn_no_zero (x);
+    return vec_sqrt (vec_abs (x)) * vec_sgn_no_zero (x);
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
@@ -34,11 +34,13 @@ struct sqrt_functions {
     return sqrt (ax) * ax * (T) (2. / 3.);
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> int_fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V int_fn (V x)
   {
-    auto ax = xsimd::abs (x);
-    return xsimd::sqrt (ax) * ax * (T) (2. / 3.);
+    using T = vec_value_type_t<V>;
+
+    auto ax = vec_abs (x);
+    return vec_sqrt (ax) * ax * (T) (2. / 3.);
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
@@ -48,11 +50,13 @@ struct sqrt_functions {
     return sqrt (ax) * ax * ax * (T) (4. / 15.);
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> int2_fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V int2_fn (V x)
   {
-    auto ax = xsimd::abs (x);
-    return xsimd::sqrt (ax) * ax * ax * (T) (4. / 15.);
+    using T = vec_value_type_t<V>;
+
+    auto ax = vec_abs (x);
+    return vec_sqrt (ax) * ax * ax * (T) (4. / 15.);
   }
   //----------------------------------------------------------------------------
 };
@@ -111,8 +115,8 @@ public:
   static void init_states (crange<T> s)
   {}
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static void init_states_multi_aligned (crange<T> s)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void init_states_simd (crange<vec_value_type_t<V>> s)
   {}
   //----------------------------------------------------------------------------
   template <class T>
@@ -138,11 +142,11 @@ public:
     return num / den;
   }
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T>,
-    crange<T>               st,
-    simd_reg<T, simd_bytes> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>>,
+    crange<vec_value_type_t<V>> st,
+    V x)
   {
     static_assert (std::is_floating_point_v<T>, "");
     using batch                      = simd_reg<T, simd_bytes>;

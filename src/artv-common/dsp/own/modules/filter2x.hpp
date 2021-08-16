@@ -94,37 +94,37 @@ public:
           smoothed_p.vars.feedback    = _cfg[b].feedback;
 
           auto     smcoeff = (float) _smooth_coeff;
-          simd_flt params  = smoother::tick_aligned<sse_bytes, float> (
+          float_x4 params  = smoother::tick_aligned (
             make_crange (smcoeff),
             _smooth_state[b].params.arr,
-            simd_flt {smoothed_p.arr.data(), xsimd::aligned_mode {}});
+            vec_load<float_x4> (smoothed_p.arr.data()));
 
           memcpy (smoothed_p.arr.data(), &params, sizeof params);
 
-          constexpr uint sse_step = simd_dbl::size;
+          constexpr uint sse_step = vec_traits<double_x2>().size;
           static_assert (smoothed_band_coefs.size() % sse_step == 0, "");
           for (uint chnl = 0; chnl < 2; ++chnl) {
             for (uint j = 0; j < smoothed_band_coefs[0].size(); j += sse_step) {
-              simd_dbl out = smoother::tick_aligned<sse_bytes, double> (
+              double_x2 out = smoother::tick_aligned (
                 make_crange (_smooth_coeff),
                 make_crange (&_smooth_state[b].filter[chnl][j], sse_step),
-                simd_dbl {&_coeffs[b][chnl][j], xsimd::aligned_mode {}});
-              out.store_aligned (&smoothed_band_coefs[chnl][j]);
+                vec_load<double_x2> (&_coeffs[b][chnl][j]));
+              vec_store (&smoothed_band_coefs[chnl][j], out);
             }
           }
 
-          simd_dbl in, out;
+          double_x2 in, out;
           in[0] = in_cp[0][i];
           in[1] = in_cp[1][i];
-          in *= simd_dbl {
+          in *= double_x2 {
             smoothed_p.vars.pre_drive_l, smoothed_p.vars.pre_drive_r};
 
-          simd_dbl prev {_last_sample[b][0], _last_sample[b][1]};
-          prev *= simd_dbl {smoothed_p.vars.feedback};
+          double_x2 prev {_last_sample[b][0], _last_sample[b][1]};
+          prev *= double_x2 {smoothed_p.vars.feedback};
           bool is_moog
             = btype >= bandtype::moog_1_lp && btype <= bandtype::moog_2_br;
           // moogs are extremely unstable reduce feedback
-          prev *= simd_dbl {is_moog ? 0.03 : 1.};
+          prev *= double_x2 {is_moog ? 0.03 : 1.};
           in += prev;
 
           switch (btype) {

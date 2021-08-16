@@ -36,7 +36,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt install libasound2-dev libcurl4-openssl-dev libx11-dev libxinerama-dev libxext-dev libfreetype6-dev libwebkit2gtk-4.0-dev libglu1-mesa-dev libjack-jackd2-dev lv2-dev
+          sudo apt install libasound2-dev libcurl4-openssl-dev libx11-dev libxinerama-dev libxext-dev libfreetype6-dev libwebkit2gtk-4.0-dev libglu1-mesa-dev libjack-jackd2-dev lv2-dev clang-12
 
       - name: Get latest CMake
         uses: lukka/get-cmake@latest
@@ -48,8 +48,7 @@ jobs:
       - name: Configure Linux
         if: runner.os == 'Linux'
         # Not using ninja. I don't remember the reason but it wasn't really running parallel builds
-        # Using clang because on vanilla Ubuntu 20.04 it compiles this codebase faster.
-        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_LV2=On
+        run: CC=/usr/bin/clang-12 CXX=/usr/bin/clang++-12 cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_LV2=On
 
       - name: Configure Windows
         if: runner.os == 'Windows'

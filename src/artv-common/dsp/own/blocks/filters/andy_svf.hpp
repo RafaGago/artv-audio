@@ -23,9 +23,9 @@ struct svf {
   template <class T>
   static void lowpass (
     crange<T> c,
-    double    freq,
-    double    q,
-    double    sr,
+    T         freq,
+    T         q,
+    T         sr,
     uint      interleaved_pack_offset = 0,
     uint      interleaved_pack_size   = 1)
   {
@@ -43,48 +43,42 @@ struct svf {
     *co.m2   = 1.;
   }
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static void lowpass_multi_aligned (
-    crange<T>               c,
-    simd_reg<T, simd_bytes> freq,
-    simd_reg<T, simd_bytes> q,
-    T                       sr)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void lowpass_simd (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           q,
+    vec_value_type_t<V>         sr)
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = simdreg::size;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= (n_coeffs * n_builtins));
+    assert (c.size() >= (n_coeffs * traits.size));
 
-    simdreg g = xsimd::tan (freq * ((T) M_PI) / sr);
-    simdreg k {((T) 1.0) / q};
+    V g = vec_tan (freq * ((T) M_PI) / sr);
+    V k = ((T) 1.0) / q;
 
-    simdreg a1_v {(T) 1.0};
-    a1_v /= g * (g + k) + ((T) 1.);
-    a1_v.store_aligned (&c[a1 * n_builtins]);
+    V a1_v = (T) 1. / (g * (g + k) + ((T) 1.));
+    vec_store (&c[a1 * traits.size], a1_v);
 
-    simdreg a2_v = g * a1_v;
-    a2_v.store_aligned (&c[a2 * n_builtins]);
+    V a2_v = g * a1_v;
+    vec_store (&c[a2 * traits.size], a2_v);
 
-    simdreg a3_v = g * a2_v;
-    a3_v.store_aligned (&c[a3 * n_builtins]);
+    V a3_v = g * a2_v;
+    vec_store (&c[a3 * traits.size], a3_v);
 
-    simdreg m0_v {(T) 0.};
-    m0_v.store_aligned (&c[m0 * n_builtins]);
-
-    simdreg m1_v {(T) 0.};
-    m1_v.store_aligned (&c[m1 * n_builtins]);
-
-    simdreg m2_v {(T) 1.};
-    m2_v.store_aligned (&c[m2 * n_builtins]);
+    vec_store (&c[m0 * traits.size], vec_set<V> ((T) 0.));
+    vec_store (&c[m1 * traits.size], vec_set<V> ((T) 0.));
+    vec_store (&c[m2 * traits.size], vec_set<V> ((T) 1.));
   }
   //----------------------------------------------------------------------------
   template <class T>
   static void bandpass (
     crange<T> c,
-    double    freq,
-    double    q,
-    double    sr,
+    T         freq,
+    T         q,
+    T         sr,
     uint      interleaved_pack_offset = 0,
     uint      interleaved_pack_size   = 1)
   {
@@ -105,9 +99,9 @@ struct svf {
   template <class T>
   static void highpass (
     crange<T> c,
-    double    freq,
-    double    q,
-    double    sr,
+    T         freq,
+    T         q,
+    T         sr,
     uint      interleaved_pack_offset = 0,
     uint      interleaved_pack_size   = 1)
   {
@@ -128,9 +122,9 @@ struct svf {
   template <class T>
   static void notch (
     crange<T> c,
-    double    freq,
-    double    q,
-    double    sr,
+    T         freq,
+    T         q,
+    T         sr,
     uint      interleaved_pack_offset = 0,
     uint      interleaved_pack_size   = 1)
   {
@@ -151,13 +145,12 @@ struct svf {
   template <class T>
   static void peak (
     crange<T> c,
-    double    freq,
-    double    q,
-    double    sr,
+    T         freq,
+    T         q,
+    T         sr,
     uint      interleaved_pack_offset = 0,
     uint      interleaved_pack_size   = 1)
   {
-    static_assert (std::is_floating_point<T>::value, "");
     c.shrink_head (interleaved_pack_offset);
     auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
@@ -174,9 +167,9 @@ struct svf {
   template <class T>
   static void allpass (
     crange<T> c,
-    double    freq,
-    double    q,
-    double    sr,
+    T         freq,
+    T         q,
+    T         sr,
     uint      interleaved_pack_offset = 0,
     uint      interleaved_pack_size   = 1)
   {
@@ -194,50 +187,43 @@ struct svf {
     *co.m2   = 0.;
   }
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static void allpass_multi_aligned (
-    crange<T>               c,
-    simd_reg<T, simd_bytes> freq, // no alignment required
-    simd_reg<T, simd_bytes> q, // no alignment required
-    T                       sr)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void allpass_simd (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           q,
+    vec_value_type_t<V>         sr)
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = simdreg::size;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= (n_coeffs * n_builtins));
+    assert (c.size() >= (n_coeffs * traits.size));
 
-    simdreg g = xsimd::tan (freq * ((T) M_PI) / sr);
-    simdreg k {((T) 1.0) / q};
+    V g = vec_tan (freq * ((T) M_PI) / sr);
+    V k = ((T) 1.0) / q;
 
-    simdreg a1_v {(T) 1.0};
-    a1_v /= g * (g + k) + ((T) 1.);
-    a1_v.store_aligned (&c[a1 * n_builtins]);
+    V a1_v = (T) 1.0 / (g * (g + k) + ((T) 1.));
+    vec_store (&c[a1 * traits.size], a1_v);
 
-    simdreg a2_v = g * a1_v;
-    a2_v.store_aligned (&c[a2 * n_builtins]);
+    V a2_v = g * a1_v;
+    vec_store (&c[a2 * traits.size], a2_v);
 
-    simdreg a3_v = g * a2_v;
-    a3_v.store_aligned (&c[a3 * n_builtins]);
+    V a3_v = g * a2_v;
+    vec_store (&c[a3 * traits.size], a3_v);
 
-    simdreg m0_v {(T) 1.};
-    m0_v.store_aligned (&c[m0 * n_builtins]);
-
-    simdreg m1_v {(T) -2.};
-    m1_v *= k;
-    m1_v.store_aligned (&c[m1 * n_builtins]);
-
-    simdreg m2_v {(T) 0.};
-    m2_v.store_aligned (&c[m2 * n_builtins]);
+    vec_store (&c[m0 * traits.size], vec_set<V> ((T) 1.));
+    vec_store (&c[m1 * traits.size], -2. * k);
+    vec_store (&c[m2 * traits.size], vec_set<V> ((T) 0.));
   }
   //----------------------------------------------------------------------------
   template <class T>
   static void bell (
     crange<T> c,
-    double    freq,
-    double    q,
-    double    db,
-    double    sr,
+    T         freq,
+    T         q,
+    T         db,
+    T         sr,
     uint      interleaved_pack_offset = 0,
     uint      interleaved_pack_size   = 1)
   {
@@ -256,59 +242,45 @@ struct svf {
     *co.m2   = 0.;
   }
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static void bell_multi_aligned (
-    crange<T>               c,
-    simd_reg<T, simd_bytes> freq,
-    simd_reg<T, simd_bytes> q,
-    simd_reg<T, simd_bytes> db,
-    T                       sr)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void bell_simd (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           q,
+    V                           db,
+    vec_value_type_t<V>         sr)
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = simdreg::size;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= (n_coeffs * n_builtins));
+    assert (c.size() >= (n_coeffs * traits.size));
 
-#if !XSIMD_BROKEN_W_FAST_MATH
-    // XSIMD broken on pow, exp, tanh...
-    simdreg A = xsimd::exp (db * (T) (1. / 40.) * (T) M_LN10);
-#else
-    simdreg A;
-    for (uint i = 0; i < n_builtins; ++i) {
-      A[i] = exp (db[i] * (T) (1. / 40.) * (T) M_LN10);
-    }
-#endif
-    auto g = xsimd::tan (simdreg {(T) M_PI} * freq / simdreg {(T) sr});
-    auto k = simdreg {(T) 1.} / (q * A);
+    V    A = vec_exp (db * (T) (1. / 40.) * (T) M_LN10);
+    auto g = vec_tan ((freq * (T) M_PI) / (T) sr);
+    auto k = (T) 1. / (q * A);
 
-    simdreg a1_v {(T) 1.0};
-    a1_v /= g * (g + k) + ((T) 1.);
-    a1_v.store_aligned (&c[a1 * n_builtins]);
+    V a1_v = ((T) 1.0) / (g * (g + k) + ((T) 1.));
+    vec_store (&c[a1 * traits.size], a1_v);
 
-    simdreg a2_v = g * a1_v;
-    a2_v.store_aligned (&c[a2 * n_builtins]);
+    V a2_v = g * a1_v;
+    vec_store (&c[a2 * traits.size], a2_v);
 
-    simdreg a3_v = g * a2_v;
-    a3_v.store_aligned (&c[a3 * n_builtins]);
+    V a3_v = g * a2_v;
+    vec_store (&c[a3 * traits.size], a3_v);
 
-    simdreg m0_v {(T) 1.};
-    m0_v.store_aligned (&c[m0 * n_builtins]);
-
-    simdreg m1_v = k * (A * A - (T) 1.);
-    m1_v.store_aligned (&c[m1 * n_builtins]);
-
-    simdreg m2_v {(T) 0.};
-    m2_v.store_aligned (&c[m2 * n_builtins]);
+    vec_store (&c[m0 * traits.size], vec_set<V> ((T) 1.));
+    vec_store (&c[m1 * traits.size], k * (A * A - (T) 1.));
+    vec_store (&c[m2 * traits.size], vec_set<V> ((T) 0.));
   }
   //----------------------------------------------------------------------------
   template <class T>
   static void low_shelf (
     crange<T> c,
-    double    freq,
-    double    q,
-    double    db,
-    double    sr,
+    T         freq,
+    T         q,
+    T         db,
+    T         sr,
     uint      coeff_offset   = 0,
     uint      coeff_distance = 1)
   {
@@ -330,10 +302,10 @@ struct svf {
   template <class T>
   static void high_shelf (
     crange<T> c,
-    double    freq,
-    double    q,
-    double    db,
-    double    sr,
+    T         freq,
+    T         q,
+    T         db,
+    T         sr,
     uint      coeff_offset   = 0,
     uint      coeff_distance = 1)
   {
@@ -368,13 +340,12 @@ struct svf {
     memset (s.data(), 0, sizeof s[0] * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class T>
+  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T tick (
     crange<const T> c, // coeffs
     crange<T>       s, // state
     T               v0)
   {
-    static_assert (std::is_floating_point<T>::value, "");
     assert (s.size() >= n_states);
     assert (c.size() >= n_coeffs);
 
@@ -382,115 +353,114 @@ struct svf {
       s[ic1eq], s[ic2eq], c[m0], c[m1], c[m2], c[a1], c[a2], c[a3], v0);
   }
   //----------------------------------------------------------------------------
-  // 1 set of coeffs, multiple outs. (E.g. stereo filter using double)
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick (
-    crange<const T>                                      c, // coeffs
-    std::array<crange<T>, simd_reg<T, simd_bytes>::size> s, // state
-    simd_reg<T, simd_bytes>                              v0)
+  // 1 set of coeffs, N outs. (E.g. stereo filter using double). Sparse
+  // states version.
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>>                              c, // coeffs
+    std::array<crange<vec_value_type_t<V>>, vec_traits_t<V>::size> s, // states
+    V                                                              v0)
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = simdreg::size;
+    constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= n_coeffs);
-    for (uint i = 0; i < n_builtins; ++i) {
+    for (uint i = 0; i < traits.size; ++i) {
       assert (s[i].size() >= n_states);
       assert (s[i].size() >= n_states);
     }
 
-    simdreg ic1eq_v, ic2eq_v;
+    V ic1eq_v, ic2eq_v;
 
-    for (uint i = 0; i < n_builtins; ++i) {
+    for (uint i = 0; i < traits.size; ++i) {
       ic1eq_v[i] = s[i][ic1eq];
       ic2eq_v[i] = s[i][ic2eq];
     }
 
-    simdreg out = calc<simdreg> (
+    V out = calc<V> (
       ic1eq_v,
       ic2eq_v,
-      simdreg {c[m0]},
-      simdreg {c[m1]},
-      simdreg {c[m2]},
-      simdreg {c[a1]},
-      simdreg {c[a2]},
-      simdreg {c[a3]},
+      vec_set<V> (c[m0]),
+      vec_set<V> (c[m1]),
+      vec_set<V> (c[m2]),
+      vec_set<V> (c[a1]),
+      vec_set<V> (c[a2]),
+      vec_set<V> (c[a3]),
       v0);
 
-    for (uint i = 0; i < n_builtins; ++i) {
+    for (uint i = 0; i < traits.size; ++i) {
       s[i][ic1eq] = ic1eq_v[i];
       s[i][ic2eq] = ic2eq_v[i];
     }
     return out;
   }
   //----------------------------------------------------------------------------
-  // 1 set of coeffs, N outs. (E.g. stereo filter using double)
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_aligned (
-    crange<const T>         c, // coeffs
-    crange<T>               s, // coefficients interleaved, ready to SIMD load
-    simd_reg<T, simd_bytes> v0)
+  // 1 set of coeffs, N outs. (E.g. stereo filter using double). Interleaved
+  // states version
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_aligned (
+    crange<const vec_value_type_t<V>> c, // coeffs (1 set)
+    crange<vec_value_type_t<V>>       s, // states (interleaved, SIMD aligned)
+    V                                 v0)
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = simdreg::size;
+    constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= n_coeffs);
-    assert (s.size() >= n_builtins * n_states);
+    assert (s.size() >= traits.size * n_states);
 
-    simdreg ic1eq_v, ic2eq_v;
+    V ic1eq_v = vec_load<V> (&s[ic1eq * traits.size]);
+    V ic2eq_v = vec_load<V> (&s[ic2eq * traits.size]);
 
-    ic1eq_v.load_aligned (&s[ic1eq * n_builtins]);
-    ic2eq_v.load_aligned (&s[ic2eq * n_builtins]);
-
-    simdreg out = calc<simdreg> (
+    V out = calc<V> (
       ic1eq_v,
       ic2eq_v,
-      simdreg {c[m0]},
-      simdreg {c[m1]},
-      simdreg {c[m2]},
-      simdreg {c[a1]},
-      simdreg {c[a2]},
-      simdreg {c[a3]},
+      vec_set<V> (c[m0]),
+      vec_set<V> (c[m1]),
+      vec_set<V> (c[m2]),
+      vec_set<V> (c[a1]),
+      vec_set<V> (c[a2]),
+      vec_set<V> (c[a3]),
       v0);
 
-    ic1eq_v.store_aligned (&s[ic1eq * n_builtins]);
-    ic2eq_v.store_aligned (&s[ic2eq * n_builtins]);
+    vec_store (&s[ic1eq * traits.size], ic1eq_v);
+    vec_store (&s[ic2eq * traits.size], ic2eq_v);
 
     return out;
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T>         c, // coeffs interleaved, ready to SIMD load
-    crange<T>               s, // coefficients interleaved, ready to SIMD load
-    simd_reg<T, simd_bytes> v0) // N inputs ready to SIMD load
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       s, // states (interleaved, SIMD aligned)
+    V                                 v0)
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = simdreg::size;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= n_builtins * n_coeffs);
-    assert (s.size() >= n_builtins * n_states);
+    assert (c.size() >= traits.size * n_coeffs);
+    assert (s.size() >= traits.size * n_states);
 
-    simdreg m0_v, m1_v, m2_v, a1_v, a2_v, a3_v, ic1eq_v, ic2eq_v;
+    V ic1eq_v = vec_load<V> (&s[ic1eq * traits.size]);
+    V ic2eq_v = vec_load<V> (&s[ic2eq * traits.size]);
 
-    ic1eq_v.load_aligned (&s[ic1eq * n_builtins]);
-    ic2eq_v.load_aligned (&s[ic2eq * n_builtins]);
+    V out = calc<V> (
+      ic1eq_v,
+      ic2eq_v,
+      vec_load<V> (&c[m0 * traits.size]),
+      vec_load<V> (&c[m1 * traits.size]),
+      vec_load<V> (&c[m2 * traits.size]),
+      vec_load<V> (&c[a1 * traits.size]),
+      vec_load<V> (&c[a2 * traits.size]),
+      vec_load<V> (&c[a3 * traits.size]),
+      v0);
 
-    m0_v.load_aligned (&c[m0 * n_builtins]);
-    m1_v.load_aligned (&c[m1 * n_builtins]);
-    m2_v.load_aligned (&c[m2 * n_builtins]);
-    a1_v.load_aligned (&c[a1 * n_builtins]);
-    a2_v.load_aligned (&c[a2 * n_builtins]);
-    a3_v.load_aligned (&c[a3 * n_builtins]);
-
-    simdreg out
-      = svf::calc (ic1eq_v, ic2eq_v, m0_v, m1_v, m2_v, a1_v, a2_v, a3_v, v0);
-
-    ic1eq_v.store_aligned (&s[ic1eq * n_builtins]);
-    ic2eq_v.store_aligned (&s[ic2eq * n_builtins]);
+    vec_store (&s[ic1eq * traits.size], ic1eq_v);
+    vec_store (&s[ic2eq * traits.size], ic2eq_v);
 
     return out;
   }
@@ -528,18 +498,18 @@ private:
   };
   //----------------------------------------------------------------------------
   template <class T>
-  static coeff_ptrs<T> unpack_interleaved_coeffs (crange<T> c, uint separation)
+  static coeff_ptrs<T> unpack_interleaved_coeffs (crange<T> c, uint distance)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    assert (c.size() >= ((n_coeffs - 1) * separation) + 1);
+    assert (c.size() >= ((n_coeffs - 1) * distance) + 1);
 
     coeff_ptrs<T> ret;
-    ret.a1 = &c[a1 * separation];
-    ret.a2 = &c[a2 * separation];
-    ret.a3 = &c[a3 * separation];
-    ret.m0 = &c[m0 * separation];
-    ret.m1 = &c[m1 * separation];
-    ret.m2 = &c[m2 * separation];
+    ret.a1 = &c[a1 * distance];
+    ret.a2 = &c[a2 * distance];
+    ret.a3 = &c[a3 * distance];
+    ret.m0 = &c[m0 * distance];
+    ret.m1 = &c[m1 * distance];
+    ret.m2 = &c[m2 * distance];
     return ret;
   }
   //----------------------------------------------------------------------------

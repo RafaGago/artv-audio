@@ -143,7 +143,7 @@ static_assert (false, "To be implemented");
 #endif
 
 template <class T>
-inline bool is_pow2 (T v)
+inline constexpr bool is_pow2 (T v)
 {
   static_assert (std::is_integral<T>::value, "");
   return (v != 0) && ((v & (v - 1)) == 0);

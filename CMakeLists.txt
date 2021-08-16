@@ -94,7 +94,8 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     endif()
 endif()
 
-set (CMAKE_CXX_FLAGS_RELEASE ${ARTV_CMAKE_CXX_FLAGS_RELEASE})
+set (CMAKE_CXX_FLAGS_RELEASE "${ARTV_CMAKE_CXX_FLAGS_RELEASE} -Wno-unused-value")
+set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wno-unused-value")
 
 # These targets are flag overrides that have to be added last, just to avoid
 # dealing with CMake configuration messes which I refuse to learn and debug:
@@ -198,7 +199,7 @@ set (XSIMD_REPO ${CMAKE_BINARY_DIR}/xsimd-git)
 ExternalProject_Add(
     xsimd_fetch
     GIT_REPOSITORY https://github.com/xtensor-stack/xsimd.git
-    GIT_TAG        e8234f75b54c8af9f26b9f90a2ecdf5a22326fa9
+    GIT_TAG        4decfbdfae7bbd3c036fdf9538c82b657caeb178
     SOURCE_DIR     "${XSIMD_REPO}"
     UPDATE_COMMAND    ""
     BUILD_ALWAYS   False
@@ -476,6 +477,8 @@ add_executable(
     common-test
     test/common/fft.cpp
     test/common/delay_compensation_buffers.cpp
+    test/common/simd.cpp
+    test/common/svf_simd.cpp
     )
 target_link_libraries (common-test PUBLIC test mufft-all wdl-fft)
 #-- Oversampr utility ----------------------------------------------------------

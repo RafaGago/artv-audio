@@ -20,23 +20,24 @@ struct pow2_functions {
     return abs (x) * x;
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V fn (V x)
   {
-    return xsimd::abs (x) * x;
+    return vec_abs (x) * x;
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T int_fn (T x)
   {
-    return xsimd::abs (x) * x * x * (T) (1. / 3.);
+    return abs (x) * x * x * (T) (1. / 3.);
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> int_fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V int_fn (V x)
   {
-    using batch = simd_batch<T, N>;
-    return xsimd::abs (x) * x * x * (T) (1. / 3.);
+    using T = vec_value_type_t<V>;
+
+    return vec_abs (x) * x * x * (T) (1. / 3.);
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
@@ -45,9 +46,11 @@ struct pow2_functions {
     return x * x * x * x * (T) (1. / 12.);
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> int2_fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V int2_fn (V x)
   {
+    using T = vec_value_type_t<V>;
+
     return x * x * x * x * (T) (1. / 12.);
   }
   //----------------------------------------------------------------------------
@@ -73,8 +76,8 @@ public:
   static void init_states (crange<T> s)
   {}
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static void init_states_multi_aligned (crange<T> s)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void init_states_simd (crange<vec_value_type_t<V>> s)
   {}
   //----------------------------------------------------------------------------
   template <class T>
@@ -92,31 +95,32 @@ public:
       * sgn_no_zero (x, (T) -1. / 6., (T) 1. / 6.);
   }
   //----------------------------------------------------------------------------
-  template <size_t simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T>,
-    crange<T>               st,
-    simd_reg<T, simd_bytes> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>>,
+    crange<vec_value_type_t<V>> st,
+    V                           x)
   {
-    static_assert (std::is_floating_point_v<T>, "");
-    using batch                      = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = batch::size;
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
 
-    assert (st.size() >= n_builtins * n_states);
+    assert (st.size() >= traits.size * n_states);
 
-    T* x1v_ptr     = &st[x1 * n_builtins];
-    T* x1_pow2_ptr = &st[x1_pow2 * n_builtins];
+    T* x1v_ptr     = &st[x1 * traits.size];
+    T* x1_pow2_ptr = &st[x1_pow2 * traits.size];
 
-    batch x1v {x1v_ptr, xsimd::aligned_mode {}};
-    batch x1_pow2v {x1_pow2_ptr, xsimd::aligned_mode {}};
+    V x1v      = vec_load<V> (x1v_ptr);
+    V x1_pow2v = vec_load<V> (x1_pow2_ptr);
 
-    batch xpow2 = x * x;
+    V xpow2 = x * x;
 
-    x.store_aligned (x1v_ptr);
-    xpow2.store_aligned (x1_pow2_ptr);
+    vec_store (x1v_ptr, x);
+    vec_store (x1_pow2_ptr, xpow2);
 
-    return xsimd::abs (xpow2 + (x1v * x) + x1_pow2v)
-      * sgn_no_zero (x, batch {(T) -1. / 6.}, batch {(T) 1. / 6.});
+    return vec_abs (xpow2 + (x1v * x) + x1_pow2v)
+      * vec_sgn_no_zero (
+             x, vec_set<V> ((T) -1. / 6.), vec_set<V> ((T) 1. / 6.));
   }
 };
 //------------------------------------------------------------------------------

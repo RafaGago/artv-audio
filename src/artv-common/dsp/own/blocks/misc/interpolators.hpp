@@ -16,17 +16,17 @@ struct allpass_interpolator {
     c[nu] = (1.0 - frac) / (1.0 + frac);
   }
   //----------------------------------------------------------------------------
-  template <uint simd_bytes, class T>
-  static void init_multi_aligned (crange<T> c, simd_reg<T, simd_bytes> frac)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void init_simd (crange<vec_value_type_t<V>> c, V frac)
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = simdreg::size;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= (n_coeffs * n_builtins));
+    assert (c.size() >= (n_coeffs * traits.size));
 
-    auto v = (simdreg {(T) 1.0} - frac) / (1.0 + frac);
-    v.store_aligned (&c[nu * n_builtins]);
+    auto v = ((T) 1.0 - frac) / (1.0 + frac);
+    vec_store (&c[nu * traits.size], v);
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -45,31 +45,32 @@ struct allpass_interpolator {
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
-  template <uint simd_bytes, class T>
-  static simd_reg<T, simd_bytes> tick_multi_aligned (
-    crange<const T>         c, // coeffs interleaved, ready to SIMD load
-    crange<T>               z, // states interleaved, ready to SIMD load
-    simd_reg<T, simd_bytes> in) // N inputs ready to SIMD load
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>>
+                                c, // coeffs interleaved, ready to SIMD load
+    crange<vec_value_type_t<V>> z, // states interleaved, ready to SIMD load
+    V                           in) // N inputs ready to SIMD load
   {
+    using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
-    using simdreg                    = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = simdreg::size;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= n_builtins * n_coeffs);
-    assert (z.size() >= n_builtins * n_states);
+    assert (c.size() >= traits.size * n_coeffs);
+    assert (z.size() >= traits.size * n_states);
 
-    T const* nu_ptr = &c[nu * n_builtins];
-    T*       d0_ptr = &z[d0 * n_builtins];
-    T*       y0_ptr = &z[y0 * n_builtins];
+    T const* nu_ptr = &c[nu * traits.size];
+    T*       d0_ptr = &z[d0 * traits.size];
+    T*       y0_ptr = &z[y0 * traits.size];
 
-    simdreg nu_v {nu_ptr, xsimd::aligned_mode {}};
-    simdreg d0_v {d0_ptr, xsimd::aligned_mode {}};
-    simdreg y0_v {y0_ptr, xsimd::aligned_mode {}};
+    V nu_v = vec_load<V> (nu_ptr);
+    V d0_v = vec_load<V> (d0_ptr);
+    V y0_v = vec_load<V> (y0_ptr);
 
     y0_v = nu_v * in + d0_v - nu_v * y0_v;
 
-    y0_v.store_aligned (y0_ptr);
-    in.store_aligned (d0_ptr);
+    vec_store (y0_ptr, y0_v);
+    vec_store (d0_ptr, in);
     return y0_v;
   }
 };

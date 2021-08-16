@@ -56,21 +56,21 @@ public:
       alignas (sse_bytes) coeff_array smoothed_band_coefs;
 
       for (uint i = 0; i < samples; ++i) {
-        constexpr uint sse_step = simd_dbl::size;
+        constexpr uint sse_step = vec_traits<double_x2>().size;
         static_assert (smoothed_band_coefs.size() % sse_step == 0, "");
         for (uint j = 0; j < smoothed_band_coefs.size(); j += sse_step) {
           // coefficient change smoothing.TODO: if filters start differing
           // broadly on coefficient sizes this might have to be optimized
           // (maybe to a) small/medium/high iteration or to the exact number
           // of elements.
-          simd_dbl out = smoother::tick_aligned<sse_bytes, double> (
+          double_x2 out = smoother::tick_aligned (
             make_crange (_smooth_coeff),
             make_crange (&_smooth_state[b].filter[j], sse_step),
-            simd_dbl {&_coeffs[b][j], xsimd::aligned_mode {}});
-          out.store_aligned (&smoothed_band_coefs[j]);
+            vec_load<double_x2> (&_coeffs[b][j]));
+          vec_store (&smoothed_band_coefs[j], out);
         }
 
-        simd_dbl in, out;
+        double_x2 in, out;
         in[0] = chnls[0][i];
         in[1] = chnls[1][i];
 
@@ -80,30 +80,30 @@ public:
         case bandtype::svf_lshelf:
         case bandtype::svf_hshelf:
         case bandtype::svf_allpass:
-          out = andy::svf::tick<sse_bytes, double> (
+          out = andy::svf::tick (
             smoothed_band_coefs,
             {make_crange (_state[0][b]), make_crange (_state[1][b])},
-            {in[0], in[1]});
+            double_x2 {in[0], in[1]});
           break;
         case bandtype::butterworth_lp:
         case bandtype::butterworth_hp:
           out = butterworth_any_order::tick (
             smoothed_band_coefs,
             {make_crange (_state[0][b]), make_crange (_state[1][b])},
-            {in[0], in[1]},
+            double_x2 {in[0], in[1]},
             q_to_butterworth_order (_cfg[b].q));
           break;
         case bandtype::svf_tilt:
           out = tilt_eq::tick (
             smoothed_band_coefs,
             {make_crange (_state[0][b]), make_crange (_state[1][b])},
-            {in[0], in[1]});
+            double_x2 {in[0], in[1]});
           break;
         case bandtype::presence:
           out = liteon::presence_high_shelf::tick (
             smoothed_band_coefs,
             {make_crange (_state[0][b]), make_crange (_state[1][b])},
-            {in[0], in[1]});
+            double_x2 {in[0], in[1]});
           break;
         default:
           jassert (false);

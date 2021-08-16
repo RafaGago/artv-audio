@@ -365,8 +365,8 @@ public:
     memset (&_post_emphasis_states, 0, sizeof _post_emphasis_states);
     memset (&_post_emphasis_coeffs, 0, sizeof _post_emphasis_coeffs);
 
-    adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::
-      init_multi_aligned<sse_bytes, double> (_adaa_fix_eq_delay_coeffs);
+    adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::init_simd<
+      double_x2> (_adaa_fix_eq_delay_coeffs);
 
     _p = params {};
 
@@ -378,7 +378,9 @@ public:
     uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
     _n_processed_samples = 0;
-    _sat_prev            = simd_dbl {0.};
+    _sat_prev            = double_x2 {0.};
+
+    update_emphasis();
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -405,16 +407,16 @@ public:
       process_block_replacing<T> ({&in[0], &in[n_samples]}, n_samples);
     }
 
-    simd_dbl compens_drive {
+    double_x2 compens_drive {
       p.drive * (p.drive_bal), p.drive * (2. - p.drive_bal)};
 
-    simd_dbl inv_compens_drive = 1. / compens_drive;
+    double_x2 inv_compens_drive = 1. / compens_drive;
 
     for (uint i = 0; i < block_samples; ++i, ++_n_processed_samples) {
       // TODO: drive and filter change smoothing
-      simd_dbl sat {chnls[0][i], chnls[1][i]};
+      double_x2 sat {chnls[0][i], chnls[1][i]};
 
-      simd_dbl lo {0.}, lo_prev {0.}, hi {0.}, hi_prev {0.};
+      double_x2 lo {}, lo_prev {}, hi {}, hi_prev {};
 
       // crossover section
       if (_crossv_enabled[lo_lp]) {
@@ -445,11 +447,11 @@ public:
       }
 
       // Envelope follower/modulation
-      simd_dbl follow = slew_limiter::tick_multi_aligned<sse_bytes, double> (
-        _envfollow_coeffs, _envfollow_states, xsimd::abs (sat));
+      double_x2 follow = slew_limiter::tick_simd (
+        _envfollow_coeffs, _envfollow_states, vec_abs (sat));
 
-      follow *= simd_dbl {p.ef_gain};
-      follow = xsimd::min (follow, simd_dbl {1.}); // clipping at 1
+      follow *= p.ef_gain;
+      follow = vec_min (follow, vec_set<double_x2> (1.)); // clipping at 1
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
         // expensive stuff at lower than audio rate
@@ -463,13 +465,14 @@ public:
         }
       }
 
-      simd_dbl drive     = compens_drive;
-      simd_dbl inv_drive = inv_compens_drive;
+      double_x2 drive     = compens_drive;
+      double_x2 inv_drive = inv_compens_drive;
 
       if (p.ef_to_drive != 0.f) {
         // gain modulation. Audio rate.
-        simd_dbl gainfollow
+        double_x2 gainfollow
           = (follow * abs (p.ef_to_drive)) + 1.; // 1 to N range
+
         if (p.ef_to_drive > 0.f) {
           drive *= gainfollow;
           inv_drive /= gainfollow;
@@ -485,12 +488,12 @@ public:
 
       // pre process
       if (p.mode == mode_compand) {
-        sat = pow2_aa::tick_multi_aligned<sse_bytes, double> (
+        sat = pow2_aa::tick_simd (
           _adaa_fix_eq_delay_coeffs, _compressor_states, sat);
       }
 
       // pre emphasis
-      sat = andy::svf::tick_multi_aligned<sse_bytes, double> (
+      sat = andy::svf::tick_simd (
         _pre_emphasis_coeffs, _pre_emphasis_states, sat);
 
       // Feedback section
@@ -499,7 +502,7 @@ public:
 
       auto feedback = _sat_prev * p.feedback;
 
-      simd_dbl feedback_follow = follow * p.ef_to_drive * fb_att;
+      double_x2 feedback_follow = follow * p.ef_to_drive * fb_att;
 
       double fbf0        = feedback_follow[0];
       feedback_follow[0] = feedback_follow[1];
@@ -545,7 +548,7 @@ public:
       _sat_prev = sat;
 
       // post emphasis
-      sat = andy::svf::tick_multi_aligned<sse_bytes, double> (
+      sat = andy::svf::tick_simd (
         _post_emphasis_coeffs, _post_emphasis_states, sat);
 
       // post process / restore
@@ -555,10 +558,10 @@ public:
         break;
       case mode_band_no_aa:
       case mode_band_normal:
-        hi = lo = simd_dbl {0.};
+        hi = lo = double_x2 {0.};
         break;
       case mode_compand:
-        sat = sqrt_aa::tick_multi_aligned<sse_bytes, double> (
+        sat = sqrt_aa::tick_simd (
           _adaa_fix_eq_delay_coeffs, _expander_states, sat);
         break;
       default:
@@ -686,43 +689,42 @@ private:
   }
   //----------------------------------------------------------------------------
   void update_emphasis (
-    simd_dbl freq_offset = simd_dbl {0.},
-    simd_dbl amt_offset  = simd_dbl {0.},
-    simd_dbl q_offset    = simd_dbl {0.})
+    double_x2 freq_offset = double_x2 {0.},
+    double_x2 amt_offset  = double_x2 {0.},
+    double_x2 q_offset    = double_x2 {0.})
   {
-    simd_dbl f  = {_p.emphasis_freq, _p.emphasis_freq};
-    simd_dbl q  = {_p.emphasis_q, _p.emphasis_q};
-    simd_dbl db = {_p.emphasis_amount, _p.emphasis_amount};
+    double_x2 f  = vec_set<double_x2> (_p.emphasis_freq);
+    double_x2 q  = vec_set<double_x2> (_p.emphasis_q);
+    double_x2 db = vec_set<double_x2> (_p.emphasis_amount);
 
     f += freq_offset;
     db += amt_offset;
     q += q_offset;
 
-    andy::svf::bell_multi_aligned<sse_bytes, double> (
+    andy::svf::bell_simd (
       _pre_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
 
-    andy::svf::bell_multi_aligned<sse_bytes, double> (
+    andy::svf::bell_simd (
       _post_emphasis_coeffs, f, q, -db, _plugcontext->get_sample_rate());
   }
   //----------------------------------------------------------------------------
   void update_envelope_follower()
   {
-    slew_limiter::init_multi_aligned<sse_bytes, double> (
+    slew_limiter::init_simd (
       _envfollow_coeffs,
-      simd_dbl {_p.ef_attack},
-      simd_dbl {_p.ef_release},
+      vec_set<double_x2> (_p.ef_attack),
+      vec_set<double_x2> (_p.ef_release),
       _plugcontext->get_sample_rate());
   }
   //----------------------------------------------------------------------------
   template <class wsh>
-  simd_batch<double, 2> wavesh_tick_simd (simd_batch<double, 2> x)
+  double_x2 wavesh_tick_simd (double_x2 x)
   {
-    return wsh::template tick_multi_aligned<sse_bytes, double> (
-      _adaa_fix_eq_delay_coeffs, _wvsh_states, x);
+    return wsh::template tick_simd (_adaa_fix_eq_delay_coeffs, _wvsh_states, x);
   }
 
   template <class wsh>
-  simd_batch<double, 2> wavesh_tick_no_simd (simd_batch<double, 2> x)
+  double_x2 wavesh_tick_no_simd (double_x2 x)
   {
     decltype (x) ret;
     ret[0] = wsh::tick (
@@ -736,7 +738,7 @@ private:
   // ARTV_SATURATION_USE_simd has detrimental effects when ADAA enabled,
   // the current implementation always takes both branches.
   template <class wsh>
-  simd_batch<double, 2> wavesh_tick (simd_batch<double, 2> x)
+  double_x2 wavesh_tick (double_x2 x)
   {
 #if ARTV_SATURATION_USE_SIMD
     return wavesh_tick_simd<wsh> (x);
@@ -787,7 +789,7 @@ private:
   emphasis_coeff_array              _post_emphasis_coeffs;
   emphasis_state_array              _post_emphasis_states;
   compander_state_array             _expander_states;
-  simd_dbl                          _sat_prev;
+  double_x2                         _sat_prev;
   uint                              _n_processed_samples;
   uint                              _control_rate_mask;
 

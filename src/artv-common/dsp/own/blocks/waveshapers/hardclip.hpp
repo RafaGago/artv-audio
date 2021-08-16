@@ -19,11 +19,12 @@ struct hardclip_functions {
     return std::clamp<T> (x, -1.0, 1.0);
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V fn (V x)
   {
-    using batch = simd_batch<T, N>;
-    return xsimd::clip (x, batch {(T) -1.0}, batch {(T) 1.0});
+    using T = vec_value_type_t<V>;
+
+    return vec_clamp (x, vec_set<V> ((T) -1.0), vec_set<V> ((T) 1.0));
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
@@ -33,14 +34,14 @@ struct hardclip_functions {
     return unclipped ? (x * x) * 0.5 : x * artv::sgn_no_zero (x) - 0.5;
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> int_fn (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V int_fn (V x)
   {
-    using batch = simd_batch<T, N>;
+    using T = vec_value_type_t<V>;
 
-    batch noclip  = x * x * batch {(T) 0.5};
-    batch yesclip = x * sgn_no_zero (x) - batch {(T) 0.5};
-    return xsimd::select (xsimd::abs (x) <= batch {(T) 1.0}, noclip, yesclip);
+    V noclip  = x * x * (T) 0.5;
+    V yesclip = x * vec_sgn_no_zero (x) - (T) 0.5;
+    return (vec_abs (x) <= (T) 1.0) ? noclip : yesclip;
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
@@ -55,18 +56,18 @@ struct hardclip_functions {
     }
   }
   //----------------------------------------------------------------------------
-  template <class T, size_t N>
-  static simd_batch<T, N> int_fn2 (simd_batch<T, N> x)
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V int2_fn (V x)
   {
-    using batch = simd_batch<T, N>;
+    using T = vec_value_type_t<V>;
 
-    batch sixth {(T) 1. / 6.};
-    batch half_x = x * batch {(T) 0.5};
+    V sixth  = vec_set<V> ((T) 1. / 6.);
+    V half_x = x * (T) 0.5;
 
-    batch noclip  = x * x * x * sixth;
-    batch yesclip = (x * half_x + sixth) * sgn_no_zero (x) - half_x;
+    V noclip  = x * x * x * sixth;
+    V yesclip = (x * half_x + sixth) * vec_sgn_no_zero (x) - half_x;
 
-    return xsimd::select (xsimd::abs (x) <= batch {(T) 1.0}, noclip, yesclip);
+    return (vec_abs (x) <= (T) 1.0) ? noclip : yesclip;
   }
   //----------------------------------------------------------------------------
 private:

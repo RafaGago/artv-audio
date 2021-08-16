@@ -1,6 +1,3 @@
-- Track the XSIMD -ffast-math bug.
-  https://github.com/xtensor-stack/xsimd/issues/515
-
 - Track Chow Phaser samplerate bug.
   https://github.com/xtensor-stack/xsimd/issues/515
 

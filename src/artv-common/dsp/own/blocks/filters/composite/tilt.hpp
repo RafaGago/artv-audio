@@ -48,21 +48,21 @@ public:
     return andy::svf::tick (co, st, v0);
   }
   //----------------------------------------------------------------------------
-  static simd_dbl tick (
+  static double_x2 tick (
     crange<double const>          co, // coeffs
     std::array<crange<double>, 2> st, // state
-    simd_dbl                      v0)
+    double_x2                     v0)
   {
     assert (st.size() >= 2);
     assert (co.size() >= n_coeffs);
     assert (st[0].size() >= n_states);
     assert (st[1].size() >= n_states);
 
-    v0 = andy::svf::tick<16> (co, st, v0);
+    v0 = andy::svf::tick (co, st, v0);
     co.shrink_head (andy::svf::n_coeffs);
     st[0].shrink_head (andy::svf::n_states);
     st[1].shrink_head (andy::svf::n_states);
-    return andy::svf::tick<16> (co, st, v0);
+    return andy::svf::tick (co, st, v0);
   }
   //----------------------------------------------------------------------------
 };

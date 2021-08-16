@@ -28,8 +28,8 @@ public:
   struct stages_tag {};
   void set (stages_tag, int v)
   {
-    static_assert (simd_flt::size == 4, "Refactor this...");
-    auto stages                    = (v + 1) * simd_flt::size;
+    static_assert (vec_traits<float_x4>().size == 4, "Refactor this...");
+    auto stages                    = (v + 1) * vec_traits<float_x4>().size;
     _params.unsmoothed.n_allpasses = stages;
   }
 
@@ -262,20 +262,21 @@ public:
   {
     for (uint i = 0; i < samples; ++i, ++_n_processed_samples) {
 
+      constexpr uint vec_size = vec_traits<float_x4>().size;
+
       // parameter smoothing.
-      auto smooth_iter = _params.smooth_target.arr.size() / simd_flt::size;
+      auto smooth_iter = _params.smooth_target.arr.size() / vec_size;
       for (uint j = 0; j < smooth_iter; ++j) {
         // HACKish encapsulation violation: this one isn't assigning the result,
         // but getting the -1 state from the one pole filter directly (copied by
         // value). See "static_assert" on the code below. 1-pole digital filters
         // are NEVER going to change so this is IMO acceptable.
-        auto in = make_crange (
-          _params.smooth_target.arr, simd_flt::size, simd_flt::size * j);
-        onepole_smoother::tick_aligned<sse_bytes, float> (
+        auto in
+          = make_crange (_params.smooth_target.arr, vec_size, vec_size * j);
+        onepole_smoother::tick_aligned (
           make_crange (_lp_smooth_coeff),
-          make_crange (
-            _params.smooth_state.arr, simd_flt::size, simd_flt::size * j),
-          simd_flt {in.data(), xsimd::aligned_mode {}});
+          make_crange (_params.smooth_state.arr, vec_size, vec_size * j),
+          vec_load<float_x4> (in));
       }
       // from now on access parameters without caring if they are smoothed or
       // not. This copy also has the aditional advantage of telling the compiler
@@ -372,15 +373,13 @@ public:
         }
         auto f = freq_lo;
 
-        assert ((pars.n_allpasses % simd_flt::size) == 0 && "bug!");
-        for (uint s = 0; s < (pars.n_allpasses / simd_flt::size); ++s) {
-          simd_batch<float, 4> freqs, qs;
-          // fill Q. Same for now they don't LFO oscillate (TODO?).
-          for (auto& v : qs) {
-            v = pars.q;
-          }
+        assert ((pars.n_allpasses % vec_size) == 0 && "bug!");
+        for (uint s = 0; s < (pars.n_allpasses / vec_size); ++s) {
+          float_x4 freqs {};
+          float_x4 qs = vec_set<float_x4> (pars.q); // Q's don't oscilate (yet)
+
           // fill freqs
-          for (uint ap = 0; ap < (simd_flt::size / 2); ++ap) {
+          for (uint ap = 0; ap < (vec_size / 2); ++ap) {
             constexpr float max_depth = 0.6;
             float           k;
             uint            stage = (s * 4) + ap;
@@ -422,7 +421,7 @@ public:
               f += fconstant_even;
             }
           }
-          andy::svf::allpass_multi_aligned<sse_bytes, float> (
+          andy::svf::allpass_simd (
             get_allpass_group_coeffs (s),
             freqs,
             qs,
@@ -431,19 +430,19 @@ public:
       }
 
       // regular processing
-      simd_batch<float, 4> out {
+      float_x4 out {
         chnls[0][i] + (_feedback_samples[0] * pars.feedback),
         chnls[1][i] + (_feedback_samples[1] * pars.feedback),
         chnls[0][i] + (_feedback_samples[0] * pars.feedback),
         chnls[1][i] + (_feedback_samples[1] * pars.feedback)};
 
-      for (uint g = 0; g < (pars.n_allpasses / simd_flt::size); ++g) {
+      for (uint g = 0; g < (pars.n_allpasses / vec_size); ++g) {
         // as of now this processes both in parallel and in series.
-        out = andy::svf::tick_multi_aligned<sse_bytes, float> (
+        out = andy::svf::tick_simd (
           get_allpass_group_coeffs (g), get_allpass_group_states (g), out);
       }
       assert (
-        (pars.n_allpasses % simd_flt::size) == 0
+        (pars.n_allpasses % vec_size) == 0
         && "there are unprocessed allpasses");
 
       chnls[0][i]       = -(out[0] + out[2]) * 0.5;
@@ -479,14 +478,15 @@ private:
   //----------------------------------------------------------------------------
   crange<float> get_allpass_group_coeffs (uint n)
   {
-    return make_crange (&_allpass[n][0], andy::svf::n_coeffs * simd_flt::size);
+    return make_crange (
+      &_allpass[n][0], andy::svf::n_coeffs * vec_traits<float_x4>().size);
   }
   //----------------------------------------------------------------------------
   crange<float> get_allpass_group_states (uint n)
   {
     return make_crange (
-      &_allpass[n][andy::svf::n_coeffs * simd_flt::size],
-      andy::svf::n_states * simd_flt::size);
+      &_allpass[n][andy::svf::n_coeffs * vec_traits<float_x4>().size],
+      andy::svf::n_states * vec_traits<float_x4>().size);
   }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
@@ -524,8 +524,9 @@ private:
   };
   //----------------------------------------------------------------------------
   std::array<float, 2> _feedback_samples;
-  using simd_allpass_group = std::
-    array<float, (andy::svf::n_coeffs + andy::svf::n_states) * simd_flt::size>;
+  using simd_allpass_group = std::array<
+    float,
+    (andy::svf::n_coeffs + andy::svf::n_states) * vec_traits_t<float_x4>::size>;
 
   parameter_values _params;
   // 16 groups of 4 filters (SIMD), 32 allpasses, interleaved for L and R = 16
