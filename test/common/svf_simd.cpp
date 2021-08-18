@@ -1,4 +1,5 @@
 #include <array>
+#include <cstdio>
 #include <cstring>
 #include <gtest/gtest.h>
 
@@ -29,13 +30,24 @@ public:
     memset (scalar_states.data(), 0, sizeof scalar_states);
     memset (vector_states.data(), 0, sizeof vector_states);
 
-    for (uint i = 0; i < 2048; ++i) {
+    std::array<scalar_type, 2048> res_scalar, res_vec;
+
+    for (uint i = 0; i < res_scalar.size(); ++i) {
       scalar_type in = _whitenoise (1.);
-      scalar_type scalar
+      res_scalar[i]
         = andy::svf::tick<scalar_type> (scalar_coeffs, scalar_states, in);
-      auto vect = andy::svf::tick_simd (
-        vector_coeffs, vector_states, vec_set<vector_type> (in));
-      ASSERT_NEAR (scalar, vect[0], (scalar_type) 0.00001);
+      res_vec[i] = andy::svf::tick_simd (
+        vector_coeffs, vector_states, vec_set<vector_type> (in))[0];
+    }
+    // TODO: Do a comparison that prints the failing index. GTEST suggested
+    // GMock Matchers and macro stuff I didn't want to lose half an hour with
+    // just now.
+    for (uint i = 0; i < res_scalar.size(); ++i) {
+      constexpr auto epsilon = 0.00001;
+      if (abs (res_scalar[i] - res_vec[i]) > epsilon) {
+        printf ("On index: %u\n", i);
+        ASSERT_NEAR (res_scalar[i], res_vec[i], (scalar_type) epsilon);
+      }
     }
   }
 
@@ -51,6 +63,22 @@ TEST (svf, lowpass)
 
   andy::svf::lowpass ({test.scalar_coeffs}, f, q, test.samplerate);
   andy::svf::lowpass_simd (
+    test.vector_coeffs,
+    vec_set<svf_test::vector_type> (f),
+    vec_set<svf_test::vector_type> (q),
+    test.samplerate);
+
+  test();
+}
+//------------------------------------------------------------------------------
+TEST (svf, highpass)
+{
+  svf_test              test;
+  svf_test::scalar_type f = 500.;
+  svf_test::scalar_type q = 2.;
+
+  andy::svf::highpass ({test.scalar_coeffs}, f, q, test.samplerate);
+  andy::svf::highpass_simd (
     test.vector_coeffs,
     vec_set<svf_test::vector_type> (f),
     vec_set<svf_test::vector_type> (q),

@@ -12,9 +12,6 @@
 
 namespace artv { namespace andy {
 
-// TODO: add the version with better precission which uses "sin" for coeff
-// calculation ?
-
 struct svf {
   //----------------------------------------------------------------------------
   enum coeffs { a1, a2, a3, m0, m1, m2, n_coeffs };
@@ -117,6 +114,36 @@ struct svf {
     *co.m0   = 1.;
     *co.m1   = -k;
     *co.m2   = -1.;
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void highpass_simd (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           q,
+    vec_value_type_t<V>         sr)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (c.size() >= (n_coeffs * traits.size));
+
+    V g = vec_tan ((T) M_PI * freq / sr);
+    V k = (T) 1.0 / q;
+
+    V a1_v = (T) 1.0 / ((T) 1.0 + g * (g + k));
+    vec_store (&c[a1 * traits.size], a1_v);
+
+    V a2_v = g * a1_v;
+    vec_store (&c[a2 * traits.size], a2_v);
+
+    V a3_v = g * a2_v;
+    vec_store (&c[a3 * traits.size], a3_v);
+
+    vec_store (&c[m0 * traits.size], vec_set<V> ((T) 1.));
+    vec_store (&c[m1 * traits.size], -k);
+    vec_store (&c[m2 * traits.size], vec_set<V> ((T) -1.));
   }
   //----------------------------------------------------------------------------
   template <class T>

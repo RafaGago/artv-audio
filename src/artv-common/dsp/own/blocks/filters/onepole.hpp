@@ -73,6 +73,8 @@ struct onepole {
   //----------------------------------------------------------------------------
   static void lowpass (crange<double> co, double freq, double sr)
   {
+    assert (co.size() >= n_coeffs);
+
     double w = tan (M_PI * freq / sr);
     double n = 1. / (1. + w);
     co[b0]   = w * n;
@@ -80,13 +82,53 @@ struct onepole {
     co[a1]   = n * (w - 1.);
   }
   //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void lowpass_simd (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    vec_value_type_t<V>         sr)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (n_coeffs * traits.size));
+
+    auto w = vec_tan (M_PI * freq / sr);
+    auto n = 1. / (1. + w);
+    vec_store (&co[b0 * traits.size], w * n);
+    vec_store (&co[b1 * traits.size], w * n);
+    vec_store (&co[a1 * traits.size], n * (w - 1.));
+  }
+  //----------------------------------------------------------------------------
   static void highpass (crange<double> co, double freq, double sr)
   {
+    assert (co.size() >= n_coeffs);
+
     double w = tan (M_PI * freq / sr);
     double n = 1. / (1. + w);
     co[b0]   = n;
-    co[b1]   = -co[b0];
+    co[b1]   = -n;
     co[a1]   = n * (w - 1.);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void highpass_simd (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    vec_value_type_t<V>         sr)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (n_coeffs * traits.size));
+
+    auto w = vec_tan (M_PI * freq / sr);
+    auto n = 1. / (1. + w);
+    vec_store (&co[b0 * traits.size], n);
+    vec_store (&co[b1 * traits.size], -n);
+    vec_store (&co[a1 * traits.size], n * (w - 1.));
   }
   //----------------------------------------------------------------------------
   static void repair_unsmoothable_coeffs (crange<double>, crange<const double>)
@@ -134,6 +176,33 @@ struct onepole {
     st[1][z1] = z1_v[1];
     st[1][z0] = in[1];
     return z1_v;
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= traits.size * n_coeffs);
+    assert (st.size() >= traits.size * n_states);
+
+    V b0v = vec_load<V> (&co[b0 * traits.size]);
+    V b1v = vec_load<V> (&co[b1 * traits.size]);
+    V a1v = vec_load<V> (&co[a1 * traits.size]);
+    V z0v = vec_load<V> (&st[z0 * traits.size]);
+    V z1v = vec_load<V> (&st[z1 * traits.size]);
+
+    z1v = in * b0v + z0v * b1v - z1v * a1v;
+    z0v = in;
+
+    vec_store<V> (&st[z0 * traits.size], z0v);
+    vec_store<V> (&st[z1 * traits.size], z1v);
+    return z1v;
   }
 };
 //------------------------------------------------------------------------------

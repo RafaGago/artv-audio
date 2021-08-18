@@ -66,6 +66,42 @@ public:
     }
   }
   //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void init_simd (
+    crange<vec_value_type_t<V>> co, // coeffs interleaved
+    V                           freq,
+    vec_value_type_t<V>         sr,
+    uint                        order,
+    bool                        is_lowpass)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (n_coeffs_for_order (order) * traits.size));
+
+    auto q_list = get_q_list (order);
+    if (order & 1) {
+      if (is_lowpass) {
+        onepole::lowpass_simd (co, freq, sr);
+      }
+      else {
+        onepole::highpass_simd (co, freq, sr);
+      }
+      co.shrink_head (onepole::n_coeffs * traits.size);
+      order -= 1;
+    }
+    for (uint i = 0; i < (order / 2); ++i) {
+      if (is_lowpass) {
+        andy::svf::lowpass_simd (co, freq, vec_set<V> (q_list[i]), sr);
+      }
+      else {
+        andy::svf::highpass_simd (co, freq, vec_set<V> (q_list[i]), sr);
+      }
+      co.shrink_head (andy::svf::n_coeffs * traits.size);
+    }
+  }
+  //----------------------------------------------------------------------------
   static double tick (
     crange<const double> co, // coeffs
     crange<double>       st, // state
@@ -82,7 +118,7 @@ public:
       order -= 1;
     }
 
-    for (uint i = 0; i < (order / 2); i++) {
+    for (uint i = 0; i < (order / 2); ++i) {
       v0 = andy::svf::tick (co, st, v0);
       co.shrink_head (andy::svf::n_coeffs);
       st.shrink_head (andy::svf::n_states);
@@ -91,8 +127,8 @@ public:
   }
   //----------------------------------------------------------------------------
   static double_x2 tick (
-    crange<double const>          co, // coeffs
-    std::array<crange<double>, 2> st, // state
+    crange<double const>          co, // coeffs (unaligned, uninterleaved)
+    std::array<crange<double>, 2> st, // state (unaligned, uninterleaved)
     double_x2                     v0,
     uint                          order)
   {
@@ -111,11 +147,43 @@ public:
       order -= 1;
     }
 
-    for (uint i = 0; i < (order / 2); i++) {
+    for (uint i = 0; i < (order / 2); ++i) {
       out = andy::svf::tick (co, st, out);
       co.shrink_head (andy::svf::n_coeffs);
       st[0].shrink_head (andy::svf::n_states);
       st[1].shrink_head (andy::svf::n_states);
+    }
+    return out;
+  }
+  //----------------------------------------------------------------------------
+  // N sets of coeffs, N outs calculated at once.
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 v0,
+    uint                              order)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (traits.size * n_coeffs_for_order (order)));
+    assert (st.size() >= (traits.size * n_states_for_order (order)));
+
+    auto out = v0;
+
+    if (order & 1) {
+      out = onepole::tick_simd (co, st, out);
+      co.shrink_head (onepole::n_coeffs * traits.size);
+      st.shrink_head (onepole::n_states * traits.size);
+      order -= 1;
+    }
+
+    for (uint i = 0; i < (order / 2); ++i) {
+      out = andy::svf::tick_simd (co, st, out);
+      co.shrink_head (andy::svf::n_coeffs * traits.size);
+      st.shrink_head (andy::svf::n_states * traits.size);
     }
     return out;
   }
@@ -191,14 +259,30 @@ public:
   //----------------------------------------------------------------------------
   static void lowpass (crange<double> co, double freq, double sr)
   {
-    assert (co.size() >= n_coeffs);
     butterworth_any_order::init (co, freq, sr, order, true);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void lowpass_simd (
+    crange<vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    V                           freq,
+    vec_value_type_t<V>         sr)
+  {
+    butterworth_any_order::init_simd (co, freq, sr, order, true);
   }
   //----------------------------------------------------------------------------
   static void highpass (crange<double> co, double freq, double sr)
   {
-    assert (co.size() >= n_coeffs);
     butterworth_any_order::init (co, freq, sr, order, false);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void highpass_simd (
+    crange<vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    V                           freq,
+    vec_value_type_t<V>         sr)
+  {
+    butterworth_any_order::init_simd (co, freq, sr, order, false);
   }
   //----------------------------------------------------------------------------
   static double tick (
@@ -210,11 +294,20 @@ public:
   }
   //----------------------------------------------------------------------------
   static double_x2 tick (
-    crange<double const>          co, // coeffs
-    std::array<crange<double>, 2> st, // state
+    crange<double const>          co, // coeffs (unaligned, uninterleaved)
+    std::array<crange<double>, 2> st, // coeffs (state, uninterleaved)
     double_x2                     v0s)
   {
     return butterworth_any_order::tick (co, st, v0s, order);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 v0s)
+  {
+    return butterworth_any_order::tick_simd (co, st, v0s, order);
   }
 };
 //------------------------------------------------------------------------------

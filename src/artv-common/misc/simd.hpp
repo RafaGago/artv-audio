@@ -28,7 +28,6 @@
 #endif
 
 namespace artv {
-
 //------------------------------------------------------------------------------
 template <class T, uint N>
 struct simd_vector_traits {
@@ -50,6 +49,9 @@ struct simd_vector_traits {
 
   template <class U>
   using rebind __attribute__ ((vector_size (bytes), __may_alias__)) = U;
+
+  using same_size_int_type  = rebind<same_size_int<T>>;
+  using same_size_uint_type = rebind<same_size_uint<T>>;
 
   template <class U>
   using rebind_traits = simd_vector_traits<U, bytes / sizeof (U)>;
