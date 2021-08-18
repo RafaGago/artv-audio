@@ -127,9 +127,9 @@ public:
     if (v == _p.lo_cut_hz) {
       return;
     }
-    _p.lo_cut_hz           = v;
-    _crossv_enabled[lo_lp] = (v >= lo_cut_min_hz);
-    update_crossover (lo_lp, !_crossv_enabled[lo_lp]);
+    _p.lo_cut_hz               = v;
+    _crossv_enabled[lo_crossv] = (v >= lo_cut_min_hz);
+    update_crossover (lo_crossv, !_crossv_enabled[lo_crossv]);
   }
 
   static constexpr auto get_parameter (lo_cut_tag)
@@ -147,9 +147,9 @@ public:
     if (v == _p.hi_cut_hz) {
       return;
     }
-    _p.hi_cut_hz           = v;
-    _crossv_enabled[hi_hp] = (v < hi_cut_max_hz);
-    update_crossover (hi_hp, !_crossv_enabled[hi_hp]);
+    _p.hi_cut_hz               = v;
+    _crossv_enabled[hi_crossv] = (v < hi_cut_max_hz);
+    update_crossover (hi_crossv, !_crossv_enabled[hi_crossv]);
   }
 
   static constexpr auto get_parameter (hi_cut_tag)
@@ -157,6 +157,8 @@ public:
     return frequency_parameter (30., hi_cut_max_hz, hi_cut_max_hz);
   }
   //----------------------------------------------------------------------------
+  static constexpr uint max_crossv_order = 10;
+
   struct lo_order_tag {};
 
   void set (lo_order_tag, int v)
@@ -166,8 +168,8 @@ public:
       return;
     }
     _p.lo_order = v;
-    if (_crossv_enabled[lo_lp]) {
-      update_crossover (lo_lp, true);
+    if (_crossv_enabled[lo_crossv]) {
+      update_crossover (lo_crossv, true);
     }
   }
 
@@ -198,8 +200,8 @@ public:
       return;
     }
     _p.hi_order = v;
-    if (_crossv_enabled[hi_hp]) {
-      update_crossover (hi_hp, true);
+    if (_crossv_enabled[hi_crossv]) {
+      update_crossover (hi_crossv, true);
     }
   }
 
@@ -408,9 +410,9 @@ public:
     memset (&_compressor_states, 0, sizeof _compressor_states);
     memset (&_expander_states, 0, sizeof _expander_states);
     memset (&_wvsh_states, 0, sizeof _wvsh_states);
-    memset (&_filt_states, 0, sizeof _filt_states);
+    memset (&_crossv_states, 0, sizeof _crossv_states);
     memset (&_dc_block_states, 0, sizeof _dc_block_states);
-    memset (&_filt_coeffs, 0, sizeof _filt_coeffs);
+    memset (&_crossv_coeffs, 0, sizeof _crossv_coeffs);
     memset (&_pre_emphasis_states, 0, sizeof _pre_emphasis_states);
     memset (&_pre_emphasis_coeffs, 0, sizeof _pre_emphasis_coeffs);
     memset (&_post_emphasis_states, 0, sizeof _post_emphasis_states);
@@ -432,7 +434,8 @@ public:
     uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
     _n_processed_samples = 0;
-    _sat_prev            = double_x2 {0.};
+    _sat_prev = _crossv_prev[lo_crossv] = _crossv_prev[hi_crossv]
+      = double_x2 {};
 
     update_emphasis();
   }
@@ -470,36 +473,37 @@ public:
       // TODO: drive and filter change smoothing
       double_x2 sat {chnls[0][i], chnls[1][i]};
 
-      double_x2 lo {}, lo_prev {}, hi {}, hi_prev {};
+      double_x2 lo {}, hi {};
 
       // crossover section
-      if (_crossv_enabled[lo_lp]) {
-        lo_prev[0] = get_crossv_states (lo_lp, 0)[onepole::z1];
-        lo_prev[1] = get_crossv_states (lo_lp, 1)[onepole::z1];
-        lo         = butterworth_any_order::tick (
-          get_crossv_coeffs (lo_lp),
-          {get_crossv_states (lo_lp, 0), get_crossv_states (lo_lp, 1)},
-          sat,
-          p.lo_order);
-        sat -= lo;
+      if (_crossv_enabled[lo_crossv]) {
+        auto fidx = lo_crossv * 2;
+        auto lp   = butterworth_any_order::tick_simd (
+          _crossv_coeffs[fidx], _crossv_states[fidx], sat, p.lo_order);
+        ++fidx;
+        auto hp = butterworth_any_order::tick_simd (
+          _crossv_coeffs[fidx], _crossv_states[fidx], sat, p.lo_order);
+        lo  = lp;
+        sat = hp;
       }
-      if (_crossv_enabled[hi_hp]) {
-        hi_prev[0] = get_crossv_states (hi_hp, 0)[onepole::z1];
-        hi_prev[1] = get_crossv_states (hi_hp, 1)[onepole::z1];
-        hi         = butterworth_any_order::tick (
-          get_crossv_coeffs (hi_hp),
-          {get_crossv_states (hi_hp, 0), get_crossv_states (hi_hp, 1)},
-          sat,
-          p.hi_order);
-        sat -= hi;
+
+      if (_crossv_enabled[hi_crossv]) {
+        auto fidx = hi_crossv * 2;
+        auto hp   = butterworth_any_order::tick_simd (
+          _crossv_coeffs[fidx], _crossv_states[fidx], sat, p.hi_order);
+        ++fidx;
+        auto lp = butterworth_any_order::tick_simd (
+          _crossv_coeffs[fidx], _crossv_states[fidx], sat, p.hi_order);
+        hi  = hp;
+        sat = lp;
       }
 
       if (adaa_order == 1 && waveshaper_type_is_adaa (p.mode)) {
         // One sample delay for hi and lo, as the ADAA chain will add 1 sample
         // delay, we mix with the previous crossover outputs. TODO: will need 2
         // samples delay when companding...
-        lo = lo_prev;
-        hi = hi_prev;
+        std::swap (_crossv_prev[lo_crossv], lo);
+        std::swap (_crossv_prev[hi_crossv], hi);
       }
 
       // Envelope follower/modulation
@@ -659,7 +663,7 @@ private:
     mode_count,
   };
 
-  enum filter_indexes { lo_lp, hi_hp, n_filters };
+  enum crossv_indexes { lo_crossv, hi_crossv, n_crossv };
 
   struct params {
     float sat_out             = 1.f;
@@ -719,48 +723,42 @@ private:
 
   using smoother = onepole_smoother;
   //----------------------------------------------------------------------------
-  using butterworth_max_type = butterworth<10>;
-  //----------------------------------------------------------------------------
-  void update_crossover (filter_indexes idx, bool reset_states)
+  void update_crossover (crossv_indexes idx, bool reset_states)
   {
-    float f;
-    int   order;
-    if (idx == lo_lp) {
-      f     = _p.lo_cut_hz;
+    uint filter_idx = idx * 2; // each crossover has two filters
+
+    double_x2 f;
+    int       order;
+    if (idx == lo_crossv) {
+      f     = vec_set<double_x2> (_p.lo_cut_hz);
       order = _p.lo_order;
     }
     else {
-      assert (idx == hi_hp);
-      f     = _p.hi_cut_hz;
+      assert (idx == hi_crossv);
+      f     = vec_set<double_x2> (_p.hi_cut_hz);
       order = _p.hi_order;
     }
 
-    butterworth_any_order::init (
-      get_crossv_coeffs (idx),
+    f[idx] *= 1.009;
+    butterworth_any_order::init_simd (
+      _crossv_coeffs[filter_idx],
       f,
       _plugcontext->get_sample_rate(),
       order,
-      idx == lo_lp);
+      idx == lo_crossv);
+
+    butterworth_any_order::init_simd (
+      _crossv_coeffs[filter_idx + 1],
+      f,
+      _plugcontext->get_sample_rate(),
+      order,
+      idx != lo_crossv);
 
     if (reset_states) {
-      // state reset
-      for (uint c = 0; c < n_channels; ++c) {
-        auto rang = get_crossv_states (idx, c);
-        memset (rang.data(), 0, rang.size() * sizeof rang[0]);
-      }
+      _crossv_prev[idx] = double_x2 {};
+      memset (
+        &_crossv_states[filter_idx], 0, 2 * sizeof _crossv_states[filter_idx]);
     }
-  }
-  //----------------------------------------------------------------------------
-  crange<double> get_crossv_coeffs (uint filt_idx)
-  {
-    static constexpr uint n_coeffs = butterworth_max_type::n_coeffs;
-    return {&_filt_coeffs[filt_idx * n_coeffs], n_coeffs};
-  }
-  //----------------------------------------------------------------------------
-  crange<double> get_crossv_states (uint filt_idx, uint channel)
-  {
-    static constexpr uint n_states = butterworth_max_type::n_states;
-    return {&_filt_states[channel][filt_idx * n_states], n_states};
   }
   //----------------------------------------------------------------------------
   crange<double> get_waveshaper_states (uint channel)
@@ -825,7 +823,7 @@ private:
   }
 //----------------------------------------------------------------------------
 #define ARTV_SATURATION_USE_SIMD 0
-  // ARTV_SATURATION_USE_simd has detrimental effects when ADAA enabled,
+  // ARTV_SATURATION_USE_simd maybe has detrimental effects when ADAA enabled,
   // the current implementation always takes both branches.
   template <class wsh>
   double_x2 wavesh_tick (double_x2 x)
@@ -848,11 +846,14 @@ private:
       * n_channels,
     sse_bytes>;
 
-  // using coeff_array = simd_array<double, max_coeffs, sse_bytes>;
-  using crossv_state_array
-    = simd_array<double, butterworth_max_type::n_states * n_filters, sse_bytes>;
-  using crossv_coeff_array
-    = simd_array<double, butterworth_max_type::n_coeffs * n_filters, sse_bytes>;
+  using crossv_coeff_array = simd_array<
+    double,
+    butterworth<max_crossv_order>::n_coeffs * n_channels,
+    sse_bytes>;
+  using crossv_state_array = simd_array<
+    double,
+    butterworth<max_crossv_order>::n_states * n_channels,
+    sse_bytes>;
 
   using emphasis_coeff_array
     = simd_array<double, andy::svf::n_coeffs * n_channels, sse_bytes>;
@@ -871,24 +872,25 @@ private:
 
   // all arrays are multiples of the simd size, no need to alignas on
   // everything.
-  std::array<bool, 2> _crossv_enabled;
+  std::array<bool, n_crossv> _crossv_enabled;
   alignas (sse_bytes) envfollow_coeff_array _envfollow_coeffs;
-  envfollow_state_array             _envfollow_states;
-  crossv_coeff_array                _filt_coeffs;
-  std::array<crossv_state_array, 2> _filt_states;
-  fix_eq_and_delay_coeff_array      _adaa_fix_eq_delay_coeffs;
-  compander_state_array             _compressor_states;
-  emphasis_coeff_array              _pre_emphasis_coeffs;
-  emphasis_state_array              _pre_emphasis_states;
-  wsh_state_array                   _wvsh_states;
-  dc_block_coeff_array              _dc_block_coeffs;
-  dc_block_state_array              _dc_block_states;
-  emphasis_coeff_array              _post_emphasis_coeffs;
-  emphasis_state_array              _post_emphasis_states;
-  compander_state_array             _expander_states;
-  double_x2                         _sat_prev;
-  uint                              _n_processed_samples;
-  uint                              _control_rate_mask;
+  envfollow_state_array                        _envfollow_states;
+  std::array<crossv_coeff_array, n_crossv * 2> _crossv_coeffs;
+  std::array<crossv_state_array, n_crossv * 2> _crossv_states;
+  fix_eq_and_delay_coeff_array                 _adaa_fix_eq_delay_coeffs;
+  compander_state_array                        _compressor_states;
+  emphasis_coeff_array                         _pre_emphasis_coeffs;
+  emphasis_state_array                         _pre_emphasis_states;
+  wsh_state_array                              _wvsh_states;
+  dc_block_coeff_array                         _dc_block_coeffs;
+  dc_block_state_array                         _dc_block_states;
+  emphasis_coeff_array                         _post_emphasis_coeffs;
+  emphasis_state_array                         _post_emphasis_states;
+  compander_state_array                        _expander_states;
+  double_x2                                    _sat_prev;
+  std::array<double_x2, n_crossv>              _crossv_prev;
+  uint                                         _n_processed_samples;
+  uint                                         _control_rate_mask;
 
   plugin_context* _plugcontext = nullptr;
 };

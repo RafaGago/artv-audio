@@ -6,6 +6,13 @@
 
 - Add low latency (IIR) oversampling.
 
+- SVF:
+  - Add the version with better precission which uses "sin" for coeff
+   calculation ?
+
+  -Coefficient reduction. Separate versions of the bell allpass lowpass and
+   highpass seem interesting. In some cases it reduces 3 mults and 2 adds.
+
 - Channel labels (? The plugin is too cluttered vertically).
 
 - Now that latency compensation is implemented, plugins like Sonic Anomaly's

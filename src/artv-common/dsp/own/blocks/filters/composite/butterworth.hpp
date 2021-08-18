@@ -53,7 +53,6 @@ public:
         onepole::highpass (co, freq, sr);
       }
       co.shrink_head (onepole::n_coeffs);
-      order -= 1;
     }
     for (uint i = 0; i < (order / 2); ++i) {
       if (is_lowpass) {
@@ -89,7 +88,6 @@ public:
         onepole::highpass_simd (co, freq, sr);
       }
       co.shrink_head (onepole::n_coeffs * traits.size);
-      order -= 1;
     }
     for (uint i = 0; i < (order / 2); ++i) {
       if (is_lowpass) {
@@ -115,9 +113,7 @@ public:
       v0 = onepole::tick (co, st, v0);
       co.shrink_head (onepole::n_coeffs);
       st.shrink_head (onepole::n_states);
-      order -= 1;
     }
-
     for (uint i = 0; i < (order / 2); ++i) {
       v0 = andy::svf::tick (co, st, v0);
       co.shrink_head (andy::svf::n_coeffs);
@@ -144,9 +140,7 @@ public:
       co.shrink_head (onepole::n_coeffs);
       st[0].shrink_head (onepole::n_states);
       st[1].shrink_head (onepole::n_states);
-      order -= 1;
     }
-
     for (uint i = 0; i < (order / 2); ++i) {
       out = andy::svf::tick (co, st, out);
       co.shrink_head (andy::svf::n_coeffs);
@@ -177,9 +171,7 @@ public:
       out = onepole::tick_simd (co, st, out);
       co.shrink_head (onepole::n_coeffs * traits.size);
       st.shrink_head (onepole::n_states * traits.size);
-      order -= 1;
     }
-
     for (uint i = 0; i < (order / 2); ++i) {
       out = andy::svf::tick_simd (co, st, out);
       co.shrink_head (andy::svf::n_coeffs * traits.size);
