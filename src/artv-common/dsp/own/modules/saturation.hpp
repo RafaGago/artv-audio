@@ -125,7 +125,7 @@ public:
       butterworth_type::lowpass (
         get_crossv_coeffs (lo_lp), v, _plugcontext->get_sample_rate());
     }
-    else if (v == lo_cut_min_hz && _crossv_enabled[lo_lp]) {
+    if (_crossv_enabled[lo_lp] && v <= lo_cut_min_hz) {
       _p.lo_cut_hz           = v;
       _crossv_enabled[lo_lp] = false;
       for (uint c = 0; c < n_channels; ++c) {
@@ -153,7 +153,7 @@ public:
       butterworth_type::highpass (
         get_crossv_coeffs (hi_hp), v, _plugcontext->get_sample_rate());
     }
-    else if (v == hi_cut_max_hz && _crossv_enabled[hi_hp]) {
+    if (_crossv_enabled[hi_hp] && v >= hi_cut_max_hz) {
       _p.hi_cut_hz           = v;
       _crossv_enabled[hi_hp] = false;
       for (uint c = 0; c < n_channels; ++c) {
@@ -408,7 +408,7 @@ public:
     }
 
     double_x2 compens_drive {
-      p.drive * (p.drive_bal), p.drive * (2. - p.drive_bal)};
+      p.drive * (2. - p.drive_bal), p.drive * (p.drive_bal)};
 
     double_x2 inv_compens_drive = 1. / compens_drive;
 
@@ -447,11 +447,10 @@ public:
       }
 
       // Envelope follower/modulation
-      double_x2 follow = slew_limiter::tick_simd (
-        _envfollow_coeffs, _envfollow_states, vec_abs (sat));
-
-      follow *= p.ef_gain;
-      follow = vec_min (follow, vec_set<double_x2> (1.)); // clipping at 1
+      double_x2 follow
+        = slew_limiter::tick_simd (_envfollow_coeffs, _envfollow_states, sat);
+      // Make unipolar and clip at 1.
+      follow = vec_min (vec_abs (follow) * p.ef_gain, vec_set<double_x2> (1.));
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
         // expensive stuff at lower than audio rate
