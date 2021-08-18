@@ -5157,6 +5157,26 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  saturation_lo_order,
+  n_stereo_busses,
+  param_common (
+    "Lo BW",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::lo_order_tag>()),
+  saturation::get_parameter (saturation::lo_order_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  saturation_hi_order,
+  n_stereo_busses,
+  param_common (
+    "Hi BW",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::hi_order_tag>()),
+  saturation::get_parameter (saturation::hi_order_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   saturation_emphasis_amount,
   n_stereo_busses,
   param_common (
@@ -5307,6 +5327,8 @@ using saturation_params = mp_list<
 
   saturation_lo_cut,
   saturation_hi_cut,
+  saturation_lo_order,
+  saturation_hi_order,
   saturation_out,
   saturation_oversampling>;
 //------------------------------------------------------------------------------

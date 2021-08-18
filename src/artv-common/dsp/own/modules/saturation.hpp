@@ -124,20 +124,12 @@ public:
   void set (lo_cut_tag, float v)
   {
     v = midi_note_to_hz (v);
-    if (v != _p.lo_cut_hz) {
-      _p.lo_cut_hz           = v;
-      _crossv_enabled[lo_lp] = true;
-      butterworth_type::lowpass (
-        get_crossv_coeffs (lo_lp), v, _plugcontext->get_sample_rate());
+    if (v == _p.lo_cut_hz) {
+      return;
     }
-    if (_crossv_enabled[lo_lp] && v <= lo_cut_min_hz) {
-      _p.lo_cut_hz           = v;
-      _crossv_enabled[lo_lp] = false;
-      for (uint c = 0; c < n_channels; ++c) {
-        auto rang = get_crossv_states (lo_lp, c);
-        memset (rang.data(), 0, rang.size() * sizeof rang[0]);
-      }
-    }
+    _p.lo_cut_hz           = v;
+    _crossv_enabled[lo_lp] = (v >= lo_cut_min_hz);
+    update_crossover (lo_lp, !_crossv_enabled[lo_lp]);
   }
 
   static constexpr auto get_parameter (lo_cut_tag)
@@ -152,25 +144,68 @@ public:
   void set (hi_cut_tag, float v)
   {
     v = midi_note_to_hz (v);
-    if (v != _p.hi_cut_hz) {
-      _p.hi_cut_hz           = v;
-      _crossv_enabled[hi_hp] = true;
-      butterworth_type::highpass (
-        get_crossv_coeffs (hi_hp), v, _plugcontext->get_sample_rate());
+    if (v == _p.hi_cut_hz) {
+      return;
     }
-    if (_crossv_enabled[hi_hp] && v >= hi_cut_max_hz) {
-      _p.hi_cut_hz           = v;
-      _crossv_enabled[hi_hp] = false;
-      for (uint c = 0; c < n_channels; ++c) {
-        auto rang = get_crossv_states (hi_hp, c);
-        memset (rang.data(), 0, rang.size() * sizeof rang[0]);
-      }
-    }
+    _p.hi_cut_hz           = v;
+    _crossv_enabled[hi_hp] = (v < hi_cut_max_hz);
+    update_crossover (hi_hp, !_crossv_enabled[hi_hp]);
   }
 
   static constexpr auto get_parameter (hi_cut_tag)
   {
     return frequency_parameter (30., hi_cut_max_hz, hi_cut_max_hz);
+  }
+  //----------------------------------------------------------------------------
+  struct lo_order_tag {};
+
+  void set (lo_order_tag, int v)
+  {
+    ++v;
+    if (v == _p.lo_order) {
+      return;
+    }
+    _p.lo_order = v;
+    if (_crossv_enabled[lo_lp]) {
+      update_crossover (lo_lp, true);
+    }
+  }
+
+  static constexpr auto get_parameter (lo_order_tag)
+  {
+    return choice_param (
+      0,
+      make_cstr_array (
+        "6dB/Oct",
+        "12dB/Oct",
+        "18dB/Oct",
+        "24dB/Oct",
+        "30dB/Oct",
+        "36dB/Oct",
+        "42dB/Oct",
+        "48dB/Oct",
+        "54dB/Oct",
+        "60dB/Oct"),
+      20);
+  }
+  //----------------------------------------------------------------------------
+  struct hi_order_tag {};
+
+  void set (hi_order_tag, float v)
+  {
+    ++v;
+    if (v == _p.hi_order) {
+      return;
+    }
+    _p.hi_order = v;
+    if (_crossv_enabled[hi_hp]) {
+      update_crossover (hi_hp, true);
+    }
+  }
+
+  static constexpr auto get_parameter (hi_order_tag)
+  {
+    return get_parameter (lo_order_tag {});
   }
   //----------------------------------------------------------------------------
   struct feedback_tag {};
@@ -441,19 +476,21 @@ public:
       if (_crossv_enabled[lo_lp]) {
         lo_prev[0] = get_crossv_states (lo_lp, 0)[onepole::z1];
         lo_prev[1] = get_crossv_states (lo_lp, 1)[onepole::z1];
-        lo         = butterworth_type::tick (
+        lo         = butterworth_any_order::tick (
           get_crossv_coeffs (lo_lp),
           {get_crossv_states (lo_lp, 0), get_crossv_states (lo_lp, 1)},
-          sat);
+          sat,
+          p.lo_order);
         sat -= lo;
       }
       if (_crossv_enabled[hi_hp]) {
         hi_prev[0] = get_crossv_states (hi_hp, 0)[onepole::z1];
         hi_prev[1] = get_crossv_states (hi_hp, 1)[onepole::z1];
-        hi         = butterworth_type::tick (
+        hi         = butterworth_any_order::tick (
           get_crossv_coeffs (hi_hp),
           {get_crossv_states (hi_hp, 0), get_crossv_states (hi_hp, 1)},
-          sat);
+          sat,
+          p.hi_order);
         sat -= hi;
       }
 
@@ -630,6 +667,8 @@ private:
     float drive_bal           = 0.f;
     float lo_cut_hz           = -1.f;
     float hi_cut_hz           = -1.f;
+    uint  lo_order            = 1;
+    uint  hi_order            = 1;
     float emphasis_freq       = 60.f;
     float emphasis_amount     = 0.f;
     float emphasis_q          = 0.5f;
@@ -680,24 +719,55 @@ private:
 
   using smoother = onepole_smoother;
   //----------------------------------------------------------------------------
-  using butterworth_type = butterworth<1>;
+  using butterworth_max_type = butterworth<10>;
+  //----------------------------------------------------------------------------
+  void update_crossover (filter_indexes idx, bool reset_states)
+  {
+    float f;
+    int   order;
+    if (idx == lo_lp) {
+      f     = _p.lo_cut_hz;
+      order = _p.lo_order;
+    }
+    else {
+      assert (idx == hi_hp);
+      f     = _p.hi_cut_hz;
+      order = _p.hi_order;
+    }
 
+    butterworth_any_order::init (
+      get_crossv_coeffs (idx),
+      f,
+      _plugcontext->get_sample_rate(),
+      order,
+      idx == lo_lp);
+
+    if (reset_states) {
+      // state reset
+      for (uint c = 0; c < n_channels; ++c) {
+        auto rang = get_crossv_states (idx, c);
+        memset (rang.data(), 0, rang.size() * sizeof rang[0]);
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
   crange<double> get_crossv_coeffs (uint filt_idx)
   {
-    static constexpr uint n_coeffs = butterworth_type::n_coeffs;
+    static constexpr uint n_coeffs = butterworth_max_type::n_coeffs;
     return {&_filt_coeffs[filt_idx * n_coeffs], n_coeffs};
   }
+  //----------------------------------------------------------------------------
   crange<double> get_crossv_states (uint filt_idx, uint channel)
   {
-    static constexpr uint n_states = butterworth_type::n_states;
+    static constexpr uint n_states = butterworth_max_type::n_states;
     return {&_filt_states[channel][filt_idx * n_states], n_states};
   }
-
+  //----------------------------------------------------------------------------
   crange<double> get_waveshaper_states (uint channel)
   {
     return {&_wvsh_states[wsh_max_states * channel], wsh_max_states};
   }
-
+  //----------------------------------------------------------------------------
   crange<const double> get_fix_eq_delay_coeffs (uint channel)
   {
     constexpr uint n
@@ -753,7 +823,7 @@ private:
       get_fix_eq_delay_coeffs (1), get_waveshaper_states (1), x[1]);
     return ret;
   }
-  //----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 #define ARTV_SATURATION_USE_SIMD 0
   // ARTV_SATURATION_USE_simd has detrimental effects when ADAA enabled,
   // the current implementation always takes both branches.
@@ -780,9 +850,9 @@ private:
 
   // using coeff_array = simd_array<double, max_coeffs, sse_bytes>;
   using crossv_state_array
-    = simd_array<double, butterworth_type::n_states * n_filters, sse_bytes>;
+    = simd_array<double, butterworth_max_type::n_states * n_filters, sse_bytes>;
   using crossv_coeff_array
-    = simd_array<double, butterworth_type::n_coeffs * n_filters, sse_bytes>;
+    = simd_array<double, butterworth_max_type::n_coeffs * n_filters, sse_bytes>;
 
   using emphasis_coeff_array
     = simd_array<double, andy::svf::n_coeffs * n_channels, sse_bytes>;
