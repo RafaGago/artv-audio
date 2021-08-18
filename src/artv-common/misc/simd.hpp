@@ -23,7 +23,7 @@
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
-#if !defined(NDEBUG)
+#if 0 // was required when maybe implementing __shufflevector wrapper.
 #include "artv-common/misc/hana.hpp"
 #endif
 

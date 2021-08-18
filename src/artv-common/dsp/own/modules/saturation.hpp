@@ -8,6 +8,7 @@
 
 #include "artv-common/dsp/own/blocks/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/blocks/filters/composite/butterworth.hpp"
+#include "artv-common/dsp/own/blocks/filters/dc_blocker.hpp"
 #include "artv-common/dsp/own/blocks/filters/moving_average.hpp"
 #include "artv-common/dsp/own/blocks/filters/onepole.hpp"
 #include "artv-common/dsp/own/blocks/misc/interpolators.hpp"
@@ -55,9 +56,13 @@ public:
       uint dc;
       switch (_p.mode) {
       case mode_no_aa:
+        [[fallthrough]];
+      case mode_band_no_aa:
         dc = 0;
         break;
       case mode_normal:
+        [[fallthrough]];
+      case mode_band_normal:
         dc = 1;
         break;
       case mode_compand:
@@ -97,7 +102,7 @@ public:
 
   static constexpr auto get_parameter (drive_tag)
   {
-    return float_param ("dB", -30.0, 30, 0.0, 0.25, 0.6, true);
+    return float_param ("dB", -30.0, 30, 0.0, 0.25, 0.5, true);
   }
   //----------------------------------------------------------------------------
   struct drive_balance_tag {};
@@ -168,6 +173,22 @@ public:
     return frequency_parameter (30., hi_cut_max_hz, hi_cut_max_hz);
   }
   //----------------------------------------------------------------------------
+  struct feedback_tag {};
+  void set (feedback_tag, float v)
+  {
+    bool neg = v < 0.f;
+    v *= 0.01;
+    v = sqrtf (fabs (v));
+    v *= 0.9f;
+    v           = neg ? -v : v;
+    _p.feedback = v;
+  }
+
+  static constexpr auto get_parameter (feedback_tag)
+  {
+    return float_param ("%", -100., 100, 0., 0.1, 0.5, true);
+  }
+  //----------------------------------------------------------------------------
   struct emphasis_freq_tag {};
 
   void set (emphasis_freq_tag, float v)
@@ -184,22 +205,6 @@ public:
     return frequency_parameter (lo_cut_min_hz, 6000., 200.);
   }
   //----------------------------------------------------------------------------
-  struct feedback_tag {};
-  void set (feedback_tag, float v)
-  {
-    bool neg = v < 0.f;
-    v *= 0.01;
-    v = sqrtf (fabs (v));
-    v *= 0.975f;
-    v           = neg ? -v : v;
-    _p.feedback = v;
-  }
-
-  static constexpr auto get_parameter (feedback_tag)
-  {
-    return float_param ("%", -100., 100, 0., 0.1);
-  }
-  //----------------------------------------------------------------------------
   struct emphasis_amount_tag {};
 
   void set (emphasis_amount_tag, float v)
@@ -212,7 +217,7 @@ public:
 
   static constexpr auto get_parameter (emphasis_amount_tag)
   {
-    return float_param ("dB", -30.0, 30, 0.0, 0.25, 0.6, true);
+    return float_param ("dB", -30.0, 30, 0.0, 0.25, 0.4, true);
   }
   //----------------------------------------------------------------------------
   struct emphasis_q_tag {};
@@ -228,6 +233,15 @@ public:
   static constexpr auto get_parameter (emphasis_q_tag)
   {
     return float_param ("", 0.01, 10., 0.5, 0.01, 0.6);
+  }
+  //----------------------------------------------------------------------------
+  struct dc_block_tag {};
+
+  void set (dc_block_tag, int v) { _p.dc_block = !!v; }
+
+  static constexpr auto get_parameter (dc_block_tag)
+  {
+    return choice_param (0, make_cstr_array ("Off", "On"), 4);
   }
   //----------------------------------------------------------------------------
   struct envfollow_attack_tag {};
@@ -271,18 +285,18 @@ public:
     return float_param ("dB", -20., 20., 0.);
   }
   //----------------------------------------------------------------------------
-  static constexpr double envfollow_max_db = 30.;
+  static constexpr float envfollow_max_db = 30.;
 
   struct envfollow_to_drive_tag {};
 
   void set (envfollow_to_drive_tag, float v)
   {
     // -1 because the signal of the envelope follower has "1" added.
-    constexpr auto max_db = (constexpr_db_to_gain (envfollow_max_db) - 1.);
+    constexpr auto max_db = (constexpr_db_to_gain (envfollow_max_db) - 1.f);
 
     _p.ef_to_drive = v * 0.01; // max 1
-    _p.ef_to_drive *= sqrt (fabs (_p.ef_to_drive));
-    _p.ef_to_drive *= (v < 0.) ? -max_db : max_db;
+    _p.ef_to_drive *= _p.ef_to_drive;
+    _p.ef_to_drive *= max_db;
   }
 
   static constexpr auto get_parameter (envfollow_to_drive_tag)
@@ -307,9 +321,9 @@ public:
 
   void set (envfollow_to_emphasis_amount_tag, float v)
   {
-    _p.ef_to_emphasis_amt = v * 0.01; // max 1
+    _p.ef_to_emphasis_amt = v * 0.01f; // max 1
     _p.ef_to_emphasis_amt = sqrt (fabs (_p.ef_to_emphasis_amt));
-    _p.ef_to_emphasis_amt *= (v < 0.) ? -30 : 30;
+    _p.ef_to_emphasis_amt *= sgn_no_zero (v, -30.f, 30.f);
   }
 
   static constexpr auto get_parameter (envfollow_to_emphasis_amount_tag)
@@ -317,16 +331,15 @@ public:
     return float_param ("%", -100., 100., 0., 0.01);
   }
   //----------------------------------------------------------------------------
-  struct envfollow_to_emphasis_q_tag {};
+  struct envfollow_to_dc_tag {};
 
-  void set (envfollow_to_emphasis_q_tag, float v)
+  void set (envfollow_to_dc_tag, float v)
   {
-    _p.ef_to_emphasis_q = v * 0.01; // max 1
-    _p.ef_to_emphasis_q = sqrt (fabs (_p.ef_to_emphasis_amt));
-    _p.ef_to_emphasis_q *= (v < 0.) ? -3. : 3.;
+    _p.ef_to_dc = sqrt (fabs (v * 0.01));
+    _p.ef_to_dc *= sgn_no_zero (v);
   }
 
-  static constexpr auto get_parameter (envfollow_to_emphasis_q_tag)
+  static constexpr auto get_parameter (envfollow_to_dc_tag)
   {
     return float_param ("%", -100., 100., 0., 0.01);
   }
@@ -337,6 +350,7 @@ public:
     emphasis_amount_tag,
     emphasis_freq_tag,
     emphasis_q_tag,
+    dc_block_tag,
     saturated_out_tag,
     drive_balance_tag,
     drive_tag,
@@ -347,7 +361,8 @@ public:
     envfollow_sensitivity_tag,
     envfollow_to_drive_tag,
     envfollow_to_emphasis_freq_tag,
-    envfollow_to_emphasis_amount_tag>;
+    envfollow_to_emphasis_amount_tag,
+    envfollow_to_dc_tag>;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -359,6 +374,7 @@ public:
     memset (&_expander_states, 0, sizeof _expander_states);
     memset (&_wvsh_states, 0, sizeof _wvsh_states);
     memset (&_filt_states, 0, sizeof _filt_states);
+    memset (&_dc_block_states, 0, sizeof _dc_block_states);
     memset (&_filt_coeffs, 0, sizeof _filt_coeffs);
     memset (&_pre_emphasis_states, 0, sizeof _pre_emphasis_states);
     memset (&_pre_emphasis_coeffs, 0, sizeof _pre_emphasis_coeffs);
@@ -367,6 +383,9 @@ public:
 
     adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::init_simd<
       double_x2> (_adaa_fix_eq_delay_coeffs);
+
+    dc_blocker::init_simd (
+      _dc_block_coeffs, vec_set<double_x2> (15.), pc.get_sample_rate());
 
     _p = params {};
 
@@ -454,13 +473,10 @@ public:
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
         // expensive stuff at lower than audio rate
-        if (
-          p.ef_to_emphasis_amt != 0. || p.ef_to_emphasis_freq != 0.
-          || p.ef_to_emphasis_q != 0) {
+        if (p.ef_to_emphasis_amt != 0. || p.ef_to_emphasis_freq != 0.) {
           update_emphasis (
             follow * p.ef_to_emphasis_freq * p.emphasis_freq,
-            follow * p.ef_to_emphasis_amt,
-            follow * p.ef_to_emphasis_q * p.emphasis_q);
+            follow * p.ef_to_emphasis_amt);
         }
       }
 
@@ -510,6 +526,8 @@ public:
       feedback += feedback * feedback_follow;
 
       sat += feedback;
+      auto dcmod = (0.5 * follow * p.ef_to_dc);
+      sat += dcmod;
 
       // waveshaping
       auto wsh_type
@@ -544,7 +562,11 @@ public:
         break;
       }
 
-      _sat_prev = sat;
+      sat -= dcmod; // this is not an obviously wrong DC blocker; deliberate.
+      auto sat_nodc
+        = dc_blocker::tick_simd (_dc_block_coeffs, _dc_block_states, sat);
+      _sat_prev = sat_nodc;
+      sat       = p.dc_block ? sat_nodc : sat;
 
       // post emphasis
       sat = andy::svf::tick_simd (
@@ -617,12 +639,13 @@ private:
     float ef_to_drive         = 1.f;
     float ef_to_emphasis_freq = 0.f;
     float ef_to_emphasis_amt  = 0.f;
-    float ef_to_emphasis_q    = 0.f;
+    float ef_to_dc            = 0.f;
     float feedback            = 0.f;
     char  type                = 0;
     char  type_prev           = 1;
     char  mode                = 1;
     char  mode_prev           = 0;
+    bool  dc_block            = false;
   } _p;
 
   template <class T>
@@ -688,9 +711,8 @@ private:
   }
   //----------------------------------------------------------------------------
   void update_emphasis (
-    double_x2 freq_offset = double_x2 {0.},
-    double_x2 amt_offset  = double_x2 {0.},
-    double_x2 q_offset    = double_x2 {0.})
+    double_x2 freq_offset = double_x2 {},
+    double_x2 amt_offset  = double_x2 {})
   {
     double_x2 f  = vec_set<double_x2> (_p.emphasis_freq);
     double_x2 q  = vec_set<double_x2> (_p.emphasis_q);
@@ -698,7 +720,6 @@ private:
 
     f += freq_offset;
     db += amt_offset;
-    q += q_offset;
 
     andy::svf::bell_simd (
       _pre_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
@@ -773,6 +794,11 @@ private:
   using envfollow_state_array
     = simd_array<double, slew_limiter::n_states * n_channels, sse_bytes>;
 
+  using dc_block_coeff_array
+    = simd_array<double, dc_blocker::n_coeffs * n_channels, sse_bytes>;
+  using dc_block_state_array
+    = simd_array<double, dc_blocker::n_states * n_channels, sse_bytes>;
+
   // all arrays are multiples of the simd size, no need to alignas on
   // everything.
   std::array<bool, 2> _crossv_enabled;
@@ -785,6 +811,8 @@ private:
   emphasis_coeff_array              _pre_emphasis_coeffs;
   emphasis_state_array              _pre_emphasis_states;
   wsh_state_array                   _wvsh_states;
+  dc_block_coeff_array              _dc_block_coeffs;
+  dc_block_state_array              _dc_block_states;
   emphasis_coeff_array              _post_emphasis_coeffs;
   emphasis_state_array              _post_emphasis_states;
   compander_state_array             _expander_states;

@@ -5237,13 +5237,23 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_envfollow_to_emphasis_q,
+  saturation_envfollow_to_dc,
   n_stereo_busses,
   param_common (
-    "EF-Tone F",
+    "EF-DC",
     declptr<updownsampled<saturation>>(),
-    declptr<saturation::envfollow_to_emphasis_q_tag>()),
-  saturation::get_parameter (saturation::envfollow_to_emphasis_q_tag {}),
+    declptr<saturation::envfollow_to_dc_tag>()),
+  saturation::get_parameter (saturation::envfollow_to_dc_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  saturation_dc_block,
+  n_stereo_busses,
+  param_common (
+    "DC block",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::dc_block_tag>()),
+  saturation::get_parameter (saturation::dc_block_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -5286,16 +5296,17 @@ using saturation_params = mp_list<
   saturation_emphasis_freq,
   saturation_emphasis_q,
 
-  saturation_lo_cut,
-  saturation_hi_cut,
   saturation_envfollow_attack,
   saturation_envfollow_release,
   saturation_envfollow_sensitivity,
   saturation_envfollow_to_drive,
   saturation_envfollow_to_emphasis_freq,
   saturation_envfollow_to_emphasis_amount,
-  saturation_envfollow_to_emphasis_q,
+  saturation_envfollow_to_dc,
+  saturation_dc_block,
 
+  saturation_lo_cut,
+  saturation_hi_cut,
   saturation_out,
   saturation_oversampling>;
 //------------------------------------------------------------------------------
