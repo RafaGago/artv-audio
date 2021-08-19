@@ -5157,23 +5157,23 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_lo_order,
+  saturation_lo_mode,
   n_stereo_busses,
   param_common (
-    "Band LoAtt",
+    "Band LoCfg",
     declptr<updownsampled<saturation>>(),
-    declptr<saturation::lo_order_tag>()),
-  saturation::get_parameter (saturation::lo_order_tag {}),
+    declptr<saturation::lo_mode_tag>()),
+  saturation::get_parameter (saturation::lo_mode_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_hi_order,
+  saturation_hi_mode,
   n_stereo_busses,
   param_common (
-    "Band HiAtt",
+    "Band HiCfg",
     declptr<updownsampled<saturation>>(),
-    declptr<saturation::hi_order_tag>()),
-  saturation::get_parameter (saturation::hi_order_tag {}),
+    declptr<saturation::hi_mode_tag>()),
+  saturation::get_parameter (saturation::hi_mode_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -5337,8 +5337,8 @@ using saturation_params = mp_list<
 
   saturation_band_lo,
   saturation_band_hi,
-  saturation_lo_order,
-  saturation_hi_order,
+  saturation_lo_mode,
+  saturation_hi_mode,
   saturation_band_gain,
   saturation_dc_block,
   saturation_oversampling>;
