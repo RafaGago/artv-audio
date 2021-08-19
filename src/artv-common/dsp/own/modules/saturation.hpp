@@ -56,12 +56,10 @@ public:
       uint dc;
       switch (_p.mode) {
       case mode_no_aa:
-      case mode_broken_crossv_no_aa:
       case mode_band_no_aa:
         dc = 0;
         break;
       case mode_normal:
-      case mode_broken_crossv_normal:
       case mode_band_normal:
         dc = 1;
         break;
@@ -82,13 +80,7 @@ public:
     return choice_param (
       0,
       make_cstr_array (
-        "No AA",
-        "ADAA",
-        "Broken Crossover No AA",
-        "Broken Crossover ADAA",
-        "Band No AA",
-        "Band ADAA",
-        "Companded ADAA"),
+        "No AA", "ADAA", "Band No AA", "Band ADAA", "Companded ADAA"),
       40);
   }
   //----------------------------------------------------------------------------
@@ -168,11 +160,14 @@ public:
 
   void set (lo_order_tag, int v)
   {
-    ++v;
-    if (v == _p.lo_order) {
+    bool broken = (v >= max_crossv_order);
+    int  order  = broken ? v - (max_crossv_order - 2) : v + 1;
+
+    if (order == _p.lo_order && broken == _p.lo_broken) {
       return;
     }
-    _p.lo_order = v;
+    _p.lo_order  = order;
+    _p.lo_broken = broken;
     if (_crossv_enabled[lo_crossv]) {
       update_crossover (lo_crossv, true);
     }
@@ -192,19 +187,31 @@ public:
         "42dB/Oct",
         "48dB/Oct",
         "54dB/Oct",
-        "60dB/Oct"),
-      20);
+        "60dB/Oct",
+        "Fail 12dB/Oct",
+        "Fail 18dB/Oct",
+        "Fail 24dB/Oct",
+        "Fail 30dB/Oct",
+        "Fail 36dB/Oct",
+        "Fail 42dB/Oct",
+        "Fail 48dB/Oct",
+        "Fail 54dB/Oct",
+        "Fail 60dB/Oct"),
+      35);
   }
   //----------------------------------------------------------------------------
   struct hi_order_tag {};
 
-  void set (hi_order_tag, float v)
+  void set (hi_order_tag, int v)
   {
-    ++v;
-    if (v == _p.hi_order) {
+    bool broken = (v >= max_crossv_order);
+    int  order  = broken ? v - (max_crossv_order - 2) : v + 1;
+
+    if (order == _p.hi_order && broken == _p.hi_broken) {
       return;
     }
-    _p.hi_order = v;
+    _p.hi_order  = order;
+    _p.hi_broken = broken;
     if (_crossv_enabled[hi_crossv]) {
       update_crossover (hi_crossv, true);
     }
@@ -497,16 +504,16 @@ public:
         auto lp      = butterworth_any_order::tick_simd (
           _crossv_coeffs[filt_id], _crossv_states[filt_id], sat, p.lo_order);
 
-        if (!crossv_is_broken (p.mode)) {
+        if (p.lo_order == 0 || p.lo_broken) {
+          lo = lp;
+          sat -= lo;
+        }
+        else {
           ++filt_id;
           auto hp = butterworth_any_order::tick_simd (
             _crossv_coeffs[filt_id], _crossv_states[filt_id], sat, p.lo_order);
           lo  = lp;
           sat = hp;
-        }
-        else {
-          lo = lp;
-          sat -= lo;
         }
       }
 
@@ -516,16 +523,16 @@ public:
         auto hp      = butterworth_any_order::tick_simd (
           _crossv_coeffs[filt_id], _crossv_states[filt_id], sat, p.hi_order);
 
-        if (!crossv_is_broken (p.mode)) {
+        if (p.hi_order == 0 || p.hi_broken) {
+          hi = hp;
+          sat -= hi;
+        }
+        else {
           ++filt_id;
           auto lp = butterworth_any_order::tick_simd (
             _crossv_coeffs[filt_id], _crossv_states[filt_id], sat, p.hi_order);
           hi  = hp;
           sat = lp;
-        }
-        else {
-          hi = hp;
-          sat -= hi;
         }
       }
 
@@ -665,8 +672,6 @@ public:
       switch (p.mode) {
       case mode_no_aa:
       case mode_normal:
-      case mode_broken_crossv_no_aa:
-      case mode_broken_crossv_normal:
         break;
       case mode_band_no_aa:
       case mode_band_normal:
@@ -707,8 +712,6 @@ private:
   enum mode_type {
     mode_no_aa,
     mode_normal,
-    mode_broken_crossv_no_aa,
-    mode_broken_crossv_normal,
     mode_band_no_aa,
     mode_band_normal,
     mode_compand,
@@ -748,6 +751,8 @@ private:
     char  mode                = 1;
     char  mode_prev           = 0;
     char  ef_mode             = ef_linear;
+    bool  hi_broken           = false;
+    bool  lo_broken           = false;
     bool  dc_block            = false;
   } _p;
 
@@ -836,12 +841,6 @@ private:
   static constexpr bool waveshaper_type_is_adaa (char mode)
   {
     return (mode & 1) || mode == mode_compand;
-  }
-  //----------------------------------------------------------------------------
-  static constexpr bool crossv_is_broken (char mode)
-  {
-    return mode == mode_broken_crossv_normal
-      || mode == mode_broken_crossv_no_aa;
   }
   //----------------------------------------------------------------------------
   void update_emphasis (
