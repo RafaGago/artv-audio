@@ -302,6 +302,16 @@ public:
     return float_param ("ms", 1, 180., 20., 0.1);
   }
   //----------------------------------------------------------------------------
+  struct envfollow_mode_tag {};
+
+  void set (envfollow_mode_tag, int v) { _p.ef_mode = v; }
+
+  static constexpr auto get_parameter (envfollow_mode_tag)
+  {
+    return choice_param (
+      0, make_cstr_array ("square root", "linear", "quadratic", "cubic"), 20);
+  }
+  //----------------------------------------------------------------------------
   struct envfollow_release_tag {};
 
   void set (envfollow_release_tag, float v)
@@ -315,7 +325,7 @@ public:
 
   static constexpr auto get_parameter (envfollow_release_tag)
   {
-    return float_param ("ms", 40., 800., 150., 1.);
+    return float_param ("ms", 40., 1000., 150., 1.);
   }
   //----------------------------------------------------------------------------
   struct envfollow_sensitivity_tag {};
@@ -336,9 +346,8 @@ public:
     // -1 because the signal of the envelope follower has "1" added.
     constexpr auto max_db = (constexpr_db_to_gain (envfollow_max_db) - 1.f);
 
-    _p.ef_to_drive = v * 0.01; // max 1
-    _p.ef_to_drive *= _p.ef_to_drive;
-    _p.ef_to_drive *= max_db;
+    _p.ef_to_drive = sqrt (abs (v) * 0.01); // max 1
+    _p.ef_to_drive *= sgn_no_zero (v, -max_db, max_db);
   }
 
   static constexpr auto get_parameter (envfollow_to_drive_tag)
@@ -401,6 +410,7 @@ public:
     envfollow_attack_tag,
     envfollow_release_tag,
     envfollow_sensitivity_tag,
+    envfollow_mode_tag,
     envfollow_to_drive_tag,
     envfollow_to_emphasis_freq_tag,
     envfollow_to_emphasis_amount_tag,
@@ -532,6 +542,23 @@ public:
         = slew_limiter::tick_simd (_envfollow_coeffs, _envfollow_states, sat);
       // Make unipolar and clip at 1.
       follow = vec_min (vec_abs (follow) * p.ef_gain, vec_set<double_x2> (1.));
+
+      switch (_p.ef_mode) {
+      case ef_sqrt:
+        follow = vec_sqrt (follow);
+        break;
+      case ef_linear:
+        break;
+      case ef_pow2:
+        follow *= follow;
+        break;
+      case ef_pow3:
+        follow *= follow * follow;
+        break;
+      default:
+        assert (false);
+        break;
+      }
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
         // expensive stuff at lower than audio rate
@@ -688,6 +715,13 @@ private:
     mode_count,
   };
 
+  enum ef_type {
+    ef_sqrt,
+    ef_linear,
+    ef_pow2,
+    ef_pow3,
+  };
+
   enum crossv_indexes { lo_crossv, hi_crossv, n_crossv };
 
   struct params {
@@ -713,6 +747,7 @@ private:
     char  type_prev           = 1;
     char  mode                = 1;
     char  mode_prev           = 0;
+    char  ef_mode             = ef_linear;
     bool  dc_block            = false;
   } _p;
 

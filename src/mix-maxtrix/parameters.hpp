@@ -5237,10 +5237,20 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  saturation_envfollow_mode,
+  n_stereo_busses,
+  param_common (
+    "EF Mode",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::envfollow_mode_tag>()),
+  saturation::get_parameter (saturation::envfollow_mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   saturation_envfollow_to_drive,
   n_stereo_busses,
   param_common (
-    "EF->Drive",
+    "EF:Drive",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::envfollow_to_drive_tag>()),
   saturation::get_parameter (saturation::envfollow_to_drive_tag {}),
@@ -5250,17 +5260,27 @@ parameter_cpp_class_define (
   saturation_envfollow_to_emphasis_freq,
   n_stereo_busses,
   param_common (
-    "EF->Tone F",
+    "EF:Tone F",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::envfollow_to_emphasis_freq_tag>()),
   saturation::get_parameter (saturation::envfollow_to_emphasis_freq_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
+  saturation_envfollow_to_emphasis_amount,
+  n_stereo_busses,
+  param_common (
+    "EF:Tone A",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::envfollow_to_emphasis_amount_tag>()),
+  saturation::get_parameter (saturation::envfollow_to_emphasis_amount_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   saturation_envfollow_to_dc,
   n_stereo_busses,
   param_common (
-    "EF->DC",
+    "EF:DC",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::envfollow_to_dc_tag>()),
   saturation::get_parameter (saturation::envfollow_to_dc_tag {}),
@@ -5274,16 +5294,6 @@ parameter_cpp_class_define (
     declptr<updownsampled<saturation>>(),
     declptr<saturation::dc_block_tag>()),
   saturation::get_parameter (saturation::dc_block_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
-  saturation_envfollow_to_emphasis_amount,
-  n_stereo_busses,
-  param_common (
-    "EF->Tone A",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::envfollow_to_emphasis_amount_tag>()),
-  saturation::get_parameter (saturation::envfollow_to_emphasis_amount_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -5319,17 +5329,18 @@ using saturation_params = mp_list<
   saturation_envfollow_attack,
   saturation_envfollow_release,
   saturation_envfollow_sensitivity,
+  saturation_envfollow_mode,
   saturation_envfollow_to_drive,
+  saturation_envfollow_to_dc,
   saturation_envfollow_to_emphasis_freq,
   saturation_envfollow_to_emphasis_amount,
-  saturation_envfollow_to_dc,
-  saturation_dc_block,
 
   saturation_band_lo,
   saturation_band_hi,
   saturation_lo_order,
   saturation_hi_order,
   saturation_band_gain,
+  saturation_dc_block,
   saturation_oversampling>;
 //------------------------------------------------------------------------------
 #if 0
