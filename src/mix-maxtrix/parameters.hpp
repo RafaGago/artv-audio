@@ -5087,10 +5087,10 @@ using filter2x_params = mp_list<
   filter2x_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
-  saturation_out,
+  saturation_band_gain,
   n_stereo_busses,
   param_common (
-    "Sat Out",
+    "Band dB",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::saturated_out_tag>()),
   saturation::get_parameter (saturation::saturated_out_tag {}),
@@ -5137,20 +5137,20 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_lo_cut,
+  saturation_band_lo,
   n_stereo_busses,
   param_common (
-    "Lo Cut",
+    "Band Lo",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::lo_cut_tag>()),
   saturation::get_parameter (saturation::lo_cut_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_hi_cut,
+  saturation_band_hi,
   n_stereo_busses,
   param_common (
-    "Hi Cut",
+    "Band Hi",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::hi_cut_tag>()),
   saturation::get_parameter (saturation::hi_cut_tag {}),
@@ -5160,7 +5160,7 @@ parameter_cpp_class_define (
   saturation_lo_order,
   n_stereo_busses,
   param_common (
-    "Lo BW",
+    "Band LoAtt",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::lo_order_tag>()),
   saturation::get_parameter (saturation::lo_order_tag {}),
@@ -5170,7 +5170,7 @@ parameter_cpp_class_define (
   saturation_hi_order,
   n_stereo_busses,
   param_common (
-    "Hi BW",
+    "Band HiAtt",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::hi_order_tag>()),
   saturation::get_parameter (saturation::hi_order_tag {}),
@@ -5240,7 +5240,7 @@ parameter_cpp_class_define (
   saturation_envfollow_to_drive,
   n_stereo_busses,
   param_common (
-    "EF-Drive",
+    "EF->Drive",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::envfollow_to_drive_tag>()),
   saturation::get_parameter (saturation::envfollow_to_drive_tag {}),
@@ -5250,7 +5250,7 @@ parameter_cpp_class_define (
   saturation_envfollow_to_emphasis_freq,
   n_stereo_busses,
   param_common (
-    "EF-Tone F",
+    "EF->Tone F",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::envfollow_to_emphasis_freq_tag>()),
   saturation::get_parameter (saturation::envfollow_to_emphasis_freq_tag {}),
@@ -5260,7 +5260,7 @@ parameter_cpp_class_define (
   saturation_envfollow_to_dc,
   n_stereo_busses,
   param_common (
-    "EF-DC",
+    "EF->DC",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::envfollow_to_dc_tag>()),
   saturation::get_parameter (saturation::envfollow_to_dc_tag {}),
@@ -5280,7 +5280,7 @@ parameter_cpp_class_define (
   saturation_envfollow_to_emphasis_amount,
   n_stereo_busses,
   param_common (
-    "EF-Tone A",
+    "EF->Tone A",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::envfollow_to_emphasis_amount_tag>()),
   saturation::get_parameter (saturation::envfollow_to_emphasis_amount_tag {}),
@@ -5325,11 +5325,11 @@ using saturation_params = mp_list<
   saturation_envfollow_to_dc,
   saturation_dc_block,
 
-  saturation_lo_cut,
-  saturation_hi_cut,
+  saturation_band_lo,
+  saturation_band_hi,
   saturation_lo_order,
   saturation_hi_order,
-  saturation_out,
+  saturation_band_gain,
   saturation_oversampling>;
 //------------------------------------------------------------------------------
 #if 0
