@@ -269,18 +269,18 @@ public:
   {
     assert (c.size() >= n_coeffs);
     assert (st.size() >= n_states);
-
-    // Explicit half sample delay to the main signal, the ADAA whaveshaper
+    // Explicit half sample delay to the main signal. The ADAA whaveshaper
     // of first order will add another half sample, as it behaves as a boxcar of
-    // L=2. This makes the delay to happen at sample boundaries.
+    // L=2. The total delay will be 1 sample.
     T delayed = allpass_interpolator::tick (c, st, x);
     st.shrink_head (allpass_interpolator::n_states);
-    // Apply boxcar to the input, delays half sample and rolls of highs
+    // Apply a boxcar to the input of the same size as the ADAA equivalent.
+    // Delays half a sample
     T filtered = moving_average<2>::tick ({}, st, x);
     st.shrink_head (moving_average<2>::n_states);
-    // As the ADAA implementation behaves as a boxcar, the input signal is
-    // pre-EQ'd to result in a flat frequency response after the ADAA process
-    // runs.
+    // The difference between the delayed main signal and the Boxcar output will
+    // contain filtered away high frequencies. These are added as a pre-EQ, to
+    // alleviate the ADAA filter HF loss with low or no oversampling.
     T eq = delayed + (delayed - filtered);
     return Impl<1>::tick ({}, st, eq);
   }
