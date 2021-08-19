@@ -5,6 +5,7 @@
 
 #include "artv-common/dsp/own/misc.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/util.hpp"
 
 namespace artv {
 
@@ -13,8 +14,8 @@ namespace artv {
 template <class Dsp>
 class simd_block_test {
 public:
-  static constexpr uint vecsize = 4;
-  using scalar_type             = float;
+  static constexpr uint vecsize = 2;
+  using scalar_type             = double;
   using vector_type             = vec<scalar_type, vecsize>;
 
   static constexpr scalar_type samplerate = 44100;
@@ -35,8 +36,10 @@ public:
 
     for (uint i = 0; i < res_scalar.size(); ++i) {
       scalar_type in = _whitenoise (1.);
-      res_scalar[i]
-        = Dsp::template tick<scalar_type> (scalar_coeffs, scalar_states, in);
+      res_scalar[i]  = Dsp::tick (
+        crange<const scalar_type> {scalar_coeffs},
+        make_crange (scalar_states),
+        in);
       res_vec[i] = Dsp::tick_simd (
         vector_coeffs, vector_states, vec_set<vector_type> (in))[0];
     }

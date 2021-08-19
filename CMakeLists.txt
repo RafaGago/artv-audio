@@ -475,8 +475,9 @@ target_link_libraries(
 #-- Common tests ---------------------------------------------------------------
 add_executable(
     common-test
-    test/common/fft.cpp
+    test/common/butterworth_simd.cpp
     test/common/delay_compensation_buffers.cpp
+    test/common/fft.cpp
     test/common/simd.cpp
     test/common/svf_simd.cpp
     )
