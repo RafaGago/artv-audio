@@ -56,18 +56,17 @@ public:
       uint dc;
       switch (_p.mode) {
       case mode_no_aa:
-        [[fallthrough]];
+      case mode_broken_crossv_no_aa:
       case mode_band_no_aa:
         dc = 0;
         break;
       case mode_normal:
-        [[fallthrough]];
+      case mode_broken_crossv_normal:
       case mode_band_normal:
         dc = 1;
         break;
       case mode_compand:
         dc = 3;
-        break;
         break;
       default:
         assert (false);
@@ -83,7 +82,13 @@ public:
     return choice_param (
       0,
       make_cstr_array (
-        "No AA", "ADAA", "Band No AA", "Band ADAA", "Companded ADAA"),
+        "No AA",
+        "ADAA",
+        "Broken Crossover No AA",
+        "Broken Crossover ADAA",
+        "Band No AA",
+        "Band ADAA",
+        "Companded ADAA"),
       40);
   }
   //----------------------------------------------------------------------------
@@ -477,31 +482,47 @@ public:
 
       // crossover section
       if (_crossv_enabled[lo_crossv]) {
-        auto fidx = lo_crossv * 2;
-        auto lp   = butterworth_any_order::tick_simd (
-          _crossv_coeffs[fidx], _crossv_states[fidx], sat, p.lo_order);
-        ++fidx;
-        auto hp = butterworth_any_order::tick_simd (
-          _crossv_coeffs[fidx], _crossv_states[fidx], sat, p.lo_order);
-        lo  = lp;
-        sat = hp;
+
+        auto filt_id = lo_crossv * 2; // 2x filters for each crossover
+        auto lp      = butterworth_any_order::tick_simd (
+          _crossv_coeffs[filt_id], _crossv_states[filt_id], sat, p.lo_order);
+
+        if (!crossv_is_broken (p.mode)) {
+          ++filt_id;
+          auto hp = butterworth_any_order::tick_simd (
+            _crossv_coeffs[filt_id], _crossv_states[filt_id], sat, p.lo_order);
+          lo  = lp;
+          sat = hp;
+        }
+        else {
+          lo = lp;
+          sat -= lo;
+        }
       }
 
       if (_crossv_enabled[hi_crossv]) {
-        auto fidx = hi_crossv * 2;
-        auto hp   = butterworth_any_order::tick_simd (
-          _crossv_coeffs[fidx], _crossv_states[fidx], sat, p.hi_order);
-        ++fidx;
-        auto lp = butterworth_any_order::tick_simd (
-          _crossv_coeffs[fidx], _crossv_states[fidx], sat, p.hi_order);
-        hi  = hp;
-        sat = lp;
+
+        auto filt_id = hi_crossv * 2; // 2x filters for each crossover
+        auto hp      = butterworth_any_order::tick_simd (
+          _crossv_coeffs[filt_id], _crossv_states[filt_id], sat, p.hi_order);
+
+        if (!crossv_is_broken (p.mode)) {
+          ++filt_id;
+          auto lp = butterworth_any_order::tick_simd (
+            _crossv_coeffs[filt_id], _crossv_states[filt_id], sat, p.hi_order);
+          hi  = hp;
+          sat = lp;
+        }
+        else {
+          hi = hp;
+          sat -= hi;
+        }
       }
 
       if (adaa_order == 1 && waveshaper_type_is_adaa (p.mode)) {
         // One sample delay for hi and lo, as the ADAA chain will add 1 sample
-        // delay, we mix with the previous crossover outputs. TODO: will need 2
-        // samples delay when companding...
+        // delay, we mix with the previous crossover outputs. TODO: will need
+        // 2 samples delay when companding...
         std::swap (_crossv_prev[lo_crossv], lo);
         std::swap (_crossv_prev[hi_crossv], hi);
       }
@@ -597,7 +618,7 @@ public:
         sat = wavesh_tick<hardclip_aa> (sat);
         break;
       case sat_sqrt_sin_adaa:
-        sat = wavesh_tick<hardclip_aa> (sat);
+        sat = wavesh_tick<sqrt_sin_sigmoid_aa> (sat);
         break;
       default:
         break;
@@ -617,6 +638,8 @@ public:
       switch (p.mode) {
       case mode_no_aa:
       case mode_normal:
+      case mode_broken_crossv_no_aa:
+      case mode_broken_crossv_normal:
         break;
       case mode_band_no_aa:
       case mode_band_normal:
@@ -657,6 +680,8 @@ private:
   enum mode_type {
     mode_no_aa,
     mode_normal,
+    mode_broken_crossv_no_aa,
+    mode_broken_crossv_normal,
     mode_band_no_aa,
     mode_band_normal,
     mode_compand,
@@ -776,6 +801,12 @@ private:
   static constexpr bool waveshaper_type_is_adaa (char mode)
   {
     return (mode & 1) || mode == mode_compand;
+  }
+  //----------------------------------------------------------------------------
+  static constexpr bool crossv_is_broken (char mode)
+  {
+    return mode == mode_broken_crossv_normal
+      || mode == mode_broken_crossv_no_aa;
   }
   //----------------------------------------------------------------------------
   void update_emphasis (
