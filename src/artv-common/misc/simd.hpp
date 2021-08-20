@@ -542,11 +542,20 @@ template <
     is_floating_point_vec_v<V1> && is_floating_point_vec_v<V2>>* = nullptr>
 static inline auto vec_pow (V1&& x, V2&& y)
 {
+#ifndef XSIMD_BROKEN_W_FAST_MATH
   return detail::call_xsimd_function (
     std::forward<V1> (x), std::forward<V2> (y), [] (auto&& v1, auto&& v2) {
       return xsimd::pow (
         std::forward<decltype (v1)> (v1), std::forward<decltype (v2)> (v2));
     });
+#else
+  constexpr auto traits = vec_traits<V1>();
+  auto           ret    = x;
+  for (uint i = 0; i < traits.size; ++i) {
+    ret[i] = pow (x[i], y[i]);
+  }
+  return ret;
+#endif
 }
 
 template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
@@ -597,7 +606,7 @@ static inline auto vec_sin (V&& x)
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = exp (x[i]);
+    x[i] = sin (x[i]);
   }
   return x;
 #endif
@@ -928,10 +937,53 @@ static inline auto vec_sgn_no_zero (
   V3&& pos_zero = vec_set<std::decay_t<V1>> (
     (typename decltype (vec_traits<std::decay_t<V1>>())::value_type) 1.))
 {
-  using V               = std::common_type_t<V1, V2, V3>;
-  constexpr auto traits = vec_traits<V>();
-  using value_type      = vec_value_type_t<V>;
+  using Vv              = std::common_type_t<V1, V2, V3>;
+  constexpr auto traits = vec_traits<Vv>();
+  using value_type      = vec_value_type_t<Vv>;
   return (x < ((value_type) 0.)) ? neg : pos_zero;
+}
+//------------------------------------------------------------------------------
+template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+bool vec_is_all_zeros (V v)
+{
+  using Vv              = std::remove_reference_t<std::remove_cv_t<V>>;
+  constexpr auto traits = vec_traits<Vv>();
+  using V64             = vec<u64, sizeof (Vv) / sizeof (u64)>;
+
+  if constexpr (sizeof (Vv) == 16) {
+    // hoping that this translates to e.g. PSET on SSE4.1
+    V64 u = *reinterpret_cast<V64*> (&v);
+    return !(u[0] & u[1]);
+  }
+  else if constexpr (sizeof (Vv) == 32) {
+    V64 u = *reinterpret_cast<V64*> (&v);
+    return !(u[0] & u[1] & u[2] & u[3]);
+  }
+  else {
+    static_assert (!std::is_same_v<V, V>, "To be implemented");
+    return false;
+  }
+}
+//------------------------------------------------------------------------------
+template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+bool vec_is_all_ones (V v)
+{
+  using Vv              = std::remove_reference_t<std::remove_cv_t<V>>;
+  constexpr auto traits = vec_traits<Vv>();
+  using V64             = vec<u64, traits.bytes / sizeof (u64)>;
+
+  if constexpr (sizeof (Vv) == 16) {
+    V64 u = *reinterpret_cast<V64*> (&v);
+    return (u[0] & u[1]) == (u64) -1;
+  }
+  else if constexpr (sizeof (Vv) == 32) {
+    V64 u = *reinterpret_cast<V64*> (&v);
+    return !!(u[0] & u[1] & u[2] & u[3]) == (u64) -1;
+  }
+  else {
+    static_assert (!std::is_same_v<V, V>, "To be implemented");
+    return false;
+  }
 }
 //------------------------------------------------------------------------------
 } // namespace artv
