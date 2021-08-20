@@ -65,7 +65,7 @@ public:
         dc = 3;
         break;
       default:
-        assert (false);
+        // assert (false);
         dc = 0;
         break;
       }
@@ -76,9 +76,7 @@ public:
   static constexpr auto get_parameter (mode_tag)
   {
     return choice_param (
-      0,
-      make_cstr_array ("Normal no AA", "Normal", "Compand 1", "Crazier"),
-      40);
+      0, make_cstr_array ("Normal no AA", "Normal", "Compand 1"), 40);
   }
   //----------------------------------------------------------------------------
   struct saturated_out_tag {};
@@ -492,6 +490,9 @@ public:
       p.drive * (2. - p.drive_bal), p.drive * (p.drive_bal)};
 
     double_x2 inv_compens_drive = 1. / compens_drive;
+    // Clipping the attenuation, as these are sigmoids...
+    static constexpr double max_att = constexpr_db_to_gain (-18.);
+    inv_compens_drive               = vec_max (inv_compens_drive, max_att);
 
     for (uint i = 0; i < block_samples; ++i, ++_n_processed_samples) {
       // TODO: drive and filter change smoothing
