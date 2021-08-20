@@ -13,6 +13,7 @@
 #include "artv-common/dsp/own/blocks/filters/onepole.hpp"
 #include "artv-common/dsp/own/blocks/misc/interpolators.hpp"
 #include "artv-common/dsp/own/blocks/misc/slew_limiter.hpp"
+#include "artv-common/dsp/own/blocks/waveshapers/compand1.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/hardclip.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/pow2.hpp"
 #include "artv-common/dsp/own/blocks/waveshapers/sqrt.hpp"
@@ -667,6 +668,60 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
+  //----------------------------------------------------------------------------
+  void update_crossover (uint idx, bool reset_states)
+  {
+    butterworth_any_order::init_simd (
+      _crossv_coeffs[idx],
+      double_x2 {_p.crossv_hz[idx], _p.crossv_hz[idx] * 1.009},
+      _plugcontext->get_sample_rate(),
+      _p.crossv_order[idx],
+      _p.crossv_is_lp[idx]);
+
+    if (reset_states) {
+      _crossv_prev[idx] = double_x2 {};
+      memset (&_crossv_states[idx], 0, sizeof _crossv_states[idx]);
+    }
+  }
+  //----------------------------------------------------------------------------
+  static constexpr bool waveshaper_type_is_adaa (char mode)
+  {
+    return mode != mode_no_aa;
+  }
+  //----------------------------------------------------------------------------
+  void update_emphasis (
+    double_x2 freq_offset = double_x2 {},
+    double_x2 amt_offset  = double_x2 {})
+  {
+    double_x2 f  = vec_set<double_x2> (_p.emphasis_freq);
+    double_x2 q  = vec_set<double_x2> (_p.emphasis_q);
+    double_x2 db = vec_set<double_x2> (_p.emphasis_amount);
+
+    f += freq_offset;
+    db += amt_offset;
+
+    andy::svf::bell_simd (
+      _pre_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
+
+    andy::svf::bell_simd (
+      _post_emphasis_coeffs, f, q, -db, _plugcontext->get_sample_rate());
+  }
+  //----------------------------------------------------------------------------
+  void update_envelope_follower()
+  {
+    slew_limiter::init_simd (
+      _envfollow_coeffs,
+      vec_set<double_x2> (_p.ef_attack),
+      vec_set<double_x2> (_p.ef_release),
+      _plugcontext->get_sample_rate());
+  }
+  //----------------------------------------------------------------------------
+  template <class wsh>
+  double_x2 wavesh_tick (double_x2 x)
+  {
+    return wsh::template tick_simd (_adaa_fix_eq_delay_coeffs, _wvsh_states, x);
+  }
+  //----------------------------------------------------------------------------
   enum sat_type {
 
     sat_tanh,
@@ -734,7 +789,7 @@ private:
     std::array<bool, n_crossv>  crossv_is_lp;
     std::array<bool, n_crossv>  crossv_enabled;
     bool                        dc_block = false;
-  } _p;
+  };
 
   template <class T>
   using to_n_states = std::integral_constant<int, T::n_states>;
@@ -767,60 +822,7 @@ private:
     mp11::mp_less>::value;
 
   using smoother = onepole_smoother;
-  //----------------------------------------------------------------------------
-  void update_crossover (crossv_indexes idx, bool reset_states)
-  {
-    butterworth_any_order::init_simd (
-      _crossv_coeffs[idx],
-      double_x2 {_p.crossv_hz[idx], _p.crossv_hz[idx] * 1.009},
-      _plugcontext->get_sample_rate(),
-      _p.crossv_order[idx],
-      _p.crossv_is_lp[idx]);
 
-    if (reset_states) {
-      _crossv_prev[idx] = double_x2 {};
-      memset (&_crossv_states[idx], 0, sizeof _crossv_states[idx]);
-    }
-  }
-  //----------------------------------------------------------------------------
-  static constexpr bool waveshaper_type_is_adaa (char mode)
-  {
-    return mode != mode_no_aa;
-  }
-  //----------------------------------------------------------------------------
-  void update_emphasis (
-    double_x2 freq_offset = double_x2 {},
-    double_x2 amt_offset  = double_x2 {})
-  {
-    double_x2 f  = vec_set<double_x2> (_p.emphasis_freq);
-    double_x2 q  = vec_set<double_x2> (_p.emphasis_q);
-    double_x2 db = vec_set<double_x2> (_p.emphasis_amount);
-
-    f += freq_offset;
-    db += amt_offset;
-
-    andy::svf::bell_simd (
-      _pre_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
-
-    andy::svf::bell_simd (
-      _post_emphasis_coeffs, f, q, -db, _plugcontext->get_sample_rate());
-  }
-  //----------------------------------------------------------------------------
-  void update_envelope_follower()
-  {
-    slew_limiter::init_simd (
-      _envfollow_coeffs,
-      vec_set<double_x2> (_p.ef_attack),
-      vec_set<double_x2> (_p.ef_release),
-      _plugcontext->get_sample_rate());
-  }
-  //----------------------------------------------------------------------------
-  template <class wsh>
-  double_x2 wavesh_tick (double_x2 x)
-  {
-    return wsh::template tick_simd (_adaa_fix_eq_delay_coeffs, _wvsh_states, x);
-  }
-  //----------------------------------------------------------------------------
   static constexpr uint n_channels = 2;
   using wsh_state_array
     = simd_array<double, wsh_max_states * n_channels, sse_bytes>;
@@ -858,6 +860,7 @@ private:
 
   // all arrays are multiples of the simd size, no need to alignas on
   // everything.
+  params _p;
   alignas (sse_bytes) envfollow_coeff_array _envfollow_coeffs;
   envfollow_state_array                    _envfollow_states;
   std::array<crossv_coeff_array, n_crossv> _crossv_coeffs;
