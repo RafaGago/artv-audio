@@ -110,14 +110,17 @@ static inline constexpr bool is_vec (
 }
 
 template <class T>
-static constexpr bool is_vec_v = is_vec<sizeof (T)> (T {});
+static constexpr bool is_vec_v
+  = is_vec<sizeof (T)> (std::remove_reference_t<std::remove_cv_t<T>> {});
 //------------------------------------------------------------------------------
 // for unevaluated contexts
 template <class V>
-using vec_traits_t = decltype (get_traits<V>());
+using vec_traits_t
+  = decltype (get_traits<std::remove_reference_t<std::remove_cv_t<V>>>());
 
 template <class V>
-using vec_value_type_t = typename vec_traits_t<V>::value_type;
+using vec_value_type_t = typename vec_traits_t<
+  std::remove_reference_t<std::remove_cv_t<V>>>::value_type;
 
 //------------------------------------------------------------------------------
 // TODO: As of now this is only done for x64, but it can be easily ifdefed
@@ -150,16 +153,22 @@ using to_xsimd_batch_t = xsimd::batch<T, to_xsimd_arch_t<bytes>>;
 template <class T, uint N>
 using vec = detail::vec<T, N>;
 
-// for unevaluated contexts
+// Gets the vector traits (see "simd_vector_traits") of a vector type "V".
+// removes references and CV qualification on "V"
 template <class V>
 using vec_traits_t = detail::vec_traits_t<V>;
 
+// Gets the value type (e.g float) of the vector type "V". removes references
+// and CV qualification on "V".
 template <class V>
 using vec_value_type_t = detail::vec_value_type_t<V>;
 
+// gets if "V" is a vector. removes references and CV qualification on "V".
 template <class V>
 static constexpr bool is_vec_v = detail::is_vec_v<V>;
 
+// gets if "V" is a floating point vector. removes references and CV
+// qualification on "V".
 template <class V>
 static constexpr bool is_floating_point_vec_v
   = is_vec_v<V>&&     std::is_floating_point_v<vec_value_type_t<V>>;
@@ -447,7 +456,7 @@ static inline V vec_shuffle (V a, V b, Ts... indexes)
 
 #if !defined(NDEBUG)
   auto indexes_tuple = hana::make<hana::tuple_tag> (indexes...);
-  hana::for_each (indexes_tuple, [&] (auto const& idx) {
+  hana::for_each (indexes_tuple, [&] (auto&& idx) {
     assert (idx >= 0 && idx < (traits.size * 2));
   });
 #endif
@@ -469,42 +478,53 @@ static inline auto vec_cast (V a)
 // XSIMD functions
 //------------------------------------------------------------------------------
 namespace detail {
-template <class V, class F>
-static inline V call_xsimd_function (V x, F func)
+template <class F, class... Ts>
+static inline auto call_xsimd_function_impl (F&& func, Ts&&... args)
 {
+  using V               = std::common_type_t<Ts...>;
   constexpr auto traits = vec_traits<V>();
-  using batch_t         = to_xsimd_batch_t<vec_value_type_t<V>, traits.bytes>;
+  using batch           = to_xsimd_batch_t<vec_value_type_t<V>, traits.bytes>;
+  using intrin          = decltype (vec_to_intrin (V {}));
 
-  // xsimd batches can be constructed from intrinsic types
-  auto intrin = vec_to_intrin (x);
   // xsimd batches can be casted back to intrinsic types
-  auto result = static_cast<decltype (intrin)> (func (batch_t {intrin}));
+  auto result = static_cast<intrin> (
+    func (batch {vec_to_intrin (std::forward<Ts> (args))}...));
   return *reinterpret_cast<V*> (&result);
 }
-
+// NOTE: The argument reversing on these three overloads below could be made
+// generic with some metaprogramming (e.g. boost hana). Going for the explicit
+// solution, as the upper bound number of args is known and low
 template <class V, class F>
-static inline V call_xsimd_function (V x, V y, F func)
+static inline auto call_xsimd_function (V&& x, F&& func)
 {
-  constexpr auto traits = vec_traits<V>();
-  using batch_t         = to_xsimd_batch_t<vec_value_type_t<V>, traits.bytes>;
-
-  // xsimd batches can be constructed from intrinsic types
-  auto    intrin_x = vec_to_intrin (x);
-  auto    intrin_y = vec_to_intrin (y);
-  batch_t batch_x {intrin_x};
-  batch_t batch_y {intrin_y};
-  // xsimd batches can be casted back to intrinsic types
-  auto result = static_cast<decltype (intrin_x)> (func (batch_x, batch_y));
-  return *reinterpret_cast<V*> (&result);
+  return call_xsimd_function_impl (std::forward<F> (func), std::forward<V> (x));
 }
+
+template <class V1, class V2, class F>
+static inline auto call_xsimd_function (V1&& x, V2&& y, F&& func)
+{
+  return call_xsimd_function_impl (
+    std::forward<F> (func), std::forward<V1> (x), std::forward<V2> (y));
+}
+
+template <class V1, class V2, class V3, class F>
+static inline auto call_xsimd_function (V1&& x, V2&& y, V3&& z, F&& func)
+{
+  return call_xsimd_function_impl (
+    std::forward<F> (func),
+    std::forward<V1> (x),
+    std::forward<V2> (y),
+    std::forward<V3> (z));
+}
+
 } // namespace detail
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_exp (V x)
+static inline auto vec_exp (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::exp (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::exp (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -515,39 +535,48 @@ static inline V vec_exp (V x)
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_pow (V x, V y)
+template <
+  class V1,
+  class V2,
+  std::enable_if_t<
+    is_floating_point_vec_v<V1> && is_floating_point_vec_v<V2>>* = nullptr>
+static inline auto vec_pow (V1&& x, V2&& y)
 {
   return detail::call_xsimd_function (
-    x, y, [] (auto const& v1, auto const& v2) { return xsimd::pow (v1, v2); });
+    std::forward<V1> (x), std::forward<V2> (y), [] (auto&& v1, auto&& v2) {
+      return xsimd::pow (
+        std::forward<decltype (v1)> (v1), std::forward<decltype (v2)> (v2));
+    });
 }
 
 template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-static inline V vec_pow (V x, vec_value_type_t<V> y)
+static inline auto vec_pow (V&& x, vec_value_type_t<V> y)
 {
-  return vec_pow (x, vec_set<V> (y));
+  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
+  return vec_pow (std::forward<V> (x), vec_set<Vv> (y));
 }
 
 template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-static inline V vec_pow (vec_value_type_t<V> x, V y)
+static inline auto vec_pow (vec_value_type_t<V> x, V&& y)
 {
-  return vec_pow (vec_set<V> (x), y);
+  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
+  return vec_pow (vec_set<Vv> (x), std::forward<V> (y));
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_sqrt (V x)
+static inline auto vec_sqrt (V&& x)
 {
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::sqrt (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::sqrt (std::forward<decltype (v)> (v));
   });
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_log (V x)
+static inline auto vec_log (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::log (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::log (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -559,11 +588,11 @@ static inline V vec_log (V x)
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_sin (V x)
+static inline auto vec_sin (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::exp (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::sin (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -575,11 +604,11 @@ static inline V vec_sin (V x)
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_cos (V x)
+static inline auto vec_cos (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::cos (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::cos (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -591,11 +620,11 @@ static inline V vec_cos (V x)
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_tan (V x)
+static inline auto vec_tan (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::tan (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::tan (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -607,11 +636,11 @@ static inline V vec_tan (V x)
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_sinh (V x)
+static inline auto vec_sinh (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::sinh (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::sinh (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -623,11 +652,11 @@ static inline V vec_sinh (V x)
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_cosh (V x)
+static inline auto vec_cosh (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::cosh (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::cosh (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -639,11 +668,11 @@ static inline V vec_cosh (V x)
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_tanh (V x)
+static inline auto vec_tanh (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::tanh (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::tanh (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -655,11 +684,11 @@ static inline V vec_tanh (V x)
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_asin (V x)
+static inline auto vec_asin (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::asin (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::asin (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -671,11 +700,11 @@ static inline V vec_asin (V x)
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_acos (V x)
+static inline auto vec_acos (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::acos (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::acos (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -687,11 +716,11 @@ static inline V vec_acos (V x)
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_atan (V x)
+static inline auto vec_atan (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::atan (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::atan (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -703,11 +732,11 @@ static inline V vec_atan (V x)
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_asinh (V x)
+static inline auto vec_asinh (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::asinh (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::asinh (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -719,11 +748,11 @@ static inline V vec_asinh (V x)
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_acosh (V x)
+static inline auto vec_acosh (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::acosh (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::acosh (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -735,11 +764,11 @@ static inline V vec_acosh (V x)
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_atanh (V x)
+static inline auto vec_atanh (V&& x)
 {
 #ifndef XSIMD_BROKEN_W_FAST_MATH
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::exp (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::atanh (std::forward<decltype (v)> (v));
   });
 #else
   constexpr auto traits = vec_traits<V>();
@@ -751,75 +780,155 @@ static inline V vec_atanh (V x)
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
-static inline V vec_abs (V x)
+static inline auto vec_abs (V&& x)
 {
-  return detail::call_xsimd_function (x, [] (auto const& v) {
-    return xsimd::abs (v);
+  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::abs (std::forward<decltype (v)> (v));
   });
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-static inline V vec_min (V x, V y)
+template <
+  class V1,
+  class V2,
+  std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
+static inline auto vec_min (V1&& x, V2&& y)
 {
   return x < y ? x : y;
 }
 
 template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-static inline V vec_min (V x, vec_value_type_t<V> y)
+static inline auto vec_min (V&& x, vec_value_type_t<V> y)
 {
-  return vec_min (x, vec_set<V> (y));
+  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
+  return vec_min (std::forward<V> (x), vec_set<Vv> (y));
 }
 
 template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-static inline V vec_min (vec_value_type_t<V> x, V y)
+static inline auto vec_min (vec_value_type_t<V> x, V&& y)
 {
-  return vec_min (vec_set<V> (x), y);
+  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
+  return vec_min (vec_set<Vv> (x), std::forward<V> (y));
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-static inline V vec_max (V x, V y)
+template <
+  class V1,
+  class V2,
+  std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
+static inline auto vec_max (V1&& x, V2&& y)
 {
   return x > y ? x : y;
 }
 
 template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-static inline V vec_max (V x, vec_value_type_t<V> y)
+static inline auto vec_max (V&& x, vec_value_type_t<V> y)
 {
-  return vec_max (x, vec_set<V> (y));
+  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
+  return vec_max (std::forward<V> (x), vec_set<Vv> (y));
 }
 
 template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-static inline V vec_max (vec_value_type_t<V> x, V y)
+static inline auto vec_max (vec_value_type_t<V> x, V&& y)
 {
-  return vec_max (vec_set<V> (x), y);
+  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
+  return vec_max (vec_set<Vv> (x), std::forward<V> (x));
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-static inline V vec_clamp (V x, V y)
+template <
+  class V1,
+  class V2,
+  class V3,
+  std::enable_if_t<is_vec_v<V1> && is_vec_v<V2> && is_vec_v<V3>>* = nullptr>
+static inline auto vec_clamp (V1&& x, V2&& min, V3&& max)
 {
   return detail::call_xsimd_function (
-    x, y, [] (auto const& v1, auto const& v2) { return xsimd::clip (v1, v2); });
+    std::forward<V1> (x),
+    std::forward<V2> (min),
+    std::forward<V3> (max),
+    [] (auto&& v1, auto&& v2, auto&& v3) {
+      return xsimd::clip (
+        std::forward<decltype (v1)> (v1),
+        std::forward<decltype (v2)> (v2),
+        std::forward<decltype (v3)> (v3));
+    });
 }
 
 template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-static inline V vec_clamp (V x, vec_value_type_t<V> y)
+static inline auto vec_clamp (
+  V&&                 x,
+  vec_value_type_t<V> y,
+  vec_value_type_t<V> z)
 {
-  return vec_clamp (x, vec_set<V> (y));
+  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
+  return vec_clamp (std::forward<V> (x), vec_set<Vv> (y), vec_set<Vv> (z));
+}
+
+template <
+  class V1,
+  class V2,
+  std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
+static inline auto vec_clamp (V1&& x, V2&& y, vec_value_type_t<V1> z)
+{
+  using Vv = std::remove_reference_t<std::remove_cv_t<V1>>;
+  return vec_clamp (
+    std::forward<V1> (x), std::forward<V2> (y), vec_set<Vv> (z));
+}
+
+template <
+  class V1,
+  class V2,
+  std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
+static inline auto vec_clamp (V1&& x, vec_value_type_t<V1> y, V2&& z)
+{
+  using Vv = std::remove_reference_t<std::remove_cv_t<V1>>;
+  return vec_clamp (
+    std::forward<V1> (x), vec_set<Vv> (y), std::forward<V2> (z));
+}
+
+template <
+  class V1,
+  class V2,
+  std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
+static inline auto vec_clamp (vec_value_type_t<V1> x, V1&& y, V2&& z)
+{
+  using Vv = std::remove_reference_t<std::remove_cv_t<V1>>;
+  return vec_clamp (
+    vec_set<Vv> (x), std::forward<V1> (y), std::forward<V2> (z));
 }
 
 template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-static inline V vec_clamp (vec_value_type_t<V> x, V y)
+static inline auto vec_clamp (
+  vec_value_type_t<V> x,
+  vec_value_type_t<V> y,
+  V&&                 z)
 {
-  return vec_clamp (vec_set<V> (x), y);
+  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
+  return vec_clamp (vec_set<V> (x), vec_set<Vv> (y), std::forward<V> (z));
 }
+
+template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+static inline auto vec_clamp (
+  vec_value_type_t<V> x,
+  V&&                 y,
+  vec_value_type_t<V> z)
+{
+  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
+  return vec_clamp (vec_set<V> (x), std::forward<V> (y), vec_set<Vv> (z));
+}
+
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-static inline V vec_sgn_no_zero (
-  V x,
-  V neg = vec_set<V> ((typename decltype (vec_traits<V>())::value_type) - 1.),
-  V pos_zero
-  = vec_set<V> ((typename decltype (vec_traits<V>())::value_type) 1.))
+template <
+  class V1,
+  class V2 = std::decay_t<V1>,
+  class V3 = std::decay_t<V1>,
+  std::enable_if_t<is_vec_v<V1> && is_vec_v<V2> && is_vec_v<V3>>* = nullptr>
+static inline auto vec_sgn_no_zero (
+  V1&& x,
+  V2&& neg = vec_set<std::decay_t<V1>> (
+    (typename decltype (vec_traits<std::decay_t<V1>>())::value_type) - 1.),
+  V3&& pos_zero = vec_set<std::decay_t<V1>> (
+    (typename decltype (vec_traits<std::decay_t<V1>>())::value_type) 1.))
 {
+  using V               = std::common_type_t<V1, V2, V3>;
   constexpr auto traits = vec_traits<V>();
   using value_type      = vec_value_type_t<V>;
   return (x < ((value_type) 0.)) ? neg : pos_zero;
