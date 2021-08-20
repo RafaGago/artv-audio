@@ -24,7 +24,7 @@ struct hardclip_functions {
   {
     using T = vec_value_type_t<V>;
 
-    return vec_clamp (x, vec_set<V> ((T) -1.0), vec_set<V> ((T) 1.0));
+    return vec_clamp (x, (T) -1.0, (T) 1.0);
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
