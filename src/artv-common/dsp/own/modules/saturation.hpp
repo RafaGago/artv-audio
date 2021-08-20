@@ -61,7 +61,7 @@ public:
       case mode_normal:
         dc = 1;
         break;
-      case mode_compand:
+      case mode_compand_sqrt:
         dc = 3;
         break;
       default:
@@ -76,7 +76,9 @@ public:
   static constexpr auto get_parameter (mode_tag)
   {
     return choice_param (
-      0, make_cstr_array ("No AA", "ADAA", "Companded ADAA"), 40);
+      0,
+      make_cstr_array ("Normal no AA", "Normal", "Compand 1", "Crazier"),
+      40);
   }
   //----------------------------------------------------------------------------
   struct saturated_out_tag {};
@@ -464,7 +466,8 @@ public:
   template <class T>
   void process_block_replacing (std::array<T*, 2> chnls, uint block_samples)
   {
-    params p = _p;
+    static constexpr double pow2compand_clip = 40.;
+    params                  p                = _p;
 
     if (unlikely (p.type_prev != p.type || p.mode_prev != p.mode)) {
       // some waveshapers will create peaks, as the integral on 0 might not be
@@ -494,6 +497,12 @@ public:
       // TODO: drive and filter change smoothing
       double_x2 sat {chnls[0][i], chnls[1][i]};
       double_x2 lo {}, hi {};
+
+      // pre process
+      if (p.mode == mode_compand_sqrt) {
+        sat = sqrt_aa::tick_simd (
+          _adaa_fix_eq_delay_coeffs, _compressor_states, sat);
+      }
 
       // crossover section
       if (_p.crossv_enabled[lo_crossv]) {
@@ -576,12 +585,6 @@ public:
 
       sat *= drive;
 
-      // pre process
-      if (p.mode == mode_compand) {
-        sat = pow2_aa::tick_simd (
-          _adaa_fix_eq_delay_coeffs, _compressor_states, sat);
-      }
-
       // pre emphasis
       sat = andy::svf::tick_simd (
         _pre_emphasis_coeffs, _pre_emphasis_states, sat);
@@ -646,15 +649,16 @@ public:
       sat = andy::svf::tick_simd (
         _post_emphasis_coeffs, _post_emphasis_states, sat);
 
-      // post process / restore
-      if (p.mode == mode_compand) {
-        sat = sqrt_aa::tick_simd (
-          _adaa_fix_eq_delay_coeffs, _expander_states, sat);
-      }
-
       // gain and crossover join
       sat *= inv_drive * p.sat_out;
       sat += lo + hi;
+
+      // post process / restore
+      if (p.mode == mode_compand_sqrt) {
+        sat = vec_clamp (sat, -pow2compand_clip, pow2compand_clip);
+        sat = pow2_aa::tick_simd (
+          _adaa_fix_eq_delay_coeffs, _expander_states, sat);
+      }
 
       chnls[0][i] = sat[0];
       chnls[1][i] = sat[1];
@@ -679,7 +683,8 @@ private:
   enum mode_type {
     mode_no_aa,
     mode_normal,
-    mode_compand,
+    mode_compand_pow,
+    mode_compand_sqrt,
     mode_count,
   };
 
@@ -812,7 +817,7 @@ private:
   template <class wsh>
   double_x2 wavesh_tick (double_x2 x)
   {
-    wsh::template tick_simd (_adaa_fix_eq_delay_coeffs, _wvsh_states, x);
+    return wsh::template tick_simd (_adaa_fix_eq_delay_coeffs, _wvsh_states, x);
   }
   //----------------------------------------------------------------------------
   static constexpr uint n_channels = 2;
