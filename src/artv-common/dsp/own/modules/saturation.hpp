@@ -120,7 +120,7 @@ public:
       return;
     }
     _p.crossv_hz[lo_crossv]      = v;
-    _p.crossv_enabled[lo_crossv] = (v >= lo_cut_min_hz);
+    _p.crossv_enabled[lo_crossv] = (v > lo_cut_min_hz);
     update_crossover (lo_crossv, !_p.crossv_enabled[lo_crossv]);
   }
 
@@ -518,8 +518,7 @@ public:
 
       if (adaa_order == 1 && waveshaper_type_is_adaa (p.mode)) {
         // One sample delay for hi and lo, as the ADAA chain will add 1 sample
-        // delay, we mix with the previous crossover outputs. TODO: will need
-        // 2 samples delay when companding...
+        // delay, we mix with the previous crossover outputs.
         std::swap (_crossv_prev[lo_crossv], lo);
         std::swap (_crossv_prev[hi_crossv], hi);
       }
@@ -595,10 +594,8 @@ public:
 
       double_x2 feedback_follow = follow * p.ef_to_drive * fb_att;
 
-      double fbf0        = feedback_follow[0];
-      feedback_follow[0] = feedback_follow[1];
-      feedback_follow[0] = fbf0;
-
+      // inverted channels on feedback_follow, just for fun...
+      feedback_follow = vec_shuffle (feedback_follow, feedback_follow, 1, 0);
       feedback += feedback * feedback_follow;
 
       sat += feedback;
@@ -780,18 +777,6 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  crange<double> get_waveshaper_states (uint channel)
-  {
-    return {&_wvsh_states[wsh_max_states * channel], wsh_max_states};
-  }
-  //----------------------------------------------------------------------------
-  crange<const double> get_fix_eq_delay_coeffs (uint channel)
-  {
-    constexpr uint n
-      = adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::n_coeffs;
-    return {&_adaa_fix_eq_delay_coeffs[n * channel], n};
-  }
-  //----------------------------------------------------------------------------
   static constexpr bool waveshaper_type_is_adaa (char mode)
   {
     return mode != mode_no_aa;
@@ -825,33 +810,9 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class wsh>
-  double_x2 wavesh_tick_simd (double_x2 x)
-  {
-    return wsh::template tick_simd (_adaa_fix_eq_delay_coeffs, _wvsh_states, x);
-  }
-
-  template <class wsh>
-  double_x2 wavesh_tick_no_simd (double_x2 x)
-  {
-    decltype (x) ret;
-    ret[0] = wsh::tick (
-      get_fix_eq_delay_coeffs (0), get_waveshaper_states (0), x[0]);
-    ret[1] = wsh::tick (
-      get_fix_eq_delay_coeffs (1), get_waveshaper_states (1), x[1]);
-    return ret;
-  }
-  //----------------------------------------------------------------------------
-#define ARTV_SATURATION_USE_SIMD 0
-  // ARTV_SATURATION_USE_simd maybe has detrimental effects when ADAA enabled,
-  // the current implementation always takes both branches.
-  template <class wsh>
   double_x2 wavesh_tick (double_x2 x)
   {
-#if ARTV_SATURATION_USE_SIMD
-    return wavesh_tick_simd<wsh> (x);
-#else
-    return wavesh_tick_no_simd<wsh> (x);
-#endif
+    wsh::template tick_simd (_adaa_fix_eq_delay_coeffs, _wvsh_states, x);
   }
   //----------------------------------------------------------------------------
   static constexpr uint n_channels = 2;
