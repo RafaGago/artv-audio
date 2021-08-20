@@ -105,7 +105,9 @@ struct tanh_functions {
   }
   //----------------------------------------------------------------------------
 };
-#if 1
+#if 0
+// This seems right analitically, but it seems to have either a bug or precision
+// issues
 //------------------------------------------------------------------------------
 // Try to use the exp() based hyperbolic/trigonometric functions
 //
@@ -210,22 +212,20 @@ public:
     assert (st.size() >= traits.size * n_states);
 
     if constexpr (std::is_same_v<T, double>) {
-      x = vec_clamp (x, vec_set<V> ((T) -300.), vec_set<V> ((T) 300.));
+      x = vec_clamp (x, (T) -300., (T) 300.);
     }
     else {
-      x = vec_clamp (
-        x,
-        vec_set<V> ((T) -150.),
-        vec_set<V> ((T) 150.)); // untested
+      x = vec_clamp (x, (T) -150.,
+                     (T) 150.); // untested
     }
 
     T* x1v_ptr     = &st[x1 * traits.size];
     T* x1_expv_ptr = &st[x1_exp * traits.size];
     T* x1_intv_ptr = &st[x1_int * traits.size];
 
-    V x1v     = vec_load (x1v_ptr);
-    V x1_expv = vec_load (x1_expv_ptr);
-    V x1_intv = vec_load (x1_intv_ptr);
+    V x1v     = vec_load<V> (x1v_ptr);
+    V x1_expv = vec_load<V> (x1_expv_ptr);
+    V x1_intv = vec_load<V> (x1_intv_ptr);
 
     V x_exp = vec_exp (x);
     V x_int = vec_log (x_exp + ((T) 1. / x_exp));
@@ -241,7 +241,7 @@ public:
     auto no_fallback = vec_abs (den) > adaa::epsilon (T {});
 
     num = no_fallback ? num : fallback;
-    den = no_fallback ? num : fallback + (T) 2.;
+    den = no_fallback ? den : fallback + (T) 2.;
     return num / den;
   }
 };
