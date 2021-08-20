@@ -1,4 +1,7 @@
 - Track Chow Phaser samplerate bug.
+  https://github.com/jatinchowdhury18/ChowPhaser/issues/15
+
+- Track XSIMD broken on fast math bug.
   https://github.com/xtensor-stack/xsimd/issues/515
 
 - Still unfixed memory leaks on original TAL Reverb 2's code (mix-maxtrix-test

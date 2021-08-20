@@ -185,9 +185,9 @@ ExternalProject_Add(
     mp11_fetch
     GIT_REPOSITORY https://github.com/boostorg/mp11.git
     GIT_TAG        boost-1.75.0
-    SOURCE_DIR     "${MP11_REPO}"
-    UPDATE_COMMAND ""
+    UPDATE_COMMAND    ""
     BUILD_ALWAYS   False
+    SOURCE_DIR     "${MP11_REPO}"
     CMAKE_ARGS     "-DCMAKE_INSTALL_PREFIX=${MP11_INSTALL}"
     INSTALL_DIR    "${MP11_INSTALL}"
     )
@@ -199,7 +199,8 @@ set (XSIMD_REPO ${CMAKE_BINARY_DIR}/xsimd-git)
 ExternalProject_Add(
     xsimd_fetch
     GIT_REPOSITORY https://github.com/xtensor-stack/xsimd.git
-    GIT_TAG        4decfbdfae7bbd3c036fdf9538c82b657caeb178
+    GIT_TAG        cba930b0e0b6706e380aae2faebea4eda2cd69ac
+    #GIT_TAG        7.6.0
     SOURCE_DIR     "${XSIMD_REPO}"
     UPDATE_COMMAND    ""
     BUILD_ALWAYS   False
@@ -238,6 +239,7 @@ ExternalProject_Add(
     URL_HASH SHA256=2a354da24f20361ebd16c1d276b4d91485478f31fde9df5e6efd7ac82212bdb6
     SOURCE_DIR     "${HIIR_REPO}"
     UPDATE_COMMAND    ""
+    BUILD_ALWAYS   False
     CONFIGURE_COMMAND ""
     BUILD_COMMAND     ""
     INSTALL_COMMAND   ""
@@ -275,6 +277,7 @@ ExternalProject_Add(
     GIT_TAG        a20b0fc0206ff7d99a96fe4afdfe8205b01c8220
     SOURCE_DIR     "${GCEM_REPO}"
     UPDATE_COMMAND    ""
+    BUILD_ALWAYS   False
     CONFIGURE_COMMAND ""
     BUILD_COMMAND     ""
     INSTALL_COMMAND   ""
