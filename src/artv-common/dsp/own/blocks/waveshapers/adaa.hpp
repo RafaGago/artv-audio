@@ -108,10 +108,20 @@ public:
     vec_store (x1v_ptr, x);
     vec_store (x1v_int_ptr, x_int);
 
-    V diff  = x - x1v;
-    V big   = (x_int - x1v_int) / diff;
-    V small = functions::fn ((x + x1v) * (T) 0.5);
-    return (vec_abs (diff) >= epsilon (T {})) ? big : small;
+    V diff = x - x1v;
+    V big, small;
+
+    auto sel       = vec_abs (diff) >= epsilon (T {});
+    bool all_big   = vec_is_all_ones (sel);
+    bool all_small = vec_is_all_zeros (sel);
+
+    if (!all_small) {
+      big = (x_int - x1v_int) / diff;
+    }
+    if (!all_big) {
+      small = functions::fn ((x + x1v) * (T) 0.5);
+    }
+    return sel ? big : small;
   }
   //----------------------------------------------------------------------------
 };
