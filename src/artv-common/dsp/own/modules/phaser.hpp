@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "artv-common/dsp/own/blocks/filters/andy_svf.hpp"
+#include "artv-common/dsp/own/blocks/filters/dc_blocker.hpp"
 #include "artv-common/dsp/own/blocks/filters/onepole.hpp"
 #include "artv-common/dsp/own/blocks/oscillators/lfo.hpp"
 #include "artv-common/dsp/own/misc.hpp"
@@ -245,6 +246,10 @@ public:
     refresh_lfo_hz();
 
     memset (&_params.smooth_state, 0, sizeof _params.smooth_state);
+    memset (&_dc_block_states, 0, sizeof _dc_block_states);
+
+    mystran_dc_blocker::init_simd (
+      _dc_block_coeffs, vec_set<double_x2> (2.), pc.get_sample_rate());
 
     onepole_smoother::lowpass<float> (
       make_crange (_lp_smooth_coeff), (1. / 0.01), pc.get_sample_rate());
@@ -445,9 +450,17 @@ public:
         (pars.n_allpasses % vec_size) == 0
         && "there are unprocessed allpasses");
 
-      chnls[0][i]       = -(out[0] + out[2]) * 0.5;
-      chnls[1][i]       = -(out[1] + out[3]) * 0.5;
-      _feedback_samples = make_array<float> (chnls[0][i], chnls[1][i]);
+      double_x2 outs = {
+        (double) out[0] + (double) out[2], (double) out[1] + (double) out[3]};
+      outs *= -0.5;
+      chnls[0][i] = outs[0];
+      chnls[1][i] = outs[1];
+
+      outs = mystran_dc_blocker::tick_simd (
+        _dc_block_coeffs, _dc_block_states, outs);
+
+      _feedback_samples[0] = outs[0];
+      _feedback_samples[1] = outs[1];
     }
   }
   //----------------------------------------------------------------------------
@@ -523,14 +536,23 @@ private:
     unsmoothed_parameters unsmoothed;
   };
   //----------------------------------------------------------------------------
-  std::array<float, 2> _feedback_samples;
+  static constexpr uint n_channels = 2;
+
+  std::array<float, n_channels> _feedback_samples;
   using simd_allpass_group = std::array<
     float,
     (andy::svf::n_coeffs + andy::svf::n_states) * vec_traits_t<float_x4>::size>;
 
+  using dc_block_coeff_array
+    = simd_array<double, mystran_dc_blocker::n_coeffs * n_channels, sse_bytes>;
+  using dc_block_state_array
+    = simd_array<double, mystran_dc_blocker::n_states * n_channels, sse_bytes>;
+
   parameter_values _params;
   // 16 groups of 4 filters (SIMD), 32 allpasses, interleaved for L and R = 16
   alignas (sse_bytes) std::array<simd_allpass_group, 16> _allpass;
+  alignas (sse_bytes) dc_block_coeff_array _dc_block_coeffs;
+  alignas (sse_bytes) dc_block_state_array _dc_block_states;
 
   std::array<lfo, 2> _lfos; // 0 = L, 1 = R
   uint               _n_processed_samples;
