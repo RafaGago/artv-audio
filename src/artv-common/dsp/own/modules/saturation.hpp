@@ -452,8 +452,8 @@ public:
     adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::init_simd<
       double_x2> (_adaa_fix_eq_delay_coeffs);
 
-    iir_dc_blocker::init_simd (
-      _dc_block_coeffs, vec_set<double_x2> (15.), pc.get_sample_rate());
+    mystran_dc_blocker::init_simd (
+      _dc_block_coeffs, vec_set<double_x2> (2.), pc.get_sample_rate());
 
     _p = params {};
 
@@ -683,8 +683,8 @@ public:
           break;
         }
 
-        sat[i] -= dcmod; // this is wrong DC blocker;
-        auto sat_nodc = iir_dc_blocker::tick_simd (
+        sat[i] -= dcmod; // this is an FX not a DC blocker;
+        auto sat_nodc = mystran_dc_blocker::tick_simd (
           _dc_block_coeffs, _dc_block_states, sat[i]);
         _sat_prev = sat_nodc;
         sat[i]    = p.dc_block ? sat_nodc : sat[i];
@@ -923,9 +923,9 @@ private:
     = simd_array<double, slew_limiter::n_states * n_channels, sse_bytes>;
 
   using dc_block_coeff_array
-    = simd_array<double, iir_dc_blocker::n_coeffs * n_channels, sse_bytes>;
+    = simd_array<double, mystran_dc_blocker::n_coeffs * n_channels, sse_bytes>;
   using dc_block_state_array
-    = simd_array<double, iir_dc_blocker::n_states * n_channels, sse_bytes>;
+    = simd_array<double, mystran_dc_blocker::n_states * n_channels, sse_bytes>;
 
   // all arrays are multiples of the simd size, no need to alignas on
   // everything.
