@@ -62,6 +62,8 @@ public:
       case mode_normal:
         dc = 1;
         break;
+      case mode_compand_1b:
+      case mode_compand_1a:
       case mode_compand_sqrt:
         dc = 3;
         break;
@@ -77,7 +79,14 @@ public:
   static constexpr auto get_parameter (mode_tag)
   {
     return choice_param (
-      0, make_cstr_array ("Normal no AA", "Normal", "Compand 1"), 40);
+      0,
+      make_cstr_array (
+        "Normal no AA",
+        "Normal",
+        "Compand Low Level",
+        "Compand High Level 1",
+        "Compand High Level 2"),
+      40);
   }
   //----------------------------------------------------------------------------
   struct saturated_out_tag {};
@@ -472,7 +481,7 @@ public:
       // some waveshapers will create peaks, as the integral on 0 might not be
       // 0. Running them for some samples of silence to initialize. This avoids
       // too having to run the "init_states" functions on the waveshapers.
-      static constexpr uint n_samples = 8;
+      static constexpr uint n_samples = 32;
       _p.type_prev                    = _p.type;
       _p.mode_prev                    = _p.mode;
       std::array<T, 2> value_increment {
@@ -495,175 +504,226 @@ public:
     static constexpr double max_att = constexpr_db_to_gain (-18.);
     inv_compens_drive               = vec_max (inv_compens_drive, max_att);
 
-    for (uint i = 0; i < block_samples; ++i, ++_n_processed_samples) {
-      // TODO: drive and filter change smoothing
-      double_x2 sat {chnls[0][i], chnls[1][i]};
-      double_x2 lo {}, hi {};
+    static constexpr uint                 max_block_size    = 32;
+    uint                                  samples_processed = 0;
+    std::array<double_x2, max_block_size> sat, lo, hi;
 
-      // pre process
-      if (p.mode == mode_compand_sqrt) {
-        sat = sqrt_aa::tick_simd (
-          _adaa_fix_eq_delay_coeffs, _compressor_states, sat);
-      }
+    while (samples_processed < block_samples) {
+      // TODO:  smoothing
+      uint subblock_size
+        = std::min (block_samples - samples_processed, max_block_size);
 
-      // crossover section
-      if (_p.crossv_enabled[lo_crossv]) {
-        lo = butterworth_any_order::tick_simd (
-          _crossv_coeffs[lo_crossv],
-          _crossv_states[lo_crossv],
-          sat,
-          p.crossv_order[lo_crossv]);
-        sat = p.crossv_is_lp[lo_crossv] ? sat - lo : lo;
-        lo  = p.crossv_is_lp[lo_crossv] ? lo : double_x2 {};
-      }
-
-      if (_p.crossv_enabled[hi_crossv]) {
-        hi = butterworth_any_order::tick_simd (
-          _crossv_coeffs[hi_crossv],
-          _crossv_states[hi_crossv],
-          sat,
-          p.crossv_order[hi_crossv]);
-        sat = !p.crossv_is_lp[hi_crossv] ? sat - hi : hi;
-        hi  = !p.crossv_is_lp[hi_crossv] ? hi : double_x2 {};
-      }
-
-      if (adaa_order == 1 && waveshaper_type_is_adaa (p.mode)) {
-        // One sample delay for hi and lo, as the ADAA chain will add 1 sample
-        // delay, we mix with the previous crossover outputs.
-        std::swap (_crossv_prev[lo_crossv], lo);
-        std::swap (_crossv_prev[hi_crossv], hi);
-      }
-
-      // Envelope follower/modulation
-      double_x2 follow
-        = slew_limiter::tick_simd (_envfollow_coeffs, _envfollow_states, sat);
-      // Make unipolar and clip at 1.
-      follow = vec_min (vec_abs (follow) * p.ef_gain, vec_set<double_x2> (1.));
-
-      switch (_p.ef_mode) {
-      case ef_sqrt:
-        follow = vec_sqrt (follow);
-        break;
-      case ef_linear:
-        break;
-      case ef_pow2:
-        follow *= follow;
-        break;
-      case ef_pow3:
-        follow *= follow * follow;
-        break;
-      default:
-        assert (false);
-        break;
-      }
-
-      if ((_n_processed_samples & _control_rate_mask) == 0) {
-        // expensive stuff at lower than audio rate
-        if (p.ef_to_emphasis_amt != 0. || p.ef_to_emphasis_freq != 0.) {
-          update_emphasis (
-            follow * p.ef_to_emphasis_freq * p.emphasis_freq,
-            follow * p.ef_to_emphasis_amt);
+      // pre process/Companding + data initialization block
+      for (uint i = 0; i < subblock_size; ++i) {
+        sat[i][0] = chnls[0][samples_processed + i];
+        sat[i][1] = chnls[1][samples_processed + i];
+        switch (p.mode) {
+        case mode_compand_1b:
+          sat[i] = compand_1b_aa::tick_simd (
+            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
+          break;
+        case mode_compand_1a:
+          sat[i] = compand_1a_aa::tick_simd (
+            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
+          break;
+        case mode_compand_sqrt:
+          sat[i] = sqrt_aa::tick_simd (
+            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
+          break;
+        case mode_no_aa:
+        case mode_normal:
+        default:
+          break;
         }
       }
-
-      double_x2 drive     = compens_drive;
-      double_x2 inv_drive = inv_compens_drive;
-
-      if (p.ef_to_drive != 0.f) {
-        // gain modulation. Audio rate.
-        double_x2 gainfollow
-          = (follow * abs (p.ef_to_drive)) + 1.; // 1 to N range
-
-        if (p.ef_to_drive > 0.f) {
-          drive *= gainfollow;
-          inv_drive /= gainfollow;
+      // crossover section
+      for (uint i = 0; i < subblock_size; ++i) {
+        if (_p.crossv_enabled[lo_crossv]) {
+          lo[i] = butterworth_any_order::tick_simd (
+            _crossv_coeffs[lo_crossv],
+            _crossv_states[lo_crossv],
+            sat[i],
+            p.crossv_order[lo_crossv]);
+          sat[i] = p.crossv_is_lp[lo_crossv] ? sat[i] - lo[i] : lo[i];
+          lo[i]  = p.crossv_is_lp[lo_crossv] ? lo[i] : double_x2 {};
         }
         else {
-          // inverse modulation
-          inv_drive *= gainfollow;
-          drive /= gainfollow;
+          lo[i] = double_x2 {};
+        }
+
+        if (_p.crossv_enabled[hi_crossv]) {
+          hi[i] = butterworth_any_order::tick_simd (
+            _crossv_coeffs[hi_crossv],
+            _crossv_states[hi_crossv],
+            sat[i],
+            p.crossv_order[hi_crossv]);
+          sat[i] = !p.crossv_is_lp[hi_crossv] ? sat[i] - hi[i] : hi[i];
+          hi[i]  = !p.crossv_is_lp[hi_crossv] ? hi[i] : double_x2 {};
+        }
+        else {
+          hi[i] = double_x2 {};
         }
       }
 
-      sat *= drive;
+      // Main block with audio-rate modulations. Done sample-wise for
+      // simplicity
+      for (uint i = 0; i < subblock_size; ++i, ++_n_processed_samples) {
+        if (adaa_order == 1 && waveshaper_type_is_adaa (p.mode)) {
+          // One sample delay for hi and lo, as the ADAA chain will add 1
+          // sample delay, we mix with the previous crossover outputs.
+          std::swap (_crossv_prev[lo_crossv], lo[i]);
+          std::swap (_crossv_prev[hi_crossv], hi[i]);
+        }
 
-      // pre emphasis
-      sat = andy::svf::tick_simd (
-        _pre_emphasis_coeffs, _pre_emphasis_states, sat);
+        // Envelope follower/modulation
+        double_x2 follow = slew_limiter::tick_simd (
+          _envfollow_coeffs, _envfollow_states, sat[i]);
+        // Make unipolar and clip at 1.
+        follow
+          = vec_min (vec_abs (follow) * p.ef_gain, vec_set<double_x2> (1.));
 
-      // Feedback section
-      static constexpr auto fb_att
-        = constexpr_db_to_gain (-constexpr_db_to_gain (envfollow_max_db) - 1.);
+        switch (_p.ef_mode) {
+        case ef_sqrt:
+          follow = vec_sqrt (follow);
+          break;
+        case ef_linear:
+          break;
+        case ef_pow2:
+          follow *= follow;
+          break;
+        case ef_pow3:
+          follow *= follow * follow;
+          break;
+        default:
+          assert (false);
+          break;
+        }
 
-      auto feedback = _sat_prev * p.feedback;
+        if ((_n_processed_samples & _control_rate_mask) == 0) {
+          // expensive stuff at lower than audio rate
+          if (p.ef_to_emphasis_amt != 0. || p.ef_to_emphasis_freq != 0.) {
+            update_emphasis (
+              follow * p.ef_to_emphasis_freq * p.emphasis_freq,
+              follow * p.ef_to_emphasis_amt);
+          }
+        }
 
-      double_x2 feedback_follow = follow * p.ef_to_drive * fb_att;
+        double_x2 drive     = compens_drive;
+        double_x2 inv_drive = inv_compens_drive;
 
-      // inverted channels on feedback_follow, just for fun...
-      feedback_follow = vec_shuffle (feedback_follow, feedback_follow, 1, 0);
-      feedback += feedback * feedback_follow;
+        if (p.ef_to_drive != 0.f) {
+          // gain modulation. Audio rate.
+          double_x2 gainfollow
+            = (follow * abs (p.ef_to_drive)) + 1.; // 1 to N range
 
-      sat += feedback;
-      auto dcmod = (0.5 * follow * p.ef_to_dc);
-      sat += dcmod;
+          if (p.ef_to_drive > 0.f) {
+            drive *= gainfollow;
+            inv_drive /= gainfollow;
+          }
+          else {
+            // inverse modulation
+            inv_drive *= gainfollow;
+            drive /= gainfollow;
+          }
+        }
 
-      // waveshaping
-      auto wsh_type
-        = p.type + (sat_type_count * (uint) waveshaper_type_is_adaa (p.mode));
+        sat[i] *= drive;
 
-      switch (wsh_type) {
-      case sat_tanh:
-        sat = wavesh_tick<tanh_adaa<0>> (sat);
-        break;
-      case sat_sqrt:
-        sat = wavesh_tick<sqrt_sigmoid_adaa<0>> (sat);
-        break;
-      case sat_hardclip:
-        sat = wavesh_tick<hardclip_adaa<0>> (sat);
-        break;
-      case sat_sqrt_sin:
-        sat = wavesh_tick<sqrt_sin_sigmoid_adaa<0>> (sat);
-        break;
-      case sat_tanh_adaa:
-        sat = wavesh_tick<tanh_aa> (sat);
-        break;
-      case sat_sqrt_adaa:
-        sat = wavesh_tick<sqrt_sigmoid_aa> (sat);
-        break;
-      case sat_hardclip_adaa:
-        sat = wavesh_tick<hardclip_aa> (sat);
-        break;
-      case sat_sqrt_sin_adaa:
-        sat = wavesh_tick<sqrt_sin_sigmoid_aa> (sat);
-        break;
-      default:
-        assert (false);
-        break;
+        // pre emphasis
+        sat[i] = andy::svf::tick_simd (
+          _pre_emphasis_coeffs, _pre_emphasis_states, sat[i]);
+
+        // Feedback section
+        static constexpr auto fb_att = constexpr_db_to_gain (
+          -constexpr_db_to_gain (envfollow_max_db) - 1.);
+
+        auto feedback = _sat_prev * p.feedback;
+
+        double_x2 feedback_follow = follow * p.ef_to_drive * fb_att;
+
+        // inverted channels on feedback_follow, just for fun...
+        feedback_follow = vec_shuffle (feedback_follow, feedback_follow, 1, 0);
+        feedback += feedback * feedback_follow;
+
+        sat[i] += feedback;
+        auto dcmod = (0.5 * follow * p.ef_to_dc);
+        sat[i] += dcmod;
+
+        // waveshaping
+        auto wsh_type
+          = p.type + (sat_type_count * (uint) waveshaper_type_is_adaa (p.mode));
+
+        switch (wsh_type) {
+        case sat_tanh:
+          sat[i] = wavesh_tick<tanh_adaa<0>> (sat[i]);
+          break;
+        case sat_sqrt:
+          sat[i] = wavesh_tick<sqrt_sigmoid_adaa<0>> (sat[i]);
+          break;
+        case sat_hardclip:
+          sat[i] = wavesh_tick<hardclip_adaa<0>> (sat[i]);
+          break;
+        case sat_sqrt_sin:
+          sat[i] = wavesh_tick<sqrt_sin_sigmoid_adaa<0>> (sat[i]);
+          break;
+        case sat_tanh_adaa:
+          sat[i] = wavesh_tick<tanh_aa> (sat[i]);
+          break;
+        case sat_sqrt_adaa:
+          sat[i] = wavesh_tick<sqrt_sigmoid_aa> (sat[i]);
+          break;
+        case sat_hardclip_adaa:
+          sat[i] = wavesh_tick<hardclip_aa> (sat[i]);
+          break;
+        case sat_sqrt_sin_adaa:
+          sat[i] = wavesh_tick<sqrt_sin_sigmoid_aa> (sat[i]);
+          break;
+        default:
+          assert (false);
+          break;
+        }
+
+        sat[i] -= dcmod; // this is wrong DC blocker;
+        auto sat_nodc = iir_dc_blocker::tick_simd (
+          _dc_block_coeffs, _dc_block_states, sat[i]);
+        _sat_prev = sat_nodc;
+        sat[i]    = p.dc_block ? sat_nodc : sat[i];
+
+        // post emphasis
+        sat[i] = andy::svf::tick_simd (
+          _post_emphasis_coeffs, _post_emphasis_states, sat[i]);
+
+        // gain and crossover join
+        sat[i] *= inv_drive * p.sat_out;
+        sat[i] += lo[i] + hi[i];
       }
 
-      sat -= dcmod; // this is not an obviously wrong DC blocker; deliberate.
-      auto sat_nodc
-        = iir_dc_blocker::tick_simd (_dc_block_coeffs, _dc_block_states, sat);
-      _sat_prev = sat_nodc;
-      sat       = p.dc_block ? sat_nodc : sat;
+      for (uint i = 0; i < subblock_size; ++i) {
+        // post process / restore
+        switch (p.mode) {
+        case mode_compand_1b:
+          sat[i] = compand_1a_aa::tick_simd (
+            _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
+          break;
+        case mode_compand_1a:
+          sat[i] = compand_1b_aa::tick_simd (
+            _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
+          break;
+        case mode_compand_sqrt:
+          // sat[i] = vec_clamp (sat[i], -pow2compand_clip, pow2compand_clip);
+          sat[i] = pow2_aa::tick_simd (
+            _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
+          break;
+        case mode_no_aa:
+        case mode_normal:
+        default:
+          break;
+        }
 
-      // post emphasis
-      sat = andy::svf::tick_simd (
-        _post_emphasis_coeffs, _post_emphasis_states, sat);
-
-      // gain and crossover join
-      sat *= inv_drive * p.sat_out;
-      sat += lo + hi;
-
-      // post process / restore
-      if (p.mode == mode_compand_sqrt) {
-        sat = vec_clamp (sat, -pow2compand_clip, pow2compand_clip);
-        sat = pow2_aa::tick_simd (
-          _adaa_fix_eq_delay_coeffs, _expander_states, sat);
+        chnls[0][samples_processed + i] = sat[i][0];
+        chnls[1][samples_processed + i] = sat[i][1];
       }
-
-      chnls[0][i] = sat[0];
-      chnls[1][i] = sat[1];
+      samples_processed += subblock_size;
     }
   }
   //----------------------------------------------------------------------------
@@ -687,6 +747,11 @@ private:
   static constexpr bool waveshaper_type_is_adaa (char mode)
   {
     return mode != mode_no_aa;
+  }
+  //----------------------------------------------------------------------------
+  static constexpr bool has_compander (char mode)
+  {
+    return mode >= mode_compander_first;
   }
   //----------------------------------------------------------------------------
   void update_emphasis (
@@ -739,7 +804,9 @@ private:
   enum mode_type {
     mode_no_aa,
     mode_normal,
-    mode_compand_pow,
+    mode_compander_first,
+    mode_compand_1b = mode_compander_first,
+    mode_compand_1a,
     mode_compand_sqrt,
     mode_count,
   };
@@ -812,10 +879,12 @@ private:
     mp11::mp_transform<to_n_states, shapers>,
     mp11::mp_less>::value;
 
-  using sqrt_aa = adaa::fix_eq_and_delay<adaa_order, sqrt_adaa>;
-  using pow2_aa = adaa::fix_eq_and_delay<adaa_order, pow2_adaa>;
+  using sqrt_aa       = adaa::fix_eq_and_delay<adaa_order, sqrt_adaa>;
+  using pow2_aa       = adaa::fix_eq_and_delay<adaa_order, pow2_adaa>;
+  using compand_1a_aa = adaa::fix_eq_and_delay<adaa_order, compand_1a_adaa>;
+  using compand_1b_aa = adaa::fix_eq_and_delay<adaa_order, compand_1b_adaa>;
 
-  using companders = mp_list<sqrt_aa, pow2_aa>;
+  using companders = mp_list<sqrt_aa, pow2_aa, compand_1a_aa, compand_1b_aa>;
 
   static constexpr uint compander_max_states = mp11::mp_max_element<
     mp11::mp_transform<to_n_states, companders>,

@@ -61,8 +61,8 @@ struct sqrt_functions {
   //----------------------------------------------------------------------------
 };
 #if 0
-// This simplification loses the sign info. Can be fixed?
-
+// This simplification loses the sign info. Can be fixed? The integral is always
+// positive.
 //------------------------------------------------------------------------------
 // No unstable division for ADAA on sqrt(x). Simple math, but I prefer to write
 // a reminder

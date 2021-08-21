@@ -119,9 +119,21 @@ template <class V>
 using vec_traits_t
   = decltype (get_traits<std::remove_reference_t<std::remove_cv_t<V>>>());
 
+template <class, bool>
+struct vec_vt_enabler;
+
 template <class V>
-using vec_value_type_t = typename vec_traits_t<
-  std::remove_reference_t<std::remove_cv_t<V>>>::value_type;
+struct vec_vt_enabler<V, false> {
+  using type = void;
+};
+
+template <class V>
+struct vec_vt_enabler<V, true> {
+  using type = typename vec_traits_t<V>::value_type;
+};
+
+template <class V>
+using vec_value_type_t = typename vec_vt_enabler<V, is_vec_v<V>>::type;
 
 //------------------------------------------------------------------------------
 // TODO: As of now this is only done for x64, but it can be easily ifdefed
@@ -179,9 +191,11 @@ static constexpr bool is_vec_v = detail::is_vec_v<V>;
 
 // gets if "V" is a floating point vector. removes references and CV
 // qualification on "V".
+// clang-format off
 template <class V>
 static constexpr bool is_floating_point_vec_v
-  = is_vec_v<V>&&     std::is_floating_point_v<vec_value_type_t<V>>;
+  = is_vec_v<V> && std::is_floating_point_v<vec_value_type_t<V>>;
+// clang-format on
 
 // SSE or equivalent
 using float_x4  = vec<float, 4>;
@@ -942,10 +956,8 @@ template <
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2> && is_vec_v<V3>>* = nullptr>
 static inline auto vec_sgn_no_zero (
   V1&& x,
-  V2&& neg = vec_set<std::decay_t<V1>> (
-    (typename decltype (vec_traits<std::decay_t<V1>>())::value_type) - 1.),
-  V3&& pos_zero = vec_set<std::decay_t<V1>> (
-    (typename decltype (vec_traits<std::decay_t<V1>>())::value_type) 1.))
+  V2&& neg      = vec_set<std::decay_t<V1>> ((vec_value_type_t<V1>) -1.),
+  V3&& pos_zero = vec_set<std::decay_t<V1>> ((vec_value_type_t<V1>) 1.))
 {
   using Vv              = std::common_type_t<V1, V2, V3>;
   constexpr auto traits = vec_traits<Vv>();
