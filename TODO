@@ -4,6 +4,8 @@
 - Track XSIMD broken on fast math bug.
   https://github.com/xtensor-stack/xsimd/issues/515
 
+- TODO explore alternative DC blockers.
+
 - Still unfixed memory leaks on original TAL Reverb 2's code (mix-maxtrix-test
   catches them).
 

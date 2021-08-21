@@ -9,10 +9,17 @@
 // Classic IIR DC blocker
 // https://ccrma.stanford.edu/~jos/filters/DC_Blocker.html
 // https://www.musicdsp.org/en/latest/Filters/135-dc-filter.html?highlight=DC
+//
+// TODO: Things to try
+// -Moving average DC blocker:
+//    https://www.dsprelated.com/showthread/comp.dsp/66509-1.php
+// -LP + diff with previous sample subtraction (mystran's comment):
+//    https://www.kvraudio.com/forum/viewtopic.php?f=33&t=545280#top
+//
 //------------------------------------------------------------------------------
 namespace artv {
 
-struct dc_blocker {
+struct iir_dc_blocker {
   //----------------------------------------------------------------------------
   enum coeffs { R, n_coeffs };
   enum state { x1, y1, n_states };

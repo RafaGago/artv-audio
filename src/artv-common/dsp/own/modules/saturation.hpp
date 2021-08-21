@@ -443,7 +443,7 @@ public:
     adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::init_simd<
       double_x2> (_adaa_fix_eq_delay_coeffs);
 
-    dc_blocker::init_simd (
+    iir_dc_blocker::init_simd (
       _dc_block_coeffs, vec_set<double_x2> (15.), pc.get_sample_rate());
 
     _p = params {};
@@ -643,7 +643,7 @@ public:
 
       sat -= dcmod; // this is not an obviously wrong DC blocker; deliberate.
       auto sat_nodc
-        = dc_blocker::tick_simd (_dc_block_coeffs, _dc_block_states, sat);
+        = iir_dc_blocker::tick_simd (_dc_block_coeffs, _dc_block_states, sat);
       _sat_prev = sat_nodc;
       sat       = p.dc_block ? sat_nodc : sat;
 
@@ -854,9 +854,9 @@ private:
     = simd_array<double, slew_limiter::n_states * n_channels, sse_bytes>;
 
   using dc_block_coeff_array
-    = simd_array<double, dc_blocker::n_coeffs * n_channels, sse_bytes>;
+    = simd_array<double, iir_dc_blocker::n_coeffs * n_channels, sse_bytes>;
   using dc_block_state_array
-    = simd_array<double, dc_blocker::n_states * n_channels, sse_bytes>;
+    = simd_array<double, iir_dc_blocker::n_states * n_channels, sse_bytes>;
 
   // all arrays are multiples of the simd size, no need to alignas on
   // everything.
