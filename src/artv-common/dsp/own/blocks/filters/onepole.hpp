@@ -23,6 +23,20 @@ struct onepole_smoother {
     c[b1]                  = (T) exp (-pi_x2 * freq / sr);
   }
   //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void lowpass_simd (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    vec_value_type_t<V>         sr)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+    constexpr T    pi_x2  = (T) 6.283185307179586476925286766559;
+
+    vec_store (c, vec_exp (-pi_x2 * freq / sr)); // just on coeff
+  }
+  //----------------------------------------------------------------------------
   template <class T>
   static void repair_unsmoothable_coeffs (crange<T>, crange<const T>)
   {}
@@ -56,11 +70,32 @@ struct onepole_smoother {
 
     V a0_v = vec_set<V> (((T) 1.) - c[b1]);
     V b1_v = vec_set<V> (c[b1]);
-    V z1_v = vec_load<V> (z);
+    V z1_v = vec_load<V> (z); // 1 coeff only
 
     z1_v = (in * a0_v) + (z1_v * b1_v);
-    vec_store (z, z1_v);
+    vec_store (z, z1_v); // 1 coeff only
     return z1_v;
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       z, // states (interleaved, SIMD aligned)
+    V                                 in)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (z.size() >= traits.size * n_states);
+    assert (c.size() >= n_coeffs);
+
+    V b1v = vec_load<V> (c); // 1 coeff only
+    V z1v = vec_load<V> (z); // 1 coeff only
+
+    z1v = (in * (1. - b1v)) + (z1v * b1v);
+    vec_store (z, z1v);
+    return z1v;
   }
   //----------------------------------------------------------------------------
 };

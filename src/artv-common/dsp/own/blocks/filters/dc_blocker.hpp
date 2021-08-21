@@ -4,21 +4,15 @@
 #include <cmath>
 #include <type_traits>
 
+#include "artv-common/dsp/own/blocks/filters/onepole.hpp"
 #include "artv-common/misc/simd.hpp"
 
-// Classic IIR DC blocker
-// https://ccrma.stanford.edu/~jos/filters/DC_Blocker.html
-// https://www.musicdsp.org/en/latest/Filters/135-dc-filter.html?highlight=DC
-//
-// TODO: Things to try
-// -Moving average DC blocker:
-//    https://www.dsprelated.com/showthread/comp.dsp/66509-1.php
-// -LP + diff with previous sample subtraction (mystran's comment):
-//    https://www.kvraudio.com/forum/viewtopic.php?f=33&t=545280#top
-//
 //------------------------------------------------------------------------------
 namespace artv {
 
+// Classic IIR DC blocker based on a highpass
+// https://ccrma.stanford.edu/~jos/filters/DC_Blocker.html
+// https://www.musicdsp.org/en/latest/Filters/135-dc-filter.html?highlight=DC
 struct iir_dc_blocker {
   //----------------------------------------------------------------------------
   enum coeffs { R, n_coeffs };
@@ -97,5 +91,69 @@ struct iir_dc_blocker {
   //----------------------------------------------------------------------------
 };
 
+// I don't know if he is the original author but he does an extreme good job
+// sharing knowledge and helping. Described here:
+// https://www.kvraudio.com/forum/viewtopic.php?f=33&t=545280#top
+struct mystran_dc_blocker {
+  //----------------------------------------------------------------------------
+  static constexpr uint n_coeffs = onepole_smoother::n_coeffs;
+  static constexpr uint n_states = onepole_smoother::n_states;
+  //----------------------------------------------------------------------------
+  // warning, if going to very low frequencies, use "double".
+  template <class T>
+  static void init (crange<T> c, T freq, T sr)
+  {
+    onepole_smoother::lowpass (c, freq, sr);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void init_simd (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    vec_value_type_t<V>         sr)
+  {
+    onepole_smoother::lowpass_simd (c, freq, sr);
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  static void repair_unsmoothable_coeffs (crange<T>, crange<const T>)
+  {}
+  //----------------------------------------------------------------------------
+  template <class T>
+  static T tick (
+    crange<const T> c, // coeffs
+    crange<T>       s, // state
+    T               x)
+  {
+    assert (c.size() >= n_coeffs);
+    assert (s.size() >= n_states);
+
+    auto prev_lp_out = s[onepole_smoother::z1];
+    onepole_smoother::tick (c, s, x);
+    return x - prev_lp_out;
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>> c,
+    crange<vec_value_type_t<V>>       s,
+    V                                 x)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (c.size() >= (traits.size * n_coeffs));
+    assert (s.size() >= (traits.size * n_states));
+
+    auto prev_lp_out = vec_load<V> (&s[onepole_smoother::z1 * traits.size]);
+    onepole_smoother::tick_simd (c, s, x);
+    return x - prev_lp_out;
+  }
+  //----------------------------------------------------------------------------
+};
+// TODO: Things to try
+// -Moving average DC blocker (linear phase):
+//    https://www.dsprelated.com/showthread/comp.dsp/66509-1.php
 //------------------------------------------------------------------------------
 } // namespace artv
