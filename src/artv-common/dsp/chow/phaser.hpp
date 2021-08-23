@@ -12,6 +12,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 
+#include "artv-common/dsp/own/blocks/filters/dc_blocker.hpp"
 #include "artv-common/dsp/own/blocks/filters/onepole.hpp"
 #include "artv-common/dsp/own/blocks/oscillators/lfo.hpp"
 #include "artv-common/dsp/own/misc.hpp"
@@ -31,7 +32,7 @@ namespace detail {
 class chow_phaser_phase_section {
 public:
   //----------------------------------------------------------------------------
-  using value_type = float;
+  using value_type = double;
   //----------------------------------------------------------------------------
   static constexpr uint n_stages_max = 52;
   static constexpr uint order        = 1;
@@ -44,20 +45,20 @@ public:
     assert (c.size() >= n_coeffs);
     // component values
     // R = jmax (1.0f, R);
-    constexpr float C  = (float) 25e-9;
-    const float     RC = R * C;
+    constexpr double C  = (float) 25e-9;
+    const double     RC = R * C;
 
     // analog coefs
-    const float b0s = RC;
-    const float b1s = -1.0f;
-    const float a0s = b0s;
-    const float a1s = 1.0f;
+    const double b0s = RC;
+    const double b1s = -1.0f;
+    const double a0s = b0s;
+    const double a1s = 1.0f;
 
     // bilinear transform
-    const auto K  = 2.0f * fs;
-    const auto a0 = a0s * K + a1s;
-    c[b0]         = (b0s * K + b1s) / a0;
-    c[b1]         = (-b0s * K + b1s) / a0;
+    const double K  = 2.0f * fs;
+    const double a0 = a0s * K + a1s;
+    c[b0]           = (b0s * K + b1s) / a0;
+    c[b1]           = (-b0s * K + b1s) / a0;
     // a0: unused
     // c[a0]         = 1.0f;
     c[a1] = (-a0s * K + a1s) / a0;
@@ -97,7 +98,7 @@ private:
     value_type               x,
     uint                     stage)
   {
-    float y  = s[stage] + x * c[b0];
+    double y = s[stage] + x * c[b0];
     s[stage] = x * c[b1] - y * c[a1];
 
     return y;
@@ -108,44 +109,65 @@ private:
 class chow_phaser_fb_section {
 public:
   //----------------------------------------------------------------------------
-  using value_type = float;
+  using value_type = double;
   //----------------------------------------------------------------------------
-  enum coeffs { a1, a2, b0, b1, b2, n_coeffs };
-  enum state { z1, z2, n_states };
+  enum coeffs {
+    a1,
+    a2,
+    b0,
+    b1,
+    b2,
+    n_own_coeffs,
+    n_coeffs = n_own_coeffs + mystran_dc_blocker::n_coeffs
+  };
+  enum state {
+    z1,
+    z2,
+    n_own_states,
+    n_states = n_own_states + (3 * mystran_dc_blocker::n_states)
+  };
   //----------------------------------------------------------------------------
-  static void calc_coefs (crange<value_type> c, float R, float fbAmt, float fs)
+  static void calc_coefs (
+    crange<value_type> c,
+    double             R,
+    double             fbAmt,
+    double             fs)
   {
     assert (c.size() >= n_coeffs);
     // jassert (R > 0.0f);
 
     // component values
     // R = jmax (1.0f, R);
-    constexpr float C  = (float) 15e-9;
-    const float     RC = R * C;
+    constexpr double C  = (float) 15e-9;
+    const double     RC = R * C;
 
     // analog coefs
-    const float b0s = RC * RC;
-    const float b1s = -2.0f * RC;
-    const float b2s = 1.0f;
-    const float a0s = b0s * (1.0f + fbAmt);
-    const float a1s = -b1s * (1.0f - fbAmt);
-    const float a2s = 1.0f + fbAmt;
+    const double b0s = RC * RC;
+    const double b1s = -2.0f * RC;
+    const double b2s = 1.0f;
+    const double a0s = b0s * (1.0f + fbAmt);
+    const double a1s = -b1s * (1.0f - fbAmt);
+    const double a2s = 1.0f + fbAmt;
 
     // frequency warping
-    using fastmath = juce::dsp::FastMathApproximations;
-    const float wc = calc_pole_freq (a0s, a1s, a2s);
-    const auto  K
-      = (wc == 0.0f) ? 2.0f * fs : wc / fastmath::tan<float> (wc / (2.0f * fs));
-    const auto KSq = K * K;
+    using fastmath   = juce::dsp::FastMathApproximations;
+    const double wc  = calc_pole_freq (a0s, a1s, a2s);
+    const double K   = (wc == 0.0f) ? 2.0f * fs : wc / tan (wc / (2.0 * fs));
+    const double KSq = K * K;
 
     // bilinear transform
-    const float a0 = a0s * KSq + a1s * K + a2s;
+    const double a0 = a0s * KSq + a1s * K + a2s;
     // c[a0]          = a0 / a0;
     c[a1] = 2.0f * (a2s - a0s * KSq) / a0;
     c[a2] = (a0s * KSq - a1s * K + a2s) / a0;
     c[b0] = (b0s * KSq + b1s * K + b2s) / a0;
     c[b1] = 2.0f * (b2s - b0s * KSq) / a0;
     c[b2] = (b0s * KSq - b1s * K + b2s) / a0;
+
+    // DC blockers, could be only done once...
+    auto dc_coeffs = c.shrink_head (n_own_coeffs);
+    // float! not going low on frequency.
+    mystran_dc_blocker::init (dc_coeffs, 2., fs);
   }
   //----------------------------------------------------------------------------
   static void reset_states (crange<value_type> s)
@@ -165,26 +187,37 @@ public:
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
 
-    float y      = s[z1] + x * c[b0];
-    auto  ydrive = drive (y, d3);
-    s[z1]        = drive (s[z2] + x * c[b1] - ydrive * c[a1], d1);
-    s[z2]        = drive (x * c[b2] - ydrive * c[a2], d2);
+    auto dc_coeffs = c.shrink_head (n_own_coeffs);
+    auto dc_states = s.shrink_head (n_own_states);
+
+    double y      = s[z1] + x * c[b0];
+    auto   ydrive = drive (y, d3);
+
+    ydrive = mystran_dc_blocker::tick (dc_coeffs, dc_states, ydrive);
+
+    s[z1]     = drive (s[z2] + x * c[b1] - ydrive * c[a1], d1);
+    dc_states = dc_states.shrink_head (mystran_dc_blocker::n_states);
+    s[z1]     = mystran_dc_blocker::tick (dc_coeffs, dc_states, s[z1]);
+
+    s[z2]     = drive (x * c[b2] - ydrive * c[a2], d2);
+    dc_states = dc_states.shrink_head (mystran_dc_blocker::n_states);
+    s[z2]     = mystran_dc_blocker::tick (dc_coeffs, dc_states, s[z2]);
     return y;
   }
   //----------------------------------------------------------------------------
 private:
-  static float drive (float x, float drive) noexcept
+  static double drive (double x, double drive) noexcept
   {
     return std::tanh (x * drive) / drive;
   }
   //----------------------------------------------------------------------------
-  static float calc_pole_freq (float a, float b, float c)
+  static double calc_pole_freq (double a, double b, double c)
   {
-    auto radicand = b * b - 4.0f * a * c;
-    if (radicand >= 0.0f)
-      return 0.0f;
+    auto radicand = b * b - 4. * a * c;
+    if (radicand >= 0.0)
+      return 0.0;
 
-    return std::sqrt (-radicand) / (2.0f * a);
+    return std::sqrt (-radicand) / (2.0 * a);
   }
 };
 //------------------------------------------------------------------------------
@@ -379,14 +412,14 @@ public:
       // states; for easy block-lowpass smoothing of coefficients. I didn't read
       // that this one was actually recalculating coefficients at sample rate.
       fb_section::calc_coefs (_fb_coeffs, rval, -1.f * smooth.p.fb, sr);
-      float nomod_out = fb_section::tick (
+      double nomod_out = fb_section::tick (
         _fb_coeffs, _fb_states, mono, smooth.p.d1, smooth.p.d2, smooth.p.d3);
 
       phase_section::calc_coefs (_ph_coeffs, rval, sr);
-      float mod_out = phase_section::tick (
+      double mod_out = phase_section::tick (
         _ph_coeffs, _ph_states, nomod_out, smooth.p.stages);
       mod_out *= smooth.p.mod;
-      mod_out += (1.0f - smooth.p.mod) * nomod_out;
+      mod_out += (1.0 - smooth.p.mod) * nomod_out;
 
       chnls[0][i] = smooth.p.mod > 0.f ? mod_out : nomod_out;
       chnls[1][i] = smooth.p.mod > 0.f ? nomod_out : mod_out;
@@ -453,13 +486,13 @@ private:
     return (std::pow ((x + 1.0f) / 2.0f, skewpow) * 2.0f) - 1.0f;
   }
   //----------------------------------------------------------------------------
-  std::array<float, phase_section::n_states> _ph_states;
-  std::array<float, fb_section::n_states>    _fb_states;
+  std::array<double, phase_section::n_states> _ph_states;
+  std::array<double, fb_section::n_states>    _fb_states;
   alignas (sse_bytes) param_state_array _param_state;
 
-  std::array<float, phase_section::n_coeffs> _ph_coeffs;
-  std::array<float, fb_section::n_coeffs>    _fb_coeffs;
-  lfo                                        _lfo;
+  std::array<double, phase_section::n_coeffs> _ph_coeffs;
+  std::array<double, fb_section::n_coeffs>    _fb_coeffs;
+  lfo                                         _lfo;
 
   static_assert (smoother::n_states == 1, "");
   float           _smooth_coeff;

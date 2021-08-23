@@ -1,6 +1,3 @@
-- Track Chow Phaser samplerate bug.
-  https://github.com/jatinchowdhury18/ChowPhaser/issues/15
-
 - Track XSIMD broken on fast math bug.
   https://github.com/xtensor-stack/xsimd/issues/515
 
