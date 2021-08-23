@@ -13,7 +13,7 @@ namespace artv {
 
 class butterworth_any_order {
 public:
-  static constexpr uint max_order = 12;
+  static constexpr uint max_order = 16;
   //----------------------------------------------------------------------------
   static constexpr uint n_coeffs_for_order (uint order)
   {
@@ -180,8 +180,6 @@ public:
     return out;
   }
   //----------------------------------------------------------------------------
-private:
-  //----------------------------------------------------------------------------
   static crange<const double> get_q_list (uint order)
   {
     // https://www.earlevel.com/main/2016/09/29/cascading-filters/
@@ -200,6 +198,33 @@ private:
       = {0.52110856, 0.59435114, 0.76352112, 1.2036156, 3.5133371};
     static const double q12[]
       = {0.50431448, 0.54119610, 0.63023621, 0.82133982, 1.3065630, 3.8306488};
+    static const double q13[]
+      = {0.51496392, 0.56468078, 0.66799308, 0.88018136, 1.4100200, 4.1481149};
+    static const double q14[] = {
+      0.50316379,
+      0.52972649,
+      0.59051105,
+      0.70710678,
+      0.93979296,
+      1.5138713,
+      4.4657021};
+    static const double q15[] = {
+      0.51117030,
+      0.54731814,
+      0.61803399,
+      0.74723827,
+      1.0000000,
+      1.6180340,
+      4.7833861};
+    static const double q16[] = {
+      0.50241929,
+      0.52249861,
+      0.56694403,
+      0.64682178,
+      0.78815462,
+      1.0606777,
+      1.7224471,
+      5.1011486};
 
     switch (order) {
     case 1:
@@ -226,6 +251,14 @@ private:
       return q11;
     case 12:
       return q12;
+    case 13:
+      return q13;
+    case 14:
+      return q14;
+    case 15:
+      return q15;
+    case 16:
+      return q16;
     default:
       assert (false);
       return {};
