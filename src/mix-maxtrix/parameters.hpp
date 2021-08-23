@@ -5287,16 +5287,6 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_dc_block,
-  n_stereo_busses,
-  param_common (
-    "DC block",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::dc_block_tag>()),
-  saturation::get_parameter (saturation::dc_block_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
   saturation_feedback,
   n_stereo_busses,
   param_common (
@@ -5340,7 +5330,6 @@ using saturation_params = mp_list<
   saturation_lo_mode,
   saturation_hi_mode,
   saturation_band_gain,
-  saturation_dc_block,
   saturation_oversampling>;
 //------------------------------------------------------------------------------
 #if 0
@@ -5360,7 +5349,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<myphaser_params>;
+using all_fx_typelists = mp_list<saturation_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 

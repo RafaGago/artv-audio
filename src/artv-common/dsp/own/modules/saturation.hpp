@@ -54,25 +54,25 @@ public:
   {
     _p.mode = (decltype (_p.mode)) v;
     if (_p.mode != _p.mode_prev) {
-      uint dc;
+      uint delcomp;
       switch (_p.mode) {
       case mode_no_aa:
-        dc = 0;
+        delcomp = 0;
         break;
       case mode_normal:
-        dc = 1;
+        delcomp = 1;
         break;
       case mode_compand_1b:
       case mode_compand_1a:
       case mode_compand_sqrt:
-        dc = 3;
+        delcomp = 3;
         break;
       default:
         // assert (false);
-        dc = 0;
+        delcomp = 0;
         break;
       }
-      _plugcontext->set_delay_compensation (dc);
+      _plugcontext->set_delay_compensation (delcomp);
     }
   }
 
@@ -83,9 +83,9 @@ public:
       make_cstr_array (
         "Normal no AA",
         "Normal",
-        "Compand Low Level",
-        "Compand High Level 1",
-        "Compand High Level 2"),
+        "Compand Low Sig",
+        "Compand High Sig",
+        "Compand Squasher"),
       40);
   }
   //----------------------------------------------------------------------------
@@ -294,15 +294,6 @@ public:
     return float_param ("", 0.01, 10., 0.5, 0.01, 0.6);
   }
   //----------------------------------------------------------------------------
-  struct dc_block_tag {};
-
-  void set (dc_block_tag, int v) { _p.dc_block = !!v; }
-
-  static constexpr auto get_parameter (dc_block_tag)
-  {
-    return choice_param (0, make_cstr_array ("Off", "On"), 4);
-  }
-  //----------------------------------------------------------------------------
   struct envfollow_attack_tag {};
 
   void set (envfollow_attack_tag, float v)
@@ -418,7 +409,6 @@ public:
     emphasis_amount_tag,
     emphasis_freq_tag,
     emphasis_q_tag,
-    dc_block_tag,
     saturated_out_tag,
     drive_balance_tag,
     drive_tag,
@@ -452,8 +442,10 @@ public:
     adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::init_simd<
       double_x2> (_adaa_fix_eq_delay_coeffs);
 
-    mystran_dc_blocker::init_simd (
-      _dc_block_coeffs, vec_set<double_x2> (2.), pc.get_sample_rate());
+    for (auto& dcbc : _dc_block_coeffs) {
+      mystran_dc_blocker::init_simd (
+        dcbc, vec_set<double_x2> (2.), pc.get_sample_rate());
+    }
 
     _p = params {};
 
@@ -521,14 +513,26 @@ public:
         case mode_compand_1b:
           sat[i] = compand_1b_aa::tick_simd (
             _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
+          sat[i] = mystran_dc_blocker::tick_simd (
+            _dc_block_coeffs[dc_block_compand],
+            _dc_block_states[dc_block_compand],
+            sat[i]);
           break;
         case mode_compand_1a:
           sat[i] = compand_1a_aa::tick_simd (
             _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
+          sat[i] = mystran_dc_blocker::tick_simd (
+            _dc_block_coeffs[dc_block_compand],
+            _dc_block_states[dc_block_compand],
+            sat[i]);
           break;
         case mode_compand_sqrt:
           sat[i] = sqrt_aa::tick_simd (
             _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
+          sat[i] = mystran_dc_blocker::tick_simd (
+            _dc_block_coeffs[dc_block_compand],
+            _dc_block_states[dc_block_compand],
+            sat[i]);
           break;
         case mode_no_aa:
         case mode_normal:
@@ -684,10 +688,11 @@ public:
         }
 
         sat[i] -= dcmod; // this is an FX not a DC blocker;
-        auto sat_nodc = mystran_dc_blocker::tick_simd (
-          _dc_block_coeffs, _dc_block_states, sat[i]);
-        _sat_prev = sat_nodc;
-        sat[i]    = p.dc_block ? sat_nodc : sat[i];
+        sat[i] = mystran_dc_blocker::tick_simd (
+          _dc_block_coeffs[dc_block_main],
+          _dc_block_states[dc_block_main],
+          sat[i]);
+        _sat_prev = sat[i];
 
         // post emphasis
         sat[i] = andy::svf::tick_simd (
@@ -704,15 +709,27 @@ public:
         case mode_compand_1b:
           sat[i] = compand_1a_aa::tick_simd (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
+          sat[i] = mystran_dc_blocker::tick_simd (
+            _dc_block_coeffs[dc_block_expand],
+            _dc_block_states[dc_block_expand],
+            sat[i]);
           break;
         case mode_compand_1a:
           sat[i] = compand_1b_aa::tick_simd (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
+          sat[i] = mystran_dc_blocker::tick_simd (
+            _dc_block_coeffs[dc_block_expand],
+            _dc_block_states[dc_block_expand],
+            sat[i]);
           break;
         case mode_compand_sqrt:
           // sat[i] = vec_clamp (sat[i], -pow2compand_clip, pow2compand_clip);
           sat[i] = pow2_aa::tick_simd (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
+          sat[i] = mystran_dc_blocker::tick_simd (
+            _dc_block_coeffs[dc_block_expand],
+            _dc_block_states[dc_block_expand],
+            sat[i]);
           break;
         case mode_no_aa:
         case mode_normal:
@@ -818,6 +835,13 @@ private:
     ef_pow3,
   };
 
+  enum ef_block_type {
+    dc_block_compand,
+    dc_block_main,
+    dc_block_expand,
+    dc_block_count,
+  };
+
   enum crossv_indexes { lo_crossv, hi_crossv, n_crossv };
 
   struct params {
@@ -855,7 +879,6 @@ private:
     char                        ef_mode             = ef_linear;
     std::array<bool, n_crossv>  crossv_is_lp;
     std::array<bool, n_crossv>  crossv_enabled;
-    bool                        dc_block = false;
   };
 
   template <class T>
@@ -931,23 +954,23 @@ private:
   // everything.
   params _p;
   alignas (sse_bytes) envfollow_coeff_array _envfollow_coeffs;
-  envfollow_state_array                    _envfollow_states;
-  std::array<crossv_coeff_array, n_crossv> _crossv_coeffs;
-  std::array<crossv_state_array, n_crossv> _crossv_states;
-  fix_eq_and_delay_coeff_array             _adaa_fix_eq_delay_coeffs;
-  compander_state_array                    _compressor_states;
-  emphasis_coeff_array                     _pre_emphasis_coeffs;
-  emphasis_state_array                     _pre_emphasis_states;
-  wsh_state_array                          _wvsh_states;
-  dc_block_coeff_array                     _dc_block_coeffs;
-  dc_block_state_array                     _dc_block_states;
-  emphasis_coeff_array                     _post_emphasis_coeffs;
-  emphasis_state_array                     _post_emphasis_states;
-  compander_state_array                    _expander_states;
-  double_x2                                _sat_prev;
-  std::array<double_x2, n_crossv>          _crossv_prev;
-  uint                                     _n_processed_samples;
-  uint                                     _control_rate_mask;
+  envfollow_state_array                            _envfollow_states;
+  std::array<crossv_coeff_array, n_crossv>         _crossv_coeffs;
+  std::array<crossv_state_array, n_crossv>         _crossv_states;
+  fix_eq_and_delay_coeff_array                     _adaa_fix_eq_delay_coeffs;
+  compander_state_array                            _compressor_states;
+  emphasis_coeff_array                             _pre_emphasis_coeffs;
+  emphasis_state_array                             _pre_emphasis_states;
+  wsh_state_array                                  _wvsh_states;
+  std::array<dc_block_coeff_array, dc_block_count> _dc_block_coeffs;
+  std::array<dc_block_state_array, dc_block_count> _dc_block_states;
+  emphasis_coeff_array                             _post_emphasis_coeffs;
+  emphasis_state_array                             _post_emphasis_states;
+  compander_state_array                            _expander_states;
+  double_x2                                        _sat_prev;
+  std::array<double_x2, n_crossv>                  _crossv_prev;
+  uint                                             _n_processed_samples;
+  uint                                             _control_rate_mask;
 
   plugin_context* _plugcontext = nullptr;
 };
