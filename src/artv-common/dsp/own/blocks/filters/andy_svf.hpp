@@ -10,7 +10,8 @@
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
 
-namespace artv { namespace andy {
+namespace artv {
+namespace andy {
 
 struct svf {
   //----------------------------------------------------------------------------
@@ -541,4 +542,99 @@ private:
   }
   //----------------------------------------------------------------------------
 };
-}} // namespace artv::andy
+//------------------------------------------------------------------------------
+struct svf_lowpass {
+  //----------------------------------------------------------------------------
+  enum coeffs { a1, a2, a3, n_coeffs };
+  enum state { ic1eq, ic2eq, n_states };
+  //----------------------------------------------------------------------------
+  template <class T>
+  static void lowpass (crange<T> c, T freq, T q, T sr)
+  {
+    static_assert (std::is_floating_point<T>::value, "");
+    c       = c.shrink_head (interleaved_pack_offset);
+    auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
+
+    double g = tan (M_PI * freq / sr);
+    double k = 1.0 / q;
+    *co.a1   = 1.0 / (1.0 + g * (g + k));
+    *co.a2   = g * *co.a1;
+    *co.a3   = g * *co.a2;
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void lowpass_simd (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           q,
+    vec_value_type_t<V>         sr)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (c.size() >= (n_coeffs * traits.size));
+
+    V g = vec_tan (freq * ((T) M_PI) / sr);
+    V k = ((T) 1.0) / q;
+
+    V a1_v = (T) 1. / (g * (g + k) + ((T) 1.));
+    vec_store (&c[a1 * traits.size], a1_v);
+
+    V a2_v = g * a1_v;
+    vec_store (&c[a2 * traits.size], a2_v);
+
+    V a3_v = g * a2_v;
+    vec_store (&c[a3 * traits.size], a3_v);
+  }
+  //----------------------------------------------------------------------------
+  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  static T tick (
+    crange<const T> c, // coeffs
+    crange<T>       s, // state
+    T               v0)
+  {
+    assert (s.size() >= n_states);
+    assert (c.size() >= n_coeffs);
+
+    T v3     = v0 - s[ic2eq];
+    T v1     = c[a1] * s[ic1eq] + c[a2] * v3;
+    T v2     = s[ic2eq] + c[a2] * s[ic1eq] + c[a3] * v3;
+    s[ic1eq] = (v1 * 2.) - s[ic1eq];
+    s[ic2eq] = (v2 * 2.) - s[ic2eq];
+    return v2;
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static V tick_simd (
+    crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       s, // states (interleaved, SIMD aligned)
+    V                                 v0)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (c.size() >= traits.size * n_coeffs);
+    assert (s.size() >= traits.size * n_states);
+
+    V ic1eq_v = vec_load<V> (&s[ic1eq * traits.size]);
+    V ic2eq_v = vec_load<V> (&s[ic2eq * traits.size]);
+    V a1_v    = vec_load<V> (&c[a1 * traits.size]);
+    V a2_v    = vec_load<V> (&c[a2 * traits.size]);
+    V a3_v    = vec_load<V> (&c[a3 * traits.size]);
+
+    V v3    = v0 - ic2eq_v;
+    V v1    = a1_v * ic1eq_v + a2_v * v3;
+    V v2    = ic2eq_v + a2_v * ic1eq_v + a3_v * v3;
+    ic1eq_v = (v1 * 2.) - ic1eq_v;
+    ic2eq_v = (v2 * 2.) - ic2eq_v;
+
+    vec_store (&s[ic1eq * traits.size], ic1eq_v);
+    vec_store (&s[ic2eq * traits.size], ic2eq_v);
+
+    return v2;
+  }
+  //----------------------------------------------------------------------------
+}
+} // namespace artv::andy
