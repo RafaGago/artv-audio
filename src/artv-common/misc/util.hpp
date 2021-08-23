@@ -295,19 +295,21 @@ public:
     return _start[idx];
   }
 
-  constexpr contiguous_range<T> shrink_head (uint count)
+  constexpr contiguous_range<T> shrink_head (uint count) const
   {
     assert (count <= size());
-    _start += count;
-    _size -= count;
-    return *this;
+    contiguous_range<T> r {*this};
+    r._start += count;
+    r._size -= count;
+    return r;
   }
 
-  constexpr contiguous_range<T> shrink_tail (uint count)
+  constexpr contiguous_range<T> shrink_tail (uint count) const
   {
     assert (count <= size());
-    _size -= count;
-    return *this;
+    contiguous_range<T> r {*this};
+    r._size -= count;
+    return r;
   }
 
   constexpr iterator       begin() { return _start; }

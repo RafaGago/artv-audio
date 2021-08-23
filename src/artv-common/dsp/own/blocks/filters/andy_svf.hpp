@@ -27,7 +27,7 @@ struct svf {
     uint      interleaved_pack_size   = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (interleaved_pack_offset);
+    c       = c.shrink_head (interleaved_pack_offset);
     auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
     double g = tan (M_PI * freq / sr);
@@ -80,7 +80,7 @@ struct svf {
     uint      interleaved_pack_size   = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (interleaved_pack_offset);
+    c       = c.shrink_head (interleaved_pack_offset);
     auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
     double g = tan (M_PI * freq / sr);
@@ -103,7 +103,7 @@ struct svf {
     uint      interleaved_pack_size   = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (interleaved_pack_offset);
+    c       = c.shrink_head (interleaved_pack_offset);
     auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
     double g = tan (M_PI * freq / sr);
@@ -156,7 +156,7 @@ struct svf {
     uint      interleaved_pack_size   = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (interleaved_pack_offset);
+    c       = c.shrink_head (interleaved_pack_offset);
     auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
     double g = tan (M_PI * freq / sr);
@@ -178,7 +178,7 @@ struct svf {
     uint      interleaved_pack_offset = 0,
     uint      interleaved_pack_size   = 1)
   {
-    c.shrink_head (interleaved_pack_offset);
+    c       = c.shrink_head (interleaved_pack_offset);
     auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
     double g = tan (M_PI * freq / sr);
@@ -201,7 +201,7 @@ struct svf {
     uint      interleaved_pack_size   = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (interleaved_pack_offset);
+    c       = c.shrink_head (interleaved_pack_offset);
     auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
     double g = tan (M_PI * freq / sr);
@@ -255,7 +255,7 @@ struct svf {
     uint      interleaved_pack_size   = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (interleaved_pack_offset);
+    c       = c.shrink_head (interleaved_pack_offset);
     auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
 
     double A = exp (db * (T) (1. / 40.) * (T) M_LN10);
@@ -312,7 +312,7 @@ struct svf {
     uint      coeff_distance = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
+    c       = c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
     auto co = unpack_interleaved_coeffs (c, coeff_distance);
 
     double A = exp (db * (T) (1. / 40.) * (T) M_LN10);
@@ -337,7 +337,7 @@ struct svf {
     uint      coeff_distance = 1)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
+    c       = c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
     auto co = unpack_interleaved_coeffs (c, coeff_distance);
 
     constexpr T ln10 = (T) gcem::log (10.);

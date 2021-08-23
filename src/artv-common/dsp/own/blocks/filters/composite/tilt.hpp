@@ -30,7 +30,7 @@ public:
   {
     assert (co.size() >= n_coeffs);
     andy::svf::low_shelf (co, freq, q, gain_db, sr);
-    co.shrink_head (andy::svf::n_coeffs);
+    co = co.shrink_head (andy::svf::n_coeffs);
     andy::svf::high_shelf (co, freq, q, -gain_db, sr);
   }
   //----------------------------------------------------------------------------
@@ -43,8 +43,8 @@ public:
     assert (st.size() >= n_states);
 
     v0 = andy::svf::tick (co, st, v0);
-    co.shrink_head (andy::svf::n_coeffs);
-    st.shrink_head (andy::svf::n_states);
+    co = co.shrink_head (andy::svf::n_coeffs);
+    st = st.shrink_head (andy::svf::n_states);
     return andy::svf::tick (co, st, v0);
   }
   //----------------------------------------------------------------------------
@@ -58,10 +58,10 @@ public:
     assert (st[0].size() >= n_states);
     assert (st[1].size() >= n_states);
 
-    v0 = andy::svf::tick (co, st, v0);
-    co.shrink_head (andy::svf::n_coeffs);
-    st[0].shrink_head (andy::svf::n_states);
-    st[1].shrink_head (andy::svf::n_states);
+    v0    = andy::svf::tick (co, st, v0);
+    co    = co.shrink_head (andy::svf::n_coeffs);
+    st[0] = st[0].shrink_head (andy::svf::n_states);
+    st[1] = st[1].shrink_head (andy::svf::n_states);
     return andy::svf::tick (co, st, v0);
   }
   //----------------------------------------------------------------------------

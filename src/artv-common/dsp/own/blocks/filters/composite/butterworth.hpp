@@ -52,7 +52,7 @@ public:
       else {
         onepole::highpass (co, freq, sr);
       }
-      co.shrink_head (onepole::n_coeffs);
+      co = co.shrink_head (onepole::n_coeffs);
     }
     for (uint i = 0; i < (order / 2); ++i) {
       if (is_lowpass) {
@@ -61,7 +61,7 @@ public:
       else {
         andy::svf::highpass (co, freq, q_list[i], sr);
       }
-      co.shrink_head (andy::svf::n_coeffs);
+      co = co.shrink_head (andy::svf::n_coeffs);
     }
   }
   //----------------------------------------------------------------------------
@@ -87,7 +87,7 @@ public:
       else {
         onepole::highpass_simd (co, freq, sr);
       }
-      co.shrink_head (onepole::n_coeffs * traits.size);
+      co = co.shrink_head (onepole::n_coeffs * traits.size);
     }
     for (uint i = 0; i < (order / 2); ++i) {
       if (is_lowpass) {
@@ -96,7 +96,7 @@ public:
       else {
         andy::svf::highpass_simd (co, freq, vec_set<V> (q_list[i]), sr);
       }
-      co.shrink_head (andy::svf::n_coeffs * traits.size);
+      co = co.shrink_head (andy::svf::n_coeffs * traits.size);
     }
   }
   //----------------------------------------------------------------------------
@@ -111,13 +111,13 @@ public:
 
     if (order & 1) {
       v0 = onepole::tick (co, st, v0);
-      co.shrink_head (onepole::n_coeffs);
-      st.shrink_head (onepole::n_states);
+      co = co.shrink_head (onepole::n_coeffs);
+      st = st.shrink_head (onepole::n_states);
     }
     for (uint i = 0; i < (order / 2); ++i) {
       v0 = andy::svf::tick (co, st, v0);
-      co.shrink_head (andy::svf::n_coeffs);
-      st.shrink_head (andy::svf::n_states);
+      co = co.shrink_head (andy::svf::n_coeffs);
+      st = st.shrink_head (andy::svf::n_states);
     }
     return v0;
   }
@@ -136,16 +136,16 @@ public:
     auto out = v0;
 
     if (order & 1) {
-      out = onepole::tick (co, st, out);
-      co.shrink_head (onepole::n_coeffs);
-      st[0].shrink_head (onepole::n_states);
-      st[1].shrink_head (onepole::n_states);
+      out   = onepole::tick (co, st, out);
+      co    = co.shrink_head (onepole::n_coeffs);
+      st[0] = st[0].shrink_head (onepole::n_states);
+      st[1] = st[1].shrink_head (onepole::n_states);
     }
     for (uint i = 0; i < (order / 2); ++i) {
-      out = andy::svf::tick (co, st, out);
-      co.shrink_head (andy::svf::n_coeffs);
-      st[0].shrink_head (andy::svf::n_states);
-      st[1].shrink_head (andy::svf::n_states);
+      out   = andy::svf::tick (co, st, out);
+      co    = co.shrink_head (andy::svf::n_coeffs);
+      st[0] = st[0].shrink_head (andy::svf::n_states);
+      st[1] = st[1].shrink_head (andy::svf::n_states);
     }
     return out;
   }
@@ -169,13 +169,13 @@ public:
 
     if (order & 1) {
       out = onepole::tick_simd (co, st, out);
-      co.shrink_head (onepole::n_coeffs * traits.size);
-      st.shrink_head (onepole::n_states * traits.size);
+      co  = co.shrink_head (onepole::n_coeffs * traits.size);
+      st  = st.shrink_head (onepole::n_states * traits.size);
     }
     for (uint i = 0; i < (order / 2); ++i) {
       out = andy::svf::tick_simd (co, st, out);
-      co.shrink_head (andy::svf::n_coeffs * traits.size);
-      st.shrink_head (andy::svf::n_states * traits.size);
+      co  = co.shrink_head (andy::svf::n_coeffs * traits.size);
+      st  = st.shrink_head (andy::svf::n_states * traits.size);
     }
     return out;
   }

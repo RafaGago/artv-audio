@@ -283,11 +283,11 @@ public:
     // of first order will add another half sample, as it behaves as a boxcar of
     // L=2. The total delay will be 1 sample.
     T delayed = allpass_interpolator::tick (c, st, x);
-    st.shrink_head (allpass_interpolator::n_states);
+    st        = st.shrink_head (allpass_interpolator::n_states);
     // Apply a boxcar to the input of the same size as the ADAA equivalent.
     // Delays half a sample
     T filtered = moving_average<2>::tick ({}, st, x);
-    st.shrink_head (moving_average<2>::n_states);
+    st         = st.shrink_head (moving_average<2>::n_states);
     // The difference between the delayed main signal and the Boxcar output will
     // contain filtered away high frequencies. These are added as a pre-EQ, to
     // alleviate the ADAA filter HF loss with low or no oversampling.
@@ -310,10 +310,10 @@ public:
 
     // comments on the non-vectorized version
     V delayed = allpass_interpolator::tick_simd (c, st, x);
-    st.shrink_head (allpass_interpolator::n_states * traits.size);
+    st        = st.shrink_head (allpass_interpolator::n_states * traits.size);
 
     V filtered = moving_average<2>::tick_simd ({}, st, x);
-    st.shrink_head (moving_average<2>::n_states * traits.size);
+    st         = st.shrink_head (moving_average<2>::n_states * traits.size);
 
     V eq = delayed + (delayed - filtered);
     return Impl<1>::tick_simd ({}, st, eq);
