@@ -5097,6 +5097,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  saturation_trim,
+  n_stereo_busses,
+  param_common (
+    "Trim",
+    declptr<updownsampled<saturation>>(),
+    declptr<saturation::trim_tag>()),
+  saturation::get_parameter (saturation::trim_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   saturation_drive,
   n_stereo_busses,
   param_common (
@@ -5308,7 +5318,7 @@ parameter_cpp_class_define (
 
 using saturation_params = mp_list<
   saturation_type,
-  saturation_mode,
+  saturation_trim,
   saturation_drive,
   saturation_drive_balance,
   saturation_feedback,
@@ -5330,6 +5340,7 @@ using saturation_params = mp_list<
   saturation_lo_mode,
   saturation_hi_mode,
   saturation_band_gain,
+  saturation_mode,
   saturation_oversampling>;
 //------------------------------------------------------------------------------
 #if 0

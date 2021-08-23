@@ -28,8 +28,10 @@
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
 
-// TODO: -parameter smoothing(?).
+// A pretty naive but extreme saturation unit. Doing a subltler less featured
+// variant based on Chebyshev polynomials could be fun.
 
+// TODO: -parameter smoothing(?) (Gains, freq and filter amount(?).
 namespace artv {
 
 //------------------------------------------------------------------------------
@@ -94,6 +96,15 @@ public:
   void set (saturated_out_tag, float v) { _p.sat_out = db_to_gain (v); }
 
   static constexpr auto get_parameter (saturated_out_tag)
+  {
+    return float_param ("dB", -20.0, 20., 0.0, 0.25, 0.6, true);
+  }
+  //----------------------------------------------------------------------------
+  struct trim_tag {};
+
+  void set (trim_tag, float v) { _p.trim = db_to_gain (v); }
+
+  static constexpr auto get_parameter (trim_tag)
   {
     return float_param ("dB", -20.0, 20., 0.0, 0.25, 0.6, true);
   }
@@ -412,6 +423,7 @@ public:
     saturated_out_tag,
     drive_balance_tag,
     drive_tag,
+    trim_tag,
     lo_cut_tag,
     hi_cut_tag,
     envfollow_attack_tag,
@@ -490,11 +502,8 @@ public:
 
     double_x2 compens_drive {
       p.drive * (2. - p.drive_bal), p.drive * (p.drive_bal)};
-
     double_x2 inv_compens_drive = 1. / compens_drive;
-    // Clipping the attenuation, as these are sigmoids...
-    static constexpr double max_att = constexpr_db_to_gain (-18.);
-    inv_compens_drive               = vec_max (inv_compens_drive, max_att);
+    compens_drive *= p.trim;
 
     static constexpr uint                 max_block_size    = 32;
     uint                                  samples_processed = 0;
@@ -859,6 +868,7 @@ private:
     std::array<uint, n_crossv>  crossv_order;
     float                       sat_out   = 1.f;
     float                       drive     = 1.f;
+    float                       trim      = 1.f;
     float                       drive_bal = 0.f;
     std::array<float, n_crossv> crossv_hz;
     float                       emphasis_freq       = 60.f;
