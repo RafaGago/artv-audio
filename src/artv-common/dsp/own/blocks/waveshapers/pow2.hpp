@@ -29,7 +29,7 @@ struct pow2_functions {
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T int_fn (T x)
   {
-    return abs (x) * x * x * (T) (1. / 3.);
+    return abs (x * x * x * (T) (1. / 3.));
   }
   //----------------------------------------------------------------------------
   template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
@@ -37,13 +37,13 @@ struct pow2_functions {
   {
     using T = vec_value_type_t<V>;
 
-    return vec_abs (x) * x * x * (T) (1. / 3.);
+    return vec_abs (x * x * x * (T) (1. / 3.));
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T int2_fn (T x)
   {
-    return x * x * x * x * (T) (1. / 12.);
+    return abs (x) * x * x * x * (T) (1. / 12.);
   }
   //----------------------------------------------------------------------------
   template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
@@ -51,7 +51,7 @@ struct pow2_functions {
   {
     using T = vec_value_type_t<V>;
 
-    return x * x * x * x * (T) (1. / 12.);
+    return vec_abs (x) * x * x * x * (T) (1. / 12.);
   }
   //----------------------------------------------------------------------------
 };

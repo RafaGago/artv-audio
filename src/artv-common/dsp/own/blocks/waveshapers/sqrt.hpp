@@ -47,7 +47,7 @@ struct sqrt_functions {
   static T int2_fn (T x)
   {
     auto ax = abs (x);
-    return sqrt (ax) * ax * ax * (T) (4. / 15.);
+    return sqrt (ax) * ax * x * (T) (4. / 15.);
   }
   //----------------------------------------------------------------------------
   template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
@@ -56,7 +56,7 @@ struct sqrt_functions {
     using T = vec_value_type_t<V>;
 
     auto ax = vec_abs (x);
-    return vec_sqrt (ax) * ax * ax * (T) (4. / 15.);
+    return vec_sqrt (ax) * ax * x * (T) (4. / 15.);
   }
   //----------------------------------------------------------------------------
 };

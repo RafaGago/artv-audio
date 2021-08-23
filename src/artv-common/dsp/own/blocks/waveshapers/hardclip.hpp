@@ -30,18 +30,19 @@ struct hardclip_functions {
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T int_fn (T x)
   {
-    bool unclipped = abs (x) <= 1.0;
-    return unclipped ? (x * x) * 0.5 : x * artv::sgn_no_zero (x) - 0.5;
+    auto ax        = abs (x);
+    bool unclipped = ax <= 1.0;
+    return unclipped ? (x * x) * 0.5 : ax - 0.5;
   }
   //----------------------------------------------------------------------------
   template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
   static V int_fn (V x)
   {
-    using T = vec_value_type_t<V>;
-
-    V noclip  = x * x * (T) 0.5;
-    V yesclip = x * vec_sgn_no_zero (x) - (T) 0.5;
-    return (vec_abs (x) <= (T) 1.0) ? noclip : yesclip;
+    using T      = vec_value_type_t<V>;
+    auto ax      = vec_abs (x);
+    V    noclip  = x * x * (T) 0.5;
+    V    yesclip = ax - (T) 0.5;
+    return (ax <= (T) 1.0) ? noclip : yesclip;
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
