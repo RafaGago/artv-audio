@@ -5290,7 +5290,7 @@ parameter_cpp_class_define (
   saturation_envfollow_to_dc,
   n_stereo_busses,
   param_common (
-    "EF:DC",
+    "EF:Asym",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::envfollow_to_dc_tag>()),
   saturation::get_parameter (saturation::envfollow_to_dc_tag {}),
