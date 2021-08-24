@@ -456,7 +456,7 @@ public:
 
     for (auto& dcbc : _dc_block_coeffs) {
       mystran_dc_blocker::init_simd (
-        dcbc, vec_set<double_x2> (2.), pc.get_sample_rate());
+        dcbc, vec_set<double_x2> (0.1), pc.get_sample_rate());
     }
 
     _p = params {};
