@@ -100,16 +100,16 @@ struct onepole_smoother {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-// From ReEQ.
 struct onepole {
   //----------------------------------------------------------------------------
   enum coeffs { b0, b1, a1, n_coeffs };
-  enum state { z1, z0, n_states };
+  enum state { s1, n_states };
   //----------------------------------------------------------------------------
   static void lowpass (crange<double> co, double freq, double sr)
   {
     assert (co.size() >= n_coeffs);
 
+    // BLT(?) from ReEQ
     double w = tan (M_PI * freq / sr);
     double n = 1. / (1. + w);
     co[b0]   = w * n;
@@ -129,6 +129,7 @@ struct onepole {
 
     assert (co.size() >= (n_coeffs * traits.size));
 
+    // BLT(?) from ReEQ
     auto w = vec_tan (M_PI * freq / sr);
     auto n = 1. / (1. + w);
     vec_store (&co[b0 * traits.size], w * n);
@@ -140,6 +141,7 @@ struct onepole {
   {
     assert (co.size() >= n_coeffs);
 
+    // BLT(?) from ReEQ
     double w = tan (M_PI * freq / sr);
     double n = 1. / (1. + w);
     co[b0]   = n;
@@ -159,6 +161,7 @@ struct onepole {
 
     assert (co.size() >= (n_coeffs * traits.size));
 
+    // BLT(?) from ReEQ
     auto w = vec_tan (M_PI * freq / sr);
     auto n = 1. / (1. + w);
     vec_store (&co[b0 * traits.size], n);
@@ -183,9 +186,10 @@ struct onepole {
     assert (st.size() >= n_states);
     assert (co.size() >= n_coeffs);
 
-    st[z1] = in * co[b0] + st[z0] * co[b1] - st[z1] * co[a1];
-    st[z0] = in;
-    return st[z1];
+    // TDF II
+    double out = in * co[b0] + st[s1];
+    st[s1]     = in * co[b1] - out * co[a1];
+    return out;
   }
   //----------------------------------------------------------------------------
   static double_x2 tick (
@@ -199,18 +203,17 @@ struct onepole {
     assert (st[1].size() >= n_states);
 
     // I don't know if it's worth to use SIMD for this actually.
-    double_x2 a1_v = vec_set<2> (co[a1]);
-    double_x2 b0_v = vec_set<2> (co[b0]);
-    double_x2 b1_v = vec_set<2> (co[b1]);
-    double_x2 z0_v = {st[0][z0], st[1][z0]};
-    double_x2 z1_v = {st[0][z1], st[1][z1]};
+    double_x2 a1v = vec_set<2> (co[a1]);
+    double_x2 b0v = vec_set<2> (co[b0]);
+    double_x2 b1v = vec_set<2> (co[b1]);
+    double_x2 s1v = {st[0][s1], st[1][s1]};
 
-    z1_v      = (in * b0_v) + (z0_v * b1_v) - (z1_v * a1_v);
-    st[0][z1] = z1_v[0];
-    st[0][z0] = in[0];
-    st[1][z1] = z1_v[1];
-    st[1][z0] = in[1];
-    return z1_v;
+    // TDF II
+    auto out  = in * b0v + s1v;
+    s1v       = in * b1v - out * a1v;
+    st[0][s1] = s1v[0];
+    st[1][s1] = s1v[1];
+    return out;
   }
   //----------------------------------------------------------------------------
   template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
@@ -229,15 +232,13 @@ struct onepole {
     V b0v = vec_load<V> (&co[b0 * traits.size]);
     V b1v = vec_load<V> (&co[b1 * traits.size]);
     V a1v = vec_load<V> (&co[a1 * traits.size]);
-    V z0v = vec_load<V> (&st[z0 * traits.size]);
-    V z1v = vec_load<V> (&st[z1 * traits.size]);
+    V s1v = vec_load<V> (&st[s1 * traits.size]);
 
-    z1v = in * b0v + z0v * b1v - z1v * a1v;
-    z0v = in;
-
-    vec_store<V> (&st[z0 * traits.size], z0v);
-    vec_store<V> (&st[z1 * traits.size], z1v);
-    return z1v;
+    // TDF II
+    auto out = in * b0v + s1v;
+    s1v      = in * b1v - out * a1v;
+    vec_store<V> (&st[s1 * traits.size], s1v);
+    return out;
   }
 };
 //------------------------------------------------------------------------------
