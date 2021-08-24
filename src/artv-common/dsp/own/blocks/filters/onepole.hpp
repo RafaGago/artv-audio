@@ -169,6 +169,38 @@ struct onepole {
     vec_store (&co[a1 * traits.size], n * (w - 1.));
   }
   //----------------------------------------------------------------------------
+  static void allpass (crange<double> co, double freq, double sr)
+  {
+    assert (co.size() >= n_coeffs);
+
+    // Found empirically
+    double w = tan (M_PI * freq / sr);
+    double n = 1. / (1. + w);
+    co[b0]   = n * (w - 1.);
+    co[b1]   = 1.;
+    co[a1]   = co[b0];
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void allpass_simd (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    vec_value_type_t<V>         sr)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (n_coeffs * traits.size));
+
+    // Found empirically
+    auto w = vec_tan (M_PI * freq / sr);
+    auto n = 1. / (1. + w);
+    vec_store (&co[b0 * traits.size], n * (w - (T) 1.));
+    vec_store (&co[b1 * traits.size], vec_set<V> ((T) 1.));
+    vec_store (&co[a1 * traits.size], n * (w - (T) 1.));
+  }
+  //----------------------------------------------------------------------------
   static void repair_unsmoothable_coeffs (crange<double>, crange<const double>)
   {}
   //----------------------------------------------------------------------------
@@ -209,8 +241,9 @@ struct onepole {
     double_x2 s1v = {st[0][s1], st[1][s1]};
 
     // TDF II
-    auto out  = in * b0v + s1v;
-    s1v       = in * b1v - out * a1v;
+    auto out = in * b0v + s1v;
+    s1v      = in * b1v - out * a1v;
+
     st[0][s1] = s1v[0];
     st[1][s1] = s1v[1];
     return out;
