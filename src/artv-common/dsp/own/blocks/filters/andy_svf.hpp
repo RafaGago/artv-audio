@@ -115,7 +115,7 @@ struct svf_multimode_tags {
   struct peak {};
   struct allpass {};
 };
-
+//------------------------------------------------------------------------------
 template <class... Tags>
 struct svf_multimode {
 

@@ -16,25 +16,25 @@ struct onepole_smoother {
   enum state { z1, n_states };
   //----------------------------------------------------------------------------
   template <class T>
-  static void lowpass (crange<T> c, T freq, T sr)
+  static void lowpass (crange<T> c, T freq, T srate)
   {
     static_assert (std::is_floating_point<T>::value, "");
     constexpr double pi_x2 = 6.283185307179586476925286766559;
-    c[b1]                  = (T) exp (-pi_x2 * freq / sr);
+    c[b1]                  = (T) exp (-pi_x2 * freq / srate);
   }
   //----------------------------------------------------------------------------
   template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
   static void lowpass_simd (
     crange<vec_value_type_t<V>> c,
     V                           freq,
-    vec_value_type_t<V>         sr)
+    vec_value_type_t<V>         srate)
   {
     using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
     constexpr auto traits = vec_traits<V>();
     constexpr T    pi_x2  = (T) 6.283185307179586476925286766559;
 
-    vec_store (c, vec_exp (-pi_x2 * freq / sr)); // just on coeff
+    vec_store (c, vec_exp (-pi_x2 * freq / srate)); // just on coeff
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -104,101 +104,139 @@ struct onepole {
   //----------------------------------------------------------------------------
   enum coeffs { b0, b1, a1, n_coeffs };
   enum state { s1, n_states };
+  template <class T>
+  struct sub_coeffs {
+    T w;
+    T n;
+  };
   //----------------------------------------------------------------------------
-  static void lowpass (crange<double> co, double freq, double sr)
+  template <class T, class U>
+  static sub_coeffs<T> get_sub_coeffs (T freq, U srate)
+  {
+    sub_coeffs<T> r;
+    if constexpr (is_vec_v<T>) {
+      r.w = vec_tan ((U) M_PI * freq / srate);
+    }
+    else {
+      r.w = tan (M_PI * freq / srate);
+    }
+    r.n = (U) 1. / ((U) 1. + r.w);
+    return r;
+  }
+  //----------------------------------------------------------------------------
+  static void lowpass (crange<double> co, sub_coeffs<double> wn)
   {
     assert (co.size() >= n_coeffs);
 
     // BLT(?) from ReEQ
-    double w = tan (M_PI * freq / sr);
-    double n = 1. / (1. + w);
-    co[b0]   = w * n;
-    co[b1]   = w * n;
-    co[a1]   = n * (w - 1.);
+    co[b0] = wn.w * wn.n;
+    co[b1] = wn.w * wn.n;
+    co[a1] = wn.n * (wn.w - 1.);
+  }
+  //----------------------------------------------------------------------------
+  static void highpass (crange<double> co, sub_coeffs<double> wn)
+  {
+    assert (co.size() >= n_coeffs);
+
+    // BLT(?) from ReEQ
+    co[b0] = wn.n;
+    co[b1] = -wn.n;
+    co[a1] = wn.n * (wn.w - 1.);
+  }
+  //----------------------------------------------------------------------------
+  static void allpass (crange<double> co, sub_coeffs<double> wn)
+  {
+    assert (co.size() >= n_coeffs);
+
+    // Found empirically
+    co[b0] = wn.n * (wn.w - 1.);
+    co[b1] = 1.;
+    co[a1] = co[b0];
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void lowpass_simd (crange<vec_value_type_t<V>> co, sub_coeffs<V> wn)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (n_coeffs * traits.size));
+
+    vec_store (&co[b0 * traits.size], wn.w * wn.n);
+    vec_store (&co[b1 * traits.size], wn.w * wn.n);
+    vec_store (&co[a1 * traits.size], wn.n * (wn.w - 1.));
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void highpass_simd (crange<vec_value_type_t<V>> co, sub_coeffs<V> wn)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (n_coeffs * traits.size));
+
+    vec_store (&co[b0 * traits.size], wn.n);
+    vec_store (&co[b1 * traits.size], -wn.n);
+    vec_store (&co[a1 * traits.size], wn.n * (wn.w - 1.));
+  }
+  //----------------------------------------------------------------------------
+  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  static void allpass_simd (crange<vec_value_type_t<V>> co, sub_coeffs<V> wn)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (n_coeffs * traits.size));
+
+    // Found empirically
+    vec_store (&co[b0 * traits.size], wn.n * (wn.w - (T) 1.));
+    vec_store (&co[b1 * traits.size], vec_set<V> ((T) 1.));
+    vec_store (&co[a1 * traits.size], wn.n * (wn.w - (T) 1.));
+  }
+  //----------------------------------------------------------------------------
+  static void lowpass (crange<double> co, double freq, double srate)
+  {
+    lowpass (co, get_sub_coeffs (freq, srate));
+  }
+  //----------------------------------------------------------------------------
+  static void highpass (crange<double> co, double freq, double srate)
+  {
+    highpass (co, get_sub_coeffs (freq, srate));
+  }
+  //----------------------------------------------------------------------------
+  static void allpass (crange<double> co, double freq, double srate)
+  {
+    allpass (co, get_sub_coeffs (freq, srate));
   }
   //----------------------------------------------------------------------------
   template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
   static void lowpass_simd (
     crange<vec_value_type_t<V>> co,
     V                           freq,
-    vec_value_type_t<V>         sr)
+    vec_value_type_t<V>         srate)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= (n_coeffs * traits.size));
-
-    // BLT(?) from ReEQ
-    auto w = vec_tan (M_PI * freq / sr);
-    auto n = 1. / (1. + w);
-    vec_store (&co[b0 * traits.size], w * n);
-    vec_store (&co[b1 * traits.size], w * n);
-    vec_store (&co[a1 * traits.size], n * (w - 1.));
-  }
-  //----------------------------------------------------------------------------
-  static void highpass (crange<double> co, double freq, double sr)
-  {
-    assert (co.size() >= n_coeffs);
-
-    // BLT(?) from ReEQ
-    double w = tan (M_PI * freq / sr);
-    double n = 1. / (1. + w);
-    co[b0]   = n;
-    co[b1]   = -n;
-    co[a1]   = n * (w - 1.);
+    lowpass_simd (co, get_sub_coeffs (freq, srate));
   }
   //----------------------------------------------------------------------------
   template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
   static void highpass_simd (
     crange<vec_value_type_t<V>> co,
     V                           freq,
-    vec_value_type_t<V>         sr)
+    vec_value_type_t<V>         srate)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= (n_coeffs * traits.size));
-
-    // BLT(?) from ReEQ
-    auto w = vec_tan (M_PI * freq / sr);
-    auto n = 1. / (1. + w);
-    vec_store (&co[b0 * traits.size], n);
-    vec_store (&co[b1 * traits.size], -n);
-    vec_store (&co[a1 * traits.size], n * (w - 1.));
-  }
-  //----------------------------------------------------------------------------
-  static void allpass (crange<double> co, double freq, double sr)
-  {
-    assert (co.size() >= n_coeffs);
-
-    // Found empirically
-    double w = tan (M_PI * freq / sr);
-    double n = 1. / (1. + w);
-    co[b0]   = n * (w - 1.);
-    co[b1]   = 1.;
-    co[a1]   = co[b0];
+    highpass_simd (co, get_sub_coeffs (freq, srate));
   }
   //----------------------------------------------------------------------------
   template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
   static void allpass_simd (
     crange<vec_value_type_t<V>> co,
     V                           freq,
-    vec_value_type_t<V>         sr)
+    vec_value_type_t<V>         srate)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= (n_coeffs * traits.size));
-
-    // Found empirically
-    auto w = vec_tan (M_PI * freq / sr);
-    auto n = 1. / (1. + w);
-    vec_store (&co[b0 * traits.size], n * (w - (T) 1.));
-    vec_store (&co[b1 * traits.size], vec_set<V> ((T) 1.));
-    vec_store (&co[a1 * traits.size], n * (w - (T) 1.));
+    allpass_simd (co, get_sub_coeffs (freq, srate));
   }
   //----------------------------------------------------------------------------
   static void repair_unsmoothable_coeffs (crange<double>, crange<const double>)
