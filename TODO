@@ -1,3 +1,16 @@
+- Saturation is blowing up when Tone Amt = -17.2, Tone F = 76, Tone Q = 1.5,
+  EF->ToneF = negative.
+
+- On all the blocks, remove function implementation duplication
+  (plain/_simd suffixed), provably by wrapping and using builtin vectors of size
+  1.
+
+- Mixmaxtrix: Add a (back) channel of communication for parameter values, so
+  values can react to changes on other parameters. Probaby through plugin-
+  context and using parameter IDs as the index on the parameter typelist. The
+  tags could actually change from being defined as tag classes to std::integral_constant<uint> and double as parameter IDs, at least on the
+  wrapper FX class.
+
 - Track XSIMD broken on fast math bug.
   https://github.com/xtensor-stack/xsimd/issues/515
 
@@ -11,9 +24,6 @@
 - SVF:
   - Add the version with better precission which uses "sin" for coeff
    calculation ?
-
-  -Coefficient reduction. Separate versions of the bell allpass lowpass and
-   highpass seem interesting. In some cases it reduces 3 mults and 2 adds.
 
 - Channel labels (? The plugin is too cluttered vertically).
 

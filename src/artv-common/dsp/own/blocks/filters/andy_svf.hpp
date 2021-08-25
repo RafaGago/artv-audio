@@ -10,8 +10,7 @@
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
 
-namespace artv {
-namespace andy {
+namespace artv { namespace andy {
 
 struct svf {
   //----------------------------------------------------------------------------
@@ -549,21 +548,21 @@ struct svf_lowpass {
   enum state { ic1eq, ic2eq, n_states };
   //----------------------------------------------------------------------------
   template <class T>
-  static void lowpass (crange<T> c, T freq, T q, T sr)
+  static void init (crange<T> c, T freq, T q, T sr)
   {
     static_assert (std::is_floating_point<T>::value, "");
-    c       = c.shrink_head (interleaved_pack_offset);
-    auto co = unpack_interleaved_coeffs (c, interleaved_pack_size);
+    assert (c.size() >= n_coeffs);
 
-    double g = tan (M_PI * freq / sr);
-    double k = 1.0 / q;
-    *co.a1   = 1.0 / (1.0 + g * (g + k));
-    *co.a2   = g * *co.a1;
-    *co.a3   = g * *co.a2;
+    std::array<T, svf::n_coeffs> res;
+
+    svf::lowpass<T> (res, freq, q, sr);
+    c[a1] = res[svf::a1];
+    c[a2] = res[svf::a2];
+    c[a3] = res[svf::a3];
   }
   //----------------------------------------------------------------------------
   template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void lowpass_simd (
+  static void init_simd (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           q,
@@ -575,17 +574,12 @@ struct svf_lowpass {
 
     assert (c.size() >= (n_coeffs * traits.size));
 
-    V g = vec_tan (freq * ((T) M_PI) / sr);
-    V k = ((T) 1.0) / q;
+    alignas (V) std::array<T, svf::n_coeffs * traits.size> res;
 
-    V a1_v = (T) 1. / (g * (g + k) + ((T) 1.));
-    vec_store (&c[a1 * traits.size], a1_v);
-
-    V a2_v = g * a1_v;
-    vec_store (&c[a2 * traits.size], a2_v);
-
-    V a3_v = g * a2_v;
-    vec_store (&c[a3 * traits.size], a3_v);
+    svf::lowpass_simd<V> (res, freq, q, sr);
+    vec_store (&c[a1 * traits.size], vec_load<V> (&res[svf::a1 * traits.size]));
+    vec_store (&c[a2 * traits.size], vec_load<V> (&res[svf::a2 * traits.size]));
+    vec_store (&c[a3 * traits.size], vec_load<V> (&res[svf::a3 * traits.size]));
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
@@ -636,5 +630,6 @@ struct svf_lowpass {
     return v2;
   }
   //----------------------------------------------------------------------------
-}
-} // namespace artv::andy
+};
+
+}} // namespace artv::andy
