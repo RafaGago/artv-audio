@@ -15,6 +15,7 @@
 #include <array>
 #include <immintrin.h>
 #include <type_traits>
+#include <utility>
 #include <xsimd/xsimd.hpp>
 #if defined(XSIMD_BROKEN_W_FAST_MATH)
 #include <cmath>
@@ -66,7 +67,8 @@ struct simd_vector_traits {
   // As "sizeof" the vectors grow in powers of 2
   // (e.g. "sizeof (vec<int, 5>) = 32" (on x64)), we restrict our vectors to
   // power of two sizes. At the time of writing this we can't detect the vector
-  // size attribute.
+  // size attribute. At the time of writing this e.g. GCC doesn't allow sizes
+  // that are not powers of 2 anyways.
   static_assert (is_pow2 (bytes), "See comment above this assertion.");
 };
 
@@ -237,8 +239,7 @@ using simd_array
 //   lazily went with __may_alias__ and type punning to avoid verifying that
 //   memcpy does the right thing.
 // - No object orientation, as it would defeat the purpuse of using the
-// builtin
-//   compiler wrappers.
+//   builtin compiler wrappers.
 //------------------------------------------------------------------------------
 // FUNCTIONS
 //------------------------------------------------------------------------------
@@ -253,6 +254,13 @@ template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
 static constexpr auto vec_traits (V)
 {
   return vec_traits<V>();
+}
+//------------------------------------------------------------------------------
+template <class T>
+auto make_vec_x1 (T v)
+{
+  vec<T, 1> r = {v};
+  return r;
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
@@ -499,43 +507,68 @@ static inline auto vec_cast (V a)
   return __builtin_convertvector(a, typename dst_traits::type);
 }
 //------------------------------------------------------------------------------
-// XSIMD functions
+// SIMD functions
 //------------------------------------------------------------------------------
 namespace detail {
-template <class F, class... Ts>
-static inline auto call_xsimd_function_impl (F&& func, Ts&&... args)
+template <class F1, class F2, class... Ts>
+static inline auto call_vec_function_impl (
+  F1&& simdf,
+  F2&& scalarf,
+  Ts&&... args)
 {
   using V               = std::common_type_t<Ts...>;
   constexpr auto traits = vec_traits<V>();
-  using batch           = to_xsimd_batch_t<vec_value_type_t<V>, traits.bytes>;
-  using intrin          = decltype (vec_to_intrin (V {}));
 
-  // xsimd batches can be casted back to intrinsic types
-  auto result = static_cast<intrin> (
-    func (batch {vec_to_intrin (std::forward<Ts> (args))}...));
-  return *reinterpret_cast<V*> (&result);
+  if constexpr (traits.size > 1) {
+    // simd, As of now only XSIMD, but the type returned by "simdf" could be
+    // detected.
+    using batch  = to_xsimd_batch_t<vec_value_type_t<V>, traits.bytes>;
+    using intrin = decltype (vec_to_intrin (V {}));
+
+    // xsimd batches can be casted back to intrinsic types
+    auto result = static_cast<intrin> (
+      simdf (batch {vec_to_intrin (std::forward<Ts> (args))}...));
+
+    return *reinterpret_cast<V*> (&result);
+  }
+  else {
+    // vectors of size == 1, scalar.
+    using T  = vec_value_type_t<V>;
+    T result = scalarf (args[0]...);
+    return make_vec_x1 (result);
+  }
 }
 // NOTE: The argument reversing on these three overloads below could be made
 // generic with some metaprogramming (e.g. boost hana). Going for the explicit
 // solution, as the upper bound number of args is known and low
-template <class V, class F>
-static inline auto call_xsimd_function (V&& x, F&& func)
+template <class V, class F1, class F2>
+static inline auto call_vec_function (V&& x, F1&& simd, F2&& scalar)
 {
-  return call_xsimd_function_impl (std::forward<F> (func), std::forward<V> (x));
+  return call_vec_function_impl (
+    std::forward<F1> (simd), std::forward<F2> (scalar), std::forward<V> (x));
 }
 
-template <class V1, class V2, class F>
-static inline auto call_xsimd_function (V1&& x, V2&& y, F&& func)
+template <class V1, class V2, class F1, class F2>
+static inline auto call_vec_function (V1&& x, V2&& y, F1&& simd, F2&& scalar)
 {
-  return call_xsimd_function_impl (
-    std::forward<F> (func), std::forward<V1> (x), std::forward<V2> (y));
+  return call_vec_function_impl (
+    std::forward<F1> (simd),
+    std::forward<F2> (scalar),
+    std::forward<V1> (x),
+    std::forward<V2> (y));
 }
 
-template <class V1, class V2, class V3, class F>
-static inline auto call_xsimd_function (V1&& x, V2&& y, V3&& z, F&& func)
+template <class V1, class V2, class V3, class F1, class F2>
+static inline auto call_vec_function (
+  V1&& x,
+  V2&& y,
+  V3&& z,
+  F1&& simd,
+  F2&& scalar)
 {
-  return call_xsimd_function_impl (
-    std::forward<F> (func),
+  return call_vec_function_impl (
+    std::forward<F1> (simd),
+    std::forward<F2> (scalar),
     std::forward<V1> (x),
     std::forward<V2> (y),
     std::forward<V3> (z));
@@ -547,7 +580,7 @@ template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_exp (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
+  return detail::call_vec_function (std::forward<V> (x), [] (auto&& v) {
     return xsimd::exp (std::forward<decltype (v)> (v));
   });
 #else
@@ -567,11 +600,14 @@ template <
 static inline auto vec_pow (V1&& x, V2&& y)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (
-    std::forward<V1> (x), std::forward<V2> (y), [] (auto&& v1, auto&& v2) {
+  return detail::call_vec_function (
+    std::forward<V1> (x),
+    std::forward<V2> (y),
+    [] (auto&& v1, auto&& v2) {
       return xsimd::pow (
         std::forward<decltype (v1)> (v1), std::forward<decltype (v2)> (v2));
-    });
+    },
+    [] (auto&& v1, auto&& v2) { return pow (v1, v2); });
 #else
   constexpr auto traits = vec_traits<V1>();
   auto           ret    = x;
@@ -599,18 +635,20 @@ static inline auto vec_pow (vec_value_type_t<V> x, V&& y)
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_sqrt (V&& x)
 {
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::sqrt (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::sqrt (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return sqrt (v); });
 }
 //------------------------------------------------------------------------------
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_log (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::log (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::log (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return log (v); });
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
@@ -624,9 +662,10 @@ template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_sin (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::sin (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::sin (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return sin (v); });
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
@@ -640,9 +679,10 @@ template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_cos (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::cos (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::cos (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return cos (v); });
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
@@ -656,9 +696,10 @@ template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_tan (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::tan (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::tan (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return tan (v); });
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
@@ -672,9 +713,10 @@ template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_sinh (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::sinh (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::sinh (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return sinh (v); });
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
@@ -688,9 +730,10 @@ template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_cosh (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::cosh (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::cosh (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return cosh (v); });
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
@@ -704,9 +747,10 @@ template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_tanh (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::tanh (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::tanh (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return tanh (v); });
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
@@ -720,9 +764,10 @@ template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_asin (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::asin (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::asin (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return asin (v); });
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
@@ -736,9 +781,10 @@ template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_acos (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::acos (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::acos (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return acos (v); });
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
@@ -752,9 +798,10 @@ template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_atan (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::atan (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::atan (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return atan (v); });
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
@@ -768,9 +815,10 @@ template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_asinh (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::asinh (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::asinh (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return asinh (v); });
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
@@ -784,9 +832,10 @@ template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_acosh (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::acosh (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::acosh (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return acosh (v); });
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
@@ -800,9 +849,10 @@ template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_atanh (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::atanh (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::atanh (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return atanh (v); });
 #else
   constexpr auto traits = vec_traits<V>();
   for (uint i = 0; i < traits.size; ++i) {
@@ -815,9 +865,10 @@ static inline auto vec_atanh (V&& x)
 template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
 static inline auto vec_abs (V&& x)
 {
-  return detail::call_xsimd_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::abs (std::forward<decltype (v)> (v));
-  });
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::abs (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return abs (v); });
 }
 //------------------------------------------------------------------------------
 template <
@@ -873,7 +924,7 @@ template <
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2> && is_vec_v<V3>>* = nullptr>
 static inline auto vec_clamp (V1&& x, V2&& min, V3&& max)
 {
-  return detail::call_xsimd_function (
+  return detail::call_vec_function (
     std::forward<V1> (x),
     std::forward<V2> (min),
     std::forward<V3> (max),
@@ -882,7 +933,8 @@ static inline auto vec_clamp (V1&& x, V2&& min, V3&& max)
         std::forward<decltype (v1)> (v1),
         std::forward<decltype (v2)> (v2),
         std::forward<decltype (v3)> (v3));
-    });
+    },
+    [] (auto&& v1, auto&& v2, auto&& v3) { return std::clamp (v1, v2, v3); });
 }
 
 template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
@@ -970,20 +1022,29 @@ bool vec_is_all_zeros (V v)
 {
   using Vv              = std::remove_reference_t<std::remove_cv_t<V>>;
   constexpr auto traits = vec_traits<Vv>();
-  using V64             = vec<u64, sizeof (Vv) / sizeof (u64)>;
 
-  if constexpr (sizeof (Vv) == 16) {
-    // hoping that this translates to e.g. PSET on SSE4.1
-    V64 u = *reinterpret_cast<V64*> (&v);
-    return !(u[0] & u[1]);
-  }
-  else if constexpr (sizeof (Vv) == 32) {
-    V64 u = *reinterpret_cast<V64*> (&v);
-    return !(u[0] & u[1] & u[2] & u[3]);
+  if constexpr (traits.size == 1) {
+    // scalar, vector of size 1. Fast case
+    using uint_ssv = typename decltype (traits)::same_size_uint_type;
+    using uint_ss  = decltype (std::declval<uint_ssv>()[0]);
+    return reinterpret_cast<uint_ssv*> (&v)[0] == (uint_ss) -1ull;
   }
   else {
-    static_assert (!std::is_same_v<V, V>, "To be implemented");
-    return false;
+    using V64 = vec<u64, sizeof (Vv) / sizeof (u64)>;
+
+    if constexpr (sizeof (Vv) == 16) {
+      // hoping that this translates to e.g. PSET on SSE4.1
+      V64 u = *reinterpret_cast<V64*> (&v);
+      return !(u[0] & u[1]);
+    }
+    else if constexpr (sizeof (Vv) == 32) {
+      V64 u = *reinterpret_cast<V64*> (&v);
+      return !(u[0] & u[1] & u[2] & u[3]);
+    }
+    else {
+      static_assert (!std::is_same_v<V, V>, "To be implemented");
+      return false;
+    }
   }
 }
 //------------------------------------------------------------------------------
@@ -992,19 +1053,28 @@ bool vec_is_all_ones (V v)
 {
   using Vv              = std::remove_reference_t<std::remove_cv_t<V>>;
   constexpr auto traits = vec_traits<Vv>();
-  using V64             = vec<u64, traits.bytes / sizeof (u64)>;
 
-  if constexpr (sizeof (Vv) == 16) {
-    V64 u = *reinterpret_cast<V64*> (&v);
-    return (u[0] & u[1]) == (u64) -1;
-  }
-  else if constexpr (sizeof (Vv) == 32) {
-    V64 u = *reinterpret_cast<V64*> (&v);
-    return !!(u[0] & u[1] & u[2] & u[3]) == (u64) -1;
+  if constexpr (traits.size == 1) {
+    // scalar, vector of size 1. Fast case
+    using uint_ssv = typename decltype (traits)::same_size_uint_type;
+    using uint_ss  = decltype (std::declval<uint_ssv>()[0]);
+    return reinterpret_cast<uint_ssv*> (&v)[0] == (uint_ss) -1ull;
   }
   else {
-    static_assert (!std::is_same_v<V, V>, "To be implemented");
-    return false;
+    using V64 = vec<u64, traits.bytes / sizeof (u64)>;
+
+    if constexpr (sizeof (Vv) == 16) {
+      V64 u = *reinterpret_cast<V64*> (&v);
+      return (u[0] & u[1]) == (u64) -1ull;
+    }
+    else if constexpr (sizeof (Vv) == 32) {
+      V64 u = *reinterpret_cast<V64*> (&v);
+      return !!(u[0] & u[1] & u[2] & u[3]) == (u64) -1ull;
+    }
+    else {
+      static_assert (!std::is_same_v<V, V>, "To be implemented");
+      return false;
+    }
   }
 }
 //------------------------------------------------------------------------------
