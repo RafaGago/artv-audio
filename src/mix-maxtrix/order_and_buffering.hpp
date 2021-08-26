@@ -337,12 +337,12 @@ private:
     u64 bit_in_others;
   };
   //----------------------------------------------------------------------------
-  static constexpr u64 get_bit_selection_mask (std::integral_constant<int, 4>)
+  static constexpr u64 get_bit_selection_mask (k_int<4>)
   {
     return 0x1111; // N == 4, channels are selected with this mask.
   }
   //----------------------------------------------------------------------------
-  static constexpr u64 get_bit_selection_mask (std::integral_constant<int, 8>)
+  static constexpr u64 get_bit_selection_mask (k_int<8>)
   {
     return 0x0101010101010101; // N == 8, channels are selected with this mask.
   }
@@ -355,8 +355,8 @@ private:
     r.mask        = lsb_mask<u64> (N) << r.offset;
     r.bit_in_self = r.bit << r.offset;
     static_assert (N == 8 || N == 4, "bit hack below has to be redone");
-    u64 selmask  = get_bit_selection_mask (std::integral_constant<int, N> {});
-    r.bit_in_all = r.bit * selmask;
+    u64 selmask     = get_bit_selection_mask (k_int<N> {});
+    r.bit_in_all    = r.bit * selmask;
     r.bit_in_others = r.bit_in_all & ~r.mask;
     return r;
   }
@@ -365,7 +365,7 @@ private:
   {
     static_assert ((N * N) <= (sizeof v * 8), "");
     u64 r       = 0;
-    u64 selmask = get_bit_selection_mask (std::integral_constant<int, N> {});
+    u64 selmask = get_bit_selection_mask (k_int<N> {});
     for (uint i = 0; i < N; ++i) {
       u64 selected = (v >> i) & selmask;
       // from e.g. 0001000100010001 to 1111

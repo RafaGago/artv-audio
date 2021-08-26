@@ -362,7 +362,7 @@ template <class Count, class F, class T, class... Ts>
 void typelist_foreach (F& func, Count c, T, Ts...)
 {
   func (c, T {});
-  auto next = std::integral_constant<int, Count::value + 1> {};
+  auto next = k_int<Count::value + 1> {};
   detail::typelist_foreach (func, next, Ts {}...);
 }
 } // namespace detail
@@ -370,7 +370,7 @@ void typelist_foreach (F& func, Count c, T, Ts...)
 template <class... Ts, class F>
 void typelist_foreach (typelist<Ts...>, F func)
 {
-  detail::typelist_foreach (func, std::integral_constant<int, 0> {}, Ts {}...);
+  detail::typelist_foreach (func, k_int<0> {}, Ts {}...);
 }
 /*----------------------------------------------------------------------------*/
 namespace detail {
@@ -395,7 +395,7 @@ void typelist_foreach (
   typelist<T2, Ts2...>)
 {
   func (c, T1 {}, T2 {});
-  auto next = std::integral_constant<int, Count::value + 1> {};
+  auto next = k_int<Count::value + 1> {};
   detail::typelist_foreach (
     func, next, typelist<Ts1...> {}, typelist<Ts2...> {});
 }
@@ -406,10 +406,7 @@ template <class... Ts1, class... Ts2, class F>
 void typelist_foreach (typelist<Ts1...>, typelist<Ts2...>, F func)
 {
   detail::typelist_foreach (
-    func,
-    std::integral_constant<int, 0> {},
-    typelist<Ts1...> {},
-    typelist<Ts2...> {});
+    func, k_int<0> {}, typelist<Ts1...> {}, typelist<Ts2...> {});
 }
 /*----------------------------------------------------------------------------*/
 namespace detail {
@@ -482,7 +479,7 @@ template <class Count, class F, class T, class... Tfs, class... Ts>
 auto typelist_transform (F& func, Count c, typelist<Tfs...>, T, Ts...)
 {
   auto transfmed = func (c, T {});
-  auto next      = std::integral_constant<int, Count::value + 1> {};
+  auto next      = k_int<Count::value + 1> {};
   return detail::typelist_transform (
     func, next, typelist<Tfs..., decltype (transfmed)> {}, Ts {}...);
 }
@@ -492,7 +489,7 @@ template <class... Ts, class F>
 auto typelist_transform (typelist<Ts...>, F func)
 {
   return detail::typelist_transform (
-    func, std::integral_constant<int, 0> {}, typelist<> {}, Ts {}...);
+    func, k_int<0> {}, typelist<> {}, Ts {}...);
 }
 /*----------------------------------------------------------------------------*/
 } // namespace artv

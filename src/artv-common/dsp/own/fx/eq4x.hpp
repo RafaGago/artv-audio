@@ -325,9 +325,9 @@ private:
     liteon::presence_high_shelf>;
 
   template <class T>
-  using to_n_coeffs = std::integral_constant<int, T::n_coeffs>;
+  using to_n_coeffs = k_int<T::n_coeffs>;
   template <class T>
-  using to_n_states = std::integral_constant<int, T::n_states>;
+  using to_n_states = k_int<T::n_states>;
 
   using n_coeffs_types = mp11::mp_transform<to_n_coeffs, filters>;
   using n_states_types = mp11::mp_transform<to_n_states, filters>;

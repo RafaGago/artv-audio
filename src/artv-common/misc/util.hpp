@@ -12,6 +12,8 @@
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/short_ints.hpp"
 
+// TODO: Split this.
+
 namespace artv {
 
 #ifdef __GNUC__
@@ -631,5 +633,38 @@ static uint get_samplerate_order (uint sample_rate)
   sr_order = last_bit_set (sr_order); // 0, 1, 2, 3, 4, 5 ...
   return sr_order;
 }
+//------------------------------------------------------------------------------
+template <uint N>
+using k_uint = std::integral_constant<uint, N>;
+
+template <int N>
+using k_int = std::integral_constant<int, N>;
+
+template <bool N>
+using k_bool = std::integral_constant<bool, N>;
+
+template <s8 N>
+using k_s8 = std::integral_constant<s8, N>;
+
+template <u8 N>
+using k_u8 = std::integral_constant<u8, N>;
+
+template <s16 N>
+using k_s16 = std::integral_constant<s16, N>;
+
+template <u16 N>
+using k_u16 = std::integral_constant<u16, N>;
+
+template <s32 N>
+using k_s32 = std::integral_constant<s32, N>;
+
+template <u32 N>
+using k_u32 = std::integral_constant<u32, N>;
+
+template <s64 N>
+using k_s64 = std::integral_constant<s64, N>;
+
+template <u64 N>
+using k_u64 = std::integral_constant<u64, N>;
 //------------------------------------------------------------------------------
 } // namespace artv
