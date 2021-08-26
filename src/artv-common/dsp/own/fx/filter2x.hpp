@@ -6,7 +6,6 @@
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
-#include "artv-common/dsp/own/parts/filters/composite/butterworth.hpp"
 #include "artv-common/dsp/own/parts/filters/composite/tilt.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/dsp/own/parts/filters/presence.hpp"

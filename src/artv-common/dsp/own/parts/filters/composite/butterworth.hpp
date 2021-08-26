@@ -1,6 +1,9 @@
 #pragma once
 
+#include <array>
 #include <cmath>
+
+#include <gcem.hpp>
 
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
@@ -11,6 +14,55 @@
 
 namespace artv {
 
+struct butterworth_2p_cascade_q_list {
+  //----------------------------------------------------------------------------
+  static constexpr uint size (uint order) { return order / 2; };
+  //----------------------------------------------------------------------------
+  template <uint Order>
+  static constexpr uint size_v = size (Order);
+  //----------------------------------------------------------------------------
+  template <uint Max_order>
+  using array = std::array<double, size_v<Max_order>>;
+  //----------------------------------------------------------------------------
+  static crange<double> get (crange<double> res_mem, uint order)
+  {
+    // odd orders have a single pole at the front.
+    uint sz = size (order);
+    assert (res_mem.size() >= sz);
+
+    long double step  = M_PI / (double) order;
+    long double angle = order & 1 ? step : step * 0.5;
+
+    for (uint i = 0; i < sz; ++i, angle += step) {
+      res_mem[i] = 1. / (2. * cos (angle));
+    }
+    return {res_mem.data(), sz};
+  }
+  //----------------------------------------------------------------------------
+  template <uint Order>
+  static array<Order> get()
+  {
+    array<Order> ret;
+    get (ret, Order);
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+  template <uint Order>
+  static constexpr array<Order> cget()
+  {
+    array<Order> ret {};
+
+    long double step  = M_PI / (long double) Order;
+    long double angle = Order & 1 ? step : step * 0.5;
+
+    for (uint i = 0; i < ret.size(); ++i, angle += step) {
+      ret[i] = 1. / (2. * gcem::cos (angle));
+    }
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+};
+//------------------------------------------------------------------------------
 // Butterworth as a cascade of Andy SVF's
 class butterworth_any_order {
 public:
@@ -44,8 +96,12 @@ public:
     bool           is_lowpass)
   {
     assert (co.size() >= n_coeffs_for_order (order));
+    assert (order <= max_order);
 
-    auto q_list = get_q_list (order);
+    constexpr auto max_size = butterworth_2p_cascade_q_list::size (max_order);
+    std::array<double, max_size> q_list_mem;
+    auto q_list = butterworth_2p_cascade_q_list::get (q_list_mem, order);
+
     if (order & 1) {
       if (is_lowpass) {
         onepole::lowpass (co, freq, sr);
@@ -79,8 +135,12 @@ public:
     constexpr auto traits = vec_traits<V>();
 
     assert (co.size() >= (n_coeffs_for_order (order) * traits.size));
+    assert (order <= max_order);
 
-    auto q_list = get_q_list (order);
+    constexpr auto max_size = butterworth_2p_cascade_q_list::size (max_order);
+    std::array<double, max_size> q_list_mem;
+    auto q_list = butterworth_2p_cascade_q_list::get (q_list_mem, order);
+
     if (order & 1) {
       if (is_lowpass) {
         onepole::lowpass_simd (co, freq, sr);
@@ -181,90 +241,6 @@ public:
     return out;
   }
   //----------------------------------------------------------------------------
-  static crange<const double> get_q_list (uint order)
-  {
-    // https://www.earlevel.com/main/2016/09/29/cascading-filters/
-    // one pole values (0.5) removed from the list.
-    static const double q2[] = {0.70710678};
-    static const double q3[] = {1.};
-    static const double q4[] = {0.54119610, 1.3065630};
-    static const double q5[] = {0.61803399, 1.6180340};
-    static const double q6[] = {0.51763809, 0.70710678, 1.9318517};
-    static const double q7[] = {0.55495813, 0.80193774, 2.2469796};
-    static const double q8[] = {0.50979558, 0.60134489, 0.89997622, 2.5629154};
-    static const double q9[] = {0.53208889, 0.65270364, 1.0000000, 2.8793852};
-    static const double q10[]
-      = {0.50623256, 0.56116312, 0.70710678, 1.1013446, 3.1962266};
-    static const double q11[]
-      = {0.52110856, 0.59435114, 0.76352112, 1.2036156, 3.5133371};
-    static const double q12[]
-      = {0.50431448, 0.54119610, 0.63023621, 0.82133982, 1.3065630, 3.8306488};
-    static const double q13[]
-      = {0.51496392, 0.56468078, 0.66799308, 0.88018136, 1.4100200, 4.1481149};
-    static const double q14[] = {
-      0.50316379,
-      0.52972649,
-      0.59051105,
-      0.70710678,
-      0.93979296,
-      1.5138713,
-      4.4657021};
-    static const double q15[] = {
-      0.51117030,
-      0.54731814,
-      0.61803399,
-      0.74723827,
-      1.0000000,
-      1.6180340,
-      4.7833861};
-    static const double q16[] = {
-      0.50241929,
-      0.52249861,
-      0.56694403,
-      0.64682178,
-      0.78815462,
-      1.0606777,
-      1.7224471,
-      5.1011486};
-
-    switch (order) {
-    case 1:
-      return {};
-    case 2:
-      return q2;
-    case 3:
-      return q3;
-    case 4:
-      return q4;
-    case 5:
-      return q5;
-    case 6:
-      return q6;
-    case 7:
-      return q7;
-    case 8:
-      return q8;
-    case 9:
-      return q9;
-    case 10:
-      return q10;
-    case 11:
-      return q11;
-    case 12:
-      return q12;
-    case 13:
-      return q13;
-    case 14:
-      return q14;
-    case 15:
-      return q15;
-    case 16:
-      return q16;
-    default:
-      assert (false);
-      return {};
-    }
-  }
 };
 //------------------------------------------------------------------------------
 template <uint N>
@@ -366,8 +342,12 @@ public:
     uint           order)
   {
     assert (co.size() >= n_coeffs_for_order (order));
+    assert (order <= max_order);
 
-    auto q_list = butterworth_any_order::get_q_list (order);
+    constexpr auto max_size = butterworth_2p_cascade_q_list::size (max_order);
+    std::array<double, max_size> q_list_mem;
+    auto q_list = butterworth_2p_cascade_q_list::get (q_list_mem, order);
+
     if (order & 1) {
       onepole::lowpass (co, freq, sr);
       co = co.shrink_head (onepole::n_coeffs);
@@ -390,8 +370,12 @@ public:
     constexpr auto traits = vec_traits<V>();
 
     assert (co.size() >= (n_coeffs_for_order (order) * traits.size));
+    assert (order <= max_order);
 
-    auto q_list = butterworth_any_order::get_q_list (order);
+    constexpr auto max_size = butterworth_2p_cascade_q_list::size (max_order);
+    std::array<double, max_size> q_list_mem;
+    auto q_list = butterworth_2p_cascade_q_list::get (q_list_mem, order);
+
     if (order & 1) {
       onepole::lowpass_simd (co, freq, sr);
       co = co.shrink_head (onepole::n_coeffs * traits.size);
