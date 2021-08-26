@@ -5,8 +5,8 @@
 
 #include <cmath>
 
-#include "artv-common/dsp/own/blocks/filters/moving_average.hpp"
-#include "artv-common/dsp/own/blocks/misc/interpolators.hpp"
+#include "artv-common/dsp/own/parts/filters/moving_average.hpp"
+#include "artv-common/dsp/own/parts/misc/interpolators.hpp"
 
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"

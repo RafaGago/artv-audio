@@ -4,7 +4,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-#include "artv-common/dsp/own/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/plugin_context.hpp"
 
 namespace artv {
 

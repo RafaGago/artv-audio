@@ -17,7 +17,7 @@
 // slider7:VibratoSpeed=15<0,30,.1>-Vibrato Speed [-]
 // slider8:VibratoAmount=0<0,40,.1>-Vibrato Amount [-]
 // slider9:Saturation=0<0,1,0.0000001>-Non-linearity [-]
-#include "artv-common/dsp/own/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"

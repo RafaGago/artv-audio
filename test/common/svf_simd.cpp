@@ -3,7 +3,7 @@
 #include <cstring>
 #include <gtest/gtest.h>
 
-#include "artv-common/dsp/own/blocks/filters/andy_svf.hpp"
+#include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "common/simd_block_test.hpp"
 
 namespace artv {

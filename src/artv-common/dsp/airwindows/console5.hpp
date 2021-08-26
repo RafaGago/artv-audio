@@ -10,8 +10,8 @@
 // from commit 7bb7fde13a9c94af242835823b813e6bcd0f20c8
 
 #include "artv-common/dsp/airwindows/common.hpp"
-#include "artv-common/dsp/own/plugin_context.hpp"
-#include "artv-common/dsp/own/stereo_summing_processor.hpp"
+#include "artv-common/dsp/own/classes/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/stereo_summing_processor.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"

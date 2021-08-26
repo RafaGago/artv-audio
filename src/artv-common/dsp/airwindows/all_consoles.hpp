@@ -2,7 +2,7 @@
 
 #include <variant>
 
-#include "artv-common/dsp/own/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/plugin_context.hpp"
 
 #include "artv-common/dsp/airwindows/console4.hpp"
 #include "artv-common/dsp/airwindows/console5.hpp"

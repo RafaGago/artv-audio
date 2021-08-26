@@ -1,6 +1,6 @@
 #pragma once
 
-#include "artv-common/dsp/own/mufft.hpp"
+#include "artv-common/dsp/own/classes/mufft.hpp"
 
 namespace artv { namespace jsfx {
 

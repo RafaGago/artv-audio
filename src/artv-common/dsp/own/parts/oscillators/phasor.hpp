@@ -3,7 +3,7 @@
 #include <cassert>
 #include <limits>
 
-#include "artv-common/dsp/own/misc.hpp"
+#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
 

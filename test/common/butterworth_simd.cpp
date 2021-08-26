@@ -3,7 +3,7 @@
 #include <cstring>
 #include <gtest/gtest.h>
 
-#include "artv-common/dsp/own/blocks/filters/composite/butterworth.hpp"
+#include "artv-common/dsp/own/parts/filters/composite/butterworth.hpp"
 #include "common/simd_block_test.hpp"
 
 namespace artv {

@@ -12,7 +12,7 @@
 
 #include <ff_meters.h>
 
-#include "artv-common/dsp/own/modules/mix.hpp"
+#include "artv-common/dsp/own/classes/mix.hpp"
 #include "artv-common/juce/effect_base.hpp"
 #include "artv-common/juce/math.hpp"
 #include "artv-common/juce/parameters.hpp"

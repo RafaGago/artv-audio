@@ -12,8 +12,8 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "artv-common/dsp/jsfx_engine/jsfx_engine.hpp"
-#include "artv-common/dsp/own/misc.hpp"
-#include "artv-common/dsp/own/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/misc.hpp"
+#include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"

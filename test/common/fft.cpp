@@ -6,8 +6,8 @@
 
 #include "gtest/gtest.h"
 
-#include "artv-common/dsp/own/mufft.hpp"
-#include "artv-common/dsp/own/wdl_fft.hpp"
+#include "artv-common/dsp/own/classes/mufft.hpp"
+#include "artv-common/dsp/own/classes/wdl_fft.hpp"
 
 #if 0
 // JSFX verification

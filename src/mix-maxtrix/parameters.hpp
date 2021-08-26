@@ -71,19 +71,19 @@
 
 #include "artv-common/dsp/witti/bbd_echo_stereo.hpp"
 
-#include "artv-common/dsp/own/oversampled.hpp"
+#include "artv-common/dsp/own/classes/oversampled.hpp"
 
-#include "artv-common/dsp/own/modules/eq4x.hpp"
-#include "artv-common/dsp/own/modules/filter2x.hpp"
-#include "artv-common/dsp/own/modules/phaser.hpp"
-#include "artv-common/dsp/own/modules/saturation.hpp"
+#include "artv-common/dsp/own/fx/eq4x.hpp"
+#include "artv-common/dsp/own/fx/filter2x.hpp"
+#include "artv-common/dsp/own/fx/phaser.hpp"
+#include "artv-common/dsp/own/fx/saturation.hpp"
 
-#include "artv-common/dsp/own/modules/sound_delay.hpp"
+#include "artv-common/dsp/own/fx/sound_delay.hpp"
 #if 1
-#include "artv-common/dsp/own/modules/polyphase-fir-tester.hpp"
+#include "artv-common/dsp/own/fx/polyphase-fir-tester.hpp"
 #endif
 
-#include "artv-common/dsp/own/modules/mix.hpp"
+#include "artv-common/dsp/own/classes/mix.hpp"
 #include "artv-common/juce/effect_base.hpp"
 #include "artv-common/juce/gui_util.hpp"
 #include "artv-common/juce/look_and_feel.hpp"

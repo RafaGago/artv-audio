@@ -3,12 +3,12 @@
 #include <array>
 #include <cstdint>
 
-#include "artv-common/dsp/own/blocks/filters/andy_svf.hpp"
-#include "artv-common/dsp/own/blocks/filters/dc_blocker.hpp"
-#include "artv-common/dsp/own/blocks/filters/onepole.hpp"
-#include "artv-common/dsp/own/blocks/oscillators/lfo.hpp"
-#include "artv-common/dsp/own/misc.hpp"
-#include "artv-common/dsp/own/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/misc.hpp"
+#include "artv-common/dsp/own/classes/plugin_context.hpp"
+#include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
+#include "artv-common/dsp/own/parts/filters/dc_blocker.hpp"
+#include "artv-common/dsp/own/parts/filters/onepole.hpp"
+#include "artv-common/dsp/own/parts/oscillators/lfo.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"

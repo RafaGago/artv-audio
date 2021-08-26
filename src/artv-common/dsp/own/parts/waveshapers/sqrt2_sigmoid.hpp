@@ -1,22 +1,28 @@
 #pragma once
 
-#include <algorithm>
 #include <cmath>
 #include <type_traits>
 
-#include "artv-common/dsp/own/blocks/waveshapers/adaa.hpp"
+#include "artv-common/dsp/own/parts/waveshapers/adaa.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
 
 namespace artv {
 
-struct hardclip_functions {
-  //----------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// cascading the sqrt sigmoid
+//
+// code as with the "ccode" function
+struct sqrt2_sigmoid_functions {
+
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T fn (T x)
   {
-    return std::clamp<T> (x, -1.0, 1.0);
+    // "x / sqrt (2 * x^2 + 1)" is the result of cascading
+    // "x / sqrt (x^2 + 1)"
+    // its positive limit is "sqrt(2)/2", so it is adjusted to -1 / 1.
+    return ((T) M_SQRT2 * x) / sqrt ((T) 2. * x * x + (T) 1.);
   }
   //----------------------------------------------------------------------------
   template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
@@ -24,37 +30,32 @@ struct hardclip_functions {
   {
     using T = vec_value_type_t<V>;
 
-    return vec_clamp (x, (T) -1.0, (T) 1.0);
+    V num = (T) M_SQRT2 * x;
+    V den = vec_sqrt ((T) 2. * x * x + (T) 1.);
+    return num / den;
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T int_fn (T x)
   {
-    auto ax        = abs (x);
-    bool unclipped = ax <= 1.0;
-    return unclipped ? (x * x) * 0.5 : ax - 0.5;
+    return (T) (1.0 / 2.0) * (T) M_SQRT2 * sqrt ((T) 2. * x * x + (T) 1.);
   }
   //----------------------------------------------------------------------------
   template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
   static V int_fn (V x)
   {
-    using T      = vec_value_type_t<V>;
-    auto ax      = vec_abs (x);
-    V    noclip  = x * x * (T) 0.5;
-    V    yesclip = ax - (T) 0.5;
-    return (ax <= (T) 1.0) ? noclip : yesclip;
+    using T = vec_value_type_t<V>;
+
+    V k = vec_set<V> ((T) (1.0 / 2.0) * (T) M_SQRT2);
+    return k * vec_sqrt ((T) 2. * x * x + (T) 1.);
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static T int2_fn (T x)
   {
-    bool unclipped = abs (x) <= 1.0;
-    if (unclipped) {
-      return (x * x * x) * (1.0 / 6.0);
-    }
-    else {
-      return ((x * x * 0.5) + (1.0 / 6.0)) * artv::sgn_no_zero (x) - (x * 0.5);
-    }
+    return (1.0 / 2.0) * (T) M_SQRT2
+      * ((T) (1.0 / 2.0) * x * sqrt ((T) 2. * x * x + 1.)
+         + (T) (1.0 / 4.0) * M_SQRT2 * asinh (M_SQRT2 * x));
   }
   //----------------------------------------------------------------------------
   template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
@@ -62,20 +63,19 @@ struct hardclip_functions {
   {
     using T = vec_value_type_t<V>;
 
-    V sixth  = vec_set<V> ((T) 1. / 6.);
-    V half_x = x * (T) 0.5;
+    V sum1 = vec_set ((T) (1.0 / 2.0));
+    sum1 *= x * vec_sqrt ((T) 2. * x * x + (T) 1.);
 
-    V noclip  = x * x * x * sixth;
-    V yesclip = (x * half_x + sixth) * vec_sgn_no_zero (x) - half_x;
+    V sum2 = vec_set ((T) (1.0 / 4.0) * (T) M_SQRT2);
+    sum2 *= vec_asinh ((T) M_SQRT2 * x);
 
-    return (vec_abs (x) <= (T) 1.0) ? noclip : yesclip;
+    return ((T) (1.0 / 2.0) * (T) M_SQRT2) * (sum1 + sum2);
   }
-  //----------------------------------------------------------------------------
-private:
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
 template <uint order>
-using hardclip_adaa = adaa::waveshaper<hardclip_functions, order>;
+using sqrt2_waveshaper_adaa = adaa::waveshaper<sqrt2_sigmoid_functions, order>;
+
 //------------------------------------------------------------------------------
 } // namespace artv

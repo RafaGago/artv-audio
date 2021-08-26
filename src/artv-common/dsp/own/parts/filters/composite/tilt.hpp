@@ -6,7 +6,7 @@
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
 
-#include "artv-common/dsp/own/blocks/filters/andy_svf.hpp"
+#include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 
 namespace artv {
 //------------------------------------------------------------------------------

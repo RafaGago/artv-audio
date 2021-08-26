@@ -1,10 +1,10 @@
 #pragma once
 
-#include "artv-common/dsp/own/delay_line.hpp"
-#include "artv-common/dsp/own/fir.hpp"
-#include "artv-common/dsp/own/misc.hpp"
-#include "artv-common/dsp/own/oversampled_coeffs.hpp"
-#include "artv-common/dsp/own/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/delay_line.hpp"
+#include "artv-common/dsp/own/classes/fir.hpp"
+#include "artv-common/dsp/own/classes/misc.hpp"
+#include "artv-common/dsp/own/classes/oversampled_coeffs.hpp"
+#include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/delay_compensation_buffers.hpp"

@@ -3,7 +3,7 @@
 #include <cstring>
 #include <gtest/gtest.h>
 
-#include "artv-common/dsp/own/misc.hpp"
+#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
 

@@ -6,7 +6,7 @@
 
 #include <disthro-ports/ports-legacy/tal-reverb-2/source/Engine/ReverbEngine.h>
 
-#include "artv-common/dsp/own/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"

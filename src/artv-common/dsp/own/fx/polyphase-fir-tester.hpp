@@ -1,8 +1,8 @@
 #pragma once
 // An FX that just upsamples and downsamples. It was just useful when developing
 
-#include "artv-common/dsp/own/fir.hpp"
-#include "artv-common/dsp/own/oversampled_coeffs.hpp"
+#include "artv-common/dsp/own/classes/fir.hpp"
+#include "artv-common/dsp/own/classes/oversampled_coeffs.hpp"
 
 namespace artv {
 

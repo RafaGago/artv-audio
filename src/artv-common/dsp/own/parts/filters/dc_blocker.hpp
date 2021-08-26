@@ -4,7 +4,7 @@
 #include <cmath>
 #include <type_traits>
 
-#include "artv-common/dsp/own/blocks/filters/onepole.hpp"
+#include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/misc/simd.hpp"
 
 //------------------------------------------------------------------------------

@@ -8,9 +8,9 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 
-#include "artv-common/dsp/own/blocks/filters/onepole.hpp"
-#include "artv-common/dsp/own/delay_line.hpp"
-#include "artv-common/dsp/own/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/delay_line.hpp"
+#include "artv-common/dsp/own/classes/plugin_context.hpp"
+#include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/bits.hpp"
