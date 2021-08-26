@@ -5090,7 +5090,7 @@ parameter_cpp_class_define (
   saturation_band_gain,
   n_stereo_busses,
   param_common (
-    "Sat Band",
+    "Band Vol",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::saturated_out_tag>()),
   saturation::get_parameter (saturation::saturated_out_tag {}),
@@ -5318,7 +5318,7 @@ parameter_cpp_class_define (
 
 using saturation_params = mp_list<
   saturation_type,
-  saturation_band_gain,
+  saturation_trim,
   saturation_drive,
   saturation_drive_balance,
   saturation_feedback,
@@ -5339,7 +5339,7 @@ using saturation_params = mp_list<
   saturation_band_hi,
   saturation_lo_mode,
   saturation_hi_mode,
-  saturation_trim,
+  saturation_band_gain,
   saturation_mode,
   saturation_oversampling>;
 //------------------------------------------------------------------------------

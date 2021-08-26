@@ -43,7 +43,6 @@ public:
       && order == _order[idx]) {
       return;
     }
-
     _freq[idx][0] = freq_l;
     _freq[idx][1] = freq_r;
 
