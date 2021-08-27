@@ -660,14 +660,17 @@ private:
     // and try to slightly correct very wild gain differences. I used a loop
     // hoovering on trakmeter's 0dB RMS and Reaper's white noise get at -18dB
 
-    static constexpr float moog_gain = constexpr_db_to_gain (-28.);
+    static constexpr float moog_gain    = constexpr_db_to_gain (-28.);
+    static constexpr float steiner_gain = constexpr_db_to_gain (15.);
 
-    float moog_correction
-      = is_moog_1 (btype) || is_moog_2 (btype) ? moog_gain : 1.;
+    float correction = is_moog_1 (btype) || is_moog_2 (btype) ? moog_gain : 1.;
+    float pre_correction
+      = is_steiner_1 (btype) || is_steiner_1 (btype) ? steiner_gain : 1.;
 
     float drive            = db_to_gain (b.drive_db);
     _cfg[band].pre_drive_l = drive;
-    _cfg[band].pre_drive_l *= moog_correction;
+    _cfg[band].pre_drive_l *= correction;
+    _cfg[band].pre_drive_l *= pre_correction;
 
     // wanting Drive to act as a weak gain on the positive side too so
     // applying on the numerator:
@@ -676,7 +679,7 @@ private:
     // Instead of just applying (1. / pre_drive).
     _cfg[band].post_drive
       = (((drive * drive) * 0.015625) + 0.984375) / _cfg[band].pre_drive_l;
-    _cfg[band].post_drive *= moog_correction;
+    _cfg[band].post_drive *= correction;
 
     _cfg[band].post_drive *= db_to_gain (_cfg[band].gain_db);
     _cfg[band].pre_drive_r
