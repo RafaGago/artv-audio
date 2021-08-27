@@ -599,78 +599,25 @@ private:
     // an useful range at that level. I adjust with a Q before self-oscillation
     // and try to slightly correct very wild gain differences. I used a loop
     // hoovering on trakmeter's 0dB RMS and Reaper's white noise get at -18dB
-    if (
-      is_ms20 (btype) || is_ms20_asym (btype) || is_steiner_1 (btype)
-      || is_steiner_2 (btype)) {
-      float drive            = db_to_gain (b.drive_db);
-      _cfg[band].pre_drive_l = (drive * 16.);
-      // wanting Drive to act as a weak gain on the positive side too so
-      // applying on the numerator:
-      // (((x^2) / 64 + (63/64), which crosses at (x=1, y=1).
-      //
-      // Instead of just applying (1. / pre_drive).
-      _cfg[band].post_drive
-        = (((drive * drive) * 0.015625) + 0.984375) / _cfg[band].pre_drive_l;
-    }
-    else if (is_moog_1 (btype) || is_moog_2 (btype)) {
-      float drive            = db_to_gain (b.drive_db);
-      _cfg[band].pre_drive_l = drive;
-      // wanting Drive to act as a weak gain on the positive side too so
-      // applying on the numerator:
-      // (((x^2) / 64 + (63/64), which crosses at (x=1, y=1).
-      //
-      // Instead of just applying (1. / drive).
-      _cfg[band].post_drive
-        = (((drive * drive) * 0.015625) + 0.984375) / _cfg[band].pre_drive_l;
-      // These have the phase polarity inverted, so using them in parallel
-      // caused cancellations
-      _cfg[band].post_drive = -_cfg[band].post_drive;
-      // these come very hot too, so they need taming.
-      double tame = 1.;
-      switch (btype) {
-        // TODO: substitute these corections by constants when they have
-        // settled.
-      case bandtype::moog_1_lp: {
-        constexpr double tame_k = constexpr_db_to_gain (-23.);
-        tame                    = tame_k;
-      } break;
-      case bandtype::moog_1_hp: {
-        _cfg[band].pre_drive_l *= 0.25;
-        constexpr double tame_k = constexpr_db_to_gain (-37.);
-        tame                    = tame_k;
-      } break;
-      case bandtype::moog_1_bp: {
-        _cfg[band].pre_drive_l *= 0.25;
-        constexpr double tame_k = constexpr_db_to_gain (-44.);
-        tame                    = tame_k;
-      } break;
-      case bandtype::moog_1_br: {
-        _cfg[band].pre_drive_l *= 0.25;
-        constexpr double tame_k = constexpr_db_to_gain (-39.);
-        tame                    = tame_k;
-      } break;
-      case bandtype::moog_2_lp: {
-        constexpr double tame_k = constexpr_db_to_gain (-25.);
-        tame                    = tame_k;
-      } break;
-      case bandtype::moog_2_hp: {
-        constexpr double tame_k = constexpr_db_to_gain (-43.);
-        tame                    = tame_k;
-      } break;
-      case bandtype::moog_2_bp: {
-        constexpr double tame_k = constexpr_db_to_gain (-62.);
-        tame                    = tame_k;
-      } break;
-      case bandtype::moog_2_br: {
-        constexpr double tame_k = constexpr_db_to_gain (-44.);
-        tame                    = tame_k;
-      } break;
-      }
-      _cfg[band].post_drive *= tame;
-    }
-    else {
-      _cfg[band].pre_drive_l = _cfg[band].post_drive = 1.f;
-    }
+
+    static constexpr float moog_gain = constexpr_db_to_gain (-28.);
+
+    float moog_correction
+      = is_moog_1 (btype) || is_moog_2 (btype) ? moog_gain : 1.;
+
+    float drive            = db_to_gain (b.drive_db);
+    _cfg[band].pre_drive_l = drive;
+    _cfg[band].pre_drive_l *= moog_correction;
+
+    // wanting Drive to act as a weak gain on the positive side too so
+    // applying on the numerator:
+    // (((x^2) / 64 + (63/64), which crosses at (x=1, y=1).
+    //
+    // Instead of just applying (1. / pre_drive).
+    _cfg[band].post_drive
+      = (((drive * drive) * 0.015625) + 0.984375) / _cfg[band].pre_drive_l;
+    _cfg[band].post_drive *= moog_correction;
+
     _cfg[band].post_drive *= db_to_gain (_cfg[band].gain_db);
     _cfg[band].pre_drive_r
       = _cfg[band].pre_drive_l * (1.f - (b.tolerance * 0.13f));
