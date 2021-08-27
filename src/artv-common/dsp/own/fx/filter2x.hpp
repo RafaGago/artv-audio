@@ -64,15 +64,16 @@ public:
   template <class T>
   void process_block_replacing (std::array<T*, 2> chnls, uint samples)
   {
-    constexpr uint                          blocksize = 128;
-    std::array<std::array<T, blocksize>, 2> in_cp;
+    constexpr uint blocksize = 32;
 
     for (uint block_smp = 0; block_smp < samples; block_smp += blocksize) {
-      uint n_samples = std::min<uint> (in_cp[0].size(), samples - block_smp);
+      uint n_samples = std::min<uint> (blocksize, samples - block_smp);
 
       // both filters are parallel/operate on the same input
-      memcpy (in_cp[0].data(), &chnls[0][block_smp], n_samples * sizeof (T));
-      memcpy (in_cp[1].data(), &chnls[1][block_smp], n_samples * sizeof (T));
+      std::array<double_x2, blocksize> in_cp;
+      for (uint i = 0; i < blocksize; ++i) {
+        in_cp[i] = double_x2 {chnls[0][block_smp + i], chnls[0][block_smp + i]};
+      }
       memset (&chnls[0][block_smp], 0, n_samples * sizeof (T));
       memset (&chnls[1][block_smp], 0, n_samples * sizeof (T));
 
@@ -90,7 +91,7 @@ public:
         alignas (sse_bytes) smoothed_params smoothed_p;
 
         for (uint i = 0; i < n_samples; ++i) {
-
+          // parameter update block
           static_assert (
             sizeof _smooth_state[b].params / sizeof (float) == 4, "");
 
@@ -119,96 +120,150 @@ public:
               single_coeff_set_tag {});
             vec_store (&smoothed_band_coeffs[co], out);
           }
+        }
 
-          double_x2 in, out;
-          in[0] = in_cp[0][i];
-          in[1] = in_cp[1][i];
-          in *= double_x2 {
-            smoothed_p.vars.pre_drive_l, smoothed_p.vars.pre_drive_r};
+        double_x2 fb_gain = vec_set<double_x2> (smoothed_p.vars.feedback);
+        if (is_moog_1 (btype)) {
+          saike::moog_1::fix_unsmoothable_coeffs<double_x2> (
+            smoothed_band_coeffs, _coeffs[b]);
+          fb_gain *= 0.03; // moogs are extremely unstable reduce feedback
+        }
+        else if (is_moog_2 (btype)) {
+          saike::moog_2::fix_unsmoothable_coeffs<double_x2> (
+            smoothed_band_coeffs, _coeffs[b]);
+          fb_gain *= 0.03; // moogs are extremely unstable reduce feedback
+        }
 
-          double_x2 prev = _last_sample[b];
-          prev *= vec_set<double_x2> (smoothed_p.vars.feedback);
-          bool is_moog
-            = btype >= bandtype::moog_1_lp && btype <= bandtype::moog_2_br;
-          // moogs are extremely unstable reduce feedback
-          prev *= vec_set<double_x2> (is_moog ? 0.03 : 1.);
-          in += prev;
+        double_x2 pre_drive = double_x2 {
+          smoothed_p.vars.pre_drive_l, smoothed_p.vars.pre_drive_r};
 
-          switch (btype) {
-          case bandtype::off: // not reachable
-            jassert (false);
-            break;
-          case bandtype::ms20_lp:
-            out
+        std::array<double_x2, blocksize> out;
+        double_x2                        last = _last_sample[b];
+
+        switch (btype) {
+        case bandtype::off: // not reachable
+          jassert (false);
+          break;
+        case bandtype::ms20_lp:
+          for (uint i = 0; i < n_samples; ++i) {
+            auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
+            out[i]
               = saike::ms20_lowpass::tick (smoothed_band_coeffs, _state[b], in);
-            break;
-          case bandtype::ms20_hp:
-            out = saike::ms20_highpass::tick (
-              smoothed_band_coeffs, _state[b], in);
-            break;
-          case bandtype::ms20_bp:
-            out = saike::ms20_bandpass::tick (
-              smoothed_band_coeffs, _state[b], in);
-            break;
-          case bandtype::ms20_br:
-            out = saike::ms20_notch::tick (smoothed_band_coeffs, _state[b], in);
-            break;
-          case bandtype::ms20_asym_lp:
-            out = saike::ms20_asym_lowpass::tick (
-              smoothed_band_coeffs, _state[b], in);
-            break;
-          case bandtype::ms20_asym_hp:
-
-            out = saike::ms20_asym_highpass::tick (
-              smoothed_band_coeffs, _state[b], in);
-            break;
-          case bandtype::ms20_asym_bp:
-            out = saike::ms20_asym_bandpass::tick (
-              smoothed_band_coeffs, _state[b], in);
-            break;
-          case bandtype::ms20_asym_br:
-            out = saike::ms20_asym_notch::tick (
-              smoothed_band_coeffs, _state[b], in);
-            break;
-          case bandtype::steiner_1_lp:
-          case bandtype::steiner_1_hp:
-          case bandtype::steiner_1_bp:
-          case bandtype::steiner_1_br:
-            out = saike::steiner_1::tick (smoothed_band_coeffs, _state[b], in);
-            break;
-          case bandtype::steiner_2_lp:
-          case bandtype::steiner_2_hp:
-          case bandtype::steiner_2_bp:
-          case bandtype::steiner_2_br:
-            out = saike::steiner_2::tick (smoothed_band_coeffs, _state[b], in);
-            break;
-          case bandtype::moog_1_lp:
-          case bandtype::moog_1_hp:
-          case bandtype::moog_1_bp:
-          case bandtype::moog_1_br:
-            saike::moog_1::fix_unsmoothable_coeffs<double_x2> (
-              smoothed_band_coeffs, _coeffs[b]);
-            out = saike::moog_1::tick (smoothed_band_coeffs, _state[b], in);
-            break;
-          case bandtype::moog_2_lp:
-          case bandtype::moog_2_hp:
-          case bandtype::moog_2_bp:
-          case bandtype::moog_2_br:
-            saike::moog_2::fix_unsmoothable_coeffs<double_x2> (
-              smoothed_band_coeffs, _coeffs[b]);
-            out = saike::moog_2::tick (smoothed_band_coeffs, _state[b], in);
-            break;
-          default:
-            jassert (false);
-            break;
+            last = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out[i]);
           }
+          break;
+        case bandtype::ms20_hp:
+          for (uint i = 0; i < n_samples; ++i) {
+            auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
+            out[i]  = saike::ms20_highpass::tick (
+              smoothed_band_coeffs, _state[b], in);
+            last = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out[i]);
+          }
+          break;
+        case bandtype::ms20_bp:
+          for (uint i = 0; i < n_samples; ++i) {
+            auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
+            out[i]  = saike::ms20_bandpass::tick (
+              smoothed_band_coeffs, _state[b], in);
+            last = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out[i]);
+          }
+          break;
+        case bandtype::ms20_br:
+          for (uint i = 0; i < n_samples; ++i) {
+            auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
+            out[i]
+              = saike::ms20_notch::tick (smoothed_band_coeffs, _state[b], in);
+            last = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out[i]);
+          }
+          break;
+        case bandtype::ms20_asym_lp:
+          for (uint i = 0; i < n_samples; ++i) {
+            auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
+            out[i]  = saike::ms20_asym_lowpass::tick (
+              smoothed_band_coeffs, _state[b], in);
+            last = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out[i]);
+          }
+          break;
+        case bandtype::ms20_asym_hp:
+          for (uint i = 0; i < n_samples; ++i) {
+            auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
+            out[i]  = saike::ms20_asym_highpass::tick (
+              smoothed_band_coeffs, _state[b], in);
+            last = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out[i]);
+          }
+          break;
+        case bandtype::ms20_asym_bp:
+          for (uint i = 0; i < n_samples; ++i) {
+            auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
+            out[i]  = saike::ms20_asym_bandpass::tick (
+              smoothed_band_coeffs, _state[b], in);
+            last = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out[i]);
+          }
+          break;
+        case bandtype::ms20_asym_br:
+          for (uint i = 0; i < n_samples; ++i) {
+            auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
+            out[i]  = saike::ms20_asym_notch::tick (
+              smoothed_band_coeffs, _state[b], in);
+            last = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out[i]);
+          }
+          break;
+        case bandtype::steiner_1_lp:
+        case bandtype::steiner_1_hp:
+        case bandtype::steiner_1_bp:
+        case bandtype::steiner_1_br:
+          for (uint i = 0; i < n_samples; ++i) {
+            auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
+            out[i]
+              = saike::steiner_1::tick (smoothed_band_coeffs, _state[b], in);
+            last = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out[i]);
+          }
+          break;
+        case bandtype::steiner_2_lp:
+        case bandtype::steiner_2_hp:
+        case bandtype::steiner_2_bp:
+        case bandtype::steiner_2_br:
+          for (uint i = 0; i < n_samples; ++i) {
+            auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
+            out[i]
+              = saike::steiner_2::tick (smoothed_band_coeffs, _state[b], in);
+            last = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out[i]);
+          }
+          break;
+        case bandtype::moog_1_lp:
+        case bandtype::moog_1_hp:
+        case bandtype::moog_1_bp:
+        case bandtype::moog_1_br:
+          for (uint i = 0; i < n_samples; ++i) {
+            auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
+            out[i]  = saike::moog_1::tick (smoothed_band_coeffs, _state[b], in);
+            last = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out[i]);
+          }
+          break;
+        case bandtype::moog_2_lp:
+        case bandtype::moog_2_hp:
+        case bandtype::moog_2_bp:
+        case bandtype::moog_2_br:
+          for (uint i = 0; i < n_samples; ++i) {
+            auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
+            out[i]  = saike::moog_2::tick (smoothed_band_coeffs, _state[b], in);
+            last = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out[i]);
+          }
+          break;
+        default:
+          jassert (false);
+          break;
+        }
+        _last_sample[b] = last;
 
-          _last_sample[b]
-            = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out);
+        for (uint i = 0; i < n_samples; ++i) {
+          static constexpr double limit = constexpr_db_to_gain (18.);
 
-          out *= smoothed_p.vars.post_drive;
-          chnls[0][block_smp + i] += out[0];
-          chnls[1][block_smp + i] += out[1];
+          out[i] *= smoothed_p.vars.post_drive;
+          vec_clamp (out[i], -limit, limit);
+
+          chnls[0][block_smp + i] += out[i][0];
+          chnls[1][block_smp + i] += out[i][1];
         }
       }
     }
