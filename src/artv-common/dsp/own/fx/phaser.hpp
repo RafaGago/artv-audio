@@ -248,11 +248,13 @@ public:
     memset (&_params.smooth_state, 0, sizeof _params.smooth_state);
     memset (&_dc_block_states, 0, sizeof _dc_block_states);
 
-    mystran_dc_blocker::init_simd (
+    mystran_dc_blocker::init (
       _dc_block_coeffs, vec_set<double_x2> (2.), pc.get_sample_rate());
 
-    onepole_smoother::lowpass<float> (
-      make_crange (_lp_smooth_coeff), (1. / 0.01), pc.get_sample_rate());
+    onepole_smoother::init (
+      make_crange (_lp_smooth_coeff),
+      make_vec_x1<decltype (_lp_smooth_coeff)> (1. / 0.01),
+      pc.get_sample_rate());
 
     _n_processed_samples = 0;
 
@@ -278,10 +280,11 @@ public:
         // are NEVER going to change so this is IMO acceptable.
         auto in
           = make_crange (_params.smooth_target.arr, vec_size, vec_size * j);
-        onepole_smoother::tick_aligned (
+        onepole_smoother::tick (
           make_crange (_lp_smooth_coeff),
           make_crange (_params.smooth_state.arr, vec_size, vec_size * j),
-          vec_load<float_x4> (in));
+          vec_load<float_x4> (in),
+          single_coeff_set_tag {});
       }
       // from now on access parameters without caring if they are smoothed or
       // not. This copy also has the aditional advantage of telling the compiler
@@ -426,11 +429,12 @@ public:
               f += fconstant_even;
             }
           }
-          andy::svf::allpass_simd (
+          andy::svf::init (
             get_allpass_group_coeffs (s),
             freqs,
             qs,
-            _plugcontext->get_sample_rate());
+            _plugcontext->get_sample_rate(),
+            allpass_tag {});
         }
       }
 
@@ -443,7 +447,7 @@ public:
 
       for (uint g = 0; g < (pars.n_allpasses / vec_size); ++g) {
         // as of now this processes both in parallel and in series.
-        out = andy::svf::tick_simd (
+        out = andy::svf::tick (
           get_allpass_group_coeffs (g), get_allpass_group_states (g), out);
       }
       assert (
@@ -456,8 +460,8 @@ public:
       chnls[0][i] = outs[0];
       chnls[1][i] = outs[1];
 
-      outs = mystran_dc_blocker::tick_simd (
-        _dc_block_coeffs, _dc_block_states, outs);
+      outs
+        = mystran_dc_blocker::tick (_dc_block_coeffs, _dc_block_states, outs);
 
       _feedback_samples[0] = outs[0];
       _feedback_samples[1] = outs[1];

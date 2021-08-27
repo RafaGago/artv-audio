@@ -47,8 +47,10 @@ public:
   {
     _plugcontext = &pc;
     _cfg         = decltype (_cfg) {};
-    smoother::lowpass<double> (
-      make_crange (_smooth_coeff), 1. / 0.08, pc.get_sample_rate());
+    smoother::init (
+      make_crange (_smooth_coeff),
+      make_vec_x1<decltype (_smooth_coeff)> (1. / 0.08),
+      pc.get_sample_rate());
     memset (&_smooth_state, 0, sizeof _smooth_state);
     memset (&_state, 0, sizeof _state);
     memset (&_last_sample, 0, sizeof _last_sample);
@@ -79,8 +81,8 @@ public:
           continue;
         }
 
-        alignas (sse_bytes) std::array<coeff_array, 2> smoothed_band_coefs;
-        alignas (sse_bytes) smoothed_params            smoothed_p;
+        alignas (sse_bytes) coeff_array     smoothed_band_coeffs;
+        alignas (sse_bytes) smoothed_params smoothed_p;
 
         for (uint i = 0; i < n_samples; ++i) {
 
@@ -93,23 +95,24 @@ public:
           smoothed_p.vars.feedback    = _cfg[b].feedback;
 
           auto     smcoeff = (float) _smooth_coeff;
-          float_x4 params  = smoother::tick_aligned (
+          float_x4 params  = smoother::tick (
             make_crange (smcoeff),
             _smooth_state[b].params.arr,
-            vec_load<float_x4> (smoothed_p.arr.data()));
+            vec_load<float_x4> (smoothed_p.arr.data()),
+            single_coeff_set_tag {});
 
           memcpy (smoothed_p.arr.data(), &params, sizeof params);
 
           constexpr uint sse_step = vec_traits<double_x2>().size;
-          static_assert (smoothed_band_coefs.size() % sse_step == 0, "");
-          for (uint chnl = 0; chnl < 2; ++chnl) {
-            for (uint j = 0; j < smoothed_band_coefs[0].size(); j += sse_step) {
-              double_x2 out = smoother::tick_aligned (
-                make_crange (_smooth_coeff),
-                make_crange (&_smooth_state[b].filter[chnl][j], sse_step),
-                vec_load<double_x2> (&_coeffs[b][chnl][j]));
-              vec_store (&smoothed_band_coefs[chnl][j], out);
-            }
+          static_assert (smoothed_band_coeffs.size() % sse_step == 0, "");
+
+          for (uint co = 0; co < smoothed_band_coeffs.size(); co += sse_step) {
+            double_x2 out = smoother::tick (
+              make_crange (_smooth_coeff),
+              make_crange (&_smooth_state[b].filter[co], sse_step),
+              vec_load<double_x2> (&_coeffs[b][co]),
+              single_coeff_set_tag {});
+            vec_store (&smoothed_band_coeffs[co], out);
           }
 
           double_x2 in, out;
@@ -131,92 +134,64 @@ public:
             jassert (false);
             break;
           case bandtype::ms20_lp:
-            for (uint ch = 0; ch < 2; ++ch) {
-              out[ch] = saike::ms20_lowpass::tick (
-                smoothed_band_coefs[ch], _state[b][ch], in[ch]);
-            }
+            out
+              = saike::ms20_lowpass::tick (smoothed_band_coeffs, _state[b], in);
             break;
           case bandtype::ms20_hp:
-            for (uint ch = 0; ch < 2; ++ch) {
-              out[ch] = saike::ms20_highpass::tick (
-                smoothed_band_coefs[ch], _state[b][ch], in[ch]);
-            }
+            out = saike::ms20_highpass::tick (
+              smoothed_band_coeffs, _state[b], in);
             break;
           case bandtype::ms20_bp:
-            for (uint ch = 0; ch < 2; ++ch) {
-              out[ch] = saike::ms20_bandpass::tick (
-                smoothed_band_coefs[ch], _state[b][ch], in[ch]);
-            }
+            out = saike::ms20_bandpass::tick (
+              smoothed_band_coeffs, _state[b], in);
             break;
           case bandtype::ms20_br:
-            for (uint ch = 0; ch < 2; ++ch) {
-              out[ch] = saike::ms20_notch::tick (
-                smoothed_band_coefs[ch], _state[b][ch], in[ch]);
-            }
+            out = saike::ms20_notch::tick (smoothed_band_coeffs, _state[b], in);
             break;
           case bandtype::ms20_asym_lp:
-            for (uint ch = 0; ch < 2; ++ch) {
-              out[ch] = saike::ms20_asym_lowpass::tick (
-                smoothed_band_coefs[ch], _state[b][ch], in[ch]);
-            }
+            out = saike::ms20_asym_lowpass::tick (
+              smoothed_band_coeffs, _state[b], in);
             break;
           case bandtype::ms20_asym_hp:
-            for (uint ch = 0; ch < 2; ++ch) {
-              out[ch] = saike::ms20_asym_highpass::tick (
-                smoothed_band_coefs[ch], _state[b][ch], in[ch]);
-            }
+
+            out = saike::ms20_asym_highpass::tick (
+              smoothed_band_coeffs, _state[b], in);
             break;
           case bandtype::ms20_asym_bp:
-            for (uint ch = 0; ch < 2; ++ch) {
-              out[ch] = saike::ms20_asym_bandpass::tick (
-                smoothed_band_coefs[ch], _state[b][ch], in[ch]);
-            }
+            out = saike::ms20_asym_bandpass::tick (
+              smoothed_band_coeffs, _state[b], in);
             break;
           case bandtype::ms20_asym_br:
-            for (uint ch = 0; ch < 2; ++ch) {
-              out[ch] = saike::ms20_asym_notch::tick (
-                smoothed_band_coefs[ch], _state[b][ch], in[ch]);
-            }
+            out = saike::ms20_asym_notch::tick (
+              smoothed_band_coeffs, _state[b], in);
             break;
           case bandtype::steiner_1_lp:
           case bandtype::steiner_1_hp:
           case bandtype::steiner_1_bp:
           case bandtype::steiner_1_br:
-            for (uint ch = 0; ch < 2; ++ch) {
-              out[ch] = saike::steiner_1::tick (
-                smoothed_band_coefs[ch], _state[b][ch], in[ch]);
-            }
+            out = saike::steiner_1::tick (smoothed_band_coeffs, _state[b], in);
             break;
           case bandtype::steiner_2_lp:
           case bandtype::steiner_2_hp:
           case bandtype::steiner_2_bp:
           case bandtype::steiner_2_br:
-            for (uint ch = 0; ch < 2; ++ch) {
-              out[ch] = saike::steiner_2::tick (
-                smoothed_band_coefs[ch], _state[b][ch], in[ch]);
-            }
+            out = saike::steiner_2::tick (smoothed_band_coeffs, _state[b], in);
             break;
           case bandtype::moog_1_lp:
           case bandtype::moog_1_hp:
           case bandtype::moog_1_bp:
           case bandtype::moog_1_br:
-            for (uint ch = 0; ch < 2; ++ch) {
-              saike::moog_1::repair_unsmoothable_coeffs (
-                smoothed_band_coefs[ch], _coeffs[b][ch]);
-              out[ch] = saike::moog_1::tick (
-                smoothed_band_coefs[ch], _state[b][ch], in[ch]);
-            }
+            saike::moog_1::fix_unsmoothable_coeffs<double_x2> (
+              smoothed_band_coeffs, _coeffs[b]);
+            out = saike::moog_1::tick (smoothed_band_coeffs, _state[b], in);
             break;
           case bandtype::moog_2_lp:
           case bandtype::moog_2_hp:
           case bandtype::moog_2_bp:
           case bandtype::moog_2_br:
-            for (uint ch = 0; ch < 2; ++ch) {
-              saike::moog_2::repair_unsmoothable_coeffs (
-                smoothed_band_coefs[ch], _coeffs[b][ch]);
-              out[ch] = saike::moog_2::tick (
-                smoothed_band_coefs[ch], _state[b][ch], in[ch]);
-            }
+            saike::moog_2::fix_unsmoothable_coeffs<double_x2> (
+              smoothed_band_coeffs, _coeffs[b]);
+            out = saike::moog_2::tick (smoothed_band_coeffs, _state[b], in);
             break;
           default:
             jassert (false);
@@ -508,7 +483,7 @@ private:
     auto& b  = _cfg[band];
     auto  sr = (float) _plugcontext->get_sample_rate();
 
-    std::array<float, 2> freq, reso;
+    double_x2 freq, reso;
     freq[0] = b.freq;
     freq[1] = b.freq * (1.f + (b.tolerance * 0.2f));
 
@@ -520,7 +495,7 @@ private:
     reso[0] = b.reso;
     reso[1] = b.reso * (1.f - (b.tolerance * 0.11f));
 
-    reso[1] = std::clamp (
+    reso[1] = std::clamp<float> (
       reso[1],
       get_parameter (band1_reso_tag {}).min,
       get_parameter (band1_reso_tag {}).max);
@@ -531,106 +506,76 @@ private:
       memset (&_coeffs[band], 0, sizeof _coeffs[band]);
       break;
     case bandtype::ms20_lp:
-      saike::ms20_lowpass::lowpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::ms20_lowpass::lowpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::ms20_lowpass::init (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_hp:
-      saike::ms20_highpass::highpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::ms20_highpass::highpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::ms20_highpass::init (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_bp:
-      saike::ms20_bandpass::bandpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::ms20_bandpass::bandpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::ms20_bandpass::init (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_br:
-      saike::ms20_notch::notch (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::ms20_notch::notch (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::ms20_notch::init (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_asym_lp:
-      saike::ms20_asym_lowpass::lowpass (
-        _coeffs[band][0], freq[0], reso[0], sr);
-      saike::ms20_asym_lowpass::lowpass (
-        _coeffs[band][1], freq[1], reso[1], sr);
+      saike::ms20_asym_lowpass::init (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_asym_hp:
-      saike::ms20_asym_highpass::highpass (
-        _coeffs[band][0], freq[0], reso[0], sr);
-      saike::ms20_asym_highpass::highpass (
-        _coeffs[band][1], freq[1], reso[1], sr);
+      saike::ms20_asym_highpass::init (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_asym_bp:
-      saike::ms20_asym_bandpass::bandpass (
-        _coeffs[band][0], freq[0], reso[0], sr);
-      saike::ms20_asym_bandpass::bandpass (
-        _coeffs[band][1], freq[1], reso[1], sr);
+      saike::ms20_asym_bandpass::init (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_asym_br:
-      saike::ms20_asym_notch::notch (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::ms20_asym_notch::notch (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::ms20_asym_notch::init (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::steiner_1_lp:
-      saike::steiner_1::lowpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::steiner_1::lowpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::steiner_1::init (_coeffs[band], freq, reso, sr, lowpass_tag {});
       break;
     case bandtype::steiner_1_hp:
-      saike::steiner_1::highpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::steiner_1::highpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::steiner_1::init (_coeffs[band], freq, reso, sr, highpass_tag {});
       break;
     case bandtype::steiner_1_bp:
-      saike::steiner_1::bandpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::steiner_1::bandpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::steiner_1::init (_coeffs[band], freq, reso, sr, bandpass_tag {});
       break;
     case bandtype::steiner_1_br:
-      saike::steiner_1::notch (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::steiner_1::notch (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::steiner_1::init (_coeffs[band], freq, reso, sr, notch_tag {});
       break;
     case bandtype::steiner_2_lp:
-      saike::steiner_2::lowpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::steiner_2::lowpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::steiner_2::init (_coeffs[band], freq, reso, sr, lowpass_tag {});
       break;
     case bandtype::steiner_2_hp:
-      saike::steiner_2::highpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::steiner_2::highpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::steiner_2::init (_coeffs[band], freq, reso, sr, highpass_tag {});
       break;
     case bandtype::steiner_2_bp:
-      saike::steiner_2::bandpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::steiner_2::bandpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::steiner_2::init (_coeffs[band], freq, reso, sr, bandpass_tag {});
       break;
     case bandtype::steiner_2_br:
-      saike::steiner_2::notch (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::steiner_2::notch (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::steiner_2::init (_coeffs[band], freq, reso, sr, notch_tag {});
       break;
     case bandtype::moog_1_lp:
-      saike::moog_1::lowpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::moog_1::lowpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::moog_1::init (_coeffs[band], freq, reso, sr, lowpass_tag {});
       break;
     case bandtype::moog_1_hp:
-      saike::moog_1::highpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::moog_1::highpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::moog_1::init (_coeffs[band], freq, reso, sr, highpass_tag {});
       break;
     case bandtype::moog_1_bp:
-      saike::moog_1::bandpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::moog_1::bandpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::moog_1::init (_coeffs[band], freq, reso, sr, bandpass_tag {});
       break;
     case bandtype::moog_1_br:
-      saike::moog_1::notch (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::moog_1::notch (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::moog_1::init (_coeffs[band], freq, reso, sr, notch_tag {});
       break;
     case bandtype::moog_2_lp:
-      saike::moog_2::lowpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::moog_2::lowpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::moog_2::init (_coeffs[band], freq, reso, sr, lowpass_tag {});
       break;
     case bandtype::moog_2_hp:
-      saike::moog_2::highpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::moog_2::highpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::moog_2::init (_coeffs[band], freq, reso, sr, highpass_tag {});
       break;
     case bandtype::moog_2_bp:
-      saike::moog_2::bandpass (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::moog_2::bandpass (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::moog_2::init (_coeffs[band], freq, reso, sr, bandpass_tag {});
       break;
     case bandtype::moog_2_br:
-      saike::moog_2::notch (_coeffs[band][0], freq[0], reso[0], sr);
-      saike::moog_2::notch (_coeffs[band][1], freq[1], reso[1], sr);
+      saike::moog_2::init (_coeffs[band], freq, reso, sr, notch_tag {});
       break;
     default:
       jassert (false);
@@ -718,15 +663,15 @@ private:
 
     // reset smoothing
     if (_cfg[band].reset_band_state) {
-      memset (&_state[band][0], 0, sizeof _state[band][0]);
-      memset (&_state[band][1], 0, sizeof _state[band][1]);
+      memset (&_state[band], 0, sizeof _state[band]);
       memset (&_smooth_state[band], 0, sizeof _smooth_state[band]);
     }
     _cfg[band].has_changes      = false;
     _cfg[band].reset_band_state = false;
   }
   //----------------------------------------------------------------------------
-  static constexpr uint n_bands = 4;
+  static constexpr uint n_bands    = 4;
+  static constexpr uint n_channels = 2;
   //----------------------------------------------------------------------------
   using filters = mp_list<
     saike::ms20_lowpass,
@@ -758,8 +703,8 @@ private:
 
   using smoother = onepole_smoother;
   //----------------------------------------------------------------------------
-  using state_array = simd_array<double, max_states, sse_bytes>;
-  using coeff_array = simd_array<double, max_coeffs, sse_bytes>;
+  using state_array = simd_array<double, max_states * n_channels, sse_bytes>;
+  using coeff_array = simd_array<double, max_coeffs * n_channels, sse_bytes>;
   //----------------------------------------------------------------------------
   union smoothed_params {
     struct {
@@ -769,14 +714,14 @@ private:
   };
   //----------------------------------------------------------------------------
   struct smooth_states {
-    alignas (sse_bytes) std::array<coeff_array, 2> filter;
+    alignas (sse_bytes) coeff_array filter;
     smoothed_params params;
   };
   //----------------------------------------------------------------------------
-  std::array<bandconfig, n_bands>                 _cfg;
-  std::array<std::array<state_array, 2>, n_bands> _state;
-  std::array<smooth_states, n_bands>              _smooth_state;
-  alignas (sse_bytes) std::array<std::array<coeff_array, 2>, n_bands> _coeffs;
+  std::array<bandconfig, n_bands>    _cfg;
+  std::array<state_array, n_bands>   _state;
+  std::array<smooth_states, n_bands> _smooth_state;
+  alignas (sse_bytes) std::array<coeff_array, n_bands> _coeffs;
   std::array<std::array<double, 2>, n_bands> _last_sample;
 
   double _smooth_coeff;

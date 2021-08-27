@@ -4,6 +4,7 @@
 
 #include <cmath>
 
+#include "artv-common/dsp/own/parts/traits.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
@@ -12,22 +13,35 @@ namespace artv { namespace saike {
 
 namespace detail {
 
-inline double f_g (double v)
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+inline V f_g (V v)
 {
-  return std::max (-1., std::min (1., v));
+  using T = vec_value_type_t<V>;
+  return vec_max ((T) -1., vec_min ((T) 1., v));
 }
-inline double f_dg (double v)
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+inline V f_dg (V v)
 {
-  return 1. - 1. * (abs (v) > 1.);
+  // return 1. - 1. * (abs (v) > 1.);
+  using T = vec_value_type_t<V>;
+  return (vec_abs (v) > (T) 1.) ? vec_set<V> (0.) : vec_set<V> (1.);
 }
 
-inline double f_g_asym (double v)
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+inline V f_g_asym (V v)
 {
-  return v > 0 ? std::min (1., v) : std::max (-1., v * .25);
+  //  v > 0 ? std::min (1., v) : std::max (-1., v * .25);
+  using T = vec_value_type_t<V>;
+  return (v > (T) 0) ? vec_min ((T) 1., v) : vec_max ((T) -1., v * (T) .25);
 }
-inline double f_dg_asym (double v)
+
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+inline V f_dg_asym (V v)
 {
-  return v > 0 ? 1. - 1. * (std::abs (v) > 1) : .25 - .25 * (std::abs (v) > 4.);
+  // v > 0 ? 1. - 1. * (std::abs (v) > 1) : .25 - .25 * (std::abs (v) > 4.);
+  using T = vec_value_type_t<V>;
+  return v > (T) 0 ? ((v > (T) 1.) ? vec_set<V> (0.) : vec_set<V> (1.))
+                   : ((v < (T) -4.) ? vec_set<V> (0.) : vec_set<V> (.25));
 }
 //##############################################################################
 // MS20 /K35: base
@@ -37,32 +51,50 @@ struct ms20_base {
   // SHA b1c1952c5f798d968ff15714bca6a5c694e06d82
   // https://github.com/JoepVanlier/JSFX
   //----------------------------------------------------------------------------
-  enum coeffs { h, hh, k, n_coeffs };
+  enum coeffs { hh, k, n_coeffs };
   enum state { y1, y2, d1, d2, n_states };
   //----------------------------------------------------------------------------
-  static void repair_unsmoothable_coeffs (crange<double>, crange<const double>)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
   {}
   //----------------------------------------------------------------------------
-  static void reset_states (crange<double> s)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
   {
-    assert (s.size() >= n_states);
-    memset (s.data(), 0, sizeof s[0] * n_states);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
   }
   //----------------------------------------------------------------------------
 protected:
-  static void init (crange<double> c, double freq, double reso, double sr)
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr)
   {
     // The original filter freq seems to be off by 10% 22000 vs 20000kHz.
     // It also doesn't respect the frequency.
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= n_coeffs);
-    freq                = std ::min (sr < 80000. ? 14000. : 20000., freq);
-    double oversampling = (sr / 44100.);
-    double norm_freq    = (freq / 20000.);
-    double f0           = norm_freq * M_PI / oversampling;
-    c[h]                = tan (f0 / (2.1 * oversampling)) * 2.1 * oversampling;
-    c[hh]               = 0.5 * c[h]; // is memory needed for this?
-    c[k]                = 2 * reso;
+    assert (c.size() >= (n_coeffs * traits.size));
+
+    freq           = vec_min (sr < (T) 80000. ? (T) 14000. : (T) 20000., freq);
+    T oversampling = (sr * (T) (1. / 44100.));
+    V norm_freq    = (freq * (T) (1. / 20000.));
+
+    V f0 = norm_freq * M_PI / oversampling;
+    V hv = vec_tan (f0 / ((T) 2.1 * oversampling)) * (T) 2.1 * oversampling;
+    vec_store (&c[hh * traits.size], hv * (T) 0.5);
+    vec_store (&c[k * traits.size], reso * (T) 2.);
   }
 
   static constexpr double epsilon  = 0.00000001;
@@ -74,211 +106,307 @@ protected:
 //##############################################################################
 struct ms20_lowpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
-  static void lowpass (crange<double> c, double freq, double reso, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr)
   {
-    init (c, freq, reso, sr);
+    detail::ms20_base::init (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               in)
+  // N sets of coeffs, N outs calculated at once.
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
-    assert (st.size() >= n_states);
-    assert (co.size() >= n_coeffs);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    double gd2k      = detail::f_g (st[d2] * co[k]);
-    double tanhterm1 = std::tanh (-st[d1] + in - gd2k);
-    double tanhterm2 = std::tanh (st[d1] - st[d2] + gd2k);
+    assert (st.size() >= (n_states * traits.size));
+    assert (co.size() >= (n_coeffs * traits.size));
 
-    double res = INFINITY;
-    for (uint i = 0; i < max_iter && epsilon < res; ++i) {
-      double ky2          = co[k] * st[y2];
-      double gky2         = detail::f_g (ky2);
-      double dgky2        = detail::f_dg (ky2);
-      double sig1         = in - st[y1] - gky2;
-      double thsig1       = std::tanh (sig1);
-      double thsig1sq     = thsig1 * thsig1;
-      double sig2         = st[y1] - st[y2] + gky2;
-      double thsig2       = std::tanh (sig2);
-      double thsig2sq     = thsig2 * thsig2;
-      double hhthsig1sqm1 = co[hh] * (thsig1sq - 1.);
-      double hhthsig2sqm1 = co[hh] * (thsig2sq - 1.);
-      double f1           = st[y1] - st[d1] - co[hh] * (tanhterm1 + thsig1);
-      double f2           = st[y2] - st[d2] - co[hh] * (tanhterm2 + thsig2);
-      res                 = std::fabs (f1) + std::fabs (f2);
-      double a            = -hhthsig1sqm1 + 1.;
-      double b            = -co[k] * hhthsig1sqm1 * dgky2;
-      double c            = hhthsig2sqm1;
-      double d            = (co[k] * dgky2 - 1.) * hhthsig2sqm1 + 1.;
-      double norm         = 1. / (a * d - b * c);
-      st[y1] -= (d * f1 - b * f2) * norm;
-      st[y2] -= (a * f2 - c * f1) * norm;
+    V hh_v = vec_load<V> (&co[hh * traits.size]);
+    V k_v  = vec_load<V> (&co[k * traits.size]);
+    V y1_v = vec_load<V> (&st[y1 * traits.size]);
+    V y2_v = vec_load<V> (&st[y2 * traits.size]);
+    V d1_v = vec_load<V> (&st[d1 * traits.size]);
+    V d2_v = vec_load<V> (&st[d2 * traits.size]);
+
+    V gd2k      = detail::f_g (d2_v * k_v);
+    V tanhterm1 = vec_tanh (-d1_v + in - gd2k);
+    V tanhterm2 = vec_tanh (d1_v - d2_v + gd2k);
+
+    for (uint i = 0; i < max_iter; ++i) {
+      V ky2          = k_v * y2_v;
+      V gky2         = detail::f_g (ky2);
+      V dgky2        = detail::f_dg (ky2);
+      V sig1         = in - y1_v - gky2;
+      V thsig1       = vec_tanh (sig1);
+      V thsig1sq     = thsig1 * thsig1;
+      V sig2         = y1_v - y2_v + gky2;
+      V thsig2       = vec_tanh (sig2);
+      V thsig2sq     = thsig2 * thsig2;
+      V hhthsig1sqm1 = hh_v * (thsig1sq - (T) 1.);
+      V hhthsig2sqm1 = hh_v * (thsig2sq - (T) 1.);
+      V f1           = y1_v - d1_v - hh_v * (tanhterm1 + thsig1);
+      V f2           = y2_v - d2_v - hh_v * (tanhterm2 + thsig2);
+      V res          = vec_abs (f1) + vec_abs (f2);
+      V a            = -hhthsig1sqm1 + (T) 1.;
+      V b            = -k_v * hhthsig1sqm1 * dgky2;
+      V c            = hhthsig2sqm1;
+      V d            = (k_v * dgky2 - (T) 1.) * hhthsig2sqm1 + (T) 1.;
+      V norm         = (T) 1. / (a * d - b * c);
+      y1_v -= (d * f1 - b * f2) * norm;
+      y2_v -= (a * f2 - c * f1) * norm;
+
+      auto stillerror = res > (T) epsilon;
+      if (vec_is_all_zeros (stillerror)) {
+        break;
+      }
     }
-    st[d1] = st[y1];
-    st[d2] = st[y2];
-    return st[d2];
+    d1_v = y1_v;
+    d2_v = y2_v;
+
+    vec_store (&st[y1 * traits.size], y1_v);
+    vec_store (&st[y2 * traits.size], y2_v);
+    vec_store (&st[d1 * traits.size], d1_v);
+    vec_store (&st[d2 * traits.size], d2_v);
+    return d2_v;
   }
-  //----------------------------------------------------------------------------
-  // TODO SIMD
   //----------------------------------------------------------------------------
 };
 //----------------------------------------------------------------------------
 struct ms20_highpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
-  static void highpass (crange<double> c, double freq, double reso, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr)
   {
-    init (c, freq, reso, sr);
+    detail::ms20_base::init (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               in)
+  // N sets of coeffs, N outs calculated at once.
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
-    assert (st.size() >= n_states);
-    assert (co.size() >= n_coeffs);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    double kc        = .85 * co[k];
-    double gkd2px    = detail::f_g (kc * (st[d2] + in));
-    double tanhterm1 = std::tanh (-st[d1] - gkd2px);
-    double tanhterm2 = std::tanh (st[d1] - st[d2] - in + gkd2px);
+    assert (st.size() >= (n_states * traits.size));
+    assert (co.size() >= (n_coeffs * traits.size));
 
-    double res = INFINITY;
-    for (uint i = 0; i < max_iter && epsilon < res; ++i) {
-      double kxpy2        = kc * (in + st[y2]);
-      double gkxpy2       = detail::f_g (kxpy2);
-      double dgky2px      = detail::f_dg (kxpy2);
-      double sig1         = -st[y1] - gkxpy2;
-      double thsig1       = std::tanh (sig1);
-      double thsig1sq     = thsig1 * thsig1;
-      double sig2         = -in + st[y1] - st[y2] + gkxpy2;
-      double thsig2       = std::tanh (sig2);
-      double thsig2sq     = thsig2 * thsig2;
-      double hhthsig1sqm1 = (thsig1sq - 1.);
-      double hhthsig2sqm1 = (thsig2sq - 1.);
-      double f1           = st[y1] - st[d1] - co[hh] * (tanhterm1 + thsig1);
-      double f2           = st[y2] - st[d2] - co[hh] * (tanhterm2 + thsig2);
-      res                 = std::fabs (f1) + std::fabs (f2);
-      double a            = -hhthsig1sqm1 + 1.;
-      double b            = -kc * hhthsig1sqm1 * dgky2px;
-      double c            = hhthsig2sqm1;
-      double d            = (kc * dgky2px - 1.) * hhthsig2sqm1 + 1.;
-      double norm         = 1. / (a * d - b * c);
-      st[y1] -= (d * f1 - b * f2) * norm;
-      st[y2] -= (a * f2 - c * f1) * norm;
+    V hh_v = vec_load<V> (&co[hh * traits.size]);
+    V k_v  = vec_load<V> (&co[k * traits.size]);
+    V y1_v = vec_load<V> (&st[y1 * traits.size]);
+    V y2_v = vec_load<V> (&st[y2 * traits.size]);
+    V d1_v = vec_load<V> (&st[d1 * traits.size]);
+    V d2_v = vec_load<V> (&st[d2 * traits.size]);
+
+    V kc        = .85 * k_v;
+    V gkd2px    = detail::f_g (kc * (d2_v + in));
+    V tanhterm1 = vec_tanh (-d1_v - gkd2px);
+    V tanhterm2 = vec_tanh (d1_v - d2_v - in + gkd2px);
+
+    for (uint i = 0; i < max_iter; ++i) {
+      V kxpy2        = kc * (in + y2_v);
+      V gkxpy2       = detail::f_g (kxpy2);
+      V dgky2px      = detail::f_dg (kxpy2);
+      V sig1         = -y1_v - gkxpy2;
+      V thsig1       = vec_tanh (sig1);
+      V thsig1sq     = thsig1 * thsig1;
+      V sig2         = -in + y1_v - y2_v + gkxpy2;
+      V thsig2       = vec_tanh (sig2);
+      V thsig2sq     = thsig2 * thsig2;
+      V hhthsig1sqm1 = (thsig1sq - (T) 1.);
+      V hhthsig2sqm1 = (thsig2sq - (T) 1.);
+      V f1           = y1_v - d1_v - hh_v * (tanhterm1 + thsig1);
+      V f2           = y2_v - d2_v - hh_v * (tanhterm2 + thsig2);
+      V res          = vec_abs (f1) + vec_abs (f2);
+      V a            = -hhthsig1sqm1 + (T) 1.;
+      V b            = -kc * hhthsig1sqm1 * dgky2px;
+      V c            = hhthsig2sqm1;
+      V d            = (kc * dgky2px - (T) 1.) * hhthsig2sqm1 + (T) 1.;
+      V norm         = (T) 1. / (a * d - b * c);
+      y1_v -= (d * f1 - b * f2) * norm;
+      y2_v -= (a * f2 - c * f1) * norm;
+
+      auto stillerror = res > (T) epsilon;
+      if (vec_is_all_zeros (stillerror)) {
+        break;
+      }
     }
-    st[d1] = st[y1];
-    st[d2] = st[y2];
-    return st[y2] + in;
+    d1_v = y1_v;
+    d2_v = y2_v;
+
+    vec_store (&st[y1 * traits.size], y1_v);
+    vec_store (&st[y2 * traits.size], y2_v);
+    vec_store (&st[d1 * traits.size], d1_v);
+    vec_store (&st[d2 * traits.size], d2_v);
+    return y2_v + in;
   }
-  //----------------------------------------------------------------------------
-  // TODO SIMD
   //----------------------------------------------------------------------------
 };
 //----------------------------------------------------------------------------
 struct ms20_bandpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
-  static void bandpass (crange<double> c, double freq, double reso, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr)
   {
-    init (c, freq, reso, sr);
+    detail::ms20_base::init (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               in)
+  // N sets of coeffs, N outs calculated at once.
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
-    assert (st.size() >= n_states);
-    assert (co.size() >= n_coeffs);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    double kc        = .95 * co[k];
-    double gd2k      = detail::f_g (st[d2] * kc);
-    double tanhterm1 = std::tanh (-st[d1] - in - gd2k);
-    double tanhterm2 = std::tanh (st[d1] - st[d2] + in + gd2k);
+    assert (st.size() >= (n_states * traits.size));
+    assert (co.size() >= (n_coeffs * traits.size));
 
-    double res = INFINITY;
-    for (uint i = 0; i < max_iter && epsilon < res; ++i) {
-      double ky2          = kc * st[y2];
-      double gky2         = detail::f_g (ky2);
-      double dgky2        = detail::f_dg (ky2);
-      double sig1         = -in - st[y1] - gky2;
-      double thsig1       = std::tanh (sig1);
-      double thsig1sq     = thsig1 * thsig1;
-      double sig2         = in + st[y1] - st[y2] + gky2;
-      double thsig2       = std::tanh (sig2);
-      double thsig2sq     = thsig2 * thsig2;
-      double hhthsig1sqm1 = co[hh] * (thsig1sq - 1.);
-      double hhthsig2sqm1 = co[hh] * (thsig2sq - 1.);
-      double f1           = st[y1] - st[d1] - co[hh] * (tanhterm1 + thsig1);
-      double f2           = st[y2] - st[d2] - co[hh] * (tanhterm2 + thsig2);
-      res                 = std::fabs (f1) + std::fabs (f2);
-      double a            = 1. - hhthsig1sqm1;
-      double b            = -kc * hhthsig1sqm1 * dgky2;
-      double c            = hhthsig2sqm1;
-      double d            = (kc * dgky2 - 1.) * hhthsig2sqm1 + 1.;
-      double norm         = 1. / (a * d - b * c);
-      st[y1] -= (d * f1 - b * f2) * norm;
-      st[y2] -= (a * f2 - c * f1) * norm;
+    V hh_v = vec_load<V> (&co[hh * traits.size]);
+    V k_v  = vec_load<V> (&co[k * traits.size]);
+    V y1_v = vec_load<V> (&st[y1 * traits.size]);
+    V y2_v = vec_load<V> (&st[y2 * traits.size]);
+    V d1_v = vec_load<V> (&st[d1 * traits.size]);
+    V d2_v = vec_load<V> (&st[d2 * traits.size]);
+
+    V kc        = (T) .95 * k_v;
+    V gd2k      = detail::f_g (d2_v * kc);
+    V tanhterm1 = vec_tanh (-d1_v - in - gd2k);
+    V tanhterm2 = vec_tanh (d1_v - d2_v + in + gd2k);
+
+    for (uint i = 0; i < max_iter; ++i) {
+      V ky2          = kc * y2_v;
+      V gky2         = detail::f_g (ky2);
+      V dgky2        = detail::f_dg (ky2);
+      V sig1         = -in - y1_v - gky2;
+      V thsig1       = vec_tanh (sig1);
+      V thsig1sq     = thsig1 * thsig1;
+      V sig2         = in + y1_v - y2_v + gky2;
+      V thsig2       = vec_tanh (sig2);
+      V thsig2sq     = thsig2 * thsig2;
+      V hhthsig1sqm1 = hh_v * (thsig1sq - (T) 1.);
+      V hhthsig2sqm1 = hh_v * (thsig2sq - (T) 1.);
+      V f1           = y1_v - d1_v - hh_v * (tanhterm1 + thsig1);
+      V f2           = y2_v - d2_v - hh_v * (tanhterm2 + thsig2);
+      V res          = vec_abs (f1) + vec_abs (f2);
+      V a            = (T) 1. - hhthsig1sqm1;
+      V b            = -kc * hhthsig1sqm1 * dgky2;
+      V c            = hhthsig2sqm1;
+      V d            = (kc * dgky2 - (T) 1.) * hhthsig2sqm1 + (T) 1.;
+      V norm         = (T) 1. / (a * d - b * c);
+      y1_v -= (d * f1 - b * f2) * norm;
+      y2_v -= (a * f2 - c * f1) * norm;
+
+      auto stillerror = res > (T) epsilon;
+      if (vec_is_all_zeros (stillerror)) {
+        break;
+      }
     }
-    st[d1] = st[y1];
-    st[d2] = st[y2];
-    return st[d2];
+    d1_v = y1_v;
+    d2_v = y2_v;
+
+    vec_store (&st[y1 * traits.size], y1_v);
+    vec_store (&st[y2 * traits.size], y2_v);
+    vec_store (&st[d1 * traits.size], d1_v);
+    vec_store (&st[d2 * traits.size], d2_v);
+    return d2_v;
   }
-  //----------------------------------------------------------------------------
-  // TODO SIMD
   //----------------------------------------------------------------------------
 };
 //----------------------------------------------------------------------------
 struct ms20_notch : public detail::ms20_base {
   //----------------------------------------------------------------------------
-  static void notch (crange<double> c, double freq, double reso, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr)
   {
-    init (c, freq, reso, sr);
+    detail::ms20_base::init (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               in)
+  // N sets of coeffs, N outs calculated at once.
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
-    assert (st.size() >= n_states);
-    assert (co.size() >= n_coeffs);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    double gd2k      = detail::f_g (st[d2] * co[k]);
-    double tanhterm1 = std::tanh (-st[d1] - in - gd2k);
-    double tanhterm2 = std::tanh (st[d1] - st[d2] + in + gd2k);
+    assert (st.size() >= (n_states * traits.size));
+    assert (co.size() >= (n_coeffs * traits.size));
 
-    double res = INFINITY;
-    for (uint i = 0; i < max_iter && epsilon < res; ++i) {
-      double ky2          = co[k] * st[y2];
-      double gky2         = detail::f_g (ky2);
-      double dgky2        = detail::f_dg (ky2);
-      double sig1         = -in - st[y1] - gky2;
-      double thsig1       = std::tanh (sig1);
-      double thsig1sq     = thsig1 * thsig1;
-      double sig2         = in + st[y1] - st[y2] + gky2;
-      double thsig2       = std::tanh (sig2);
-      double thsig2sq     = thsig2 * thsig2;
-      double hhthsig1sqm1 = co[hh] * (thsig1sq - 1.);
-      double hhthsig2sqm1 = co[hh] * (thsig2sq - 1.);
-      double f1           = st[y1] - st[d1] - co[hh] * (tanhterm1 + thsig1);
-      double f2           = st[y2] - st[d2] - co[hh] * (tanhterm2 + thsig2);
-      res                 = std::fabs (f1) + std::fabs (f2);
-      double a            = 1. - hhthsig1sqm1;
-      double b            = -co[k] * hhthsig1sqm1 * dgky2;
-      double c            = hhthsig2sqm1;
-      double d            = (co[k] * dgky2 - 1.) * hhthsig2sqm1 + 1.;
-      double norm         = 1. / (a * d - b * c);
-      st[y1] -= (d * f1 - b * f2) * norm;
-      st[y2] -= (a * f2 - c * f1) * norm;
+    V hh_v = vec_load<V> (&co[hh * traits.size]);
+    V k_v  = vec_load<V> (&co[k * traits.size]);
+    V y1_v = vec_load<V> (&st[y1 * traits.size]);
+    V y2_v = vec_load<V> (&st[y2 * traits.size]);
+    V d1_v = vec_load<V> (&st[d1 * traits.size]);
+    V d2_v = vec_load<V> (&st[d2 * traits.size]);
+
+    V gd2k      = detail::f_g (d2_v * k_v);
+    V tanhterm1 = vec_tanh (-d1_v - in - gd2k);
+    V tanhterm2 = vec_tanh (d1_v - d2_v + in + gd2k);
+
+    for (uint i = 0; i < max_iter; ++i) {
+      V ky2          = k_v * y2_v;
+      V gky2         = detail::f_g (ky2);
+      V dgky2        = detail::f_dg (ky2);
+      V sig1         = -in - y1_v - gky2;
+      V thsig1       = vec_tanh (sig1);
+      V thsig1sq     = thsig1 * thsig1;
+      V sig2         = in + y1_v - y2_v + gky2;
+      V thsig2       = vec_tanh (sig2);
+      V thsig2sq     = thsig2 * thsig2;
+      V hhthsig1sqm1 = hh_v * (thsig1sq - (T) 1.);
+      V hhthsig2sqm1 = hh_v * (thsig2sq - (T) 1.);
+      V f1           = y1_v - d1_v - hh_v * (tanhterm1 + thsig1);
+      V f2           = y2_v - d2_v - hh_v * (tanhterm2 + thsig2);
+      V res          = vec_abs (f1) + vec_abs (f2);
+      V a            = (T) 1. - hhthsig1sqm1;
+      V b            = -k_v * hhthsig1sqm1 * dgky2;
+      V c            = hhthsig2sqm1;
+      V d            = (k_v * dgky2 - (T) 1.) * hhthsig2sqm1 + (T) 1.;
+      V norm         = (T) 1. / (a * d - b * c);
+      y1_v -= (d * f1 - b * f2) * norm;
+      y2_v -= (a * f2 - c * f1) * norm;
+
+      auto stillerror = res > (T) epsilon;
+      if (vec_is_all_zeros (stillerror)) {
+        break;
+      }
     }
-    st[d1] = st[y1];
-    st[d2] = st[y2];
-    return in - st[y2];
+    d1_v = y1_v;
+    d2_v = y2_v;
+
+    vec_store (&st[y1 * traits.size], y1_v);
+    vec_store (&st[y2 * traits.size], y2_v);
+    vec_store (&st[d1 * traits.size], d1_v);
+    vec_store (&st[d2 * traits.size], d2_v);
+    return in - y2_v;
   }
-  //----------------------------------------------------------------------------
-  // TODO SIMD
   //----------------------------------------------------------------------------
 };
 //##############################################################################
@@ -287,222 +415,318 @@ struct ms20_notch : public detail::ms20_base {
 //----------------------------------------------------------------------------
 struct ms20_asym_lowpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
-  static void lowpass (crange<double> c, double freq, double reso, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr)
   {
-    init (c, freq, reso, sr);
+    detail::ms20_base::init (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               in)
+  // N sets of coeffs, N outs calculated at once.
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
-    assert (st.size() >= n_states);
-    assert (co.size() >= n_coeffs);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    double gd2k = detail::f_g_asym (st[d2] * co[k]);
-    double sig1 = -st[d1] + in - gd2k;
-    double qq   = (sig1 < 0.) ? .6 : 1.0;
+    assert (st.size() >= (n_states * traits.size));
+    assert (co.size() >= (n_coeffs * traits.size));
+
+    V hh_v = vec_load<V> (&co[hh * traits.size]);
+    V k_v  = vec_load<V> (&co[k * traits.size]);
+    V y1_v = vec_load<V> (&st[y1 * traits.size]);
+    V y2_v = vec_load<V> (&st[y2 * traits.size]);
+    V d1_v = vec_load<V> (&st[d1 * traits.size]);
+    V d2_v = vec_load<V> (&st[d2 * traits.size]);
+
+    V gd2k = detail::f_g_asym (d2_v * k_v);
+    V sig1 = -d1_v + in - gd2k;
+    V qq   = (sig1 < 0.) ? (T) .6 : (T) 1.0;
 
     sig1 *= qq;
-    double tanhterm1 = std::tanh (sig1);
-    double tanhterm2 = std::tanh (st[d1] - st[d2] + gd2k);
+    V tanhterm1 = vec_tanh (sig1);
+    V tanhterm2 = vec_tanh (d1_v - d2_v + gd2k);
 
-    double res = INFINITY;
-    for (uint i = 0; i < max_iter && epsilon < res; ++i) {
-      double ky2   = co[k] * st[y2];
-      double gky2  = detail::f_g_asym (ky2);
-      double dgky2 = detail::f_dg_asym (ky2);
-      sig1         = in - st[y1] - gky2;
-      qq           = (sig1 < 0.) ? .6 : 1.0;
+    for (uint i = 0; i < max_iter; ++i) {
+      V ky2   = k_v * y2_v;
+      V gky2  = detail::f_g_asym (ky2);
+      V dgky2 = detail::f_dg_asym (ky2);
+      sig1    = in - y1_v - gky2;
+      qq      = (sig1 < 0.) ? (T) .6 : (T) 1.0;
       sig1 *= qq;
-      double thsig1       = std::tanh (sig1);
-      double thsig1sq     = thsig1 * thsig1;
-      double sig2         = st[y1] - st[y2] + gky2;
-      double thsig2       = std::tanh (sig2);
-      double thsig2sq     = thsig2 * thsig2;
-      double hhthsig1sqm1 = co[hh] * (thsig1sq - 1.);
-      double hhthsig2sqm1 = co[hh] * (thsig2sq - 1.);
-      double f1           = st[y1] - st[d1] - co[hh] * (tanhterm1 + thsig1);
-      double f2           = st[y2] - st[d2] - co[hh] * (tanhterm2 + thsig2);
-      res                 = std::fabs (f1) + std::fabs (f2);
-      double a            = -qq * hhthsig1sqm1 + 1.;
-      double b            = -qq * co[k] * hhthsig1sqm1 * dgky2;
-      double c            = hhthsig2sqm1;
-      double d            = (co[k] * dgky2 - 1.) * hhthsig2sqm1 + 1.;
-      double norm         = 1. / (a * d - b * c);
-      st[y1] -= (d * f1 - b * f2) * norm;
-      st[y2] -= (a * f2 - c * f1) * norm;
+      V thsig1       = vec_tanh (sig1);
+      V thsig1sq     = thsig1 * thsig1;
+      V sig2         = y1_v - y2_v + gky2;
+      V thsig2       = vec_tanh (sig2);
+      V thsig2sq     = thsig2 * thsig2;
+      V hhthsig1sqm1 = hh_v * (thsig1sq - (T) 1.);
+      V hhthsig2sqm1 = hh_v * (thsig2sq - (T) 1.);
+      V f1           = y1_v - d1_v - hh_v * (tanhterm1 + thsig1);
+      V f2           = y2_v - d2_v - hh_v * (tanhterm2 + thsig2);
+      V res          = vec_abs (f1) + vec_abs (f2);
+      V a            = -qq * hhthsig1sqm1 + (T) 1.;
+      V b            = -qq * k_v * hhthsig1sqm1 * dgky2;
+      V c            = hhthsig2sqm1;
+      V d            = (k_v * dgky2 - (T) 1.) * hhthsig2sqm1 + (T) 1.;
+      V norm         = 1. / (a * d - b * c);
+      y1_v -= (d * f1 - b * f2) * norm;
+      y2_v -= (a * f2 - c * f1) * norm;
+
+      auto stillerror = res > (T) epsilon;
+      if (vec_is_all_zeros (stillerror)) {
+        break;
+      }
     }
-    st[d1] = st[y1];
-    st[d2] = st[y2];
-    return st[d2];
+    d1_v = y1_v;
+    d2_v = y2_v;
+
+    vec_store (&st[y1 * traits.size], y1_v);
+    vec_store (&st[y2 * traits.size], y2_v);
+    vec_store (&st[d1 * traits.size], d1_v);
+    vec_store (&st[d2 * traits.size], d2_v);
+    return d2_v;
   }
-  //----------------------------------------------------------------------------
-  // TODO SIMD
   //----------------------------------------------------------------------------
 };
 //----------------------------------------------------------------------------
 struct ms20_asym_highpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
-  static void highpass (crange<double> c, double freq, double reso, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr)
   {
-    init (c, freq, reso, sr);
+    detail::ms20_base::init (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               in)
+  // N sets of coeffs, N outs calculated at once.
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
-    assert (st.size() >= n_states);
-    assert (co.size() >= n_coeffs);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    double kc        = co[k];
-    double gkd2px    = detail::f_g_asym (kc * (st[d2] + in));
-    double tanhterm1 = std::tanh (-st[d1] - gkd2px);
-    double tanhterm2 = std::tanh (st[d1] - st[d2] - in + gkd2px);
+    assert (st.size() >= (n_states * traits.size));
+    assert (co.size() >= (n_coeffs * traits.size));
 
-    double res = INFINITY;
-    for (uint i = 0; i < max_iter && epsilon < res; ++i) {
-      double kxpy2        = kc * (in + st[y2]);
-      double gkxpy2       = detail::f_g_asym (kxpy2);
-      double dgky2px      = detail::f_dg_asym (kxpy2);
-      double sig1         = -st[y1] - gkxpy2;
-      double thsig1       = std::tanh (sig1);
-      double thsig1sq     = thsig1 * thsig1;
-      double sig2         = -in + st[y1] - st[y2] + gkxpy2;
-      double thsig2       = std::tanh (sig2);
-      double thsig2sq     = thsig2 * thsig2;
-      double hhthsig1sqm1 = (thsig1sq - 1.);
-      double hhthsig2sqm1 = (thsig2sq - 1.);
-      double f1           = st[y1] - st[d1] - co[hh] * (tanhterm1 + thsig1);
-      double f2           = st[y2] - st[d2] - co[hh] * (tanhterm2 + thsig2);
-      res                 = std::fabs (f1) + std::fabs (f2);
-      double a            = -hhthsig1sqm1 + 1.;
-      double b            = -kc * hhthsig1sqm1 * dgky2px;
-      double c            = hhthsig2sqm1;
-      double d            = (kc * dgky2px - 1.) * hhthsig2sqm1 + 1.;
-      double norm         = 1.0 / (a * d - b * c);
-      st[y1] -= (d * f1 - b * f2) * norm;
-      st[y2] -= (a * f2 - c * f1) * norm;
+    V hh_v = vec_load<V> (&co[hh * traits.size]);
+    V k_v  = vec_load<V> (&co[k * traits.size]);
+    V y1_v = vec_load<V> (&st[y1 * traits.size]);
+    V y2_v = vec_load<V> (&st[y2 * traits.size]);
+    V d1_v = vec_load<V> (&st[d1 * traits.size]);
+    V d2_v = vec_load<V> (&st[d2 * traits.size]);
+
+    V kc        = k_v;
+    V gkd2px    = detail::f_g_asym (kc * (d2_v + in));
+    V tanhterm1 = vec_tanh (-d1_v - gkd2px);
+    V tanhterm2 = vec_tanh (d1_v - d2_v - in + gkd2px);
+
+    for (uint i = 0; i < max_iter; ++i) {
+      V kxpy2        = kc * (in + y2_v);
+      V gkxpy2       = detail::f_g_asym (kxpy2);
+      V dgky2px      = detail::f_dg_asym (kxpy2);
+      V sig1         = -y1_v - gkxpy2;
+      V thsig1       = vec_tanh (sig1);
+      V thsig1sq     = thsig1 * thsig1;
+      V sig2         = -in + y1_v - y2_v + gkxpy2;
+      V thsig2       = vec_tanh (sig2);
+      V thsig2sq     = thsig2 * thsig2;
+      V hhthsig1sqm1 = (thsig1sq - (T) 1.);
+      V hhthsig2sqm1 = (thsig2sq - (T) 1.);
+      V f1           = y1_v - d1_v - hh_v * (tanhterm1 + thsig1);
+      V f2           = y2_v - d2_v - hh_v * (tanhterm2 + thsig2);
+      V res          = vec_abs (f1) + vec_abs (f2);
+      V a            = -hhthsig1sqm1 + (T) 1.;
+      V b            = -kc * hhthsig1sqm1 * dgky2px;
+      V c            = hhthsig2sqm1;
+      V d            = (kc * dgky2px - (T) 1.) * hhthsig2sqm1 + (T) 1.;
+      V norm         = (T) 1.0 / (a * d - b * c);
+      y1_v -= (d * f1 - b * f2) * norm;
+      y2_v -= (a * f2 - c * f1) * norm;
+
+      auto stillerror = res > (T) epsilon;
+      if (vec_is_all_zeros (stillerror)) {
+        break;
+      }
     }
-    st[d1] = st[y1];
-    st[d2] = st[y2];
-    return st[y2] + in;
+    d1_v = y1_v;
+    d2_v = y2_v;
+
+    vec_store (&st[y1 * traits.size], y1_v);
+    vec_store (&st[y2 * traits.size], y2_v);
+    vec_store (&st[d1 * traits.size], d1_v);
+    vec_store (&st[d2 * traits.size], d2_v);
+    return y2_v + in;
   }
-  //----------------------------------------------------------------------------
-  // TODO SIMD
   //----------------------------------------------------------------------------
 };
 //----------------------------------------------------------------------------
 struct ms20_asym_bandpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
-  static void bandpass (crange<double> c, double freq, double reso, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr)
   {
-    init (c, freq, reso, sr);
+    detail::ms20_base::init (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               in)
+  // N sets of coeffs, N outs calculated at once.
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
-    assert (st.size() >= n_states);
-    assert (co.size() >= n_coeffs);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    double kc   = co[k];
-    double gd2k = detail::f_g_asym (st[d2] * kc);
-    double sig1 = -st[d1] - in - gd2k;
-    double qq   = (sig1 < 0.) ? .6 : 1.0;
+    assert (st.size() >= (n_states * traits.size));
+    assert (co.size() >= (n_coeffs * traits.size));
+
+    V hh_v = vec_load<V> (&co[hh * traits.size]);
+    V k_v  = vec_load<V> (&co[k * traits.size]);
+    V y1_v = vec_load<V> (&st[y1 * traits.size]);
+    V y2_v = vec_load<V> (&st[y2 * traits.size]);
+    V d1_v = vec_load<V> (&st[d1 * traits.size]);
+    V d2_v = vec_load<V> (&st[d2 * traits.size]);
+
+    V kc   = k_v;
+    V gd2k = detail::f_g_asym (d2_v * kc);
+    V sig1 = -d1_v - in - gd2k;
+    V qq   = (sig1 < 0.) ? (T) .6 : (T) 1.0;
     sig1 *= qq;
-    double tanhterm1 = std::tanh (sig1);
-    double tanhterm2 = std::tanh (st[d1] - st[d2] + in + gd2k);
+    V tanhterm1 = vec_tanh (sig1);
+    V tanhterm2 = vec_tanh (d1_v - d2_v + in + gd2k);
 
-    double res = INFINITY;
-    for (uint i = 0; i < max_iter && epsilon < res; ++i) {
-      double ky2   = kc * st[y2];
-      double gky2  = detail::f_g_asym (ky2);
-      double dgky2 = detail::f_dg_asym (ky2);
-      sig1         = -in - st[y1] - gky2;
-      qq           = (sig1 < 0.) ? .6 : 1.0;
+    for (uint i = 0; i < max_iter; ++i) {
+      V ky2   = kc * y2_v;
+      V gky2  = detail::f_g_asym (ky2);
+      V dgky2 = detail::f_dg_asym (ky2);
+      sig1    = -in - y1_v - gky2;
+      qq      = (sig1 < 0.) ? (T) .6 : (T) 1.0;
       sig1 *= qq;
-      double thsig1       = std::tanh (sig1);
-      double thsig1sq     = thsig1 * thsig1;
-      double sig2         = in + st[y1] - st[y2] + gky2;
-      double thsig2       = std::tanh (sig2);
-      double thsig2sq     = thsig2 * thsig2;
-      double hhthsig1sqm1 = co[hh] * (thsig1sq - 1.);
-      double hhthsig2sqm1 = co[hh] * (thsig2sq - 1.);
-      double f1           = st[y1] - st[d1] - co[hh] * (tanhterm1 + thsig1);
-      double f2           = st[y2] - st[d2] - co[hh] * (tanhterm2 + thsig2);
-      res                 = std::fabs (f1) + std::fabs (f2);
-      double a            = 1. - qq * hhthsig1sqm1;
-      double b            = -qq * kc * hhthsig1sqm1 * dgky2;
-      double c            = hhthsig2sqm1;
-      double d            = (kc * dgky2 - 1.) * hhthsig2sqm1 + 1.;
-      double norm         = 1. / (a * d - b * c);
-      st[y1] -= (d * f1 - b * f2) * norm;
-      st[y2] -= (a * f2 - c * f1) * norm;
+      V thsig1       = vec_tanh (sig1);
+      V thsig1sq     = thsig1 * thsig1;
+      V sig2         = in + y1_v - y2_v + gky2;
+      V thsig2       = vec_tanh (sig2);
+      V thsig2sq     = thsig2 * thsig2;
+      V hhthsig1sqm1 = hh_v * (thsig1sq - (T) 1.);
+      V hhthsig2sqm1 = hh_v * (thsig2sq - (T) 1.);
+      V f1           = y1_v - d1_v - hh_v * (tanhterm1 + thsig1);
+      V f2           = y2_v - d2_v - hh_v * (tanhterm2 + thsig2);
+      V res          = vec_abs (f1) + vec_abs (f2);
+      V a            = (T) 1. - qq * hhthsig1sqm1;
+      V b            = -qq * kc * hhthsig1sqm1 * dgky2;
+      V c            = hhthsig2sqm1;
+      V d            = (kc * dgky2 - (T) 1.) * hhthsig2sqm1 + (T) 1.;
+      V norm         = 1. / (a * d - b * c);
+      y1_v -= (d * f1 - b * f2) * norm;
+      y2_v -= (a * f2 - c * f1) * norm;
+
+      auto stillerror = res > (T) epsilon;
+      if (vec_is_all_zeros (stillerror)) {
+        break;
+      }
     }
-    st[d1] = st[y1];
-    st[d2] = st[y2];
-    return st[d2];
+    d1_v = y1_v;
+    d2_v = y2_v;
+
+    vec_store (&st[y1 * traits.size], y1_v);
+    vec_store (&st[y2 * traits.size], y2_v);
+    vec_store (&st[d1 * traits.size], d1_v);
+    vec_store (&st[d2 * traits.size], d2_v);
+    return d2_v;
   }
-  //----------------------------------------------------------------------------
-  // TODO SIMD
   //----------------------------------------------------------------------------
 };
 //----------------------------------------------------------------------------
 struct ms20_asym_notch : public detail::ms20_base {
   //----------------------------------------------------------------------------
-  static void notch (crange<double> c, double freq, double reso, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr)
   {
-    init (c, freq, reso, sr);
+    detail::ms20_base::init (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               in)
+  // N sets of coeffs, N outs calculated at once.
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
-    assert (st.size() >= n_states);
-    assert (co.size() >= n_coeffs);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    double gd2k      = detail::f_g_asym (st[d2] * co[k]);
-    double tanhterm1 = std::tanh (-st[d1] - in - gd2k);
-    double tanhterm2 = std::tanh (st[d1] - st[d2] + in + gd2k);
+    assert (st.size() >= (n_states * traits.size));
+    assert (co.size() >= (n_coeffs * traits.size));
 
-    double res = INFINITY;
-    for (uint i = 0; i < max_iter && epsilon < res; ++i) {
-      double ky2          = co[k] * st[y2];
-      double gky2         = detail::f_g_asym (ky2);
-      double dgky2        = detail::f_dg_asym (ky2);
-      double sig1         = -in - st[y1] - gky2;
-      double thsig1       = std::tanh (sig1);
-      double thsig1sq     = thsig1 * thsig1;
-      double sig2         = in + st[y1] - st[y2] + gky2;
-      double thsig2       = std::tanh (sig2);
-      double thsig2sq     = thsig2 * thsig2;
-      double hhthsig1sqm1 = co[hh] * (thsig1sq - 1.);
-      double hhthsig2sqm1 = co[hh] * (thsig2sq - 1.);
-      double f1           = st[y1] - st[d1] - co[hh] * (tanhterm1 + thsig1);
-      double f2           = st[y2] - st[d2] - co[hh] * (tanhterm2 + thsig2);
-      res                 = std::fabs (f1) + std::fabs (f2);
-      double a            = 1. - hhthsig1sqm1;
-      double b            = -co[k] * hhthsig1sqm1 * dgky2;
-      double c            = hhthsig2sqm1;
-      double d            = (co[k] * dgky2 - 1.) * hhthsig2sqm1 + 1.;
-      double norm         = 1. / (a * d - b * c);
-      st[y1] -= (d * f1 - b * f2) * norm;
-      st[y2] -= (a * f2 - c * f1) * norm;
+    V hh_v = vec_load<V> (&co[hh * traits.size]);
+    V k_v  = vec_load<V> (&co[k * traits.size]);
+    V y1_v = vec_load<V> (&st[y1 * traits.size]);
+    V y2_v = vec_load<V> (&st[y2 * traits.size]);
+    V d1_v = vec_load<V> (&st[d1 * traits.size]);
+    V d2_v = vec_load<V> (&st[d2 * traits.size]);
+
+    V gd2k      = detail::f_g_asym (d2_v * k_v);
+    V tanhterm1 = vec_tanh (-d1_v - in - gd2k);
+    V tanhterm2 = vec_tanh (d1_v - d2_v + in + gd2k);
+
+    for (uint i = 0; i < max_iter; ++i) {
+      V ky2          = k_v * y2_v;
+      V gky2         = detail::f_g_asym (ky2);
+      V dgky2        = detail::f_dg_asym (ky2);
+      V sig1         = -in - y1_v - gky2;
+      V thsig1       = vec_tanh (sig1);
+      V thsig1sq     = thsig1 * thsig1;
+      V sig2         = in + y1_v - y2_v + gky2;
+      V thsig2       = vec_tanh (sig2);
+      V thsig2sq     = thsig2 * thsig2;
+      V hhthsig1sqm1 = hh_v * (thsig1sq - (T) 1.);
+      V hhthsig2sqm1 = hh_v * (thsig2sq - (T) 1.);
+      V f1           = y1_v - d1_v - hh_v * (tanhterm1 + thsig1);
+      V f2           = y2_v - d2_v - hh_v * (tanhterm2 + thsig2);
+      V res          = vec_abs (f1) + vec_abs (f2);
+      V a            = 1. - hhthsig1sqm1;
+      V b            = -k_v * hhthsig1sqm1 * dgky2;
+      V c            = hhthsig2sqm1;
+      V d            = (k_v * dgky2 - (T) 1.) * hhthsig2sqm1 + (T) 1.;
+      V norm         = (T) 1. / (a * d - b * c);
+      y1_v -= (d * f1 - b * f2) * norm;
+      y2_v -= (a * f2 - c * f1) * norm;
+
+      auto stillerror = res > (T) epsilon;
+      if (vec_is_all_zeros (stillerror)) {
+        break;
+      }
     }
-    st[d1] = st[y1];
-    st[d2] = st[y2];
-    return in - st[y2];
+    d1_v = y1_v;
+    d2_v = y2_v;
+
+    vec_store (&st[y1 * traits.size], y1_v);
+    vec_store (&st[y2 * traits.size], y2_v);
+    vec_store (&st[d1 * traits.size], d1_v);
+    vec_store (&st[d2 * traits.size], d2_v);
+    return in - y2_v;
   }
-  //----------------------------------------------------------------------------
-  // TODO SIMD
   //----------------------------------------------------------------------------
 };
 //##############################################################################
@@ -518,79 +742,138 @@ struct steiner_base {
   enum coeffs { h, k, kh, hsq, lp, bp, hp, normalizing_const, n_coeffs };
   enum state { x, v1, v2, n_states };
   //----------------------------------------------------------------------------
-  static void lowpass (crange<double> co, double freq, double reso, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr,
+    lowpass_tag)
   {
     init (co, freq, reso, 0., sr);
   }
-
-  static void bandpass (crange<double> co, double freq, double reso, double sr)
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr,
+    bandpass_tag)
   {
     init (co, freq, reso, 0.25, sr);
   }
 
-  static void highpass (crange<double> co, double freq, double reso, double sr)
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr,
+    highpass_tag)
   {
     init (co, freq, reso, 0.5, sr);
   }
 
-  static void notch (crange<double> co, double freq, double reso, double sr)
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr,
+    notch_tag)
   {
     init (co, freq, reso, 0.75, sr);
   }
   //----------------------------------------------------------------------------
-  static void repair_unsmoothable_coeffs (crange<double>, crange<const double>)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
   {}
   //----------------------------------------------------------------------------
-  static void reset_states (crange<double> s)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
   {
-    assert (s.size() >= n_states);
-    memset (s.data(), 0, sizeof s[0] * n_states);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
   }
   //----------------------------------------------------------------------------
+protected:
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void init (
-    crange<double> co,
-    double         freq,
-    double         reso,
-    double         morph,
-    double         sr)
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         morph,
+    vec_value_type_t<V>         sr)
   {
     // The original filter freq seems to be off by 10% 22000 vs 20000kHz.
     // It also doesn't respect the frequency.
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    assert (co.size() >= n_coeffs);
-    freq                  = std ::min (sr < 80000. ? 14000. : 20000., freq);
-    double oversampling   = (sr / 44100.);
-    double norm_freq      = (freq / 20000.);
-    double f0             = norm_freq / oversampling;
-    co[h]                 = tan (0.5 * M_PI * f0);
-    co[k]                 = 3.98 * reso;
-    co[hsq]               = co[h] * co[h]; // calculated instead?
-    co[kh]                = co[k] * co[h]; // calculated instead?
-    co[normalizing_const] = 1.0 / (-kh + hsq + 2. * h + 1.);
+    assert (co.size() >= (n_coeffs * traits.size));
+
+    freq           = vec_min (sr < (T) 80000. ? (T) 14000. : (T) 20000., freq);
+    T oversampling = (sr * (T) (1. / 44100.));
+    V norm_freq    = (freq * (T) (1. / 20000.));
+
+    V f0 = norm_freq / oversampling;
+
+    V h_v   = vec_tan ((T) 0.5 * M_PI * f0);
+    V k_v   = (T) 3.98 * reso;
+    V hsq_v = h_v * h_v; // calculated on "tick "instead to save memory?
+    V kh_v  = k_v * h_v; // calculated on "tick "instead to save memory?
+
+    vec_store (&co[h * traits.size], h_v);
+    vec_store (&co[k * traits.size], k_v);
+    vec_store (&co[hsq * traits.size], hsq_v);
+    vec_store (&co[kh * traits.size], kh_v);
+    vec_store (
+      &co[normalizing_const * traits.size],
+      (T) 1.0 / (-kh_v + hsq_v + (T) 2. * h_v + (T) 1.));
 
     /*alpha = 20.94153124476462;
     beta = 0.057872340425531923;
     vref = log(h / (alpha * beta)) / alpha;*/
 
     if (morph < 0.25) {
-      co[lp] = 1.0 - morph * 4;
-      co[bp] = morph * 4;
-      co[hp] = 0;
+      vec_store (&co[lp * traits.size], vec_set<V> ((T) 1.0 - morph * (T) 4));
+      vec_store (&co[bp * traits.size], vec_set<V> (morph * (T) 4));
+      vec_store (&co[hp * traits.size], vec_set<V> ((T) 0));
     }
     else if (morph < 0.5) {
-      co[hp] = (morph - 0.25) * 4;
-      co[bp] = 1.0 - (morph - 0.25) * 4;
-      co[lp] = 0;
+      vec_store (
+        &co[hp * traits.size], vec_set<V> ((morph - (T) 0.25) * (T) 4.));
+      vec_store (
+        &co[bp * traits.size],
+        vec_set<V> ((T) 1.0 - (morph - (T) 0.25) * (T) 4.));
+      vec_store (&co[lp * traits.size], vec_set<V> ((T) 0.));
     }
-    else if (morph < 0.75) {
-      co[hp] = 1.0;
-      co[bp] = -2.0 * (morph - 0.5) * 4;
-      co[lp] = (morph - 0.5) * 4;
+    else if (morph < (T) 0.75) {
+      vec_store (&co[hp * traits.size], vec_set<V> ((T) 1.0));
+      vec_store (
+        &co[bp * traits.size],
+        vec_set<V> ((T) -2.0 * (morph - (T) 0.5) * (T) 4.));
+      vec_store (
+        &co[lp * traits.size], vec_set<V> ((morph - (T) 0.5) * (T) 4.));
     }
     else {
-      co[hp] = 1.0 - (morph - 0.75) * 4;
-      co[bp] = -2.0 * (1 - (morph - 0.75) * 4);
-      co[lp] = 1;
+      vec_store (
+        &co[hp * traits.size],
+        vec_set<V> ((T) 1.0 - (morph - (T) 0.75) * (T) 4.));
+      vec_store (
+        &co[bp * traits.size],
+        vec_set<V> ((T) -2.0 * ((T) 1 - (morph - (T) 0.75) * (T) 4.)));
+      vec_store (&co[lp * traits.size], vec_set<V> ((T) 1));
     }
   }
 
@@ -604,56 +887,78 @@ struct steiner_base {
 //##############################################################################
 struct steiner_1 : public detail::steiner_base {
   //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               in)
+  // N sets of coeffs, N outs calculated at once.
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
-    assert (st.size() >= n_states);
-    assert (co.size() >= n_coeffs);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    double x_xn = st[x] + in;
-    double v1n  = (-co[kh] * st[v1] + (co[bp] - co[hp]) * co[h] * x_xn
-                  + co[hsq] * ((co[lp] - co[hp]) * x_xn - st[v1])
-                  + 2. * co[h] * st[v2] + st[v1])
-      * co[normalizing_const];
-    double v2n
-      = (co[kh] * ((co[bp] - co[hp]) * x_xn + st[v2] - 2.0 * st[v1])
-         + (co[lp] - co[bp]) * co[hsq] * x_xn + (co[lp] - co[bp]) * co[h] * x_xn
-         - co[hsq] * st[v2] + st[v2])
-      * co[normalizing_const];
-    double kp1 = co[k] + 1.0;
-    double fb  = detail::f_g ((co[k] + 1.) * (co[hp] * st[x] + st[v1]));
-    double s1_fixed
-      = 2.0 * co[bp] * st[x] - co[hp] * st[x] - st[v1] + st[v2] + fb;
-    double s2_fixed = -4.0 * co[bp] * st[x] + co[hp] * st[x]
-      - 2.0 * (st[v2] + fb) + st[v1] + co[lp] * st[x];
+    assert (st.size() >= (n_states * traits.size));
+    assert (co.size() >= (n_coeffs * traits.size));
 
-    double res = INFINITY;
-    for (uint i = 0; i < max_iter && epsilon < res; ++i) {
-      double fb_s1      = kp1 * (co[hp] * in + v1n);
-      double fb_clipped = detail::f_g (fb_s1);
-      double s1         = s1_fixed - co[hp] * in - v1n + v2n + fb_clipped;
-      double s2
-        = s2_fixed + co[hp] * in + co[lp] * in + v1n - 2.0 * (v2n + fb_clipped);
-      double f1   = -v1n + st[v1] + co[h] * s1;
-      double f2   = -v2n + st[v2] + co[h] * s2;
-      res         = std::fabs (f1) + std::fabs (f2);
-      double a    = co[h] * (kp1 * detail::f_dg (fb_s1) - 1.0) - 1.0;
-      double b    = co[h];
-      double c    = co[h] * (1.0 - 2.0 * (co[k] + 1.0) * detail::f_dg (fb_s1));
-      double d    = -2.0 * co[h] - 1.0;
-      double norm = 1.0 / (a * d - b * c);
+    V h_v                 = vec_load<V> (&co[h * traits.size]);
+    V k_v                 = vec_load<V> (&co[k * traits.size]);
+    V hsq_v               = vec_load<V> (&co[hsq * traits.size]);
+    V kh_v                = vec_load<V> (&co[kh * traits.size]);
+    V lp_v                = vec_load<V> (&co[lp * traits.size]);
+    V bp_v                = vec_load<V> (&co[bp * traits.size]);
+    V hp_v                = vec_load<V> (&co[hp * traits.size]);
+    V normalizing_const_v = vec_load<V> (&co[normalizing_const * traits.size]);
+
+    V x_v  = vec_load<V> (&st[x * traits.size]);
+    V v1_v = vec_load<V> (&st[v1 * traits.size]);
+    V v2_v = vec_load<V> (&st[v2 * traits.size]);
+
+    V x_xn = x_v + in;
+    V v1n
+      = (-kh_v * v1_v + (bp_v - hp_v) * h_v * x_xn
+         + hsq_v * ((lp_v - hp_v) * x_xn - v1_v) + (T) 2. * h_v * v2_v + v1_v)
+      * normalizing_const_v;
+    V v2n = (kh_v * ((bp_v - hp_v) * x_xn + v2_v - (T) 2.0 * v1_v)
+             + (lp_v - bp_v) * hsq_v * x_xn + (lp_v - bp_v) * h_v * x_xn
+             - hsq_v * v2_v + v2_v)
+      * normalizing_const_v;
+    V kp1      = k_v + (T) 1.0;
+    V fb       = detail::f_g ((k_v + (T) 1.) * (hp_v * x_v + v1_v));
+    V s1_fixed = (T) 2.0 * bp_v * x_v - hp_v * x_v - v1_v + v2_v + fb;
+    V s2_fixed = (T) -4.0 * bp_v * x_v + hp_v * x_v - (T) 2.0 * (v2_v + fb)
+      + v1_v + lp_v * x_v;
+
+    for (uint i = 0; i < max_iter; ++i) {
+      V fb_s1      = kp1 * (hp_v * in + v1n);
+      V fb_clipped = detail::f_g (fb_s1);
+      V s1         = s1_fixed - hp_v * in - v1n + v2n + fb_clipped;
+      V s2
+        = s2_fixed + hp_v * in + lp_v * in + v1n - (T) 2.0 * (v2n + fb_clipped);
+      V f1  = -v1n + v1_v + h_v * s1;
+      V f2  = -v2n + v2_v + h_v * s2;
+      V res = vec_abs (f1) + vec_abs (f2);
+      V a   = h_v * (kp1 * detail::f_dg (fb_s1) - 1.0) - 1.0;
+      V b   = h_v;
+      V c = h_v * ((T) 1.0 - (T) 2.0 * (k_v + (T) 1.0) * detail::f_dg (fb_s1));
+      V d = (T) -2.0 * h_v - (T) 1.0;
+      V norm = (T) 1.0 / (a * d - b * c);
       v1n -= (d * f1 - b * f2) * norm;
       v2n -= (a * f2 - c * f1) * norm;
+
+      auto stillerror = res > (T) epsilon;
+      if (vec_is_all_zeros (stillerror)) {
+        break;
+      }
     }
-    st[x]  = in;
-    st[v1] = v1n;
-    st[v2] = v2n;
-    return (v1n + co[hp] * in);
+    x_v  = in;
+    v1_v = v1n;
+    v2_v = v2n;
+
+    vec_store (&st[x * traits.size], x_v);
+    vec_store (&st[v1 * traits.size], v1_v);
+    vec_store (&st[v2 * traits.size], v2_v);
+    return (v1n + hp_v * in);
   }
-  //----------------------------------------------------------------------------
-  // TODO SIMD
   //----------------------------------------------------------------------------
 };
 //##############################################################################
@@ -661,57 +966,79 @@ struct steiner_1 : public detail::steiner_base {
 //##############################################################################
 struct steiner_2 : public detail::steiner_base {
   //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               in)
+  // N sets of coeffs, N outs calculated at once.
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
-    assert (st.size() >= n_states);
-    assert (co.size() >= n_coeffs);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    double x_xn = st[x] + in;
-    double v1n  = (-co[kh] * st[v1] + (co[bp] - co[hp]) * co[h] * x_xn
-                  + co[hsq] * ((co[lp] - co[hp]) * x_xn - st[v1])
-                  + 2. * co[h] * st[v2] + st[v1])
-      * co[normalizing_const];
-    double v2n
-      = (co[kh] * ((co[bp] - co[hp]) * x_xn + st[v2] - 2.0 * st[v1])
-         + (co[lp] - co[bp]) * co[hsq] * x_xn + (co[lp] - co[bp]) * co[h] * x_xn
-         - co[hsq] * st[v2] + st[v2])
-      * co[normalizing_const];
-    double kp1 = co[k] + 1.0;
-    double fb  = detail::f_g_asym ((co[k] + 1.) * (co[hp] * st[x] + st[v1]));
-    double s1_fixed
-      = 2.0 * co[bp] * st[x] - co[hp] * st[x] - st[v1] + st[v2] + fb;
-    double s2_fixed = -4.0 * co[bp] * st[x] + co[hp] * st[x]
-      - 2.0 * (st[v2] + fb) + st[v1] + co[lp] * st[x];
+    assert (st.size() >= (n_states * traits.size));
+    assert (co.size() >= (n_coeffs * traits.size));
 
-    double res = INFINITY;
-    for (uint i = 0; i < max_iter && epsilon < res; ++i) {
-      double fb_s1      = kp1 * (co[hp] * in + v1n);
-      double fb_clipped = detail::f_g_asym (fb_s1);
-      double s1         = s1_fixed - co[hp] * in - v1n + v2n + fb_clipped;
-      double s2
-        = s2_fixed + co[hp] * in + co[lp] * in + v1n - 2.0 * (v2n + fb_clipped);
-      double f1 = -v1n + st[v1] + co[h] * s1;
-      double f2 = -v2n + st[v2] + co[h] * s2;
-      res       = std::fabs (f1) + std::fabs (f2);
-      double a  = co[h] * (kp1 * detail::f_dg_asym (fb_s1) - 1.0) - 1.0;
-      double b  = co[h];
-      double c
-        = co[h] * (1.0 - 2.0 * (co[k] + 1.0) * detail::f_dg_asym (fb_s1));
-      double d    = -2.0 * co[h] - 1.0;
-      double norm = 1.0 / (a * d - b * c);
+    V h_v                 = vec_load<V> (&co[h * traits.size]);
+    V k_v                 = vec_load<V> (&co[k * traits.size]);
+    V hsq_v               = vec_load<V> (&co[hsq * traits.size]);
+    V kh_v                = vec_load<V> (&co[kh * traits.size]);
+    V lp_v                = vec_load<V> (&co[lp * traits.size]);
+    V bp_v                = vec_load<V> (&co[bp * traits.size]);
+    V hp_v                = vec_load<V> (&co[hp * traits.size]);
+    V normalizing_const_v = vec_load<V> (&co[normalizing_const * traits.size]);
+
+    V x_v  = vec_load<V> (&st[x * traits.size]);
+    V v1_v = vec_load<V> (&st[v1 * traits.size]);
+    V v2_v = vec_load<V> (&st[v2 * traits.size]);
+
+    V x_xn = x_v + in;
+    V v1n
+      = (-kh_v * v1_v + (bp_v - hp_v) * h_v * x_xn
+         + hsq_v * ((lp_v - hp_v) * x_xn - v1_v) + (T) 2. * h_v * v2_v + v1_v)
+      * normalizing_const_v;
+    V v2n = (kh_v * ((bp_v - hp_v) * x_xn + v2_v - (T) 2.0 * v1_v)
+             + (lp_v - bp_v) * hsq_v * x_xn + (lp_v - bp_v) * h_v * x_xn
+             - hsq_v * v2_v + v2_v)
+      * normalizing_const_v;
+    V kp1      = k_v + (T) 1.0;
+    V fb       = detail::f_g_asym ((k_v + (T) 1.) * (hp_v * x_v + v1_v));
+    V s1_fixed = (T) 2.0 * bp_v * x_v - hp_v * x_v - v1_v + v2_v + fb;
+    V s2_fixed = (T) -4.0 * bp_v * x_v + hp_v * x_v - (T) 2.0 * (v2_v + fb)
+      + v1_v + lp_v * x_v;
+
+    for (uint i = 0; i < max_iter; ++i) {
+      V fb_s1      = kp1 * (hp_v * in + v1n);
+      V fb_clipped = detail::f_g_asym (fb_s1);
+      V s1         = s1_fixed - hp_v * in - v1n + v2n + fb_clipped;
+      V s2
+        = s2_fixed + hp_v * in + lp_v * in + v1n - (T) 2.0 * (v2n + fb_clipped);
+      V f1  = -v1n + v1_v + h_v * s1;
+      V f2  = -v2n + v2_v + h_v * s2;
+      V res = vec_abs (f1) + vec_abs (f2);
+      V a   = h_v * (kp1 * detail::f_dg_asym (fb_s1) - (T) 1.0) - (T) 1.0;
+      V b   = h_v;
+      V c   = h_v
+        * ((T) 1.0 - (T) 2.0 * (k_v + (T) 1.0) * detail::f_dg_asym (fb_s1));
+      V d    = (T) -2.0 * h_v - (T) 1.0;
+      V norm = (T) 1.0 / (a * d - b * c);
       v1n -= (d * f1 - b * f2) * norm;
       v2n -= (a * f2 - c * f1) * norm;
+
+      auto stillerror = res > (T) epsilon;
+      if (vec_is_all_zeros (stillerror)) {
+        break;
+      }
     }
-    st[x]  = in;
-    st[v1] = v1n;
-    st[v2] = v2n;
-    return (v1n + co[hp] * in);
+    x_v  = in;
+    v1_v = v1n;
+    v2_v = v2n;
+
+    vec_store (&st[x * traits.size], x_v);
+    vec_store (&st[v1 * traits.size], v1_v);
+    vec_store (&st[v2 * traits.size], v2_v);
+    return (v1n + hp_v * in);
   }
-  //----------------------------------------------------------------------------
-  // TODO SIMD
   //----------------------------------------------------------------------------
 };
 //##############################################################################
@@ -724,8 +1051,6 @@ struct moog_1 {
   //----------------------------------------------------------------------------
   enum coeffs {
     k,
-    vt2,
-    vt2i,
     q0s,
     r1s,
     k0s,
@@ -758,165 +1083,268 @@ struct moog_1 {
     n_states
   };
   //----------------------------------------------------------------------------
-  static void lowpass (crange<double> co, double freq, double reso, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr,
+    lowpass_tag)
   {
-    init (co, freq, reso, 0, 0., sr);
+    init (co, freq, reso, 0, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
-  static void bandpass (crange<double> co, double freq, double reso, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr,
+    bandpass_tag)
   {
-    init (co, freq, reso, 1, 0., sr);
+    init (co, freq, reso, 1, vec_set<V> (0.), sr);
   }
-  //----------------------------------------------------------------------------
-  static void highpass (crange<double> co, double freq, double reso, double sr)
-  {
-    init (co, freq, reso, 2, 0., sr);
-  }
-  //----------------------------------------------------------------------------
-  static void notch (crange<double> co, double freq, double reso, double sr)
-  {
-    init (co, freq, reso, 3, 0., sr);
-  }
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               in)
-  {
-    assert (st.size() >= n_states);
-    assert (co.size() >= n_coeffs);
 
-    double yo = std::tanh (co[k0g] * (in + st[sg1]));
-    double a  = yo;
-    double yi = yo;
-    double yd = co[k0s] * (yi + st[sf1]);
-    double y  = yd + st[si1];
-    yo        = std::tanh (co[vt2i] * y);
-    double b  = yo;
-    st[si1]   = yd + y;
-    st[sf1]   = co[r1s] * yi - co[q0s] * yo;
-    yi        = yo;
-    yd        = co[k0s] * (yi + st[sf2]);
-    y         = yd + st[si2];
-    yo        = std::tanh (co[vt2i] * y);
-    double c  = yo;
-    st[si2]   = yd + y;
-    st[sf2]   = co[r1s] * yi - co[q0s] * yo;
-    yi        = yo;
-    yd        = co[k0s] * (yi + st[sf3]);
-    y         = yd + st[si3];
-    yo        = std::tanh (co[vt2i] * y);
-    double d  = yo;
-    st[si3]   = yd + y;
-    st[sf3]   = co[r1s] * yi - co[q0s] * yo;
-    yi        = yo;
-    yd        = co[k0s] * (yi + st[sf4]);
-    y         = yd + st[si4];
-    yo        = std::tanh (co[vt2i] * y);
-    st[si4]   = yd + y;
-    st[sf4]   = co[r1s] * yi - co[q0s] * yo;
-    double yf = co[k] * y;
-    st[sg1]   = co[rg1] * in + co[qg1] * yf + st[sg2];
-    st[sg2]   = co[rg2] * in + co[qg2] * yf + st[sg3];
-    st[sg3]   = co[rg3] * in + co[qg3] * yf + st[sg4];
-    st[sg4]   = co[rg4] * in + co[qg4] * yf;
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr,
+    highpass_tag)
+  {
+    init (co, freq, reso, 2, vec_set<V> (0.), sr);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr,
+    notch_tag)
+  {
+    init (co, freq, reso, 3, vec_set<V> (0.), sr);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>       co_smooth,
+    crange<vec_value_type_t<const V>> co)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    double f1, f2;
-    double fracv = co[frac];
-    switch (*(u64*) &co[choice]) {
+    assert (co.size() >= (n_coeffs * traits.size));
+    assert (co_smooth.size() >= (n_coeffs * traits.size));
+
+    // the filter type as an integer can't be smoothed
+    memcpy (
+      &co_smooth[choice * traits.size], &co[choice * traits.size], sizeof (V));
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
+  }
+  //----------------------------------------------------------------------------
+  // N sets of coeffs, N outs calculated at once.
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+    using uint_vec        = typename decltype (traits)::same_size_uint_type;
+
+    assert (st.size() >= (n_states * traits.size));
+    assert (co.size() >= (n_coeffs * traits.size));
+
+    V k_v    = vec_load<V> (&co[k * traits.size]);
+    V q0s_v  = vec_load<V> (&co[q0s * traits.size]);
+    V r1s_v  = vec_load<V> (&co[r1s * traits.size]);
+    V k0s_v  = vec_load<V> (&co[k0s * traits.size]);
+    V k0g_v  = vec_load<V> (&co[k0g * traits.size]);
+    V rg1_v  = vec_load<V> (&co[rg1 * traits.size]);
+    V rg2_v  = vec_load<V> (&co[rg2 * traits.size]);
+    V rg3_v  = vec_load<V> (&co[rg3 * traits.size]);
+    V rg4_v  = vec_load<V> (&co[rg4 * traits.size]);
+    V qg1_v  = vec_load<V> (&co[qg1 * traits.size]);
+    V qg2_v  = vec_load<V> (&co[qg2 * traits.size]);
+    V qg3_v  = vec_load<V> (&co[qg3 * traits.size]);
+    V qg4_v  = vec_load<V> (&co[qg4 * traits.size]);
+    V frac_v = vec_load<V> (&co[frac * traits.size]);
+
+    auto choice_f = vec_load<V> (&co[choice * traits.size]);
+    auto choice_v = *reinterpret_cast<uint_vec*> (&choice_f);
+
+    V sf1_v = vec_load<V> (&st[sf1 * traits.size]);
+    V sf2_v = vec_load<V> (&st[sf2 * traits.size]);
+    V sf3_v = vec_load<V> (&st[sf3 * traits.size]);
+    V sf4_v = vec_load<V> (&st[sf4 * traits.size]);
+    V sg1_v = vec_load<V> (&st[sg1 * traits.size]);
+    V sg2_v = vec_load<V> (&st[sg2 * traits.size]);
+    V sg3_v = vec_load<V> (&st[sg3 * traits.size]);
+    V sg4_v = vec_load<V> (&st[sg4 * traits.size]);
+    V si1_v = vec_load<V> (&st[si1 * traits.size]);
+    V si2_v = vec_load<V> (&st[si2 * traits.size]);
+    V si3_v = vec_load<V> (&st[si3 * traits.size]);
+    V si4_v = vec_load<V> (&st[si4 * traits.size]);
+
+    V yo  = vec_tanh (k0g_v * (in + sg1_v));
+    V a   = yo;
+    V yi  = yo;
+    V yd  = k0s_v * (yi + sf1_v);
+    V y   = yd + si1_v;
+    yo    = vec_tanh ((T) vt2i * y);
+    V b   = yo;
+    si1_v = yd + y;
+    sf1_v = r1s_v * yi - q0s_v * yo;
+    yi    = yo;
+    yd    = k0s_v * (yi + sf2_v);
+    y     = yd + si2_v;
+    yo    = vec_tanh ((T) vt2i * y);
+    V c   = yo;
+    si2_v = yd + y;
+    sf2_v = r1s_v * yi - q0s_v * yo;
+    yi    = yo;
+    yd    = k0s_v * (yi + sf3_v);
+    y     = yd + si3_v;
+    yo    = vec_tanh ((T) vt2i * y);
+    V d   = yo;
+    si3_v = yd + y;
+    sf3_v = r1s_v * yi - q0s_v * yo;
+    yi    = yo;
+    yd    = k0s_v * (yi + sf4_v);
+    y     = yd + si4_v;
+    yo    = vec_tanh ((T) vt2i * y);
+    si4_v = yd + y;
+    sf4_v = r1s_v * yi - q0s_v * yo;
+    V yf  = k_v * y;
+    sg1_v = rg1_v * in + qg1_v * yf + sg2_v;
+    sg2_v = rg2_v * in + qg2_v * yf + sg3_v;
+    sg3_v = rg3_v * in + qg3_v * yf + sg4_v;
+    sg4_v = rg4_v * in + qg4_v * yf;
+
+    V f1, f2;
+    switch (choice_v[0]) {
     case 0:
-      f1 = y * (1. + co[k]);
-      f2 = vt2 * (2. * c - 2. * b);
+      f1 = y * ((T) 1. + k_v);
+      f2 = (T) vt2 * ((T) 2. * c - (T) 2. * b);
       break;
     case 1:
-      f1 = vt2 * (2. * c - 2. * b);
-      f2 = vt2 * (a - 4. * b + 6. * c - 4. * d + yo);
+      f1 = (T) vt2 * ((T) 2. * c - (T) 2. * b);
+      f2 = (T) vt2 * (a - (T) 4. * b + (T) 6. * c - (T) 4. * d + yo);
       break;
     case 2:
-      fracv *= fracv;
-      fracv *= fracv;
-      f1 = vt2 * (a - 4. * b + 6. * c - 4. * d + yo);
-      f2 = vt2 * (a - 4. * b + 6. * c - 4. * d);
+      frac_v *= frac_v;
+      frac_v *= frac_v;
+      f1 = (T) vt2 * (a - (T) 4. * b + (T) 6. * c - (T) 4. * d + yo);
+      f2 = (T) vt2 * (a - (T) 4. * b + (T) 6. * c - (T) 4. * d);
       break;
     case 3:
-      f1 = vt2 * (a - 4. * b + 6. * c - 4. * d);
-      f2 = y * (1. + co[k]);
+      f1 = (T) vt2 * (a - (T) 4. * b + (T) 6. * c - (T) 4. * d);
+      f2 = y * ((T) 1. + k_v);
       break;
     default:
-      f1 = 0;
-      f2 = 0;
+      f1 = vec_set<V> ((T) 0);
+      f2 = vec_set<V> ((T) 0);
       break;
     }
-    return (f2 * fracv + f1 * (1.0 - fracv)) * co[vt2i];
+
+    vec_store (&st[sf1 * traits.size], sf1_v);
+    vec_store (&st[sf2 * traits.size], sf2_v);
+    vec_store (&st[sf3 * traits.size], sf3_v);
+    vec_store (&st[sf4 * traits.size], sf4_v);
+    vec_store (&st[sg1 * traits.size], sg1_v);
+    vec_store (&st[sg2 * traits.size], sg2_v);
+    vec_store (&st[sg3 * traits.size], sg3_v);
+    vec_store (&st[sg4 * traits.size], sg4_v);
+    vec_store (&st[si1 * traits.size], si1_v);
+    vec_store (&st[si2 * traits.size], si2_v);
+    vec_store (&st[si3 * traits.size], si3_v);
+    vec_store (&st[si4 * traits.size], si4_v);
+
+    return (f2 * frac_v + f1 * (1.0 - frac_v)) * (T) vt2i;
   }
   //----------------------------------------------------------------------------
-  static void repair_unsmoothable_coeffs (
-    crange<double>       co_smooth,
-    crange<const double> co)
-  {
-    assert (co_smooth.size() >= n_coeffs);
-    assert (co.size() >= n_coeffs);
-    // the filter type as integer can't be smoothed
-    co_smooth[choice] = co[choice];
-  }
+private:
+  static constexpr double vt2  = 0.052;
+  static constexpr double vt2i = 19.23076923076923;
   //----------------------------------------------------------------------------
-  static void reset_states (crange<double> s)
-  {
-    assert (s.size() >= n_states);
-    memset (s.data(), 0, sizeof s[0] * n_states);
-  }
-  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void init (
-    crange<double> co,
-    double         freq,
-    double         reso,
-    uint           filter_type, // choice on the original code
-    double         fraction, // frac on the original code
-    double         sr)
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    uint                        filter_type, // choice on the original code
+    V                           fraction, // frac on the original code
+    vec_value_type_t<V>         sr)
   {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+    using uint_vec        = typename decltype (traits)::same_size_uint_type;
+
+    assert (co.size() >= (n_coeffs * traits.size));
     // The original filter freq seems to be off by 10% 22000 vs 20000kHz.
     // It also doesn't respect the frequency.
-    assert (co.size() >= n_coeffs);
 
     // needs generous sample/rate oversampling
-    freq = std ::min (sr < 176200. ? 12000. : 20000., freq);
-    freq = std ::min (sr < 96000. ? 11000. : 20000., freq);
-    freq = std ::min (sr < 88200. ? 6000. : 20000., freq);
-    freq = std ::min (sr < 48000. ? 5500. : 20000., freq);
+    freq = vec_min (sr < (T) 176200. ? (T) 12000. : (T) 20000., freq);
+    freq = vec_min (sr < (T) 96000. ? (T) 11000. : (T) 20000., freq);
+    freq = vec_min (sr < (T) 88200. ? (T) 6000. : (T) 20000., freq);
+    freq = vec_min (sr < (T) 48000. ? (T) 5500. : (T) 20000., freq);
 
-    double fc = freq;
-    double fs = sr;
+    V fc = freq;
+    T fs = sr;
 
-    co[k]    = reso * 3.9999999999999987;
-    double g = std::tan (3.141592653589793 * fc / fs)
-      / std::sqrt (
-                 1.0 + std::sqrt (co[k])
-                 - 2. * std::pow (co[k], 0.25) * 0.7071067811865476);
-    co[vt2]    = 0.052;
-    co[vt2i]   = 19.23076923076923;
-    double p0s = 1.0 / (1.0 + g);
-    co[q0s]    = 1.0 - g;
-    co[r1s]    = -g;
-    co[k0s]    = co[vt2] * g * p0s;
-    double nmp = (1.0 - p0s);
-    double gn  = nmp * nmp * nmp * nmp;
-    double kgn = co[k] * gn;
-    double p0g = 1.0 / (1.0 + kgn);
-    co[k0g]    = -co[vt2i] * p0g;
-    co[rg1]    = -4.0 * kgn;
-    co[rg2]    = -6.0 * kgn;
-    co[rg3]    = -4.0 * kgn;
-    co[rg4]    = -1.0 * kgn;
-    double tmp = p0s * (g - 1.0);
-    double acc = tmp;
-    co[qg1]    = -4.0 * (kgn + acc);
+    V k_v = reso * (T) 3.9999999999999987;
+    vec_store (&co[k * traits.size], k_v);
+
+    V g = vec_tan ((T) M_PI * fc / fs)
+      / vec_sqrt (
+            (T) 1.0 + vec_sqrt (k_v)
+            - (T) 2. * vec_pow (k_v, (T) 0.25) * (T) M_SQRT1_2);
+
+    V p0s = 1.0 / (1.0 + g);
+    vec_store (&co[q0s * traits.size], 1.0 - g); // save memory?
+    vec_store (&co[r1s * traits.size], -g);
+    vec_store (&co[k0s * traits.size], (T) vt2 * g * p0s);
+
+    V nmp = (1.0 - p0s);
+    V gn  = nmp * nmp * nmp * nmp;
+    V kgn = k_v * gn;
+    V p0g = 1.0 / (1.0 + kgn);
+
+    vec_store (&co[k0g * traits.size], -(T) vt2i * p0g);
+    vec_store (&co[rg1 * traits.size], -4.0 * kgn); // save memory?
+    vec_store (&co[rg2 * traits.size], -6.0 * kgn); // save memory?
+    vec_store (&co[rg3 * traits.size], -4.0 * kgn); // save memory?
+    vec_store (&co[rg4 * traits.size], -1.0 * kgn); // save memory?
+
+    V tmp = p0s * (g - 1.0);
+    V acc = tmp;
+
+    vec_store (&co[qg1 * traits.size], -4.0 * (kgn + acc));
     acc *= tmp;
-    co[qg2] = -6.0 * (kgn + acc);
+    vec_store (&co[qg2 * traits.size], -6.0 * (kgn + acc));
     acc *= tmp;
-    co[qg3] = -4.0 * (kgn + acc);
+    vec_store (&co[qg3 * traits.size], -4.0 * (kgn + acc));
     acc *= tmp;
-    co[qg4]               = -1.0 * (kgn + acc);
-    *((u64*) &co[choice]) = filter_type;
-    co[frac]              = fraction;
+    vec_store (&co[qg4 * traits.size], -1.0 * (kgn + acc));
+    // vector types are defined with __may_alias__ reinterpret is fine.
+    auto ft = vec_set<uint_vec> (filter_type);
+    vec_store (&co[choice * traits.size], *reinterpret_cast<V*> (&ft));
+    vec_store (&co[frac * traits.size], fraction);
   }
 };
 //##############################################################################
@@ -929,8 +1357,6 @@ struct moog_2 {
   //----------------------------------------------------------------------------
   enum coeffs {
     k,
-    vt2,
-    vt2i,
     q0s,
     r1s,
     k0s,
@@ -945,143 +1371,232 @@ struct moog_2 {
   };
   enum state { sf1, sf2, sg1, sg2, si1, si2, n_states };
   //----------------------------------------------------------------------------
-  static void lowpass (crange<double> co, double freq, double reso, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr,
+    lowpass_tag)
   {
-    init (co, freq, reso, 0, 0., sr);
+    init (co, freq, reso, 0, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
-  static void bandpass (crange<double> co, double freq, double reso, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr,
+    bandpass_tag)
   {
-    init (co, freq, reso, 1, 0., sr);
+    init (co, freq, reso, 1, vec_set<V> (0.), sr);
   }
-  //----------------------------------------------------------------------------
-  static void highpass (crange<double> co, double freq, double reso, double sr)
-  {
-    init (co, freq, reso, 2, 0., sr);
-  }
-  //----------------------------------------------------------------------------
-  static void notch (crange<double> co, double freq, double reso, double sr)
-  {
-    init (co, freq, reso, 3, 0., sr);
-  }
-  //----------------------------------------------------------------------------
-  static void repair_unsmoothable_coeffs (
-    crange<double>       co_smooth,
-    crange<const double> co)
-  {
-    assert (co_smooth.size() >= n_coeffs);
-    assert (co.size() >= n_coeffs);
-    // the filter type as integer can't be smoothed
-    co_smooth[choice] = co[choice];
-  }
-  //----------------------------------------------------------------------------
-  static void reset_states (crange<double> s)
-  {
-    assert (s.size() >= n_states);
-    memset (s.data(), 0, sizeof s[0] * n_states);
-  }
-  //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               in)
-  {
-    assert (st.size() >= n_states);
-    assert (co.size() >= n_coeffs);
 
-    double yo = std::tanh (co[k0g] * (in + st[sg1]));
-    double a  = yo;
-    double yi = yo;
-    double yd = co[k0s] * (yi + st[sf1]);
-    double y  = yd + st[si1];
-    yo        = std::tanh (co[vt2i] * y);
-    double b  = yo;
-    st[si1]   = yd + y;
-    st[sf1]   = co[r1s] * yi - co[q0s] * yo;
-    yi        = yo;
-    yd        = co[k0s] * (yi + st[sf2]);
-    y         = yd + st[si2];
-    yo        = std::tanh (co[vt2i] * y);
-    st[si2]   = yd + y;
-    st[sf2]   = co[r1s] * yi - co[q0s] * yo;
-    double yf = co[k] * y;
-    st[sg1]   = co[rg1] * in + co[qg1] * yf + st[sg2];
-    st[sg2]   = co[rg2] * in + co[qg2] * yf;
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr,
+    highpass_tag)
+  {
+    init (co, freq, reso, 2, vec_set<V> (0.), sr);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    vec_value_type_t<V>         sr,
+    notch_tag)
+  {
+    init (co, freq, reso, 3, vec_set<V> (0.), sr);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>       co_smooth,
+    crange<vec_value_type_t<const V>> co)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    double f1, f2;
-    double fracv = co[frac];
-    switch (*((u64*) &co[choice])) {
+    assert (co.size() >= (n_coeffs * traits.size));
+    assert (co_smooth.size() >= (n_coeffs * traits.size));
+
+    // the filter type as an integer can't be smoothed
+    memcpy (
+      &co_smooth[choice * traits.size], &co[choice * traits.size], sizeof (V));
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
+  }
+  //----------------------------------------------------------------------------
+  // N sets of coeffs, N outs calculated at once.
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+    using uint_vec        = typename decltype (traits)::same_size_uint_type;
+
+    assert (st.size() >= (n_states * traits.size));
+    assert (co.size() >= (n_coeffs * traits.size));
+
+    V k_v    = vec_load<V> (&co[k * traits.size]);
+    V q0s_v  = vec_load<V> (&co[q0s * traits.size]);
+    V r1s_v  = vec_load<V> (&co[r1s * traits.size]);
+    V k0s_v  = vec_load<V> (&co[k0s * traits.size]);
+    V k0g_v  = vec_load<V> (&co[k0g * traits.size]);
+    V rg1_v  = vec_load<V> (&co[rg1 * traits.size]);
+    V rg2_v  = vec_load<V> (&co[rg2 * traits.size]);
+    V qg1_v  = vec_load<V> (&co[qg1 * traits.size]);
+    V qg2_v  = vec_load<V> (&co[qg2 * traits.size]);
+    V frac_v = vec_load<V> (&co[frac * traits.size]);
+
+    auto choice_f = vec_load<V> (&co[choice * traits.size]);
+    auto choice_v = *reinterpret_cast<uint_vec*> (&choice_f);
+
+    V sf1_v = vec_load<V> (&st[sf1 * traits.size]);
+    V sf2_v = vec_load<V> (&st[sf2 * traits.size]);
+    V sg1_v = vec_load<V> (&st[sg1 * traits.size]);
+    V sg2_v = vec_load<V> (&st[sg2 * traits.size]);
+    V si1_v = vec_load<V> (&st[si1 * traits.size]);
+    V si2_v = vec_load<V> (&st[si2 * traits.size]);
+
+    V yo  = vec_tanh (k0g_v * (in + sg1_v));
+    V a   = yo;
+    V yi  = yo;
+    V yd  = k0s_v * (yi + sf1_v);
+    V y   = yd + si1_v;
+    yo    = vec_tanh ((T) vt2i * y);
+    V b   = yo;
+    si1_v = yd + y;
+    sf1_v = r1s_v * yi - q0s_v * yo;
+    yi    = yo;
+    yd    = k0s_v * (yi + sf2_v);
+    y     = yd + si2_v;
+    yo    = vec_tanh ((T) vt2i * y);
+    si2_v = yd + y;
+    sf2_v = r1s_v * yi - q0s_v * yo;
+    V yf  = k_v * y;
+    sg1_v = rg1_v * in + qg1_v * yf + sg2_v;
+    sg2_v = rg2_v * in + qg2_v * yf;
+
+    V f1, f2;
+    switch (choice_v[0]) {
     case 0:
-      f1 = y * (1. + co[k]);
-      f2 = vt2 * (2. * b - 2. * yo) * 8.;
+      f1 = y * ((T) 1. + k_v);
+      f2 = (T) vt2 * ((T) 2. * b - (T) 2. * yo) * (T) 8.;
       break;
     case 1:
-      f1 = vt2 * (2. * b - 2. * yo) * 8.;
-      f2 = vt2 * (a - b);
+      f1 = (T) vt2 * ((T) 2. * b - (T) 2. * yo) * (T) 8.;
+      f2 = (T) vt2 * (a - b);
       break;
     case 2:
-      fracv *= fracv;
-      fracv *= fracv;
-      f1 = vt2 * (a - b);
-      f2 = -vt2 * (2. * b - 2. * yo - a);
+      frac_v *= frac_v;
+      frac_v *= frac_v;
+      f1 = (T) vt2 * (a - b);
+      f2 = -(T) vt2 * ((T) 2. * b - (T) 2. * yo - a);
       break;
     case 3:
-      f1 = -vt2 * (2. * b - 2. * yo - a);
-      f2 = y * (1. + co[k]);
+      f1 = -(T) vt2 * ((T) 2. * b - (T) 2. * yo - a);
+      f2 = y * ((T) 1. + k_v);
       break;
     default:
-      f1 = 0;
-      f2 = 0;
+      f1 = vec_set<V> ((T) 0);
+      f2 = vec_set<V> ((T) 0);
       break;
     }
-    return (f2 * fracv + f1 * (1.0 - fracv)) * co[vt2i];
+
+    vec_store (&st[sf1 * traits.size], sf1_v);
+    vec_store (&st[sf2 * traits.size], sf2_v);
+    vec_store (&st[sg1 * traits.size], sg1_v);
+    vec_store (&st[sg2 * traits.size], sg2_v);
+    vec_store (&st[si1 * traits.size], si1_v);
+    vec_store (&st[si2 * traits.size], si2_v);
+
+    return (f2 * frac_v + f1 * (1.0 - frac_v)) * (T) vt2i;
   }
   //----------------------------------------------------------------------------
+private:
+  //----------------------------------------------------------------------------
+  static constexpr double vt2  = 0.052;
+  static constexpr double vt2i = 19.23076923076923;
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void init (
-    crange<double> co,
-    double         freq,
-    double         reso,
-    uint           filter_type, // choice on the original code
-    double         fraction, // frac on the original code
-    double         sr)
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    V                           reso,
+    uint                        filter_type, // choice on the original code
+    V                           fraction, // frac on the original code
+    vec_value_type_t<V>         sr)
   {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+    using uint_vec        = typename decltype (traits)::same_size_uint_type;
+
+    assert (co.size() >= (n_coeffs * traits.size));
     // The original filter freq seems to be off by 10% 22000 vs 20000kHz.
     // It also doesn't respect the frequency.
-    assert (co.size() >= n_coeffs);
 
     // needs generous sample/rate oversampling
-    freq = std ::min (sr < 176200. ? 12000. : 20000., freq);
-    freq = std ::min (sr < 96000. ? 11000. : 20000., freq);
-    freq = std ::min (sr < 88200. ? 6000. : 20000., freq);
-    freq = std ::min (sr < 48000. ? 5500. : 20000., freq);
+    freq = vec_min (sr < (T) 176200. ? (T) 12000. : (T) 20000., freq);
+    freq = vec_min (sr < (T) 96000. ? (T) 11000. : (T) 20000., freq);
+    freq = vec_min (sr < (T) 88200. ? (T) 6000. : (T) 20000., freq);
+    freq = vec_min (sr < (T) 48000. ? (T) 5500. : (T) 20000., freq);
 
-    double fc = freq;
-    double fs = sr;
+    V fc = freq;
+    T fs = sr;
 
-    co[k]    = reso * 120.;
-    double g = std::tan (3.141592653589793 / fs * fc) / std::sqrt (1. + co[k]);
-    co[vt2]  = 0.052;
-    co[vt2i] = 19.23076923076923;
-    double p0s = 1.0 / (1.0 + g);
-    co[q0s]    = 1.0 - g;
-    co[r1s]    = -g;
-    co[k0s]    = co[vt2] * g * p0s;
-    double nmp = (1.0 - p0s);
-    double gn  = std::pow (nmp, 2.);
-    double kgn = co[k] * gn;
-    double p0g = 1.0 / (1.0 + kgn);
-    co[k0g]    = -co[vt2i] * p0g;
-    co[rg1]    = -2.0 * kgn;
-    co[rg2]    = -1.0 * kgn;
-    double tmp = p0s * (g - 1.0);
-    double acc = tmp;
-    co[qg1]    = -2.0 * (kgn + acc);
+    V k_v   = reso * 120.;
+    V g     = vec_tan (3.141592653589793 / fs * fc) / vec_sqrt (1. + k_v);
+    V p0s   = 1.0 / (1.0 + g);
+    V q0s_v = 1.0 - g;
+    V r1s_v = -g;
+    V k0s_v = (T) vt2 * g * p0s;
+    V nmp   = (1.0 - p0s);
+    V gn    = vec_pow (nmp, 2.);
+    V kgn   = k_v * gn;
+    V p0g   = 1.0 / (1.0 + kgn);
+    V k0g_v = -(T) vt2i * p0g;
+    V rg1_v = -2.0 * kgn;
+    V rg2_v = -1.0 * kgn;
+    V tmp   = p0s * (g - 1.0);
+    V acc   = tmp;
+    V qg1_v = -2.0 * (kgn + acc);
     acc *= tmp;
-    co[qg2]               = -1.0 * (kgn + acc);
-    *((u64*) &co[choice]) = filter_type;
-    co[frac]              = fraction;
+    V qg2_v = -1.0 * (kgn + acc);
+
+    vec_store (&co[k * traits.size], k_v);
+    vec_store (&co[q0s * traits.size], q0s_v);
+    vec_store (&co[r1s * traits.size], r1s_v);
+    vec_store (&co[k0s * traits.size], k0s_v);
+    vec_store (&co[k0g * traits.size], k0g_v);
+    vec_store (&co[rg1 * traits.size], rg1_v);
+    vec_store (&co[rg2 * traits.size], rg2_v);
+    vec_store (&co[qg1 * traits.size], qg1_v);
+    vec_store (&co[qg2 * traits.size], qg2_v);
+    // vector types are defined with __may_alias__ reinterpret is fine.
+    auto ft = vec_set<uint_vec> (filter_type);
+    vec_store (&co[choice * traits.size], *reinterpret_cast<V*> (&ft));
+    vec_store (&co[frac * traits.size], fraction);
   }
 };
-//------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 }} // namespace artv::saike

@@ -398,11 +398,11 @@ public:
     memset (&_post_emphasis_states, 0, sizeof _post_emphasis_states);
     memset (&_post_emphasis_coeffs, 0, sizeof _post_emphasis_coeffs);
 
-    adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::init_simd<
-      double_x2> (_adaa_fix_eq_delay_coeffs);
+    adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::init<double_x2> (
+      _adaa_fix_eq_delay_coeffs);
 
     for (auto& dcbc : _dc_block_coeffs) {
-      mystran_dc_blocker::init_simd (
+      mystran_dc_blocker::init (
         dcbc, vec_set<double_x2> (0.1), pc.get_sample_rate());
     }
 
@@ -433,7 +433,7 @@ public:
     if (unlikely (p.type_prev != p.type || p.mode_prev != p.mode)) {
       // some waveshapers will create peaks, as the integral on 0 might not be
       // 0. Running them for some samples of silence to initialize. This avoids
-      // too having to run the "init_states" functions on the waveshapers.
+      // too having to run the "reset_states" functions on the waveshapers.
       static constexpr uint n_samples = 32;
       _p.type_prev                    = _p.type;
       _p.mode_prev                    = _p.mode;
@@ -469,25 +469,25 @@ public:
         sat[i][1] = chnls[1][samples_processed + i];
         switch (p.mode) {
         case mode_compand_1b:
-          sat[i] = compand_1b_aa::tick_simd (
+          sat[i] = compand_1b_aa::tick (
             _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick_simd (
+          sat[i] = mystran_dc_blocker::tick (
             _dc_block_coeffs[dc_block_compand],
             _dc_block_states[dc_block_compand],
             sat[i]);
           break;
         case mode_compand_1a:
-          sat[i] = compand_1a_aa::tick_simd (
+          sat[i] = compand_1a_aa::tick (
             _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick_simd (
+          sat[i] = mystran_dc_blocker::tick (
             _dc_block_coeffs[dc_block_compand],
             _dc_block_states[dc_block_compand],
             sat[i]);
           break;
         case mode_compand_sqrt:
-          sat[i] = sqrt_aa::tick_simd (
+          sat[i] = sqrt_aa::tick (
             _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick_simd (
+          sat[i] = mystran_dc_blocker::tick (
             _dc_block_coeffs[dc_block_compand],
             _dc_block_states[dc_block_compand],
             sat[i]);
@@ -526,8 +526,8 @@ public:
         }
 
         // Envelope follower/modulation
-        double_x2 follow = slew_limiter::tick_simd (
-          _envfollow_coeffs, _envfollow_states, sat[i]);
+        double_x2 follow
+          = slew_limiter::tick (_envfollow_coeffs, _envfollow_states, sat[i]);
         // Make unipolar and clip at 1.
         follow
           = vec_min (vec_abs (follow) * p.ef_gain, vec_set<double_x2> (1.));
@@ -580,7 +580,7 @@ public:
         sat[i] *= drive;
 
         // pre emphasis
-        sat[i] = andy::svf::tick_simd (
+        sat[i] = andy::svf::tick (
           _pre_emphasis_coeffs, _pre_emphasis_states, sat[i]);
 
         // Feedback section
@@ -634,14 +634,14 @@ public:
         }
 
         sat[i] -= dcmod; // this is an FX not a DC blocker;
-        sat[i] = mystran_dc_blocker::tick_simd (
+        sat[i] = mystran_dc_blocker::tick (
           _dc_block_coeffs[dc_block_main],
           _dc_block_states[dc_block_main],
           sat[i]);
         _sat_prev = sat[i];
 
         // post emphasis
-        sat[i] = andy::svf::tick_simd (
+        sat[i] = andy::svf::tick (
           _post_emphasis_coeffs, _post_emphasis_states, sat[i]);
 
         // gain and crossover join
@@ -653,26 +653,26 @@ public:
         // post process / restore
         switch (p.mode) {
         case mode_compand_1b:
-          sat[i] = compand_1a_aa::tick_simd (
+          sat[i] = compand_1a_aa::tick (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick_simd (
+          sat[i] = mystran_dc_blocker::tick (
             _dc_block_coeffs[dc_block_expand],
             _dc_block_states[dc_block_expand],
             sat[i]);
           break;
         case mode_compand_1a:
-          sat[i] = compand_1b_aa::tick_simd (
+          sat[i] = compand_1b_aa::tick (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick_simd (
+          sat[i] = mystran_dc_blocker::tick (
             _dc_block_coeffs[dc_block_expand],
             _dc_block_states[dc_block_expand],
             sat[i]);
           break;
         case mode_compand_sqrt:
           // sat[i] = vec_clamp (sat[i], -pow2compand_clip, pow2compand_clip);
-          sat[i] = pow2_aa::tick_simd (
+          sat[i] = pow2_aa::tick (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick_simd (
+          sat[i] = mystran_dc_blocker::tick (
             _dc_block_coeffs[dc_block_expand],
             _dc_block_states[dc_block_expand],
             sat[i]);
@@ -731,16 +731,26 @@ private:
     f += freq_offset;
     db += amt_offset;
 
-    andy::svf::bell_simd (
-      _pre_emphasis_coeffs, f, q, db, _plugcontext->get_sample_rate());
+    andy::svf::init (
+      _pre_emphasis_coeffs,
+      f,
+      q,
+      db,
+      _plugcontext->get_sample_rate(),
+      bell_tag {});
 
-    andy::svf::bell_simd (
-      _post_emphasis_coeffs, f, q, -db, _plugcontext->get_sample_rate());
+    andy::svf::init (
+      _post_emphasis_coeffs,
+      f,
+      q,
+      -db,
+      _plugcontext->get_sample_rate(),
+      bell_tag {});
   }
   //----------------------------------------------------------------------------
   void update_envelope_follower()
   {
-    slew_limiter::init_simd (
+    slew_limiter::init (
       _envfollow_coeffs,
       vec_set<double_x2> (_p.ef_attack),
       vec_set<double_x2> (_p.ef_release),
@@ -750,7 +760,7 @@ private:
   template <class wsh>
   double_x2 wavesh_tick (double_x2 x)
   {
-    return wsh::template tick_simd (_adaa_fix_eq_delay_coeffs, _wvsh_states, x);
+    return wsh::template tick (_adaa_fix_eq_delay_coeffs, _wvsh_states, x);
   }
   //----------------------------------------------------------------------------
   enum sat_type {

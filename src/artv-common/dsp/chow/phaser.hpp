@@ -167,7 +167,7 @@ public:
     // DC blockers, could be only done once...
     auto dc_coeffs = c.shrink_head (n_own_coeffs);
     // float! not going low on frequency.
-    mystran_dc_blocker::init (dc_coeffs, 2., fs);
+    mystran_dc_blocker::init (dc_coeffs, make_vec_x1 (2.), fs);
   }
   //----------------------------------------------------------------------------
   static void reset_states (crange<value_type> s)
@@ -193,15 +193,18 @@ public:
     double y      = s[z1] + x * c[b0];
     auto   ydrive = drive (y, d3);
 
-    ydrive = mystran_dc_blocker::tick (dc_coeffs, dc_states, ydrive);
+    ydrive = mystran_dc_blocker::tick (
+      dc_coeffs, dc_states, make_vec_x1 (ydrive))[0];
 
     s[z1]     = drive (s[z2] + x * c[b1] - ydrive * c[a1], d1);
     dc_states = dc_states.shrink_head (mystran_dc_blocker::n_states);
-    s[z1]     = mystran_dc_blocker::tick (dc_coeffs, dc_states, s[z1]);
+    s[z1]
+      = mystran_dc_blocker::tick (dc_coeffs, dc_states, make_vec_x1 (s[z1]))[0];
 
     s[z2]     = drive (x * c[b2] - ydrive * c[a2], d2);
     dc_states = dc_states.shrink_head (mystran_dc_blocker::n_states);
-    s[z2]     = mystran_dc_blocker::tick (dc_coeffs, dc_states, s[z2]);
+    s[z2]
+      = mystran_dc_blocker::tick (dc_coeffs, dc_states, make_vec_x1 (s[z2]))[0];
     return y;
   }
   //----------------------------------------------------------------------------
@@ -334,8 +337,10 @@ public:
   {
     _plugcontext = &pc;
 
-    smoother::lowpass<float> (
-      make_crange (_smooth_coeff), 1. / 0.1, pc.get_sample_rate());
+    smoother::init (
+      make_crange (_smooth_coeff),
+      make_vec_x1<decltype (_smooth_coeff)> (1. / 0.1),
+      pc.get_sample_rate());
 
     memset (&_ph_coeffs, 0, sizeof _ph_coeffs);
     memset (&_fb_coeffs, 0, sizeof _fb_coeffs);
@@ -375,10 +380,12 @@ public:
     for (uint i = 0; i < samples; ++i) {
       // block LP parameter smoothing. 4 = SSE float
       for (uint j = 0; j < param_tgt.arr.size(); j += sse_step) {
-        float_x4 out = smoother::tick_aligned (
+        float_x4 out = smoother::tick (
           make_crange (_smooth_coeff),
           make_crange (&_param_state.arr[j], sse_step),
-          vec_load<float_x4> (&param_tgt.arr[j]));
+          vec_load<float_x4> (&param_tgt.arr[j]),
+          single_coeff_set_tag {});
+
         vec_store (&smooth.arr[j], out);
       }
 

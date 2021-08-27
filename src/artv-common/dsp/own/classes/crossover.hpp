@@ -33,7 +33,7 @@ public:
     uint  crossv_idx,
     float freq_l,
     float freq_r,
-    uint  order) // order, 0 -> disabled, 2, 4 8
+    uint  order) // order, 0 -> disabled, 2, 4 8.
   {
     assert (crossv_idx < n_crossovers);
     uint idx = id_invert (crossv_idx);
@@ -48,7 +48,7 @@ public:
 
     if (order != 0) {
       double_x2 f = {freq_l, freq_r};
-      linkwitz_riley_stage::init_simd (_coeffs[idx], f, _samplerate, order);
+      lr::init (_coeffs[idx], f, _samplerate, order);
     }
 
     if (order == _order[idx]) {
@@ -82,8 +82,8 @@ public:
   std::array<double_x2, n_bands> tick (double_x2 in)
   {
     // bands enable disabled.
-    std::array<double_x2, n_bands>       bands {};
-    linkwitz_riley_stage::out<double_x2> crossv {};
+    std::array<double_x2, n_bands> bands {};
+    lr_crossover_out<double_x2>    crossv {};
     crossv.lp = in;
 
     // crossovers go top to bottom internally
@@ -97,8 +97,7 @@ public:
       if (_order[crv] == 0) {
         continue;
       }
-      crossv = linkwitz_riley_stage::tick_simd (
-        _coeffs[crv], _states[crv], crossv.lp, _order[crv]);
+      crossv = lr::tick (_coeffs[crv], _states[crv], crossv.lp, _order[crv]);
 
       bands[bnd] = crossv.hp;
     }
@@ -136,7 +135,7 @@ public:
           continue;
         }
         uint band = n_crossovers - i;
-        ret[band] = linkwitz_riley_stage::apply_correction_simd (
+        ret[band] = lr::apply_correction (
           _coeffs[crv], _corr_states[correction_idx], ret[band], _order[crv]);
       }
     }
@@ -162,7 +161,7 @@ public:
         continue;
       }
       // apply correction to the sum of bands simultaneously
-      ret = linkwitz_riley_stage::apply_correction_simd (
+      ret = lr::apply_correction (
         _coeffs[crossv], _corr_states[correction_idx], ret, _order[crossv]);
     }
     ret += bands[0] + bands[1];
@@ -175,6 +174,7 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
+  using lr = linkwitz_riley_stage_any_order;
   //----------------------------------------------------------------------------
   uint id_invert (uint v)
   {
@@ -222,13 +222,10 @@ private:
     : decltype (get_n_correctors())::value;
 
   //----------------------------------------------------------------------------
-  static constexpr uint n_chnls = 2;
-  static constexpr uint n_crossv_coeffs
-    = n_chnls * linkwitz_riley_stage::n_coeffs;
-  static constexpr uint n_crossv_states
-    = n_chnls * linkwitz_riley_stage::n_states;
-  static constexpr uint n_correction_states
-    = n_chnls * linkwitz_riley_stage::n_correction_states;
+  static constexpr uint n_chnls             = 2;
+  static constexpr uint n_crossv_coeffs     = n_chnls * lr::n_coeffs;
+  static constexpr uint n_crossv_states     = n_chnls * lr::n_states;
+  static constexpr uint n_correction_states = n_chnls * lr::n_correction_states;
 
   alignas (double_x2)
     std::array<std::array<double, n_crossv_coeffs>, n_crossovers> _coeffs;

@@ -15,26 +15,14 @@ namespace artv {
 // clang-format on
 struct sqrt_functions {
   //----------------------------------------------------------------------------
-  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static T fn (T x)
-  {
-    return sqrt (abs (x)) * sgn_no_zero (x);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V fn (V x)
   {
-    return vec_sqrt (vec_abs (x)) * vec_sgn_no_zero (x);
+    auto ax = vec_abs (x);
+    return vec_sqrt (ax) * vec_sgn_no_zero (x);
   }
   //----------------------------------------------------------------------------
-  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static T int_fn (T x)
-  {
-    auto ax = abs (x);
-    return sqrt (ax) * ax * (T) (2. / 3.);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V int_fn (V x)
   {
     using T = vec_value_type_t<V>;
@@ -43,14 +31,7 @@ struct sqrt_functions {
     return vec_sqrt (ax) * ax * (T) (2. / 3.);
   }
   //----------------------------------------------------------------------------
-  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static T int2_fn (T x)
-  {
-    auto ax = abs (x);
-    return sqrt (ax) * ax * x * (T) (4. / 15.);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V int2_fn (V x)
   {
     using T = vec_value_type_t<V>;
@@ -110,40 +91,36 @@ class sqrt_adaa_1 {
 public:
   enum coeffs { n_coeffs };
   enum state { x1, x1_sqrt, n_states };
-    //----------------------------------------------------------------------------
-  template <class T>
-  static void init_states (crange<T> s)
-  {}
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void init_states_simd (crange<vec_value_type_t<V>> s)
-  {}
-  //----------------------------------------------------------------------------
-  template <class T>
-  static T tick (crange<const T>, crange<T> st, T x)
+  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (crange<vec_value_type_t<V>>)
   {
-    T x1v      = st[x1];
-    T x1_sqrtv = st[x1_sqrt];
-
-    auto ax = abs (x);
-    // likely avoid NaN, this value is almost out of resolution.
-    ax += std::numeric_limits<T>::min();
-    T x_sqrtv = sqrt (ax) * ax;
-    // likely avoid division by zero, this value will get out of resolution.
-    x_sqrtv += std::numeric_limits<T>::min();
-
-    st[x1]      = x;
-    st[x1_sqrt] = x_sqrtv;
-
-    T num = (x * x + x * x1v + x1v * x1v);
-    num *= sgn_no_zero (x, (T) -9., (T) 9.);
-    T den = (x_sqrtv + x1_sqrtv) * ((T) 6.);
-
-    return num / den;
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
   }
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+  }
+  //----------------------------------------------------------------------------
+  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
+  {
+    using T = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>>,
     crange<vec_value_type_t<V>> st,
     V x)

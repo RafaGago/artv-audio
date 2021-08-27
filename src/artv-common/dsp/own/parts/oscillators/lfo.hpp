@@ -7,6 +7,7 @@
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/dsp/own/parts/oscillators/phasor.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
 
 namespace artv {
@@ -25,8 +26,8 @@ public:
   void set_freq (float f, float samplerate)
   {
     _phasor.set_freq (f, samplerate);
-    onepole_smoother::lowpass<float> (
-      make_crange (_smooth_coeff), f * 2, samplerate);
+    onepole_smoother::init (
+      make_crange (_smooth_coeff), make_vec_x1 (f * 2), samplerate);
   }
   //----------------------------------------------------------------------------
   void set_phase (phase p) { _phasor.set_phase (p); }
@@ -110,8 +111,10 @@ public:
     }
     float ret;
     for (uint i = 0; i < n; ++i) {
-      ret = onepole_smoother::tick<float> (
-        make_crange (_smooth_coeff), make_crange (_smooth_state), _noise_value);
+      ret = onepole_smoother::tick (
+        make_crange (_smooth_coeff),
+        make_crange (_smooth_state),
+        make_vec_x1 (_noise_value))[0];
     }
     return ret;
   }

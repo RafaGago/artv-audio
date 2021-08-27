@@ -14,6 +14,7 @@
 
 #include <array>
 #include <immintrin.h>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <xsimd/xsimd.hpp>
@@ -195,7 +196,7 @@ static constexpr bool is_vec_v = detail::is_vec_v<V>;
 // qualification on "V".
 // clang-format off
 template <class V>
-static constexpr bool is_floating_point_vec_v
+static constexpr bool is_vec_of_float_type_v
   = is_vec_v<V> && std::is_floating_point_v<vec_value_type_t<V>>;
 // clang-format on
 
@@ -230,6 +231,14 @@ static constexpr uint avx_bytes = 32;
 template <class T, size_t N, size_t instr_set_bytes>
 using simd_array
   = std::array<T, round_ceil<size_t> (N, (instr_set_bytes / sizeof (T)))>;
+
+template <class V>
+using enable_if_vec_t = std::enable_if_t<is_vec_v<V>>;
+
+template <class V>
+using enable_if_vec_of_float_point_t
+  = std::enable_if_t<is_vec_of_float_type_v<V>>;
+
 //------------------------------------------------------------------------------
 // TODO: As of now this is only done for x64, but it can be easily ifdefed
 //------------------------------------------------------------------------------
@@ -244,13 +253,13 @@ using simd_array
 // FUNCTIONS
 //------------------------------------------------------------------------------
 // returns a "simd_vector_traits"
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static constexpr auto vec_traits()
 {
   return vec_traits_t<V> {};
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static constexpr auto vec_traits (V)
 {
   return vec_traits<V>();
@@ -263,7 +272,7 @@ auto make_vec_x1 (T v)
   return r;
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline auto vec_to_intrin (V simdvec)
 {
   constexpr auto traits = vec_traits<V>();
@@ -293,7 +302,7 @@ static inline auto vec_to_intrin (V simdvec)
   }
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline V vec_load (vec_value_type_t<V> const* src)
 {
   vec_traits<V>(); // check type validity only
@@ -306,13 +315,13 @@ static inline vec<T, N> vec_load (T const* src)
   return vec_load<vec<T, N>> (src);
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline void vec_load (V& dst, vec_value_type_t<V> const* src)
 {
   dst = vec_load<V> (src);
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline V vec_load (crange<const vec_value_type_t<V>> src)
 {
   constexpr auto traits = vec_traits<V>();
@@ -326,13 +335,13 @@ static inline vec<T, N> vec_load (crange<const T> src)
   return vec_load<vec<T, N>> (src);
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline void vec_load (V& dst, crange<const vec_value_type_t<V>> src)
 {
   dst = vec_load<V> (src);
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline V vec_load_unaligned (vec_value_type_t<V> const* src)
 {
   constexpr auto traits = vec_traits<V>();
@@ -347,13 +356,13 @@ static inline vec<T, N> vec_load_unaligned (T const* src)
   return vec_load_unaligned<vec<T, N>> (src);
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline void vec_load_unaligned (V& dst, vec_value_type_t<V> const* src)
 {
   dst = vec_load_unaligned<V> (src);
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline V vec_load_unaligned (crange<const vec_value_type_t<V>> src)
 {
   constexpr auto traits = vec_traits<V>();
@@ -367,7 +376,7 @@ static inline vec<T, N> vec_load_unaligned (crange<const T> src)
   return vec_load_unaligned<vec<T, N>> (src);
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline void vec_load_unaligned (
   V&                                dst,
   crange<const vec_value_type_t<V>> src)
@@ -375,7 +384,7 @@ static inline void vec_load_unaligned (
   dst = vec_load_unaligned<V> (src);
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline void vec_store (vec_value_type_t<V>* dst, V src)
 {
   constexpr auto traits = vec_traits<V>();
@@ -384,7 +393,7 @@ static inline void vec_store (vec_value_type_t<V>* dst, V src)
   *reinterpret_cast<V*> (dst) = src;
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline void vec_store (crange<vec_value_type_t<V>> dst, V src)
 {
   constexpr auto traits = vec_traits<V>();
@@ -392,7 +401,7 @@ static inline void vec_store (crange<vec_value_type_t<V>> dst, V src)
   vec_store (dst.data(), src);
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline void vec_store_unaligned (vec_value_type_t<V>* dst, V src)
 {
   constexpr auto traits = vec_traits<V>();
@@ -402,7 +411,7 @@ static inline void vec_store_unaligned (vec_value_type_t<V>* dst, V src)
   *reinterpret_cast<vec_u_type*> (dst) = src;
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline void vec_store_unaligned (crange<vec_value_type_t<V>> dst, V src)
 {
   constexpr auto traits = vec_traits<V>();
@@ -410,14 +419,14 @@ static inline void vec_store_unaligned (crange<vec_value_type_t<V>> dst, V src)
   vec_store_unaligned (dst.data(), src);
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline void vec_set (V& dst, vec_value_type_t<V> v)
 {
   constexpr auto traits = vec_traits<V>();
   dst                   = v - V {}; // convoluted but works.
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline V vec_set (vec_value_type_t<V> v)
 {
   V ret;
@@ -533,8 +542,24 @@ static inline auto call_vec_function_impl (
   }
   else {
     // vectors of size == 1, scalar.
+
+    // Workaround. Doing the obvious:
+    //  T result = scalarf (args[0]...);
+    //
+    // gives back:
+    //  "error: non-const reference cannot bind to vector element".
+    //
+    // Vector types are a bit special.
+    //
+    // Workarounding via casts, as they are simpler than the  alternative I can
+    // think of now, which is making copies via a tuple, and then writing an
+    // ad-hoc custom function to unpack while accessing the first element of
+    // the vector type. Fugly.
+    //
+    // It is know that the vector is of size 1 and that it has the
+    // "__may_alias__" attribute set.
     using T  = vec_value_type_t<V>;
-    T result = scalarf (args[0]...);
+    T result = scalarf ((*((T*) &args))...);
     return make_vec_x1 (result);
   }
 }
@@ -576,7 +601,7 @@ static inline auto call_vec_function (
 
 } // namespace detail
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_exp (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -584,11 +609,12 @@ static inline auto vec_exp (V&& x)
     return xsimd::exp (std::forward<decltype (v)> (v));
   });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto      traits = vec_traits<V>();
+  std::remove_cv_t<V> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = exp (x[i]);
+    ret[i] = exp (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
@@ -596,7 +622,7 @@ template <
   class V1,
   class V2,
   std::enable_if_t<
-    is_floating_point_vec_v<V1> && is_floating_point_vec_v<V2>>* = nullptr>
+    is_vec_of_float_type_v<V1> && is_vec_of_float_type_v<V2>>* = nullptr>
 static inline auto vec_pow (V1&& x, V2&& y)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -609,8 +635,8 @@ static inline auto vec_pow (V1&& x, V2&& y)
     },
     [] (auto&& v1, auto&& v2) { return pow (v1, v2); });
 #else
-  constexpr auto traits = vec_traits<V1>();
-  auto           ret    = x;
+  constexpr auto                                traits = vec_traits<V1>();
+  std::remove_reference_t<std::remove_cv_t<V1>> ret;
   for (uint i = 0; i < traits.size; ++i) {
     ret[i] = pow (x[i], y[i]);
   }
@@ -618,21 +644,21 @@ static inline auto vec_pow (V1&& x, V2&& y)
 #endif
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline auto vec_pow (V&& x, vec_value_type_t<V> y)
 {
   using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
   return vec_pow (std::forward<V> (x), vec_set<Vv> (y));
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline auto vec_pow (vec_value_type_t<V> x, V&& y)
 {
   using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
   return vec_pow (vec_set<Vv> (x), std::forward<V> (y));
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_sqrt (V&& x)
 {
   return detail::call_vec_function (
@@ -641,7 +667,7 @@ static inline auto vec_sqrt (V&& x)
     [] (auto&& v) { return sqrt (v); });
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_log (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -650,15 +676,16 @@ static inline auto vec_log (V&& x)
     [] (auto&& v) { return xsimd::log (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return log (v); });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = log (x[i]);
+    ret[i] = log (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_sin (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -667,15 +694,16 @@ static inline auto vec_sin (V&& x)
     [] (auto&& v) { return xsimd::sin (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return sin (v); });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = sin (x[i]);
+    ret[i] = sin (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_cos (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -684,15 +712,16 @@ static inline auto vec_cos (V&& x)
     [] (auto&& v) { return xsimd::cos (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return cos (v); });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = cos (x[i]);
+    ret[i] = cos (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_tan (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -701,15 +730,16 @@ static inline auto vec_tan (V&& x)
     [] (auto&& v) { return xsimd::tan (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return tan (v); });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = tan (x[i]);
+    ret[i] = tan (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_sinh (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -718,15 +748,16 @@ static inline auto vec_sinh (V&& x)
     [] (auto&& v) { return xsimd::sinh (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return sinh (v); });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = sinh (x[i]);
+    ret[i] = sinh (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_cosh (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -735,15 +766,16 @@ static inline auto vec_cosh (V&& x)
     [] (auto&& v) { return xsimd::cosh (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return cosh (v); });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = cosh (x[i]);
+    ret[i] = cosh (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_tanh (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -752,15 +784,16 @@ static inline auto vec_tanh (V&& x)
     [] (auto&& v) { return xsimd::tanh (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return tanh (v); });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = tanh (x[i]);
+    ret[i] = tanh (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_asin (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -769,15 +802,16 @@ static inline auto vec_asin (V&& x)
     [] (auto&& v) { return xsimd::asin (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return asin (v); });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = asin (x[i]);
+    ret[i] = asin (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_acos (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -786,15 +820,16 @@ static inline auto vec_acos (V&& x)
     [] (auto&& v) { return xsimd::acos (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return acos (v); });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = acos (x[i]);
+    ret[i] = acos (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_atan (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -803,15 +838,16 @@ static inline auto vec_atan (V&& x)
     [] (auto&& v) { return xsimd::atan (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return atan (v); });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = atan (x[i]);
+    ret[i] = atan (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_asinh (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -820,15 +856,16 @@ static inline auto vec_asinh (V&& x)
     [] (auto&& v) { return xsimd::asinh (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return asinh (v); });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = asinh (x[i]);
+    ret[i] = asinh (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_acosh (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -837,15 +874,16 @@ static inline auto vec_acosh (V&& x)
     [] (auto&& v) { return xsimd::acosh (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return acosh (v); });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = acosh (x[i]);
+    ret[i] = acosh (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_atanh (V&& x)
 {
 #if XSIMD_BROKEN_W_FAST_MATH == 0
@@ -854,15 +892,52 @@ static inline auto vec_atanh (V&& x)
     [] (auto&& v) { return xsimd::atanh (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return atanh (v); });
 #else
-  constexpr auto traits = vec_traits<V>();
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
-    x[i] = atanh (x[i]);
+    ret[i] = atanh (x[i]);
   }
-  return x;
+  return ret;
 #endif
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_floating_point_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+static inline auto vec_atan2 (V&& x, V&& y)
+{
+#if XSIMD_BROKEN_W_FAST_MATH == 0
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    std::forward<V> (y),
+    [] (auto&& v1, auto&& v2) {
+      return xsimd::atan2 (
+        std::forward<decltype (v1)> (v1), std::forward<decltype (v2)> (v2));
+    },
+    [] (auto&& v1, auto&& v2) { return atan2 (v1, v2); });
+#else
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
+  for (uint i = 0; i < traits.size; ++i) {
+    ret[i] = atan2 (x[i], y[i]);
+  }
+  return ret;
+#endif
+}
+
+template <class V, enable_if_vec_t<V>* = nullptr>
+static inline auto vec_atan2 (V&& x, vec_value_type_t<V> y)
+{
+  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
+  return vec_atan2 (std::forward<V> (x), vec_set<Vv> (y));
+}
+
+template <class V, enable_if_vec_t<V>* = nullptr>
+static inline auto vec_atan2 (vec_value_type_t<V> x, V&& y)
+{
+  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
+  return vec_atan2 (vec_set<Vv> (x), std::forward<V> (y));
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_abs (V&& x)
 {
   return detail::call_vec_function (
@@ -880,14 +955,14 @@ static inline auto vec_min (V1&& x, V2&& y)
   return x < y ? x : y;
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline auto vec_min (V&& x, vec_value_type_t<V> y)
 {
   using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
   return vec_min (std::forward<V> (x), vec_set<Vv> (y));
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline auto vec_min (vec_value_type_t<V> x, V&& y)
 {
   using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
@@ -903,18 +978,18 @@ static inline auto vec_max (V1&& x, V2&& y)
   return x > y ? x : y;
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline auto vec_max (V&& x, vec_value_type_t<V> y)
 {
   using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
   return vec_max (std::forward<V> (x), vec_set<Vv> (y));
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline auto vec_max (vec_value_type_t<V> x, V&& y)
 {
   using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
-  return vec_max (vec_set<Vv> (x), std::forward<V> (x));
+  return vec_max (vec_set<Vv> (x), std::forward<V> (y));
 }
 //------------------------------------------------------------------------------
 template <
@@ -937,7 +1012,7 @@ static inline auto vec_clamp (V1&& x, V2&& min, V3&& max)
     [] (auto&& v1, auto&& v2, auto&& v3) { return std::clamp (v1, v2, v3); });
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline auto vec_clamp (
   V&&                 x,
   vec_value_type_t<V> y,
@@ -980,7 +1055,7 @@ static inline auto vec_clamp (vec_value_type_t<V1> x, V1&& y, V2&& z)
     vec_set<Vv> (x), std::forward<V1> (y), std::forward<V2> (z));
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline auto vec_clamp (
   vec_value_type_t<V> x,
   vec_value_type_t<V> y,
@@ -990,7 +1065,7 @@ static inline auto vec_clamp (
   return vec_clamp (vec_set<V> (x), vec_set<Vv> (y), std::forward<V> (z));
 }
 
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 static inline auto vec_clamp (
   vec_value_type_t<V> x,
   V&&                 y,
@@ -1017,7 +1092,7 @@ static inline auto vec_sgn_no_zero (
   return (x < ((value_type) 0.)) ? neg : pos_zero;
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 bool vec_is_all_zeros (V v)
 {
   using Vv              = std::remove_reference_t<std::remove_cv_t<V>>;
@@ -1027,7 +1102,7 @@ bool vec_is_all_zeros (V v)
     // scalar, vector of size 1. Fast case
     using uint_ssv = typename decltype (traits)::same_size_uint_type;
     using uint_ss  = decltype (std::declval<uint_ssv>()[0]);
-    return reinterpret_cast<uint_ssv*> (&v)[0] == (uint_ss) -1ull;
+    return (*reinterpret_cast<uint_ssv*> (&v))[0] == (uint_ss) 0ull;
   }
   else {
     using V64 = vec<u64, sizeof (Vv) / sizeof (u64)>;
@@ -1048,7 +1123,7 @@ bool vec_is_all_zeros (V v)
   }
 }
 //------------------------------------------------------------------------------
-template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+template <class V, enable_if_vec_t<V>* = nullptr>
 bool vec_is_all_ones (V v)
 {
   using Vv              = std::remove_reference_t<std::remove_cv_t<V>>;
@@ -1058,7 +1133,7 @@ bool vec_is_all_ones (V v)
     // scalar, vector of size 1. Fast case
     using uint_ssv = typename decltype (traits)::same_size_uint_type;
     using uint_ss  = decltype (std::declval<uint_ssv>()[0]);
-    return reinterpret_cast<uint_ssv*> (&v)[0] == (uint_ss) -1ull;
+    return (*reinterpret_cast<uint_ssv*> (&v))[0] == (uint_ss) -1ull;
   }
   else {
     using V64 = vec<u64, traits.bytes / sizeof (u64)>;

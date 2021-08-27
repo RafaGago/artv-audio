@@ -19,21 +19,14 @@ struct iir_dc_blocker {
   enum state { x1, y1, n_states };
   //----------------------------------------------------------------------------
   // warning, if going to very low frequencies, use "double".
-  template <class T>
-  static void init (crange<T> c, T freq, T sr)
-  {
-    assert (c.size() >= n_coeffs);
-    c[R] = 1. - (M_PI * 2. * freq / sr);
-  }
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void init_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     vec_value_type_t<V>         sr)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= (traits.size * n_coeffs));
@@ -43,33 +36,16 @@ struct iir_dc_blocker {
   }
   //----------------------------------------------------------------------------
   template <class T>
-  static void repair_unsmoothable_coeffs (crange<T>, crange<const T>)
+  static void fix_unsmoothable_coeffs (crange<T>, crange<const T>)
   {}
   //----------------------------------------------------------------------------
-  template <class T>
-  static T tick (
-    crange<const T> c, // coeffs
-    crange<T>       s, // state
-    T               x)
-  {
-    static_assert (std::is_floating_point<T>::value, "");
-    assert (c.size() >= n_coeffs);
-    assert (s.size() >= n_states);
-
-    T y   = x - s[x1] + c[R] * s[y1];
-    s[y1] = y;
-    s[x1] = x;
-    return y;
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>> c,
     crange<vec_value_type_t<V>>       s,
     V                                 x)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= (traits.size * n_coeffs));
@@ -100,54 +76,47 @@ struct mystran_dc_blocker {
   static constexpr uint n_states = onepole_smoother::n_states;
   //----------------------------------------------------------------------------
   // warning, if going to very low frequencies, use "double".
-  template <class T>
-  static void init (crange<T> c, T freq, T sr)
-  {
-    onepole_smoother::lowpass (c, freq, sr);
-  }
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void init_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     vec_value_type_t<V>         sr)
   {
-    onepole_smoother::lowpass_simd (c, freq, sr);
+    onepole_smoother::init (c, freq, sr);
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static void repair_unsmoothable_coeffs (crange<T>, crange<const T>)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
   {}
   //----------------------------------------------------------------------------
-  template <class T>
-  static T tick (
-    crange<const T> c, // coeffs
-    crange<T>       s, // state
-    T               x)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
   {
-    assert (c.size() >= n_coeffs);
-    assert (s.size() >= n_states);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    auto prev_lp_out = s[onepole_smoother::z1];
-    onepole_smoother::tick (c, s, x);
-    return x - prev_lp_out;
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
   }
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>> c,
     crange<vec_value_type_t<V>>       s,
     V                                 x)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= (traits.size * n_coeffs));
     assert (s.size() >= (traits.size * n_states));
 
     auto prev_lp_out = vec_load<V> (&s[onepole_smoother::z1 * traits.size]);
-    onepole_smoother::tick_simd (c, s, x);
+    onepole_smoother::tick (c, s, x);
     return x - prev_lp_out;
   }
   //----------------------------------------------------------------------------

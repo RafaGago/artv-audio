@@ -1,5 +1,5 @@
-This folder contains building blocks for creating DSP objects. It is mostly
-organized on classes that:
+This folder contains building blocks for creating DSP objects. Most of all,
+barring some exceptions, is organized on classes that:
 
 - Only have static methods.
 - Don't manage the memory they operate with.

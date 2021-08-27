@@ -6,6 +6,8 @@
 #include <gcem.hpp>
 #include <type_traits>
 
+#include "artv-common/dsp/own/parts/traits.hpp"
+
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
@@ -29,14 +31,8 @@ static svf_coeffs<T> get_main_coeffs (T freq, T q, U sr)
   static_assert (std::is_floating_point<U>::value, "");
 
   svf_coeffs<T> ret;
-  T             g;
 
-  if constexpr (is_vec_v<T>) {
-    g = vec_tan (M_PI * freq / sr);
-  }
-  else {
-    g = tan (M_PI * freq / sr);
-  }
+  T g    = vec_tan ((U) M_PI * freq / sr);
   ret.k  = (U) 1.0 / q;
   ret.a1 = (U) 1.0 / ((U) 1.0 + g * (g + ret.k));
   ret.a2 = g * ret.a1;
@@ -107,28 +103,18 @@ static svf_tick_result<T> svf_tick (T ic1eq, T ic2eq, T a1, T a2, T a3, T v0)
 // order on which the tags appear (natural order, left to right). If only one
 // tag is passed the output is returned as a single value instead of an array.
 //------------------------------------------------------------------------------
-struct svf_multimode_tags {
-  struct lowpass {};
-  struct highpass {};
-  struct bandpass {};
-  struct notch {};
-  struct peak {};
-  struct allpass {};
-};
 //------------------------------------------------------------------------------
 template <class... Tags>
 struct svf_multimode {
-
-  using tags = svf_multimode_tags;
 
   // maybe do tag validation, (things won't compile anyways).
   using enabled_modes = mp11::mp_unique<mp11::mp_list<Tags...>>;
 
   static constexpr bool needs_k_coeff
-    = mp11::mp_contains<enabled_modes, tags::highpass>::value
-    || mp11::mp_contains<enabled_modes, tags::notch>::value
-    || mp11::mp_contains<enabled_modes, tags::peak>::value
-    || mp11::mp_contains<enabled_modes, tags::allpass>::value;
+    = mp11::mp_contains<enabled_modes, highpass_tag>::value
+    || mp11::mp_contains<enabled_modes, notch_tag>::value
+    || mp11::mp_contains<enabled_modes, peak_tag>::value
+    || mp11::mp_contains<enabled_modes, allpass_tag>::value;
 
   static constexpr bool returns_array = mp11::mp_size<enabled_modes>::value > 1;
 
@@ -140,32 +126,15 @@ struct svf_multimode {
   enum coeffs { a1, a2, a3, k, n_coeffs = k + (uint) needs_k_coeff };
   enum state { ic1eq, ic2eq, n_states };
   //----------------------------------------------------------------------------
-  template <class T>
-  static void init (crange<T> c, T freq, T q, T sr)
-  {
-    static_assert (std::is_floating_point<T>::value, "");
-    assert (c.size() >= n_coeffs);
-
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
-
-    c[a1] = coeffs.a1;
-    c[a2] = coeffs.a2;
-    c[a3] = coeffs.a3;
-    if constexpr (needs_k_coeff) {
-      c[k] = coeffs.k;
-    }
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void init_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           q,
     vec_value_type_t<V>         sr)
   {
 
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= (n_coeffs * traits.size));
@@ -180,59 +149,30 @@ struct svf_multimode {
     }
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static auto tick (crange<const T> c, crange<T> s, T v0)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
   {
-    static_assert (std::is_floating_point<T>::value, "");
-    assert (c.size() >= n_coeffs);
-    assert (s.size() >= n_states);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    auto tick_r
-      = detail::svf_tick (s[ic1eq], s[ic2eq], c[a1], c[a2], c[a3], v0);
-    s[ic1eq] = tick_r.ic1eq;
-    s[ic2eq] = tick_r.ic2eq;
-
-    std::array<T, mp11::mp_size<enabled_modes>::value> ret;
-
-    mp_foreach_idx (enabled_modes {}, [&] (auto index, auto mode) {
-      using tag = decltype (mode);
-
-      if constexpr (std::is_same_v<tag, tags::lowpass>) {
-        ret[index.value] = tick_r.v2;
-      }
-      else if constexpr (std::is_same_v<tag, tags::highpass>) {
-        ret[index.value] = v0 + -c[k] * tick_r.v1 + tick_r.v2;
-      }
-      else if constexpr (std::is_same_v<tag, tags::bandpass>) {
-        ret[index.value] = tick_r.v1;
-      }
-      else if constexpr (std::is_same_v<tag, tags::notch>) {
-        ret[index.value] = v0 + -c[k] * tick_r.v1;
-      }
-      else if constexpr (std::is_same_v<tag, tags::peak>) {
-        ret[index.value] = v0 + -c[k] * tick_r.v1 + (T) -2. * tick_r.v2;
-      }
-      else if constexpr (std::is_same_v<tag, tags::allpass>) {
-        ret[index.value] = v0 + (T) -2. * c[k] * tick_r.v1;
-      }
-    });
-
-    if constexpr (returns_array) {
-      return ret;
-    }
-    else {
-      return ret[0];
-    }
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
   }
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static auto tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static auto tick (
     crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
     crange<vec_value_type_t<V>>       s, // states (interleaved, SIMD aligned)
     V                                 v0)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= traits.size * n_coeffs);
@@ -258,22 +198,22 @@ struct svf_multimode {
     mp_foreach_idx (enabled_modes {}, [&] (auto index, auto mode) {
       using tag = decltype (mode);
 
-      if constexpr (std::is_same_v<tag, tags::lowpass>) {
+      if constexpr (std::is_same_v<tag, lowpass_tag>) {
         ret[index.value] = tick_r.v2;
       }
-      else if constexpr (std::is_same_v<tag, tags::highpass>) {
+      else if constexpr (std::is_same_v<tag, highpass_tag>) {
         ret[index.value] = v0 + k_v * tick_r.v1 + tick_r.v2;
       }
-      else if constexpr (std::is_same_v<tag, tags::bandpass>) {
+      else if constexpr (std::is_same_v<tag, bandpass_tag>) {
         ret[index.value] = tick_r.v1;
       }
-      else if constexpr (std::is_same_v<tag, tags::notch>) {
+      else if constexpr (std::is_same_v<tag, notch_tag>) {
         ret[index.value] = v0 + -k_v * tick_r.v1;
       }
-      else if constexpr (std::is_same_v<tag, tags::peak>) {
+      else if constexpr (std::is_same_v<tag, peak_tag>) {
         ret[index.value] = v0 + -k_v * tick_r.v1 + (T) -2. * tick_r.v2;
       }
-      else if constexpr (std::is_same_v<tag, tags::allpass>) {
+      else if constexpr (std::is_same_v<tag, allpass_tag>) {
         ret[index.value] = v0 + (T) -2. * k_v * tick_r.v1;
       }
     });
@@ -288,49 +228,27 @@ struct svf_multimode {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-using svf_lowpass  = svf_multimode<svf_multimode_tags::lowpass>;
-using svf_highpass = svf_multimode<svf_multimode_tags::highpass>;
-using svf_allpass  = svf_multimode<svf_multimode_tags::allpass>;
-using svf_bandpass = svf_multimode<svf_multimode_tags::bandpass>;
-using svf_notch    = svf_multimode<svf_multimode_tags::notch>;
-using svf_peak     = svf_multimode<svf_multimode_tags::peak>;
+using svf_lowpass  = svf_multimode<lowpass_tag>;
+using svf_highpass = svf_multimode<highpass_tag>;
+using svf_allpass  = svf_multimode<allpass_tag>;
+using svf_bandpass = svf_multimode<bandpass_tag>;
+using svf_notch    = svf_multimode<notch_tag>;
+using svf_peak     = svf_multimode<peak_tag>;
 //------------------------------------------------------------------------------
 struct svf {
   //----------------------------------------------------------------------------
   enum coeffs { a1, a2, a3, m0, m1, m2, n_coeffs };
   enum state { ic1eq, ic2eq, n_states };
   //----------------------------------------------------------------------------
-  template <class T>
-  static void lowpass (
-    crange<T> c,
-    T         freq,
-    T         q,
-    T         sr,
-    uint      interleaved_pack_offset = 0,
-    uint      interleaved_pack_size   = 1)
-  {
-    static_assert (std::is_floating_point<T>::value, "");
-    c           = c.shrink_head (interleaved_pack_offset);
-    auto co     = unpack_interleaved_coeffs (c, interleaved_pack_size);
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
-
-    *co.a1 = coeffs.a1;
-    *co.a2 = coeffs.a2;
-    *co.a3 = coeffs.a3;
-    *co.m0 = 0.;
-    *co.m1 = 0.;
-    *co.m2 = 1.;
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void lowpass_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           q,
-    vec_value_type_t<V>         sr)
+    vec_value_type_t<V>         sr,
+    lowpass_tag)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
     auto           coeffs = detail::get_main_coeffs (freq, q, sr);
 
@@ -343,59 +261,15 @@ struct svf {
     vec_store (&c[m2 * traits.size], vec_set<V> ((T) 1.));
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static void bandpass (
-    crange<T> c,
-    T         freq,
-    T         q,
-    T         sr,
-    uint      interleaved_pack_offset = 0,
-    uint      interleaved_pack_size   = 1)
-  {
-    static_assert (std::is_floating_point<T>::value, "");
-    c           = c.shrink_head (interleaved_pack_offset);
-    auto co     = unpack_interleaved_coeffs (c, interleaved_pack_size);
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
-
-    *co.a1 = coeffs.a1;
-    *co.a2 = coeffs.a2;
-    *co.a3 = coeffs.a3;
-    *co.m0 = 0.;
-    *co.m1 = 1.;
-    *co.m2 = 0.;
-  }
-  //----------------------------------------------------------------------------
-  template <class T>
-  static void highpass (
-    crange<T> c,
-    T         freq,
-    T         q,
-    T         sr,
-    uint      interleaved_pack_offset = 0,
-    uint      interleaved_pack_size   = 1)
-  {
-    static_assert (std::is_floating_point<T>::value, "");
-    c           = c.shrink_head (interleaved_pack_offset);
-    auto co     = unpack_interleaved_coeffs (c, interleaved_pack_size);
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
-
-    *co.a1 = coeffs.a1;
-    *co.a2 = coeffs.a2;
-    *co.a3 = coeffs.a3;
-    *co.m0 = 1.;
-    *co.m1 = -coeffs.k;
-    *co.m2 = -1.;
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void highpass_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           q,
-    vec_value_type_t<V>         sr)
+    vec_value_type_t<V>         sr,
+    highpass_tag)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
     auto           coeffs = detail::get_main_coeffs (freq, q, sr);
 
@@ -408,80 +282,37 @@ struct svf {
     vec_store (&c[m2 * traits.size], vec_set<V> ((T) -1.));
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static void notch (
-    crange<T> c,
-    T         freq,
-    T         q,
-    T         sr,
-    uint      interleaved_pack_offset = 0,
-    uint      interleaved_pack_size   = 1)
-  {
-    static_assert (std::is_floating_point<T>::value, "");
-    c           = c.shrink_head (interleaved_pack_offset);
-    auto co     = unpack_interleaved_coeffs (c, interleaved_pack_size);
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
-
-    *co.a1 = coeffs.a1;
-    *co.a2 = coeffs.a2;
-    *co.a3 = coeffs.a3;
-    *co.m0 = 1.;
-    *co.m1 = -coeffs.k;
-    *co.m2 = 0.;
-  }
-  //----------------------------------------------------------------------------
-  template <class T>
-  static void peak (
-    crange<T> c,
-    T         freq,
-    T         q,
-    T         sr,
-    uint      interleaved_pack_offset = 0,
-    uint      interleaved_pack_size   = 1)
-  {
-    c           = c.shrink_head (interleaved_pack_offset);
-    auto co     = unpack_interleaved_coeffs (c, interleaved_pack_size);
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
-
-    *co.a1 = coeffs.a1;
-    *co.a2 = coeffs.a2;
-    *co.a3 = coeffs.a3;
-    *co.m0 = 1.;
-    *co.m1 = -coeffs.k;
-    *co.m2 = -2.;
-  }
-  //----------------------------------------------------------------------------
-  template <class T>
-  static void allpass (
-    crange<T> c,
-    T         freq,
-    T         q,
-    T         sr,
-    uint      interleaved_pack_offset = 0,
-    uint      interleaved_pack_size   = 1)
-  {
-    static_assert (std::is_floating_point<T>::value, "");
-    c           = c.shrink_head (interleaved_pack_offset);
-    auto co     = unpack_interleaved_coeffs (c, interleaved_pack_size);
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
-
-    *co.a1 = coeffs.a1;
-    *co.a2 = coeffs.a2;
-    *co.a3 = coeffs.a3;
-    *co.m0 = 1.;
-    *co.m1 = -2. * coeffs.k;
-    *co.m2 = 0.;
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void allpass_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           q,
-    vec_value_type_t<V>         sr)
+    vec_value_type_t<V>         sr,
+    peak_tag)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+    auto           coeffs = detail::get_main_coeffs (freq, q, sr);
+
+    assert (c.size() >= (n_coeffs * traits.size));
+
+    vec_store (&c[a1 * traits.size], coeffs.a1);
+    vec_store (&c[a2 * traits.size], coeffs.a2);
+    vec_store (&c[a3 * traits.size], coeffs.a3);
+    vec_store (&c[m0 * traits.size], vec_set<V> ((T) 1.));
+    vec_store (&c[m1 * traits.size], -coeffs.k);
+    vec_store (&c[m2 * traits.size], vec_set<V> ((T) -2.));
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           q,
+    vec_value_type_t<V>         sr,
+    allpass_tag)
+  {
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
     auto           coeffs = detail::get_main_coeffs (freq, q, sr);
 
@@ -494,39 +325,16 @@ struct svf {
     vec_store (&c[m2 * traits.size], vec_set<V> ((T) 0.));
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static void bell (
-    crange<T> c,
-    T         freq,
-    T         q,
-    T         db,
-    T         sr,
-    uint      interleaved_pack_offset = 0,
-    uint      interleaved_pack_size   = 1)
-  {
-    static_assert (std::is_floating_point<T>::value, "");
-    c           = c.shrink_head (interleaved_pack_offset);
-    auto co     = unpack_interleaved_coeffs (c, interleaved_pack_size);
-    auto coeffs = detail::get_main_coeffs (freq, q, db, sr, true);
-
-    *co.a1 = coeffs.a1;
-    *co.a2 = coeffs.a2;
-    *co.a3 = coeffs.a3;
-    *co.m0 = 1.;
-    *co.m1 = coeffs.k * (coeffs.A * coeffs.A - 1.);
-    *co.m2 = 0.;
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void bell_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           q,
     V                           db,
-    vec_value_type_t<V>         sr)
+    vec_value_type_t<V>         sr,
+    bell_tag)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
     auto           coeffs = detail::get_main_coeffs (freq, q, db, sr, true);
 
@@ -539,132 +347,77 @@ struct svf {
     vec_store (&c[m2 * traits.size], vec_set<V> ((T) 0.));
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static void low_shelf (
-    crange<T> c,
-    T         freq,
-    T         q,
-    T         db,
-    T         sr,
-    uint      coeff_offset   = 0,
-    uint      coeff_distance = 1)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           q,
+    V                           db,
+    vec_value_type_t<V>         sr,
+    lowshelf_tag)
   {
-    static_assert (std::is_floating_point<T>::value, "");
-    c           = c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
-    auto co     = unpack_interleaved_coeffs (c, coeff_distance);
-    auto coeffs = detail::get_main_coeffs (freq, q, db, sr, false);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+    auto           coeffs = detail::get_main_coeffs (freq, q, db, sr, false);
 
-    *co.a1 = coeffs.a1;
-    *co.a2 = coeffs.a2;
-    *co.a3 = coeffs.a3;
-    *co.m0 = 1.;
-    *co.m1 = coeffs.k * (coeffs.A - 1.);
-    *co.m2 = (coeffs.A * coeffs.A) - 1.;
+    assert (c.size() >= (n_coeffs * traits.size));
+    vec_store (&c[a1 * traits.size], coeffs.a1);
+    vec_store (&c[a2 * traits.size], coeffs.a2);
+    vec_store (&c[a3 * traits.size], coeffs.a3);
+    vec_store (&c[m0 * traits.size], vec_set<V> ((T) 1.));
+    vec_store (&c[m1 * traits.size], coeffs.k * (coeffs.A - 1.));
+    vec_store (&c[m2 * traits.size], (coeffs.A * coeffs.A) - 1.);
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static void high_shelf (
-    crange<T> c,
-    T         freq,
-    T         q,
-    T         db,
-    T         sr,
-    uint      coeff_offset   = 0,
-    uint      coeff_distance = 1)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> c,
+    V                           freq,
+    V                           q,
+    V                           db,
+    vec_value_type_t<V>         sr,
+    highshelf_tag)
   {
-    static_assert (std::is_floating_point<T>::value, "");
-    c           = c.shrink_head (coeff_offset * coeff_distance * n_coeffs);
-    auto co     = unpack_interleaved_coeffs (c, coeff_distance);
-    auto coeffs = detail::get_main_coeffs (freq, q, db, sr, false);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+    auto           coeffs = detail::get_main_coeffs (freq, q, db, sr, false);
 
-    *co.a1 = coeffs.a1;
-    *co.a2 = coeffs.a2;
-    *co.a3 = coeffs.a3;
-    *co.m0 = coeffs.A * coeffs.A;
-    *co.m1 = coeffs.k * (1. - coeffs.A) * coeffs.A;
-    *co.m2 = 1. - (coeffs.A * coeffs.A);
+    assert (c.size() >= (n_coeffs * traits.size));
+    vec_store (&c[a1 * traits.size], coeffs.a1);
+    vec_store (&c[a2 * traits.size], coeffs.a2);
+    vec_store (&c[a3 * traits.size], coeffs.a3);
+    vec_store (&c[m0 * traits.size], coeffs.A * coeffs.A);
+    vec_store (&c[m1 * traits.size], coeffs.k * (1. - coeffs.A) * coeffs.A);
+    vec_store (&c[m2 * traits.size], 1. - (coeffs.A * coeffs.A));
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static void repair_unsmoothable_coeffs (crange<T>, crange<const T>)
-  {
-    static_assert (std::is_floating_point<T>::value, "");
-  }
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
+  {}
   //----------------------------------------------------------------------------
-  template <class T>
-  static void reset_states (crange<T> s)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
   {
-    static_assert (std::is_floating_point<T>::value, "");
-    assert (s.size() >= n_states);
-    memset (s.data(), 0, sizeof s[0] * n_states);
-  }
-  //----------------------------------------------------------------------------
-  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static T tick (
-    crange<const T> c, // coeffs
-    crange<T>       s, // state
-    T               v0)
-  {
-    assert (s.size() >= n_states);
-    assert (c.size() >= n_coeffs);
-
-    return calc (
-      s[ic1eq], s[ic2eq], c[m0], c[m1], c[m2], c[a1], c[a2], c[a3], v0);
-  }
-  //----------------------------------------------------------------------------
-  // 1 set of coeffs, N outs. (E.g. stereo filter using double). Sparse
-  // states version.
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>>                              c, // coeffs
-    std::array<crange<vec_value_type_t<V>>, vec_traits_t<V>::size> s, // states
-    V                                                              v0)
-  {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= n_coeffs);
-    for (uint i = 0; i < traits.size; ++i) {
-      assert (s[i].size() >= n_states);
-      assert (s[i].size() >= n_states);
-    }
-
-    V ic1eq_v, ic2eq_v;
-
-    for (uint i = 0; i < traits.size; ++i) {
-      ic1eq_v[i] = s[i][ic1eq];
-      ic2eq_v[i] = s[i][ic2eq];
-    }
-
-    V out = calc<V> (
-      ic1eq_v,
-      ic2eq_v,
-      vec_set<V> (c[m0]),
-      vec_set<V> (c[m1]),
-      vec_set<V> (c[m2]),
-      vec_set<V> (c[a1]),
-      vec_set<V> (c[a2]),
-      vec_set<V> (c[a3]),
-      v0);
-
-    for (uint i = 0; i < traits.size; ++i) {
-      s[i][ic1eq] = ic1eq_v[i];
-      s[i][ic2eq] = ic2eq_v[i];
-    }
-    return out;
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
   }
   //----------------------------------------------------------------------------
   // 1 set of coeffs, N outs. (E.g. stereo filter using double). Interleaved
   // states version
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_aligned (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>> c, // coeffs (1 set)
     crange<vec_value_type_t<V>>       s, // states (interleaved, SIMD aligned)
-    V                                 v0)
+    V                                 v0,
+    single_coeff_set_tag)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= n_coeffs);
@@ -691,14 +444,13 @@ struct svf {
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
     crange<vec_value_type_t<V>>       s, // states (interleaved, SIMD aligned)
     V                                 v0)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= traits.size * n_coeffs);
@@ -742,32 +494,6 @@ private:
     ic1eq_v     = tick_r.ic1eq;
     ic2eq_v     = tick_r.ic2eq;
     return out;
-  }
-  //----------------------------------------------------------------------------
-  template <class T>
-  struct coeff_ptrs {
-    T* a1;
-    T* a2;
-    T* a3;
-    T* m0;
-    T* m1;
-    T* m2;
-  };
-  //----------------------------------------------------------------------------
-  template <class T>
-  static coeff_ptrs<T> unpack_interleaved_coeffs (crange<T> c, uint distance)
-  {
-    static_assert (std::is_floating_point<T>::value, "");
-    assert (c.size() >= ((n_coeffs - 1) * distance) + 1);
-
-    coeff_ptrs<T> ret;
-    ret.a1 = &c[a1 * distance];
-    ret.a2 = &c[a2 * distance];
-    ret.a3 = &c[a3 * distance];
-    ret.m0 = &c[m0 * distance];
-    ret.m1 = &c[m1 * distance];
-    ret.m2 = &c[m2 * distance];
-    return ret;
   }
   //----------------------------------------------------------------------------
 };

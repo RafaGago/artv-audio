@@ -22,38 +22,34 @@ struct moving_average<2> {
   enum coeffs { n_coeffs };
   enum state { z1, n_states };
   //----------------------------------------------------------------------------
-  template <class T>
-  static void lowpass (crange<T>)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (crange<vec_value_type_t<V>>)
   {}
   //----------------------------------------------------------------------------
-  template <class T>
-  static void repair_unsmoothable_coeffs (crange<T>, crange<const T>)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
   {}
   //----------------------------------------------------------------------------
-  template <class T>
-  static T tick (
-    crange<const T>, // coeffs
-    crange<T> z, // state
-    T         in)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
   {
-    static_assert (std::is_floating_point<T>::value, "");
-    assert (z.size() >= n_states);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    T ret = z[z1];
-    z[z1] = in;
-    ret += in;
-    ret *= (T) 0.5;
-    return ret;
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
   }
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>>,
     crange<vec_value_type_t<V>> z, // state 'z1' 1 to N
     V                           in) // in' 1 to N
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (z.size() >= (traits.size * n_states));

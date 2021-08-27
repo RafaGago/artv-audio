@@ -11,6 +11,7 @@
 
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
+#include "artv-common/dsp/own/parts/traits.hpp"
 
 namespace artv {
 
@@ -88,50 +89,15 @@ public:
   //- To make it easy for the compiler to reduce template bloat, as they don't
   //  depend on template parameters.
   //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void init (
-    crange<double> co, // coeffs
-    double         freq,
-    double         sr,
-    uint           order,
-    bool           is_lowpass)
-  {
-    assert (co.size() >= n_coeffs_for_order (order));
-    assert (order <= max_order);
-
-    constexpr auto max_size = butterworth_2p_cascade_q_list::size (max_order);
-    std::array<double, max_size> q_list_mem;
-    auto q_list = butterworth_2p_cascade_q_list::get (q_list_mem, order);
-
-    if (order & 1) {
-      if (is_lowpass) {
-        onepole::lowpass (co, freq, sr);
-      }
-      else {
-        onepole::highpass (co, freq, sr);
-      }
-      co = co.shrink_head (onepole::n_coeffs);
-    }
-    for (uint i = 0; i < (order / 2); ++i) {
-      if (is_lowpass) {
-        andy::svf::lowpass (co, freq, q_list[i], sr);
-      }
-      else {
-        andy::svf::highpass (co, freq, q_list[i], sr);
-      }
-      co = co.shrink_head (andy::svf::n_coeffs);
-    }
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void init_simd (
     crange<vec_value_type_t<V>> co, // coeffs interleaved
     V                           freq,
     vec_value_type_t<V>         sr,
     uint                        order,
     bool                        is_lowpass)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (co.size() >= (n_coeffs_for_order (order) * traits.size));
@@ -143,98 +109,94 @@ public:
 
     if (order & 1) {
       if (is_lowpass) {
-        onepole::lowpass_simd (co, freq, sr);
+        onepole::init (co, freq, sr, lowpass_tag {});
       }
       else {
-        onepole::highpass_simd (co, freq, sr);
+        onepole::init (co, freq, sr, highpass_tag {});
       }
       co = co.shrink_head (onepole::n_coeffs * traits.size);
     }
     for (uint i = 0; i < (order / 2); ++i) {
       if (is_lowpass) {
-        andy::svf::lowpass_simd (co, freq, vec_set<V> (q_list[i]), sr);
+        andy::svf::init (co, freq, vec_set<V> (q_list[i]), sr, lowpass_tag {});
       }
       else {
-        andy::svf::highpass_simd (co, freq, vec_set<V> (q_list[i]), sr);
+        andy::svf::init (co, freq, vec_set<V> (q_list[i]), sr, highpass_tag {});
       }
       co = co.shrink_head (andy::svf::n_coeffs * traits.size);
     }
   }
   //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               v0,
-    uint                 order)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st, uint order)
   {
-    assert (co.size() >= n_coeffs_for_order (order));
-    assert (st.size() >= n_states_for_order (order));
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    if (order & 1) {
-      v0 = onepole::tick (co, st, v0);
-      co = co.shrink_head (onepole::n_coeffs);
-      st = st.shrink_head (onepole::n_states);
-    }
-    for (uint i = 0; i < (order / 2); ++i) {
-      v0 = andy::svf::tick (co, st, v0);
-      co = co.shrink_head (andy::svf::n_coeffs);
-      st = st.shrink_head (andy::svf::n_states);
-    }
-    return v0;
+    uint numstates = traits.size * n_states_for_order (order);
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
   }
   //----------------------------------------------------------------------------
-  static double_x2 tick (
-    crange<double const>          co, // coeffs (unaligned, uninterleaved)
-    std::array<crange<double>, 2> st, // state (unaligned, uninterleaved)
-    double_x2                     v0,
-    uint                          order)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (single set)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in,
+    uint                              order,
+    single_coeff_set_tag)
   {
-    assert (st.size() >= 2);
-    assert (co.size() >= n_coeffs_for_order (order));
-    assert (st[0].size() >= n_states_for_order (order));
-    assert (st[1].size() >= n_states_for_order (order));
 
-    auto out = v0;
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= n_coeffs_for_order (order));
+    assert (st.size() >= (traits.size * n_states_for_order (order)));
+
+    auto out = in;
 
     if (order & 1) {
-      out   = onepole::tick (co, st, out);
-      co    = co.shrink_head (onepole::n_coeffs);
-      st[0] = st[0].shrink_head (onepole::n_states);
-      st[1] = st[1].shrink_head (onepole::n_states);
+      out = onepole::tick (co, st, out, single_coeff_set_tag {});
+      co  = co.shrink_head (onepole::n_coeffs);
+      st  = st.shrink_head (onepole::n_states * traits.size);
     }
     for (uint i = 0; i < (order / 2); ++i) {
-      out   = andy::svf::tick (co, st, out);
-      co    = co.shrink_head (andy::svf::n_coeffs);
-      st[0] = st[0].shrink_head (andy::svf::n_states);
-      st[1] = st[1].shrink_head (andy::svf::n_states);
+      out = andy::svf::tick (co, st, out, single_coeff_set_tag {});
+      co  = co.shrink_head (andy::svf::n_coeffs);
+      st  = st.shrink_head (andy::svf::n_states * traits.size);
     }
     return out;
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
     crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 v0,
+    V                                 in,
     uint                              order)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (co.size() >= (traits.size * n_coeffs_for_order (order)));
     assert (st.size() >= (traits.size * n_states_for_order (order)));
 
-    auto out = v0;
+    auto out = in;
 
     if (order & 1) {
-      out = onepole::tick_simd (co, st, out);
+      out = onepole::tick (co, st, out);
       co  = co.shrink_head (onepole::n_coeffs * traits.size);
       st  = st.shrink_head (onepole::n_states * traits.size);
     }
     for (uint i = 0; i < (order / 2); ++i) {
-      out = andy::svf::tick_simd (co, st, out);
+      out = andy::svf::tick (co, st, out);
       co  = co.shrink_head (andy::svf::n_coeffs * traits.size);
       st  = st.shrink_head (andy::svf::n_states * traits.size);
     }
@@ -256,60 +218,62 @@ public:
     order > 0 && order <= butterworth_any_order::max_order
     && "Unsupported filter order.");
   //----------------------------------------------------------------------------
-  static void repair_unsmoothable_coeffs (crange<double>, crange<const double>)
-  {}
+  static void fix_unsmoothable_coeffs (crange<double>, crange<const double>) {}
   //----------------------------------------------------------------------------
-  static void lowpass (crange<double> co, double freq, double sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
+    crange<vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    V                           freq,
+    vec_value_type_t<V>         sr,
+    lowpass_tag)
   {
     butterworth_any_order::init (co, freq, sr, order, true);
   }
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void lowpass_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
     crange<vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
     V                           freq,
-    vec_value_type_t<V>         sr)
-  {
-    butterworth_any_order::init_simd (co, freq, sr, order, true);
-  }
-  //----------------------------------------------------------------------------
-  static void highpass (crange<double> co, double freq, double sr)
+    vec_value_type_t<V>         sr,
+    highpass_tag)
   {
     butterworth_any_order::init (co, freq, sr, order, false);
   }
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void highpass_simd (
-    crange<vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
-    V                           freq,
-    vec_value_type_t<V>         sr)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
   {
-    butterworth_any_order::init_simd (co, freq, sr, order, false);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
   }
   //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               v0)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (single set)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 in,
+    single_coeff_set_tag              t)
   {
-    return butterworth_any_order::tick (co, st, v0, order);
+    return butterworth_any_order::tick (co, st, in, order, t);
   }
   //----------------------------------------------------------------------------
-  static double_x2 tick (
-    crange<double const>          co, // coeffs (unaligned, uninterleaved)
-    std::array<crange<double>, 2> st, // coeffs (state, uninterleaved)
-    double_x2                     v0s)
-  {
-    return butterworth_any_order::tick (co, st, v0s, order);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
     crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 v0s)
+    V                                 in)
   {
-    return butterworth_any_order::tick_simd (co, st, v0s, order);
+    return butterworth_any_order::tick (co, st, in, order);
   }
 };
 //------------------------------------------------------------------------------
@@ -335,38 +299,14 @@ public:
       + n_onepole * onepole::n_states;
   }
   //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void init (
-    crange<double> co, // coeffs
-    double         freq,
-    double         sr,
-    uint           order)
-  {
-    assert (co.size() >= n_coeffs_for_order (order));
-    assert (order <= max_order);
-
-    constexpr auto max_size = butterworth_2p_cascade_q_list::size (max_order);
-    std::array<double, max_size> q_list_mem;
-    auto q_list = butterworth_2p_cascade_q_list::get (q_list_mem, order);
-
-    if (order & 1) {
-      onepole::lowpass (co, freq, sr);
-      co = co.shrink_head (onepole::n_coeffs);
-    }
-    for (uint i = 0; i < (order / 2); ++i) {
-      andy::svf_lowpass::init (co, freq, q_list[i], sr);
-      co = co.shrink_head (andy::svf_lowpass::n_coeffs);
-    }
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void init_simd (
     crange<vec_value_type_t<V>> co, // coeffs interleaved
     V                           freq,
     vec_value_type_t<V>         sr,
     uint                        order)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (co.size() >= (n_coeffs_for_order (order) * traits.size));
@@ -377,61 +317,55 @@ public:
     auto q_list = butterworth_2p_cascade_q_list::get (q_list_mem, order);
 
     if (order & 1) {
-      onepole::lowpass_simd (co, freq, sr);
+      onepole::init (co, freq, sr, lowpass_tag {});
       co = co.shrink_head (onepole::n_coeffs * traits.size);
     }
     for (uint i = 0; i < (order / 2); ++i) {
-      andy::svf_lowpass::init_simd (co, freq, vec_set<V> (q_list[i]), sr);
+      andy::svf_lowpass::init (co, freq, vec_set<V> (q_list[i]), sr);
       co = co.shrink_head (andy::svf_lowpass::n_coeffs * traits.size);
     }
   }
   //----------------------------------------------------------------------------
-  static double tick (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               v0,
-    uint                 order)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st, uint order)
   {
-    assert (co.size() >= n_coeffs_for_order (order));
-    assert (st.size() >= n_states_for_order (order));
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    if (order & 1) {
-      v0 = onepole::tick (co, st, v0);
-      co = co.shrink_head (onepole::n_coeffs);
-      st = st.shrink_head (onepole::n_states);
-    }
-    for (uint i = 0; i < (order / 2); ++i) {
-      v0 = andy::svf_lowpass::tick (co, st, v0);
-      co = co.shrink_head (andy::svf_lowpass::n_coeffs);
-      st = st.shrink_head (andy::svf_lowpass::n_states);
-    }
-    return v0;
+    uint numstates = traits.size * n_states_for_order (order);
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
     crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 v0,
+    V                                 in,
     uint                              order)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (co.size() >= (traits.size * n_coeffs_for_order (order)));
     assert (st.size() >= (traits.size * n_states_for_order (order)));
 
-    auto out = v0;
+    auto out = in;
 
     if (order & 1) {
-      out = onepole::tick_simd (co, st, out);
+      out = onepole::tick (co, st, out);
       co  = co.shrink_head (onepole::n_coeffs * traits.size);
       st  = st.shrink_head (onepole::n_states * traits.size);
     }
     for (uint i = 0; i < (order / 2); ++i) {
-      out = andy::svf_lowpass::tick_simd (co, st, out);
+      out = andy::svf_lowpass::tick (co, st, out);
       co  = co.shrink_head (andy::svf_lowpass::n_coeffs * traits.size);
       st  = st.shrink_head (andy::svf_lowpass::n_states * traits.size);
     }
@@ -441,43 +375,23 @@ public:
   //----------------------------------------------------------------------------
   // for block processing optimization, so one pass of the onepole is done on
   // all the samples, then a pass of the cascades.
-  static double tick_onepole (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               v0,
-    uint                 order)
-  {
-    assert (co.size() >= n_coeffs_for_order (order));
-    assert (st.size() >= n_states_for_order (order));
-
-    if (order & 1) {
-      v0 = onepole::tick (co, st, v0);
-      co = co.shrink_head (onepole::n_coeffs);
-      st = st.shrink_head (onepole::n_states);
-    }
-    return v0;
-  }
-  //----------------------------------------------------------------------------
-  // for block processing optimization, so one pass of the onepole is done on
-  // all the samples, then a pass of the cascades.
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_onepole_simd (
+  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick_onepole (
     crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
     crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 v0,
+    V                                 in,
     uint                              order)
   {
     using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
     constexpr auto traits = vec_traits<V>();
 
     assert (co.size() >= (traits.size * n_coeffs_for_order (order)));
     assert (st.size() >= (traits.size * n_states_for_order (order)));
 
-    auto out = v0;
+    auto out = in;
 
     if (order & 1) {
-      out = onepole::tick_simd (co, st, out);
+      out = onepole::tick (co, st, out);
       co  = co.shrink_head (onepole::n_coeffs * traits.size);
       st  = st.shrink_head (onepole::n_states * traits.size);
     }
@@ -486,50 +400,27 @@ public:
   //----------------------------------------------------------------------------
   // for block processing optimization, so one pass of the onepole is done on
   // all the samples, then a pass of the cascades.
-  static double tick_two_pole_cascade (
-    crange<const double> co, // coeffs
-    crange<double>       st, // state
-    double               v0,
-    uint                 order)
-  {
-    assert (co.size() >= n_coeffs_for_order (order));
-    assert (st.size() >= n_states_for_order (order));
-
-    co = co.shrink_head (onepole::n_coeffs * (order & 1));
-    st = st.shrink_head (onepole::n_states * (order & 1));
-
-    for (uint i = 0; i < (order / 2); ++i) {
-      v0 = andy::svf_lowpass::tick (co, st, v0);
-      co = co.shrink_head (andy::svf_lowpass::n_coeffs);
-      st = st.shrink_head (andy::svf_lowpass::n_states);
-    }
-    return v0;
-  }
-  //----------------------------------------------------------------------------
-  // for block processing optimization, so one pass of the onepole is done on
-  // all the samples, then a pass of the cascades.
   // N sets of coeffs, N outs calculated at once.
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_two_pole_cascade_simd (
+  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick_two_pole_cascade (
     crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
     crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 v0,
+    V                                 in,
     uint                              order)
   {
     using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
     constexpr auto traits = vec_traits<V>();
 
     assert (co.size() >= (traits.size * n_coeffs_for_order (order)));
     assert (st.size() >= (traits.size * n_states_for_order (order)));
 
-    auto out = v0;
+    auto out = in;
 
     co = co.shrink_head (onepole::n_coeffs * traits.size * (order & 1));
     st = st.shrink_head (onepole::n_states * traits.size * (order & 1));
 
     for (uint i = 0; i < (order / 2); ++i) {
-      out = andy::svf_lowpass::tick_simd (co, st, out);
+      out = andy::svf_lowpass::tick (co, st, out);
       co  = co.shrink_head (andy::svf_lowpass::n_coeffs * traits.size);
       st  = st.shrink_head (andy::svf_lowpass::n_states * traits.size);
     }

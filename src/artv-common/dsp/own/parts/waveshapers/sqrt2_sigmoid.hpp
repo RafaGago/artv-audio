@@ -15,19 +15,13 @@ namespace artv {
 //
 // code as with the "ccode" function
 struct sqrt2_sigmoid_functions {
-
-  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static T fn (T x)
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V fn (V x)
   {
     // "x / sqrt (2 * x^2 + 1)" is the result of cascading
     // "x / sqrt (x^2 + 1)"
     // its positive limit is "sqrt(2)/2", so it is adjusted to -1 / 1.
-    return ((T) M_SQRT2 * x) / sqrt ((T) 2. * x * x + (T) 1.);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V fn (V x)
-  {
     using T = vec_value_type_t<V>;
 
     V num = (T) M_SQRT2 * x;
@@ -35,13 +29,7 @@ struct sqrt2_sigmoid_functions {
     return num / den;
   }
   //----------------------------------------------------------------------------
-  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static T int_fn (T x)
-  {
-    return (T) (1.0 / 2.0) * (T) M_SQRT2 * sqrt ((T) 2. * x * x + (T) 1.);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V int_fn (V x)
   {
     using T = vec_value_type_t<V>;
@@ -50,15 +38,7 @@ struct sqrt2_sigmoid_functions {
     return k * vec_sqrt ((T) 2. * x * x + (T) 1.);
   }
   //----------------------------------------------------------------------------
-  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static T int2_fn (T x)
-  {
-    return (1.0 / 2.0) * (T) M_SQRT2
-      * ((T) (1.0 / 2.0) * x * sqrt ((T) 2. * x * x + 1.)
-         + (T) (1.0 / 4.0) * M_SQRT2 * asinh (M_SQRT2 * x));
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V int2_fn (V x)
   {
     using T = vec_value_type_t<V>;

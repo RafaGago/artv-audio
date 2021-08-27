@@ -21,29 +21,14 @@ struct slew_limiter {
   enum coeffs { attack, release, n_coeffs };
   enum state { prev, n_states };
   //----------------------------------------------------------------------------
-  template <class T>
-  static void init (crange<T> c, T attack_sec, T release_sec, T samplerate)
-  {
-    static_assert (std::is_floating_point<T>::value, "");
-    assert (attack_sec >= 0.);
-    assert (release_sec >= 0.);
-
-    double_x2 v = {attack_sec, release_sec};
-    v *= samplerate;
-    v          = vec_exp ((T) -1. / v);
-    c[attack]  = v[0];
-    c[release] = v[1];
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void init_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (
     crange<vec_value_type_t<V>> c,
     V                           attack_sec,
     V                           release_sec,
     vec_value_type_t<V>         samplerate)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= (n_coeffs * traits.size));
@@ -57,32 +42,32 @@ struct slew_limiter {
     vec_store (&c[release * traits.size], release_sec);
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static T tick (
-    crange<const T> c, // coeffs
-    crange<T>       s, // state
-    T               in)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
   {
-    static_assert (std::is_floating_point<T>::value, "");
-    assert (s.size() >= n_states);
-    assert (c.size() >= n_coeffs);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    T in_prev = s[prev];
-    T coeff   = in_prev < in ? c[attack] : c[release];
-    s[prev]   = in + coeff * (in_prev - in);
-    return s[prev];
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>>
                                 c, // coeffs interleaved, ready to SIMD load
     crange<vec_value_type_t<V>> s, // states interleaved, ready to SIMD load
     V                           in)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= (traits.size * n_coeffs));

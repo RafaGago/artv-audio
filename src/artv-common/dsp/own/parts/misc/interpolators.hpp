@@ -10,17 +10,10 @@ struct allpass_interpolator {
   enum coeffs { nu, n_coeffs };
   enum state { y0, d0, n_states };
   //----------------------------------------------------------------------------
-  template <class T>
-  static constexpr void init (crange<T> c, T frac)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (crange<vec_value_type_t<V>> c, V frac)
   {
-    c[nu] = (1.0 - frac) / (1.0 + frac);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void init_simd (crange<vec_value_type_t<V>> c, V frac)
-  {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= (n_coeffs * traits.size));
@@ -29,31 +22,32 @@ struct allpass_interpolator {
     vec_store (&c[nu * traits.size], v);
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static constexpr void repair_unsmoothable_coeffs (crange<T>, crange<const T>)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
   {}
   //----------------------------------------------------------------------------
-  template <class T>
-  static constexpr T tick (
-    crange<const T> c, // coeffs
-    crange<T>       z, // state
-    T               in)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
   {
-    z[y0] = c[nu] * in + z[d0] - c[nu] * z[y0];
-    z[d0] = in;
-    return z[y0];
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>>
                                 c, // coeffs interleaved, ready to SIMD load
     crange<vec_value_type_t<V>> z, // states interleaved, ready to SIMD load
     V                           in) // N inputs ready to SIMD load
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= traits.size * n_coeffs);

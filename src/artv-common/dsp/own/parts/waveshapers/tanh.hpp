@@ -64,39 +64,19 @@ So 4 "exp" calls are needed, alternatively 2 exp calls and 2 divisions.
 // clang-format on
 struct tanh_functions {
   //----------------------------------------------------------------------------
-  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static T fn (T x)
-  {
-    return tanh (x);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V fn (V x)
   {
     return vec_tanh (x);
   }
   //----------------------------------------------------------------------------
-  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static T int_fn (T x)
-  {
-    return log (cosh (x));
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V int_fn (V x)
   {
     return vec_log (vec_cosh (x));
   }
   //----------------------------------------------------------------------------
-  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static T int2_fn (T x)
-  {
-    // not solveable analitically in a practical/easy way.
-    static_assert (!std::is_same_v<T, T>, "TBI?");
-    return (T) 0.;
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V int2_fn (V x)
   {
     // not solveable analitically in a practical/easy way.
@@ -109,7 +89,8 @@ struct tanh_functions {
 // This seems right analitically, but it seems to have either a bug or precision
 // issues
 //------------------------------------------------------------------------------
-// Try to use the exp() based hyperbolic/trigonometric functions
+// This tries to use the exp() based hyperbolic/trigonometric functions and
+// buffering results.
 //
 // cosh = exp(x) + exp(-x) / 2;
 // tanh = (exp(2x) + 1) / (exp(2x) - 1);
@@ -127,23 +108,26 @@ public:
   enum coeffs { n_coeffs };
   enum state { x1, x1_exp, x1_int, n_states };
   //----------------------------------------------------------------------------
-  template <class T>
-  static void init_states (crange<T> st)
-  {
-    static_assert (std::is_floating_point_v<T>, "");
-
-    assert (st.size() >= n_states);
-
-    st[x1]     = (T) 0.;
-    st[x1_exp] = (T) 1.; // exp (0)
-    st[x1_int] = (T) 0.6931471805599453; // log (2)
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void init_states_simd (crange<vec_value_type_t<V>> st)
+  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (crange<vec_value_type_t<V>>)
   {
     using T = vec_value_type_t<V>;
     static_assert (std::is_floating_point<T>::value, "");
+  }
+  //----------------------------------------------------------------------------
+  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+  }
+  //----------------------------------------------------------------------------
+  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
+  {
+    using T = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (st.size() >= (traits.size * n_states));
@@ -161,56 +145,19 @@ public:
     vec_store (x1_intv_ptr, x1_intv);
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static T tick (crange<const T>, crange<T> st, T x)
-  {
-    static_assert (std::is_floating_point_v<T>, "");
-
-    assert (st.size() >= n_states);
-
-    T x1v     = st[x1];
-    T x1_expv = st[x1_exp];
-    T x1_intv = st[x1_int];
-
-    // avoid exp going out of range by clipping the input. clipping at a point
-    // that allows "x_exp * x1_expv" to not result on infinity.
-    if constexpr (std::is_same_v<T, double>) {
-      x = std::clamp (x, -300., 300.);
-    }
-    else {
-      x = std::clamp (x, -150., 150.); // untested...
-    }
-
-    T x_exp = exp (x);
-    T x_int = log (x_exp + ((T) 1. / x_exp));
-
-    st[x1]     = x;
-    st[x1_exp] = x_exp;
-    st[x1_int] = x_int;
-
-    T diff = x - x1v;
-    T ret;
-    if (abs (diff) >= adaa::epsilon (T {})) {
-      ret = (x_int - x1_intv) / diff;
-    }
-    else {
-      ret = (x_exp * x1_expv - (T) 1.) / (x_exp * x1_expv + (T) 1);
-    }
-    return ret;
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
+  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick_simd (
     crange<const vec_value_type_t<V>>,
     crange<vec_value_type_t<V>> st,
     V                           x)
   {
     using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
     constexpr auto traits = vec_traits<V>();
 
     assert (st.size() >= traits.size * n_states);
 
+    // avoid exp going out of range by clipping the input. clipping at a point
+    // that allows "x_exp * x1_expv" to not result on infinity.
     if constexpr (std::is_same_v<T, double>) {
       x = vec_clamp (x, (T) -300., (T) 300.);
     }

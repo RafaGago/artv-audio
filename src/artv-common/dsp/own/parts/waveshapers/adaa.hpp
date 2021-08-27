@@ -9,6 +9,7 @@
 #include "artv-common/dsp/own/parts/misc/interpolators.hpp"
 
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
 
 namespace artv { namespace adaa {
@@ -32,14 +33,22 @@ public:
   enum coeffs { n_coeffs };
   enum state { n_states };
   //----------------------------------------------------------------------------
-  template <class T>
-  static T tick (crange<const T>, crange<T>, T x)
-  {
-    return functions::fn (x);
-  }
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (crange<vec_value_type_t<V>>)
+  {}
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>>,
     crange<vec_value_type_t<V>> st,
     V                           x)
@@ -55,44 +64,35 @@ public:
   enum coeffs { n_coeffs };
   enum state { x1, x1_int, n_states };
   //----------------------------------------------------------------------------
-  template <class T>
-  static void init_states (crange<T> s)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (crange<vec_value_type_t<V>>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void init_states_simd (crange<vec_value_type_t<V>> s)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
   {}
   //----------------------------------------------------------------------------
-  template <class T>
-  static T tick (crange<const T>, crange<T> st, T x)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
   {
-    assert (st.size() >= n_states);
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
 
-    T x_int   = functions::int_fn (x);
-    T x1v     = st[x1];
-    T x1v_int = st[x1_int];
-
-    st[x1]     = x;
-    st[x1_int] = x_int;
-
-    T diff = x - x1v;
-    if (abs (diff) >= epsilon (T {})) {
-      return (x_int - x1v_int) / diff;
-    }
-    else {
-      return (functions::fn ((x + x1v) * (T) 0.5));
-    }
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
   }
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>>,
     crange<vec_value_type_t<V>> st,
     V                           x)
   {
     // as this has to calculate both branches, it might not be worth bothering.
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (st.size() >= (traits.size * n_states));
@@ -132,14 +132,31 @@ public:
   enum coeffs { n_coeffs };
   enum state { x1, x2, x2_der, x1_int2, n_states };
   //----------------------------------------------------------------------------
-  template <class T>
-  static void init_states (crange<T> s)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (crange<vec_value_type_t<V>>)
+  {
+    using T = vec_value_type_t<V>;
+    static_assert (std::is_floating_point<T>::value, "");
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void init_states_simd (crange<vec_value_type_t<V>> s)
-  {}
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
+  }
   //----------------------------------------------------------------------------
+  // kept as an impl reference if going for it.
   template <class T>
   static T tick (crange<const T>, crange<T> st, T x)
   {
@@ -175,8 +192,8 @@ public:
     return ret;
   }
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>>,
     crange<vec_value_type_t<V>> st,
     V                           x)
@@ -228,23 +245,10 @@ public:
     n_states          = impl_states_idx + Impl<1>::n_states
   };
   //----------------------------------------------------------------------------
-  template <class T>
-  static void init (crange<T> c)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void init (crange<vec_value_type_t<V>> c)
   {
-    static_assert (std::is_floating_point<T>::value, "");
-    assert (c.size() >= n_coeffs);
-
-    static_assert (moving_average<2>::n_coeffs == 0, "Add initialization!");
-    static_assert (Impl<1>::n_coeffs == 0, "Add initialization!");
-
-    allpass_interpolator::init (c, (T) 0.5);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void init_simd (crange<vec_value_type_t<V>> c)
-  {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= (n_coeffs * traits.size));
@@ -252,86 +256,58 @@ public:
     static_assert (moving_average<2>::n_coeffs == 0, "Add initialization!");
     static_assert (Impl<1>::n_coeffs == 0, "Add initialization!");
 
-    allpass_interpolator::init_simd (c, vec_set<V> ((T) 0.5));
+    allpass_interpolator::init (c, vec_set<V> ((T) 0.5));
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static void init_states (crange<T> s)
-  {
-    static_assert (std::is_floating_point<T>::value, "");
-    // maybe memset delay line and boxcar?
-    Impl<1>::init_states (s.shrink_head (impl_states_idx));
-  }
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
+  {}
   //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static void init_states_simd (crange<vec_value_type_t<V>> s)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> s)
   {
     using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
 
     // maybe memset delay line and boxcar?
-    Impl<1>::template init_states_simd<T, V> (
+    Impl<1>::template reset_states<V> (
       s.shrink_head (impl_states_idx * vec_traits<V>().size));
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static T tick (crange<const T> c, crange<T> st, T x)
-  {
-    assert (c.size() >= n_coeffs);
-    assert (st.size() >= n_states);
-    // Explicit half sample delay to the main signal. The ADAA whaveshaper
-    // of first order will add another half sample, as it behaves as a boxcar of
-    // L=2. The total delay will be 1 sample.
-    T delayed = allpass_interpolator::tick (c, st, x);
-    st        = st.shrink_head (allpass_interpolator::n_states);
-    // Apply a boxcar to the input of the same size as the ADAA equivalent.
-    // Delays half a sample
-    T filtered = moving_average<2>::tick ({}, st, x);
-    st         = st.shrink_head (moving_average<2>::n_states);
-    // The difference between the delayed main signal and the Boxcar output will
-    // contain filtered away high frequencies. These are added as a pre-EQ, to
-    // alleviate the ADAA filter HF loss with low or no oversampling.
-    T eq = delayed + (delayed - filtered);
-    return Impl<1>::tick ({}, st, eq);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>> c,
     crange<vec_value_type_t<V>>       st,
     V                                 x)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
+    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= (traits.size * n_coeffs));
     assert (st.size() >= (traits.size * n_states));
 
     // comments on the non-vectorized version
-    V delayed = allpass_interpolator::tick_simd (c, st, x);
+    V delayed = allpass_interpolator::tick (c, st, x);
     st        = st.shrink_head (allpass_interpolator::n_states * traits.size);
 
-    V filtered = moving_average<2>::tick_simd ({}, st, x);
+    V filtered = moving_average<2>::tick ({}, st, x);
     st         = st.shrink_head (moving_average<2>::n_states * traits.size);
 
     V eq = delayed + (delayed - filtered);
-    return Impl<1>::tick_simd ({}, st, eq);
+    return Impl<1>::tick ({}, st, eq);
   }
   //----------------------------------------------------------------------------
 };
+//------------------------------------------------------------------------------
 namespace detail {
 template <uint order>
 struct null_shaper {
   enum coeffs { n_coeffs };
   enum state { n_states };
 
-  template <class T>
-  static T tick (crange<const T>, crange<T>, T)
-  {}
-
-  template <class V, std::enable_if_t<is_vec_v<V>>* = nullptr>
-  static V tick_simd (
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
     crange<const vec_value_type_t<V>> c,
     crange<vec_value_type_t<V>>       st,
     V                                 x)
@@ -340,7 +316,7 @@ struct null_shaper {
   }
 };
 } // namespace detail
-
+//------------------------------------------------------------------------------
 // initialization for the coefficients of all "fix_eq_and_delay" classes is the
 // same, so "fix_eq_and_delay_coeff_initialization" can be used.
 template <uint order>

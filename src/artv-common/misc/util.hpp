@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include <gcem.hpp>
@@ -667,4 +668,33 @@ using k_s64 = std::integral_constant<s64, N>;
 template <u64 N>
 using k_u64 = std::integral_constant<u64, N>;
 //------------------------------------------------------------------------------
+namespace detail {
+template <class tuple_like, class Func, size_t... Idxs>
+auto tuple_unpack (
+  tuple_like&& t,
+  Func&&       unpack_f,
+  std::index_sequence<Idxs...>)
+{
+  using ret_t = decltype (unpack_f (std::get<Idxs> (t)...));
+
+  if constexpr (std::is_same_v<ret_t, void>) {
+    unpack_f (std::get<Idxs> (t)...);
+    return nullptr;
+  }
+  else {
+    return unpack_f (std::get<Idxs> (t)...);
+  }
+}
+} // namespace detail
+
+template <template <class...> class tuple_like, class Func, class... Ts>
+auto tuple_unpack (tuple_like<Ts...>&& t, Func&& unpack_f)
+{
+  return detail::tuple_unpack (
+    std::forward<tuple_like<Ts...>> (t),
+    std::forward<Func> (unpack_f),
+    std::index_sequence_for<Ts...> {});
+}
+//------------------------------------------------------------------------------
+
 } // namespace artv
