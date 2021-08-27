@@ -429,12 +429,11 @@ public:
               f += fconstant_even;
             }
           }
-          andy::svf::reset_coeffs (
+          andy::svf_allpass::reset_coeffs (
             get_allpass_group_coeffs (s),
             freqs,
             qs,
-            _plugcontext->get_sample_rate(),
-            allpass_tag {});
+            _plugcontext->get_sample_rate());
         }
       }
 
@@ -447,7 +446,7 @@ public:
 
       for (uint g = 0; g < (pars.n_allpasses / vec_size); ++g) {
         // as of now this processes both in parallel and in series.
-        out = andy::svf::tick (
+        out = andy::svf_allpass::tick (
           get_allpass_group_coeffs (g), get_allpass_group_states (g), out);
       }
       assert (
@@ -496,14 +495,15 @@ private:
   crange<float> get_allpass_group_coeffs (uint n)
   {
     return make_crange (
-      &_allpass[n][0], andy::svf::n_coeffs * vec_traits<float_x4>().size);
+      &_allpass[n][0],
+      andy::svf_allpass::n_coeffs * vec_traits<float_x4>().size);
   }
   //----------------------------------------------------------------------------
   crange<float> get_allpass_group_states (uint n)
   {
     return make_crange (
-      &_allpass[n][andy::svf::n_coeffs * vec_traits<float_x4>().size],
-      andy::svf::n_states * vec_traits<float_x4>().size);
+      &_allpass[n][andy::svf_allpass::n_coeffs * vec_traits<float_x4>().size],
+      andy::svf_allpass::n_states * vec_traits<float_x4>().size);
   }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
@@ -545,7 +545,8 @@ private:
   std::array<float, n_channels> _feedback_samples;
   using simd_allpass_group = std::array<
     float,
-    (andy::svf::n_coeffs + andy::svf::n_states) * vec_traits_t<float_x4>::size>;
+    (andy::svf_allpass::n_coeffs + andy::svf_allpass::n_states)
+      * vec_traits_t<float_x4>::size>;
 
   using dc_block_coeff_array
     = simd_array<double, mystran_dc_blocker::n_coeffs * n_channels, sse_bytes>;
