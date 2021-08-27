@@ -7,6 +7,7 @@
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/composite/tilt.hpp"
+#include "artv-common/dsp/own/parts/filters/dc_blocker.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/dsp/own/parts/filters/presence.hpp"
 #include "artv-common/dsp/own/parts/filters/saike.hpp"
@@ -54,6 +55,10 @@ public:
     memset (&_smooth_state, 0, sizeof _smooth_state);
     memset (&_state, 0, sizeof _state);
     memset (&_last_sample, 0, sizeof _last_sample);
+    memset (&_dc_states, 0, sizeof _dc_states);
+
+    mystran_dc_blocker::reset_coeffs (
+      _dc_coeffs, vec_set<double_x2> (1.), pc.get_sample_rate());
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -121,12 +126,12 @@ public:
           in *= double_x2 {
             smoothed_p.vars.pre_drive_l, smoothed_p.vars.pre_drive_r};
 
-          double_x2 prev {_last_sample[b][0], _last_sample[b][1]};
-          prev *= double_x2 {smoothed_p.vars.feedback};
+          double_x2 prev = _last_sample[b];
+          prev *= vec_set<double_x2> (smoothed_p.vars.feedback);
           bool is_moog
             = btype >= bandtype::moog_1_lp && btype <= bandtype::moog_2_br;
           // moogs are extremely unstable reduce feedback
-          prev *= double_x2 {is_moog ? 0.03 : 1.};
+          prev *= vec_set<double_x2> (is_moog ? 0.03 : 1.);
           in += prev;
 
           switch (btype) {
@@ -198,8 +203,8 @@ public:
             break;
           }
 
-          _last_sample[b][0] = out[0];
-          _last_sample[b][1] = out[1];
+          _last_sample[b]
+            = mystran_dc_blocker::tick (_dc_coeffs, _dc_states[b], out);
 
           out *= smoothed_p.vars.post_drive;
           chnls[0][block_smp + i] += out[0];
@@ -667,6 +672,11 @@ private:
   using state_array = simd_array<double, max_states * n_channels, sse_bytes>;
   using coeff_array = simd_array<double, max_coeffs * n_channels, sse_bytes>;
   //----------------------------------------------------------------------------
+  using dc_blocker_coeffs_array
+    = simd_array<double, mystran_dc_blocker::n_states * n_channels, sse_bytes>;
+  using dc_blocker_states_array
+    = simd_array<double, mystran_dc_blocker::n_states * n_channels, sse_bytes>;
+  //----------------------------------------------------------------------------
   union smoothed_params {
     struct {
       float pre_drive_l, pre_drive_r, post_drive, feedback;
@@ -683,7 +693,9 @@ private:
   std::array<state_array, n_bands>   _state;
   std::array<smooth_states, n_bands> _smooth_state;
   alignas (sse_bytes) std::array<coeff_array, n_bands> _coeffs;
-  std::array<std::array<double, 2>, n_bands> _last_sample;
+  dc_blocker_coeffs_array                      _dc_coeffs;
+  std::array<dc_blocker_states_array, n_bands> _dc_states;
+  std::array<double_x2, n_bands>               _last_sample;
 
   double _smooth_coeff;
 
