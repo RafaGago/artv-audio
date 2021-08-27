@@ -47,7 +47,7 @@ public:
   {
     _plugcontext = &pc;
     _cfg         = decltype (_cfg) {};
-    smoother::init (
+    smoother::reset_coeffs (
       make_crange (_smooth_coeff),
       make_vec_x1<decltype (_smooth_coeff)> (1. / 0.08),
       pc.get_sample_rate());
@@ -506,76 +506,90 @@ private:
       memset (&_coeffs[band], 0, sizeof _coeffs[band]);
       break;
     case bandtype::ms20_lp:
-      saike::ms20_lowpass::init (_coeffs[band], freq, reso, sr);
+      saike::ms20_lowpass::reset_coeffs (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_hp:
-      saike::ms20_highpass::init (_coeffs[band], freq, reso, sr);
+      saike::ms20_highpass::reset_coeffs (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_bp:
-      saike::ms20_bandpass::init (_coeffs[band], freq, reso, sr);
+      saike::ms20_bandpass::reset_coeffs (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_br:
-      saike::ms20_notch::init (_coeffs[band], freq, reso, sr);
+      saike::ms20_notch::reset_coeffs (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_asym_lp:
-      saike::ms20_asym_lowpass::init (_coeffs[band], freq, reso, sr);
+      saike::ms20_asym_lowpass::reset_coeffs (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_asym_hp:
-      saike::ms20_asym_highpass::init (_coeffs[band], freq, reso, sr);
+      saike::ms20_asym_highpass::reset_coeffs (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_asym_bp:
-      saike::ms20_asym_bandpass::init (_coeffs[band], freq, reso, sr);
+      saike::ms20_asym_bandpass::reset_coeffs (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::ms20_asym_br:
-      saike::ms20_asym_notch::init (_coeffs[band], freq, reso, sr);
+      saike::ms20_asym_notch::reset_coeffs (_coeffs[band], freq, reso, sr);
       break;
     case bandtype::steiner_1_lp:
-      saike::steiner_1::init (_coeffs[band], freq, reso, sr, lowpass_tag {});
+      saike::steiner_1::reset_coeffs (
+        _coeffs[band], freq, reso, sr, lowpass_tag {});
       break;
     case bandtype::steiner_1_hp:
-      saike::steiner_1::init (_coeffs[band], freq, reso, sr, highpass_tag {});
+      saike::steiner_1::reset_coeffs (
+        _coeffs[band], freq, reso, sr, highpass_tag {});
       break;
     case bandtype::steiner_1_bp:
-      saike::steiner_1::init (_coeffs[band], freq, reso, sr, bandpass_tag {});
+      saike::steiner_1::reset_coeffs (
+        _coeffs[band], freq, reso, sr, bandpass_tag {});
       break;
     case bandtype::steiner_1_br:
-      saike::steiner_1::init (_coeffs[band], freq, reso, sr, notch_tag {});
+      saike::steiner_1::reset_coeffs (
+        _coeffs[band], freq, reso, sr, notch_tag {});
       break;
     case bandtype::steiner_2_lp:
-      saike::steiner_2::init (_coeffs[band], freq, reso, sr, lowpass_tag {});
+      saike::steiner_2::reset_coeffs (
+        _coeffs[band], freq, reso, sr, lowpass_tag {});
       break;
     case bandtype::steiner_2_hp:
-      saike::steiner_2::init (_coeffs[band], freq, reso, sr, highpass_tag {});
+      saike::steiner_2::reset_coeffs (
+        _coeffs[band], freq, reso, sr, highpass_tag {});
       break;
     case bandtype::steiner_2_bp:
-      saike::steiner_2::init (_coeffs[band], freq, reso, sr, bandpass_tag {});
+      saike::steiner_2::reset_coeffs (
+        _coeffs[band], freq, reso, sr, bandpass_tag {});
       break;
     case bandtype::steiner_2_br:
-      saike::steiner_2::init (_coeffs[band], freq, reso, sr, notch_tag {});
+      saike::steiner_2::reset_coeffs (
+        _coeffs[band], freq, reso, sr, notch_tag {});
       break;
     case bandtype::moog_1_lp:
-      saike::moog_1::init (_coeffs[band], freq, reso, sr, lowpass_tag {});
+      saike::moog_1::reset_coeffs (
+        _coeffs[band], freq, reso, sr, lowpass_tag {});
       break;
     case bandtype::moog_1_hp:
-      saike::moog_1::init (_coeffs[band], freq, reso, sr, highpass_tag {});
+      saike::moog_1::reset_coeffs (
+        _coeffs[band], freq, reso, sr, highpass_tag {});
       break;
     case bandtype::moog_1_bp:
-      saike::moog_1::init (_coeffs[band], freq, reso, sr, bandpass_tag {});
+      saike::moog_1::reset_coeffs (
+        _coeffs[band], freq, reso, sr, bandpass_tag {});
       break;
     case bandtype::moog_1_br:
-      saike::moog_1::init (_coeffs[band], freq, reso, sr, notch_tag {});
+      saike::moog_1::reset_coeffs (_coeffs[band], freq, reso, sr, notch_tag {});
       break;
     case bandtype::moog_2_lp:
-      saike::moog_2::init (_coeffs[band], freq, reso, sr, lowpass_tag {});
+      saike::moog_2::reset_coeffs (
+        _coeffs[band], freq, reso, sr, lowpass_tag {});
       break;
     case bandtype::moog_2_hp:
-      saike::moog_2::init (_coeffs[band], freq, reso, sr, highpass_tag {});
+      saike::moog_2::reset_coeffs (
+        _coeffs[band], freq, reso, sr, highpass_tag {});
       break;
     case bandtype::moog_2_bp:
-      saike::moog_2::init (_coeffs[band], freq, reso, sr, bandpass_tag {});
+      saike::moog_2::reset_coeffs (
+        _coeffs[band], freq, reso, sr, bandpass_tag {});
       break;
     case bandtype::moog_2_br:
-      saike::moog_2::init (_coeffs[band], freq, reso, sr, notch_tag {});
+      saike::moog_2::reset_coeffs (_coeffs[band], freq, reso, sr, notch_tag {});
       break;
     default:
       jassert (false);

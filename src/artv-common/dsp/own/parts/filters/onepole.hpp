@@ -17,7 +17,7 @@ struct onepole_smoother {
   enum state { z1, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     vec_value_type_t<V>         srate)
@@ -116,7 +116,7 @@ struct onepole {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     sub_coeffs<V>               wn,
     lowpass_tag)
@@ -132,7 +132,7 @@ struct onepole {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     sub_coeffs<V>               wn,
     highpass_tag)
@@ -148,7 +148,7 @@ struct onepole {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     sub_coeffs<V>               wn,
     allpass_tag)
@@ -165,33 +165,33 @@ struct onepole {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     vec_value_type_t<V>         srate,
     lowpass_tag                 t)
   {
-    init (co, get_sub_coeffs (freq, srate), t);
+    reset_coeffs (co, get_sub_coeffs (freq, srate), t);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     vec_value_type_t<V>         srate,
     highpass_tag                t)
   {
-    init (co, get_sub_coeffs (freq, srate), t);
+    reset_coeffs (co, get_sub_coeffs (freq, srate), t);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     vec_value_type_t<V>         srate,
     allpass_tag                 t)
   {
-    init (co, get_sub_coeffs (freq, srate), t);
+    reset_coeffs (co, get_sub_coeffs (freq, srate), t);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

@@ -248,10 +248,10 @@ public:
     memset (&_params.smooth_state, 0, sizeof _params.smooth_state);
     memset (&_dc_block_states, 0, sizeof _dc_block_states);
 
-    mystran_dc_blocker::init (
+    mystran_dc_blocker::reset_coeffs (
       _dc_block_coeffs, vec_set<double_x2> (2.), pc.get_sample_rate());
 
-    onepole_smoother::init (
+    onepole_smoother::reset_coeffs (
       make_crange (_lp_smooth_coeff),
       make_vec_x1<decltype (_lp_smooth_coeff)> (1. / 0.01),
       pc.get_sample_rate());
@@ -429,7 +429,7 @@ public:
               f += fconstant_even;
             }
           }
-          andy::svf::init (
+          andy::svf::reset_coeffs (
             get_allpass_group_coeffs (s),
             freqs,
             qs,

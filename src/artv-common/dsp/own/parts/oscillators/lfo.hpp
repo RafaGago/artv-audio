@@ -26,7 +26,7 @@ public:
   void set_freq (float f, float samplerate)
   {
     _phasor.set_freq (f, samplerate);
-    onepole_smoother::init (
+    onepole_smoother::reset_coeffs (
       make_crange (_smooth_coeff), make_vec_x1 (f * 2), samplerate);
   }
   //----------------------------------------------------------------------------

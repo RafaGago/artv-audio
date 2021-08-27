@@ -21,7 +21,7 @@ public:
   static void fix_unsmoothable_coeffs (crange<double>, crange<const double>) {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           q,
@@ -29,9 +29,9 @@ public:
     vec_value_type_t<V>         sr)
   {
     assert (co.size() >= n_coeffs);
-    andy::svf::init (co, freq, q, gain_db, sr, lowshelf_tag {});
+    andy::svf::reset_coeffs (co, freq, q, gain_db, sr, lowshelf_tag {});
     co = co.shrink_head (andy::svf::n_coeffs);
-    andy::svf::init (co, freq, q, -gain_db, sr, highshelf_tag {});
+    andy::svf::reset_coeffs (co, freq, q, -gain_db, sr, highshelf_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

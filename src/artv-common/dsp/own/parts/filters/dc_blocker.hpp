@@ -21,7 +21,7 @@ struct iir_dc_blocker {
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     vec_value_type_t<V>         sr)
@@ -78,12 +78,12 @@ struct mystran_dc_blocker {
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     vec_value_type_t<V>         sr)
   {
-    onepole_smoother::init (c, freq, sr);
+    onepole_smoother::reset_coeffs (c, freq, sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

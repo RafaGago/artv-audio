@@ -398,11 +398,11 @@ public:
     memset (&_post_emphasis_states, 0, sizeof _post_emphasis_states);
     memset (&_post_emphasis_coeffs, 0, sizeof _post_emphasis_coeffs);
 
-    adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::init<double_x2> (
-      _adaa_fix_eq_delay_coeffs);
+    adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::reset_coeffs<
+      double_x2> (_adaa_fix_eq_delay_coeffs);
 
     for (auto& dcbc : _dc_block_coeffs) {
-      mystran_dc_blocker::init (
+      mystran_dc_blocker::reset_coeffs (
         dcbc, vec_set<double_x2> (0.1), pc.get_sample_rate());
     }
 
@@ -731,7 +731,7 @@ private:
     f += freq_offset;
     db += amt_offset;
 
-    andy::svf::init (
+    andy::svf::reset_coeffs (
       _pre_emphasis_coeffs,
       f,
       q,
@@ -739,7 +739,7 @@ private:
       _plugcontext->get_sample_rate(),
       bell_tag {});
 
-    andy::svf::init (
+    andy::svf::reset_coeffs (
       _post_emphasis_coeffs,
       f,
       q,
@@ -750,7 +750,7 @@ private:
   //----------------------------------------------------------------------------
   void update_envelope_follower()
   {
-    slew_limiter::init (
+    slew_limiter::reset_coeffs (
       _envfollow_coeffs,
       vec_set<double_x2> (_p.ef_attack),
       vec_set<double_x2> (_p.ef_release),

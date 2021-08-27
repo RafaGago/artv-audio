@@ -37,7 +37,7 @@ public:
   {
     _plugcontext = &pc;
     _cfg         = decltype (_cfg) {};
-    smoother::init (
+    smoother::reset_coeffs (
       make_crange (_smooth_coeff),
       make_vec_x1 (1. / 0.02),
       pc.get_sample_rate());
@@ -264,7 +264,7 @@ private:
       memset (&_coeffs[band], 0, sizeof _coeffs[band]);
       break;
     case bandtype::svf_bell:
-      andy::svf::init (
+      andy::svf::reset_coeffs (
         _coeffs[band],
         make_vec_x1<double> (b.freq),
         make_vec_x1<double> (b.q),
@@ -273,7 +273,7 @@ private:
         bell_tag {});
       break;
     case bandtype::svf_lshelf:
-      andy::svf::init (
+      andy::svf::reset_coeffs (
         _coeffs[band],
         make_vec_x1<double> (b.freq),
         make_vec_x1<double> (b.q),
@@ -282,7 +282,7 @@ private:
         lowshelf_tag {});
       break;
     case bandtype::svf_hshelf:
-      andy::svf::init (
+      andy::svf::reset_coeffs (
         _coeffs[band],
         make_vec_x1<double> (b.freq),
         make_vec_x1<double> (b.q),
@@ -291,7 +291,7 @@ private:
         highshelf_tag {});
       break;
     case bandtype::svf_allpass:
-      andy::svf::init (
+      andy::svf::reset_coeffs (
         _coeffs[band],
         make_vec_x1<double> (b.freq),
         make_vec_x1<double> (b.q),
@@ -300,7 +300,7 @@ private:
       break;
     case bandtype::butterworth_lp:
     case bandtype::butterworth_hp:
-      butterworth_any_order::init (
+      butterworth_any_order::reset_coeffs (
         _coeffs[band],
         make_vec_x1<double> (b.freq),
         sr,
@@ -308,7 +308,7 @@ private:
         (b.type) == bandtype::butterworth_lp);
       break;
     case bandtype::svf_tilt:
-      tilt_eq::init (
+      tilt_eq::reset_coeffs (
         _coeffs[band],
         make_vec_x1<double> (b.freq),
         make_vec_x1<double> (b.q),
@@ -317,7 +317,7 @@ private:
       break;
     case bandtype::presence: {
       float qnorm_0_to_1 = b.q / get_parameter (band1_q_tag {}).max;
-      liteon::presence_high_shelf::init (
+      liteon::presence_high_shelf::reset_coeffs (
         _coeffs[band],
         make_vec_x1<double> (b.freq),
         make_vec_x1<double> (qnorm_0_to_1),

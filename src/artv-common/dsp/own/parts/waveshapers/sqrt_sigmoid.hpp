@@ -53,11 +53,8 @@ public:
   enum state { x1, x1_sqrt, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (crange<vec_value_type_t<V>>)
-  {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
-  }
+  static void reset_coeffs (crange<vec_value_type_t<V>>)
+  {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void fix_unsmoothable_coeffs (

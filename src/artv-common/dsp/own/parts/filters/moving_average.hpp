@@ -23,7 +23,7 @@ struct moving_average<2> {
   enum state { z1, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (crange<vec_value_type_t<V>>)
+  static void reset_coeffs (crange<vec_value_type_t<V>>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

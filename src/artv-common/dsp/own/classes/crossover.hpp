@@ -48,7 +48,7 @@ public:
 
     if (order != 0) {
       double_x2 f = {freq_l, freq_r};
-      lr::init (_coeffs[idx], f, _samplerate, order);
+      lr::reset_coeffs (_coeffs[idx], f, _samplerate, order);
     }
 
     if (order == _order[idx]) {

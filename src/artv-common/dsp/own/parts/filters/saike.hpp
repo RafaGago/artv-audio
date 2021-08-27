@@ -74,7 +74,7 @@ struct ms20_base {
 protected:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           reso,
@@ -107,13 +107,13 @@ protected:
 struct ms20_lowpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr)
   {
-    detail::ms20_base::init (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -183,13 +183,13 @@ struct ms20_lowpass : public detail::ms20_base {
 struct ms20_highpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr)
   {
-    detail::ms20_base::init (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -260,13 +260,13 @@ struct ms20_highpass : public detail::ms20_base {
 struct ms20_bandpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr)
   {
-    detail::ms20_base::init (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -337,13 +337,13 @@ struct ms20_bandpass : public detail::ms20_base {
 struct ms20_notch : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr)
   {
-    detail::ms20_base::init (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -416,13 +416,13 @@ struct ms20_notch : public detail::ms20_base {
 struct ms20_asym_lowpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr)
   {
-    detail::ms20_base::init (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -498,13 +498,13 @@ struct ms20_asym_lowpass : public detail::ms20_base {
 struct ms20_asym_highpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr)
   {
-    detail::ms20_base::init (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -575,13 +575,13 @@ struct ms20_asym_highpass : public detail::ms20_base {
 struct ms20_asym_bandpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr)
   {
-    detail::ms20_base::init (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -657,13 +657,13 @@ struct ms20_asym_bandpass : public detail::ms20_base {
 struct ms20_asym_notch : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr)
   {
-    detail::ms20_base::init (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -743,49 +743,49 @@ struct steiner_base {
   enum state { x, v1, v2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr,
     lowpass_tag)
   {
-    init (co, freq, reso, 0., sr);
+    reset_coeffs (co, freq, reso, 0., sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr,
     bandpass_tag)
   {
-    init (co, freq, reso, 0.25, sr);
+    reset_coeffs (co, freq, reso, 0.25, sr);
   }
 
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr,
     highpass_tag)
   {
-    init (co, freq, reso, 0.5, sr);
+    reset_coeffs (co, freq, reso, 0.5, sr);
   }
 
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr,
     notch_tag)
   {
-    init (co, freq, reso, 0.75, sr);
+    reset_coeffs (co, freq, reso, 0.75, sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -808,7 +808,7 @@ struct steiner_base {
 protected:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
@@ -1084,48 +1084,48 @@ struct moog_1 {
   };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr,
     lowpass_tag)
   {
-    init (co, freq, reso, 0, vec_set<V> (0.), sr);
+    reset_coeffs (co, freq, reso, 0, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr,
     bandpass_tag)
   {
-    init (co, freq, reso, 1, vec_set<V> (0.), sr);
+    reset_coeffs (co, freq, reso, 1, vec_set<V> (0.), sr);
   }
 
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr,
     highpass_tag)
   {
-    init (co, freq, reso, 2, vec_set<V> (0.), sr);
+    reset_coeffs (co, freq, reso, 2, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr,
     notch_tag)
   {
-    init (co, freq, reso, 3, vec_set<V> (0.), sr);
+    reset_coeffs (co, freq, reso, 3, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -1282,7 +1282,7 @@ private:
   static constexpr double vt2i = 19.23076923076923;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
@@ -1372,48 +1372,48 @@ struct moog_2 {
   enum state { sf1, sf2, sg1, sg2, si1, si2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr,
     lowpass_tag)
   {
-    init (co, freq, reso, 0, vec_set<V> (0.), sr);
+    reset_coeffs (co, freq, reso, 0, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr,
     bandpass_tag)
   {
-    init (co, freq, reso, 1, vec_set<V> (0.), sr);
+    reset_coeffs (co, freq, reso, 1, vec_set<V> (0.), sr);
   }
 
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr,
     highpass_tag)
   {
-    init (co, freq, reso, 2, vec_set<V> (0.), sr);
+    reset_coeffs (co, freq, reso, 2, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,
     vec_value_type_t<V>         sr,
     notch_tag)
   {
-    init (co, freq, reso, 3, vec_set<V> (0.), sr);
+    reset_coeffs (co, freq, reso, 3, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -1539,7 +1539,7 @@ private:
   static constexpr double vt2i = 19.23076923076923;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co,
     V                           freq,
     V                           reso,

@@ -167,7 +167,7 @@ public:
     // DC blockers, could be only done once...
     auto dc_coeffs = c.shrink_head (n_own_coeffs);
     // float! not going low on frequency.
-    mystran_dc_blocker::init (dc_coeffs, make_vec_x1 (2.), fs);
+    mystran_dc_blocker::reset_coeffs (dc_coeffs, make_vec_x1 (2.), fs);
   }
   //----------------------------------------------------------------------------
   static void reset_states (crange<value_type> s)
@@ -337,7 +337,7 @@ public:
   {
     _plugcontext = &pc;
 
-    smoother::init (
+    smoother::reset_coeffs (
       make_crange (_smooth_coeff),
       make_vec_x1<decltype (_smooth_coeff)> (1. / 0.1),
       pc.get_sample_rate());

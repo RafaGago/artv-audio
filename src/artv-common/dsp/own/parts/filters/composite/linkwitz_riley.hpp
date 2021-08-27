@@ -36,7 +36,7 @@ public:
   static constexpr uint n_correction_states = onepole::n_states;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     vec_value_type_t<V>         sr)
@@ -47,8 +47,8 @@ public:
     assert (c.size() >= (n_coeffs * traits.size));
 
     auto params = onepole::get_sub_coeffs (freq, sr);
-    onepole::init (c, params, lowpass_tag {});
-    onepole::init (
+    onepole::reset_coeffs (c, params, lowpass_tag {});
+    onepole::reset_coeffs (
       c.shrink_head (onepole::n_coeffs * traits.size), params, allpass_tag {});
   }
   //----------------------------------------------------------------------------
@@ -130,7 +130,7 @@ public:
 
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     vec_value_type_t<V>         sr)
@@ -141,7 +141,7 @@ public:
     static constexpr auto qlist  = butterworth_2p_cascade_q_list::cget<2>();
 
     assert (c.size() >= (n_coeffs * traits.size));
-    svf_lp_ap::init (c, freq, vec_set<V> (qlist[0]), sr);
+    svf_lp_ap::reset_coeffs (c, freq, vec_set<V> (qlist[0]), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -218,7 +218,7 @@ public:
 
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     vec_value_type_t<V>         sr)
@@ -230,8 +230,8 @@ public:
 
     assert (c.size() >= (n_coeffs * traits.size));
 
-    svf_lp_ap::init (c, freq, vec_set<V> (qlist[0]), sr);
-    svf_lp_ap::init (
+    svf_lp_ap::reset_coeffs (c, freq, vec_set<V> (qlist[0]), sr);
+    svf_lp_ap::reset_coeffs (
       c.shrink_head (svf_lp_ap::n_coeffs * traits.size),
       freq,
       vec_set<V> (qlist[1]),
@@ -359,7 +359,7 @@ public:
     std::max (lr4::n_correction_states, lr8::n_correction_states));
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     vec_value_type_t<V>         sr,
@@ -372,13 +372,13 @@ public:
 
     switch (order) {
     case 2:
-      lr2::init (c, freq, sr);
+      lr2::reset_coeffs (c, freq, sr);
       break;
     case 4:
-      lr4::init (c, freq, sr);
+      lr4::reset_coeffs (c, freq, sr);
       break;
     case 8:
-      lr8::init (c, freq, sr);
+      lr8::reset_coeffs (c, freq, sr);
       break;
     default:
       assert (false);

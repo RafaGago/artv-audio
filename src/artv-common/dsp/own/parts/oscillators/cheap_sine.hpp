@@ -16,7 +16,7 @@ public:
   enum state { z0, z1, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           freq,
     vec_value_type_t<V>         sr,

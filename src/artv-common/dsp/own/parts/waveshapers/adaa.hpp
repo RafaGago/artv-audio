@@ -34,7 +34,7 @@ public:
   enum state { n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (crange<vec_value_type_t<V>>)
+  static void reset_coeffs (crange<vec_value_type_t<V>>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -65,7 +65,7 @@ public:
   enum state { x1, x1_int, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (crange<vec_value_type_t<V>>)
+  static void reset_coeffs (crange<vec_value_type_t<V>>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -133,11 +133,8 @@ public:
   enum state { x1, x2, x2_der, x1_int2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (crange<vec_value_type_t<V>>)
-  {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
-  }
+  static void reset_coeffs (crange<vec_value_type_t<V>>)
+  {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void fix_unsmoothable_coeffs (
@@ -246,7 +243,7 @@ public:
   };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (crange<vec_value_type_t<V>> c)
+  static void reset_coeffs (crange<vec_value_type_t<V>> c)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
@@ -256,7 +253,7 @@ public:
     static_assert (moving_average<2>::n_coeffs == 0, "Add initialization!");
     static_assert (Impl<1>::n_coeffs == 0, "Add initialization!");
 
-    allpass_interpolator::init (c, vec_set<V> ((T) 0.5));
+    allpass_interpolator::reset_coeffs (c, vec_set<V> ((T) 0.5));
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

@@ -90,7 +90,7 @@ public:
   //  depend on template parameters.
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co, // coeffs interleaved
     V                           freq,
     vec_value_type_t<V>         sr,
@@ -109,19 +109,21 @@ public:
 
     if (order & 1) {
       if (is_lowpass) {
-        onepole::init (co, freq, sr, lowpass_tag {});
+        onepole::reset_coeffs (co, freq, sr, lowpass_tag {});
       }
       else {
-        onepole::init (co, freq, sr, highpass_tag {});
+        onepole::reset_coeffs (co, freq, sr, highpass_tag {});
       }
       co = co.shrink_head (onepole::n_coeffs * traits.size);
     }
     for (uint i = 0; i < (order / 2); ++i) {
       if (is_lowpass) {
-        andy::svf::init (co, freq, vec_set<V> (q_list[i]), sr, lowpass_tag {});
+        andy::svf::reset_coeffs (
+          co, freq, vec_set<V> (q_list[i]), sr, lowpass_tag {});
       }
       else {
-        andy::svf::init (co, freq, vec_set<V> (q_list[i]), sr, highpass_tag {});
+        andy::svf::reset_coeffs (
+          co, freq, vec_set<V> (q_list[i]), sr, highpass_tag {});
       }
       co = co.shrink_head (andy::svf::n_coeffs * traits.size);
     }
@@ -221,23 +223,23 @@ public:
   static void fix_unsmoothable_coeffs (crange<double>, crange<const double>) {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
     V                           freq,
     vec_value_type_t<V>         sr,
     lowpass_tag)
   {
-    butterworth_any_order::init (co, freq, sr, order, true);
+    butterworth_any_order::reset_coeffs (co, freq, sr, order, true);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
     V                           freq,
     vec_value_type_t<V>         sr,
     highpass_tag)
   {
-    butterworth_any_order::init (co, freq, sr, order, false);
+    butterworth_any_order::reset_coeffs (co, freq, sr, order, false);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -300,7 +302,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> co, // coeffs interleaved
     V                           freq,
     vec_value_type_t<V>         sr,
@@ -317,11 +319,11 @@ public:
     auto q_list = butterworth_2p_cascade_q_list::get (q_list_mem, order);
 
     if (order & 1) {
-      onepole::init (co, freq, sr, lowpass_tag {});
+      onepole::reset_coeffs (co, freq, sr, lowpass_tag {});
       co = co.shrink_head (onepole::n_coeffs * traits.size);
     }
     for (uint i = 0; i < (order / 2); ++i) {
-      andy::svf_lowpass::init (co, freq, vec_set<V> (q_list[i]), sr);
+      andy::svf_lowpass::reset_coeffs (co, freq, vec_set<V> (q_list[i]), sr);
       co = co.shrink_head (andy::svf_lowpass::n_coeffs * traits.size);
     }
   }

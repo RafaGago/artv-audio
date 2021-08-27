@@ -22,7 +22,7 @@ struct slew_limiter {
   enum state { prev, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void init (
+  static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
     V                           attack_sec,
     V                           release_sec,
