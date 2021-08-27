@@ -137,18 +137,18 @@ struct ms20_lowpass : public detail::ms20_base {
     V d2_v = vec_load<V> (&st[d2 * traits.size]);
 
     V gd2k      = detail::f_g (d2_v * k_v);
-    V tanhterm1 = vec_tanh (-d1_v + in - gd2k);
-    V tanhterm2 = vec_tanh (d1_v - d2_v + gd2k);
+    V tanhterm1 = vec_tanh_approx_vaneev (-d1_v + in - gd2k);
+    V tanhterm2 = vec_tanh_approx_vaneev (d1_v - d2_v + gd2k);
 
     for (uint i = 0; i < max_iter; ++i) {
       V ky2          = k_v * y2_v;
       V gky2         = detail::f_g (ky2);
       V dgky2        = detail::f_dg (ky2);
       V sig1         = in - y1_v - gky2;
-      V thsig1       = vec_tanh (sig1);
+      V thsig1       = vec_tanh_approx_vaneev (sig1);
       V thsig1sq     = thsig1 * thsig1;
       V sig2         = y1_v - y2_v + gky2;
-      V thsig2       = vec_tanh (sig2);
+      V thsig2       = vec_tanh_approx_vaneev (sig2);
       V thsig2sq     = thsig2 * thsig2;
       V hhthsig1sqm1 = hh_v * (thsig1sq - (T) 1.);
       V hhthsig2sqm1 = hh_v * (thsig2sq - (T) 1.);
@@ -214,18 +214,18 @@ struct ms20_highpass : public detail::ms20_base {
 
     V kc        = .85 * k_v;
     V gkd2px    = detail::f_g (kc * (d2_v + in));
-    V tanhterm1 = vec_tanh (-d1_v - gkd2px);
-    V tanhterm2 = vec_tanh (d1_v - d2_v - in + gkd2px);
+    V tanhterm1 = vec_tanh_approx_vaneev (-d1_v - gkd2px);
+    V tanhterm2 = vec_tanh_approx_vaneev (d1_v - d2_v - in + gkd2px);
 
     for (uint i = 0; i < max_iter; ++i) {
       V kxpy2        = kc * (in + y2_v);
       V gkxpy2       = detail::f_g (kxpy2);
       V dgky2px      = detail::f_dg (kxpy2);
       V sig1         = -y1_v - gkxpy2;
-      V thsig1       = vec_tanh (sig1);
+      V thsig1       = vec_tanh_approx_vaneev (sig1);
       V thsig1sq     = thsig1 * thsig1;
       V sig2         = -in + y1_v - y2_v + gkxpy2;
-      V thsig2       = vec_tanh (sig2);
+      V thsig2       = vec_tanh_approx_vaneev (sig2);
       V thsig2sq     = thsig2 * thsig2;
       V hhthsig1sqm1 = (thsig1sq - (T) 1.);
       V hhthsig2sqm1 = (thsig2sq - (T) 1.);
@@ -291,18 +291,18 @@ struct ms20_bandpass : public detail::ms20_base {
 
     V kc        = (T) .95 * k_v;
     V gd2k      = detail::f_g (d2_v * kc);
-    V tanhterm1 = vec_tanh (-d1_v - in - gd2k);
-    V tanhterm2 = vec_tanh (d1_v - d2_v + in + gd2k);
+    V tanhterm1 = vec_tanh_approx_vaneev (-d1_v - in - gd2k);
+    V tanhterm2 = vec_tanh_approx_vaneev (d1_v - d2_v + in + gd2k);
 
     for (uint i = 0; i < max_iter; ++i) {
       V ky2          = kc * y2_v;
       V gky2         = detail::f_g (ky2);
       V dgky2        = detail::f_dg (ky2);
       V sig1         = -in - y1_v - gky2;
-      V thsig1       = vec_tanh (sig1);
+      V thsig1       = vec_tanh_approx_vaneev (sig1);
       V thsig1sq     = thsig1 * thsig1;
       V sig2         = in + y1_v - y2_v + gky2;
-      V thsig2       = vec_tanh (sig2);
+      V thsig2       = vec_tanh_approx_vaneev (sig2);
       V thsig2sq     = thsig2 * thsig2;
       V hhthsig1sqm1 = hh_v * (thsig1sq - (T) 1.);
       V hhthsig2sqm1 = hh_v * (thsig2sq - (T) 1.);
@@ -367,8 +367,8 @@ struct ms20_notch : public detail::ms20_base {
     V d2_v = vec_load<V> (&st[d2 * traits.size]);
 
     V gd2k      = detail::f_g (d2_v * k_v);
-    V tanhterm1 = vec_tanh (-d1_v - in - gd2k);
-    V tanhterm2 = vec_tanh (d1_v - d2_v + in + gd2k);
+    V tanhterm1 = vec_tanh_approx_vaneev (-d1_v - in - gd2k);
+    V tanhterm2 = vec_tanh_approx_vaneev (d1_v - d2_v + in + gd2k);
 
     for (uint i = 0; i < max_iter; ++i) {
       V ky2          = k_v * y2_v;
@@ -378,7 +378,7 @@ struct ms20_notch : public detail::ms20_base {
       V thsig1       = vec_tanh (sig1);
       V thsig1sq     = thsig1 * thsig1;
       V sig2         = in + y1_v - y2_v + gky2;
-      V thsig2       = vec_tanh (sig2);
+      V thsig2       = vec_tanh_approx_vaneev (sig2);
       V thsig2sq     = thsig2 * thsig2;
       V hhthsig1sqm1 = hh_v * (thsig1sq - (T) 1.);
       V hhthsig2sqm1 = hh_v * (thsig2sq - (T) 1.);
@@ -450,8 +450,8 @@ struct ms20_asym_lowpass : public detail::ms20_base {
     V qq   = (sig1 < 0.) ? (T) .6 : (T) 1.0;
 
     sig1 *= qq;
-    V tanhterm1 = vec_tanh (sig1);
-    V tanhterm2 = vec_tanh (d1_v - d2_v + gd2k);
+    V tanhterm1 = vec_tanh_approx_vaneev (sig1);
+    V tanhterm2 = vec_tanh_approx_vaneev (d1_v - d2_v + gd2k);
 
     for (uint i = 0; i < max_iter; ++i) {
       V ky2   = k_v * y2_v;
@@ -460,10 +460,10 @@ struct ms20_asym_lowpass : public detail::ms20_base {
       sig1    = in - y1_v - gky2;
       qq      = (sig1 < 0.) ? (T) .6 : (T) 1.0;
       sig1 *= qq;
-      V thsig1       = vec_tanh (sig1);
+      V thsig1       = vec_tanh_approx_vaneev (sig1);
       V thsig1sq     = thsig1 * thsig1;
       V sig2         = y1_v - y2_v + gky2;
-      V thsig2       = vec_tanh (sig2);
+      V thsig2       = vec_tanh_approx_vaneev (sig2);
       V thsig2sq     = thsig2 * thsig2;
       V hhthsig1sqm1 = hh_v * (thsig1sq - (T) 1.);
       V hhthsig2sqm1 = hh_v * (thsig2sq - (T) 1.);
@@ -529,18 +529,18 @@ struct ms20_asym_highpass : public detail::ms20_base {
 
     V kc        = k_v;
     V gkd2px    = detail::f_g_asym (kc * (d2_v + in));
-    V tanhterm1 = vec_tanh (-d1_v - gkd2px);
-    V tanhterm2 = vec_tanh (d1_v - d2_v - in + gkd2px);
+    V tanhterm1 = vec_tanh_approx_vaneev (-d1_v - gkd2px);
+    V tanhterm2 = vec_tanh_approx_vaneev (d1_v - d2_v - in + gkd2px);
 
     for (uint i = 0; i < max_iter; ++i) {
       V kxpy2        = kc * (in + y2_v);
       V gkxpy2       = detail::f_g_asym (kxpy2);
       V dgky2px      = detail::f_dg_asym (kxpy2);
       V sig1         = -y1_v - gkxpy2;
-      V thsig1       = vec_tanh (sig1);
+      V thsig1       = vec_tanh_approx_vaneev (sig1);
       V thsig1sq     = thsig1 * thsig1;
       V sig2         = -in + y1_v - y2_v + gkxpy2;
-      V thsig2       = vec_tanh (sig2);
+      V thsig2       = vec_tanh_approx_vaneev (sig2);
       V thsig2sq     = thsig2 * thsig2;
       V hhthsig1sqm1 = (thsig1sq - (T) 1.);
       V hhthsig2sqm1 = (thsig2sq - (T) 1.);
@@ -609,8 +609,8 @@ struct ms20_asym_bandpass : public detail::ms20_base {
     V sig1 = -d1_v - in - gd2k;
     V qq   = (sig1 < 0.) ? (T) .6 : (T) 1.0;
     sig1 *= qq;
-    V tanhterm1 = vec_tanh (sig1);
-    V tanhterm2 = vec_tanh (d1_v - d2_v + in + gd2k);
+    V tanhterm1 = vec_tanh_approx_vaneev (sig1);
+    V tanhterm2 = vec_tanh_approx_vaneev (d1_v - d2_v + in + gd2k);
 
     for (uint i = 0; i < max_iter; ++i) {
       V ky2   = kc * y2_v;
@@ -619,10 +619,10 @@ struct ms20_asym_bandpass : public detail::ms20_base {
       sig1    = -in - y1_v - gky2;
       qq      = (sig1 < 0.) ? (T) .6 : (T) 1.0;
       sig1 *= qq;
-      V thsig1       = vec_tanh (sig1);
+      V thsig1       = vec_tanh_approx_vaneev (sig1);
       V thsig1sq     = thsig1 * thsig1;
       V sig2         = in + y1_v - y2_v + gky2;
-      V thsig2       = vec_tanh (sig2);
+      V thsig2       = vec_tanh_approx_vaneev (sig2);
       V thsig2sq     = thsig2 * thsig2;
       V hhthsig1sqm1 = hh_v * (thsig1sq - (T) 1.);
       V hhthsig2sqm1 = hh_v * (thsig2sq - (T) 1.);
@@ -687,18 +687,18 @@ struct ms20_asym_notch : public detail::ms20_base {
     V d2_v = vec_load<V> (&st[d2 * traits.size]);
 
     V gd2k      = detail::f_g_asym (d2_v * k_v);
-    V tanhterm1 = vec_tanh (-d1_v - in - gd2k);
-    V tanhterm2 = vec_tanh (d1_v - d2_v + in + gd2k);
+    V tanhterm1 = vec_tanh_approx_vaneev (-d1_v - in - gd2k);
+    V tanhterm2 = vec_tanh_approx_vaneev (d1_v - d2_v + in + gd2k);
 
     for (uint i = 0; i < max_iter; ++i) {
       V ky2          = k_v * y2_v;
       V gky2         = detail::f_g_asym (ky2);
       V dgky2        = detail::f_dg_asym (ky2);
       V sig1         = -in - y1_v - gky2;
-      V thsig1       = vec_tanh (sig1);
+      V thsig1       = vec_tanh_approx_vaneev (sig1);
       V thsig1sq     = thsig1 * thsig1;
       V sig2         = in + y1_v - y2_v + gky2;
-      V thsig2       = vec_tanh (sig2);
+      V thsig2       = vec_tanh_approx_vaneev (sig2);
       V thsig2sq     = thsig2 * thsig2;
       V hhthsig1sqm1 = hh_v * (thsig1sq - (T) 1.);
       V hhthsig2sqm1 = hh_v * (thsig2sq - (T) 1.);
@@ -1200,33 +1200,33 @@ struct moog_1 {
     V si3_v = vec_load<V> (&st[si3 * traits.size]);
     V si4_v = vec_load<V> (&st[si4 * traits.size]);
 
-    V yo  = vec_tanh (k0g_v * (in + sg1_v));
+    V yo  = vec_tanh_approx_vaneev (k0g_v * (in + sg1_v));
     V a   = yo;
     V yi  = yo;
     V yd  = k0s_v * (yi + sf1_v);
     V y   = yd + si1_v;
-    yo    = vec_tanh ((T) vt2i * y);
+    yo    = vec_tanh_approx_vaneev ((T) vt2i * y);
     V b   = yo;
     si1_v = yd + y;
     sf1_v = r1s_v * yi - q0s_v * yo;
     yi    = yo;
     yd    = k0s_v * (yi + sf2_v);
     y     = yd + si2_v;
-    yo    = vec_tanh ((T) vt2i * y);
+    yo    = vec_tanh_approx_vaneev ((T) vt2i * y);
     V c   = yo;
     si2_v = yd + y;
     sf2_v = r1s_v * yi - q0s_v * yo;
     yi    = yo;
     yd    = k0s_v * (yi + sf3_v);
     y     = yd + si3_v;
-    yo    = vec_tanh ((T) vt2i * y);
+    yo    = vec_tanh_approx_vaneev ((T) vt2i * y);
     V d   = yo;
     si3_v = yd + y;
     sf3_v = r1s_v * yi - q0s_v * yo;
     yi    = yo;
     yd    = k0s_v * (yi + sf4_v);
     y     = yd + si4_v;
-    yo    = vec_tanh ((T) vt2i * y);
+    yo    = vec_tanh_approx_vaneev ((T) vt2i * y);
     si4_v = yd + y;
     sf4_v = r1s_v * yi - q0s_v * yo;
     V yf  = k_v * y;
@@ -1478,19 +1478,19 @@ struct moog_2 {
     V si1_v = vec_load<V> (&st[si1 * traits.size]);
     V si2_v = vec_load<V> (&st[si2 * traits.size]);
 
-    V yo  = vec_tanh (k0g_v * (in + sg1_v));
+    V yo  = vec_tanh_approx_vaneev (k0g_v * (in + sg1_v));
     V a   = yo;
     V yi  = yo;
     V yd  = k0s_v * (yi + sf1_v);
     V y   = yd + si1_v;
-    yo    = vec_tanh ((T) vt2i * y);
+    yo    = vec_tanh_approx_vaneev ((T) vt2i * y);
     V b   = yo;
     si1_v = yd + y;
     sf1_v = r1s_v * yi - q0s_v * yo;
     yi    = yo;
     yd    = k0s_v * (yi + sf2_v);
     y     = yd + si2_v;
-    yo    = vec_tanh ((T) vt2i * y);
+    yo    = vec_tanh_approx_vaneev ((T) vt2i * y);
     si2_v = yd + y;
     sf2_v = r1s_v * yi - q0s_v * yo;
     V yf  = k_v * y;

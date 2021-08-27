@@ -1153,4 +1153,26 @@ bool vec_is_all_ones (V v)
   }
 }
 //------------------------------------------------------------------------------
+// approximations.
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+static inline auto vec_tanh_approx_vaneev (V&& x)
+{
+  using Vv              = std::remove_reference_t<std::remove_cv_t<V>>;
+  constexpr auto traits = vec_traits<Vv>();
+  using T               = vec_value_type_t<Vv>;
+  // https://www.kvraudio.com/forum/viewtopic.php?f=33&t=388650&start=45
+  auto ax = vec_abs (x);
+  auto x2 = x * x;
+
+  // clang-format off
+  return (
+    x  * ((T) 2.45550750702956 +
+    (T) 2.45550750702956 * ax +
+    ((T) 0.893229853513558 + (T) 0.821226666969744 * ax) * x2)
+    / ((T) 2.44506634652299 + ((T) 2.44506634652299 + x2) *
+    vec_abs (x + (T) 0.814642734961073 * x * ax)));
+  // clang-format on
+}
+
 } // namespace artv
