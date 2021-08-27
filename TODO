@@ -1,9 +1,9 @@
+- Add envelope follower on the filters module for the cutoff. The code already
+  is processing in blocks, so it can run at a reduced pace (samplerate).
+
+
 - Saturation is blowing up when Tone Amt = -17.2, Tone F = 76, Tone Q = 1.5,
   High Feedback, EF->ToneF = negative.
-
-- On all the blocks, remove function implementation duplication
-  (plain/_simd suffixed), provably by wrapping and using builtin vectors of size
-  1.
 
 - Mixmaxtrix: Add a (back) channel of communication for parameter values, so
   values can react to changes on other parameters. Probaby through plugin-
@@ -13,8 +13,6 @@
 
 - Track XSIMD broken on fast math bug.
   https://github.com/xtensor-stack/xsimd/issues/515
-
-- TODO explore alternative DC blockers.
 
 - Still unfixed memory leaks on original TAL Reverb 2's code (mix-maxtrix-test
   catches them).
@@ -40,8 +38,6 @@
 
 - Sonic Enhancer: It seems as if the envelopes speeds when triggering the CV are
   samplerate dependant. This seems to be designed for 44.1kHz only.
-
-- Add envelope follower on the filters module for the cutoff.
 
 - Pitch shifter.
 
