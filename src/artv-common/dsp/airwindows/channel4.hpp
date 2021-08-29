@@ -208,10 +208,10 @@ public:
       *out1 = inputSampleL * gain;
       *out2 = inputSampleR * gain;
 
-      *in1++;
-      *in2++;
-      *out1++;
-      *out2++;
+      in1++;
+      in2++;
+      out1++;
+      out2++;
     }
   }
   // Parameters (call once per block) ------------------------------------------

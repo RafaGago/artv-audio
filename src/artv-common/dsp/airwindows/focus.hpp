@@ -212,10 +212,10 @@ public:
       *out1 = inputSampleL;
       *out2 = inputSampleR;
 
-      *in1++;
-      *in2++;
-      *out1++;
-      *out2++;
+      in1++;
+      in2++;
+      out1++;
+      out2++;
     }
   }
   // Parameters (call once per block) ------------------------------------------

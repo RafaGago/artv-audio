@@ -115,7 +115,7 @@ private:
   T const* _h = nullptr; // kernel
 };
 
-static constexpr uint fir_cache_line_bytes = 64;
+static constexpr uint fir_cache_line_bytes = 128;
 
 template <class T>
 using fir_std_vector
