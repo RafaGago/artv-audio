@@ -609,10 +609,27 @@ static inline auto vec_exp (V&& x)
     return xsimd::exp (std::forward<decltype (v)> (v));
   });
 #else
-  constexpr auto      traits = vec_traits<V>();
-  std::remove_cv_t<V> ret;
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
     ret[i] = exp (x[i]);
+  }
+  return ret;
+#endif
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+static inline auto vec_exp2 (V&& x)
+{
+#if XSIMD_BROKEN_W_FAST_MATH == 0
+  return detail::call_vec_function (std::forward<V> (x), [] (auto&& v) {
+    return xsimd::exp2 (std::forward<decltype (v)> (v));
+  });
+#else
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
+  for (uint i = 0; i < traits.size; ++i) {
+    ret[i] = exp2 (x[i]);
   }
   return ret;
 #endif

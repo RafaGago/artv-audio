@@ -17,7 +17,7 @@ public:
   // TODO: make a double version
 
 private:
-  static constexpr float g_fScale = 2.0f / 0xffffffff;
+  static constexpr double g_fScale = 2.0f / 4294967296.f;
 
   int g_x1 = 0x67452301;
   int g_x2 = 0xefcdab89;

@@ -2,6 +2,7 @@
 
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/util.hpp"
 #include <algorithm>
 #include <array>
 #include <cassert>

@@ -79,7 +79,7 @@
 #include "artv-common/dsp/own/fx/saturation.hpp"
 
 #include "artv-common/dsp/own/fx/sound_delay.hpp"
-#if 1
+#if 0
 #include "artv-common/dsp/own/fx/polyphase-fir-tester.hpp"
 #endif
 
@@ -4902,7 +4902,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "1.Type",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band1_type_tag>()),
   filter2x::get_parameter (filter2x::band1_type_tag {}),
   slider_ext);
@@ -4912,7 +4912,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "1.Topology",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band1_topology_tag>()),
   filter2x::get_parameter (filter2x::band1_topology_tag {}),
   slider_ext);
@@ -4922,7 +4922,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "1.Freq",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band1_freq_tag>()),
   filter2x::get_parameter (filter2x::band1_freq_tag {}),
   slider_ext);
@@ -4932,7 +4932,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "1.Reso",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band1_reso_tag>()),
   filter2x::get_parameter (filter2x::band1_reso_tag {}),
   slider_ext);
@@ -4942,7 +4942,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "1.Drive",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band1_drive_tag>()),
   filter2x::get_parameter (filter2x::band1_drive_tag {}),
   slider_ext);
@@ -4952,7 +4952,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "1.Gain",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band1_gain_tag>()),
   filter2x::get_parameter (filter2x::band1_gain_tag {}),
   slider_ext);
@@ -4962,7 +4962,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "1.Feedback",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band1_feedback_tag>()),
   filter2x::get_parameter (filter2x::band1_feedback_tag {}),
   slider_ext);
@@ -4972,7 +4972,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "1.Tolerance",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band1_tolerance_tag>()),
   filter2x::get_parameter (filter2x::band1_tolerance_tag {}),
   slider_ext);
@@ -4982,7 +4982,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "2.Type",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band2_type_tag>()),
   filter2x::get_parameter (filter2x::band2_type_tag {}),
   slider_ext);
@@ -4992,7 +4992,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "2.Topology",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band2_topology_tag>()),
   filter2x::get_parameter (filter2x::band2_topology_tag {}),
   slider_ext);
@@ -5002,7 +5002,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "2.Freq",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band2_freq_tag>()),
   filter2x::get_parameter (filter2x::band2_freq_tag {}),
   slider_ext);
@@ -5012,7 +5012,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "2.Reso",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band2_reso_tag>()),
   filter2x::get_parameter (filter2x::band2_reso_tag {}),
   slider_ext);
@@ -5022,7 +5022,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "2.Drive",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band2_drive_tag>()),
   filter2x::get_parameter (filter2x::band2_drive_tag {}),
   slider_ext);
@@ -5032,7 +5032,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "2.Gain",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band2_gain_tag>()),
   filter2x::get_parameter (filter2x::band2_gain_tag {}),
   slider_ext);
@@ -5042,7 +5042,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "2.Feedback",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band2_feedback_tag>()),
   filter2x::get_parameter (filter2x::band2_feedback_tag {}),
   slider_ext);
@@ -5052,17 +5052,87 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "2.Tolerance",
-    declptr<upsampled<filter2x>>(),
+    declptr<oversampled<filter2x>>(),
     declptr<filter2x::band2_tolerance_tag>()),
   filter2x::get_parameter (filter2x::band2_tolerance_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  filter2x_band1_ef_to_freq,
+  n_stereo_busses,
+  param_common (
+    "1.EF:Freq",
+    declptr<oversampled<filter2x>>(),
+    declptr<filter2x::band1_ef_to_freq_tag>()),
+  filter2x::get_parameter (filter2x::band1_ef_to_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  filter2x_band2_ef_to_freq,
+  n_stereo_busses,
+  param_common (
+    "2.EF:Freq",
+    declptr<oversampled<filter2x>>(),
+    declptr<filter2x::band2_ef_to_freq_tag>()),
+  filter2x::get_parameter (filter2x::band2_ef_to_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  filter2x_band1_ef_to_reso,
+  n_stereo_busses,
+  param_common (
+    "1.EF:reso",
+    declptr<oversampled<filter2x>>(),
+    declptr<filter2x::band1_ef_to_reso_tag>()),
+  filter2x::get_parameter (filter2x::band1_ef_to_reso_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  filter2x_band2_ef_to_reso,
+  n_stereo_busses,
+  param_common (
+    "2.EF:reso",
+    declptr<oversampled<filter2x>>(),
+    declptr<filter2x::band2_ef_to_reso_tag>()),
+  filter2x::get_parameter (filter2x::band2_ef_to_reso_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  filter2x_envfollow_sensitivity,
+  n_stereo_busses,
+  param_common (
+    "EF Sens",
+    declptr<updownsampled<filter2x>>(),
+    declptr<filter2x::envfollow_sensitivity_tag>()),
+  filter2x::get_parameter (filter2x::envfollow_sensitivity_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  filter2x_envfollow_attack,
+  n_stereo_busses,
+  param_common (
+    "EF Attack",
+    declptr<oversampled<filter2x>>(),
+    declptr<filter2x::envfollow_attack_tag>()),
+  filter2x::get_parameter (filter2x::envfollow_attack_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  filter2x_envfollow_release,
+  n_stereo_busses,
+  param_common (
+    "EF Rel",
+    declptr<oversampled<filter2x>>(),
+    declptr<filter2x::envfollow_release_tag>()),
+  filter2x::get_parameter (filter2x::envfollow_release_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   filter2x_oversampling,
   n_stereo_busses,
   param_common (
-    "Upsample",
-    declptr<upsampled<filter2x>>(),
+    "Oversample",
+    declptr<oversampled<filter2x>>(),
     declptr<oversampled_amount_tag>()),
   updownsampled<filter2x>::get_parameter (oversampled_amount_tag {}),
   slider_ext);
@@ -5076,6 +5146,16 @@ using filter2x_params = mp_list<
   filter2x_band1_gain,
   filter2x_band1_feedback,
   filter2x_band1_tolerance,
+
+  filter2x_envfollow_attack,
+  filter2x_envfollow_release,
+  filter2x_band1_ef_to_freq,
+  filter2x_band2_ef_to_freq,
+  filter2x_band1_ef_to_reso,
+  filter2x_band2_ef_to_reso,
+  filter2x_envfollow_sensitivity,
+  filter2x_oversampling,
+
   filter2x_band2_type,
   filter2x_band2_topology,
   filter2x_band2_freq,
@@ -5083,8 +5163,7 @@ using filter2x_params = mp_list<
   filter2x_band2_drive,
   filter2x_band2_gain,
   filter2x_band2_feedback,
-  filter2x_band2_tolerance,
-  filter2x_oversampling>;
+  filter2x_band2_tolerance>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   saturation_band_gain,
@@ -5357,7 +5436,7 @@ parameter_cpp_class_define (
 using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #endif
 //------------------------------------------------------------------------------
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<filter2x_params>;

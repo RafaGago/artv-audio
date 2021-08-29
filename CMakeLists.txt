@@ -94,8 +94,8 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     endif()
 endif()
 
-set (CMAKE_CXX_FLAGS_RELEASE "${ARTV_CMAKE_CXX_FLAGS_RELEASE} -Wno-unused-value")
-set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wno-unused-value")
+set (CMAKE_CXX_FLAGS_RELEASE "${ARTV_CMAKE_CXX_FLAGS_RELEASE}")
+set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 
 # These targets are flag overrides that have to be added last, just to avoid
 # dealing with CMake configuration messes which I refuse to learn and debug:
@@ -162,6 +162,26 @@ target_compile_definitions(
     PUBLIC
     WDL_FFT_REALSIZE=4
     )
+#-- Own Utilities library (C) --------------------------------------------------
+
+# Just using the headers, avoiding meson for now.
+
+set (BL_REPO ${CMAKE_BINARY_DIR}/bl-git)
+ExternalProject_Add(
+    bl_fetch
+    GIT_REPOSITORY https://github.com/RafaGago/base_library.git
+    GIT_TAG        3d08c1ccbecc4ab26495999fc6692978b490e40f
+    #GIT_TAG        7.6.0
+    SOURCE_DIR     "${BL_REPO}"
+    UPDATE_COMMAND    ""
+    BUILD_ALWAYS   False
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND     ""
+    INSTALL_COMMAND   ""
+    )
+add_library (bl_headers INTERFACE)
+target_include_directories (bl_headers INTERFACE ${BL_REPO}/include)
+add_dependencies (bl_headers bl_fetch)
 #-- Boost hanna-----------------------------------------------------------------
 set (HANA_REPO ${CMAKE_BINARY_DIR}/boost-hana-git)
 set (HANA_INSTALL ${CMAKE_BINARY_DIR}/boost-hana-install)
@@ -443,7 +463,7 @@ set_source_files_properties(
 #-- Common ---------------------------------------------------------------------
 add_library(common INTERFACE)
 target_include_directories (common INTERFACE src)
-target_link_libraries(common INTERFACE hana mp11 xsimd gcem)
+target_link_libraries(common INTERFACE hana mp11 xsimd gcem bl_headers)
 
 if(MSVC)
     # MSVC Includes clang-cl.
@@ -478,11 +498,9 @@ target_link_libraries(
 #-- Common tests ---------------------------------------------------------------
 add_executable(
     common-test
-    test/common/butterworth_simd.cpp
     test/common/delay_compensation_buffers.cpp
     test/common/fft.cpp
     test/common/simd.cpp
-    test/common/svf_simd.cpp
     )
 target_link_libraries (common-test PUBLIC test mufft-all wdl-fft)
 #-- Oversampr utility ----------------------------------------------------------

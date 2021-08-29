@@ -2,6 +2,9 @@
 
 #include <algorithm>
 
+#include <bl/base/static_integer_math.h>
+
+#include "artv-common/dsp/own/classes/control_rate.hpp"
 #include "artv-common/dsp/own/classes/jsfx.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
@@ -11,6 +14,7 @@
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/dsp/own/parts/filters/presence.hpp"
 #include "artv-common/dsp/own/parts/filters/saike.hpp"
+#include "artv-common/dsp/own/parts/misc/slew_limiter.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"
@@ -33,6 +37,8 @@ private:
     gain,
     tolerance,
     feedback,
+    ef_to_frequency,
+    ef_to_resonance
   };
 
 public:
@@ -43,6 +49,258 @@ public:
   };
   //----------------------------------------------------------------------------
   static constexpr dsp_types dsp_type = dsp_types::eq;
+  //----------------------------------------------------------------------------
+  template <uint band>
+  void set (param<band, paramtype::band_type>, int v)
+  {
+    static_assert (band < n_bands, "");
+
+    if (v >= (int) bandtype::size || v < 0) {
+      v = 0;
+    }
+    _cfg[band].has_changes |= (int) _cfg[band].type != (int) v;
+    _cfg[band].reset_band_state |= _cfg[band].has_changes;
+    _cfg[band].type = (u8) v;
+  }
+
+  template <uint band>
+  static constexpr auto get_parameter (param<band, paramtype::band_type>)
+  {
+    return choice_param (
+      0,
+      make_cstr_array (
+        "Off",
+        "K35",
+        "K35 Asym",
+        "Steiner",
+        "Steiner Asym",
+        "Ladder 4pole",
+        "Ladder 2pole"),
+      20);
+  }
+  //----------------------------------------------------------------------------
+  template <uint band>
+  void set (param<band, paramtype::topology>, int v)
+  {
+    static_assert (band < n_bands, "");
+    if (v >= n_topologies || v < 0) {
+      v = (int) bandtype::off;
+    }
+    _cfg[band].has_changes |= (int) _cfg[band].topology != (int) v;
+    _cfg[band].reset_band_state |= _cfg[band].has_changes;
+    _cfg[band].topology = (u8) v;
+  }
+
+  static constexpr uint n_topologies = 4;
+
+  template <uint band>
+  static constexpr auto get_parameter (param<band, paramtype::topology>)
+  {
+    return choice_param (
+      0, make_cstr_array ("Lowpass", "Highpass", "Bandpass", "Bandreject"), 8);
+  }
+  //----------------------------------------------------------------------------
+  template <uint band>
+  void set (param<band, paramtype::frequency>, float v)
+  {
+    static_assert (band < n_bands, "");
+    v = midi_note_to_hz (v);
+    _cfg[band].has_changes |= _cfg[band].freq != v;
+    _cfg[band].freq = v;
+  }
+
+  template <uint band>
+  static constexpr auto get_parameter (param<band, paramtype::frequency>)
+  {
+    return frequency_parameter (20.0, 20000.0, 440.0);
+  }
+  //----------------------------------------------------------------------------
+  template <uint band>
+  void set (param<band, paramtype::reso>, float v)
+  {
+    static_assert (band < n_bands, "");
+    auto& b = _cfg[band];
+    b.has_changes |= b.reso != v;
+    _cfg[band].reso = v;
+  }
+
+  template <uint band>
+  static constexpr auto get_parameter (param<band, paramtype::reso>)
+  {
+    return float_param ("", 0.f, 1.f, 0.5f, 0.0001f);
+  }
+  //----------------------------------------------------------------------------
+  template <uint band>
+  void set (param<band, paramtype::drive>, float v)
+  {
+    static_assert (band < n_bands, "");
+    _cfg[band].has_changes |= _cfg[band].drive_db != v;
+    _cfg[band].drive_db = v;
+  }
+
+  template <uint band>
+  static constexpr auto get_parameter (param<band, paramtype::drive>)
+  {
+    return float_param ("dB", -40.f, 30.f, 0.f, 0.3f, 0.6f, true);
+  }
+  //----------------------------------------------------------------------------
+  template <uint band>
+  void set (param<band, paramtype::gain>, float v)
+  {
+    static_assert (band < n_bands, "");
+    _cfg[band].has_changes |= _cfg[band].gain_db != v;
+    _cfg[band].gain_db = v;
+  }
+
+  template <uint band>
+  static constexpr auto get_parameter (param<band, paramtype::gain>)
+  {
+    return float_param ("dB", -30.f, 20.f, 0.f, 0.3f, 0.6f, true);
+  }
+  //----------------------------------------------------------------------------
+  template <uint band>
+  void set (param<band, paramtype::tolerance>, float v)
+  {
+    static_assert (band < n_bands, "");
+    v *= 0.01;
+    _cfg[band].has_changes |= _cfg[band].tolerance != v;
+    _cfg[band].tolerance = v;
+  }
+
+  template <uint band>
+  static constexpr auto get_parameter (param<band, paramtype::tolerance>)
+  {
+    return float_param ("%", -100.f, 100.f, 0.f, 0.1f);
+  }
+  //----------------------------------------------------------------------------
+  template <uint band>
+  void set (param<band, paramtype::feedback>, float v)
+  {
+    static_assert (band < n_bands, "");
+    v *= (0.01f * 0.93f);
+    _cfg[band].feedback = v;
+  }
+
+  template <uint band>
+  static constexpr auto get_parameter (param<band, paramtype::feedback>)
+  {
+    return float_param ("%", -100.f, 100.f, 0.f, 0.1f);
+  }
+  //----------------------------------------------------------------------------
+  struct envfollow_attack_tag {};
+
+  void set (envfollow_attack_tag, float v)
+  {
+    v *= 0.001f; // to seconds
+    if (v != _ef.attack) {
+      _ef.attack = v;
+      update_envelope_follower();
+    }
+  }
+
+  static constexpr auto get_parameter (envfollow_attack_tag)
+  {
+    return float_param ("ms", 1, 180., 20., 0.1);
+  }
+  //----------------------------------------------------------------------------
+  struct envfollow_sensitivity_tag {};
+
+  void set (envfollow_sensitivity_tag, float v) { _ef.gain = db_to_gain (v); }
+
+  static constexpr auto get_parameter (envfollow_sensitivity_tag)
+  {
+    return float_param ("dB", -10., 30., 0., 0.01);
+  }
+  //----------------------------------------------------------------------------
+  struct envfollow_release_tag {};
+
+  void set (envfollow_release_tag, float v)
+  {
+    v *= 0.001f; // to seconds
+    if (v != _ef.release) {
+      _ef.release = v;
+      update_envelope_follower();
+    }
+  }
+
+  static constexpr auto get_parameter (envfollow_release_tag)
+  {
+    return float_param ("ms", 40., 1000., 150., 1.);
+  }
+  //----------------------------------------------------------------------------
+  template <uint band>
+  void set (param<band, paramtype::ef_to_frequency>, float v)
+  {
+    static_assert (band < n_bands, "");
+    v *= (0.01f * 4.f);
+    _cfg[band].ef_to_freq = v;
+  }
+
+  template <uint band>
+  static constexpr auto get_parameter (param<band, paramtype::ef_to_frequency>)
+  {
+    return float_param ("%", -100.f, 100.f, 0.f, 0.1f);
+  }
+  //----------------------------------------------------------------------------
+  template <uint band>
+  void set (param<band, paramtype::ef_to_resonance>, float v)
+  {
+    static_assert (band < n_bands, "");
+    v *= (0.01f * 0.5f);
+    _cfg[band].ef_to_reso = v;
+  }
+
+  template <uint band>
+  static constexpr auto get_parameter (param<band, paramtype::ef_to_resonance>)
+  {
+    return float_param ("%", -100.f, 100.f, 0.f, 0.1f);
+  }
+  //----------------------------------------------------------------------------
+  using band1_type_tag       = param<0, paramtype::band_type>;
+  using band2_type_tag       = param<1, paramtype::band_type>;
+  using band1_topology_tag   = param<0, paramtype::topology>;
+  using band2_topology_tag   = param<1, paramtype::topology>;
+  using band1_freq_tag       = param<0, paramtype::frequency>;
+  using band2_freq_tag       = param<1, paramtype::frequency>;
+  using band1_reso_tag       = param<0, paramtype::reso>;
+  using band2_reso_tag       = param<1, paramtype::reso>;
+  using band1_drive_tag      = param<0, paramtype::drive>;
+  using band2_drive_tag      = param<1, paramtype::drive>;
+  using band1_gain_tag       = param<0, paramtype::gain>;
+  using band2_gain_tag       = param<1, paramtype::gain>;
+  using band1_tolerance_tag  = param<0, paramtype::tolerance>;
+  using band2_tolerance_tag  = param<1, paramtype::tolerance>;
+  using band1_feedback_tag   = param<0, paramtype::feedback>;
+  using band2_feedback_tag   = param<1, paramtype::feedback>;
+  using band1_ef_to_freq_tag = param<0, paramtype::ef_to_frequency>;
+  using band2_ef_to_freq_tag = param<1, paramtype::ef_to_frequency>;
+  using band1_ef_to_reso_tag = param<0, paramtype::ef_to_resonance>;
+  using band2_ef_to_reso_tag = param<1, paramtype::ef_to_resonance>;
+  //----------------------------------------------------------------------------
+  using parameters = mp_list<
+    band1_type_tag,
+    band1_topology_tag,
+    band1_freq_tag,
+    band1_drive_tag,
+    band1_reso_tag,
+    band1_gain_tag,
+    band1_tolerance_tag,
+    band1_feedback_tag,
+    band2_type_tag,
+    band2_topology_tag,
+    band2_freq_tag,
+    band2_drive_tag,
+    band2_reso_tag,
+    band2_gain_tag,
+    band2_tolerance_tag,
+    band2_feedback_tag,
+    envfollow_attack_tag,
+    envfollow_release_tag,
+    envfollow_sensitivity_tag,
+    band1_ef_to_freq_tag,
+    band1_ef_to_reso_tag,
+    band2_ef_to_freq_tag,
+    band2_ef_to_reso_tag>;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -55,17 +313,22 @@ public:
     memset (&_smooth_state, 0, sizeof _smooth_state);
     memset (&_state, 0, sizeof _state);
     memset (&_last_sample, 0, sizeof _last_sample);
+    memset (&_envfollow_states, 0, sizeof _envfollow_states);
     memset (&_dc_states, 0, sizeof _dc_states);
 
     mystran_dc_blocker::reset_coeffs (
       _dc_coeffs, vec_set<double_x2> (1.), pc.get_sample_rate());
+
+    _ef_value = vec_set<double_x2> (0.);
+
+    constexpr uint base_order = bl_static_log2_floor_u64 ((u64) blocksize);
+    uint sr_order = get_samplerate_order (pc.get_sample_rate()) + base_order;
+    _control.reset (1 << (sr_order + 2));
   }
   //----------------------------------------------------------------------------
   template <class T>
   void process_block_replacing (std::array<T*, 2> chnls, uint samples)
   {
-    constexpr uint blocksize = 32;
-
     for (uint block_smp = 0; block_smp < samples; block_smp += blocksize) {
       uint n_samples = std::min<uint> (blocksize, samples - block_smp);
 
@@ -77,8 +340,23 @@ public:
       memset (&chnls[0][block_smp], 0, n_samples * sizeof (T));
       memset (&chnls[1][block_smp], 0, n_samples * sizeof (T));
 
+      int  control_offset   = _control.tick (n_samples);
+      bool is_control_block = control_offset >= 0;
+
+      // control block
+      if (is_control_block) {
+        // Envelope follower/modulation
+        auto prev = _ef_value;
+        _ef_value = slew_limiter::tick (
+          _envfollow_coeffs, _envfollow_states, in_cp[control_offset]);
+        // Make unipolar and clip at 1.
+        _ef_value = vec_min (vec_abs (_ef_value * _ef.gain), 1.);
+        _ef_value = (_ef_value + prev) * 0.5; // Box LP
+        _ef_value *= _ef_value;
+      }
+
       for (uint b = 0; b < n_bands; ++b) {
-        if (_cfg[b].has_changes) {
+        if (_cfg[b].has_changes || is_control_block) {
           reset_band (b);
         }
 
@@ -257,7 +535,7 @@ public:
         _last_sample[b] = last;
 
         for (uint i = 0; i < n_samples; ++i) {
-          static constexpr double limit = constexpr_db_to_gain (18.);
+          static constexpr double limit = constexpr_db_to_gain (10.);
 
           out[i] *= smoothed_p.vars.post_drive;
           vec_clamp (out[i], -limit, limit);
@@ -268,178 +546,6 @@ public:
       }
     }
   }
-  //----------------------------------------------------------------------------
-  template <uint band>
-  void set (param<band, paramtype::band_type>, int v)
-  {
-    static_assert (band < n_bands, "");
-
-    if (v >= (int) bandtype::size || v < 0) {
-      v = 0;
-    }
-    _cfg[band].has_changes |= (int) _cfg[band].type != (int) v;
-    _cfg[band].reset_band_state |= _cfg[band].has_changes;
-    _cfg[band].type = (u8) v;
-  }
-
-  template <uint band>
-  static constexpr auto get_parameter (param<band, paramtype::band_type>)
-  {
-    return choice_param (
-      0,
-      make_cstr_array (
-        "Off",
-        "K35",
-        "K35 Asym",
-        "Steiner",
-        "Steiner Asym",
-        "Ladder 4pole",
-        "Ladder 2pole"),
-      20);
-  }
-  //----------------------------------------------------------------------------
-  template <uint band>
-  void set (param<band, paramtype::topology>, int v)
-  {
-    static_assert (band < n_bands, "");
-    if (v >= n_topologies || v < 0) {
-      v = (int) bandtype::off;
-    }
-    _cfg[band].has_changes |= (int) _cfg[band].topology != (int) v;
-    _cfg[band].reset_band_state |= _cfg[band].has_changes;
-    _cfg[band].topology = (u8) v;
-  }
-
-  static constexpr uint n_topologies = 4;
-
-  template <uint band>
-  static constexpr auto get_parameter (param<band, paramtype::topology>)
-  {
-    return choice_param (
-      0, make_cstr_array ("Lowpass", "Highpass", "Bandpass", "Bandreject"), 8);
-  }
-  //----------------------------------------------------------------------------
-  template <uint band>
-  void set (param<band, paramtype::frequency>, float v)
-  {
-    static_assert (band < n_bands, "");
-    v = midi_note_to_hz (v);
-    _cfg[band].has_changes |= _cfg[band].freq != v;
-    _cfg[band].freq = v;
-  }
-
-  template <uint band>
-  static constexpr auto get_parameter (param<band, paramtype::frequency>)
-  {
-    return frequency_parameter (20.0, 20000.0, 440.0);
-  }
-  //----------------------------------------------------------------------------
-  template <uint band>
-  void set (param<band, paramtype::reso>, float v)
-  {
-    static_assert (band < n_bands, "");
-    auto& b = _cfg[band];
-    b.has_changes |= b.reso != v;
-    _cfg[band].reso = v;
-  }
-
-  template <uint band>
-  static constexpr auto get_parameter (param<band, paramtype::reso>)
-  {
-    return float_param ("", 0.f, 1.f, 0.5f, 0.0001f);
-  }
-  //----------------------------------------------------------------------------
-  template <uint band>
-  void set (param<band, paramtype::drive>, float v)
-  {
-    static_assert (band < n_bands, "");
-    _cfg[band].has_changes |= _cfg[band].drive_db != v;
-    _cfg[band].drive_db = v;
-  }
-
-  template <uint band>
-  static constexpr auto get_parameter (param<band, paramtype::drive>)
-  {
-    return float_param ("dB", -40.f, 30.f, 0.f, 0.3f, 0.6f, true);
-  }
-  //----------------------------------------------------------------------------
-  template <uint band>
-  void set (param<band, paramtype::gain>, float v)
-  {
-    static_assert (band < n_bands, "");
-    _cfg[band].has_changes |= _cfg[band].gain_db != v;
-    _cfg[band].gain_db = v;
-  }
-
-  template <uint band>
-  static constexpr auto get_parameter (param<band, paramtype::gain>)
-  {
-    return float_param ("dB", -30.f, 20.f, 0.f, 0.3f, 0.6f, true);
-  }
-  //----------------------------------------------------------------------------
-  template <uint band>
-  void set (param<band, paramtype::tolerance>, float v)
-  {
-    static_assert (band < n_bands, "");
-    v *= 0.01;
-    _cfg[band].has_changes |= _cfg[band].tolerance != v;
-    _cfg[band].tolerance = v;
-  }
-
-  template <uint band>
-  static constexpr auto get_parameter (param<band, paramtype::tolerance>)
-  {
-    return float_param ("%", -100.f, 100.f, 0.f, 0.1f);
-  }
-  //----------------------------------------------------------------------------
-  template <uint band>
-  void set (param<band, paramtype::feedback>, float v)
-  {
-    static_assert (band < n_bands, "");
-    v *= 0.0093;
-    _cfg[band].feedback = v;
-  }
-
-  template <uint band>
-  static constexpr auto get_parameter (param<band, paramtype::feedback>)
-  {
-    return float_param ("%", -100.f, 100.f, 0.f, 0.1f);
-  }
-  //----------------------------------------------------------------------------
-  using band1_type_tag      = param<0, paramtype::band_type>;
-  using band2_type_tag      = param<1, paramtype::band_type>;
-  using band1_topology_tag  = param<0, paramtype::topology>;
-  using band2_topology_tag  = param<1, paramtype::topology>;
-  using band1_freq_tag      = param<0, paramtype::frequency>;
-  using band2_freq_tag      = param<1, paramtype::frequency>;
-  using band1_reso_tag      = param<0, paramtype::reso>;
-  using band2_reso_tag      = param<1, paramtype::reso>;
-  using band1_drive_tag     = param<0, paramtype::drive>;
-  using band2_drive_tag     = param<1, paramtype::drive>;
-  using band1_gain_tag      = param<0, paramtype::gain>;
-  using band2_gain_tag      = param<1, paramtype::gain>;
-  using band1_tolerance_tag = param<0, paramtype::tolerance>;
-  using band2_tolerance_tag = param<1, paramtype::tolerance>;
-  using band1_feedback_tag  = param<0, paramtype::feedback>;
-  using band2_feedback_tag  = param<1, paramtype::feedback>;
-  //----------------------------------------------------------------------------
-  using parameters = mp_list<
-    band1_type_tag,
-    band1_topology_tag,
-    band1_freq_tag,
-    band1_drive_tag,
-    band1_reso_tag,
-    band1_gain_tag,
-    band1_tolerance_tag,
-    band1_feedback_tag,
-    band2_type_tag,
-    band2_topology_tag,
-    band2_freq_tag,
-    band2_drive_tag,
-    band2_reso_tag,
-    band2_gain_tag,
-    band2_tolerance_tag,
-    band2_feedback_tag>;
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
@@ -514,23 +620,6 @@ private:
     return type >= bandtype::moog_2_beg && type < bandtype::moog_2_end;
   }
   //----------------------------------------------------------------------------
-  struct bandconfig {
-    float freq             = 440.f;
-    float reso             = 0.7f;
-    float drive_db         = 0.f;
-    float gain_db          = 0.f;
-    float tolerance        = 0.f;
-    float feedback         = 0.f;
-    float dry_wet          = 1.f;
-    float pre_drive_l      = 1.f;
-    float pre_drive_r      = 1.f;
-    float post_drive       = 1.f;
-    u8    type             = 0;
-    u8    topology         = 0;
-    bool  has_changes      = false;
-    bool  reset_band_state = false;
-  };
-  //----------------------------------------------------------------------------
   bandtype get_band_type (uint band)
   {
     uint offset = (_cfg[band].type * n_topologies) - (n_topologies - 1);
@@ -540,25 +629,28 @@ private:
   //----------------------------------------------------------------------------
   void reset_band (uint band)
   {
+    constexpr double min_hz
+      = midi_note_to_hz (get_parameter (band1_freq_tag {}).min);
+    constexpr double max_hz
+      = midi_note_to_hz (get_parameter (band1_freq_tag {}).max);
+    constexpr double min_reso = get_parameter (band1_reso_tag {}).min;
+    constexpr double max_reso = get_parameter (band1_reso_tag {}).max;
+
     auto& b  = _cfg[band];
     auto  sr = (float) _plugcontext->get_sample_rate();
 
-    double_x2 freq, reso;
-    freq[0] = b.freq;
-    freq[1] = b.freq * (1.f + (b.tolerance * 0.2f));
+    auto ef_mod = double_x2 {};
+    if (b.ef_to_freq != 0.f || b.ef_to_reso != 0.f) {
+      ef_mod = ((_ef_value * _ef_value) + vec_sqrt (_ef_value)) * 0.5;
+    }
 
-    freq[1] = std::clamp<float> (
-      freq[1],
-      midi_note_to_hz (get_parameter (band1_freq_tag {}).min),
-      midi_note_to_hz (get_parameter (band1_freq_tag {}).max));
+    double_x2 freq = {b.freq, b.freq * (1.f + (b.tolerance * 0.2f))};
+    freq *= vec_exp2 (ef_mod * b.ef_to_freq);
+    freq = vec_clamp (freq, min_hz, max_hz);
 
-    reso[0] = b.reso;
-    reso[1] = b.reso * (1.f - (b.tolerance * 0.11f));
-
-    reso[1] = std::clamp<float> (
-      reso[1],
-      get_parameter (band1_reso_tag {}).min,
-      get_parameter (band1_reso_tag {}).max);
+    double_x2 reso = {b.reso, b.reso * (1.f - (b.tolerance * 0.11f))};
+    reso += reso * ef_mod * b.ef_to_reso;
+    reso = vec_clamp (reso, min_reso, max_reso);
 
     auto btype = get_band_type (band);
     switch (btype) {
@@ -694,6 +786,24 @@ private:
     _cfg[band].reset_band_state = false;
   }
   //----------------------------------------------------------------------------
+  void update_envelope_follower()
+  {
+    slew_limiter::reset_coeffs (
+      _envfollow_coeffs,
+      vec_set<double_x2> (_ef.attack),
+      vec_set<double_x2> (_ef.release),
+      _plugcontext->get_sample_rate() / (float) _control.get_period());
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint blocksize = 32;
+  //----------------------------------------------------------------------------
+  enum ef_type {
+    ef_sqrt,
+    ef_linear,
+    ef_pow2,
+    ef_pow3,
+  };
+  //----------------------------------------------------------------------------
   static constexpr uint n_bands    = 4;
   static constexpr uint n_channels = 2;
   //----------------------------------------------------------------------------
@@ -735,6 +845,25 @@ private:
   using dc_blocker_states_array
     = simd_array<double, mystran_dc_blocker::n_states * n_channels, sse_bytes>;
   //----------------------------------------------------------------------------
+  struct bandconfig {
+    float freq             = 440.f;
+    float reso             = 0.7f;
+    float drive_db         = 0.f;
+    float gain_db          = 0.f;
+    float tolerance        = 0.f;
+    float feedback         = 0.f;
+    float dry_wet          = 1.f;
+    float pre_drive_l      = 1.f;
+    float pre_drive_r      = 1.f;
+    float post_drive       = 1.f;
+    float ef_to_freq       = 0.f;
+    float ef_to_reso       = 0.f;
+    u8    type             = 0;
+    u8    topology         = 0;
+    bool  has_changes      = false;
+    bool  reset_band_state = false;
+  };
+  //----------------------------------------------------------------------------
   union smoothed_params {
     struct {
       float pre_drive_l, pre_drive_r, post_drive, feedback;
@@ -747,13 +876,32 @@ private:
     smoothed_params params;
   };
   //----------------------------------------------------------------------------
+  struct ef_cfg {
+    float attack  = 0;
+    float release = 0.;
+    // uint  mode    = 0;
+    float gain = 0.;
+  };
+  //----------------------------------------------------------------------------
+  using envfollow_coeff_array
+    = simd_array<double, slew_limiter::n_coeffs * n_channels, sse_bytes>;
+  using envfollow_state_array
+    = simd_array<double, slew_limiter::n_states * n_channels, sse_bytes>;
+  //----------------------------------------------------------------------------
   std::array<bandconfig, n_bands>    _cfg;
   std::array<state_array, n_bands>   _state;
   std::array<smooth_states, n_bands> _smooth_state;
+
   alignas (sse_bytes) std::array<coeff_array, n_bands> _coeffs;
-  dc_blocker_coeffs_array                      _dc_coeffs;
+  alignas (sse_bytes) envfollow_coeff_array _envfollow_coeffs;
+  dc_blocker_coeffs_array _dc_coeffs;
+
+  envfollow_state_array                        _envfollow_states;
   std::array<dc_blocker_states_array, n_bands> _dc_states;
   std::array<double_x2, n_bands>               _last_sample;
+  double_x2                                    _ef_value;
+  ef_cfg                                       _ef;
+  control_rate                                 _control;
 
   double _smooth_coeff;
 

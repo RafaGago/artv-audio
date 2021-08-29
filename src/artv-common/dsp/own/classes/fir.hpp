@@ -8,6 +8,9 @@
 #include <cassert>
 
 #include "artv-common/dsp/types.hpp"
+#include "artv-common/misc/bits.hpp"
+#include "artv-common/misc/compiler.hpp"
+#include "artv-common/misc/overaligned_allocator.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
 
@@ -61,7 +64,11 @@ private:
 // A convolution where the delay line is externally controlled. The kernel is
 // not owned by the class. This doesn't own memory because the most optimal
 // memory layout is not known at this abstraction depth.
-template <class T, uint channels = 1>
+//
+// the "alignment" template parameter is an external guarantee not enforced by
+// the class. It specifies that the memory for both the kernel and the delay
+// lines will be aligned to this value.
+template <class T, uint channels = 1, uint alignment = alignof (T)>
 class convolution_block {
 public:
   using value_type                 = T;
@@ -71,21 +78,53 @@ public:
   //----------------------------------------------------------------------------
   std::array<T, n_channels> tick (
     convolution_delay_line<T, n_channels> const& dl,
-    uint                                         start_idx = 0)
+    uint                                         trailing_zero_coeffs_hint = 0)
   {
-    std::array<T, n_channels> out {};
-    auto                      z = dl.samples();
-    for (uint i = 0; i < dl.size(); ++i) {
+    // The pointers of the kernel and the delay line should be aligned to
+    // "alignment". When the delay line size is a multiple of a SIMD instruction
+    // length all the code will run vectorized. Enforcing sizes have to be done
+    // outside this class by e.g. zero filling filter kernels up to the desired
+    // size.
+    alignas (alignment) std::array<T, n_channels> out {};
+
+    auto z_al = assume_aligned_hint<alignment> (dl.samples().data());
+    auto h_al = assume_aligned_hint<alignment> (_h);
+
+    std::remove_pointer_t<decltype (z_al)>* artv_restrict z = z_al;
+    std::remove_pointer_t<decltype (h_al)>* artv_restrict h = h_al;
+
+    assert (is_aligned_to (alignment, z));
+    assert (is_aligned_to (alignment, h));
+
+    uint size = dl.size();
+
+    // TODO: More hints for clang?
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < size; ++i) {
       for (uint c = 0; c < n_channels; ++c) {
-        out[c] += _h[i] * z[(i * n_channels) + c];
+        out[c] += h[i] * z[(i * n_channels) + c];
       }
     }
     return out;
   }
   //----------------------------------------------------------------------------
+
 private:
+  //----------------------------------------------------------------------------
+
   T const* _h = nullptr; // kernel
 };
+
+static constexpr uint fir_cache_line_bytes = 64;
+
+template <class T>
+using fir_std_vector
+  = std::vector<T, overaligned_allocator<T, fir_cache_line_bytes>>;
+
+constexpr bool fir_verify_alignment (uint v)
+{
+  return is_pow2 (v) && v <= fir_cache_line_bytes;
+}
 
 } // namespace detail
 //------------------------------------------------------------------------------
@@ -144,7 +183,20 @@ struct lth_band {
 };
 //------------------------------------------------------------------------------
 // Polyphase FIR decimator
-template <class T, uint channels = 1>
+//
+// The "alignment" template parameter will make:
+//
+// - The kernel size in bytes to be rounded (and zero padded) up to the data
+//   alignment. The compiler will get a hint via attributes.
+// - The delay line size(s) in bytes to be rounded up to the data alignment.
+//   The compiler will too get a hint via attributes.
+// - The memory for both the delay lines and the kernel to start with that
+//   alignment.
+//
+// The intent is to avoid a possible compiler-generated slow path to deal with
+// scalars by filling with zeros. It might matter on some machines.
+
+template <class T, uint channels = 1, uint alignment = alignof (T)>
 class fir_decimator {
 public:
   using value_type                 = T;
@@ -152,26 +204,26 @@ public:
   //----------------------------------------------------------------------------
   void reset (crange<const T> kernel, uint ratio)
   {
-    // To make it polyphase, we ensure that the coefficients are multiples of
-    // "ratio". This is done by adding zeros coefficients that don't contribute
-    // to the response.
-    uint ksize      = round_ceil<uint> (kernel.size(), ratio);
-    uint kernel_mem = ksize;
-    // magic "2" reminder: delay line buffer has to be double the required size
-    uint delay_lines_mem = 2 * ksize * n_channels;
+    constexpr uint overalign = alignment / sizeof (T);
+
+    uint ksize_ratio     = round_ceil<uint> (kernel.size(), ratio);
+    uint ksize_overalign = round_ceil<uint> (ksize_ratio, overalign);
+
+    uint ksize   = ksize_overalign;
+    uint delsize = 2 * ksize * n_channels;
 
     _mem.clear();
-    _mem.resize (kernel_mem + delay_lines_mem);
+    _mem.resize (ksize + delsize); // 0 filled
     _ratio = ratio;
     // On the decimator the zero coefficients only added for the filter to be
     // polyphase decomposable have to be at the front.
     memcpy (
-      _mem.data() + (ksize - kernel.size()),
+      _mem.data() + (ksize_ratio - kernel.size()),
       kernel.data(),
       sizeof kernel[0] * kernel.size());
 
     _filter.reset (make_crange (&_mem[0], ksize));
-    _delay.reset (make_crange (&_mem[ksize], delay_lines_mem), ksize);
+    _delay.reset (make_crange (&_mem[ksize], delsize), ksize);
   }
   //----------------------------------------------------------------------------
   std::array<T, n_channels> tick (std::array<crange<const T>, n_channels> in)
@@ -197,15 +249,27 @@ public:
   uint order() const { return _filter.order(); }
   //----------------------------------------------------------------------------
 private:
-  detail::convolution_block<T, n_channels>      _filter;
-  detail::convolution_delay_line<T, n_channels> _delay;
-  std::vector<T>                                _mem;
-  uint                                          _ratio;
+  detail::convolution_block<T, n_channels, alignment> _filter;
+  detail::convolution_delay_line<T, n_channels>       _delay;
+  detail::fir_std_vector<T>                           _mem;
+  uint                                                _ratio;
 };
 //------------------------------------------------------------------------------
 // Polyphase FIR decimator optimized for L-th band decimation (coefficients with
 // a regular pattern of zeros).
-template <class T, uint channels = 1>
+//
+// The "alignment" template parameter will make:
+//
+// - The kernel size in bytes to be rounded (and zero padded) up to the data
+//   alignment. The compiler will get a hint via attributes.
+// - The delay line size(s) in bytes to be rounded up to the data alignment.
+//   The compiler will too get a hint via attributes.
+// - The memory for both the delay lines and the kernel to start with that
+//   alignment.
+//
+// The intent is to avoid a possible compiler-generated slow path to deal with
+// scalars by filling with zeros. It might matter on some machines.
+template <class T, uint channels = 1, uint alignment = alignof (T)>
 class lth_band_fir_decimator {
 public:
   using value_type                 = T;
@@ -215,16 +279,29 @@ public:
   {
     assert (lth_band::verify_coeffs (kernel, ratio));
 
-    uint ksize      = round_ceil<uint> (kernel.size(), ratio);
+    constexpr uint overalign = alignment / sizeof (T);
+
+    uint ksize_ratio     = round_ceil<uint> (kernel.size(), ratio);
+    uint ksize_overalign = round_ceil<uint> (ksize_ratio, overalign * ratio);
+
+    uint ksize      = ksize_overalign;
     uint subk_size  = ksize / ratio;
-    uint kernel_mem = ksize - subk_size;
+    uint kernel_mem = ksize - subk_size; // remove zeroes
     // magic "2" reminder: delay line buffer has to be double the required size
-    uint delay_lines_mem  = 2 * ksize * n_channels;
-    uint zero_dl_size     = 2 * subk_size * n_channels;
-    uint non_zero_dl_size = delay_lines_mem - zero_dl_size;
+
+    // position on the delay line handling the zero coefficients.
+    _center_coeff_pos = ksize_ratio / (ratio * 2);
+    // The delay line with the zeroed coefficients only has a coefficient at the
+    // center, so the delay line can be shortened on half + 1.
+    uint zero_dl_size = round_ceil<uint> (
+      (_center_coeff_pos + 1) * (2 * n_channels), overalign);
+    uint zero_dl_elems = zero_dl_size / (2 * n_channels);
+
+    uint non_zero_dl_elems = ksize - subk_size;
+    uint non_zero_dl_size  = non_zero_dl_elems * (2 * n_channels);
 
     _mem.clear();
-    _mem.resize (kernel_mem + delay_lines_mem);
+    _mem.resize (kernel_mem + zero_dl_size + non_zero_dl_size); // 0 filled
 
     // Copy skipping the coefficients multiple of the ratio: the (zeros or
     // the central coefficient).
@@ -243,13 +320,14 @@ public:
     _ratio        = ratio;
     _center_coeff = kernel[kernel.size() / 2];
 
-    _filter.reset (make_crange (&_mem[0], kernel_mem));
+    T* dst = &_mem[0];
+    _filter.reset (make_crange (dst, kernel_mem));
+    dst += kernel_mem;
 
-    _delays[0].reset (
-      make_crange (&_mem[kernel_mem], non_zero_dl_size), ksize - subk_size);
-    _delays[1].reset (
-      make_crange (&_mem[kernel_mem + non_zero_dl_size], zero_dl_size),
-      subk_size);
+    _delays[0].reset (make_crange (dst, non_zero_dl_size), non_zero_dl_elems);
+    dst += non_zero_dl_size;
+
+    _delays[1].reset (make_crange (dst, zero_dl_size), zero_dl_elems);
   }
   //----------------------------------------------------------------------------
   std::array<T, n_channels> tick (std::array<crange<const T>, n_channels> in)
@@ -266,14 +344,14 @@ public:
       }
       _delays[i == 0].push (interleaved_in);
     }
-    // filtering branches with non zero coefficients
-    uint                      n_trailing_zero_coeffs = _ratio - 1;
-    std::array<T, n_channels> ret
+    // skipping positions with padded zero coefficients
+    uint n_trailing_zero_coeffs = _ratio - 1;
+    alignas (alignment) std::array<T, n_channels> ret
       = _filter.tick (_delays[0], n_trailing_zero_coeffs);
 
     // adding the only non zero coeff at the center of the remaining branch.
-    T const* center = _delays[1].samples().data();
-    center += (_delays[1].size() / 2) * channels;
+    T const* center
+      = _delays[1].samples().data() + (_center_coeff_pos * channels);
     for (uint c = 0; c < n_channels; ++c) {
       ret[c] += center[c] * _center_coeff;
     }
@@ -287,9 +365,10 @@ public:
 private:
   detail::convolution_block<T, n_channels>                     _filter;
   std::array<detail::convolution_delay_line<T, n_channels>, 2> _delays;
-  std::vector<T>                                               _mem;
-  T                                                            _center_coeff;
-  uint                                                         _ratio;
+  detail::fir_std_vector<T>                                    _mem;
+  uint _center_coeff_pos;
+  T    _center_coeff;
+  uint _ratio;
 };
 //------------------------------------------------------------------------------
 // Polyphase FIR interpolator with selectable L-th band optimization (in case
@@ -297,18 +376,28 @@ private:
 //
 // As the interpolator is always decomposed in branches, adding the Lth band
 // optimization doesn't add too much bloat to the class, so it is done in place.
-template <class T, uint channels = 1>
+//
+// The "alignment" template parameter will make:
+//
+// - The kernel size in bytes to be rounded (and zero padded) up to the data
+//   alignment. The compiler will get a hint via attributes.
+// - The delay line size(s) in bytes to be rounded up to the data alignment.
+//   The compiler will too get a hint via attributes.
+// - The memory for both the delay lines and the kernel to start with that
+//   alignment.
+//
+// The intent is to avoid a possible compiler-generated slow path to deal with
+// scalars by filling with zeros. It might matter on some machines.+
+template <class T, uint channels = 1, uint alignment = alignof (T)>
 class fir_interpolator {
 public:
   using value_type                 = T;
   static constexpr uint n_channels = channels;
   //----------------------------------------------------------------------------
-  // If the filter cutoff frequency is Fs/4 and the number of coefficients minus
-  // one is a multiple of 4 then this is Lth-band filter. Lth band filters have
-  // 1/ratio of the coefficients as zeros, so they can be skipped. A polyphase
-  // FIR interpolator is structured in a way that the skipping the zeroed branch
-  // is trivial, so it doesn't have a separate implementation as the decimator
-  // does.
+  // If the filter is a Lth-band filter it has "1/ratio" of the coefficients as
+  // zeros, so they can be skipped. A polyphase FIR interpolator is structured
+  // in a way that the skipping the zeroed branch is trivial, so it doesn't have
+  // a separate implementation as the decimator does.
   void reset (
     crange<const T> kernel,
     uint            ratio,
@@ -317,18 +406,25 @@ public:
     // To make it polyphase, we ensure that the coefficients are multiples of
     // "ratio" the unused parts of the kernel will have zeros that don't
     // contribute to the response.
-
     _is_lth_band = enable_lth_band_optimization;
     _ratio       = ratio;
 
     assert (!_is_lth_band || lth_band::verify_coeffs (kernel, ratio));
 
-    uint ksize      = round_ceil<uint> (kernel.size(), ratio);
+    constexpr uint overalign = alignment / sizeof (T);
+
+    uint ksize_ratio     = round_ceil<uint> (kernel.size(), ratio);
+    uint ksize_overalign = round_ceil<uint> (ksize_ratio, overalign * ratio);
+
+    uint ksize      = ksize_overalign;
     uint subk_size  = ksize / ratio;
     uint kernel_mem = ksize;
     kernel_mem -= (_is_lth_band) ? subk_size : 0;
     // magic "2" reminder: delay line buffer has to be double the required size
     uint delay_lines_mem = 2 * subk_size * n_channels;
+
+    // the center coefficient position before padding the delay line.
+    _center_coeff_pos = ksize_ratio / (2 * ratio);
 
     _mem.clear();
     _mem.resize (kernel_mem + delay_lines_mem);
@@ -374,8 +470,8 @@ public:
       // the center coefficient on a L-th band linear phase lowpass is always 1,
       // so it is a direct copy of the sample, as multiplying by one has no
       // effect.
-      const T* center = _delay.samples().data();
-      center += (_delay.size() / 2) * channels;
+      const T* center
+        = _delay.samples().data() + (_center_coeff_pos * channels);
       for (uint c = 0; c < channels; ++c) {
         out[c][0] = center[c];
       }
@@ -389,7 +485,8 @@ public:
 private:
   std::vector<detail::convolution_block<T, n_channels>> _filters;
   detail::convolution_delay_line<T, n_channels>         _delay;
-  std::vector<T>                                        _mem;
+  detail::fir_std_vector<T>                             _mem;
+  uint                                                  _center_coeff_pos;
   uint                                                  _ratio;
   bool                                                  _is_lth_band;
 };

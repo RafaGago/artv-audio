@@ -55,12 +55,15 @@ class oversampled_common {
 public:
   static constexpr uint max_oversampling = 16;
   static constexpr uint n_channels       = 2;
+
+  using decimator_type    = lth_band_fir_decimator<T, 2, 16>;
+  using interpolator_type = fir_interpolator<T, 2, 16>;
   //----------------------------------------------------------------------------
   void set_oversampling_order (
     uint                                  order,
     std::function<void (plugin_context&)> fx_reset_fn,
-    fir_interpolator<T, 2>&               interpolator,
-    lth_band_fir_decimator<T, 2>*         decimator)
+    interpolator_type&                    interpolator,
+    decimator_type*                       decimator)
   {
     if (_pc.oversampling_order != order) {
       uint delay_prev        = get_total_delay();
@@ -97,10 +100,7 @@ public:
     fx_reset_fn (_pc);
   }
   //----------------------------------------------------------------------------
-  void upsample (
-    std::array<T*, 2>       chnls,
-    uint                    samples,
-    fir_interpolator<T, 2>& up)
+  void upsample (std::array<T*, 2> chnls, uint samples, interpolator_type& up)
   {}
   //----------------------------------------------------------------------------
   template <bool downsample>
@@ -108,8 +108,8 @@ public:
     std::array<T*, 2>                             chnls,
     uint                                          samples,
     std::function<void (std::array<T*, 2>, uint)> fx_process_block_replacing,
-    fir_interpolator<T, 2>&                       interpolator,
-    lth_band_fir_decimator<T, 2>*                 decimator)
+    interpolator_type&                            interpolator,
+    decimator_type*                               decimator)
   {
     if (_pc.oversampling_order == 0) {
       // fast path, oversampling disabled
@@ -175,9 +175,7 @@ private:
   }
   //----------------------------------------------------------------------------
   template <uint ratio>
-  void reset_oversamplers (
-    fir_interpolator<T, 2>&       up,
-    lth_band_fir_decimator<T, 2>* down)
+  void reset_oversamplers (interpolator_type& up, decimator_type* down)
   {
     _oversample_delay = linear_phase_fir_coeffs<ratio>::latency();
     up.reset (linear_phase_fir_coeffs<ratio>::data(), ratio, true);
@@ -196,9 +194,7 @@ private:
     _n_samples_fractional = next_int_delay - _module_delay;
   }
   //----------------------------------------------------------------------------
-  void reset_resamplers (
-    fir_interpolator<T, 2>&       up,
-    lth_band_fir_decimator<T, 2>* down)
+  void reset_resamplers (interpolator_type& up, decimator_type* down)
   {
     switch (_pc.oversampling_order) {
     case 0:
@@ -309,13 +305,16 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  using maybe_decimator = std::
-    conditional_t<downsample, lth_band_fir_decimator<T, 2>, std::monostate>;
+  using interpolator_type = typename oversampled_common<T>::interpolator_type;
+  using decimator_type    = typename oversampled_common<T>::decimator_type;
 
-  fx                     _fx;
-  oversampled_common<T>  _common;
-  fir_interpolator<T, 2> _interpolator;
-  maybe_decimator        _decimator;
+  using maybe_decimator
+    = std::conditional_t<downsample, decimator_type, std::monostate>;
+
+  fx                    _fx;
+  oversampled_common<T> _common;
+  interpolator_type     _interpolator;
+  maybe_decimator       _decimator;
 };
 //------------------------------------------------------------------------------
 template <class fx, class T = float>

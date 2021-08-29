@@ -327,8 +327,7 @@ public:
 
   void set (envfollow_to_emphasis_freq_tag, float v)
   {
-    _p.ef_to_emphasis_freq = v * 0.01; // max 1
-    _p.ef_to_emphasis_freq *= 2.; // max one octave up or down
+    _p.ef_to_emphasis_freq = v * (0.01 * 2.); // max = 2, 2 octaves up and down
   }
 
   static constexpr auto get_parameter (envfollow_to_emphasis_freq_tag)
@@ -529,8 +528,7 @@ public:
         double_x2 follow
           = slew_limiter::tick (_envfollow_coeffs, _envfollow_states, sat[i]);
         // Make unipolar and clip at 1.
-        follow
-          = vec_min (vec_abs (follow) * p.ef_gain, vec_set<double_x2> (1.));
+        follow = vec_min (vec_abs (follow) * p.ef_gain, 1.);
 
         switch (_p.ef_mode) {
         case ef_sqrt:
@@ -553,7 +551,7 @@ public:
           // expensive stuff at lower than audio rate
           if (p.ef_to_emphasis_amt != 0. || p.ef_to_emphasis_freq != 0.) {
             update_emphasis (
-              follow * p.ef_to_emphasis_freq * p.emphasis_freq,
+              vec_exp2 (follow * p.ef_to_emphasis_freq) * p.emphasis_freq,
               follow * p.ef_to_emphasis_amt);
           }
         }

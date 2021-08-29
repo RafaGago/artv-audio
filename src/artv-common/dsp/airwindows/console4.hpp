@@ -1,5 +1,8 @@
 #pragma once
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-value"
+
 // Airwindows console4 Port.
 //
 // Original code left mostly intact, just run through clang-format and adapted
@@ -381,10 +384,10 @@ public:
         *out2 = inputSampleR;
       }
 
-      *in1++;
-      *in2++;
-      *out1++;
-      *out2++;
+      in1++;
+      in2++;
+      out1++;
+      out2++;
     }
   }
   //----------------------------------------------------------------------------
@@ -425,3 +428,5 @@ private:
 };
 
 }} // namespace artv::airwindows
+
+#pragma GCC diagnostic pop

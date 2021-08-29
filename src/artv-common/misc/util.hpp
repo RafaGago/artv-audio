@@ -696,5 +696,14 @@ auto tuple_unpack (tuple_like<Ts...>&& t, Func&& unpack_f)
     std::index_sequence_for<Ts...> {});
 }
 //------------------------------------------------------------------------------
+template <class T>
+constexpr bool is_aligned_to (uint align, T* v)
+{
+  assert (is_pow2 (align));
+  auto addr = reinterpret_cast<same_size_uint<T*>> (v);
+  return (addr & (align - 1)) == 0;
+}
+
+//------------------------------------------------------------------------------
 
 } // namespace artv
