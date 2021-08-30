@@ -56,8 +56,8 @@ public:
   static constexpr uint max_oversampling = 16;
   static constexpr uint n_channels       = 2;
 
-  using decimator_type    = lth_band_fir_decimator<T, 2, 16>;
-  using interpolator_type = fir_interpolator<T, 2, 16>;
+  using decimator_type    = fir_decimator<T, 2>;
+  using interpolator_type = fir_interpolator<T, 2>;
   //----------------------------------------------------------------------------
   void set_oversampling_order (
     uint                                  order,
@@ -178,7 +178,7 @@ private:
   void reset_oversamplers (interpolator_type& up, decimator_type* down)
   {
     _oversample_delay = linear_phase_fir_coeffs<ratio>::latency();
-    up.reset (linear_phase_fir_coeffs<ratio>::data(), ratio, true);
+    up.reset (linear_phase_fir_coeffs<ratio>::data(), ratio, false);
     if (down) {
       _oversample_delay *= 2; // Up and downsampler, 2 times the latency
       down->reset (linear_phase_fir_coeffs<ratio>::data(), ratio);
