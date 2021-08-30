@@ -40,6 +40,7 @@ private:
 public:
   using type = mp11::mp_transform<type_with_index, T<Ts...>, index_seq_typed>;
 };
+
 } // namespace detail
 
 template <class Tl>
@@ -54,6 +55,13 @@ void mp_foreach_idx (L<Ts...>, F&& f)
   mp11::mp_for_each<with_idx> ([&] (auto type) {
     f (typename decltype (type)::index {}, typename decltype (type)::type {});
   });
+}
+//------------------------------------------------------------------------------
+template <uint End, class F>
+void mp_foreach_idx (F&& f)
+{
+  mp11::mp_for_each<
+    mp11::mp_from_sequence<mp11::make_integer_sequence<uint, End>>> (f);
 }
 //------------------------------------------------------------------------------
 
