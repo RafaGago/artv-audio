@@ -9,18 +9,16 @@
 // too on C++. This code requires clang 11 or higher:
 // https://gcc.gnu.org/bugzilla//show_bug.cgi?id=57572
 
-#define XSIMD_BROKEN_W_FAST_MATH 1
+#define XSIMD_DISABLED 1
 #define XSIMD_NEW_INTERFACE 1
 
 #include <array>
+#include <cmath>
 #include <immintrin.h>
 #include <tuple>
 #include <type_traits>
 #include <utility>
 #include <xsimd/xsimd.hpp>
-#if defined(XSIMD_BROKEN_W_FAST_MATH)
-#include <cmath>
-#endif
 
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/mp11.hpp"
@@ -604,10 +602,11 @@ static inline auto call_vec_function (
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_exp (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_vec_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::exp (std::forward<decltype (v)> (v));
-  });
+#if XSIMD_DISABLED == 0
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::exp (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return exp (v); });
 #else
   constexpr auto                               traits = vec_traits<V>();
   std::remove_reference_t<std::remove_cv_t<V>> ret;
@@ -621,10 +620,11 @@ static inline auto vec_exp (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_exp2 (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
-  return detail::call_vec_function (std::forward<V> (x), [] (auto&& v) {
-    return xsimd::exp2 (std::forward<decltype (v)> (v));
-  });
+#if XSIMD_DISABLED == 0
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::exp2 (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return exp2 (v); });
 #else
   constexpr auto                               traits = vec_traits<V>();
   std::remove_reference_t<std::remove_cv_t<V>> ret;
@@ -642,7 +642,7 @@ template <
     is_vec_of_float_type_v<V1> && is_vec_of_float_type_v<V2>>* = nullptr>
 static inline auto vec_pow (V1&& x, V2&& y)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V1> (x),
     std::forward<V2> (y),
@@ -687,7 +687,7 @@ static inline auto vec_sqrt (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_log (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::log (std::forward<decltype (v)> (v)); },
@@ -703,9 +703,27 @@ static inline auto vec_log (V&& x)
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+static inline auto vec_log2 (V&& x)
+{
+#if XSIMD_DISABLED == 0
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::log2 (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return log2 (v); });
+#else
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
+  for (uint i = 0; i < traits.size; ++i) {
+    ret[i] = log2 (x[i]);
+  }
+  return ret;
+#endif
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_sin (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::sin (std::forward<decltype (v)> (v)); },
@@ -723,7 +741,7 @@ static inline auto vec_sin (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_cos (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::cos (std::forward<decltype (v)> (v)); },
@@ -741,7 +759,7 @@ static inline auto vec_cos (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_tan (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::tan (std::forward<decltype (v)> (v)); },
@@ -759,7 +777,7 @@ static inline auto vec_tan (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_sinh (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::sinh (std::forward<decltype (v)> (v)); },
@@ -777,7 +795,7 @@ static inline auto vec_sinh (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_cosh (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::cosh (std::forward<decltype (v)> (v)); },
@@ -795,7 +813,7 @@ static inline auto vec_cosh (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_tanh (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::tanh (std::forward<decltype (v)> (v)); },
@@ -813,7 +831,7 @@ static inline auto vec_tanh (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_asin (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::asin (std::forward<decltype (v)> (v)); },
@@ -831,7 +849,7 @@ static inline auto vec_asin (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_acos (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::acos (std::forward<decltype (v)> (v)); },
@@ -849,7 +867,7 @@ static inline auto vec_acos (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_atan (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::atan (std::forward<decltype (v)> (v)); },
@@ -867,7 +885,7 @@ static inline auto vec_atan (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_asinh (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::asinh (std::forward<decltype (v)> (v)); },
@@ -885,7 +903,7 @@ static inline auto vec_asinh (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_acosh (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::acosh (std::forward<decltype (v)> (v)); },
@@ -903,7 +921,7 @@ static inline auto vec_acosh (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_atanh (V&& x)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::atanh (std::forward<decltype (v)> (v)); },
@@ -921,7 +939,7 @@ static inline auto vec_atanh (V&& x)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_atan2 (V&& x, V&& y)
 {
-#if XSIMD_BROKEN_W_FAST_MATH == 0
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     std::forward<V> (y),
@@ -1191,5 +1209,5 @@ static inline auto vec_tanh_approx_vaneev (V&& x)
     vec_abs (x + (T) 0.814642734961073 * x * ax)));
   // clang-format on
 }
-
+//------------------------------------------------------------------------------
 } // namespace artv

@@ -11,7 +11,7 @@
   https://www.kvraudio.com/forum/viewtopic.php?f=33&t=569388&start=30&sid=90826930d4707e692b3137cd8ba19405
 
 - Track XSIMD broken on fast math bug.
-  https://github.com/xtensor-stack/xsimd/issues/515
+  https://github.com/xtensor-stack/xsimd/issues/547
 
 - Still unfixed memory leaks on original TAL Reverb 2's code (mix-maxtrix-test
   catches them).

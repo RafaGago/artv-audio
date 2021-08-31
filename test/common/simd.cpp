@@ -8,6 +8,31 @@
 #include "artv-common/misc/simd.hpp"
 
 namespace artv {
+
+template <class F1, class F2>
+static void simd_check (
+  F1     cmath_func,
+  F2     vec_func,
+  double range_start = 0.,
+  double range_end   = 10.,
+  double range_step  = 0.01,
+  double epsilon     = 0.01) // 1%
+{
+  double min = 1. - epsilon;
+  double max = 1. + epsilon;
+
+  for (double i = range_start; i < range_end; i += range_step) {
+    double cm  = cmath_func (i);
+    double vec = vec_func (vec_set<double_x2> (i))[0];
+    double fac = cm / vec;
+
+    if ((fac < min || fac > max) && !(cm == 0. && vec == 0.)) {
+      printf ("input: %f, std: %f, vec: %f\n", i, cm, vec);
+      ASSERT_EQ (cm, vec); // error!
+    }
+  }
+}
+
 //------------------------------------------------------------------------------
 TEST (simd, sanity_check)
 {
@@ -94,38 +119,120 @@ TEST (simd, shuffle)
   ASSERT_EQ (dst[3], 6);
 }
 //------------------------------------------------------------------------------
-// one of the functions having 1 parameter
 TEST (simd, exp)
 {
-  mp11::mp_for_each<mp_list<float, double>> ([] (auto typeval) {
-    using T       = decltype (typeval);
-    using vectype = vec<T, 16 / sizeof (T)>;
-
-    T    scalar = (T) 0.12345678901234567890;
-    auto vect   = vec_set<vectype> (scalar);
-
-    scalar = exp (scalar);
-    vect   = vec_exp (vect);
-
-    ASSERT_NEAR (scalar, vect[0], (T) 0.0000001);
-  });
+  simd_check (
+    [] (auto v) { return exp (v); }, [] (auto v) { return vec_exp (v); });
 }
 //------------------------------------------------------------------------------
-// one of the functions having 2 parameters
+TEST (simd, log)
+{
+  simd_check (
+    [] (auto v) { return log (v); }, [] (auto v) { return vec_log (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, log2)
+{
+  simd_check (
+    [] (auto v) { return log2 (v); }, [] (auto v) { return vec_log2 (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, exp2)
+{
+  simd_check (
+    [] (auto v) { return exp2 (v); }, [] (auto v) { return vec_exp2 (v); });
+}
+//------------------------------------------------------------------------------
 TEST (simd, pow)
 {
-  mp11::mp_for_each<mp_list<float, double>> ([] (auto typeval) {
-    using T       = decltype (typeval);
-    using vectype = vec<T, 16 / sizeof (T)>;
-
-    T    scalar = (T) 0.12345678901234567890;
-    auto vect   = vec_set<vectype> (scalar);
-
-    scalar = pow (scalar, scalar);
-    vect   = vec_pow (vect, vect);
-
-    ASSERT_NEAR (scalar, vect[0], (T) 0.0000001);
-  });
+  simd_check (
+    [] (auto v) { return pow (v, 2.); },
+    [] (auto v) { return vec_pow (v, 2.); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, sin)
+{
+  simd_check (
+    [] (auto v) { return sin (v); }, [] (auto v) { return vec_sin (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, cos)
+{
+  simd_check (
+    [] (auto v) { return cos (v); }, [] (auto v) { return vec_cos (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, tan)
+{
+  simd_check (
+    [] (auto v) { return tan (v); }, [] (auto v) { return vec_tan (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, sinh)
+{
+  simd_check (
+    [] (auto v) { return sinh (v); }, [] (auto v) { return vec_sinh (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, cosh)
+{
+  simd_check (
+    [] (auto v) { return cosh (v); }, [] (auto v) { return vec_cosh (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, tanh)
+{
+  simd_check (
+    [] (auto v) { return tanh (v); }, [] (auto v) { return vec_tanh (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, asin)
+{
+  simd_check (
+    [] (auto v) { return asin (v); }, [] (auto v) { return vec_asin (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, acos)
+{
+  simd_check (
+    [] (auto v) { return acos (v); }, [] (auto v) { return vec_acos (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, atan)
+{
+  simd_check (
+    [] (auto v) { return atan (v); }, [] (auto v) { return vec_atan (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, atan2)
+{
+  simd_check (
+    [] (auto v) { return atan2 (v, v); },
+    [] (auto v) { return vec_atan2 (v, v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, asinh)
+{
+  simd_check (
+    [] (auto v) { return sinh (v); }, [] (auto v) { return vec_sinh (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, acosh)
+{
+  simd_check (
+    [] (auto v) { return acosh (v); }, [] (auto v) { return vec_acosh (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, atanh)
+{
+  simd_check (
+    [] (auto v) { return atanh (v); }, [] (auto v) { return vec_atanh (v); });
+}
+//------------------------------------------------------------------------------
+TEST (simd, sqrt)
+{
+  simd_check (
+    [] (auto v) { return sqrt (v); }, [] (auto v) { return vec_sqrt (v); });
 }
 //------------------------------------------------------------------------------
 } // namespace artv

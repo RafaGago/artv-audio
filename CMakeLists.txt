@@ -218,9 +218,8 @@ add_dependencies (mp11 mp11_fetch)
 set (XSIMD_REPO ${CMAKE_BINARY_DIR}/xsimd-git)
 ExternalProject_Add(
     xsimd_fetch
-    GIT_REPOSITORY https://github.com/xtensor-stack/xsimd.git
-    GIT_TAG        cba930b0e0b6706e380aae2faebea4eda2cd69ac
-    #GIT_TAG        7.6.0
+    GIT_REPOSITORY https://github.com/RafaGago/xsimd.git
+    GIT_TAG        1075472af267695730adba03311d5b62b266cdf9
     SOURCE_DIR     "${XSIMD_REPO}"
     UPDATE_COMMAND    ""
     BUILD_ALWAYS   False
@@ -480,6 +479,7 @@ target_link_libraries(
     gtest
     gtest_main
     common
+    dsp_target_compile_options
     )
 #-- Headless -------------------------------------------------------------------
 add_library (headless INTERFACE)
