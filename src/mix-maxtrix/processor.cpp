@@ -355,10 +355,8 @@ private:
 
     std::array<bool, parameters::n_stereo_busses> zeroed {};
 
-    using rmode    = parameters::routing_mode;
-    uint bus_order = p_get (parameters::routing {})[0];
-    bus_order      = bus_order != rmode::crossover ? bus_order : rmode::full;
-    uint n_gbusses = parameters::n_stereo_busses >> bus_order;
+    uint rmode     = p_get (parameters::routing {})[0];
+    uint n_gbusses = parameters::n_parallel_buses (rmode);
 
     for (uint bus_beg = 0; bus_beg < _io.order.size(); bus_beg += n_gbusses) {
 

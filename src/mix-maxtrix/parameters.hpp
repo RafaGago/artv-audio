@@ -178,7 +178,13 @@ struct routing_mode {
     crossover,
   };
 };
-static constexpr uint routing_crossover = 3;
+//------------------------------------------------------------------------------
+static constexpr uint n_parallel_buses (uint rm)
+{
+  uint order = (rm != routing_mode::crossover) ? (uint) rm : routing_mode::full;
+  return parameters::n_stereo_busses >> order;
+}
+//------------------------------------------------------------------------------
 #endif
 
 parameter_cpp_class_define (
@@ -5476,7 +5482,7 @@ parameter_cpp_class_define (
 using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #endif
 //------------------------------------------------------------------------------
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<saturation_params>;

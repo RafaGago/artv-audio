@@ -1046,6 +1046,14 @@ public:
         // forcing redraw of the fx parameters
         on_fx_type_or_page_change (i * 2, -1);
       }
+      auto& mixer_sends = p_get (parameters::mixer_sends {})[0];
+      uint  gsz         = parameters::n_parallel_buses (selected_id);
+      for (auto cptr : mixer_sends->get_components()) {
+        cptr->setEnabled (true);
+      }
+      for (uint i = gsz; i < parameters::n_stereo_busses; i += gsz) {
+        mixer_sends->get_components()[i - 1]->setEnabled (false);
+      }
     }
     else {
       for (uint i = 0; i < n_crossv_bands; ++i) {
