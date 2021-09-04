@@ -58,6 +58,7 @@ public:
     u64  send_outs, // bit stream of size N * N representing sends of mix chnls
     u64  mute_solo_v, // bit stream of size N * 2 (2 = mute + solo)
     u64  mixer2mixer_sends, // bit stream of size N.
+    u64  inhibit_reordering, // bit stream of size N.
     uint n_groups_log2,
     bus_latency_arr const& mix_latencies,
     T                      channel_has_processing)
@@ -165,6 +166,10 @@ public:
           // inhibit the reordering optimization. They need to be processed
           // sequentially left to right. Not done outside of the loop to not
           // create another indentation level.
+          break;
+        }
+        if ((chnl.bit_in_self & inhibit_reordering) != 0) {
+          // manually specified to not reorder this channel.
           break;
         }
 
@@ -282,6 +287,7 @@ public:
     u64  send_outs, // bit stream of size N * N representing sends of mix chnls
     u64  mute_solo_v, // bit stream of size N * 2 (2 = mute + solo)
     u64  mixer2mixer_sends, // bit stream of size N.
+    u64  inhibit_reordering, // bit stream of size N.
     uint n_groups_log2                   = 0,
     bus_latency_arr const& mix_latencies = bus_latency_arr {})
   {
@@ -290,6 +296,7 @@ public:
       send_outs,
       mute_solo_v,
       mixer2mixer_sends,
+      inhibit_reordering,
       n_groups_log2,
       mix_latencies,
       [] (uint chnl) { return true; });

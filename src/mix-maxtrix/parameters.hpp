@@ -169,6 +169,18 @@ parameter_cpp_class_define (
   float_param ("dB", -20.f, 20.f, 0.f, 0.01f),
   slider_ext);
 
+#if MIXMAXTRIX_CHANNELS == 8
+struct routing_mode {
+  enum {
+    full,
+    blocks_of_4,
+    blocks_of_2,
+    crossover,
+  };
+};
+static constexpr uint routing_crossover = 3;
+#endif
+
 parameter_cpp_class_define (
   routing,
   1,
@@ -181,7 +193,8 @@ parameter_cpp_class_define (
     make_cstr_array (
       "[1,2,3,4,5,6,7,8]",
       "[1,2,3,4]>[5,6,7,8]",
-      "[1,2]>[3,4]>[5,6]>[7,8]"),
+      "[1,2]>[3,4]>[5,6]>[7,8]",
+      "[Crossover]"),
     10,
     false),
 #else
@@ -5422,6 +5435,33 @@ using saturation_params = mp_list<
   saturation_mode,
   saturation_oversampling>;
 //------------------------------------------------------------------------------
+parameter_cpp_class_define (
+  crossover_frequency,
+  3,
+  param_common ("Crossv"),
+  frequency_parameter (40.0, 17000.0, 600.0),
+  slider_ext);
+
+parameter_cpp_class_define (
+  crossover_lr_diff,
+  3,
+  param_common ("F Diff"),
+  float_param ("%", -100.f, 100.f, 0.f, 0.01f),
+  slider_ext);
+
+parameter_cpp_class_define (
+  crossover_mode,
+  3,
+  param_common ("Mode"),
+  choice_param (
+    1,
+    make_cstr_array ("Off", "12dB/Oct", "24dB/Oct", "48dB/Oct"),
+    12),
+  slider_ext);
+
+using crossover_params
+  = mp_list<crossover_frequency, crossover_lr_diff, crossover_mode>;
+//------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
   polyphase_fir_test_gain,
@@ -5436,7 +5476,7 @@ parameter_cpp_class_define (
 using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #endif
 //------------------------------------------------------------------------------
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<saturation_params>;
@@ -5574,8 +5614,10 @@ using non_routing_controls_typelist
 using all_controls_typelist = mp11::mp_flatten<
   mp11::mp_list<routing_controls_typelist, non_routing_controls_typelist>>;
 
-using all_channel_sliders_typelist = mp11::mp_flatten<
-  mp11::mp_list<all_nonfx_sliders_typelist, channel_fx_sliders_typelist>>;
+using all_channel_sliders_typelist = mp11::mp_flatten<mp11::mp_list<
+  all_nonfx_sliders_typelist,
+  channel_fx_sliders_typelist,
+  crossover_params>>;
 
 using parameters_typelist = mp11::mp_flatten<
   mp11::mp_list<all_controls_typelist, all_channel_sliders_typelist>>;

@@ -12,6 +12,7 @@
 
 #include <ff_meters.h>
 
+#include "artv-common/dsp/own/classes/crossover.hpp"
 #include "artv-common/dsp/own/classes/mix.hpp"
 #include "artv-common/juce/effect_base.hpp"
 #include "artv-common/juce/math.hpp"
@@ -136,6 +137,7 @@ public:
   void prepareToPlay (double samplerate, int max_block_samples) override
   {
     _fx_context.reset (*this, samplerate, fx_blocksize);
+    _crossv.reset (samplerate);
 
     for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
       _mixer[i].reset (_fx_context);
@@ -246,13 +248,34 @@ private:
       outs |= (((u64) outs_arr[i]) << (i * parameters::n_stereo_busses));
     }
 
+    uint routing           = (uint) routing_arr[0];
+    uint inhibit_reorder   = 0;
+    auto mixer2mixer_sends = mixsends_arr[0];
+    _crossv_on             = (routing == parameters::routing_mode::crossover);
+
+    if (_crossv_on) {
+      // This was never thought out to be a multifx, so it was never was
+      // designed to have multiple ins (sidechain) and outs per fx. It is
+      // perfectly doable backend-wise but not on the GUI. The crossover is
+      // added in a kind-of hacked way.
+
+      // No process order reordering/optimizing on channels 1,3,5 and 7.
+      inhibit_reorder = (1 << 0) | (1 << 2) | (1 << 4) | (1 << 6);
+      // crossover + block of 4
+      routing = parameters::routing_mode::full;
+      // sanitizing mixer 2 mixer sends. Not allowed to send to crossover
+      // channels.
+      mixer2mixer_sends &= inhibit_reorder;
+    }
+
     auto latency_prev = _io.plugin_latency;
     _io.recompute (
       ins,
       outs,
       mute_solo_bits,
-      mixsends_arr[0],
-      (uint) routing_arr[0],
+      mixer2mixer_sends,
+      inhibit_reorder,
+      routing,
       _fx_context.fx_latencies);
 
     this->setLatencySamples (_io.plugin_latency);
@@ -332,8 +355,10 @@ private:
 
     std::array<bool, parameters::n_stereo_busses> zeroed {};
 
-    uint n_gbusses
-      = parameters::n_stereo_busses >> p_get (parameters::routing {})[0];
+    using rmode    = parameters::routing_mode;
+    uint bus_order = p_get (parameters::routing {})[0];
+    bus_order      = bus_order != rmode::crossover ? bus_order : rmode::full;
+    uint n_gbusses = parameters::n_stereo_busses >> bus_order;
 
     for (uint bus_beg = 0; bus_beg < _io.order.size(); bus_beg += n_gbusses) {
 
@@ -442,9 +467,10 @@ private:
         // run the oversampling parameter first (if any)
         //
         // The "oversampled" class fully resets the FX on samplerate changes.
-        // This way all the parameters will be passed afterwards. The next loop
-        // of parameter setting sets the oversampling again, but "oversampled"
-        // just acts on changes, so it is OK to not handle the case.
+        // This way all the parameters will be passed afterwards. The next
+        // loop of parameter setting sets the oversampling again, but
+        // "oversampled" just acts on changes, so it is OK to not handle the
+        // case.
         mp11::mp_for_each<param_tlist> ([=, &fx] (auto param) {
           using paramtype = decltype (param);
           using dsp_param = typename decltype (paramtype::common)::dsp_param;
@@ -474,6 +500,12 @@ private:
       }
     });
     // clang-format on
+
+    if (is_crossv_channel (channel) && channel != 0) {
+      // the buffers for the crossover channels are already written and mixed
+      // nothing to do.
+      return true;
+    }
 
     bool ret;
     if (processors[0] == nullptr) {
@@ -506,6 +538,24 @@ private:
       }
     }
     return ret;
+  }
+  //----------------------------------------------------------------------------
+  void refresh_crossv_parameters()
+  {
+    p_refresh_many (parameters::crossover_params {});
+    auto& freqs = p_get (parameters::crossover_frequency {});
+    auto& diffs = p_get (parameters::crossover_lr_diff {});
+    auto& modes = p_get (parameters::crossover_mode {});
+
+    for (uint i = 0; i < _crossv.n_crossovers; ++i) {
+      float diff = diffs[i] * (0.01 * 0.2);
+      float f    = midi_note_to_hz (freqs[i]);
+      _crossv.set_crossover_point (
+        i,
+        f + (f * diff),
+        f - (f * diff),
+        ((uint) (modes[i] != 0)) << modes[i]);
+    }
   }
   //----------------------------------------------------------------------------
   void mixer_parameters_update (uint channel, bool will_mute)
@@ -549,7 +599,20 @@ private:
     auto           fx_type = p_get (parameters::fx_type {})[channel];
     constexpr auto fx_val  = parameters::fx_type {};
 
-    if (fx_type == 0 || fx_type >= fx_val.type.choices.size()) {
+    if (_crossv_on && channel == 0) {
+      refresh_crossv_parameters();
+      std::array<std::array<T*, 2>, decltype (_crossv)::n_bands> ins;
+      for (uint i = 0; i < ins.size(); ++i) {
+        auto cbus = buffers.get_write_ptrs (_io.mix[i * 2]);
+        ins[i][0] = cbus[0];
+        ins[i][1] = cbus[1];
+      }
+      _crossv.tick<T> (ins, samples);
+    }
+
+    if (
+      fx_type == 0 || fx_type >= fx_val.type.choices.size()
+      || is_crossv_channel (channel)) {
       // Fast path: Skipping fx and dry/wet mixing.
       _mixer[channel].process_block_replacing (mix_bus, samples);
       return;
@@ -717,6 +780,11 @@ private:
     _dly_comp_buffers.compensate (id_r, make_crange (chnlptrs[1], samples));
   }
   //----------------------------------------------------------------------------
+  constexpr bool is_crossv_channel (uint chnl)
+  {
+    return _crossv_on && !(chnl & 1);
+  }
+  //----------------------------------------------------------------------------
   struct param_change_counter
     : public juce::AudioProcessorValueTreeState::Listener {
     virtual ~param_change_counter() {};
@@ -746,14 +814,14 @@ private:
   static constexpr uint fx_blocksize = 128;
   alignas (32) std::array<std::array<float, fx_blocksize>, 4> _fx_mix_buffer;
   delay_compensation_buffers<float, 2> _dly_comp_buffers;
+  crossover<3, false>                  _crossv;
+  bool                                 _crossv_on;
+  uint                                 _program = 0;
 
-  uint _program = 0;
+  alignas (128)
+    std::array<foleys::LevelMeterSource, parameters::n_stereo_busses> _meters;
 
-  std::array<char, 128> _cache_padding_1;
-  std::array<foleys::LevelMeterSource, parameters::n_stereo_busses> _meters;
-  std::array<char, 128> _cache_padding_2;
-
-  param_change_counter _routing_refreshed;
+  alignas (128) param_change_counter _routing_refreshed;
   param_change_counter _non_routing_refreshed;
   param_change_counter _non_fx_slider_refreshed;
 };

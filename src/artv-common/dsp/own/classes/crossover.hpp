@@ -13,6 +13,9 @@ namespace artv {
 
 // TODO(maybe): Remove template parameters to avoid possible code bloat if two
 // crossovers of the same type live on the same program.
+// TODO(maybe): When needed, if dry-wet processing is needed it is trivial to
+//   process the dry signal with the allpass equivalent version of the
+//   crossover. It is just running the dry signal through all allpasses.
 //------------------------------------------------------------------------------
 template <uint N_Crossovers, bool Controls_summing = true>
 class crossover {
@@ -106,9 +109,9 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void tick (crange<T> io, uint samples)
+  void tick (crange<std::array<T*, 2>> io, uint samples)
   {
-    assert (false && "TODO!");
+    tick<T, !controls_summing> (io, samples);
   }
   //----------------------------------------------------------------------------
   std::array<double_x2, n_bands> phase_correct (
@@ -142,12 +145,6 @@ public:
     return ret;
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  void phase_correct (crange<T> io, uint samples)
-  {
-    assert (false && "TODO!");
-  }
-  //----------------------------------------------------------------------------
   double_x2 sum (std::array<double_x2, n_bands> bands)
   {
     assert (controls_summing);
@@ -168,12 +165,78 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void sum (crange<T> io, uint samples)
+  void sum (crange<std::array<T*, 2>> io, uint samples)
   {
-    assert (false && "TODO!");
+    assert (controls_summing);
+    assert (io.size() >= n_bands);
+    for (uint b = 0; b < n_bands; ++b) {
+      assert (io[b][0] != nullptr);
+      assert (io[b][1] != nullptr);
+    }
+
+    static constexpr uint blocksize = 32;
+
+    std::array<std::array<double_x2, n_bands>, blocksize> buffer;
+
+    uint done = 0;
+    while (done < samples) {
+      uint subblock_size = std::min (samples - done, blocksize);
+
+      for (uint b = 0; b < n_bands; ++b) {
+        for (uint i = 0; i < subblock_size; ++subblock_size) {
+          buffer[i][b] = double_x2 {io[b][0][done + i], io[b][1][done + i]};
+        }
+      }
+
+      for (uint i = 0; i < subblock_size; ++subblock_size) {
+        buffer[i][0] = tick (buffer[i]);
+      }
+
+      for (uint i = 0; i < subblock_size; ++subblock_size) {
+        io[0][0][done + i] = buffer[i][0][0];
+        io[0][1][done + i] = buffer[i][0][1];
+      }
+      done += subblock_size;
+    }
   }
   //----------------------------------------------------------------------------
 private:
+  //----------------------------------------------------------------------------
+  template <class T, bool do_phase_correct>
+  void tick (crange<std::array<T*, 2>> io, uint samples)
+  {
+    assert (io.size() >= n_bands);
+    for (uint b = 0; b < n_bands; ++b) {
+      assert (io[b][0] != nullptr);
+      assert (io[b][1] != nullptr);
+    }
+
+    static constexpr uint blocksize = 32;
+
+    std::array<std::array<double_x2, n_bands>, blocksize> buffer;
+
+    uint done = 0;
+    while (done < samples) {
+      uint subblock_size = std::min (samples - done, blocksize);
+
+      for (uint i = 0; i < subblock_size; ++i) {
+        buffer[i] = tick (double_x2 {io[0][0][done + i], io[0][1][done + i]});
+      }
+      if constexpr (do_phase_correct) {
+        for (uint i = 0; i < subblock_size; ++i) {
+          buffer[i] = phase_correct (buffer[i]);
+        }
+      }
+      for (uint b = 0; b < n_bands; ++b) {
+        for (uint i = 0; i < subblock_size; ++i) {
+          io[b][0][done + i] = buffer[i][b][0];
+          io[b][1][done + i] = buffer[i][b][1];
+        }
+      }
+      done += subblock_size;
+    }
+  }
+  //----------------------------------------------------------------------------
   using lr = linkwitz_riley_stage_any_order;
   //----------------------------------------------------------------------------
   uint id_invert (uint v)

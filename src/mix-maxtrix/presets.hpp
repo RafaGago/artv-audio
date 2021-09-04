@@ -82,30 +82,18 @@ static constexpr preset presets[] = {
 <?xml version="1.0" encoding="UTF-8"?>
 <params plugin_version="1">
     <PARAM id="in_selection_01" value="1.0" />
-    <PARAM id="in_selection_02" value="1.0" />
-    <PARAM id="in_selection_03" value="1.0" />
-    <PARAM id="in_selection_04" value="1.0" />
     <PARAM id="out_selection_01" value="1.0" />
-    <PARAM id="out_selection_02" value="2.0" />
-    <PARAM id="out_selection_03" value="4.0" />
-    <PARAM id="out_selection_04" value="8.0" />
-    <PARAM id="eq4x_band1_freq_01" value="57.99777221679688" />
-    <PARAM id="eq4x_band1_freq_02" value="57.99777221679688" />
-    <PARAM id="eq4x_band1_freq_03" value="84.78579711914062" />
-    <PARAM id="eq4x_band1_freq_04" value="108.2253265380859" />
-    <PARAM id="eq4x_band1_q_01" value="0.4999999701976776" />
-    <PARAM id="eq4x_band1_type_01" value="5.0" />
-    <PARAM id="eq4x_band1_type_02" value="6.0" />
-    <PARAM id="eq4x_band1_type_03" value="6.0" />
-    <PARAM id="eq4x_band1_type_04" value="6.0" />
-    <PARAM id="eq4x_band2_freq_02" value="84.78579711914062" />
-    <PARAM id="eq4x_band2_freq_03" value="108.2253265380859" />
-    <PARAM id="eq4x_band2_type_02" value="5.0" />
-    <PARAM id="eq4x_band2_type_03" value="5.0" />
-    <PARAM id="fx_type_01" value="23.0" />
-    <PARAM id="fx_type_02" value="23.0" />
-    <PARAM id="fx_type_03" value="23.0" />
-    <PARAM id="fx_type_04" value="23.0" />
+    <PARAM id="crossover_frequency_01" value="57.60536956787109" />
+    <PARAM id="crossover_frequency_02" value="74.5" />
+    <PARAM id="crossover_frequency_03" value="105.80224609375" />
+    <PARAM id="fx_type_01" value="0.0" />
+    <PARAM id="fx_type_02" value="0.0" />
+    <PARAM id="fx_type_03" value="0.0" />
+    <PARAM id="fx_type_04" value="0.0" />
+    <PARAM id="out_selection_03" value="2.0" />
+    <PARAM id="out_selection_05" value="4.0" />
+    <PARAM id="out_selection_07" value="8.0" />
+    <PARAM id="routing" value="3.0" />
 </params>
      )END"},
   {.name = "Mix: Console 6 Companding",

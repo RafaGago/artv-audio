@@ -78,6 +78,7 @@ public:
     //        juce::Colours::darkgoldenrod,
     //        juce::Colours::red.brighter (0.4),
     //        juce::Colours::sienna,
+    _is_crossover = false;
 
     for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
       _meters[i].setLookAndFeel (&_meters_look_feel[i]);
@@ -378,6 +379,13 @@ public:
       combo.is_drag_source = true;
       combo.on_drop
         = std::bind (&editor::fx_drag_and_drop_event, this, i, _1, _2, _3);
+    }
+
+    // routing event
+    {
+      auto& combo    = p_get (parameters::routing {})[0]->combo;
+      combo.onChange = [=] { on_routing_change(); };
+      on_routing_change();
     }
 
     // size
@@ -710,19 +718,28 @@ public:
     auto cp_slider_ex_bounds
       = [&] (uint row, uint col, auto t) { using dst_type = decltype (t); };
 
-    // positioning  all fx parameter sliders on top of each respective
+    // positioning  all parameter sliders (knobs) on top of each respective
     // _fx_off_slider object
-    mp11::mp_for_each<parameters::all_fx_typelists> ([&] (auto fx_tlist) {
+    mp11::mp_for_each<fx_and_crossover_knobs_typelist> ([&] (auto fx_tlist) {
+      // crossover has only 3 mixer channels with knobs.
+      constexpr bool is_crossover
+        = std::is_same_v<decltype (fx_tlist), parameters::crossover_params>;
+
       uint param_idx = 0;
       mp11::mp_for_each<decltype (fx_tlist)> ([&] (auto param) {
         auto& param_arr = p_get (param);
-        for (uint chnl = 0; chnl < param_arr.size(); ++chnl) {
+        for (uint arr_idx = 0; arr_idx < param_arr.size(); ++arr_idx) {
 
-          param_arr[chnl]->slider.setBounds (
+          // crossover parameters map idx 0-2 to chnl 2,4,6 respectively
+          uint chnl = arr_idx;
+          if (is_crossover) {
+            chnl = (arr_idx * 2) + 2;
+          }
+          param_arr[arr_idx]->slider.setBounds (
             _fx_off_sliders[chnl][param_idx % num_page_params]
               .slider.getBounds());
 
-          param_arr[chnl]->label.setBounds (
+          param_arr[arr_idx]->label.setBounds (
             _fx_off_sliders[chnl][param_idx % num_page_params]
               .label.getBounds());
         }
@@ -856,15 +873,9 @@ public:
       getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
   }
   //----------------------------------------------------------------------------
-  void on_fx_type_or_page_change (uint chnl, int action)
+  void clear_fx_knobs (uint chnl)
   {
-    static constexpr int on_fx_change = -1;
-    static constexpr int fx1_page     = 0;
-    static constexpr int fx2_page     = 1;
-    static constexpr int fx3_page     = 2;
-
-    auto set_visible = [] (juce::Component& c) { c.setVisible (true); };
-    auto set_hidden  = [] (juce::Component& c) { c.setVisible (false); };
+    auto set_hidden = [] (juce::Component& c) { c.setVisible (false); };
 
     // hide and disable sliders before starting
     for (uint i = 0; i < num_page_params; ++i) {
@@ -875,7 +886,96 @@ public:
         p_get (param)[chnl]->foreach_component (set_hidden);
       });
     });
+    if ((chnl & 1) || chnl == 0) {
+      return;
+    }
+    mp11::mp_for_each<parameters::crossover_params> ([=] (auto param) {
+      p_get (param)[(chnl / 2) - 1]->foreach_component (set_hidden);
+    });
+  }
+  //----------------------------------------------------------------------------
+  void set_as_empty_fx (uint chnl)
+  {
+    auto set_visible = [] (juce::Component& c) { c.setVisible (true); };
 
+    for (auto& btn : _page_buttons[chnl]) {
+      btn.setEnabled (false);
+    }
+    for (uint i = 0; i < num_page_params; ++i) {
+      _fx_off_sliders[chnl][i].foreach_component (set_visible);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class fx_params>
+  void show_fx_knobs (uint chnl, uint param_array_idx, int action, fx_params)
+  {
+    static constexpr int on_fx_change = -1;
+    static constexpr int fx1_page     = 0;
+    static constexpr int fx2_page     = 1;
+    static constexpr int fx3_page     = 2;
+
+    auto set_visible = [] (juce::Component& c) { c.setVisible (true); };
+
+    static constexpr uint ptotal = mp11::mp_size<fx_params>::value;
+    // list of params per page.
+    static constexpr std::array<size_t, num_fx_pages> n_params = {
+      std::min (ptotal, num_page_params),
+      (ptotal > num_page_params)
+        ? std::min (ptotal - num_page_params, num_page_params)
+        : 0,
+      (ptotal > (2 * num_page_params))
+        ? std::min (ptotal - (2 * num_page_params), num_page_params)
+        : 0};
+
+    uint curr_page = 0;
+    for (uint i = 0; i < num_fx_pages; ++i) {
+      bool toggled         = _page_buttons[chnl][i].getToggleState();
+      bool page_has_params = !!n_params[i];
+      if (toggled && !page_has_params) {
+        _page_buttons[chnl][i].setToggleState (
+          false, juce::NotificationType::sendNotification);
+        toggled = 0;
+      }
+      _page_buttons[chnl][i].setEnabled (page_has_params);
+      curr_page += toggled * i;
+    }
+
+    mp11::mp_for_each<mp11::mp_iota_c<num_fx_pages>> ([=] (auto page) {
+      // "mp_drop_c" doesn't silently translate to 0 when passed bigger sizes
+      static constexpr uint n_drop_beg = (page.value == 0) ? 0
+        : (n_params[page.value - 1] == num_page_params)
+        ? (page.value * num_page_params)
+        : 0;
+
+      using page_params_beg = mp11::mp_drop_c<fx_params, n_drop_beg>;
+      using page_params
+        = mp11::mp_take_c<page_params_beg, n_params[page.value]>;
+
+      bool forced_by_fx_change
+        = (action == on_fx_change) && (curr_page == page.value);
+
+      if (action == page.value || forced_by_fx_change) {
+        mp11::mp_for_each<page_params> ([=] (auto param) {
+          p_get (param)[param_array_idx]->foreach_component (set_visible);
+        });
+        for (uint i = n_params[page.value]; i < num_page_params; ++i) {
+          _fx_off_sliders[chnl][i].foreach_component (set_visible);
+        }
+        if (forced_by_fx_change) {
+          _page_buttons[chnl][page.value].setToggleState (
+            true, juce::NotificationType::sendNotification);
+        }
+      }
+    });
+  }
+  //----------------------------------------------------------------------------
+  void on_fx_type_or_page_change (uint chnl, int action)
+  {
+    // no FX redraw when the crossover is enabled.
+    if (_is_crossover && !(chnl & 1)) {
+      return;
+    }
+    clear_fx_knobs (chnl);
     // get FX
     auto&          combo  = p_get (parameters::fx_type {})[chnl]->combo;
     auto           fx_id  = combo.getSelectedId();
@@ -893,67 +993,68 @@ public:
       if (fx_idx++ != fx_id - 2) {
         return; // next
       }
-
-      using fx_params              = decltype (fxtl);
-      static constexpr uint ptotal = mp11::mp_size<fx_params>::value;
-      static constexpr std::array<size_t, num_fx_pages> n_params = {
-        std::min (ptotal, num_page_params),
-        (ptotal > num_page_params)
-          ? std::min (ptotal - num_page_params, num_page_params)
-          : 0,
-        (ptotal > (2 * num_page_params))
-          ? std::min (ptotal - (2 * num_page_params), num_page_params)
-          : 0};
-
-      uint curr_page = 0;
-      for (uint i = 0; i < num_fx_pages; ++i) {
-        bool toggled         = _page_buttons[chnl][i].getToggleState();
-        bool page_has_params = !!n_params[i];
-        if (toggled && !page_has_params) {
-          _page_buttons[chnl][i].setToggleState (
-            false, juce::NotificationType::sendNotification);
-          toggled = 0;
-        }
-        _page_buttons[chnl][i].setEnabled (page_has_params);
-        curr_page += toggled * i;
-      }
-
-      mp11::mp_for_each<mp11::mp_iota_c<num_fx_pages>> ([=] (auto page) {
-        // "mp_drop_c" doesn't silently translate to 0 when passed bigger sizes
-        static constexpr uint n_drop_beg = (page.value == 0) ? 0
-          : (n_params[page.value - 1] == num_page_params)
-          ? (page.value * num_page_params)
-          : 0;
-
-        using page_params_beg = mp11::mp_drop_c<fx_params, n_drop_beg>;
-        using page_params
-          = mp11::mp_take_c<page_params_beg, n_params[page.value]>;
-
-        bool forced_by_fx_change
-          = (action == on_fx_change) && (curr_page == page.value);
-
-        if (action == page.value || forced_by_fx_change) {
-          mp11::mp_for_each<page_params> ([=] (auto param) {
-            p_get (param)[chnl]->foreach_component (set_visible);
-          });
-          for (uint i = n_params[page.value]; i < num_page_params; ++i) {
-            _fx_off_sliders[chnl][i].foreach_component (set_visible);
-          }
-          if (forced_by_fx_change) {
-            _page_buttons[chnl][page.value].setToggleState (
-              true, juce::NotificationType::sendNotification);
-          }
-        }
-      });
+      show_fx_knobs (chnl, chnl, action, fxtl);
     });
     if (no_fx) {
-      if (no_fx) {
-        for (auto& btn : _page_buttons[chnl]) {
-          btn.setEnabled (false);
+      set_as_empty_fx (chnl);
+    }
+  }
+  //----------------------------------------------------------------------------
+  void on_routing_change()
+  {
+    auto& routing_combo = p_get (parameters::routing {})[0]->combo;
+    auto  selected_id   = routing_combo.getSelectedId();
+    assert (selected_id);
+    --selected_id;
+
+    static constexpr uint n_crossv_bands = 4;
+
+    auto set_channel_components_state = [=] (uint chnl, bool enabled) {
+      auto& fx_type = p_get (parameters::fx_type {})[chnl];
+      auto& ins     = p_get (parameters::in_selection {})[chnl];
+      auto& wet_bal = p_get (parameters::wet_balance {})[chnl];
+      auto& wet_pan = p_get (parameters::wet_pan {})[chnl];
+      auto& dry_pan = p_get (parameters::dry_pan {})[chnl];
+      auto& fx_mix  = p_get (parameters::fx_mix {})[chnl];
+
+      auto& mixer_sends = p_get (parameters::mixer_sends {})[0];
+
+      fx_type->combo.setEnabled (enabled);
+      fx_type->prev.setEnabled (enabled);
+      fx_type->next.setEnabled (enabled);
+      wet_bal->slider.setEnabled (enabled);
+      wet_pan->slider.setEnabled (enabled);
+      dry_pan->slider.setEnabled (enabled);
+      fx_mix->slider.setEnabled (enabled);
+      wet_bal->label.setEnabled (enabled);
+      wet_pan->label.setEnabled (enabled);
+      dry_pan->label.setEnabled (enabled);
+      fx_mix->label.setEnabled (enabled);
+
+      if (chnl != 0) {
+        for (auto btn_ptr : ins->get_components()) {
+          btn_ptr->setEnabled (enabled);
         }
+        mixer_sends->get_components()[chnl - 1]->setEnabled (enabled);
       }
-      for (uint i = 0; i < num_page_params; ++i) {
-        _fx_off_sliders[chnl][i].foreach_component (set_visible);
+    };
+
+    _is_crossover = selected_id == parameters::routing_mode::crossover;
+    if (!_is_crossover) {
+      for (uint i = 0; i < n_crossv_bands; ++i) {
+        set_channel_components_state (i * 2, true);
+        // forcing redraw of the fx parameters
+        on_fx_type_or_page_change (i * 2, -1);
+      }
+    }
+    else {
+      for (uint i = 0; i < n_crossv_bands; ++i) {
+        clear_fx_knobs (i * 2);
+        set_channel_components_state (i * 2, false);
+      }
+      set_as_empty_fx (0);
+      for (uint i = 1; i < n_crossv_bands; ++i) {
+        show_fx_knobs (i * 2, i - 1, -1, parameters::crossover_params {});
       }
     }
   }
@@ -1165,6 +1266,9 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
+  using fx_and_crossover_knobs_typelist = mp11::
+    mp_push_back<parameters::all_fx_typelists, parameters::crossover_params>;
+
   static constexpr uint num_fx_params   = 24;
   static constexpr uint num_fx_pages    = 3;
   static constexpr uint num_page_params = num_fx_params / num_fx_pages;
@@ -1189,6 +1293,7 @@ private:
                                                               _meters_look_feel;
   std::array<foleys::LevelMeter, parameters::n_stereo_busses> _meters;
   crange<foleys::LevelMeterSource>                            _meter_srcs;
+  bool                                                        _is_crossover;
 
 }; // namespace artv
 //------------------------------------------------------------------------------
