@@ -16,9 +16,9 @@ static constexpr auto frequency_parameter (
 {
   return float_param (
     "",
-    hz_to_midi_note (min_hz),
-    hz_to_midi_note (max_hz),
-    hz_to_midi_note (default_hz),
+    constexpr_hz_to_midi_note (min_hz),
+    constexpr_hz_to_midi_note (max_hz),
+    constexpr_hz_to_midi_note (default_hz),
     0.f,
     1.f,
     false,

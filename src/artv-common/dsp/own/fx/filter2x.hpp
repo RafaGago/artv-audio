@@ -630,9 +630,9 @@ private:
   void reset_band (uint band)
   {
     constexpr double min_hz
-      = midi_note_to_hz (get_parameter (band1_freq_tag {}).min);
+      = constexpr_midi_note_to_hz (get_parameter (band1_freq_tag {}).min);
     constexpr double max_hz
-      = midi_note_to_hz (get_parameter (band1_freq_tag {}).max);
+      = constexpr_midi_note_to_hz (get_parameter (band1_freq_tag {}).max);
     constexpr double min_reso = get_parameter (band1_reso_tag {}).min;
     constexpr double max_reso = get_parameter (band1_reso_tag {}).max;
 

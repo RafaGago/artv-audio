@@ -1,4 +1,4 @@
-- Deprecate MixMaxtrix4
+- Deprecate MixMaxtrix4.
 
 - Add envelope follower on the filters module for the cutoff. The code already
   is processing in blocks, so it can run at a reduced pace (samplerate).
