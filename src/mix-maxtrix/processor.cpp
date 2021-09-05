@@ -634,20 +634,6 @@ private:
       });
 
     // FX process and mix.
-
-    // Self note for when adding oversampling.
-    //
-    // The same 128 bit buffer will be used. Then the upsampler and the
-    // downsampler will take the same buffer as input and output.
-    //
-    // On the upsampler, when calling, (Buffsize / Oversampling) samples at
-    // base rate will be placed on the bottom of the buffer so they don't
-    // overwite.
-    //
-    // When calling the downsampler, the passed buffer will have Buffsize
-    // samples at the upsampled rate. It will return (N / Oversampling)
-    // samples.
-
     assert (fx);
     auto& mix_buffer = get_mix_buffer (T {});
 
