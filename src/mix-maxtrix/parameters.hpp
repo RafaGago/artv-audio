@@ -426,7 +426,7 @@ parameter_cpp_class_define (
   stereo_bub3_lowcut,
   n_stereo_busses,
   param_common (
-    "Crossover",
+    "Crossovr",
     declptr<saike::stereo_bub3>(),
     declptr<saike::stereo_bub3::lowcut_tag>()),
   saike::stereo_bub3::get_parameter (saike::stereo_bub3::lowcut_tag {}),
@@ -476,7 +476,7 @@ parameter_cpp_class_define (
   stereo_bub3_saturation,
   n_stereo_busses,
   param_common (
-    "Saturation",
+    "Sat",
     declptr<saike::stereo_bub3>(),
     declptr<saike::stereo_bub3::saturation_tag>()),
   saike::stereo_bub3::get_parameter (saike::stereo_bub3::saturation_tag {}),
@@ -685,7 +685,7 @@ parameter_cpp_class_define (
   nonlinear_saturation,
   n_stereo_busses,
   param_common (
-    "Saturation",
+    "Sat",
     declptr<liteon::nonlinear>(),
     declptr<liteon::nonlinear::saturation_tag>()),
   liteon::nonlinear::get_parameter (liteon::nonlinear::saturation_tag {}),
@@ -695,7 +695,7 @@ parameter_cpp_class_define (
   nonlinear_fluctuation,
   n_stereo_busses,
   param_common (
-    "Fluctuation",
+    "Fluctu",
     declptr<liteon::nonlinear>(),
     declptr<liteon::nonlinear::fluctuation_tag>()),
   liteon::nonlinear::get_parameter (liteon::nonlinear::fluctuation_tag {}),
@@ -705,7 +705,7 @@ parameter_cpp_class_define (
   nonlinear_noise_floor,
   n_stereo_busses,
   param_common (
-    "Noise Floor",
+    "Noise Flr",
     declptr<liteon::nonlinear>(),
     declptr<liteon::nonlinear::noise_floor_tag>()),
   liteon::nonlinear::get_parameter (liteon::nonlinear::noise_floor_tag {}),
@@ -763,7 +763,7 @@ parameter_cpp_class_define (
   stereo_tilt_frequency,
   n_stereo_busses,
   param_common (
-    "Frequency",
+    "Freq",
     declptr<liteon::stereo_tilt>(),
     declptr<liteon::stereo_tilt::frequency_tag>()),
   liteon::stereo_tilt::get_parameter (liteon::stereo_tilt::frequency_tag {}),
@@ -878,7 +878,7 @@ parameter_cpp_class_define (
   transience_attack_amt,
   n_stereo_busses,
   param_common (
-    "Attack Amt",
+    "Attk Amt",
     declptr<updownsampled<saike::transience>>(),
     declptr<saike::transience::strength_tag>()),
   saike::transience::get_parameter (saike::transience::strength_tag {}),
@@ -898,7 +898,7 @@ parameter_cpp_class_define (
   transience_decay_amt,
   n_stereo_busses,
   param_common (
-    "Decay Amt",
+    "Dec Amt",
     declptr<updownsampled<saike::transience>>(),
     declptr<saike::transience::strength2_tag>()),
   saike::transience::get_parameter (saike::transience::strength2_tag {}),
@@ -957,7 +957,7 @@ parameter_cpp_class_define (
   slax_emphasis,
   n_stereo_busses,
   param_common (
-    "Emphasis",
+    "Empha",
     declptr<updownsampled<sonic_anomaly::slax>>(),
     declptr<sonic_anomaly::slax::emphasis_tag>()),
   sonic_anomaly::slax::get_parameter (sonic_anomaly::slax::emphasis_tag {}),
@@ -1067,7 +1067,7 @@ parameter_cpp_class_define (
   vola2_emphasis,
   n_stereo_busses,
   param_common (
-    "Emphasis",
+    "Empha",
     declptr<sonic_anomaly::vola2>(),
     declptr<sonic_anomaly::vola2::emphasis_tag>()),
   sonic_anomaly::vola2::get_parameter (sonic_anomaly::vola2::emphasis_tag {}),
@@ -1289,7 +1289,7 @@ parameter_cpp_class_define (
   atlantis_detune_shift,
   n_stereo_busses,
   param_common (
-    "Detune Bias",
+    "Dtune Bias",
     declptr<geraint_luff::atlantis_reverb>(),
     declptr<geraint_luff::atlantis_reverb::detune_shift_bias_tag>()),
   geraint_luff::atlantis_reverb::get_parameter (
@@ -1300,7 +1300,7 @@ parameter_cpp_class_define (
   atlantis_detune_spd,
   n_stereo_busses,
   param_common (
-    "Detune Spd",
+    "Dtune Spd",
     declptr<geraint_luff::atlantis_reverb>(),
     declptr<geraint_luff::atlantis_reverb::detune_cents_per_second_tag>()),
   geraint_luff::atlantis_reverb::get_parameter (
@@ -1344,7 +1344,7 @@ parameter_cpp_class_define (
   atlantis_damping_low,
   n_stereo_busses,
   param_common (
-    "Damp Low",
+    "Damp L",
     declptr<geraint_luff::atlantis_reverb>(),
     declptr<geraint_luff::atlantis_reverb::low_damping_hz_tag>()),
   geraint_luff::atlantis_reverb::get_parameter (
@@ -1355,7 +1355,7 @@ parameter_cpp_class_define (
   atlantis_damping_high,
   n_stereo_busses,
   param_common (
-    "Damp High",
+    "Damp H",
     declptr<geraint_luff::atlantis_reverb>(),
     declptr<geraint_luff::atlantis_reverb::high_damping_hz_tag>()),
   geraint_luff::atlantis_reverb::get_parameter (
@@ -1414,7 +1414,7 @@ parameter_cpp_class_define (
   echo_cycles_delay_beats,
   n_stereo_busses,
   param_common (
-    "Delay Sync",
+    "Del Sync",
     declptr<geraint_luff::echo_cycles>(),
     declptr<geraint_luff::echo_cycles::delay_beats_tag>()),
   geraint_luff::echo_cycles::get_parameter (
@@ -1694,7 +1694,7 @@ parameter_cpp_class_define (
   spring_box_density_sync,
   n_stereo_busses,
   param_common (
-    "Density Sync",
+    "Dens Sync",
     declptr<geraint_luff::spring_box>(),
     declptr<geraint_luff::spring_box::density_sync_tag>()),
   geraint_luff::spring_box::get_parameter (
@@ -1705,7 +1705,7 @@ parameter_cpp_class_define (
   spring_box_feedback,
   n_stereo_busses,
   param_common (
-    "Feedback",
+    "Feedbk",
     declptr<geraint_luff::spring_box>(),
     declptr<geraint_luff::spring_box::feedback_tag>()),
   geraint_luff::spring_box::get_parameter (
@@ -1804,7 +1804,7 @@ parameter_cpp_class_define (
   sandwitch_amp_asymmetry,
   n_stereo_busses,
   param_common (
-    "Asymmetry",
+    "Asym",
     declptr<geraint_luff::sandwitch_amp>(),
     declptr<geraint_luff::sandwitch_amp::asymmetry_tag>()),
   geraint_luff::sandwitch_amp::get_parameter (
@@ -1826,7 +1826,7 @@ parameter_cpp_class_define (
   sandwitch_amp_distortion_width,
   n_stereo_busses,
   param_common (
-    "Dist Width",
+    "Dist Wd",
     declptr<geraint_luff::sandwitch_amp>(),
     declptr<geraint_luff::sandwitch_amp::distortion_width_tag>()),
   geraint_luff::sandwitch_amp::get_parameter (
@@ -1837,7 +1837,7 @@ parameter_cpp_class_define (
   sandwitch_amp_filter_freq,
   n_stereo_busses,
   param_common (
-    "Filter Freq",
+    "Filter F",
     declptr<geraint_luff::sandwitch_amp>(),
     declptr<geraint_luff::sandwitch_amp::filter_freq_tag>()),
   geraint_luff::sandwitch_amp::get_parameter (
@@ -1848,7 +1848,7 @@ parameter_cpp_class_define (
   sandwitch_amp_filter_gain,
   n_stereo_busses,
   param_common (
-    "Filter Gain",
+    "Filter G",
     declptr<geraint_luff::sandwitch_amp>(),
     declptr<geraint_luff::sandwitch_amp::filter_gain_tag>()),
   geraint_luff::sandwitch_amp::get_parameter (
@@ -1859,7 +1859,7 @@ parameter_cpp_class_define (
   sandwitch_amp_bandwidth_octaves,
   n_stereo_busses,
   param_common (
-    "Bandwidth",
+    "BW",
     declptr<geraint_luff::sandwitch_amp>(),
     declptr<geraint_luff::sandwitch_amp::bandwidth_octaves_tag>()),
   geraint_luff::sandwitch_amp::get_parameter (
@@ -1891,7 +1891,7 @@ parameter_cpp_class_define (
   bbd_echo_feedback,
   n_stereo_busses,
   param_common (
-    "Feedback",
+    "Feedbk",
     declptr<witti::bbd_echo_stereo>(),
     declptr<witti::bbd_echo_stereo::feedback_tag>()),
   witti::bbd_echo_stereo::get_parameter (
@@ -1913,7 +1913,7 @@ parameter_cpp_class_define (
   bbd_echo_lfo_speed,
   n_stereo_busses,
   param_common (
-    "Lfo Speed",
+    "Lfo Spd",
     declptr<witti::bbd_echo_stereo>(),
     declptr<witti::bbd_echo_stereo::lfo_speed_tag>()),
   witti::bbd_echo_stereo::get_parameter (
@@ -1944,7 +1944,7 @@ parameter_cpp_class_define (
   bbd_echo_delay_sync_l,
   n_stereo_busses,
   param_common (
-    "SyncTime L",
+    "SynTime L",
     declptr<witti::bbd_echo_stereo>(),
     declptr<witti::bbd_echo_stereo::delay_sync_l_tag>()),
   witti::bbd_echo_stereo::get_parameter (
@@ -1955,7 +1955,7 @@ parameter_cpp_class_define (
   bbd_echo_delay_sync_r,
   n_stereo_busses,
   param_common (
-    "SyncTime R",
+    "SynTime R",
     declptr<witti::bbd_echo_stereo>(),
     declptr<witti::bbd_echo_stereo::delay_sync_r_tag>()),
   witti::bbd_echo_stereo::get_parameter (
@@ -2208,7 +2208,7 @@ parameter_cpp_class_define (
   df_plate_algorithm,
   n_stereo_busses,
   param_common (
-    "Algorithm",
+    "Algo",
     declptr<dragonfly::plate>(),
     declptr<dragonfly::plate::algorithm_tag>()),
   dragonfly::plate::get_parameter (dragonfly::plate::algorithm_tag {}),
@@ -2429,7 +2429,7 @@ parameter_cpp_class_define (
   df_hall_modulation,
   n_stereo_busses,
   param_common (
-    "Modulation",
+    "Mod",
     declptr<dragonfly::hall>(),
     declptr<dragonfly::hall::modulation_tag>()),
   dragonfly::hall::get_parameter (dragonfly::hall::modulation_tag {}),
@@ -2648,7 +2648,7 @@ parameter_cpp_class_define (
   _4x4_low_drive,
   n_stereo_busses,
   param_common (
-    "Low Drive",
+    "L< Drive",
     declptr<sstillwell::_4x4>(),
     declptr<sstillwell::_4x4::low_drive_tag>()),
   sstillwell::_4x4::get_parameter (sstillwell::_4x4::low_drive_tag {}),
@@ -2658,7 +2658,7 @@ parameter_cpp_class_define (
   _4x4_mid_drive,
   n_stereo_busses,
   param_common (
-    "Mid Drive",
+    "M Drive",
     declptr<sstillwell::_4x4>(),
     declptr<sstillwell::_4x4::mid_drive_tag>()),
   sstillwell::_4x4::get_parameter (sstillwell::_4x4::mid_drive_tag {}),
@@ -2668,7 +2668,7 @@ parameter_cpp_class_define (
   _4x4_high_drive,
   n_stereo_busses,
   param_common (
-    "High Drive",
+    "H Drive",
     declptr<sstillwell::_4x4>(),
     declptr<sstillwell::_4x4::high_drive_tag>()),
   sstillwell::_4x4::get_parameter (sstillwell::_4x4::high_drive_tag {}),
@@ -2678,7 +2678,7 @@ parameter_cpp_class_define (
   _4x4_low_gain,
   n_stereo_busses,
   param_common (
-    "Low Gain",
+    "L Gain",
     declptr<sstillwell::_4x4>(),
     declptr<sstillwell::_4x4::low_gain_tag>()),
   sstillwell::_4x4::get_parameter (sstillwell::_4x4::low_gain_tag {}),
@@ -2688,7 +2688,7 @@ parameter_cpp_class_define (
   _4x4_mid_gain,
   n_stereo_busses,
   param_common (
-    "Mid Gain",
+    "M Gain",
     declptr<sstillwell::_4x4>(),
     declptr<sstillwell::_4x4::mid_gain_tag>()),
   sstillwell::_4x4::get_parameter (sstillwell::_4x4::mid_gain_tag {}),
@@ -2698,7 +2698,7 @@ parameter_cpp_class_define (
   _4x4_high_gain,
   n_stereo_busses,
   param_common (
-    "High Gain",
+    "H Gain",
     declptr<sstillwell::_4x4>(),
     declptr<sstillwell::_4x4::high_gain_tag>()),
   sstillwell::_4x4::get_parameter (sstillwell::_4x4::high_gain_tag {}),
@@ -2708,7 +2708,7 @@ parameter_cpp_class_define (
   _4x4_low_mid_freq,
   n_stereo_busses,
   param_common (
-    "Lo/Mid Freq",
+    "L/M Freq",
     declptr<sstillwell::_4x4>(),
     declptr<sstillwell::_4x4::low_mid_freq_tag>()),
   sstillwell::_4x4::get_parameter (sstillwell::_4x4::low_mid_freq_tag {}),
@@ -2718,7 +2718,7 @@ parameter_cpp_class_define (
   _4x4_mid_high_freq,
   n_stereo_busses,
   param_common (
-    "Mid/Hi Freq",
+    "M/H Freq",
     declptr<sstillwell::_4x4>(),
     declptr<sstillwell::_4x4::mid_high_freq_tag>()),
   sstillwell::_4x4::get_parameter (sstillwell::_4x4::mid_high_freq_tag {}),
@@ -2739,7 +2739,7 @@ parameter_cpp_class_define (
   _1175_threshold,
   n_stereo_busses,
   param_common (
-    "Threshold",
+    "Thres",
     declptr<updownsampled<sstillwell::_1175>>(),
     declptr<sstillwell::_1175::threshold_tag>()),
   sstillwell::_1175::get_parameter (sstillwell::_1175::threshold_tag {}),
@@ -2807,7 +2807,7 @@ parameter_cpp_class_define (
   fairly_childish_threshold,
   n_stereo_busses,
   param_common (
-    "Threshold",
+    "Thres",
     declptr<updownsampled<sstillwell::fairly_childish>>(),
     declptr<sstillwell::fairly_childish::threshold_tag>()),
   sstillwell::fairly_childish::get_parameter (
@@ -2904,7 +2904,7 @@ parameter_cpp_class_define (
   huge_booty_frequency,
   n_stereo_busses,
   param_common (
-    "Frequency",
+    "Freq",
     declptr<sstillwell::huge_booty>(),
     declptr<sstillwell::huge_booty::frequency_tag>()),
   sstillwell::huge_booty::get_parameter (
@@ -2928,7 +2928,7 @@ parameter_cpp_class_define (
   major_tom_threshold,
   n_stereo_busses,
   param_common (
-    "Threshold",
+    "Thres",
     declptr<updownsampled<sstillwell::major_tom>>(),
     declptr<sstillwell::major_tom::threshold_tag>()),
   sstillwell::major_tom::get_parameter (
@@ -3024,7 +3024,7 @@ parameter_cpp_class_define (
   master_tom_threshold,
   n_stereo_busses,
   param_common (
-    "Threshold",
+    "Thres",
     declptr<sstillwell::master_tom>(),
     declptr<sstillwell::master_tom::threshold_tag>()),
   sstillwell::master_tom::get_parameter (
@@ -3107,7 +3107,7 @@ parameter_cpp_class_define (
   event_horizon_2_threshold,
   n_stereo_busses,
   param_common (
-    "Threshold",
+    "Thres",
     declptr<updownsampled<sstillwell::event_horizon_2>>(),
     declptr<sstillwell::event_horizon_2::threshold_tag>()),
   sstillwell::event_horizon_2::get_parameter (
@@ -3167,7 +3167,7 @@ parameter_cpp_class_define (
   rbj1073_low_shelf,
   n_stereo_busses,
   param_common (
-    "Low Shelf",
+    "L Shelf",
     declptr<sstillwell::rbj1073>(),
     declptr<sstillwell::rbj1073::low_shelf_tag>()),
   sstillwell::rbj1073::get_parameter (sstillwell::rbj1073::low_shelf_tag {}),
@@ -3177,7 +3177,7 @@ parameter_cpp_class_define (
   rbj1073_low_gain,
   n_stereo_busses,
   param_common (
-    "Low Gain",
+    "L Gain",
     declptr<sstillwell::rbj1073>(),
     declptr<sstillwell::rbj1073::low_gain_tag>()),
   sstillwell::rbj1073::get_parameter (sstillwell::rbj1073::low_gain_tag {}),
@@ -3187,7 +3187,7 @@ parameter_cpp_class_define (
   rbj1073_mid_freq,
   n_stereo_busses,
   param_common (
-    "Mid Freq",
+    "M Freq",
     declptr<sstillwell::rbj1073>(),
     declptr<sstillwell::rbj1073::mid_freq_tag>()),
   sstillwell::rbj1073::get_parameter (sstillwell::rbj1073::mid_freq_tag {}),
@@ -3197,7 +3197,7 @@ parameter_cpp_class_define (
   rbj1073_mid_gain,
   n_stereo_busses,
   param_common (
-    "Mid Gain",
+    "M Gain",
     declptr<sstillwell::rbj1073>(),
     declptr<sstillwell::rbj1073::mid_gain_tag>()),
   sstillwell::rbj1073::get_parameter (sstillwell::rbj1073::mid_gain_tag {}),
@@ -3334,7 +3334,7 @@ parameter_cpp_class_define (
   gate_expander_gatethresh,
   n_stereo_busses,
   param_common (
-    "Threshold",
+    "Thres",
     declptr<updownsampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::gatethresh_tag>()),
   chokehold::gate_expander::get_parameter (
@@ -3356,7 +3356,7 @@ parameter_cpp_class_define (
   gate_expander_hysteresis,
   n_stereo_busses,
   param_common (
-    "Hysteresis",
+    "Hyst",
     declptr<updownsampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::gatehyst_tag>()),
   chokehold::gate_expander::get_parameter (
@@ -3411,7 +3411,7 @@ parameter_cpp_class_define (
   gate_expander_channel_mode,
   n_stereo_busses,
   param_common (
-    "Chnl Mode",
+    "Chnl Mod",
     declptr<updownsampled<chokehold::gate_expander>>(),
     declptr<chokehold::gate_expander::routing_tag>()),
   chokehold::gate_expander::get_parameter (
@@ -3456,7 +3456,7 @@ parameter_cpp_class_define (
   track_comp_compfeedbk,
   n_stereo_busses,
   param_common (
-    "Feedback",
+    "Feedbk",
     declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::compfeedbk_tag>()),
   chokehold::track_comp::get_parameter (
@@ -3467,7 +3467,7 @@ parameter_cpp_class_define (
   track_comp_compwindow,
   n_stereo_busses,
   param_common (
-    "Feedb RMS",
+    "FB RMS",
     declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::compwindow_tag>()),
   chokehold::track_comp::get_parameter (
@@ -3478,7 +3478,7 @@ parameter_cpp_class_define (
   track_comp_compthresh,
   n_stereo_busses,
   param_common (
-    "Threshold",
+    "Thres",
     declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::compthresh_tag>()),
   chokehold::track_comp::get_parameter (
@@ -3574,7 +3574,7 @@ parameter_cpp_class_define (
   track_comp_saturation,
   n_stereo_busses,
   param_common (
-    "Saturation",
+    "Sat",
     declptr<updownsampled<chokehold::track_comp>>(),
     declptr<chokehold::track_comp::saturation_tag>()),
   chokehold::track_comp::get_parameter (
@@ -3762,7 +3762,7 @@ parameter_cpp_class_define (
   sound_delay_l_sync,
   n_stereo_busses,
   param_common (
-    "Left Sync",
+    "L Sync",
     declptr<sound_delay>(),
     declptr<sound_delay::delay_beats_l_tag>()),
   sound_delay::get_parameter (sound_delay::delay_beats_l_tag {}),
@@ -3772,7 +3772,7 @@ parameter_cpp_class_define (
   sound_delay_r_sync,
   n_stereo_busses,
   param_common (
-    "Right Sync",
+    "R Sync",
     declptr<sound_delay>(),
     declptr<sound_delay::delay_beats_r_tag>()),
   sound_delay::get_parameter (sound_delay::delay_beats_r_tag {}),
@@ -3790,7 +3790,7 @@ parameter_cpp_class_define (
   zebigchorus3_algo,
   n_stereo_busses,
   param_common (
-    "Algorithm",
+    "Algo",
     declptr<smashed_transistors::ze_big_chorus3>(),
     declptr<smashed_transistors::ze_big_chorus3::sl_algo_tag>()),
   smashed_transistors::ze_big_chorus3::get_parameter (
@@ -3878,7 +3878,7 @@ parameter_cpp_class_define (
   zebigchorus3_gratedisp,
   n_stereo_busses,
   param_common (
-    "G Rate Disp",
+    "G R Disper",
     declptr<smashed_transistors::ze_big_chorus3>(),
     declptr<smashed_transistors::ze_big_chorus3::sl_gratedisp_tag>()),
   smashed_transistors::ze_big_chorus3::get_parameter (
@@ -4035,7 +4035,7 @@ parameter_cpp_class_define (
   zelittlechorus_fb,
   n_stereo_busses,
   param_common (
-    "Feedback",
+    "Feedbk",
     declptr<smashed_transistors::ze_little_scanner_chorus>(),
     declptr<smashed_transistors::ze_little_scanner_chorus::sl_fb_tag>()),
   smashed_transistors::ze_little_scanner_chorus::get_parameter (
@@ -4125,7 +4125,7 @@ parameter_cpp_class_define (
   chow_phaser_feedback,
   n_stereo_busses,
   param_common (
-    "Feedback",
+    "Feedbk",
     declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::feedback_tag>()),
   chow::phaser::get_parameter (chow::phaser::feedback_tag {}),
@@ -4135,7 +4135,7 @@ parameter_cpp_class_define (
   chow_phaser_modulation,
   n_stereo_busses,
   param_common (
-    "Modulation",
+    "Mod",
     declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::modulation_tag>()),
   chow::phaser::get_parameter (chow::phaser::modulation_tag {}),
@@ -4175,7 +4175,7 @@ parameter_cpp_class_define (
   chow_phaser_src_channel,
   n_stereo_busses,
   param_common (
-    "Channel In",
+    "Chnl In",
     declptr<updownsampled<chow::phaser>>(),
     declptr<chow::phaser::src_channel_tag>()),
   chow::phaser::get_parameter (chow::phaser::src_channel_tag {}),
@@ -4260,7 +4260,7 @@ parameter_cpp_class_define (
   tal_reverb2_predelay_sync,
   n_stereo_busses,
   param_common (
-    "Predel Sync",
+    "PreDly Syn",
     declptr<tal::reverb2>(),
     declptr<tal::reverb2::predelay_sync_tag>()),
   tal::reverb2::get_parameter (tal::reverb2::predelay_sync_tag {}),
@@ -4270,7 +4270,7 @@ parameter_cpp_class_define (
   tal_reverb2_lowshelf_frequency,
   n_stereo_busses,
   param_common (
-    "LowCut Frq",
+    "LCut Frq",
     declptr<tal::reverb2>(),
     declptr<tal::reverb2::lowshelf_frequency_tag>()),
   tal::reverb2::get_parameter (tal::reverb2::lowshelf_frequency_tag {}),
@@ -4300,7 +4300,7 @@ parameter_cpp_class_define (
   tal_reverb2_lowshelf_gain,
   n_stereo_busses,
   param_common (
-    "LowCut Amt",
+    "LCut Amt",
     declptr<tal::reverb2>(),
     declptr<tal::reverb2::lowshelf_gain_tag>()),
   tal::reverb2::get_parameter (tal::reverb2::lowshelf_gain_tag {}),
@@ -4465,7 +4465,7 @@ parameter_cpp_class_define (
   fdnverb_feedback,
   n_stereo_busses,
   param_common (
-    "Feedback",
+    "Feedbk",
     declptr<shabtronic::fdn_verb>(),
     declptr<shabtronic::fdn_verb::feedback_tag>()),
   shabtronic::fdn_verb::get_parameter (shabtronic::fdn_verb::feedback_tag {}),
@@ -4679,7 +4679,7 @@ parameter_cpp_class_define (
   myphaser_feedback,
   n_stereo_busses,
   param_common (
-    "Feedback",
+    "Feedbk",
     declptr<upsampled<phaser>>(),
     declptr<phaser::feedback_tag>()),
   phaser::get_parameter (phaser::feedback_tag {}),
@@ -4930,7 +4930,7 @@ parameter_cpp_class_define (
   filter2x_band1_topology,
   n_stereo_busses,
   param_common (
-    "1.Topology",
+    "1.Topo",
     declptr<oversampled<filter2x>>(),
     declptr<filter2x::band1_topology_tag>()),
   filter2x::get_parameter (filter2x::band1_topology_tag {}),
@@ -4980,7 +4980,7 @@ parameter_cpp_class_define (
   filter2x_band1_feedback,
   n_stereo_busses,
   param_common (
-    "1.Feedback",
+    "1.Feedbk",
     declptr<oversampled<filter2x>>(),
     declptr<filter2x::band1_feedback_tag>()),
   filter2x::get_parameter (filter2x::band1_feedback_tag {}),
@@ -5010,7 +5010,7 @@ parameter_cpp_class_define (
   filter2x_band2_topology,
   n_stereo_busses,
   param_common (
-    "2.Topology",
+    "2.Topo",
     declptr<oversampled<filter2x>>(),
     declptr<filter2x::band2_topology_tag>()),
   filter2x::get_parameter (filter2x::band2_topology_tag {}),
@@ -5060,7 +5060,7 @@ parameter_cpp_class_define (
   filter2x_band2_feedback,
   n_stereo_busses,
   param_common (
-    "2.Feedback",
+    "2.Feedbk",
     declptr<oversampled<filter2x>>(),
     declptr<filter2x::band2_feedback_tag>()),
   filter2x::get_parameter (filter2x::band2_feedback_tag {}),
@@ -5398,7 +5398,7 @@ parameter_cpp_class_define (
   saturation_feedback,
   n_stereo_busses,
   param_common (
-    "Feedback",
+    "Feedbk",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::feedback_tag>()),
   saturation::get_parameter (saturation::feedback_tag {}),
