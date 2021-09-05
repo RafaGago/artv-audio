@@ -31,7 +31,10 @@ namespace artv { namespace sonic_anomaly {
 struct transpire {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::dynamics;
+  static constexpr dsp_types dsp_type  = dsp_types::dynamics;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
 private:
   // definitions for environment function calls
@@ -564,8 +567,10 @@ private:
   //----------------------------------------------------------------------------
 public:
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
     double inl      = 0.;
     double inr      = 0.;
     double mtr$over = 0.;
@@ -602,8 +607,10 @@ public:
     norm = (jsfx_rand (1.) * 0.000000000000001);
     ;
     for (int $$i = 0, $$end = samples; $$i < $$end; ++$$i) {
-      T& spl0 = chnls[0][$$i];
-      T& spl1 = chnls[1][$$i];
+      auto& spl0 = outs[0][i];
+      auto& spl1 = outs[1][i];
+      spl0       = ins[0][i];
+      spl1       = ins[1][i];
 
       inl = spl0;
       inr = spl1;

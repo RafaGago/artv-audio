@@ -43,14 +43,16 @@ public:
     fpNShapeR = 0.0;
 #endif
   }
-  //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, int samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
-    T const* in1  = chnls[0];
-    T const* in2  = chnls[1];
-    T*       out1 = chnls[0];
-    T*       out2 = chnls[1];
+    assert (outs.size() >= 2);
+    assert (ins.size() >= 2);
+
+    T const* in1  = ins[0];
+    T const* in2  = ins[1];
+    T*       out1 = outs[0];
+    T*       out2 = outs[1];
 
     double overallscale = 1.0;
     overallscale /= 44100.0;
@@ -75,7 +77,7 @@ public:
     if (gainchase < 0.0)
       gainchase = inputgain;
 
-    while (--samples >= 0) {
+    while (--samples < ((uint) -1ull)) {
       inputSampleL = *in1;
       inputSampleR = *in2;
 #if AIRWINDOWS_DENORMALIZATION_ENABLE
@@ -297,15 +299,18 @@ public:
   //----------------------------------------------------------------------------
   template <class T>
   void process_block_adding (
-    std::array<T*, 2>       dst,
-    std::array<T const*, 2> src,
-    int                     samples,
-    bool                    dst_sum)
+    crange<T*>       outs,
+    crange<T const*> ins,
+    uint             samples,
+    bool             dst_sum)
   {
-    T const* in1  = src[0];
-    T const* in2  = src[1];
-    T*       out1 = dst[0];
-    T*       out2 = dst[1];
+    assert (outs.size() >= 2);
+    assert (ins.size() >= 2);
+
+    T const* in1  = ins[0];
+    T const* in2  = ins[1];
+    T*       out1 = outs[0];
+    T*       out2 = outs[1];
 
     double overallscale = 1.0;
     overallscale /= 44100.0;
@@ -330,7 +335,7 @@ public:
     if (gainchase < 0.0)
       gainchase = inputgain;
 
-    while (--samples >= 0) {
+    while (--samples < ((uint) -1ull)) {
       inputSampleL = *in1;
       inputSampleR = *in2;
 #if AIRWINDOWS_DENORMALIZATION_ENABLE
@@ -507,21 +512,21 @@ public:
   }
   //----------------------------------------------------------------------------
   void process (
-    std::array<float*, 2>       dst,
-    std::array<float const*, 2> src,
-    uint                        samples,
-    bool                        dst_sum) override
+    crange<float*>       outs,
+    crange<float const*> ins,
+    uint                 samples,
+    bool                 dst_sum) override
   {
-    process_block_adding (dst, src, samples, dst_sum);
+    process_block_adding (outs, ins, samples, dst_sum);
   }
   //----------------------------------------------------------------------------
   void process (
-    std::array<double*, 2>       dst,
-    std::array<double const*, 2> src,
-    uint                         samples,
-    bool                         dst_sum) override
+    crange<double*>       outs,
+    crange<double const*> ins,
+    uint                  samples,
+    bool                  dst_sum) override
   {
-    process_block_adding (dst, src, samples, dst_sum);
+    process_block_adding (outs, ins, samples, dst_sum);
   }
   // Parameters (call once per block) ------------------------------------------
   void set (console5bus::drive_tag, float value) { A = db_to_gain (value); }

@@ -20,4 +20,10 @@ enum class dsp_types {
   other
 };
 
-}
+enum class bus_types {
+  dummy,
+  mono,
+  stereo,
+};
+
+} // namespace artv

@@ -47,12 +47,15 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, int samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
-    T const* in1  = chnls[0];
-    T const* in2  = chnls[1];
-    T*       out1 = chnls[0];
-    T*       out2 = chnls[1];
+    assert (outs.size() >= 2);
+    assert (ins.size() >= 2);
+
+    T const* in1  = ins[0];
+    T const* in2  = ins[1];
+    T*       out1 = outs[0];
+    T*       out2 = outs[1];
 
     long double inputgain = A * 1.03;
 
@@ -83,7 +86,7 @@ public:
     biquadB[5] = 2.0 * (K * K - 1.0) * norm;
     biquadB[6] = (1.0 - K / biquadB[1] + K * K) * norm;
 
-    while (--samples >= 0) {
+    while (--samples < ((uint) -1ull)) {
       long double inputSampleL = *in1;
       long double inputSampleR = *in2;
 #if AIRWINDOWS_FP_DITHER
@@ -244,15 +247,18 @@ public:
   //----------------------------------------------------------------------------
   template <class T>
   void process_block_adding (
-    std::array<T*, 2>       dst,
-    std::array<T const*, 2> src,
-    int                     samples,
-    bool                    dst_sum)
+    crange<T*>       outs,
+    crange<T const*> ins,
+    uint             samples,
+    bool             dst_sum)
   {
-    T const* in1  = src[0];
-    T const* in2  = src[1];
-    T*       out1 = dst[0];
-    T*       out2 = dst[1];
+    assert (outs.size() >= 2);
+    assert (ins.size() >= 2);
+
+    T const* in1  = ins[0];
+    T const* in2  = ins[1];
+    T*       out1 = outs[0];
+    T*       out2 = outs[1];
 
     long double inputgain = A * 1.272019649514069;
     // which is, in fact, the square root of 1.618033988749894848204586...
@@ -278,7 +284,7 @@ public:
     biquadA[5]  = 2.0 * (K * K - 1.0) * norm;
     biquadA[6]  = (1.0 - K / biquadA[1] + K * K) * norm;
 
-    while (--samples >= 0) {
+    while (--samples < ((uint) -1ull)) {
       long double inputSampleL = *in1;
       long double inputSampleR = *in2;
 #if AIRWINDOWS_FP_DITHER
@@ -382,21 +388,21 @@ public:
   }
   //----------------------------------------------------------------------------
   void process (
-    std::array<float*, 2>       dst,
-    std::array<float const*, 2> src,
-    uint                        samples,
-    bool                        dst_sum) override
+    crange<float*>       outs,
+    crange<float const*> ins,
+    uint                 samples,
+    bool                 dst_sum) override
   {
-    process_block_adding (dst, src, samples, dst_sum);
+    process_block_adding (outs, ins, samples, dst_sum);
   }
   //----------------------------------------------------------------------------
   void process (
-    std::array<double*, 2>       dst,
-    std::array<double const*, 2> src,
-    uint                         samples,
-    bool                         dst_sum) override
+    crange<double*>       outs,
+    crange<double const*> ins,
+    uint                  samples,
+    bool                  dst_sum) override
   {
-    process_block_adding (dst, src, samples, dst_sum);
+    process_block_adding (outs, ins, samples, dst_sum);
   }
   // Parameters (call once per block) ------------------------------------------
   void set (console7bus::drive_tag, float value)

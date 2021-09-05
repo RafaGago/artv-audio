@@ -100,20 +100,23 @@ public:
     fx_reset_fn (_pc);
   }
   //----------------------------------------------------------------------------
-  void upsample (std::array<T*, 2> chnls, uint samples, interpolator_type& up)
-  {}
+  using processfn = std::function<void (crange<T*>, crange<T const*>, uint)>;
   //----------------------------------------------------------------------------
   template <bool downsample>
-  void process_block_replacing (
-    std::array<T*, 2>                             chnls,
-    uint                                          samples,
-    std::function<void (std::array<T*, 2>, uint)> fx_process_block_replacing,
-    interpolator_type&                            interpolator,
-    decimator_type*                               decimator)
+  void process (
+    crange<T*>         outs,
+    crange<T const*>   ins,
+    int                samples,
+    processfn          fx_process,
+    interpolator_type& interpolator,
+    decimator_type*    decimator)
   {
+    assert (outs.size() >= 2);
+    assert (ins.size() >= 2);
+
     if (_pc.oversampling_order == 0) {
       // fast path, oversampling disabled
-      fx_process_block_replacing (chnls, samples);
+      fx_process (outs, ins, samples);
       return;
     }
 
@@ -129,7 +132,7 @@ public:
       _work_buffers[1].get_write_buffer().data()};
 
     for (uint i = 0; i < samples; ++i) {
-      std::array<T, 2> interleaved {chnls[0][i], chnls[1][i]};
+      std::array<T, 2> interleaved {ins[0][i], ins[1][i]};
       uint             idx = (i << oversampling_order);
       auto             l   = make_crange (upsampled[0] + idx, ratio);
       auto             r   = make_crange (upsampled[1] + idx, ratio);
@@ -140,23 +143,28 @@ public:
       _work_buffers[0].get_read_buffer (n_frac_spl).data(),
       _work_buffers[1].get_read_buffer (n_frac_spl).data()};
 
-    fx_process_block_replacing (
-      upsampled_frac_corrected, (samples << oversampling_order));
+    auto c_upsampled_frac_corrected
+      = array_const_cast<T const*> (upsampled_frac_corrected);
+
+    fx_process (
+      upsampled_frac_corrected,
+      c_upsampled_frac_corrected,
+      (samples << oversampling_order));
 
     for (uint i = 0; i < samples; ++i) {
       uint idx = (i << oversampling_order);
       if constexpr (downsample) {
-        auto l      = make_crange (upsampled_frac_corrected[0] + idx, ratio);
-        auto r      = make_crange (upsampled_frac_corrected[1] + idx, ratio);
-        auto ret    = decimator->tick ({l, r});
-        chnls[0][i] = ret[0];
-        chnls[1][i] = ret[1];
+        auto l     = make_crange (upsampled_frac_corrected[0] + idx, ratio);
+        auto r     = make_crange (upsampled_frac_corrected[1] + idx, ratio);
+        auto ret   = decimator->tick ({l, r});
+        outs[0][i] = ret[0];
+        outs[1][i] = ret[1];
       }
       else {
-        // just drop samples, on this configuration "fx_process_block_replacing"
+        // just drop samples, on this configuration "fx_process"
         // is assumed to not introduce aliasing
-        chnls[0][i] = upsampled_frac_corrected[0][idx];
-        chnls[1][i] = upsampled_frac_corrected[1][idx];
+        outs[0][i] = upsampled_frac_corrected[0][idx];
+        outs[1][i] = upsampled_frac_corrected[1][idx];
       }
     }
     for (uint c = 0; c < n_channels; ++c) {
@@ -243,7 +251,13 @@ class oversampled {
 public:
   static constexpr bool      downsample = downsamples::value;
   static constexpr dsp_types dsp_type   = fx::dsp_type;
+  static constexpr bus_types bus_type   = fx::bus_type;
   using fx_type                         = fx;
+  static constexpr uint n_inputs        = fx::n_inputs;
+  static constexpr uint n_outputs       = fx::n_outputs;
+  static_assert (n_inputs == 1 && n_outputs == 1, "Unsuported configuitation");
+  //----------------------------------------------------------------------------
+
   //----------------------------------------------------------------------------
   void set (oversampled_amount_tag, int v)
   {
@@ -288,18 +302,21 @@ public:
     _common.reset (pc, fx_reset);
   }
   //----------------------------------------------------------------------------
-  void process_block_replacing (std::array<T*, 2> chnls, uint samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
-    auto fx_process = [=] (std::array<T*, 2> c, uint s) {
-      _fx.process_block_replacing (c, s);
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
+    auto fx_process = [=] (crange<T*> o, crange<T const*> i, uint s) {
+      _fx.process (o, i, s);
     };
     if constexpr (downsample) {
-      _common.template process_block_replacing<downsample> (
-        chnls, samples, fx_process, _interpolator, &_decimator);
+      _common.template process<downsample> (
+        outs, ins, samples, fx_process, _interpolator, &_decimator);
     }
     else {
-      _common.template process_block_replacing<downsample> (
-        chnls, samples, fx_process, _interpolator, nullptr);
+      _common.template process<downsample> (
+        outs, ins, samples, fx_process, _interpolator, nullptr);
     }
   }
   //----------------------------------------------------------------------------

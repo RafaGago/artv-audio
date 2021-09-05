@@ -26,7 +26,10 @@ namespace artv { namespace geraint_luff {
 class sandwitch_amp {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::distortion;
+  static constexpr dsp_types dsp_type  = dsp_types::distortion;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   // definitions for environment function calls
 private:
@@ -472,8 +475,11 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint block_samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
     double avg       = 0.;
     double diff      = 0.;
     double left      = 0.;
@@ -499,8 +505,11 @@ public:
       init$update();
     };
     for (int $$i = 0, $$end = block_samples; $$i < $$end; ++$$i) {
-      auto& spl0 = chnls[0][$$i];
-      auto& spl1 = chnls[1][$$i];
+      auto& spl0 = outs[0][$$i];
+      auto& spl1 = outs[1][$$i];
+      spl0       = ins[0][$$i];
+      spl1       = ins[1][$$i];
+
       spl0 += 1e-15;
       spl1 += 1e-15;
       if (smoothing) {

@@ -23,7 +23,10 @@ namespace artv { namespace sstillwell {
 struct _1175 {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::dynamics;
+  static constexpr dsp_types dsp_type  = dsp_types::dynamics;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
 private:
   static double eel2_eq (double lhs, double rhs)
@@ -446,8 +449,10 @@ private:
   //----------------------------------------------------------------------------
 public:
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint block_samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
 
     double aspl0    = 0.;
     double aspl1    = 0.;
@@ -460,8 +465,10 @@ public:
     double ospl1    = 0.;
 
     for (int $$i = 0, $$end = block_samples; $$i < $$end; ++$$i) {
-      auto& spl0 = chnls[0][$$i];
-      auto& spl1 = chnls[1][$$i];
+      auto& spl0 = outs[0][$$i];
+      auto& spl1 = outs[1][$$i];
+      spl0       = ins[0][$$i];
+      spl1       = ins[1][$$i];
       ospl0      = spl0;
       ospl1      = spl1;
       aspl0      = std::abs (spl0);

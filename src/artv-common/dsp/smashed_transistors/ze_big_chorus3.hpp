@@ -20,7 +20,10 @@ namespace artv { namespace smashed_transistors {
 class ze_big_chorus3 {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::modulation;
+  static constexpr dsp_types dsp_type  = dsp_types::modulation;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   struct sl_algo_tag {};
 
@@ -285,8 +288,10 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
     if (_asl_algo != sl_algo || std::abs (sl_delay - _asl_delay) > 10.) {
       NAP_clear (_lines[0]);
       NAP_clear (_lines[1]);
@@ -361,16 +366,16 @@ public:
         _k = 0;
       }
 
-      double spl0 = chnls[0][i];
-      double spl1 = chnls[1][i];
+      double spl0 = ins[0][i];
+      double spl1 = ins[1][i];
       spl0 *= _gain;
       spl1 *= _gain;
-      double in0  = spl0;
-      double in1  = spl1;
-      spl0        = (this->*algo) (_lines[0], spl0);
-      spl1        = (this->*algo) (_lines[1], spl1);
-      chnls[0][i] = _gWet * softSat (spl0) + _gDry * in0;
-      chnls[1][i] = _gWet * softSat (spl1) + _gDry * in1;
+      double in0 = spl0;
+      double in1 = spl1;
+      spl0       = (this->*algo) (_lines[0], spl0);
+      spl1       = (this->*algo) (_lines[1], spl1);
+      outs[0][i] = _gWet * softSat (spl0) + _gDry * in0;
+      outs[1][i] = _gWet * softSat (spl1) + _gDry * in1;
     }
   }
   //----------------------------------------------------------------------------

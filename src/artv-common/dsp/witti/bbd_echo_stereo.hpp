@@ -15,7 +15,10 @@ namespace artv { namespace witti {
 struct bbd_echo_stereo {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::delay;
+  static constexpr dsp_types dsp_type  = dsp_types::delay;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   struct feedback_tag {};
   void set (feedback_tag, float v)
@@ -296,10 +299,18 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint block_samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
   {
-    _l.process_block_replacing (make_array (chnls[0]), block_samples);
-    _r.process_block_replacing (make_array (chnls[1]), block_samples);
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
+    for (uint i = 0; i < (uint) bus_type; ++i) {
+      if (unlikely (ins[i] != outs[i])) {
+        memcpy (outs[i], ins[i], block_samples * sizeof outs[i][0]);
+      }
+    }
+    _l.process (make_array (outs[0]), block_samples);
+    _r.process (make_array (outs[1]), block_samples);
   }
   //----------------------------------------------------------------------------
 private:

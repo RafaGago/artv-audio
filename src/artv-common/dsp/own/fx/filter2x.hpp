@@ -48,7 +48,10 @@ public:
     static constexpr uint ptype = (uint) Type;
   };
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::eq;
+  static constexpr dsp_types dsp_type  = dsp_types::eq;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   template <uint band>
   void set (param<band, paramtype::band_type>, int v)
@@ -327,18 +330,20 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
     for (uint block_smp = 0; block_smp < samples; block_smp += blocksize) {
       uint n_samples = std::min<uint> (blocksize, samples - block_smp);
 
       // both filters are parallel/operate on the same input
       std::array<double_x2, blocksize> in_cp;
       for (uint i = 0; i < blocksize; ++i) {
-        in_cp[i] = double_x2 {chnls[0][block_smp + i], chnls[0][block_smp + i]};
+        in_cp[i] = double_x2 {ins[0][block_smp + i], ins[0][block_smp + i]};
       }
-      memset (&chnls[0][block_smp], 0, n_samples * sizeof (T));
-      memset (&chnls[1][block_smp], 0, n_samples * sizeof (T));
+      memset (&outs[0][block_smp], 0, n_samples * sizeof (T));
+      memset (&outs[1][block_smp], 0, n_samples * sizeof (T));
 
       int  control_offset   = _control.tick (n_samples);
       bool is_control_block = control_offset >= 0;
@@ -540,8 +545,8 @@ public:
           out[i] *= smoothed_p.vars.post_drive;
           vec_clamp (out[i], -limit, limit);
 
-          chnls[0][block_smp + i] += out[i][0];
-          chnls[1][block_smp + i] += out[i][1];
+          outs[0][block_smp + i] += out[i][0];
+          outs[1][block_smp + i] += out[i][1];
         }
       }
     }

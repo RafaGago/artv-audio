@@ -174,7 +174,10 @@ static constexpr auto ms_param = float_param ("", -100.f, 100.f, 0.f, 0.01f);
 class dry_wet_mixer {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::mixer;
+  static constexpr dsp_types dsp_type  = dsp_types::mixer;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 2;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -197,10 +200,24 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (
-    std::array<T*, 2>       dryb,
-    std::array<T const*, 2> wetb,
-    uint                    samples)
+  void process_block (crange<T*> outs, crange<T const*> ins, int samples)
+  {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= ((uint) bus_type));
+
+    if (ins.size() == (uint) bus_type) {
+      process_block_dry_only (outs, ins, samples);
+    }
+    else {
+      process_block_dry_wet (outs, ins, samples);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void process_block_dry_wet (
+    crange<T*>       outs,
+    crange<T const*> ins,
+    uint             samples)
   {
     using simd                  = juce::dsp::SIMDRegister<T>;
     constexpr size_t simd_elems = simd::SIMDNumElements;
@@ -277,10 +294,15 @@ public:
         ++c[3];
       }
     };
+    for (uint i = 0; i < 2; ++i) {
+      if (unlikely (ins[i] != outs[i])) {
+        memcpy (outs[i], ins[i], samples * sizeof outs[i][0]);
+      }
+    }
     // this "const_cast" is because making "block_divide" const aware could be
     // a real mess. The wet channels are unnmodified.
     std::array<T*, 4> chnls
-      = {dryb[0], dryb[1], const_cast<T*> (wetb[0]), const_cast<T*> (wetb[1])};
+      = {outs[0], outs[1], const_cast<T*> (ins[2]), const_cast<T*> (ins[3])};
 
     block_divide (simd::SIMDRegisterSize, chnls, samples, vect, unvect);
   }
@@ -288,7 +310,10 @@ public:
   // this can be invoked when you know there is no wet signal, it skips dry
   // panning, but it doesn't skip dry M/S balance.
   template <class T>
-  void process_block_replacing (std::array<T*, 2> dryb, uint samples)
+  void process_block_dry_only (
+    crange<T*>       outs,
+    crange<T const*> ins,
+    uint             samples)
   {
     using simd                  = juce::dsp::SIMDRegister<T>;
     constexpr size_t simd_elems = simd::SIMDNumElements;
@@ -344,6 +369,16 @@ public:
         ++c[1];
       }
     };
+
+    for (uint i = 0; i < 2; ++i) {
+      if (unlikely (ins[i] != outs[i])) {
+        memcpy (outs[i], ins[i], samples * sizeof outs[i][0]);
+      }
+    }
+    // this "const_cast" is because making "block_divide" const aware could be
+    // a real mess. The wet channels are unnmodified.
+    std::array<T*, 2> dryb = {outs[0], outs[1]};
+
     block_divide (simd::SIMDRegisterSize, dryb, samples, vect, unvect);
 
     _gain[wet].l.skip (samples);

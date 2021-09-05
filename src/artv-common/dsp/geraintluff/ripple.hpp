@@ -31,7 +31,10 @@ namespace artv { namespace geraint_luff {
 class ripple {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::modulation;
+  static constexpr dsp_types dsp_type  = dsp_types::modulation;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
 private:
   // definitions for environment function calls
@@ -4088,8 +4091,14 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint block_samples)
+  void process (
+    crange<T*>       outs,
+    crange<T const*> ins,
+    uint             block_samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
     double beat_blockdelta        = 0.;
     double cycle_phase_adjustment = 0.;
     double cycle_phase_blockdelta = 0.;
@@ -6816,8 +6825,10 @@ public:
     cycle_phase -= std::floor (cycle_phase);
     ;
     for (int $$i = 0, $$end = block_samples; $$i < $$end; ++$$i) {
-      auto& spl0 = chnls[0][$$i];
-      auto& spl1 = chnls[1][$$i];
+      auto& spl0 = outs[0][$$i];
+      auto& spl1 = outs[1][$$i];
+      spl0       = ins[0][$$i];
+      spl1       = ins[1][$$i];
 
       spl0 = init$bank_filter (
         spl0 * gain,

@@ -15,7 +15,10 @@ private:
 
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::other;
+  static constexpr dsp_types dsp_type  = dsp_types::other;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   struct gain_tag {};
 
@@ -35,21 +38,24 @@ public:
     _gain = 1.f;
   }
   //----------------------------------------------------------------------------
-  void process_block_replacing (std::array<float*, 2> chnls, uint block_samples)
+  template <class T>
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
     for (uint i = 0; i < block_samples; ++i) {
-      std::array<sample_type, channels> in = {chnls[0][i], chnls[1][i]};
+      std::array<sample_type, channels> in = {ins[0][i], ins[1][i]};
       std::array<std::array<sample_type, ratio>, channels> upsampled;
       _up.tick ({make_crange (upsampled[0]), make_crange (upsampled[1])}, in);
 #if 1
       auto ret
         = _down.tick ({make_crange (upsampled[0]), make_crange (upsampled[1])});
-      chnls[0][i] = ret[0] * _gain;
-      chnls[1][i] = ret[1] * _gain;
+      outs[0][i] = ret[0] * _gain;
+      outs[1][i] = ret[1] * _gain;
 #else
       // only test upsampler...
-      chnls[0][i] = upsampled[0][0] * _gain;
-      chnls[1][i] = upsampled[1][0] * _gain;
+      outs[0][i] = upsampled[0][0] * _gain;
+      outs[1][i] = upsampled[1][0] * _gain;
 #endif
     }
   }

@@ -26,7 +26,10 @@ public:
   // DSP------------------------------------------------------------------------
   busscolors4() {}
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::exciter;
+  static constexpr dsp_types dsp_type  = dsp_types::exciter;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -81,12 +84,15 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, int samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
-    T* in1  = chnls[0];
-    T* in2  = chnls[1];
-    T* out1 = chnls[0];
-    T* out2 = chnls[1];
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
+    T const* in1  = ins[0];
+    T const* in2  = ins[1];
+    T*       out1 = outs[0];
+    T*       out2 = outs[1];
 
     double overallscale = 1.0;
     overallscale /= 44100.0;
@@ -130,7 +136,7 @@ public:
     double wet = D;
     double dry = 1.0 - wet;
 
-    while (--samples >= 0) {
+    while (--samples < ((uint) -1ull)) {
       inputSampleL = *in1;
       inputSampleR = *in2;
 #if AIRWINDOWS_DENORMALIZATION_ENABLE

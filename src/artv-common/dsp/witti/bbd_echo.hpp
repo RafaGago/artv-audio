@@ -28,8 +28,11 @@ namespace artv { namespace witti {
 struct bbd_echo {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::delay;
-
+  static constexpr dsp_types dsp_type  = dsp_types::delay;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
+  //----------------------------------------------------------------------------
 private:
   // definitions for environment function calls
   static double eel2_eq (double lhs, double rhs)
@@ -1022,8 +1025,10 @@ private:
   //----------------------------------------------------------------------------
 public:
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint block_samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
     double a     = 0.;
     double b     = 0.;
     double c     = 0.;
@@ -1041,15 +1046,16 @@ public:
     double tmp   = 0.;
 
     for (int $$i = 0; $$i < block_samples; ++$$i) {
-      auto& spl0 = chnls[0][$$i];
-      auto& spl1 = chnls[1][$$i];
-
-      dl = dlbuf;
-      db = dlbuf;
-      i  = ipos;
-      a  = spl0;
-      b  = spl1;
-      c  = (spl0 + spl1) * 0.5;
+      auto& spl0 = outs[0][$$i];
+      auto& spl1 = outs[1][$$i];
+      spl0       = ins[0][$$i];
+      spl1       = ins[1][$$i];
+      dl         = dlbuf;
+      db         = dlbuf;
+      i          = ipos;
+      a          = spl0;
+      b          = spl1;
+      c          = (spl0 + spl1) * 0.5;
       (lp += (((jsfx_rand (2.) - 1.) - lp) * 0.02));
       noise = lp * hiss;
       if ((((uint) pos) % ((uint) std::floor (samples))) > 0.) {
@@ -1132,7 +1138,7 @@ public:
   }
   // addon, to make the stereo version...
   template <class T>
-  void process_block_replacing (std::array<T*, 1> chnls, uint block_samples)
+  void process (std::array<T*, 1> chnls, uint block_samples)
   {
     double a     = 0.;
     double c     = 0.;

@@ -38,7 +38,10 @@ namespace artv {
 class saturation {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::waveshaper;
+  static constexpr dsp_types dsp_type  = dsp_types::waveshaper;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   struct type_tag {};
 
@@ -424,8 +427,10 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint block_samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
     static constexpr double pow2compand_clip = 40.;
     params                  p                = _p;
 
@@ -437,7 +442,7 @@ public:
       _p.type_prev                    = _p.type;
       _p.mode_prev                    = _p.mode;
       std::array<T, 2> value_increment {
-        chnls[0][0] * 1 / n_samples, chnls[1][0] * 1 / n_samples};
+        (T) (ins[0][0] * (1. / n_samples)), (T) (ins[1][0] * (1. / n_samples))};
       std::array<T, n_samples * 2> in {};
       for (uint i = 1; i < n_samples; ++i) {
         in[i] = in[i - 1] + value_increment[0];
@@ -445,7 +450,9 @@ public:
       for (uint i = n_samples + 1; i < (n_samples * 2); ++i) {
         in[i] = in[i - 1] + value_increment[1];
       }
-      process_block_replacing<T> ({&in[0], &in[n_samples]}, n_samples);
+      std::array<T*, 2> io  = {&in[0], &in[n_samples]};
+      auto              cio = array_const_cast<T const*> (io);
+      process<T> (io, cio, n_samples);
     }
 
     double_x2 compens_drive {
@@ -464,8 +471,8 @@ public:
 
       // pre process/Companding + data initialization block
       for (uint i = 0; i < subblock_size; ++i) {
-        sat[i][0] = chnls[0][samples_processed + i];
-        sat[i][1] = chnls[1][samples_processed + i];
+        sat[i][0] = ins[0][samples_processed + i];
+        sat[i][1] = ins[1][samples_processed + i];
         switch (p.mode) {
         case mode_compand_1b:
           sat[i] = compand_1b_aa::tick (
@@ -681,8 +688,8 @@ public:
           break;
         }
 
-        chnls[0][samples_processed + i] = sat[i][0];
-        chnls[1][samples_processed + i] = sat[i][1];
+        outs[0][samples_processed + i] = sat[i][0];
+        outs[1][samples_processed + i] = sat[i][1];
       }
       samples_processed += subblock_size;
     }

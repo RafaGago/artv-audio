@@ -25,7 +25,10 @@ public:
   // DSP------------------------------------------------------------------------
   focus() {}
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::exciter;
+  static constexpr dsp_types dsp_type  = dsp_types::exciter;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -43,12 +46,15 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, int samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
-    float* in1  = chnls[0];
-    float* in2  = chnls[1];
-    float* out1 = chnls[0];
-    float* out2 = chnls[1];
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
+    T const* in1  = ins[0];
+    T const* in2  = ins[1];
+    T*       out1 = outs[0];
+    T*       out2 = outs[1];
 
     //[0] is frequency: 0.000001 to 0.499999 is near-zero to near-Nyquist
     //[1] is resonance, 0.7071 is Butterworth. Also can't be zero
@@ -67,7 +73,7 @@ public:
     figureL[5] = figureR[5] = 2.0 * (K * K - 1.0) * norm;
     figureL[6] = figureR[6] = (1.0 - K / figureR[1] + K * K) * norm;
 
-    while (--samples >= 0) {
+    while (--samples < ((uint) -1ull)) {
       long double inputSampleL = *in1;
       long double inputSampleR = *in2;
 #if AIRWINDOWS_FP_DITHER_ENABLE

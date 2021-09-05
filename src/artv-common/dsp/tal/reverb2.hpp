@@ -19,7 +19,10 @@ namespace artv { namespace tal {
 class reverb2 {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::reverb;
+  static constexpr dsp_types dsp_type  = dsp_types::reverb;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   struct decay_time_tag {};
   void set (decay_time_tag, float v) { _reverb->setDecayTime (v * 0.01); }
@@ -148,15 +151,17 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint block_samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
     for (uint i = 0; i < block_samples; ++i) {
       float l, r;
-      l = (float) chnls[0][i];
-      r = (float) chnls[1][i];
+      l = (float) ins[0][i];
+      r = (float) ins[1][i];
       _reverb->process (&l, &r);
-      chnls[0][i] = l;
-      chnls[1][i] = r;
+      outs[0][i] = l;
+      outs[1][i] = r;
     }
   }
   //----------------------------------------------------------------------------

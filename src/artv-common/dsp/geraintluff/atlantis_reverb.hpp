@@ -48,7 +48,10 @@ namespace artv { namespace geraint_luff {
 class atlantis_reverb {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::reverb;
+  static constexpr dsp_types dsp_type  = dsp_types::reverb;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   // definitions for environment function calls
 private:
@@ -920,8 +923,11 @@ private:
 public:
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
     double decay_intervals           = 0.;
     double detune_cents_per_interval = 0.;
     double dry_factor                = 0.;
@@ -1030,8 +1036,11 @@ public:
     };
 #endif
     for (int $$i = 0, $$end = std::max (0, (int) samples); $$i < $$end; ++$$i) {
-      T& spl0                                 = chnls[0][$$i];
-      T& spl1                                 = chnls[1][$$i];
+      auto& spl0 = outs[0][$$i];
+      auto& spl1 = outs[1][$$i];
+      spl0       = ins[0][$$i];
+      spl1       = ins[1][$$i];
+
       heap (input_buffer + buffer_pos)        = spl0;
       heap (input_buffer + (buffer_pos + 1.)) = spl1;
       interval_index += 1.;

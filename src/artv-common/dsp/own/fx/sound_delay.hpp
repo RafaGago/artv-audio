@@ -26,7 +26,10 @@ namespace artv {
 class sound_delay {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::delay;
+  static constexpr dsp_types dsp_type  = dsp_types::delay;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   struct delay_ms_tag {};
 
@@ -115,8 +118,10 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint block_samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
     update_delay_times();
 
     for (uint i = 0; i < block_samples; ++i) {
@@ -129,11 +134,11 @@ public:
           make_crange (_smooth_state[0]), make_crange (_smooth_state[1])),
         _delay_times_samples);
 #endif
-      auto in = make_array (chnls[0][i], chnls[1][i]);
+      auto in = make_array (ins[0][i], ins[1][i]);
       _delay.push (in);
 
-      chnls[0][i] = _delay.get (0, t_samples[0]);
-      chnls[1][i] = _delay.get (1, t_samples[1]);
+      outs[0][i] = _delay.get (0, t_samples[0]);
+      outs[1][i] = _delay.get (1, t_samples[1]);
     }
   }
   //----------------------------------------------------------------------------

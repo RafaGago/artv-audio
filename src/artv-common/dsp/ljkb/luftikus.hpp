@@ -15,7 +15,10 @@ namespace artv { namespace ljkb {
 class luftikus {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::eq;
+  static constexpr dsp_types dsp_type  = dsp_types::eq;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   struct gain_10hz_tag {};
   void set (gain_10hz_tag, float v)
@@ -151,10 +154,18 @@ public:
     });
   }
   //----------------------------------------------------------------------------
-  void process_block_replacing (std::array<float*, 2> chnls, uint block_samples)
+  void process (crange<float*> outs, crange<float const*> ins, int samples)
   {
-    _eqs[0].processBlock (chnls[0], block_samples);
-    _eqs[1].processBlock (chnls[1], block_samples);
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
+    for (uint i = 0; i < (uint) bus_type; ++i) {
+      if (unlikely (ins[i] != outs[i])) {
+        memcpy (outs[i], ins[i], samples * sizeof outs[i][0]);
+      }
+    }
+    _eqs[0].processBlock (outs[0], samples);
+    _eqs[1].processBlock (outs[1], samples);
   }
   //----------------------------------------------------------------------------
 private:

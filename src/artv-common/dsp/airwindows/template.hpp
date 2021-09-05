@@ -30,12 +30,15 @@ public:
   void reset (plugin_context& pc) { sample_rate = pc.get_sample_rate(); }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, int samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
-    T* in1  = chnls[0];
-    T* in2  = chnls[1];
-    T* out1 = chnls[0];
-    T* out2 = chnls[1];
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
+    T const* in1  = ins[0];
+    T const* in2  = ins[1];
+    T*       out1 = outs[0];
+    T*       out2 = outs[1];
 
 #if AIRWINDOWS_FP_DITHER_ENABLE
 #endif

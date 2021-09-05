@@ -28,7 +28,10 @@ namespace artv { namespace geraint_luff {
 class spring_box {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::delay;
+  static constexpr dsp_types dsp_type  = dsp_types::delay;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
 private:
   // definitions for environment function calls
@@ -968,8 +971,11 @@ private:
 public:
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint block_samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
     _current_block_samples = block_samples;
 
     double d            = 0.;
@@ -1030,8 +1036,10 @@ public:
       + init_smoother_block_1 (filter_b2, filter_b2_value, filter_b2_step);
     ;
     for (int __i = 0, __end = block_samples; __i < __end; ++__i) {
-      auto& spl0 = chnls[0][__i];
-      auto& spl1 = chnls[1][__i];
+      auto& spl0 = outs[0][__i];
+      auto& spl1 = outs[1][__i];
+      spl0       = ins[0][__i];
+      spl1       = ins[1][__i];
 
       if (smoothing) {
         init_smoother_sample (wet_value, wet_step);

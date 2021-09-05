@@ -28,7 +28,10 @@ namespace artv { namespace geraint_luff {
 class echo_cycles {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::delay;
+  static constexpr dsp_types dsp_type  = dsp_types::delay;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
 private:
   // definitions for environment function calls
@@ -900,8 +903,11 @@ public:
   uint samples_block = 512;
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
     samples_block               = samples;
     double buffer_write_index   = 0.;
     double delay_samples_target = 0.;
@@ -980,8 +986,11 @@ public:
       delay_gain_step;
     };
     for (int $$i = 0, $$end = samples; $$i < $$end; ++$$i) {
-      T& spl0 = chnls[0][$$i];
-      T& spl1 = chnls[1][$$i];
+      auto& spl0 = outs[0][$$i];
+      auto& spl1 = outs[1][$$i];
+      spl0       = ins[0][$$i];
+      spl1       = ins[1][$$i];
+
       if (smoothing) {
         init$smoother_sample (output_dry$this$value, output_dry$this$step);
         init$smoother_sample (output_wet$this$value, output_wet$this$step);

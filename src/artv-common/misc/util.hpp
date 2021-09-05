@@ -494,6 +494,38 @@ static auto make_crange (Ts&&... args)
   return make_contiguous_range (std::forward<Ts> (args)...);
 }
 //------------------------------------------------------------------------------
+// Double pointers don't const convert, this is annoying on crange.
+// https://stackoverflow.com/questions/5055655/double-pointer-const-correctness-warnings-in-c
+template <class U, class T, size_t N>
+static constexpr auto array_static_cast (std::array<T, N>& in)
+{
+  std::array<U, N> ret;
+  for (uint i = 0; i < N; ++i) {
+    ret[i] = static_cast<U> (in[i]);
+  }
+  return ret;
+}
+
+template <class U, class T, size_t N>
+static constexpr auto array_const_cast (std::array<T, N>& in)
+{
+  std::array<U, N> ret;
+  for (uint i = 0; i < N; ++i) {
+    ret[i] = const_cast<U> (in[i]);
+  }
+  return ret;
+}
+
+template <class U, class T, size_t N>
+static constexpr auto array_reinterpret_cast (std::array<T, N>& in)
+{
+  std::array<U, N> ret;
+  for (uint i = 0; i < N; ++i) {
+    ret[i] = reinterpret_cast<U> (in[i]);
+  }
+  return ret;
+}
+//------------------------------------------------------------------------------
 // Apply a function to each parameter on a  variadic argument pack
 template <class funct>
 static void apply (funct const& f)

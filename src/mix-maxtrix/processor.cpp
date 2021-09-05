@@ -612,7 +612,8 @@ private:
       fx_type == 0 || fx_type >= fx_val.type.choices.size()
       || is_crossv_channel (channel)) {
       // Fast path: Skipping fx and dry/wet mixing.
-      _mixer[channel].process_block_replacing (mix_bus, samples);
+      auto c_mix_bus = array_const_cast<T const*> (mix_bus);
+      _mixer[channel].process_block<T> (mix_bus, c_mix_bus, samples);
       return;
     }
 
@@ -649,48 +650,28 @@ private:
 
     assert (fx);
     auto& mix_buffer = get_mix_buffer (T {});
-    if (_io.fx_delay_samples[channel] == 0) {
-      for (uint i = 0; i < samples;) {
-        uint bsz = std::min<uint> (samples - i, fx_blocksize);
 
-        std::array<T*, 2> fx_in = {mix_buffer[0].data(), mix_buffer[1].data()};
+    for (uint i = 0; i < samples;) {
+      uint bsz = std::min<uint> (samples - i, fx_blocksize);
 
-        memcpy (fx_in[0], mix_bus[0], bsz * sizeof (T));
-        memcpy (fx_in[1], mix_bus[1], bsz * sizeof (T));
+      std::array<T*, 2> wet_arr = {mix_buffer[0].data(), mix_buffer[1].data()};
 
-        fx->process_block_replacing (fx_in, bsz);
-        std::array<T const*, 2> fx_in_const {fx_in[0], fx_in[1]};
+      auto c_mix_bus = array_const_cast<T const*> (mix_bus);
 
-        _mixer[channel].process_block_replacing (mix_bus, fx_in_const, bsz);
+      fx->process (crange<T*> {wet_arr}, crange<T const*> {c_mix_bus}, bsz);
 
-        mix_bus[0] += bsz;
-        mix_bus[1] += bsz;
-        i += bsz;
+      if (_io.fx_delay_samples[channel] != 0) {
+        dly_compensate_fx_dry (channel, mix_bus, bsz);
       }
-    }
-    else {
-      for (uint i = 0; i < samples;) {
-        uint bsz = std::min<uint> (samples - i, fx_blocksize);
 
-        std::array<T*, 2> fx_in  = {mix_buffer[0].data(), mix_buffer[1].data()};
-        std::array<T*, 2> dry_in = {mix_buffer[2].data(), mix_buffer[3].data()};
+      std::array<T const*, 4> mixer_in {
+        mix_bus[0], mix_bus[1], wet_arr[0], wet_arr[1]};
 
-        memcpy (fx_in[0], mix_bus[0], bsz * sizeof (T));
-        memcpy (fx_in[1], mix_bus[1], bsz * sizeof (T));
-        memcpy (dry_in[0], fx_in[0], 2 * bsz * sizeof (T));
+      _mixer[channel].process_block<T> (mix_bus, mixer_in, bsz);
 
-        fx->process_block_replacing (fx_in, bsz);
-        dly_compensate_fx_dry (channel, dry_in, bsz);
-
-        std::array<T const*, 2> fx_in_const {fx_in[0], fx_in[1]};
-
-        _mixer[channel].process_block_replacing (dry_in, fx_in_const, bsz);
-        memcpy (mix_bus[0], dry_in[0], bsz * sizeof (T));
-        memcpy (mix_bus[1], dry_in[1], bsz * sizeof (T));
-        mix_bus[0] += bsz;
-        mix_bus[1] += bsz;
-        i += bsz;
-      }
+      mix_bus[0] += bsz;
+      mix_bus[1] += bsz;
+      i += bsz;
     }
   }
   //----------------------------------------------------------------------------
@@ -810,7 +791,7 @@ private:
   std::array<dsp_variant, parameters::n_stereo_busses> _fx_dsp;
 
   static constexpr uint fx_blocksize = 128;
-  alignas (32) std::array<std::array<float, fx_blocksize>, 4> _fx_mix_buffer;
+  alignas (32) std::array<std::array<float, fx_blocksize>, 2> _fx_mix_buffer;
   delay_compensation_buffers<float, 2> _dly_comp_buffers;
   crossover<3, false>                  _crossv;
   bool                                 _crossv_on;

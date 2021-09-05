@@ -25,9 +25,9 @@ public:
     return *this;
   }
   virtual ~compile_firewall() {};
-  virtual void set_parameter (unsigned id, float v)   = 0;
-  virtual void reset (unsigned samplerate)            = 0;
-  virtual void process (float** io, unsigned samples) = 0;
+  virtual void set_parameter (unsigned id, float v)                      = 0;
+  virtual void reset (unsigned samplerate)                               = 0;
+  virtual void process (float** out, const float** in, unsigned samples) = 0;
 
 protected:
   void* _dsp = nullptr;
@@ -45,7 +45,7 @@ public:
 
   void set_parameter (unsigned id, float v) override;
   void reset (unsigned samplerate) override;
-  void process (float** io, unsigned samples) override;
+  void process (float** out, const float** in, unsigned samples) override;
 };
 
 class plate_compile_firewall : public compile_firewall {
@@ -60,7 +60,7 @@ public:
 
   void set_parameter (unsigned id, float v) override;
   void reset (unsigned samplerate) override;
-  void process (float** io, unsigned samples) override;
+  void process (float** out, const float** in, unsigned samples) override;
 };
 
 class hall_compile_firewall : public compile_firewall {
@@ -75,7 +75,7 @@ public:
 
   void set_parameter (unsigned id, float v) override;
   void reset (unsigned samplerate) override;
-  void process (float** io, unsigned samples) override;
+  void process (float** out, const float** in, unsigned samples) override;
 };
 
 struct room_compile_firewall : public compile_firewall {
@@ -90,7 +90,7 @@ public:
 
   void set_parameter (unsigned id, float v) override;
   void reset (unsigned samplerate) override;
-  void process (float** io, unsigned samples) override;
+  void process (float** out, const float** in, unsigned samples) override;
 };
 
 }}; // namespace artv::dragonfly

@@ -31,7 +31,10 @@ public:
     static constexpr uint ptype = (uint) Type;
   };
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::eq;
+  static constexpr dsp_types dsp_type  = dsp_types::eq;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -45,8 +48,13 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
+    uint n_enabled_bands = 0;
+
     for (uint b = 0; b < n_bands; ++b) {
       if (_cfg[b].has_changes) {
         reset_band (b);
@@ -55,6 +63,7 @@ public:
         continue;
       }
 
+      ++n_enabled_bands;
       alignas (sse_bytes) coeff_array smoothed_band_coefs;
 
       for (uint i = 0; i < samples; ++i) {
@@ -74,8 +83,8 @@ public:
         }
 
         double_x2 in, out;
-        in[0] = chnls[0][i];
-        in[1] = chnls[1][i];
+        in[0] = ins[0][i];
+        in[1] = ins[1][i];
 
         switch (_cfg[b].type) {
         case bandtype::off: // not reachable
@@ -107,8 +116,13 @@ public:
           jassert (false);
           break;
         }
-        chnls[0][i] = out[0];
-        chnls[1][i] = out[1];
+        outs[0][i] = out[0];
+        outs[1][i] = out[1];
+      }
+    }
+    if (unlikely (n_enabled_bands == 0)) {
+      for (uint i = 0; i < (uint) bus_type; ++i) {
+        memcpy (outs[i], ins[i], samples * sizeof outs[0][0]);
       }
     }
   }

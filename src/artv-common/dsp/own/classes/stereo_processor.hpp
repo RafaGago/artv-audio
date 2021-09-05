@@ -12,8 +12,9 @@ template <class T>
 struct stereo_processor {
   virtual ~stereo_processor() {}
   virtual void reset (plugin_context& pc) = 0;
-  virtual void process_block_replacing (std::array<T*, 2> io, unsigned samples)
+  virtual void process (crange<T*> outs, crange<T const*> ins, uint samples)
     = 0;
+
   // TODO: All of this is implementable on "stereo_processor_adapt", just not
   // done yet.
   //
@@ -34,13 +35,13 @@ public:
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc) override { Impl::reset (pc); };
   //----------------------------------------------------------------------------
-  void process_block_replacing (std::array<T*, 2> io, unsigned samples) override
+  void process (crange<T*> outs, crange<T const*> ins, uint samples) override
   {
-    Impl::process_block_replacing (io, samples);
+    Impl::process (outs, ins, samples);
   }
   //----------------------------------------------------------------------------
 private:
-  using Impl::process_block_replacing;
+  using Impl::process;
   using Impl::reset;
 };
 //------------------------------------------------------------------------------

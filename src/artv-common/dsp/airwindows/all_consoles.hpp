@@ -17,7 +17,10 @@ template <size_t N>
 class all_consoles {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::console;
+  static constexpr dsp_types dsp_type  = dsp_types::console;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -31,10 +34,10 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, int samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
     console_instances_get ([=] (auto& bus, auto& channels) {
-      bus.process_block_replacing (chnls, samples);
+      bus.process (outs, ins, samples);
     });
   }
   //----------------------------------------------------------------------------

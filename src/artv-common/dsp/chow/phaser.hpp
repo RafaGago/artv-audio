@@ -229,7 +229,10 @@ private:
 class phaser {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::modulation;
+  static constexpr dsp_types dsp_type  = dsp_types::modulation;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   struct feedback_tag {};
   void                  set (feedback_tag, float v) { _params.fb = v; }
@@ -367,8 +370,11 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
     alignas (sse_bytes) param_state_array param_tgt;
     alignas (sse_bytes) param_state_array smooth;
     param_targets_to_array (param_tgt);
@@ -400,16 +406,16 @@ public:
       float mono;
       switch (_params.src) {
       case 0:
-        mono = (chnls[0][i] + chnls[1][i]) * 0.5;
+        mono = (ins[0][i] + ins[1][i]) * 0.5;
         break;
       case 1:
-        mono = chnls[0][i];
+        mono = ins[0][i];
         break;
       case 2:
-        mono = chnls[1][i];
+        mono = ins[1][i];
         break;
       case 3:
-        mono = (chnls[0][i] - chnls[1][i]) * 0.5;
+        mono = (ins[0][i] - ins[1][i]) * 0.5;
         break;
       default:
         break;
@@ -428,8 +434,8 @@ public:
       mod_out *= smooth.p.mod;
       mod_out += (1.0 - smooth.p.mod) * nomod_out;
 
-      chnls[0][i] = smooth.p.mod > 0.f ? mod_out : nomod_out;
-      chnls[1][i] = smooth.p.mod > 0.f ? nomod_out : mod_out;
+      outs[0][i] = smooth.p.mod > 0.f ? mod_out : nomod_out;
+      outs[1][i] = smooth.p.mod > 0.f ? nomod_out : mod_out;
     }
   }
   //----------------------------------------------------------------------------

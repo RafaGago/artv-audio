@@ -44,8 +44,11 @@ void hall_compile_firewall::reset (unsigned samplerate)
   cast (_dsp)->sampleRateChanged (samplerate);
 };
 
-void hall_compile_firewall::process (float** io, unsigned samples)
+void hall_compile_firewall::process (
+  float**       out,
+  const float** in,
+  unsigned      samples)
 {
-  cast (_dsp)->run ((const float**) io, io, samples);
+  cast (_dsp)->run (in, out, samples);
 };
 }} // namespace artv::dragonfly

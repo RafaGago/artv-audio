@@ -24,7 +24,10 @@ namespace artv {
 class phaser {
 public:
   //----------------------------------------------------------------------------
-  static constexpr dsp_types dsp_type = dsp_types::modulation;
+  static constexpr dsp_types dsp_type  = dsp_types::modulation;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   struct stages_tag {};
   void set (stages_tag, int v)
@@ -265,8 +268,10 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_replacing (std::array<T*, 2> chnls, uint samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
     for (uint i = 0; i < samples; ++i, ++_n_processed_samples) {
 
       constexpr uint vec_size = vec_traits<float_x4>().size;
@@ -439,10 +444,10 @@ public:
 
       // regular processing
       float_x4 out {
-        chnls[0][i] + (_feedback_samples[0] * pars.feedback),
-        chnls[1][i] + (_feedback_samples[1] * pars.feedback),
-        chnls[0][i] + (_feedback_samples[0] * pars.feedback),
-        chnls[1][i] + (_feedback_samples[1] * pars.feedback)};
+        ins[0][i] + (_feedback_samples[0] * pars.feedback),
+        ins[1][i] + (_feedback_samples[1] * pars.feedback),
+        ins[0][i] + (_feedback_samples[0] * pars.feedback),
+        ins[1][i] + (_feedback_samples[1] * pars.feedback)};
 
       for (uint g = 0; g < (pars.n_allpasses / vec_size); ++g) {
         // as of now this processes both in parallel and in series.
@@ -453,17 +458,17 @@ public:
         (pars.n_allpasses % vec_size) == 0
         && "there are unprocessed allpasses");
 
-      double_x2 outs = {
+      double_x2 outx2 = {
         (double) out[0] + (double) out[2], (double) out[1] + (double) out[3]};
-      outs *= -0.5;
-      chnls[0][i] = outs[0];
-      chnls[1][i] = outs[1];
+      outx2 *= -0.5;
+      outs[0][i] = outx2[0];
+      outs[1][i] = outx2[1];
 
-      outs
-        = mystran_dc_blocker::tick (_dc_block_coeffs, _dc_block_states, outs);
+      outx2
+        = mystran_dc_blocker::tick (_dc_block_coeffs, _dc_block_states, outx2);
 
-      _feedback_samples[0] = outs[0];
-      _feedback_samples[1] = outs[1];
+      _feedback_samples[0] = outx2[0];
+      _feedback_samples[1] = outx2[1];
     }
   }
   //----------------------------------------------------------------------------
