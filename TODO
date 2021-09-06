@@ -1,5 +1,8 @@
 - Deprecate MixMaxtrix4.
 
+- Enable "-compress-debug-info=zlib" on Debug executables. It takes ages to load
+  on GDB when all the FX are enabled.
+
 - Add envelope follower on the filters module for the cutoff. The code already
   is processing in blocks, so it can run at a reduced pace (samplerate).
 

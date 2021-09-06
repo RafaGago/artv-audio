@@ -91,7 +91,9 @@ public:
   //----------------------------------------------------------------------------
   processor()
     : effect_base {get_default_bus_properties(), make_apvts_layout()}
-    , _fsamples {parameters::n_stereo_busses * 2}
+    , _fsamples {
+        parameters::n_stereo_busses * 2,
+        (parameters::crossover_n_bands - 1) * 2}
   {
     this->init_aptvs_references (params);
     for (auto& meter_src : _meters) {
@@ -137,7 +139,7 @@ public:
   void prepareToPlay (double samplerate, int max_block_samples) override
   {
     _fx_context.reset (*this, samplerate, fx_blocksize);
-    _crossv.reset (samplerate);
+    _crossv_on = false;
 
     for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
       _mixer[i].reset (_fx_context);
@@ -232,7 +234,9 @@ private:
     u64  bits;
   };
   //----------------------------------------------------------------------------
-  void io_recompute (u64 mute_solo_bits)
+  void io_recompute (
+    u64                                                  mute_solo_bits,
+    std::array<uint, parameters::crossover_n_bands - 1>& crossv_outs)
   {
     auto& ins_arr      = p_get (parameters::in_selection {});
     auto& outs_arr     = p_get (parameters::out_selection {});
@@ -248,35 +252,46 @@ private:
       outs |= (((u64) outs_arr[i]) << (i * parameters::n_stereo_busses));
     }
 
-    uint routing           = (uint) routing_arr[0];
-    uint inhibit_reorder   = 0;
-    auto mixer2mixer_sends = mixsends_arr[0];
-    _crossv_on             = (routing == parameters::routing_mode::crossover);
-
+    // if the channel 0, which is the only one that can have  the crossover, has
+    // no inputs, then the crossover is off.
+    _crossv_on &= (ins_arr[0] != 0);
+    uint inhibit_opt = 0;
     if (_crossv_on) {
       // This was never thought out to be a multifx, so it was never was
       // designed to have multiple ins (sidechain) and outs per fx. It is
       // perfectly doable backend-wise but not on the GUI. The crossover is
-      // added in a kind-of hacked way.
-
-      // No process order reordering/optimizing on channels 1,3,5 and 7.
-      inhibit_reorder = (1 << 0) | (1 << 2) | (1 << 4) | (1 << 6);
-      // crossover + block of 4
-      routing = parameters::routing_mode::full;
-      // sanitizing mixer 2 mixer sends. Not allowed to send to crossover
-      // channels.
-      mixer2mixer_sends &= inhibit_reorder;
+      // added by implementing 3 send channels by inhibiting reordering
+      // optimizations on the affected channels and manually setting the 3
+      // additional crossover's buffers as inputs to the channel. See the
+      // conditional depending on "_crossv_on" below.
+      for (uint i = 0; i < crossv_outs.size(); ++i) {
+        inhibit_opt |= 1 << crossv_outs[i];
+      }
     }
+
+    uint routing = (uint) routing_arr[0];
 
     auto latency_prev = _io.plugin_latency;
     _io.recompute (
       ins,
       outs,
       mute_solo_bits,
-      mixer2mixer_sends,
-      inhibit_reorder,
+      mixsends_arr[0],
+      inhibit_opt,
       routing,
       _fx_context.fx_latencies);
+
+    if (_crossv_on) {
+      // buffers -9,-10 and -11 are reserved for crossover outputs.
+      uint limit = parameters::n_parallel_buses (routing);
+      for (uint i = 0; i < crossv_outs.size(); ++i) {
+        if (crossv_outs[i] < limit) {
+          // only sending to the first group of parallel busses.
+          _io.in[crossv_outs[i]][_io.n_busses + i]
+            = -((int) _io.n_busses) - 1 - i;
+        }
+      }
+    }
 
     this->setLatencySamples (_io.plugin_latency);
     _fx_context.fx_latencies_changed = false;
@@ -308,6 +323,7 @@ private:
         [&] (auto key, uint i, auto val) { routing_change |= val.changed(); });
     }
 
+    bool crossv_change = false;
     if (unlikely (
           _non_routing_refreshed.get_and_clear() || routing_change
           || _fx_context.fx_latencies_changed)) {
@@ -317,7 +333,19 @@ private:
         parameters::non_routing_controls_typelist {},
         [&] (auto key, uint i, auto val) {
           if constexpr (std::is_same_v<decltype (key), parameters::fx_type>) {
+            constexpr uint crossv_id
+              = mp11::mp_find<
+                  parameters::all_fx_typelists,
+                  parameters::crossover_params>::value
+              + 1;
+
             fx_type_changed[i] = val.changed();
+            if (i != 0) {
+              return; // crossover only on channel 0
+            }
+            _crossv_on = (val.current == crossv_id);
+            crossv_change
+              = fx_type_changed[i] && (_crossv_on || val.previous == crossv_id);
           }
           if constexpr (std::is_same_v<decltype (key), parameters::mute_solo>) {
             mutesolo.changed |= val.changed();
@@ -327,13 +355,30 @@ private:
         });
     }
 
+    std::array<uint, parameters::crossover_n_bands - 1> crossv_outs {};
+    if (unlikely (_crossv_on)) {
+      using band_params = mp11::mp_list<
+        parameters::crossover_band1_out,
+        parameters::crossover_band2_out,
+        parameters::crossover_band3_out>;
+
+      mp_foreach_idx (band_params {}, [&] (auto index, auto param) {
+        auto value = p_refresh (param, 0);
+        // notice: +1 because the crossover can't output on channel 0
+        crossv_outs[index] = value.current + 1;
+        crossv_change |= value.changed();
+      });
+    }
+
     if (unlikely (_non_fx_slider_refreshed.get_and_clear())) {
       p_refresh_many (parameters::all_nonfx_sliders_typelist {});
     }
 
-    if (unlikely (routing_change || _fx_context.fx_latencies_changed)) {
+    if (unlikely (
+          routing_change || _fx_context.fx_latencies_changed
+          || crossv_change)) {
       // not delaying mute and solo...
-      io_recompute (mutesolo.bits);
+      io_recompute (mutesolo.bits, crossv_outs);
       mutesolo.changed = false;
     }
 
@@ -402,7 +447,7 @@ private:
       // cause a 1 audio buffer delay when unmuting + 1 audio buffer crossfade
       // when unmuting, but it is the only sensible way to do when having a
       // dynamic buffer ordering optimization.
-      io_recompute (mutesolo.bits);
+      io_recompute (mutesolo.bits, crossv_outs);
     }
   }
   //----------------------------------------------------------------------------
@@ -415,8 +460,8 @@ private:
     bool        fx_type_changed)
   {
     // + 1 for the mixer 2 mixer sends
-    static constexpr size_t n_mix_inputs = parameters::n_stereo_busses + 1;
-    std::array<stereo_summing_processor*, n_mix_inputs> processors {};
+    std::array<stereo_summing_processor*, parameters::console_n_elems>
+      processors {};
 
     auto           fx_type = p_get (parameters::fx_type {})[channel];
     constexpr auto fx_val  = parameters::fx_type {};
@@ -498,13 +543,6 @@ private:
       }
     });
     // clang-format on
-
-    if (is_crossv_channel (channel) && channel != 0) {
-      // the buffers for the crossover channels are already written and mixed
-      // nothing to do.
-      return true;
-    }
-
     bool ret;
     if (processors[0] == nullptr) {
       ret = buffers.template mix<2, s8> (
@@ -536,24 +574,6 @@ private:
       }
     }
     return ret;
-  }
-  //----------------------------------------------------------------------------
-  void refresh_crossv_parameters()
-  {
-    p_refresh_many (parameters::crossover_params {});
-    auto& freqs = p_get (parameters::crossover_frequency {});
-    auto& diffs = p_get (parameters::crossover_lr_diff {});
-    auto& modes = p_get (parameters::crossover_mode {});
-
-    for (uint i = 0; i < _crossv.n_crossovers; ++i) {
-      float diff = diffs[i] * (0.01 * 0.2);
-      float f    = midi_note_to_hz (freqs[i]);
-      _crossv.set_crossover_point (
-        i,
-        f + (f * diff),
-        f - (f * diff),
-        ((uint) (modes[i] != 0)) << modes[i]);
-    }
   }
   //----------------------------------------------------------------------------
   void mixer_parameters_update (uint channel, bool will_mute)
@@ -597,20 +617,7 @@ private:
     auto           fx_type = p_get (parameters::fx_type {})[channel];
     constexpr auto fx_val  = parameters::fx_type {};
 
-    if (_crossv_on && channel == 0) {
-      refresh_crossv_parameters();
-      std::array<std::array<T*, 2>, decltype (_crossv)::n_bands> ins;
-      for (uint i = 0; i < ins.size(); ++i) {
-        auto cbus = buffers.get_write_ptrs (_io.mix[i * 2]);
-        ins[i][0] = cbus[0];
-        ins[i][1] = cbus[1];
-      }
-      _crossv.tick<T> (ins, samples);
-    }
-
-    if (
-      fx_type == 0 || fx_type >= fx_val.type.choices.size()
-      || is_crossv_channel (channel)) {
+    if (fx_type == 0 || fx_type >= fx_val.type.choices.size()) {
       // Fast path: Skipping fx and dry/wet mixing.
       auto c_mix_bus = array_const_cast<T const*> (mix_bus);
       _mixer[channel].process_block<T> (mix_bus, c_mix_bus, samples);
@@ -637,27 +644,44 @@ private:
     assert (fx);
     auto& mix_buffer = get_mix_buffer (T {});
 
+    constexpr auto crossv_head = parameters::n_stereo_busses * 2;
+    // getting the buffer for the negative indexes, where we store the mix
+    // buffers not provided by Juce and the Crossover buffers
+    auto& internal_audiobuff = buffers.get_audiobuffer (-1);
+    static_assert (parameters::crossover_n_bands == 4, "Fix this");
+    auto out_ptrs = make_array<T*> (
+      mix_buffer[0].data(),
+      mix_buffer[1].data(),
+      internal_audiobuff.getWritePointer (crossv_head),
+      internal_audiobuff.getWritePointer (crossv_head + 1),
+      internal_audiobuff.getWritePointer (crossv_head + 2),
+      internal_audiobuff.getWritePointer (crossv_head + 3),
+      internal_audiobuff.getWritePointer (crossv_head + 4),
+      internal_audiobuff.getWritePointer (crossv_head + 5));
+
     for (uint i = 0; i < samples;) {
       uint bsz = std::min<uint> (samples - i, fx_blocksize);
 
-      std::array<T*, 2> wet_arr = {mix_buffer[0].data(), mix_buffer[1].data()};
-
       auto c_mix_bus = array_const_cast<T const*> (mix_bus);
 
-      fx->process (crange<T*> {wet_arr}, crange<T const*> {c_mix_bus}, bsz);
+      fx->process (crange<T*> {out_ptrs}, crange<T const*> {c_mix_bus}, bsz);
 
       if (_io.fx_delay_samples[channel] != 0) {
         dly_compensate_fx_dry (channel, mix_bus, bsz);
       }
 
-      std::array<T const*, 4> mixer_in {
-        mix_bus[0], mix_bus[1], wet_arr[0], wet_arr[1]};
+      auto mixer_in = make_array<T const*> (
+        mix_bus[0], mix_bus[1], out_ptrs[0], out_ptrs[1]);
 
       _mixer[channel].process_block<T> (mix_bus, mixer_in, bsz);
 
+      i += bsz;
+      // advance non-blockwise buffers.
       mix_bus[0] += bsz;
       mix_bus[1] += bsz;
-      i += bsz;
+      for (uint j = 2; j < out_ptrs.size(); ++j) {
+        out_ptrs[j] += bsz;
+      }
     }
   }
   //----------------------------------------------------------------------------
@@ -745,11 +769,6 @@ private:
     _dly_comp_buffers.compensate (id_r, make_crange (chnlptrs[1], samples));
   }
   //----------------------------------------------------------------------------
-  constexpr bool is_crossv_channel (uint chnl)
-  {
-    return _crossv_on && !(chnl & 1);
-  }
-  //----------------------------------------------------------------------------
   struct param_change_counter
     : public juce::AudioProcessorValueTreeState::Listener {
     virtual ~param_change_counter() {};
@@ -767,7 +786,9 @@ private:
     std::atomic<uint> _count {0};
   };
   //----------------------------------------------------------------------------
-  using io_engine = order_and_buffering<parameters::n_stereo_busses>;
+  using io_engine = order_and_buffering<
+    parameters::n_stereo_busses,
+    parameters::crossover_n_bands - 1>;
 
   mix_maxtrix_fx_context                                 _fx_context;
   buffers<float>                                         _fsamples;
@@ -779,9 +800,9 @@ private:
   static constexpr uint fx_blocksize = 128;
   alignas (32) std::array<std::array<float, fx_blocksize>, 2> _fx_mix_buffer;
   delay_compensation_buffers<float, 2> _dly_comp_buffers;
-  crossover<3, false>                  _crossv;
-  bool                                 _crossv_on;
   uint                                 _program = 0;
+
+  bool _crossv_on;
 
   alignas (128)
     std::array<foleys::LevelMeterSource, parameters::n_stereo_busses> _meters;

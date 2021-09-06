@@ -3,6 +3,7 @@ namespace artv {
 
 enum class dsp_types {
   console,
+  crossover,
   mixer,
   delay,
   distortion,

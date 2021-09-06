@@ -78,7 +78,6 @@ public:
     //        juce::Colours::darkgoldenrod,
     //        juce::Colours::red.brighter (0.4),
     //        juce::Colours::sienna,
-    _is_crossover = false;
 
     for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
       _meters[i].setLookAndFeel (&_meters_look_feel[i]);
@@ -386,6 +385,16 @@ public:
       auto& combo    = p_get (parameters::routing {})[0]->combo;
       combo.onChange = [=] { on_routing_change(); };
       on_routing_change();
+    }
+
+    // crossover only available on channel 0
+    constexpr uint crossv_id = mp11::mp_find<
+      parameters::all_fx_typelists,
+      parameters::crossover_params>::value;
+
+    for (uint i = 1; i < parameters::n_stereo_busses; ++i) {
+      auto& combo = p_get (parameters::fx_type {})[i]->combo;
+      combo.setItemEnabled (crossv_id + 2, false);
     }
 
     // size
@@ -720,26 +729,16 @@ public:
 
     // positioning  all parameter sliders (knobs) on top of each respective
     // _fx_off_slider object
-    mp11::mp_for_each<fx_and_crossover_knobs_typelist> ([&] (auto fx_tlist) {
-      // crossover has only 3 mixer channels with knobs.
-      constexpr bool is_crossover
-        = std::is_same_v<decltype (fx_tlist), parameters::crossover_params>;
-
+    mp11::mp_for_each<parameters::all_fx_typelists> ([&] (auto fx_tlist) {
       uint param_idx = 0;
       mp11::mp_for_each<decltype (fx_tlist)> ([&] (auto param) {
         auto& param_arr = p_get (param);
-        for (uint arr_idx = 0; arr_idx < param_arr.size(); ++arr_idx) {
-
-          // crossover parameters map idx 0-2 to chnl 2,4,6 respectively
-          uint chnl = arr_idx;
-          if (is_crossover) {
-            chnl = (arr_idx * 2) + 2;
-          }
-          param_arr[arr_idx]->slider.setBounds (
+        for (uint chnl = 0; chnl < param_arr.size(); ++chnl) {
+          param_arr[chnl]->slider.setBounds (
             _fx_off_sliders[chnl][param_idx % num_page_params]
               .slider.getBounds());
 
-          param_arr[arr_idx]->label.setBounds (
+          param_arr[chnl]->label.setBounds (
             _fx_off_sliders[chnl][param_idx % num_page_params]
               .label.getBounds());
         }
@@ -881,16 +880,14 @@ public:
     for (uint i = 0; i < num_page_params; ++i) {
       _fx_off_sliders[chnl][i].foreach_component (set_hidden);
     }
-    mp11::mp_for_each<parameters::all_fx_typelists> ([=] (auto fxtl) {
-      mp11::mp_for_each<decltype (fxtl)> ([=] (auto param) {
+    mp11::mp_for_each<parameters::all_fx_typelists> ([=] (auto fxtlv) {
+      using fxtl = decltype (fxtlv);
+      if (std::is_same_v<fxtl, parameters::crossover_params> && chnl != 0) {
+        return;
+      }
+      mp11::mp_for_each<fxtl> ([=] (auto param) {
         p_get (param)[chnl]->foreach_component (set_hidden);
       });
-    });
-    if ((chnl & 1) || chnl == 0) {
-      return;
-    }
-    mp11::mp_for_each<parameters::crossover_params> ([=] (auto param) {
-      p_get (param)[(chnl / 2) - 1]->foreach_component (set_hidden);
     });
   }
   //----------------------------------------------------------------------------
@@ -971,16 +968,23 @@ public:
   //----------------------------------------------------------------------------
   void on_fx_type_or_page_change (uint chnl, int action)
   {
+    static constexpr uint combo_to_fx_typelist_offset = 2;
     // no FX redraw when the crossover is enabled.
-    if (_is_crossover && !(chnl & 1)) {
-      return;
-    }
     clear_fx_knobs (chnl);
     // get FX
     auto&          combo  = p_get (parameters::fx_type {})[chnl]->combo;
     auto           fx_id  = combo.getSelectedId();
     constexpr auto fx_val = parameters::fx_type {};
     bool           no_fx  = fx_id <= 1 || fx_id > fx_val.type.choices.size();
+
+    fx_id -= combo_to_fx_typelist_offset;
+
+    constexpr uint crossv_id = mp11::mp_find<
+      parameters::all_fx_typelists,
+      parameters::crossover_params>::value;
+
+    // crossover only on channel 0.
+    no_fx |= ((fx_id == crossv_id) && chnl != 0);
     if (no_fx) {
       // loading a corrupted preset fixup
       combo.setSelectedId (1, juce::NotificationType::dontSendNotification);
@@ -990,7 +994,7 @@ public:
     uint fx_idx = 0;
     mp11::mp_for_each<parameters::all_fx_typelists> ([=, &fx_idx] (auto fxtl) {
       // 2 = combobox unset (juce) + no fx value.
-      if (fx_idx++ != fx_id - 2) {
+      if (fx_idx++ != fx_id) {
         return; // next
       }
       show_fx_knobs (chnl, chnl, action, fxtl);
@@ -1007,63 +1011,13 @@ public:
     assert (selected_id);
     --selected_id;
 
-    static constexpr uint n_crossv_bands = 4;
-
-    auto set_channel_components_state = [=] (uint chnl, bool enabled) {
-      auto& fx_type = p_get (parameters::fx_type {})[chnl];
-      auto& ins     = p_get (parameters::in_selection {})[chnl];
-      auto& wet_bal = p_get (parameters::wet_balance {})[chnl];
-      auto& wet_pan = p_get (parameters::wet_pan {})[chnl];
-      auto& dry_pan = p_get (parameters::dry_pan {})[chnl];
-      auto& fx_mix  = p_get (parameters::fx_mix {})[chnl];
-
-      auto& mixer_sends = p_get (parameters::mixer_sends {})[0];
-
-      fx_type->combo.setEnabled (enabled);
-      fx_type->prev.setEnabled (enabled);
-      fx_type->next.setEnabled (enabled);
-      wet_bal->slider.setEnabled (enabled);
-      wet_pan->slider.setEnabled (enabled);
-      dry_pan->slider.setEnabled (enabled);
-      fx_mix->slider.setEnabled (enabled);
-      wet_bal->label.setEnabled (enabled);
-      wet_pan->label.setEnabled (enabled);
-      dry_pan->label.setEnabled (enabled);
-      fx_mix->label.setEnabled (enabled);
-
-      if (chnl != 0) {
-        for (auto btn_ptr : ins->get_components()) {
-          btn_ptr->setEnabled (enabled);
-        }
-        mixer_sends->get_components()[chnl - 1]->setEnabled (enabled);
-      }
-    };
-
-    _is_crossover = selected_id == parameters::routing_mode::crossover;
-    if (!_is_crossover) {
-      for (uint i = 0; i < n_crossv_bands; ++i) {
-        set_channel_components_state (i * 2, true);
-        // forcing redraw of the fx parameters
-        on_fx_type_or_page_change (i * 2, -1);
-      }
-      auto& mixer_sends = p_get (parameters::mixer_sends {})[0];
-      uint  gsz         = parameters::n_parallel_buses (selected_id);
-      for (auto cptr : mixer_sends->get_components()) {
-        cptr->setEnabled (true);
-      }
-      for (uint i = gsz; i < parameters::n_stereo_busses; i += gsz) {
-        mixer_sends->get_components()[i - 1]->setEnabled (false);
-      }
+    auto& mixer_sends = p_get (parameters::mixer_sends {})[0];
+    uint  gsz         = parameters::n_parallel_buses (selected_id);
+    for (auto cptr : mixer_sends->get_components()) {
+      cptr->setEnabled (true);
     }
-    else {
-      for (uint i = 0; i < n_crossv_bands; ++i) {
-        clear_fx_knobs (i * 2);
-        set_channel_components_state (i * 2, false);
-      }
-      set_as_empty_fx (0);
-      for (uint i = 1; i < n_crossv_bands; ++i) {
-        show_fx_knobs (i * 2, i - 1, -1, parameters::crossover_params {});
-      }
+    for (uint i = gsz; i < parameters::n_stereo_busses; i += gsz) {
+      mixer_sends->get_components()[i - 1]->setEnabled (false);
     }
   }
   //----------------------------------------------------------------------------
@@ -1229,8 +1183,11 @@ public:
     slider_typelist)
   {
     constexpr auto notif = juce::NotificationType::sendNotificationAsync;
+    // crossover only exists on channel 0, can't be copied.
+    using copyable_sliders
+      = mp_remove_all<slider_typelist, parameters::crossover_params>;
 
-    mp11::mp_for_each<slider_typelist> ([=] (auto paramtype) {
+    mp11::mp_for_each<copyable_sliders> ([=] (auto paramtype) {
       auto&         param = p_get (paramtype);
       juce::Slider& src   = param[src_chnl]->slider;
       juce::Slider& dst   = param[dst_chnl]->slider;
@@ -1274,9 +1231,6 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  using fx_and_crossover_knobs_typelist = mp11::
-    mp_push_back<parameters::all_fx_typelists, parameters::crossover_params>;
-
   static constexpr uint num_fx_params   = 24;
   static constexpr uint num_fx_pages    = 3;
   static constexpr uint num_page_params = num_fx_params / num_fx_pages;
@@ -1301,8 +1255,6 @@ private:
                                                               _meters_look_feel;
   std::array<foleys::LevelMeter, parameters::n_stereo_busses> _meters;
   crange<foleys::LevelMeterSource>                            _meter_srcs;
-  bool                                                        _is_crossover;
-
 }; // namespace artv
 //------------------------------------------------------------------------------
 juce::AudioProcessorEditor* new_editor (

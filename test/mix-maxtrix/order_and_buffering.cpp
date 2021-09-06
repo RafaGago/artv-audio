@@ -82,6 +82,7 @@ TEST (order_and_buffering, input_dependency_no_modification)
     0,
     0,
     0,
+    0,
     order_and_buffering<4>::bus_latency_arr {},
     [] (uint i) { return false; });
   ASSERT_EQ (ob.order[0], 0);
@@ -406,7 +407,7 @@ TEST (order_and_buffering, latency_empty)
 {
   order_and_buffering<4>::bus_latency_arr lat = {0, 0, 0, 0};
   order_and_buffering<4>                  ob;
-  ob.recompute (0x1111, 0x1111, 0, 0, 0, lat);
+  ob.recompute (0x1111, 0x1111, 0, 0, 0, 0, lat);
 
   ASSERT_EQ (ob.post_input_mix_delay_samples[0], 0);
   ASSERT_EQ (ob.post_input_mix_delay_samples[1], 0);
@@ -425,7 +426,7 @@ TEST (order_and_buffering, latency_no_sends)
 {
   order_and_buffering<4>::bus_latency_arr lat = {1, 2, 3, 4};
   order_and_buffering<4>                  ob;
-  ob.recompute (0x1111, 0x1111, 0, 0, 0, lat);
+  ob.recompute (0x1111, 0x1111, 0, 0, 0, 0, lat);
 
   ASSERT_EQ (ob.post_input_mix_delay_samples[0], 0);
   ASSERT_EQ (ob.post_input_mix_delay_samples[1], 0);
@@ -444,7 +445,7 @@ TEST (order_and_buffering, latency_all_sends_enabled)
 {
   order_and_buffering<4>::bus_latency_arr lat = {1, 2, 3, 4};
   order_and_buffering<4>                  ob;
-  ob.recompute (0x1111, 0x1111, 0, 0x7, 0, lat);
+  ob.recompute (0x1111, 0x1111, 0, 0x7, 0, 0, lat);
 
   ASSERT_EQ (ob.post_input_mix_delay_samples[0], 0);
   ASSERT_EQ (ob.post_input_mix_delay_samples[1], 1);
@@ -466,7 +467,7 @@ TEST (order_and_buffering, latency_all_sends_enabled_series)
   order_and_buffering<4>::bus_latency_arr lat = {1, 2, 3, 4};
   order_and_buffering<4>                  ob;
   // buses 1 to 4 connected in series. Only bus 1 inputs and bus 4 outputs
-  ob.recompute (0x0001, 0x1000, 0, 0x7, 0, lat);
+  ob.recompute (0x0001, 0x1000, 0, 0x7, 0, 0, lat);
 
   ASSERT_EQ (ob.post_input_mix_delay_samples[0], 0);
   ASSERT_EQ (ob.post_input_mix_delay_samples[1], 0);
@@ -487,7 +488,7 @@ TEST (order_and_buffering, latency_no_sends_groups_enabled)
 {
   order_and_buffering<4>::bus_latency_arr lat = {1, 2, 3, 4};
   order_and_buffering<4>                  ob;
-  ob.recompute (0x1111, 0x1111, 0, 0, 1, lat);
+  ob.recompute (0x1111, 0x1111, 0, 0, 1, 0, lat);
 
   ASSERT_EQ (ob.post_input_mix_delay_samples[0], 0);
   ASSERT_EQ (ob.post_input_mix_delay_samples[1], 0);
@@ -506,7 +507,7 @@ TEST (order_and_buffering, latency_all_sends_enabled_groups_enabled)
 {
   order_and_buffering<4>::bus_latency_arr lat = {1, 2, 3, 4};
   order_and_buffering<4>                  ob;
-  ob.recompute (0x1111, 0x1111, 0, 0x7, 1, lat);
+  ob.recompute (0x1111, 0x1111, 0, 0x7, 1, 0, lat);
 
   ASSERT_EQ (ob.post_input_mix_delay_samples[0], 0);
   ASSERT_EQ (ob.post_input_mix_delay_samples[1], 1);

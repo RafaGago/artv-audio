@@ -83,6 +83,8 @@
 #include "artv-common/dsp/own/fx/polyphase-fir-tester.hpp"
 #endif
 
+#include "mix-maxtrix/crossover.hpp"
+
 #include "artv-common/dsp/own/classes/mix.hpp"
 #include "artv-common/juce/effect_base.hpp"
 #include "artv-common/juce/gui_util.hpp"
@@ -181,8 +183,7 @@ struct routing_mode {
 //------------------------------------------------------------------------------
 static constexpr uint n_parallel_buses (uint rm)
 {
-  uint order = (rm != routing_mode::crossover) ? (uint) rm : routing_mode::full;
-  return parameters::n_stereo_busses >> order;
+  return parameters::n_stereo_busses >> rm;
 }
 //------------------------------------------------------------------------------
 #endif
@@ -199,8 +200,7 @@ parameter_cpp_class_define (
     make_cstr_array (
       "[1,2,3,4,5,6,7,8]",
       "[1,2,3,4]>[5,6,7,8]",
-      "[1,2]>[3,4]>[5,6]>[7,8]",
-      "[Crossover]"),
+      "[1,2]>[3,4]>[5,6]>[7,8]"),
     10,
     false),
 #else
@@ -309,7 +309,148 @@ parameter_cpp_class_define (
 using busscolors4_params
   = mp_list<busscolors4_drive, busscolors4_color, busscolors4_dry_wet>;
 //------------------------------------------------------------------------------
-using consoles_dsp_type = airwindows::all_consoles<n_stereo_busses + 1>;
+static constexpr uint crossover_n_bands = 4;
+
+using mm_crossover = mixmaxtrix_crossover<crossover_n_bands>;
+
+parameter_cpp_class_define (
+  crossover_band1_frequency,
+  1,
+  param_common (
+    "1.Freq",
+    declptr<mm_crossover>(),
+    declptr<mm_crossover::band1_freq_tag>()),
+  mm_crossover::get_parameter (mm_crossover::band1_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  crossover_band2_frequency,
+  1,
+  param_common (
+    "2.Freq",
+    declptr<mm_crossover>(),
+    declptr<mm_crossover::band2_freq_tag>()),
+  mm_crossover::get_parameter (mm_crossover::band2_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  crossover_band3_frequency,
+  1,
+  param_common (
+    "3.Freq",
+    declptr<mm_crossover>(),
+    declptr<mm_crossover::band3_freq_tag>()),
+  mm_crossover::get_parameter (mm_crossover::band3_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  crossover_band1_mode,
+  1,
+  param_common (
+    "1.Mode",
+    declptr<mm_crossover>(),
+    declptr<mm_crossover::band1_mode_tag>()),
+  mm_crossover::get_parameter (mm_crossover::band1_mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  crossover_band2_mode,
+  1,
+  param_common (
+    "2.Mode",
+    declptr<mm_crossover>(),
+    declptr<mm_crossover::band2_mode_tag>()),
+  mm_crossover::get_parameter (mm_crossover::band2_mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  crossover_band3_mode,
+  1,
+  param_common (
+    "3.Mode",
+    declptr<mm_crossover>(),
+    declptr<mm_crossover::band3_mode_tag>()),
+  mm_crossover::get_parameter (mm_crossover::band3_mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  crossover_band1_diff,
+  1,
+  param_common (
+    "1.Diff",
+    declptr<mm_crossover>(),
+    declptr<mm_crossover::band1_diff_tag>()),
+  mm_crossover::get_parameter (mm_crossover::band1_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  crossover_band2_diff,
+  1,
+  param_common (
+    "2.Diff",
+    declptr<mm_crossover>(),
+    declptr<mm_crossover::band2_diff_tag>()),
+  mm_crossover::get_parameter (mm_crossover::band2_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  crossover_band3_diff,
+  1,
+  param_common (
+    "3.Diff",
+    declptr<mm_crossover>(),
+    declptr<mm_crossover::band3_diff_tag>()),
+  mm_crossover::get_parameter (mm_crossover::band3_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  crossover_band1_out,
+  1,
+  param_common (
+    "1.Send",
+    declptr<mm_crossover>(),
+    declptr<mm_crossover::band1_out_tag>()),
+  mm_crossover::get_parameter (mm_crossover::band1_out_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  crossover_band2_out,
+  1,
+  param_common (
+    "2.Send",
+    declptr<mm_crossover>(),
+    declptr<mm_crossover::band2_out_tag>()),
+  mm_crossover::get_parameter (mm_crossover::band2_out_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  crossover_band3_out,
+  1,
+  param_common (
+    "3.Send",
+    declptr<mm_crossover>(),
+    declptr<mm_crossover::band3_out_tag>()),
+  mm_crossover::get_parameter (mm_crossover::band3_out_tag {}),
+  slider_ext);
+
+using crossover_params = mp_list<
+  crossover_band1_frequency,
+  crossover_band1_diff,
+  crossover_band1_mode,
+  crossover_band1_out,
+  crossover_band2_frequency,
+  crossover_band2_diff,
+  crossover_band2_mode,
+  crossover_band2_out,
+  crossover_band3_frequency,
+  crossover_band3_diff,
+  crossover_band3_mode,
+  crossover_band3_out>;
+//------------------------------------------------------------------------------
+static constexpr uint console_n_elems
+  = n_stereo_busses + 1 + (crossover_n_bands - 1);
+
+using consoles_dsp_type = airwindows::all_consoles<console_n_elems>;
 
 parameter_cpp_class_define (
   consoles_type,
@@ -5441,33 +5582,6 @@ using saturation_params = mp_list<
   saturation_mode,
   saturation_oversampling>;
 //------------------------------------------------------------------------------
-parameter_cpp_class_define (
-  crossover_frequency,
-  3,
-  param_common ("Crossv"),
-  frequency_parameter (40.0, 17000.0, 600.0),
-  slider_ext);
-
-parameter_cpp_class_define (
-  crossover_lr_diff,
-  3,
-  param_common ("F Diff"),
-  float_param ("%", -100.f, 100.f, 0.f, 0.01f),
-  slider_ext);
-
-parameter_cpp_class_define (
-  crossover_mode,
-  3,
-  param_common ("Mode"),
-  choice_param (
-    1,
-    make_cstr_array ("Off", "12dB/Oct", "24dB/Oct", "48dB/Oct"),
-    12),
-  slider_ext);
-
-using crossover_params
-  = mp_list<crossover_frequency, crossover_lr_diff, crossover_mode>;
-//------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
   polyphase_fir_test_gain,
@@ -5485,7 +5599,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<saturation_params>;
+using all_fx_typelists = mp_list<crossover_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX");
 
@@ -5532,10 +5646,8 @@ using all_fx_typelists = mp_list<
   fdnverb_params,
   track_comp_params,
   signal_crusher_params,
-  saturation_params
-#if 0
-  saturation_params // 1 sample latency.
-#endif
+  saturation_params,
+  crossover_params
   >;
 // clang-format on
 //------------------------------------------------------------------------------
@@ -5581,11 +5693,12 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Reverb Tal 2",
   ":Stereo Stereo Bub 3",
   ":Stereo Stereo Tilt",
-  ":EQ Filters x2",
+  ":Filter Filters x2",
   ":Reverb FDN Verb Riser",
   ":Dynamics Track Comp",
   ":Distortion Signal Crusher",
-  ":Distortion Saturation");
+  ":Distortion Saturation",
+  ":Filter Crossover-4");
 
 #endif // #if TWEAK_BUILD
 
@@ -5620,10 +5733,8 @@ using non_routing_controls_typelist
 using all_controls_typelist = mp11::mp_flatten<
   mp11::mp_list<routing_controls_typelist, non_routing_controls_typelist>>;
 
-using all_channel_sliders_typelist = mp11::mp_flatten<mp11::mp_list<
-  all_nonfx_sliders_typelist,
-  channel_fx_sliders_typelist,
-  crossover_params>>;
+using all_channel_sliders_typelist = mp11::mp_flatten<
+  mp11::mp_list<all_nonfx_sliders_typelist, channel_fx_sliders_typelist>>;
 
 using parameters_typelist = mp11::mp_flatten<
   mp11::mp_list<all_controls_typelist, all_channel_sliders_typelist>>;

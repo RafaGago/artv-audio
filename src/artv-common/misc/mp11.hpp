@@ -12,7 +12,6 @@ namespace mp11 = boost::mp11;
 
 template <class... T>
 using mp_list = mp11::mp_list<T...>;
-
 //------------------------------------------------------------------------------
 template <class T, class Idx>
 struct type_with_index {
@@ -64,6 +63,25 @@ void mp_foreach_idx (F&& f)
     mp11::mp_from_sequence<mp11::make_integer_sequence<uint, End>>> (f);
 }
 //------------------------------------------------------------------------------
+// clang-format off
+template <class L, class V>
+using mp_not_in_list =
+  mp11::mp_bool<mp11::mp_find<L, V>::value < mp11::mp_size<L>::value>;
+// clang-format on
+
+// "mp_not_in_list" as a quoted metafunction for a given list.
+template <class L>
+struct mp_not_in_list_qm {
+  template <class V>
+  using fn = mp_not_in_list<L, V>;
+};
+//------------------------------------------------------------------------------
+// Removes the types on the list "L_rm" from list "L"
+template <class L, class L_rm>
+using mp_remove_all = mp11::mp_remove_if_q<L, mp_not_in_list_qm<L_rm>>;
+//------------------------------------------------------------------------------
+
+} // namespace artv
 
 #else
 
@@ -75,4 +93,3 @@ struct mp_list {}
 }
 
 #endif
-} // namespace artv

@@ -46,11 +46,13 @@ private
   u64 mask;
 };
 //------------------------------------------------------------------------------
-template <size_t N> // N == channel count
+// N == channel count, Ext = externally managed inputs.
+template <size_t N, ssize_t Ext = 0>
 class order_and_buffering {
 public:
-  using bus_latency_arr = std::array<u16, N>;
-
+  using bus_latency_arr                  = std::array<u16, N>;
+  static constexpr size_t n_busses       = N;
+  static constexpr size_t n_external_ins = Ext;
   //----------------------------------------------------------------------------
   template <class T>
   void recompute (
@@ -58,7 +60,7 @@ public:
     u64  send_outs, // bit stream of size N * N representing sends of mix chnls
     u64  mute_solo_v, // bit stream of size N * 2 (2 = mute + solo)
     u64  mixer2mixer_sends, // bit stream of size N.
-    u64  inhibit_reordering, // bit stream of size N.
+    u64  inhibit_optimizations, // bit stream of size N.
     uint n_groups_log2,
     bus_latency_arr const& mix_latencies,
     T                      channel_has_processing)
@@ -168,7 +170,7 @@ public:
           // create another indentation level.
           break;
         }
-        if ((chnl.bit_in_self & inhibit_reordering) != 0) {
+        if ((chnl.bit_in_self & inhibit_optimizations) != 0) {
           // manually specified to not reorder this channel.
           break;
         }
@@ -277,7 +279,8 @@ public:
       ins,
       send_outs,
       mixer2mixer_sends,
-      mixer2mixer_receives);
+      mixer2mixer_receives,
+      inhibit_optimizations);
   }
   //----------------------------------------------------------------------------
   // just a variant adding default parameters, as this can't be done on the
@@ -287,7 +290,7 @@ public:
     u64  send_outs, // bit stream of size N * N representing sends of mix chnls
     u64  mute_solo_v, // bit stream of size N * 2 (2 = mute + solo)
     u64  mixer2mixer_sends, // bit stream of size N.
-    u64  inhibit_reordering, // bit stream of size N.
+    u64  inhibit_optimizations           = 0, // bit stream of size N.
     uint n_groups_log2                   = 0,
     bus_latency_arr const& mix_latencies = bus_latency_arr {})
   {
@@ -296,7 +299,7 @@ public:
       send_outs,
       mute_solo_v,
       mixer2mixer_sends,
-      inhibit_reordering,
+      inhibit_optimizations,
       n_groups_log2,
       mix_latencies,
       [] (uint chnl) { return true; });
@@ -311,7 +314,7 @@ public:
   //
   // // input buffers to each output channel: 1 based indexes
 
-  std::array<std::array<s8, N>, N> in; // ins from the DAW
+  std::array<std::array<s8, N + Ext>, N> in; // ins
   std::array<s8, N>                receives; // rcv from neighbouring mixer
   std::array<std::array<s8, N>, N> out;
   std::array<s8, N>                mix; // buffers: 1 based indexes
@@ -391,7 +394,8 @@ private:
     u64                    ins_as_bits,
     u64                    outs_as_bits,
     u64                    mixer2mixer_sends,
-    u64                    mixer2mixer_receives)
+    u64                    mixer2mixer_receives,
+    u64                    optimization_inhibited)
   {
     // Summarizing the relevant parts only. Each channel/bus has on this order:
     //
@@ -421,7 +425,11 @@ private:
     //
     // In the case of latency there is no room for miscalculation.
     std::array<u8, N> chnl_io = classify_io_detect_dead_ends (
-      ins_as_bits, outs_as_bits, mixer2mixer_sends, mixer2mixer_receives);
+      ins_as_bits,
+      outs_as_bits,
+      mixer2mixer_sends,
+      mixer2mixer_receives,
+      optimization_inhibited);
 
     for (uint c = 0; c < N; ++c) {
       if (chnl_io[c] == dead_channel) {
@@ -475,7 +483,8 @@ private:
     u64 ins_as_bits,
     u64 outs_as_bits,
     u64 mixer2mixer_sends,
-    u64 mixer2mixer_receives)
+    u64 mixer2mixer_receives,
+    u64 optimization_inhibited)
   {
     // this function requires "mixer2mixer_sends" and "mixer2mixer_receives" to
     // be corrected for grouping.
@@ -486,6 +495,8 @@ private:
     for (uint c = 0; c < N; ++c) {
       u64  chnl_mask = lsb_mask<u64> (N) << (c * N);
       bool has_ins   = !!(ins_as_bits & chnl_mask);
+      // assuming "optimization_inhibited" channels as if connected to an input.
+      has_ins |= !!(optimization_inhibited & bit<uint> (c));
       bool has_outs  = !!(outs_as_bits & chnl_mask);
       bool has_sends = mixer2mixer_sends & bit<uint> (c);
       bool has_recvs = mixer2mixer_receives & bit<uint> (c);

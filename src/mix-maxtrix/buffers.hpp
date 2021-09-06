@@ -21,9 +21,11 @@ public:
   using value_type = T;
   static_assert (std::is_floating_point<T>::value, "");
   //----------------------------------------------------------------------------
-  buffers (size_t channel_count) : _internal {64, (int) channel_count}
+  buffers (size_t channel_count, size_t extra_count = 0)
+    : _internal {(int) channel_count + (int) extra_count, 64}
   {
     _channel_count = channel_count;
+    _extra_count   = extra_count;
     _buffers[1]    = &_internal;
   }
   //----------------------------------------------------------------------------
@@ -31,7 +33,7 @@ public:
   {
     assert (block.getNumChannels() == _channel_count);
     _internal.setSize (
-      _channel_count, block.getNumSamples(), false, false, true);
+      _channel_count + _extra_count, block.getNumSamples(), false, false, true);
     _buffers[0] = &block;
   }
   //----------------------------------------------------------------------------
@@ -369,6 +371,7 @@ private:
   std::array<juce::AudioBuffer<T>*, 2> _buffers;
   juce::AudioBuffer<T>                 _internal;
   uint                                 _channel_count = 0;
+  uint                                 _extra_count   = 0;
 }; // namespace artv
 
 } // namespace artv

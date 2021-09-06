@@ -83,17 +83,27 @@ static constexpr preset presets[] = {
 <params plugin_version="1">
     <PARAM id="in_selection_01" value="1.0" />
     <PARAM id="out_selection_01" value="1.0" />
-    <PARAM id="crossover_frequency_01" value="57.60536956787109" />
-    <PARAM id="crossover_frequency_02" value="74.5" />
-    <PARAM id="crossover_frequency_03" value="105.80224609375" />
-    <PARAM id="fx_type_01" value="0.0" />
-    <PARAM id="fx_type_02" value="0.0" />
-    <PARAM id="fx_type_03" value="0.0" />
-    <PARAM id="fx_type_04" value="0.0" />
-    <PARAM id="out_selection_03" value="2.0" />
-    <PARAM id="out_selection_05" value="4.0" />
-    <PARAM id="out_selection_07" value="8.0" />
-    <PARAM id="routing" value="3.0" />
+    <PARAM id="crossover_band1_diff" />
+    <PARAM id="crossover_band1_frequency" value="51.08850860595703" />
+    <PARAM id="crossover_band1_mode" />
+    <PARAM id="crossover_band1_out" value="0.0" />
+    <PARAM id="crossover_band2_diff" />
+    <PARAM id="crossover_band2_frequency" value="73.13029479980469" />
+    <PARAM id="crossover_band2_mode" />
+    <PARAM id="crossover_band2_out" value="1.0" />
+    <PARAM id="crossover_band3_diff" />
+    <PARAM id="crossover_band3_frequency" value="105.9929809570312" />
+    <PARAM id="crossover_band3_mode" />
+    <PARAM id="crossover_band3_out" value="2.0" />
+    <PARAM id="fx_type_01" value="42.0" />
+    <PARAM id="global_volume" />
+    <PARAM id="mixer_sends" />
+    <PARAM id="out_selection_02" value="2.0" />
+    <PARAM id="out_selection_03" value="4.0" />
+    <PARAM id="out_selection_04" value="8.0" />
+    <PARAM id="out_selection_05" value="0.0" />
+    <PARAM id="out_selection_07" value="0.0" />
+    <PARAM id="routing" value="0.0" />
 </params>
      )END"},
   {.name = "Mix: Console 6 Companding",

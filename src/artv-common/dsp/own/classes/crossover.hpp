@@ -109,9 +109,9 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void tick (crange<std::array<T*, 2>> io, uint samples)
+  void tick (crange<T*> outs, crange<T const*> ins, uint samples)
   {
-    tick<T, !controls_summing> (io, samples);
+    tick<T, !controls_summing> (outs, ins, samples);
   }
   //----------------------------------------------------------------------------
   std::array<double_x2, n_bands> phase_correct (
@@ -165,16 +165,18 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void sum (crange<std::array<T*, 2>> io, uint samples)
+  void sum (crange<T*> outs, crange<T const*> ins, uint samples)
   {
-    assert (controls_summing);
-    assert (io.size() >= n_bands);
-    for (uint b = 0; b < n_bands; ++b) {
-      assert (io[b][0] != nullptr);
-      assert (io[b][1] != nullptr);
-    }
-
     static constexpr uint blocksize = 32;
+
+    assert (outs.size() >= 2);
+    assert (outs[0] != nullptr);
+    assert (outs[1] != nullptr);
+
+    assert (ins.size() >= (n_bands * 2));
+    for (uint b = 0; b < (n_bands * 2); ++b) {
+      assert (ins[b] != nullptr);
+    }
 
     std::array<std::array<double_x2, n_bands>, blocksize> buffer;
 
@@ -183,8 +185,9 @@ public:
       uint subblock_size = std::min (samples - done, blocksize);
 
       for (uint b = 0; b < n_bands; ++b) {
+        uint in = b * 2;
         for (uint i = 0; i < subblock_size; ++subblock_size) {
-          buffer[i][b] = double_x2 {io[b][0][done + i], io[b][1][done + i]};
+          buffer[i][b] = double_x2 {ins[in][done + i], ins[in + 1][done + i]};
         }
       }
 
@@ -193,8 +196,8 @@ public:
       }
 
       for (uint i = 0; i < subblock_size; ++subblock_size) {
-        io[0][0][done + i] = buffer[i][0][0];
-        io[0][1][done + i] = buffer[i][0][1];
+        outs[0][done + i] = buffer[i][0][0];
+        outs[1][done + i] = buffer[i][0][1];
       }
       done += subblock_size;
     }
@@ -203,15 +206,18 @@ public:
 private:
   //----------------------------------------------------------------------------
   template <class T, bool do_phase_correct>
-  void tick (crange<std::array<T*, 2>> io, uint samples)
+  void tick (crange<T*> outs, crange<T const*> ins, uint samples)
   {
-    assert (io.size() >= n_bands);
-    for (uint b = 0; b < n_bands; ++b) {
-      assert (io[b][0] != nullptr);
-      assert (io[b][1] != nullptr);
-    }
-
     static constexpr uint blocksize = 32;
+
+    assert (ins.size() >= 2);
+    assert (ins[0] != nullptr);
+    assert (ins[1] != nullptr);
+
+    assert (outs.size() >= (n_bands * 2));
+    for (uint b = 0; b < (n_bands * 2); ++b) {
+      assert (outs[b] != nullptr);
+    }
 
     std::array<std::array<double_x2, n_bands>, blocksize> buffer;
 
@@ -220,7 +226,7 @@ private:
       uint subblock_size = std::min (samples - done, blocksize);
 
       for (uint i = 0; i < subblock_size; ++i) {
-        buffer[i] = tick (double_x2 {io[0][0][done + i], io[0][1][done + i]});
+        buffer[i] = tick (double_x2 {ins[0][done + i], ins[1][done + i]});
       }
       if constexpr (do_phase_correct) {
         for (uint i = 0; i < subblock_size; ++i) {
@@ -229,8 +235,9 @@ private:
       }
       for (uint b = 0; b < n_bands; ++b) {
         for (uint i = 0; i < subblock_size; ++i) {
-          io[b][0][done + i] = buffer[i][b][0];
-          io[b][1][done + i] = buffer[i][b][1];
+          uint out                = b * 2;
+          outs[out][done + i]     = buffer[i][b][0];
+          outs[out + 1][done + i] = buffer[i][b][1];
         }
       }
       done += subblock_size;
