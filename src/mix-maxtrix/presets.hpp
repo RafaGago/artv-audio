@@ -688,113 +688,107 @@ static constexpr preset presets[] = {
    .xml = R"END(
 <?xml version="1.0" encoding="UTF-8"?>
 <params plugin_version="1">
-    <PARAM id="_1175_attack_02" value="165.0" />
-    <PARAM id="_1175_gain_02" value="10.39999961853027" />
-    <PARAM id="_1175_ratio_02" value="1.0" />
-    <PARAM id="_1175_release_02" value="147.0" />
-    <PARAM id="_1175_threshold_02" value="-17.89999771118164" />
     <PARAM id="channel_modifs_01" value="0.0" />
     <PARAM id="channel_modifs_02" value="0.0" />
     <PARAM id="consolidator_channel_link_08" value="0.0" />
-    <PARAM id="consolidator_ingain_03" value="0.0" />
     <PARAM id="consolidator_ingain_08" value="20.15999984741211" />
-    <PARAM id="consolidator_mode_03" value="2.0" />
     <PARAM id="consolidator_mode_08" value="0.0" />
     <PARAM id="consolidator_sidechain_freq_03" value="38.3695068359375" />
     <PARAM id="consolidator_st_mode_08" value="0.0" />
-    <PARAM id="consolidator_trim_03" value="0.0" />
     <PARAM id="consolidator_trim_08" value="3.069999694824219" />
-    <PARAM id="eq4x_band1_freq_01" value="59.43284606933594" />
-    <PARAM id="eq4x_band1_freq_03" value="59.43284606933594" />
-    <PARAM id="eq4x_band1_freq_05" value="69.0" />
-    <PARAM id="eq4x_band1_q_03" value="0.4999999701976776" />
-    <PARAM id="eq4x_band1_q_05" value="0.4999999701976776" />
-    <PARAM id="eq4x_band1_type_01" value="5.0" />
-    <PARAM id="eq4x_band1_type_03" value="6.0" />
-    <PARAM id="eq4x_band2_freq_01" value="27.86124229431152" />
-    <PARAM id="eq4x_band2_freq_03" value="93.52516174316406" />
-    <PARAM id="eq4x_band2_freq_04" value="69.0" />
-    <PARAM id="eq4x_band2_freq_05" value="69.0" />
-    <PARAM id="eq4x_band2_freq_06" value="93.52516174316406" />
-    <PARAM id="eq4x_band2_freq_07" value="69.0" />
-    <PARAM id="eq4x_band2_gain_01" value="10.0" />
-    <PARAM id="eq4x_band2_q_01" value="4.094699859619141" />
-    <PARAM id="eq4x_band2_q_05" value="0.4999999701976776" />
-    <PARAM id="eq4x_band2_type_01" value="1.0" />
-    <PARAM id="eq4x_band2_type_03" value="5.0" />
-    <PARAM id="eq4x_band2_type_06" value="6.0" />
-    <PARAM id="filter2x_band1_drive_05" value="21.80000305175781" />
-    <PARAM id="filter2x_band1_feedback_05" value="0.0" />
-    <PARAM id="filter2x_band1_freq_05" value="25.5323314666748" />
-    <PARAM id="filter2x_band1_gain_05" value="3.25" />
-    <PARAM id="filter2x_band1_reso_05" value="0.2319999933242798" />
-    <PARAM id="filter2x_band1_tolerance_05" value="31.19999694824219" />
+    <PARAM id="filter2x_band1_drive_05" value="17.90000152587891" />
+    <PARAM id="filter2x_band1_feedback_05" value="68.80000305175781" />
+    <PARAM id="filter2x_band1_freq_05" value="28.88083457946777" />
+    <PARAM id="filter2x_band1_gain_05" value="3.300003051757812" />
+    <PARAM id="filter2x_band1_reso_05" value="0.6759999990463257" />
+    <PARAM id="filter2x_band1_tolerance_05" value="-37.59999847412109" />
     <PARAM id="filter2x_band1_topology_05" value="1.0" />
     <PARAM id="filter2x_band1_type_05" value="2.0" />
-    <PARAM id="fx_mix_07" value="97.20000457763672" />
-    <PARAM id="fx_mix_08" value="27.20000076293945" />
-    <PARAM id="fx_type_01" value="23.0" />
-    <PARAM id="fx_type_02" value="9.0" />
-    <PARAM id="fx_type_03" value="23.0" />
+    <PARAM id="fx_mix_07" value="49.60000228881836" />
+    <PARAM id="fx_mix_08" value="24.40000152587891" />
+    <PARAM id="fx_type_01" value="42.0" />
+    <PARAM id="fx_type_02" value="23.0" />
+    <PARAM id="fx_type_03" value="9.0" />
     <PARAM id="fx_type_04" value="15.0" />
     <PARAM id="fx_type_05" value="37.0" />
-    <PARAM id="fx_type_06" value="23.0" />
+    <PARAM id="fx_type_06" value="0.0" />
     <PARAM id="fx_type_07" value="11.0" />
     <PARAM id="fx_type_08" value="10.0" />
-    <PARAM id="gate_expander_attack_07" value="1.0" />
-    <PARAM id="gate_expander_attack_08" value="5.0" />
+    <PARAM id="gate_expander_attack_07" value="8.600000381469727" />
     <PARAM id="gate_expander_channel_link_07" value="0.0" />
-    <PARAM id="gate_expander_gatethresh_07" value="-13.70000076293945" />
-    <PARAM id="gate_expander_gatethresh_08" value="-60.0" />
+    <PARAM id="gate_expander_gatethresh_07" value="-29.19999885559082" />
     <PARAM id="gate_expander_hysteresis_07" value="-2.659999847412109" />
-    <PARAM id="gate_expander_hysteresis_08" value="-3.0" />
     <PARAM id="gate_expander_mode_07" value="1.0" />
-    <PARAM id="gate_expander_range_07" value="-17.28000068664551" />
-    <PARAM id="gate_expander_range_08" value="-40.0" />
-    <PARAM id="gate_expander_release_07" value="50.0" />
-    <PARAM id="gate_expander_release_08" value="300.0" />
-    <PARAM id="global_volume" value="-7.050000190734863" />
+    <PARAM id="gate_expander_range_07" value="-50.88000106811523" />
+    <PARAM id="gate_expander_release_07" value="368.8000183105469" />
+    <PARAM id="global_volume" value="0.0" />
     <PARAM id="in_selection_01" value="1.0" />
-    <PARAM id="in_selection_03" value="1.0" />
-    <PARAM id="in_selection_06" value="1.0" />
-    <PARAM id="major_tom_agc_04" value="0.0" />
-    <PARAM id="major_tom_detection_04" value="1.0" />
-    <PARAM id="major_tom_gain_04" value="0.0" />
-    <PARAM id="major_tom_knee_04" value="1.0" />
-    <PARAM id="major_tom_ratio_04" value="1.940000057220459" />
-    <PARAM id="major_tom_threshold_04" value="-29.39999961853027" />
-    <PARAM id="mixer_sends" value="109.0" />
-    <PARAM id="out_selection_02" value="1.0" />
+    <PARAM id="in_selection_03" value="0.0" />
+    <PARAM id="in_selection_06" value="0.0" />
+    <PARAM id="mixer_sends" value="75.0" />
+    <PARAM id="out_selection_02" value="0.0" />
     <PARAM id="out_selection_05" value="1.0" />
     <PARAM id="out_selection_08" value="1.0" />
     <PARAM id="pan_08" value="0.0" />
     <PARAM id="routing" value="0.0" />
-    <PARAM id="sandwitch_amp_asymmetry_03" value="0.0" />
-    <PARAM id="sandwitch_amp_bandwidth_octaves_03" value="2.0" />
-    <PARAM id="sandwitch_amp_distortion_width_03" value="0.4999999701976776" />
-    <PARAM id="sandwitch_amp_filter_freq_03" value="81.38906097412109" />
-    <PARAM id="sandwitch_amp_filter_gain_03" value="20.0" />
-    <PARAM id="sandwitch_amp_limit_db_03" value="-12.0" />
-    <PARAM id="sandwitch_amp_secondary_gain_db_03" value="0.0" />
-    <PARAM id="sound_delay_l_sync_02" value="0.0" />
-    <PARAM id="sound_delay_r_sync_02" value="0.0" />
-    <PARAM id="stereo_tilt_balance_08" value="-72.0" />
-    <PARAM id="stereo_tilt_frequency_08" value="78.0" />
-    <PARAM id="stereo_tilt_tilt_08" value="6.0" />
     <PARAM id="transience_attack_04" value="0.3840000033378601" />
-    <PARAM id="transience_attack_amt_03" value="0.0" />
-    <PARAM id="transience_attack_amt_04" value="0.3840000629425049" />
-    <PARAM id="transience_decay_03" value="0.5" />
+    <PARAM id="transience_attack_amt_04" value="0.6880000829696655" />
     <PARAM id="transience_decay_04" value="0.7839999794960022" />
-    <PARAM id="transience_decay_amt_03" value="0.0" />
-    <PARAM id="transience_decay_amt_04" value="0.7360000610351562" />
+    <PARAM id="transience_decay_amt_04" value="0.7039999961853027" />
     <PARAM id="transience_gainsmoothing_04" value="0.07999999821186066" />
     <PARAM id="transience_mode_04" value="0.0" />
-    <PARAM id="volume_02" value="4.0" />
-    <PARAM id="volume_05" value="6.379997253417969" />
-    <PARAM id="volume_08" value="12.0" />
+    <PARAM id="volume_02" value="0.0" />
+    <PARAM id="volume_05" value="0.3400001525878906" />
+    <PARAM id="volume_08" value="0.0" />
     <PARAM id="wet_balance_08" value="-100.0" />
     <PARAM id="wet_pan_08" value="1.599998474121094" />
+    <PARAM id="_1175_attack_03" value="165.0" />
+    <PARAM id="_1175_gain_03" value="10.39999961853027" />
+    <PARAM id="_1175_ratio_03" value="1.0" />
+    <PARAM id="_1175_release_03" value="170.0" />
+    <PARAM id="_1175_threshold_03" value="-18.79999923706055" />
+    <PARAM id="consolidator_oversampling_08" value="0.0" />
+    <PARAM id="crossover_band1_diff" value="0.0" />
+    <PARAM id="crossover_band1_frequency" value="57.30715942382812" />
+    <PARAM id="crossover_band1_mode" />
+    <PARAM id="crossover_band1_out" value="2.0" />
+    <PARAM id="crossover_band2_diff" value="0.0" />
+    <PARAM id="crossover_band2_frequency" value="93.69966125488281" />
+    <PARAM id="crossover_band2_mode" />
+    <PARAM id="crossover_band2_out" value="5.0" />
+    <PARAM id="crossover_band3_diff" value="0.0" />
+    <PARAM id="crossover_band3_frequency" value="108.8631286621094" />
+    <PARAM id="crossover_band3_mode" value="0.0" />
+    <PARAM id="crossover_band3_out" value="0.0" />
+    <PARAM id="eq4x_band1_freq_02" value="59.43284606933594" />
+    <PARAM id="eq4x_band1_type_02" value="0.0" />
+    <PARAM id="eq4x_band2_freq_02" value="28.339599609375" />
+    <PARAM id="eq4x_band2_gain_02" value="2.75" />
+    <PARAM id="eq4x_band2_q_02" value="0.5730999708175659" />
+    <PARAM id="eq4x_band2_type_02" value="1.0" />
+    <PARAM id="filter2x_band1_ef_to_freq_05" value="100.0" />
+    <PARAM id="filter2x_band1_ef_to_reso_05" value="0.0" />
+    <PARAM id="filter2x_envfollow_attack_05" value="7.099999904632568" />
+    <PARAM id="filter2x_envfollow_release_05" value="407.0" />
+    <PARAM id="filter2x_envfollow_sensitivity_05" value="23.43999862670898" />
+    <PARAM id="fx_mix_02" value="100.0" />
+    <PARAM id="fx_mix_03" value="100.0" />
+    <PARAM id="fx_mix_04" value="100.0" />
+    <PARAM id="fx_mix_05" value="2.265000104904175" />
+    <PARAM id="out_selection_01" value="0.0" />
+    <PARAM id="out_selection_03" value="1.0" />
+    <PARAM id="out_selection_04" value="0.0" />
+    <PARAM id="transience_oversampling_04" value="0.0" />
+    <PARAM id="volume_03" value="4.0" />
+    <PARAM id="volume_04" value="-11.94000244140625" />
+    <PARAM id="volume_07" value="0.0" />
+    <PARAM id="wet_balance_02" value="0.0" />
+    <PARAM id="wet_balance_05" value="-56.79999923706055" />
+    <PARAM id="wet_pan_02" value="0.0" />
+    <PARAM id="wet_pan_03" value="0.0" />
+    <PARAM id="wet_pan_04" value="0.0" />
+    <PARAM id="wet_pan_05" value="19.19999694824219" />
+    <PARAM id="wet_pan_07" value="0.0" />
 </params>
      )END"},
   {.name = "FX: Multiband Nasal Modulations",
