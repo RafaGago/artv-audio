@@ -802,80 +802,77 @@ static constexpr preset presets[] = {
 <?xml version="1.0" encoding="UTF-8"?>
 <params plugin_version="1">
     <PARAM id="in_selection_01" value="1.0" />
-    <PARAM id="in_selection_02" value="1.0" />
-    <PARAM id="in_selection_03" value="1.0" />
-    <PARAM id="in_selection_04" value="1.0" />
+    <PARAM id="in_selection_02" value="0.0" />
+    <PARAM id="in_selection_03" value="0.0" />
+    <PARAM id="in_selection_04" value="0.0" />
     <PARAM id="out_selection_01" value="1.0" />
-    <PARAM id="out_selection_02" value="2.0" />
-    <PARAM id="out_selection_03" value="4.0" />
-    <PARAM id="out_selection_04" value="8.0" />
-    <PARAM id="eq4x_band1_freq_01" value="57.99777221679688" />
-    <PARAM id="eq4x_band1_freq_02" value="57.99777221679688" />
-    <PARAM id="eq4x_band1_freq_03" value="84.78579711914062" />
-    <PARAM id="eq4x_band1_freq_04" value="108.2253265380859" />
-    <PARAM id="eq4x_band1_q_01" value="0.4999999701976776" />
-    <PARAM id="eq4x_band1_type_01" value="5.0" />
-    <PARAM id="eq4x_band1_type_02" value="6.0" />
-    <PARAM id="eq4x_band1_type_03" value="6.0" />
-    <PARAM id="eq4x_band1_type_04" value="6.0" />
-    <PARAM id="eq4x_band2_freq_02" value="84.78579711914062" />
-    <PARAM id="eq4x_band2_freq_03" value="108.2253265380859" />
-    <PARAM id="eq4x_band2_type_02" value="5.0" />
-    <PARAM id="eq4x_band2_type_03" value="5.0" />
-    <PARAM id="fx_type_01" value="23.0" />
-    <PARAM id="fx_type_02" value="23.0" />
-    <PARAM id="fx_type_03" value="23.0" />
-    <PARAM id="fx_type_04" value="23.0" />
-    <PARAM id="bbd_echo_age_07" value="-74.40000152587891" />
-    <PARAM id="bbd_echo_clock_scale_07" value="0.8490000367164612" />
-    <PARAM id="bbd_echo_delay_sync_l_07" value="25.59999847412109" />
-    <PARAM id="bbd_echo_delay_sync_r_07" value="18.39999961853027" />
-    <PARAM id="bbd_echo_feedback_07" value="56.0" />
-    <PARAM id="bbd_echo_stages_07" value="2.0" />
-    <PARAM id="eq4x_band2_freq_01" value="69.0" />
-    <PARAM id="eq4x_band2_freq_06" value="69.0" />
-    <PARAM id="eq4x_band2_q_01" value="0.4999999701976776" />
-    <PARAM id="eq4x_band2_type_01" value="0.0" />
-    <PARAM id="eq4x_band2_type_06" value="0.0" />
-    <PARAM id="fx_mix_06" value="76.80000305175781" />
-    <PARAM id="fx_mix_07" value="57.60000228881836" />
-    <PARAM id="fx_mix_08" value="53.60000228881836" />
+    <PARAM id="out_selection_02" value="1.0" />
+    <PARAM id="out_selection_03" value="1.0" />
+    <PARAM id="out_selection_04" value="1.0" />
+    <PARAM id="fx_type_01" value="42.0" />
+    <PARAM id="fx_type_02" value="27.0" />
+    <PARAM id="fx_type_03" value="2.0" />
+    <PARAM id="fx_type_04" value="25.0" />
+    <PARAM id="bbd_echo_age_07" value="0.0" />
+    <PARAM id="bbd_echo_clock_scale_07" value="1.0" />
+    <PARAM id="bbd_echo_delay_sync_l_07" value="50.0" />
+    <PARAM id="bbd_echo_delay_sync_r_07" value="50.0" />
+    <PARAM id="bbd_echo_feedback_07" value="40.0" />
+    <PARAM id="bbd_echo_stages_07" value="9.0" />
+    <PARAM id="fx_mix_06" value="100.0" />
+    <PARAM id="fx_mix_07" value="100.0" />
+    <PARAM id="fx_mix_08" value="100.0" />
     <PARAM id="fx_type_05" value="0.0" />
-    <PARAM id="fx_type_06" value="27.0" />
-    <PARAM id="fx_type_07" value="2.0" />
-    <PARAM id="fx_type_08" value="25.0" />
+    <PARAM id="fx_type_06" value="0.0" />
+    <PARAM id="fx_type_07" value="0.0" />
+    <PARAM id="fx_type_08" value="0.0" />
     <PARAM id="global_volume" value="0.0" />
-    <PARAM id="in_selection_05" value="9.0" />
-    <PARAM id="in_selection_06" value="2.0" />
-    <PARAM id="in_selection_07" value="4.0" />
+    <PARAM id="in_selection_05" value="0.0" />
+    <PARAM id="in_selection_06" value="0.0" />
+    <PARAM id="in_selection_07" value="0.0" />
     <PARAM id="in_selection_08" value="0.0" />
-    <PARAM id="mixer_sends" value="64.0" />
-    <PARAM id="myphaser_feedback_08" value="-74.40000152587891" />
-    <PARAM id="myphaser_high_freq_08" value="107.3255462646484" />
-    <PARAM id="myphaser_lfo_depth_08" value="65.80000305175781" />
-    <PARAM id="myphaser_lfo_rate_08" value="-80.0" />
-    <PARAM id="myphaser_lfo_rate_sync_08" value="16.0" />
-    <PARAM id="myphaser_lfo_stereo_08" value="298.1000061035156" />
-    <PARAM id="myphaser_low_freq_08" value="84.93194580078125" />
-    <PARAM id="myphaser_q_08" value="1.632000088691711" />
-    <PARAM id="myphaser_stages_08" value="11.0" />
-    <PARAM id="myphaser_stages_mode_08" value="4.0" />
-    <PARAM id="out_selection_05" value="1.0" />
-    <PARAM id="out_selection_06" value="1.0" />
-    <PARAM id="out_selection_07" value="0.0" />
-    <PARAM id="out_selection_08" value="1.0" />
-    <PARAM id="routing" value="1.0" />
-    <PARAM id="volume_02" value="0.0" />
-    <PARAM id="volume_05" value="0.0" />
-    <PARAM id="volume_07" value="2.919998168945312" />
-    <PARAM id="volume_08" value="2.219997406005859" />
-    <PARAM id="wet_balance_08" value="0.0" />
-    <PARAM id="wet_pan_06" value="54.39999389648438" />
-    <PARAM id="wet_pan_07" value="-34.40000152587891" />
-    <PARAM id="wet_pan_08" value="-59.20000076293945" />
-    <PARAM id="zebigchorus3_algo_06" value="7.0" />
-    <PARAM id="zebigchorus3_delay_06" value="17.79999923706055" />
-    <PARAM id="zebigchorus3_dmod_06" value="90.0" />
+    <PARAM id="mixer_sends" value="4.0" />
+    <PARAM id="routing" value="0.0" />
+    <PARAM id="bbd_echo_age_03" value="-74.40000152587891" />
+    <PARAM id="bbd_echo_clock_scale_03" value="0.8490000367164612" />
+    <PARAM id="bbd_echo_delay_sync_l_03" value="25.59999847412109" />
+    <PARAM id="bbd_echo_delay_sync_r_03" value="18.39999961853027" />
+    <PARAM id="bbd_echo_feedback_03" value="56.0" />
+    <PARAM id="bbd_echo_stages_03" value="2.0" />
+    <PARAM id="crossover_band1_diff" value="-11.20000457763672" />
+    <PARAM id="crossover_band1_frequency" value="57.78551864624023" />
+    <PARAM id="crossover_band1_mode" />
+    <PARAM id="crossover_band1_out" />
+    <PARAM id="crossover_band2_diff" value="24.0" />
+    <PARAM id="crossover_band2_frequency" value="84.61087036132812" />
+    <PARAM id="crossover_band2_mode" />
+    <PARAM id="crossover_band2_out" value="1.0" />
+    <PARAM id="crossover_band3_diff" value="-19.20000457763672" />
+    <PARAM id="crossover_band3_frequency" value="106.9496917724609" />
+    <PARAM id="crossover_band3_mode" />
+    <PARAM id="crossover_band3_out" value="3.0" />
+    <PARAM id="fx_mix_02" value="76.80000305175781" />
+    <PARAM id="fx_mix_03" value="57.60000228881836" />
+    <PARAM id="fx_mix_04" value="53.60000228881836" />
+    <PARAM id="myphaser_feedback_04" value="-74.40000152587891" />
+    <PARAM id="myphaser_high_freq_04" value="107.3255462646484" />
+    <PARAM id="myphaser_lfo_depth_04" value="65.80000305175781" />
+    <PARAM id="myphaser_lfo_rate_04" value="-80.0" />
+    <PARAM id="myphaser_lfo_rate_sync_04" value="16.0" />
+    <PARAM id="myphaser_lfo_stereo_04" value="298.1000061035156" />
+    <PARAM id="myphaser_low_freq_04" value="84.93194580078125" />
+    <PARAM id="myphaser_q_04" value="1.632000088691711" />
+    <PARAM id="myphaser_stages_04" value="11.0" />
+    <PARAM id="myphaser_stages_mode_04" value="4.0" />
+    <PARAM id="volume_03" value="2.919998168945312" />
+    <PARAM id="volume_04" value="2.219997406005859" />
+    <PARAM id="wet_balance_02" value="5.860000610351562" />
+    <PARAM id="wet_balance_06" value="0.0" />
+    <PARAM id="wet_pan_02" value="54.39999389648438" />
+    <PARAM id="wet_pan_03" value="-34.40000152587891" />
+    <PARAM id="wet_pan_04" value="-59.20000076293945" />
+    <PARAM id="zebigchorus3_algo_02" value="7.0" />
+    <PARAM id="zebigchorus3_delay_02" value="17.79999923706055" />
 </params>
      )END"},
 };
