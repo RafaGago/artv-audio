@@ -404,8 +404,11 @@ public:
       double_x2> (_adaa_fix_eq_delay_coeffs);
 
     for (auto& dcbc : _dc_block_coeffs) {
+      // this DC blocker at a very low frequency is critical for the sound of
+      // the companded modes to be acceptable. Unfortunately it causes DC itself
+      // when the sound is muted. I didn't find a solution.
       mystran_dc_blocker::reset_coeffs (
-        dcbc, vec_set<double_x2> (0.1), pc.get_sample_rate());
+        dcbc, vec_set<double_x2> (0.01), pc.get_sample_rate());
     }
 
     _p = params {};
@@ -435,6 +438,9 @@ public:
     params                  p                = _p;
 
     if (unlikely (p.type_prev != p.type || p.mode_prev != p.mode)) {
+      memset (&_dc_block_states, 0, sizeof _dc_block_states);
+      memset (&_compressor_states, 0, sizeof _compressor_states);
+      memset (&_expander_states, 0, sizeof _expander_states);
       // some waveshapers will create peaks, as the integral on 0 might not be
       // 0. Running them for some samples of silence to initialize. This avoids
       // too having to run the "reset_states" functions on the waveshapers.
@@ -475,28 +481,28 @@ public:
         sat[i][1] = ins[1][samples_processed + i];
         switch (p.mode) {
         case mode_compand_1b:
+          sat[i] = mystran_dc_blocker::tick (
+            _dc_block_coeffs[dc_block_compand],
+            _dc_block_states[dc_block_compand],
+            sat[i]);
           sat[i] = compand_1b_aa::tick (
             _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick (
-            _dc_block_coeffs[dc_block_compand],
-            _dc_block_states[dc_block_compand],
-            sat[i]);
           break;
         case mode_compand_1a:
+          sat[i] = mystran_dc_blocker::tick (
+            _dc_block_coeffs[dc_block_compand],
+            _dc_block_states[dc_block_compand],
+            sat[i]);
           sat[i] = compand_1a_aa::tick (
             _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick (
-            _dc_block_coeffs[dc_block_compand],
-            _dc_block_states[dc_block_compand],
-            sat[i]);
           break;
         case mode_compand_sqrt:
-          sat[i] = sqrt_aa::tick (
-            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
           sat[i] = mystran_dc_blocker::tick (
             _dc_block_coeffs[dc_block_compand],
             _dc_block_states[dc_block_compand],
             sat[i]);
+          sat[i] = sqrt_aa::tick (
+            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
           break;
         case mode_no_aa:
         case mode_normal:
@@ -638,7 +644,6 @@ public:
           break;
         }
 
-        sat[i] -= dcmod; // this is an FX not a DC blocker;
         sat[i] = mystran_dc_blocker::tick (
           _dc_block_coeffs[dc_block_main],
           _dc_block_states[dc_block_main],

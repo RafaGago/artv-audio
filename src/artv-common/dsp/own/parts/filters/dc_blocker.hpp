@@ -125,4 +125,71 @@ struct mystran_dc_blocker {
 // -Moving average DC blocker (linear phase):
 //    https://www.dsprelated.com/showthread/comp.dsp/66509-1.php
 //------------------------------------------------------------------------------
+struct combined_dc_blocker {
+  //----------------------------------------------------------------------------
+  static constexpr uint n_coeffs
+    = iir_dc_blocker::n_coeffs + mystran_dc_blocker::n_coeffs;
+  static constexpr uint n_states
+    = iir_dc_blocker::n_states + mystran_dc_blocker::n_states;
+  //----------------------------------------------------------------------------
+  // warning, if going to very low frequencies, use "double".
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<vec_value_type_t<V>> c,
+    vec_value_type_t<V>         sr)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    T f1;
+    T f2;
+    if constexpr (std::is_same_v<T, double>) {
+      f1 = 0.1;
+      f2 = 8.;
+    }
+    else {
+      f1 = 5.f;
+      f2 = 10.f;
+    }
+
+    mystran_dc_blocker::reset_coeffs (c, vec_set<V> (f1), sr);
+    c = c.shrink_head (mystran_dc_blocker::n_coeffs * traits.size);
+    iir_dc_blocker::reset_coeffs (c, vec_set<V> (f2), sr);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> c,
+    crange<vec_value_type_t<V>>       s,
+    V                                 x)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+    auto           ret    = mystran_dc_blocker::tick (c, s, x);
+    return iir_dc_blocker::tick (
+      c.shrink_head (mystran_dc_blocker::n_coeffs * traits.size),
+      s.shrink_head (mystran_dc_blocker::n_states * traits.size),
+      ret);
+  }
+  //----------------------------------------------------------------------------
+};
+//------------------------------------------------------------------------------
 } // namespace artv

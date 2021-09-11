@@ -5596,12 +5596,12 @@ parameter_cpp_class_define (
 using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #endif
 //------------------------------------------------------------------------------
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<crossover_params>;
+using all_fx_typelists = mp_list<saturation_params, crossover_params>;
 
-static constexpr auto fx_choices = make_cstr_array ("none", "FX");
+static constexpr auto fx_choices = make_cstr_array ("none", "FX", "C");
 
 #else
 // clang-format off
