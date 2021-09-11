@@ -125,12 +125,13 @@ struct mystran_dc_blocker {
 // -Moving average DC blocker (linear phase):
 //    https://www.dsprelated.com/showthread/comp.dsp/66509-1.php
 //------------------------------------------------------------------------------
-struct combined_dc_blocker {
+// one mystran DC blocker at very low frequency, with very good blocking
+// properties followed by another DC blocker with a higher cutoff to block the
+// DC that the first one causes.
+struct mystran_dc_blocker_2x {
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs
-    = iir_dc_blocker::n_coeffs + mystran_dc_blocker::n_coeffs;
-  static constexpr uint n_states
-    = iir_dc_blocker::n_states + mystran_dc_blocker::n_states;
+  static constexpr uint n_coeffs = 2 * mystran_dc_blocker::n_coeffs;
+  static constexpr uint n_states = 2 * mystran_dc_blocker::n_states;
   //----------------------------------------------------------------------------
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
@@ -155,7 +156,7 @@ struct combined_dc_blocker {
 
     mystran_dc_blocker::reset_coeffs (c, vec_set<V> (f1), sr);
     c = c.shrink_head (mystran_dc_blocker::n_coeffs * traits.size);
-    iir_dc_blocker::reset_coeffs (c, vec_set<V> (f2), sr);
+    mystran_dc_blocker::reset_coeffs (c, vec_set<V> (f2), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -184,7 +185,7 @@ struct combined_dc_blocker {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
     auto           ret    = mystran_dc_blocker::tick (c, s, x);
-    return iir_dc_blocker::tick (
+    return mystran_dc_blocker::tick (
       c.shrink_head (mystran_dc_blocker::n_coeffs * traits.size),
       s.shrink_head (mystran_dc_blocker::n_states * traits.size),
       ret);

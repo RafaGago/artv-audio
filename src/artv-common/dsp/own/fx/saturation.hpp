@@ -8,6 +8,7 @@
 
 #include "artv-common/dsp/own/classes/crossover.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/value_smoother.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/dc_blocker.hpp"
 #include "artv-common/dsp/own/parts/filters/moving_average.hpp"
@@ -96,7 +97,10 @@ public:
   //----------------------------------------------------------------------------
   struct saturated_out_tag {};
 
-  void set (saturated_out_tag, float v) { _p.sat_out = db_to_gain (v); }
+  void set (saturated_out_tag, float v)
+  {
+    _sparams.set (db_to_gain (v), sm_out);
+  }
 
   static constexpr auto get_parameter (saturated_out_tag)
   {
@@ -105,7 +109,7 @@ public:
   //----------------------------------------------------------------------------
   struct trim_tag {};
 
-  void set (trim_tag, float v) { _p.trim = db_to_gain (v); }
+  void set (trim_tag, float v) { _sparams.set (db_to_gain (v), sm_trim); }
 
   static constexpr auto get_parameter (trim_tag)
   {
@@ -114,7 +118,11 @@ public:
   //----------------------------------------------------------------------------
   struct drive_tag {};
 
-  void set (drive_tag, float v) { _p.drive = db_to_gain (v); }
+  void set (drive_tag, float v)
+  {
+    _p.drive = db_to_gain (v);
+    update_drive();
+  }
 
   static constexpr auto get_parameter (drive_tag)
   {
@@ -126,6 +134,7 @@ public:
   void set (drive_balance_tag, float v)
   {
     _p.drive_bal = (v * 0.7 * 0.01) + 1.;
+    update_drive();
   }
 
   static constexpr auto get_parameter (drive_balance_tag)
@@ -202,8 +211,8 @@ public:
     v *= 0.01;
     v = sqrtf (fabs (v));
     v *= 0.9f;
-    v           = neg ? -v : v;
-    _p.feedback = v;
+    v = neg ? -v : v;
+    _sparams.set (v, sm_feedback);
   }
 
   static constexpr auto get_parameter (feedback_tag)
@@ -215,11 +224,7 @@ public:
 
   void set (emphasis_freq_tag, float v)
   {
-    v = midi_note_to_hz (v);
-    if (v != _p.emphasis_freq) {
-      _p.emphasis_freq = v;
-      update_emphasis();
-    }
+    _sparams.set (midi_note_to_hz (v), sm_emphasis_freq);
   }
 
   static constexpr auto get_parameter (emphasis_freq_tag)
@@ -231,10 +236,7 @@ public:
 
   void set (emphasis_amount_tag, float v)
   {
-    if (v != _p.emphasis_amount) {
-      _p.emphasis_amount = v;
-      update_emphasis();
-    }
+    _sparams.set (midi_note_to_hz (v), sm_emphasis_amt);
   }
 
   static constexpr auto get_parameter (emphasis_amount_tag)
@@ -244,13 +246,7 @@ public:
   //----------------------------------------------------------------------------
   struct emphasis_q_tag {};
 
-  void set (emphasis_q_tag, float v)
-  {
-    if (v != _p.emphasis_q) {
-      _p.emphasis_q = v;
-      update_emphasis();
-    }
-  }
+  void set (emphasis_q_tag, float v) { _sparams.set (v, sm_emphasis_q); }
 
   static constexpr auto get_parameter (emphasis_q_tag)
   {
@@ -317,8 +313,9 @@ public:
     // -1 because the signal of the envelope follower has "1" added.
     constexpr auto max_db = (constexpr_db_to_gain (envfollow_max_db) - 1.f);
 
-    _p.ef_to_drive = sqrt (abs (v) * 0.01); // max 1
-    _p.ef_to_drive *= sgn_no_zero (v, -max_db, max_db);
+    auto efdrv = sqrt (abs (v) * 0.01); // max 1
+    efdrv *= sgn_no_zero (v, -max_db, max_db);
+    _sparams.set (efdrv, sm_ef_to_drive);
   }
 
   static constexpr auto get_parameter (envfollow_to_drive_tag)
@@ -330,7 +327,8 @@ public:
 
   void set (envfollow_to_emphasis_freq_tag, float v)
   {
-    _p.ef_to_emphasis_freq = v * (0.01 * 2.); // max = 2, 2 octaves up and down
+    // max = 2, 2 octaves up and down
+    _sparams.set (v * (0.01 * 2.), sm_ef_to_emphasis_freq);
   }
 
   static constexpr auto get_parameter (envfollow_to_emphasis_freq_tag)
@@ -342,9 +340,10 @@ public:
 
   void set (envfollow_to_emphasis_amount_tag, float v)
   {
-    _p.ef_to_emphasis_amt = v * 0.01f; // max 1
-    _p.ef_to_emphasis_amt = sqrt (fabs (_p.ef_to_emphasis_amt));
-    _p.ef_to_emphasis_amt *= sgn_no_zero (v, -30.f, 30.f);
+    auto amt = v * 0.01f; // max 1
+    amt      = sqrt (fabs (amt));
+    amt *= sgn_no_zero (v, -30.f, 30.f);
+    _sparams.set (amt, sm_ef_to_emphasis_amt);
   }
 
   static constexpr auto get_parameter (envfollow_to_emphasis_amount_tag)
@@ -356,8 +355,9 @@ public:
 
   void set (envfollow_to_dc_tag, float v)
   {
-    _p.ef_to_dc = sqrt (fabs (v * 0.01));
-    _p.ef_to_dc *= sgn_no_zero (v);
+    auto amt = sqrt (fabs (v * 0.01));
+    amt *= sgn_no_zero (v);
+    _sparams.set (amt, sm_ef_to_dc);
   }
 
   static constexpr auto get_parameter (envfollow_to_dc_tag)
@@ -403,15 +403,27 @@ public:
     adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::reset_coeffs<
       double_x2> (_adaa_fix_eq_delay_coeffs);
 
-    for (auto& dcbc : _dc_block_coeffs) {
-      // this DC blocker at a very low frequency is critical for the sound of
-      // the companded modes to be acceptable. Unfortunately it causes DC itself
-      // when the sound is muted. I didn't find a solution.
-      mystran_dc_blocker::reset_coeffs (
-        dcbc, vec_set<double_x2> (0.01), pc.get_sample_rate());
-    }
+    // this DC blocker at a very low frequency is critical for the sound of
+    // the companded modes to be acceptable. Unfortunately it causes DC itself
+    // when the sound is muted. I didn't find a solution.
+    mystran_dc_blocker::reset_coeffs (
+      _dc_block_coeffs[dc_block_compand],
+      vec_set<double_x2> (18.),
+      pc.get_sample_rate());
+
+    mystran_dc_blocker::reset_coeffs (
+      _dc_block_coeffs[dc_block_main],
+      vec_set<double_x2> (0.02),
+      pc.get_sample_rate());
+
+    mystran_dc_blocker::reset_coeffs (
+      _dc_block_coeffs[dc_block_expand],
+      vec_set<double_x2> (18.),
+      pc.get_sample_rate());
 
     _p = params {};
+
+    _sparams.reset ((float) pc.get_sample_rate());
 
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
@@ -425,8 +437,8 @@ public:
       = double_x2 {};
 
     _crossv.reset (pc.get_sample_rate());
-
     update_emphasis();
+    _sparams.set_to_target();
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -461,17 +473,11 @@ public:
       process<T> (io, cio, n_samples);
     }
 
-    double_x2 compens_drive {
-      p.drive * (2. - p.drive_bal), p.drive * (p.drive_bal)};
-    double_x2 inv_compens_drive = 1. / compens_drive;
-    compens_drive *= p.trim;
-
     static constexpr uint                 max_block_size    = 32;
     uint                                  samples_processed = 0;
     std::array<double_x2, max_block_size> sat, lo, hi;
 
     while (samples_processed < block_samples) {
-      // TODO:  smoothing
       uint subblock_size
         = std::min (block_samples - samples_processed, max_block_size);
 
@@ -537,6 +543,13 @@ public:
           std::swap (_crossv_prev[hi_crossv], hi[i]);
         }
 
+        // smoothing some params
+        _sparams.tick();
+
+        double_x2 drive {_sparams.get (sm_drive_l), _sparams.get (sm_drive_r)};
+        double_x2 inv_drive = 1. / drive;
+        inv_drive *= _sparams.get (sm_trim);
+
         // Envelope follower/modulation
         double_x2 follow
           = slew_limiter::tick (_envfollow_coeffs, _envfollow_states, sat[i]);
@@ -562,22 +575,20 @@ public:
 
         if ((_n_processed_samples & _control_rate_mask) == 0) {
           // expensive stuff at lower than audio rate
-          if (p.ef_to_emphasis_amt != 0. || p.ef_to_emphasis_freq != 0.) {
-            update_emphasis (
-              vec_exp2 (follow * p.ef_to_emphasis_freq) * p.emphasis_freq,
-              follow * p.ef_to_emphasis_amt);
-          }
+          update_emphasis (
+            vec_exp2 (follow * _sparams.get (sm_ef_to_emphasis_freq))
+              * _sparams.get (sm_emphasis_freq),
+            follow * _sparams.get (sm_ef_to_emphasis_amt));
         }
 
-        double_x2 drive     = compens_drive;
-        double_x2 inv_drive = inv_compens_drive;
+        float ef_to_drive = _sparams.get (sm_ef_to_drive);
 
-        if (p.ef_to_drive != 0.f) {
+        if (ef_to_drive != 0.f) {
           // gain modulation. Audio rate.
           double_x2 gainfollow
-            = (follow * abs (p.ef_to_drive)) + 1.; // 1 to N range
+            = (follow * abs (ef_to_drive)) + 1.; // 1 to N range
 
-          if (p.ef_to_drive > 0.f) {
+          if (ef_to_drive > 0.f) {
             drive *= gainfollow;
             inv_drive /= gainfollow;
           }
@@ -598,16 +609,16 @@ public:
         static constexpr auto fb_att = constexpr_db_to_gain (
           -constexpr_db_to_gain (envfollow_max_db) - 1.);
 
-        auto feedback = _sat_prev * p.feedback;
+        auto feedback = _sat_prev * _sparams.get (sm_feedback);
 
-        double_x2 feedback_follow = follow * p.ef_to_drive * fb_att;
+        double_x2 feedback_follow = follow * ef_to_drive * fb_att;
 
         // inverted channels on feedback_follow, just for fun...
         feedback_follow = vec_shuffle (feedback_follow, feedback_follow, 1, 0);
         feedback += feedback * feedback_follow;
 
         sat[i] += feedback;
-        auto dcmod = (0.5 * follow * p.ef_to_dc);
+        auto dcmod = (0.5 * follow * _sparams.get (sm_ef_to_dc));
         sat[i] += dcmod;
 
         // waveshaping
@@ -655,7 +666,7 @@ public:
           _post_emphasis_coeffs, _post_emphasis_states, sat[i]);
 
         // gain and crossover join
-        sat[i] *= inv_drive * p.sat_out;
+        sat[i] *= inv_drive * _sparams.get (sm_out);
         sat[i] += lo[i] + hi[i];
       }
 
@@ -665,27 +676,27 @@ public:
         case mode_compand_1b:
           sat[i] = compand_1a_aa::tick (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick (
-            _dc_block_coeffs[dc_block_expand],
-            _dc_block_states[dc_block_expand],
-            sat[i]);
+          // sat[i] = mystran_dc_blocker::tick (
+          //  _dc_block_coeffs[dc_block_expand],
+          //  _dc_block_states[dc_block_expand],
+          //  sat[i]);
           break;
         case mode_compand_1a:
           sat[i] = compand_1b_aa::tick (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick (
-            _dc_block_coeffs[dc_block_expand],
-            _dc_block_states[dc_block_expand],
-            sat[i]);
+          // sat[i] = mystran_dc_blocker::tick (
+          //  _dc_block_coeffs[dc_block_expand],
+          //  _dc_block_states[dc_block_expand],
+          //  sat[i]);
           break;
         case mode_compand_sqrt:
           // sat[i] = vec_clamp (sat[i], -pow2compand_clip, pow2compand_clip);
           sat[i] = pow2_aa::tick (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick (
-            _dc_block_coeffs[dc_block_expand],
-            _dc_block_states[dc_block_expand],
-            sat[i]);
+          // sat[i] = mystran_dc_blocker::tick (
+          //  _dc_block_coeffs[dc_block_expand],
+          //  _dc_block_states[dc_block_expand],
+          //  sat[i]);
           break;
         case mode_no_aa:
         case mode_normal:
@@ -711,6 +722,25 @@ private:
     return v;
   }
   //----------------------------------------------------------------------------
+  enum smoothed_state {
+    sm_drive_l,
+    sm_drive_r,
+    sm_feedback,
+    sm_out,
+
+    sm_trim,
+    sm_emphasis_freq,
+    sm_emphasis_amt,
+    sm_emphasis_q,
+
+    sm_ef_to_drive,
+    sm_ef_to_emphasis_freq,
+    sm_ef_to_emphasis_amt,
+    sm_ef_to_dc,
+
+    sm_count,
+  };
+  //----------------------------------------------------------------------------
   void update_crossover (uint idx)
   {
     _crossv.set_crossover_point (
@@ -718,6 +748,12 @@ private:
       _p.crossv_hz[idx],
       _p.crossv_hz[idx] * 1.009,
       abs (_p.crossv_order[idx]));
+  }
+  //----------------------------------------------------------------------------
+  void update_drive()
+  {
+    _sparams.set (_p.drive * (2. - _p.drive_bal), sm_drive_l);
+    _sparams.set (_p.drive * (_p.drive_bal), sm_drive_r);
   }
   //----------------------------------------------------------------------------
   static constexpr bool waveshaper_type_is_adaa (char mode)
@@ -734,9 +770,9 @@ private:
     double_x2 freq_offset = double_x2 {},
     double_x2 amt_offset  = double_x2 {})
   {
-    double_x2 f  = vec_set<double_x2> (_p.emphasis_freq);
-    double_x2 q  = vec_set<double_x2> (_p.emphasis_q);
-    double_x2 db = vec_set<double_x2> (_p.emphasis_amount);
+    double_x2 f  = vec_set<double_x2> (_sparams.get (sm_emphasis_freq));
+    double_x2 q  = vec_set<double_x2> (_sparams.get (sm_emphasis_q));
+    double_x2 db = vec_set<double_x2> (_sparams.get (sm_emphasis_amt));
 
     f += freq_offset;
     db += amt_offset;
@@ -823,27 +859,17 @@ private:
     }
 
     std::array<int, n_crossv>   crossv_order;
-    float                       sat_out   = 1.f;
-    float                       drive     = 1.f;
-    float                       trim      = 1.f;
-    float                       drive_bal = 0.f;
     std::array<float, n_crossv> crossv_hz;
-    float                       emphasis_freq       = 60.f;
-    float                       emphasis_amount     = 0.f;
-    float                       emphasis_q          = 0.5f;
-    float                       ef_attack           = 0.;
-    float                       ef_release          = 0.f;
-    float                       ef_gain             = 1.f;
-    float                       ef_to_drive         = 1.f;
-    float                       ef_to_emphasis_freq = 0.f;
-    float                       ef_to_emphasis_amt  = 0.f;
-    float                       ef_to_dc            = 0.f;
-    float                       feedback            = 0.f;
-    char                        type                = 0;
-    char                        type_prev           = 1;
-    char                        mode                = 1;
-    char                        mode_prev           = 0;
-    char                        ef_mode             = ef_linear;
+    float                       drive      = 1.f;
+    float                       drive_bal  = 0.f;
+    float                       ef_attack  = 0.;
+    float                       ef_release = 0.f;
+    float                       ef_gain    = 1.f;
+    char                        type       = 0;
+    char                        type_prev  = 1;
+    char                        mode       = 1;
+    char                        mode_prev  = 0;
+    char                        ef_mode    = ef_linear;
   };
 
   template <class T>
@@ -910,10 +936,13 @@ private:
   // everything.
   params _p;
   alignas (sse_bytes) envfollow_coeff_array _envfollow_coeffs;
-  envfollow_state_array                            _envfollow_states;
-  fix_eq_and_delay_coeff_array                     _adaa_fix_eq_delay_coeffs;
-  compander_state_array                            _compressor_states;
-  emphasis_coeff_array                             _pre_emphasis_coeffs;
+  envfollow_state_array           _envfollow_states;
+  fix_eq_and_delay_coeff_array    _adaa_fix_eq_delay_coeffs;
+  compander_state_array           _compressor_states;
+  crossover<2, true>              _crossv;
+  value_smoother<float, sm_count> _sparams;
+
+  alignas (sse_bytes) emphasis_coeff_array _pre_emphasis_coeffs;
   emphasis_state_array                             _pre_emphasis_states;
   wsh_state_array                                  _wvsh_states;
   std::array<dc_block_coeff_array, dc_block_count> _dc_block_coeffs;
@@ -923,7 +952,6 @@ private:
   compander_state_array                            _expander_states;
   double_x2                                        _sat_prev;
   std::array<double_x2, n_crossv>                  _crossv_prev;
-  crossover<2, true>                               _crossv;
   uint                                             _n_processed_samples;
   uint                                             _control_rate_mask;
 
