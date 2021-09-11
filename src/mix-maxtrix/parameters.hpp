@@ -5329,7 +5329,7 @@ parameter_cpp_class_define (
   saturation_band_gain,
   n_stereo_busses,
   param_common (
-    "Band Vol",
+    "Sat Vol",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::saturated_out_tag>()),
   saturation::get_parameter (saturation::saturated_out_tag {}),
@@ -5389,7 +5389,7 @@ parameter_cpp_class_define (
   saturation_band_lo,
   n_stereo_busses,
   param_common (
-    "Band Lo",
+    "Sat Lo",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::lo_cut_tag>()),
   saturation::get_parameter (saturation::lo_cut_tag {}),
@@ -5399,7 +5399,7 @@ parameter_cpp_class_define (
   saturation_band_hi,
   n_stereo_busses,
   param_common (
-    "Band Hi",
+    "Sat Hi",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::hi_cut_tag>()),
   saturation::get_parameter (saturation::hi_cut_tag {}),
@@ -5409,7 +5409,7 @@ parameter_cpp_class_define (
   saturation_lo_mode,
   n_stereo_busses,
   param_common (
-    "Band LoCfg",
+    "Sat LoCfg",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::lo_mode_tag>()),
   saturation::get_parameter (saturation::lo_mode_tag {}),
@@ -5419,7 +5419,7 @@ parameter_cpp_class_define (
   saturation_hi_mode,
   n_stereo_busses,
   param_common (
-    "Band HiCfg",
+    "Sat HiCfg",
     declptr<updownsampled<saturation>>(),
     declptr<saturation::hi_mode_tag>()),
   saturation::get_parameter (saturation::hi_mode_tag {}),
