@@ -120,6 +120,24 @@ struct mystran_dc_blocker {
     return x - prev_lp_out;
   }
   //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> c,
+    crange<vec_value_type_t<V>>       s,
+    V                                 x,
+    single_coeff_set_tag              t)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    assert (c.size() >= (traits.size));
+    assert (s.size() >= (traits.size * n_states));
+
+    auto prev_lp_out = vec_load<V> (&s[onepole_smoother::z1 * traits.size]);
+    onepole_smoother::tick (c, s, x, t);
+    return x - prev_lp_out;
+  }
+  //----------------------------------------------------------------------------
 };
 // TODO: Things to try
 // -Moving average DC blocker (linear phase):

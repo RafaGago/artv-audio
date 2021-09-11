@@ -460,19 +460,7 @@ public:
     // the companded modes to be acceptable. Unfortunately it causes DC itself
     // when the sound is muted. I didn't find a solution.
     mystran_dc_blocker::reset_coeffs (
-      _dc_block_coeffs[dc_block_compand],
-      vec_set<double_x2> (18.),
-      pc.get_sample_rate());
-
-    mystran_dc_blocker::reset_coeffs (
-      _dc_block_coeffs[dc_block_main],
-      vec_set<double_x2> (0.02),
-      pc.get_sample_rate());
-
-    mystran_dc_blocker::reset_coeffs (
-      _dc_block_coeffs[dc_block_expand],
-      vec_set<double_x2> (18.),
-      pc.get_sample_rate());
+      _dc_block_coeffs, make_vec_x1 (10.), pc.get_sample_rate());
 
     _p = params {};
 
@@ -533,42 +521,46 @@ public:
       uint subblock_size
         = std::min (block_samples - samples_processed, max_block_size);
 
-      // pre process/Companding + data initialization block
+      // Input DC blocking
       for (uint i = 0; i < subblock_size; ++i) {
         sat[i][0] = ins[0][samples_processed + i];
         sat[i][1] = ins[1][samples_processed + i];
-        switch (p.mode) {
-        case mode_compand_1b:
-          sat[i] = mystran_dc_blocker::tick (
-            _dc_block_coeffs[dc_block_compand],
-            _dc_block_states[dc_block_compand],
-            sat[i]);
+
+        sat[i] = mystran_dc_blocker::tick (
+          _dc_block_coeffs,
+          _dc_block_states[dc_block_in],
+          sat[i],
+          single_coeff_set_tag {});
+      }
+
+      // pre process/Companding + data initialization block
+      switch (p.mode) {
+      case mode_compand_1b:
+        for (uint i = 0; i < subblock_size; ++i) {
           sat[i] = compand_1b_aa::tick (
             _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
-          break;
-        case mode_compand_1a:
-          sat[i] = mystran_dc_blocker::tick (
-            _dc_block_coeffs[dc_block_compand],
-            _dc_block_states[dc_block_compand],
-            sat[i]);
+        }
+        break;
+      case mode_compand_1a:
+        for (uint i = 0; i < subblock_size; ++i) {
           sat[i] = compand_1a_aa::tick (
             _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
-          break;
-        case mode_compand_sqrt:
-          sat[i] = mystran_dc_blocker::tick (
-            _dc_block_coeffs[dc_block_compand],
-            _dc_block_states[dc_block_compand],
-            sat[i]);
+        }
+        break;
+      case mode_compand_sqrt:
+        for (uint i = 0; i < subblock_size; ++i) {
           sat[i] = sqrt_aa::tick (
             _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
-          break;
-        case mode_no_aa:
-        case mode_normal:
-        default:
-          break;
         }
+        break;
+      case mode_no_aa:
+      case mode_normal:
+      default:
+        break;
       }
-      // crossover section
+
+      // Crossover section. Notice that this is a crossover that sums to flat
+      // frequency and phase response but has ripples on the passed band.
       for (uint i = 0; i < subblock_size; ++i) {
         if (_p.crossv_enabled[lo_crossv]) {
           lo[i] = butterworth_any_order::tick (
@@ -665,10 +657,6 @@ public:
 
         sat[i] *= drive;
 
-        // pre emphasis
-        // sat[i] = andy::svf::tick (
-        //  _pre_emphasis_coeffs, _pre_emphasis_states, sat[i]);
-
         // Feedback section
         static constexpr auto fb_att = constexpr_db_to_gain (
           -constexpr_db_to_gain (envfollow_max_db) - 1.);
@@ -684,6 +672,10 @@ public:
         sat[i] += feedback;
         auto dcmod = (0.5 * follow * _sparams.get (sm_ef_to_dc));
         sat[i] += dcmod;
+
+        // pre emphasis
+        sat[i] = andy::svf::tick (
+          _pre_emphasis_coeffs, _pre_emphasis_states, sat[i]);
 
         // waveshaping
         auto wsh_type
@@ -719,54 +711,55 @@ public:
           break;
         }
 
-        sat[i] = mystran_dc_blocker::tick (
-          _dc_block_coeffs[dc_block_main],
-          _dc_block_states[dc_block_main],
-          sat[i]);
-        _sat_prev = sat[i];
-
         // post emphasis
-        // sat[i] = andy::svf::tick (
-        //  _post_emphasis_coeffs, _post_emphasis_states, sat[i]);
+        sat[i] = andy::svf::tick (
+          _post_emphasis_coeffs, _post_emphasis_states, sat[i]);
+
+        // not a DC blocker, but reduces DC on the FB path. Notice that adding
+        // a third DC blocker here had negative effect on the sound when using
+        // "mode_compand_1b".
+        sat[i] -= dcmod;
+        _sat_prev = sat[i];
 
         // gain and crossover join
         sat[i] *= inv_drive * _sparams.get (sm_out);
         sat[i] += lo[i] + hi[i];
       }
 
-      for (uint i = 0; i < subblock_size; ++i) {
-        // post process / restore
-        switch (p.mode) {
-        case mode_compand_1b:
+      // post process / restore
+      switch (p.mode) {
+      case mode_compand_1b:
+        for (uint i = 0; i < subblock_size; ++i) {
           sat[i] = compand_1a_aa::tick (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick (
-            _dc_block_coeffs[dc_block_expand],
-            _dc_block_states[dc_block_expand],
-            sat[i]);
-          break;
-        case mode_compand_1a:
+        }
+        break;
+      case mode_compand_1a:
+        for (uint i = 0; i < subblock_size; ++i) {
           sat[i] = compand_1b_aa::tick (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick (
-            _dc_block_coeffs[dc_block_expand],
-            _dc_block_states[dc_block_expand],
-            sat[i]);
-          break;
-        case mode_compand_sqrt:
+        }
+        break;
+      case mode_compand_sqrt:
+        for (uint i = 0; i < subblock_size; ++i) {
           // sat[i] = vec_clamp (sat[i], -pow2compand_clip, pow2compand_clip);
           sat[i] = pow2_aa::tick (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
-          sat[i] = mystran_dc_blocker::tick (
-            _dc_block_coeffs[dc_block_expand],
-            _dc_block_states[dc_block_expand],
-            sat[i]);
-          break;
-        case mode_no_aa:
-        case mode_normal:
-        default:
-          break;
         }
+        break;
+      case mode_no_aa:
+      case mode_normal:
+      default:
+        break;
+      }
+
+      // Post DC-blocker.
+      for (uint i = 0; i < subblock_size; ++i) {
+        sat[i] = mystran_dc_blocker::tick (
+          _dc_block_coeffs,
+          _dc_block_states[dc_block_out],
+          sat[i],
+          single_coeff_set_tag {});
 
         outs[0][samples_processed + i] = sat[i][0];
         outs[1][samples_processed + i] = sat[i][1];
@@ -902,9 +895,8 @@ private:
   };
 
   enum ef_block_type {
-    dc_block_compand,
-    dc_block_main,
-    dc_block_expand,
+    dc_block_in,
+    dc_block_out,
     dc_block_count,
   };
 
@@ -1021,7 +1013,7 @@ private:
   alignas (sse_bytes) emphasis_coeff_array _pre_emphasis_coeffs;
   emphasis_state_array                             _pre_emphasis_states;
   wsh_state_array                                  _wvsh_states;
-  std::array<dc_block_coeff_array, dc_block_count> _dc_block_coeffs;
+  dc_block_coeff_array                             _dc_block_coeffs;
   std::array<dc_block_state_array, dc_block_count> _dc_block_states;
   emphasis_coeff_array                             _post_emphasis_coeffs;
   emphasis_state_array                             _post_emphasis_states;

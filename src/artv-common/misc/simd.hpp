@@ -264,10 +264,9 @@ static constexpr auto vec_traits (V)
 }
 //------------------------------------------------------------------------------
 template <class T>
-auto make_vec_x1 (T v)
+vec<T, 1> make_vec_x1 (T v)
 {
-  vec<T, 1> r = {v};
-  return r;
+  return {v};
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
