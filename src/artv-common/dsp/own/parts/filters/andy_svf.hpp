@@ -172,26 +172,78 @@ struct svf_multimode {
     crange<vec_value_type_t<V>>       s, // states (interleaved, SIMD aligned)
     V                                 v0)
   {
-    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= traits.size * n_coeffs);
+
+    if constexpr (needs_k_coeff) {
+      return tick (
+        s,
+        v0,
+        vec_load<V> (&c[a1 * traits.size]),
+        vec_load<V> (&c[a2 * traits.size]),
+        vec_load<V> (&c[a3 * traits.size]),
+        vec_load<V> (&c[k * traits.size]));
+    }
+    else {
+      return tick (
+        s,
+        v0,
+        vec_load<V> (&c[a1 * traits.size]),
+        vec_load<V> (&c[a2 * traits.size]),
+        vec_load<V> (&c[a3 * traits.size]));
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static auto tick (
+    crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       s, // states (interleaved, SIMD aligned)
+    V                                 v0,
+    single_coeff_set_tag)
+  {
+    assert (c.size() >= n_coeffs);
+
+    if constexpr (needs_k_coeff) {
+      return tick (
+        s,
+        v0,
+        vec_set<V> (c[a1]),
+        vec_set<V> (c[a2]),
+        vec_set<V> (c[a3]),
+        vec_set<V> (c[k]));
+    }
+    else {
+      return tick (
+        s, v0, vec_set<V> (c[a1]), vec_set<V> (c[a2]), vec_set<V> (c[a3]));
+    }
+  }
+  //----------------------------------------------------------------------------
+private:
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static auto tick (
+    crange<vec_value_type_t<V>> s,
+    V                           v0,
+    V                           a1_v,
+    V                           a2_v,
+    V                           a3_v,
+    [[maybe_unused]] V          k_v = vec_set<V> (0.))
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
     assert (s.size() >= traits.size * n_states);
 
     auto tick_r = detail::svf_tick (
       vec_load<V> (&s[ic1eq * traits.size]),
       vec_load<V> (&s[ic2eq * traits.size]),
-      vec_load<V> (&c[a1 * traits.size]),
-      vec_load<V> (&c[a2 * traits.size]),
-      vec_load<V> (&c[a3 * traits.size]),
+      a1_v,
+      a2_v,
+      a3_v,
       v0);
     vec_store (&s[ic1eq * traits.size], tick_r.ic1eq);
     vec_store (&s[ic2eq * traits.size], tick_r.ic2eq);
-
-    [[maybe_unused]] V k_v;
-    if constexpr (needs_k_coeff) {
-      vec_load (k_v, &c[k * traits.size]);
-    }
 
     std::array<V, mp11::mp_size<enabled_modes>::value> ret;
 
