@@ -223,23 +223,23 @@ private:
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-template <uint order, template <uint> class Impl>
+template <uint order, template <uint, class...> class Impl, class... Ts>
 class fix_eq_and_delay;
 
-template <template <uint> class Impl>
-class fix_eq_and_delay<1, Impl> {
+template <template <uint, class...> class Impl, class... Ts>
+class fix_eq_and_delay<1, Impl, Ts...> {
 public:
   enum coeffs {
     allpass_coeffs_idx,
     boxcar_coeffs_idx = allpass_coeffs_idx + allpass_interpolator::n_coeffs,
     impl_coeffs_idx   = boxcar_coeffs_idx + moving_average<2>::n_coeffs,
-    n_coeffs          = impl_coeffs_idx + Impl<1>::n_coeffs
+    n_coeffs          = impl_coeffs_idx + Impl<1, Ts...>::n_coeffs
   };
   enum state {
     allpass_states_idx,
     boxcar_states_idx = allpass_states_idx + allpass_interpolator::n_states,
     impl_states_idx   = boxcar_states_idx + moving_average<2>::n_states,
-    n_states          = impl_states_idx + Impl<1>::n_states
+    n_states          = impl_states_idx + Impl<1, Ts...>::n_states
   };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -251,7 +251,7 @@ public:
     assert (c.size() >= (n_coeffs * traits.size));
 
     static_assert (moving_average<2>::n_coeffs == 0, "Add initialization!");
-    static_assert (Impl<1>::n_coeffs == 0, "Add initialization!");
+    static_assert (Impl<1, Ts...>::n_coeffs == 0, "Add initialization!");
 
     allpass_interpolator::reset_coeffs (c, vec_set<V> ((T) 0.5));
   }
@@ -268,7 +268,7 @@ public:
     using T = vec_value_type_t<V>;
 
     // maybe memset delay line and boxcar?
-    Impl<1>::template reset_states<V> (
+    Impl<1, Ts...>::template reset_states<V> (
       s.shrink_head (impl_states_idx * vec_traits<V>().size));
   }
   //----------------------------------------------------------------------------
@@ -292,7 +292,7 @@ public:
     st         = st.shrink_head (moving_average<2>::n_states * traits.size);
 
     V eq = delayed + (delayed - filtered);
-    return Impl<1>::tick ({}, st, eq);
+    return Impl<1, Ts...>::tick ({}, st, eq);
   }
   //----------------------------------------------------------------------------
 };

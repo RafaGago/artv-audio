@@ -37,7 +37,7 @@ struct pow2_functions {
   }
   //----------------------------------------------------------------------------
 };
-#if 1
+#if 0
 // TODO: is the sign preservation breaking this?
 //------------------------------------------------------------------------------
 // This one has a trivial simplification, it doesn't require branches.
