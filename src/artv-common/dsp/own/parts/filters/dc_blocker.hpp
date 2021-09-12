@@ -50,6 +50,28 @@ struct iir_dc_blocker {
     constexpr auto traits = vec_traits<V>();
 
     assert (c.size() >= (traits.size * n_coeffs));
+    return tick (s, x, vec_load<V> (&c[R * traits.size]));
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> c,
+    crange<vec_value_type_t<V>>       s,
+    V                                 x,
+    single_coeff_set_tag)
+  {
+    assert (c.size() >= (n_coeffs));
+    return tick (s, x, vec_set<V> (c[R]));
+  }
+  //----------------------------------------------------------------------------
+private:
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (crange<vec_value_type_t<V>> s, V x, V Rv)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
     assert (s.size() >= (traits.size * n_states));
 
     auto x1_ptr = &s[x1 * traits.size];
@@ -57,7 +79,6 @@ struct iir_dc_blocker {
 
     auto x1v = vec_load<V> (x1_ptr);
     auto y1v = vec_load<V> (y1_ptr);
-    auto Rv  = vec_load<V> (&c[R * traits.size]);
 
     auto y = x - x1v + Rv * y1v;
 
@@ -65,9 +86,8 @@ struct iir_dc_blocker {
     vec_store (y1_ptr, y);
     return y;
   }
-  //----------------------------------------------------------------------------
 };
-
+//------------------------------------------------------------------------------
 // I don't know if he is the original author but he does an extreme good job
 // sharing knowledge and helping. Described here:
 // https://www.kvraudio.com/forum/viewtopic.php?f=33&t=545280#top

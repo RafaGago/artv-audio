@@ -15,7 +15,7 @@
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/dsp/own/parts/misc/interpolators.hpp"
 #include "artv-common/dsp/own/parts/misc/slew_limiter.hpp"
-#include "artv-common/dsp/own/parts/waveshapers/adaa/compand2.hpp"
+#include "artv-common/dsp/own/parts/waveshapers/adaa/compand1.hpp"
 #include "artv-common/dsp/own/parts/waveshapers/adaa/hardclip.hpp"
 #include "artv-common/dsp/own/parts/waveshapers/adaa/pow2.hpp"
 #include "artv-common/dsp/own/parts/waveshapers/adaa/sqrt.hpp"
@@ -68,8 +68,7 @@ public:
       case mode_normal:
         delcomp = 1;
         break;
-      case mode_compand_2b:
-      case mode_compand_2a:
+      case mode_compand_1a:
       case mode_compand_sqrt:
         delcomp = 3;
         break;
@@ -87,11 +86,7 @@ public:
     return choice_param (
       0,
       make_cstr_array (
-        "Normal no AA",
-        "Normal",
-        "Compand Low Sig",
-        "Compand High Sig",
-        "Compand Squasher"),
+        "Normal no AA", "Normal", "Compand High", "Compand Squash"),
       40);
   }
   //----------------------------------------------------------------------------
@@ -285,7 +280,10 @@ public:
   //----------------------------------------------------------------------------
   struct emphasis_amount_tag {};
 
-  void set (emphasis_amount_tag, float v) { _sparams.set (v, sm_emphasis_amt); }
+  void set (emphasis_amount_tag, float v)
+  {
+    _sparams.set (midi_note_to_hz (v), sm_emphasis_amt);
+  }
 
   static constexpr auto get_parameter (emphasis_amount_tag)
   {
@@ -453,8 +451,11 @@ public:
     adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::reset_coeffs<
       double_x2> (_adaa_fix_eq_delay_coeffs);
 
+    // this DC blocker at a very low frequency is critical for the sound of
+    // the companded modes to be acceptable. Unfortunately it causes DC itself
+    // when the sound is muted. I didn't find a solution.
     mystran_dc_blocker::reset_coeffs (
-      _dc_block_coeffs, make_vec_x1 (6.), pc.get_sample_rate());
+      _dc_block_coeffs, make_vec_x1 (1.), pc.get_sample_rate());
 
     _p = params {};
 
@@ -528,16 +529,13 @@ public:
       }
 
       // pre process/Companding + data initialization block
+      //
+      // Using "compand_1b_aa" first required extremely good DC blocking
+      // unfortunately. The sound easily broke.
       switch (p.mode) {
-      case mode_compand_2b:
+      case mode_compand_1a:
         for (uint i = 0; i < subblock_size; ++i) {
-          sat[i] = compand_2b_aa::tick (
-            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
-        }
-        break;
-      case mode_compand_2a:
-        for (uint i = 0; i < subblock_size; ++i) {
-          sat[i] = compand_2a_aa::tick (
+          sat[i] = compand_1a_aa::tick (
             _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
         }
         break;
@@ -626,7 +624,8 @@ public:
         if ((_n_processed_samples & _control_rate_mask) == 0) {
           // expensive stuff at lower than audio rate
           update_emphasis (
-            vec_exp2 (follow * _sparams.get (sm_ef_to_emphasis_freq)),
+            vec_exp2 (follow * _sparams.get (sm_ef_to_emphasis_freq))
+              * _sparams.get (sm_emphasis_freq),
             follow * _sparams.get (sm_ef_to_emphasis_amt));
         }
 
@@ -710,7 +709,7 @@ public:
 
         // not a DC blocker, but reduces DC on the FB path. Notice that adding
         // a third DC blocker here had negative effect on the sound when using
-        // "mode_compand_2b".
+        // "mode_compand_1b".
         sat[i] -= dcmod;
         _sat_prev = sat[i];
 
@@ -718,6 +717,7 @@ public:
         sat[i] *= inv_drive * _sparams.get (sm_out);
         sat[i] += lo[i] + hi[i];
       }
+
       // Post DC-blocker.
       for (uint i = 0; i < subblock_size; ++i) {
         sat[i] = mystran_dc_blocker::tick (
@@ -725,18 +725,16 @@ public:
           _dc_block_states[dc_block_out],
           sat[i],
           single_coeff_set_tag {});
+
+        outs[0][samples_processed + i] = sat[i][0];
+        outs[1][samples_processed + i] = sat[i][1];
       }
+
       // post process / restore
       switch (p.mode) {
-      case mode_compand_2b:
+      case mode_compand_1a:
         for (uint i = 0; i < subblock_size; ++i) {
-          sat[i] = compand_2a_aa::tick (
-            _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
-        }
-        break;
-      case mode_compand_2a:
-        for (uint i = 0; i < subblock_size; ++i) {
-          sat[i] = compand_2b_aa::tick (
+          sat[i] = compand_1b_aa::tick (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
         }
         break;
@@ -751,11 +749,6 @@ public:
       case mode_normal:
       default:
         break;
-      }
-      // Deinterleave.
-      for (uint i = 0; i < subblock_size; ++i) {
-        outs[0][samples_processed + i] = sat[i][0];
-        outs[1][samples_processed + i] = sat[i][1];
       }
       samples_processed += subblock_size;
     }
@@ -814,14 +807,14 @@ private:
   }
   //----------------------------------------------------------------------------
   void update_emphasis (
-    double_x2 freq_fact  = double_x2 {1., 1.},
-    double_x2 amt_offset = double_x2 {})
+    double_x2 freq_offset = double_x2 {},
+    double_x2 amt_offset  = double_x2 {})
   {
     double_x2 f  = vec_set<double_x2> (_sparams.get (sm_emphasis_freq));
     double_x2 q  = vec_set<double_x2> (_sparams.get (sm_emphasis_q));
     double_x2 db = vec_set<double_x2> (_sparams.get (sm_emphasis_amt));
 
-    f *= freq_fact;
+    f += freq_offset;
     db += amt_offset;
 
     andy::svf::reset_coeffs (
@@ -874,8 +867,7 @@ private:
     mode_no_aa,
     mode_normal,
     mode_compander_first,
-    mode_compand_2b = mode_compander_first,
-    mode_compand_2a,
+    mode_compand_1a = mode_compander_first,
     mode_compand_sqrt,
     mode_count,
   };
@@ -946,16 +938,10 @@ private:
 
   using sqrt_aa       = adaa::fix_eq_and_delay<adaa_order, sqrt_adaa>;
   using pow2_aa       = adaa::fix_eq_and_delay<adaa_order, pow2_adaa>;
-  using compand_2a_aa = adaa::fix_eq_and_delay<
-    adaa_order,
-    compand_2a_adaa,
-    std::integral_constant<uint, 4>>;
-  using compand_2b_aa = adaa::fix_eq_and_delay<
-    adaa_order,
-    compand_2b_adaa,
-    std::integral_constant<uint, 4>>;
+  using compand_1a_aa = adaa::fix_eq_and_delay<adaa_order, compand_1a_adaa>;
+  using compand_1b_aa = adaa::fix_eq_and_delay<adaa_order, compand_1b_adaa>;
 
-  using companders = mp_list<sqrt_aa, pow2_aa, compand_2a_aa, compand_2b_aa>;
+  using companders = mp_list<sqrt_aa, pow2_aa, compand_1a_aa, compand_1b_aa>;
 
   static constexpr uint compander_max_states = mp11::mp_max_element<
     mp11::mp_transform<to_n_states, companders>,
