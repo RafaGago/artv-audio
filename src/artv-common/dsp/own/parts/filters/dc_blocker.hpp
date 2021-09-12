@@ -4,6 +4,7 @@
 #include <cmath>
 #include <type_traits>
 
+#include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/misc/simd.hpp"
 
@@ -143,38 +144,24 @@ struct mystran_dc_blocker {
 // -Moving average DC blocker (linear phase):
 //    https://www.dsprelated.com/showthread/comp.dsp/66509-1.php
 //------------------------------------------------------------------------------
-// one mystran DC blocker at very low frequency, with very good blocking
-// properties followed by another DC blocker with a higher cutoff to block the
-// DC that the first one causes.
-struct mystran_dc_blocker_2x {
+struct mystran_dc_blocker_2pole {
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs = 2 * mystran_dc_blocker::n_coeffs;
-  static constexpr uint n_states = 2 * mystran_dc_blocker::n_states;
+  static constexpr uint n_coeffs = andy::svf_lowpass::n_coeffs;
+  static constexpr uint n_states = andy::svf_lowpass::n_states + 1;
   //----------------------------------------------------------------------------
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<vec_value_type_t<V>> c,
+    V                           freq,
     vec_value_type_t<V>         sr)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    using T                      = vec_value_type_t<V>;
+    constexpr auto traits        = vec_traits<V>();
+    constexpr T    butterworth_q = M_SQRT1_2;
 
-    T f1;
-    T f2;
-    if constexpr (std::is_same_v<T, double>) {
-      f1 = 0.1;
-      f2 = 8.;
-    }
-    else {
-      f1 = 5.f;
-      f2 = 10.f;
-    }
-
-    mystran_dc_blocker::reset_coeffs (c, vec_set<V> (f1), sr);
-    c = c.shrink_head (mystran_dc_blocker::n_coeffs * traits.size);
-    mystran_dc_blocker::reset_coeffs (c, vec_set<V> (f2), sr);
+    andy::svf_lowpass::reset_coeffs (c, freq, vec_set<V> (butterworth_q), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -202,11 +189,35 @@ struct mystran_dc_blocker_2x {
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
-    auto           ret    = mystran_dc_blocker::tick (c, s, x);
-    return mystran_dc_blocker::tick (
-      c.shrink_head (mystran_dc_blocker::n_coeffs * traits.size),
-      s.shrink_head (mystran_dc_blocker::n_states * traits.size),
-      ret);
+
+    assert (c.size() >= (traits.size * n_coeffs));
+    assert (s.size() >= (traits.size * n_states));
+
+    V  now  = andy::svf_lowpass::tick (c, s, x);
+    T* prev = s.shrink_head (traits.size * andy::svf_lowpass::n_states).data();
+    V  prev_lp_out = vec_load<V> (prev);
+    vec_store (prev, now);
+    return x - prev_lp_out;
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const vec_value_type_t<V>> c,
+    crange<vec_value_type_t<V>>       s,
+    V                                 x,
+    single_coeff_set_tag              t)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    assert (c.size() >= (traits.size));
+    assert (s.size() >= (traits.size * n_states));
+
+    V  now  = andy::svf_lowpass::tick (c, s, x, t);
+    T* prev = s.shrink_head (traits.size * andy::svf_lowpass::n_states).data();
+    V  prev_lp_out = vec_load<V> (prev);
+    vec_store (prev, now);
+    return x - prev_lp_out;
   }
   //----------------------------------------------------------------------------
 };
