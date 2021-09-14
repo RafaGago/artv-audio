@@ -254,19 +254,19 @@ private:
         ret[index.value] = tick_r.v2;
       }
       else if constexpr (std::is_same_v<tag, highpass_tag>) {
-        ret[index.value] = v0 + k_v * tick_r.v1 + tick_r.v2;
+        ret[index.value] = v0 - k_v * tick_r.v1 - tick_r.v2;
       }
       else if constexpr (std::is_same_v<tag, bandpass_tag>) {
         ret[index.value] = tick_r.v1;
       }
       else if constexpr (std::is_same_v<tag, notch_tag>) {
-        ret[index.value] = v0 + -k_v * tick_r.v1;
+        ret[index.value] = v0 - k_v * tick_r.v1;
       }
       else if constexpr (std::is_same_v<tag, peak_tag>) {
-        ret[index.value] = v0 + -k_v * tick_r.v1 + (T) -2. * tick_r.v2;
+        ret[index.value] = v0 - k_v * tick_r.v1 - (T) 2. * tick_r.v2;
       }
       else if constexpr (std::is_same_v<tag, allpass_tag>) {
-        ret[index.value] = v0 + (T) -2. * k_v * tick_r.v1;
+        ret[index.value] = v0 - (T) 2. * k_v * tick_r.v1;
       }
     });
 

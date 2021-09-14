@@ -469,7 +469,7 @@ public:
     uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
     _n_processed_samples = 0;
-    _sat_prev = _crossv_prev[lo_crossv] = _crossv_prev[hi_crossv]
+    _sat_prev = _dcmod_prev = _crossv_prev[lo_crossv] = _crossv_prev[hi_crossv]
       = double_x2 {};
 
     update_emphasis();
@@ -555,26 +555,46 @@ public:
       // frequency and phase response but has ripples on the passed band.
       for (uint i = 0; i < subblock_size; ++i) {
         if (_p.crossv_enabled[lo_crossv]) {
-          lo[i] = butterworth_any_order::tick (
-            _crossv_coeffs[lo_crossv],
-            _crossv_states[lo_crossv],
-            sat[i],
-            p.crossv_order[lo_crossv]);
-          sat[i] = p.crossv_is_lp[lo_crossv] ? sat[i] - lo[i] : lo[i];
-          lo[i]  = p.crossv_is_lp[lo_crossv] ? lo[i] : double_x2 {};
+          if (p.crossv_is_lp[lo_crossv]) {
+            lo[i] = butterworth_lowpass_any_order::tick (
+              _crossv_coeffs[lo_crossv],
+              _crossv_states[lo_crossv],
+              sat[i],
+              p.crossv_order[lo_crossv]);
+            sat[i] = sat[i] - lo[i];
+          }
+          else {
+            lo[i] = butterworth_highpass_any_order::tick (
+              _crossv_coeffs[lo_crossv],
+              _crossv_states[lo_crossv],
+              sat[i],
+              p.crossv_order[lo_crossv]);
+            sat[i] = lo[i];
+            lo[i]  = double_x2 {};
+          }
         }
         else {
           lo[i] = double_x2 {};
         }
 
         if (_p.crossv_enabled[hi_crossv]) {
-          hi[i] = butterworth_any_order::tick (
-            _crossv_coeffs[hi_crossv],
-            _crossv_states[hi_crossv],
-            sat[i],
-            p.crossv_order[hi_crossv]);
-          sat[i] = !p.crossv_is_lp[hi_crossv] ? sat[i] - hi[i] : hi[i];
-          hi[i]  = !p.crossv_is_lp[hi_crossv] ? hi[i] : double_x2 {};
+          if (!p.crossv_is_lp[hi_crossv]) {
+            hi[i] = butterworth_highpass_any_order::tick (
+              _crossv_coeffs[hi_crossv],
+              _crossv_states[hi_crossv],
+              sat[i],
+              p.crossv_order[hi_crossv]);
+            sat[i] = sat[i] - hi[i];
+          }
+          else {
+            hi[i] = butterworth_lowpass_any_order::tick (
+              _crossv_coeffs[hi_crossv],
+              _crossv_states[hi_crossv],
+              sat[i],
+              p.crossv_order[hi_crossv]);
+            sat[i] = hi[i];
+            hi[i]  = double_x2 {};
+          }
         }
         else {
           hi[i] = double_x2 {};
@@ -663,6 +683,7 @@ public:
 
         sat[i] += feedback;
         auto dcmod = (0.5 * follow * _sparams.get (sm_ef_to_dc));
+        dcmod += _dcmod_prev * 0.5; // Kind-of moving average LP
         sat[i] += dcmod;
 
         // pre emphasis
@@ -711,7 +732,8 @@ public:
         // a third DC blocker here had negative effect on the sound when using
         // "mode_compand_1b".
         sat[i] -= dcmod;
-        _sat_prev = sat[i];
+        _sat_prev   = sat[i];
+        _dcmod_prev = dcmod;
 
         // gain and crossover join
         sat[i] *= inv_drive * _sparams.get (sm_out);
@@ -777,12 +799,21 @@ private:
   //----------------------------------------------------------------------------
   void update_crossover (uint idx, bool reset_states)
   {
-    butterworth_any_order::reset_coeffs (
-      _crossv_coeffs[idx],
-      double_x2 {_p.crossv_hz[idx], _p.crossv_hz[idx] * 1.009},
-      _plugcontext->get_sample_rate(),
-      _p.crossv_order[idx],
-      _p.crossv_is_lp[idx]);
+    auto f = double_x2 {_p.crossv_hz[idx], _p.crossv_hz[idx] * 1.009};
+    if (_p.crossv_is_lp[idx]) {
+      butterworth_lowpass_any_order::reset_coeffs (
+        _crossv_coeffs[idx],
+        f,
+        _plugcontext->get_sample_rate(),
+        _p.crossv_order[idx]);
+    }
+    else {
+      butterworth_highpass_any_order::reset_coeffs (
+        _crossv_coeffs[idx],
+        f,
+        _plugcontext->get_sample_rate(),
+        _p.crossv_order[idx]);
+    }
 
     if (reset_states) {
       _crossv_prev[idx] = double_x2 {};
@@ -960,14 +991,18 @@ private:
       * n_channels,
     sse_bytes>;
 
-  using crossv_coeff_array = simd_array<
-    double,
-    butterworth<max_crossv_order>::n_coeffs * n_channels,
-    sse_bytes>;
-  using crossv_state_array = simd_array<
-    double,
-    butterworth<max_crossv_order>::n_states * n_channels,
-    sse_bytes>;
+  static constexpr uint max_butterw_coeffs = std::max (
+    butterworth_lowpass<max_crossv_order>::n_coeffs,
+    butterworth_highpass<max_crossv_order>::n_coeffs);
+
+  static constexpr uint max_butterw_states = std::max (
+    butterworth_lowpass<max_crossv_order>::n_states,
+    butterworth_highpass<max_crossv_order>::n_states);
+
+  using crossv_coeff_array
+    = simd_array<double, max_butterw_coeffs * n_channels, sse_bytes>;
+  using crossv_state_array
+    = simd_array<double, max_butterw_states * n_channels, sse_bytes>;
 
   using emphasis_coeff_array
     = simd_array<double, andy::svf::n_coeffs * n_channels, sse_bytes>;
@@ -1004,6 +1039,7 @@ private:
   emphasis_state_array                             _post_emphasis_states;
   compander_state_array                            _expander_states;
   double_x2                                        _sat_prev;
+  double_x2                                        _dcmod_prev;
   std::array<double_x2, n_crossv>                  _crossv_prev;
   uint                                             _n_processed_samples;
   uint                                             _control_rate_mask;

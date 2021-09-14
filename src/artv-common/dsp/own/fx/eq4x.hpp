@@ -96,8 +96,15 @@ public:
             smoothed_band_coefs, _state[b], in, single_coeff_set_tag {});
           break;
         case bandtype::butterworth_lp:
+          out = butterworth_lowpass_any_order::tick (
+            smoothed_band_coefs,
+            _state[b],
+            in,
+            q_to_butterworth_order (_cfg[b].q),
+            single_coeff_set_tag {});
+          break;
         case bandtype::butterworth_hp:
-          out = butterworth_any_order::tick (
+          out = butterworth_highpass_any_order::tick (
             smoothed_band_coefs,
             _state[b],
             in,
@@ -184,7 +191,7 @@ public:
     reset &= (q_to_butterworth_order (b.q) != q_to_butterworth_order (v));
 
     b.reset_band_state |= reset;
-    b.has_changes |= b.q != v;
+    b.has_changes |= reset;
     _cfg[band].q = v;
   }
 
@@ -313,13 +320,18 @@ private:
         allpass_tag {});
       break;
     case bandtype::butterworth_lp:
-    case bandtype::butterworth_hp:
-      butterworth_any_order::reset_coeffs (
+      butterworth_lowpass_any_order::reset_coeffs (
         _coeffs[band],
         make_vec_x1<double> (b.freq),
         sr,
-        q_to_butterworth_order (b.q),
-        (b.type) == bandtype::butterworth_lp);
+        q_to_butterworth_order (b.q));
+      break;
+    case bandtype::butterworth_hp:
+      butterworth_highpass_any_order::reset_coeffs (
+        _coeffs[band],
+        make_vec_x1<double> (b.freq),
+        sr,
+        q_to_butterworth_order (b.q));
       break;
     case bandtype::svf_tilt:
       tilt_eq::reset_coeffs (
@@ -366,7 +378,8 @@ private:
   //----------------------------------------------------------------------------
   using filters = mp_list<
     andy::svf,
-    butterworth<max_butterworth_order>,
+    butterworth_lowpass<max_butterworth_order>,
+    butterworth_highpass<max_butterworth_order>,
     liteon::presence_high_shelf>;
 
   template <class T>
