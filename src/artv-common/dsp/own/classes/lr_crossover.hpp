@@ -11,6 +11,8 @@
 
 namespace artv {
 
+// Linkwitz Riley Crossover.
+
 // TODO(maybe): Remove template parameters to avoid possible code bloat if two
 // crossovers of the same type live on the same program.
 // TODO(maybe): When needed, if dry-wet processing is needed it is trivial to
@@ -18,7 +20,7 @@ namespace artv {
 //   crossover. It is just running the dry signal through all allpasses.
 //------------------------------------------------------------------------------
 template <uint N_Crossovers, bool Controls_summing = true>
-class crossover {
+class lr_crossover {
 public:
   static constexpr uint n_crossovers     = N_Crossovers;
   static constexpr uint n_bands          = n_crossovers + 1;

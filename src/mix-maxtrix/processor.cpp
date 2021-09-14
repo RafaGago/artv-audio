@@ -12,7 +12,6 @@
 
 #include <ff_meters.h>
 
-#include "artv-common/dsp/own/classes/crossover.hpp"
 #include "artv-common/dsp/own/classes/mix.hpp"
 #include "artv-common/juce/effect_base.hpp"
 #include "artv-common/juce/math.hpp"
@@ -336,7 +335,7 @@ private:
             constexpr uint crossv_id
               = mp11::mp_find<
                   parameters::all_fx_typelists,
-                  parameters::crossover_params>::value
+                  parameters::lr_crossv_params>::value
               + 1;
 
             fx_type_changed[i] = val.changed();
@@ -358,9 +357,9 @@ private:
     std::array<uint, parameters::crossover_n_bands - 1> crossv_outs {};
     if (unlikely (_crossv_on)) {
       using band_params = mp11::mp_list<
-        parameters::crossover_band1_out,
-        parameters::crossover_band2_out,
-        parameters::crossover_band3_out>;
+        parameters::lr_crossv_band1_out,
+        parameters::lr_crossv_band2_out,
+        parameters::lr_crossv_band3_out>;
 
       mp_foreach_idx (band_params {}, [&] (auto index, auto param) {
         auto value = p_refresh (param, 0);

@@ -390,7 +390,7 @@ public:
     // crossover only available on channel 0
     constexpr uint crossv_id = mp11::mp_find<
       parameters::all_fx_typelists,
-      parameters::crossover_params>::value;
+      parameters::lr_crossv_params>::value;
 
     for (uint i = 1; i < parameters::n_stereo_busses; ++i) {
       auto& combo = p_get (parameters::fx_type {})[i]->combo;
@@ -882,7 +882,7 @@ public:
     }
     mp11::mp_for_each<parameters::all_fx_typelists> ([=] (auto fxtlv) {
       using fxtl = decltype (fxtlv);
-      if (std::is_same_v<fxtl, parameters::crossover_params> && chnl != 0) {
+      if (std::is_same_v<fxtl, parameters::lr_crossv_params> && chnl != 0) {
         return;
       }
       mp11::mp_for_each<fxtl> ([=] (auto param) {
@@ -981,7 +981,7 @@ public:
 
     constexpr uint crossv_id = mp11::mp_find<
       parameters::all_fx_typelists,
-      parameters::crossover_params>::value;
+      parameters::lr_crossv_params>::value;
 
     // crossover only on channel 0.
     no_fx |= ((fx_id == crossv_id) && chnl != 0);
@@ -1185,7 +1185,7 @@ public:
     constexpr auto notif = juce::NotificationType::sendNotificationAsync;
     // crossover only exists on channel 0, can't be copied.
     using copyable_sliders
-      = mp_remove_all<slider_typelist, parameters::crossover_params>;
+      = mp_remove_all<slider_typelist, parameters::lr_crossv_params>;
 
     mp11::mp_for_each<copyable_sliders> ([=] (auto paramtype) {
       auto&         param = p_get (paramtype);

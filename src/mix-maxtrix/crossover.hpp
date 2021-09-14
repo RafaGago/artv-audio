@@ -1,6 +1,6 @@
 #pragma once
 
-#include "artv-common/dsp/own/classes/crossover.hpp"
+#include "artv-common/dsp/own/classes/lr_crossover.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
@@ -9,7 +9,7 @@ namespace artv {
 
 //------------------------------------------------------------------------------
 template <uint Bands>
-class mixmaxtrix_crossover {
+class mixmaxtrix_lr_crossover {
 private:
   enum class paramtype { mode, frequency, diff, out };
 
@@ -166,7 +166,7 @@ private:
   };
   //----------------------------------------------------------------------------
   std::array<bandcfg, n_crossovers> _cfg;
-  crossover<3, false>               _crossv;
+  lr_crossover<3, false>            _crossv;
 };
 //------------------------------------------------------------------------------
 } // namespace artv
