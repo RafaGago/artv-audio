@@ -119,6 +119,10 @@ public:
           out = liteon::presence_high_shelf::tick (
             smoothed_band_coefs, _state[b], in, single_coeff_set_tag {});
           break;
+        case bandtype::onepole_allpass:
+          out = onepole::tick (
+            smoothed_band_coefs, _state[b], in, single_coeff_set_tag {});
+          break;
         default:
           jassert (false);
           break;
@@ -160,7 +164,8 @@ public:
         "Butterworth LP",
         "Butterworth HP",
         "Tilt",
-        "Presence HiShelf"),
+        "Presence HiShelf",
+        "Allpass OnePole"),
       30);
   }
   //----------------------------------------------------------------------------
@@ -263,6 +268,7 @@ private:
     butterworth_hp,
     svf_tilt,
     presence,
+    onepole_allpass,
     size
   };
   //----------------------------------------------------------------------------
@@ -350,6 +356,10 @@ private:
         make_vec_x1<double> (b.gain_db),
         sr);
     } break;
+    case bandtype::onepole_allpass: {
+      onepole::reset_coeffs (
+        _coeffs[band], make_vec_x1<double> (b.freq), sr, allpass_tag {});
+    } break;
     default:
       jassert (false);
     }
@@ -378,6 +388,7 @@ private:
   //----------------------------------------------------------------------------
   using filters = mp_list<
     andy::svf,
+    onepole,
     butterworth_lowpass<max_butterworth_order>,
     butterworth_highpass<max_butterworth_order>,
     liteon::presence_high_shelf>;
