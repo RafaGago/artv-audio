@@ -1,3 +1,5 @@
+- Try Chow exciter, Klon centaur and nonlinear Models. Port some.
+
 - Enable "-compress-debug-info=zlib" on Debug executables. It takes ages to load
   on GDB when all the FX are enabled.
 

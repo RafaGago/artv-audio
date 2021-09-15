@@ -701,22 +701,442 @@ static constexpr preset presets[] = {
     <PARAM id="filter2x_band1_freq_05" value="28.88083457946777" />
     <PARAM id="filter2x_band1_gain_05" value="3.300003051757812" />
     <PARAM id="filter2x_band1_reso_05" value="0.6759999990463257" />
-    <PARAM id="filter2x_band1_tolerance_05" value="-37.59999847412109" />
-    <PARAM id="filter2x_band1_topology_05" value="1.0" />
-    <PARAM id="filter2x_band1_type_05" value="2.0" />
-    <PARAM id="fx_mix_07" value="49.60000228881836" />
-    <PARAM id="fx_mix_08" value="24.40000152587891" />
-    <PARAM id="fx_type_01" value="42.0" />
-    <PARAM id="fx_type_02" value="23.0" />
-    <PARAM id="fx_type_03" value="9.0" />
-    <PARAM id="fx_type_04" value="15.0" />
-    <PARAM id="fx_type_05" value="37.0" />
-    <PARAM id="fx_type_06" value="0.0" />
-    <PARAM id="fx_type_07" value="11.0" />
-    <PARAM id="fx_type_08" value="10.0" />
-    <PARAM id="gate_expander_attack_07" value="8.600000381469727" />
-    <PARAM id="gate_expander_channel_link_07" value="0.0" />
-    <PARAM id="gate_expander_gatethresh_07" value="-29.19999885559082" />
+    <PARAM id="filter2x_band1_tolerance_05" value="-37.59999847412109" />_predelay_03" />
+    <PARAM id="tal_reverb2_predelay_04" />
+    <PARAM id="tal_reverb2_predelay_05" />
+    <PARAM id="tal_reverb2_predelay_06" />
+    <PARAM id="tal_reverb2_predelay_07" />
+    <PARAM id="tal_reverb2_predelay_08" />
+    <PARAM id="tal_reverb2_predelay_sync_01" />
+    <PARAM id="tal_reverb2_predelay_sync_02" />
+    <PARAM id="tal_reverb2_predelay_sync_03" />
+    <PARAM id="tal_reverb2_predelay_sync_04" />
+    <PARAM id="tal_reverb2_predelay_sync_05" />
+    <PARAM id="tal_reverb2_predelay_sync_06" />
+    <PARAM id="tal_reverb2_predelay_sync_07" />
+    <PARAM id="tal_reverb2_predelay_sync_08" />
+    <PARAM id="tal_reverb2_stereo_width_01" />
+    <PARAM id="tal_reverb2_stereo_width_02" />
+    <PARAM id="tal_reverb2_stereo_width_03" />
+    <PARAM id="tal_reverb2_stereo_width_04" />
+    <PARAM id="tal_reverb2_stereo_width_05" />
+    <PARAM id="tal_reverb2_stereo_width_06" />
+    <PARAM id="tal_reverb2_stereo_width_07" />
+    <PARAM id="tal_reverb2_stereo_width_08" />
+    <PARAM id="track_comp_autogain_01" />
+    <PARAM id="track_comp_autogain_02" />
+    <PARAM id="track_comp_autogain_03" value="1.0" />
+    <PARAM id="track_comp_autogain_04" />
+    <PARAM id="track_comp_autogain_05" />
+    <PARAM id="track_comp_autogain_06" />
+    <PARAM id="track_comp_autogain_07" />
+    <PARAM id="track_comp_autogain_08" />
+    <PARAM id="track_comp_compattack_01" />
+    <PARAM id="track_comp_compattack_02" />
+    <PARAM id="track_comp_compattack_03" value="39.78099822998047" />
+    <PARAM id="track_comp_compattack_04" value="10.00100040435791" />
+    <PARAM id="track_comp_compattack_05" />
+    <PARAM id="track_comp_compattack_06" />
+    <PARAM id="track_comp_compattack_07" />
+    <PARAM id="track_comp_compattack_08" />
+    <PARAM id="track_comp_compfeedbk_01" />
+    <PARAM id="track_comp_compfeedbk_02" />
+    <PARAM id="track_comp_compfeedbk_03" value="81.40000152587891" />
+    <PARAM id="track_comp_compfeedbk_04" value="25.0" />
+    <PARAM id="track_comp_compfeedbk_05" />
+    <PARAM id="track_comp_compfeedbk_06" />
+    <PARAM id="track_comp_compfeedbk_07" />
+    <PARAM id="track_comp_compfeedbk_08" />
+    <PARAM id="track_comp_compknee_01" />
+    <PARAM id="track_comp_compknee_02" />
+    <PARAM id="track_comp_compknee_03" value="1.289999961853027" />
+    <PARAM id="track_comp_compknee_04" value="4.5" />
+    <PARAM id="track_comp_compknee_05" />
+    <PARAM id="track_comp_compknee_06" />
+    <PARAM id="track_comp_compknee_07" />
+    <PARAM id="track_comp_compknee_08" />
+    <PARAM id="track_comp_comprange_01" />
+    <PARAM id="track_comp_comprange_02" />
+    <PARAM id="track_comp_comprange_03" value="-40.0" />
+    <PARAM id="track_comp_comprange_04" />
+    <PARAM id="track_comp_comprange_05" />
+    <PARAM id="track_comp_comprange_06" />
+    <PARAM id="track_comp_comprange_07" />
+    <PARAM id="track_comp_comprange_08" />
+    <PARAM id="track_comp_compratio_01" />
+    <PARAM id="track_comp_compratio_02" />
+    <PARAM id="track_comp_compratio_03" value="9.200000762939453" />
+    <PARAM id="track_comp_compratio_04" value="4.0" />
+    <PARAM id="track_comp_compratio_05" />
+    <PARAM id="track_comp_compratio_06" />
+    <PARAM id="track_comp_compratio_07" />
+    <PARAM id="track_comp_compratio_08" />
+    <PARAM id="track_comp_comprelease_01" />
+    <PARAM id="track_comp_comprelease_02" />
+    <PARAM id="track_comp_comprelease_03" value="263.3200073242188" />
+    <PARAM id="track_comp_comprelease_04" value="200.0" />
+    <PARAM id="track_comp_comprelease_05" />
+    <PARAM id="track_comp_comprelease_06" />
+    <PARAM id="track_comp_comprelease_07" />
+    <PARAM id="track_comp_comprelease_08" />
+    <PARAM id="track_comp_compthresh_01" />
+    <PARAM id="track_comp_compthresh_02" />
+    <PARAM id="track_comp_compthresh_03" value="-49.20000076293945" />
+    <PARAM id="track_comp_compthresh_04" value="0.0" />
+    <PARAM id="track_comp_compthresh_05" />
+    <PARAM id="track_comp_compthresh_06" />
+    <PARAM id="track_comp_compthresh_07" />
+    <PARAM id="track_comp_compthresh_08" />
+    <PARAM id="track_comp_compwindow_01" />
+    <PARAM id="track_comp_compwindow_02" />
+    <PARAM id="track_comp_compwindow_03" value="0.0" />
+    <PARAM id="track_comp_compwindow_04" />
+    <PARAM id="track_comp_compwindow_05" />
+    <PARAM id="track_comp_compwindow_06" />
+    <PARAM id="track_comp_compwindow_07" />
+    <PARAM id="track_comp_compwindow_08" />
+    <PARAM id="track_comp_dbgain_01" />
+    <PARAM id="track_comp_dbgain_02" />
+    <PARAM id="track_comp_dbgain_03" />
+    <PARAM id="track_comp_dbgain_04" />
+    <PARAM id="track_comp_dbgain_05" />
+    <PARAM id="track_comp_dbgain_06" />
+    <PARAM id="track_comp_dbgain_07" />
+    <PARAM id="track_comp_dbgain_08" />
+    <PARAM id="track_comp_dbtrim_01" />
+    <PARAM id="track_comp_dbtrim_02" />
+    <PARAM id="track_comp_dbtrim_03" />
+    <PARAM id="track_comp_dbtrim_04" />
+    <PARAM id="track_comp_dbtrim_05" />
+    <PARAM id="track_comp_dbtrim_06" />
+    <PARAM id="track_comp_dbtrim_07" />
+    <PARAM id="track_comp_dbtrim_08" />
+    <PARAM id="track_comp_linkamount_01" />
+    <PARAM id="track_comp_linkamount_02" />
+    <PARAM id="track_comp_linkamount_03" />
+    <PARAM id="track_comp_linkamount_04" />
+    <PARAM id="track_comp_linkamount_05" />
+    <PARAM id="track_comp_linkamount_06" />
+    <PARAM id="track_comp_linkamount_07" />
+    <PARAM id="track_comp_linkamount_08" />
+    <PARAM id="track_comp_oversampling_01" />
+    <PARAM id="track_comp_oversampling_02" />
+    <PARAM id="track_comp_oversampling_03" />
+    <PARAM id="track_comp_oversampling_04" />
+    <PARAM id="track_comp_oversampling_05" />
+    <PARAM id="track_comp_oversampling_06" />
+    <PARAM id="track_comp_oversampling_07" />
+    <PARAM id="track_comp_oversampling_08" />
+    <PARAM id="track_comp_saturation_01" />
+    <PARAM id="track_comp_saturation_02" />
+    <PARAM id="track_comp_saturation_03" />
+    <PARAM id="track_comp_saturation_04" />
+    <PARAM id="track_comp_saturation_05" />
+    <PARAM id="track_comp_saturation_06" />
+    <PARAM id="track_comp_saturation_07" />
+    <PARAM id="track_comp_saturation_08" />
+    <PARAM id="track_comp_scfreq_01" />
+    <PARAM id="track_comp_scfreq_02" />
+    <PARAM id="track_comp_scfreq_03" />
+    <PARAM id="track_comp_scfreq_04" />
+    <PARAM id="track_comp_scfreq_05" />
+    <PARAM id="track_comp_scfreq_06" />
+    <PARAM id="track_comp_scfreq_07" />
+    <PARAM id="track_comp_scfreq_08" />
+    <PARAM id="transience_attack_01" />
+    <PARAM id="transience_attack_02" />
+    <PARAM id="transience_attack_03" value="0.4239999949932098" />
+    <PARAM id="transience_attack_04" value="0.5" />
+    <PARAM id="transience_attack_05" />
+    <PARAM id="transience_attack_06" />
+    <PARAM id="transience_attack_07" />
+    <PARAM id="transience_attack_08" />
+    <PARAM id="transience_attack_amt_01" />
+    <PARAM id="transience_attack_amt_02" />
+    <PARAM id="transience_attack_amt_03" value="0.3359999656677246" />
+    <PARAM id="transience_attack_amt_04" value="0.0" />
+    <PARAM id="transience_attack_amt_05" />
+    <PARAM id="transience_attack_amt_06" />
+    <PARAM id="transience_attack_amt_07" />
+    <PARAM id="transience_attack_amt_08" />
+    <PARAM id="transience_decay_01" />
+    <PARAM id="transience_decay_02" />
+    <PARAM id="transience_decay_03" value="0.9759999513626099" />
+    <PARAM id="transience_decay_04" value="0.5" />
+    <PARAM id="transience_decay_05" />
+    <PARAM id="transience_decay_06" />
+    <PARAM id="transience_decay_07" />
+    <PARAM id="transience_decay_08" />
+    <PARAM id="transience_decay_amt_01" />
+    <PARAM id="transience_decay_amt_02" />
+    <PARAM id="transience_decay_amt_03" value="0.8399999141693115" />
+    <PARAM id="transience_decay_amt_04" value="0.0" />
+    <PARAM id="transience_decay_amt_05" />
+    <PARAM id="transience_decay_amt_06" />
+    <PARAM id="transience_decay_amt_07" />
+    <PARAM id="transience_decay_amt_08" />
+    <PARAM id="transience_gainsmoothing_01" />
+    <PARAM id="transience_gainsmoothing_02" />
+    <PARAM id="transience_gainsmoothing_03" value="0.1359999924898148" />
+    <PARAM id="transience_gainsmoothing_04" />
+    <PARAM id="transience_gainsmoothing_05" />
+    <PARAM id="transience_gainsmoothing_06" />
+    <PARAM id="transience_gainsmoothing_07" />
+    <PARAM id="transience_gainsmoothing_08" />
+    <PARAM id="transience_mode_01" />
+    <PARAM id="transience_mode_02" />
+    <PARAM id="transience_mode_03" value="1.0" />
+    <PARAM id="transience_mode_04" value="0.0" />
+    <PARAM id="transience_mode_05" />
+    <PARAM id="transience_mode_06" />
+    <PARAM id="transience_mode_07" />
+    <PARAM id="transience_mode_08" />
+    <PARAM id="transience_oversampling_01" />
+    <PARAM id="transience_oversampling_02" />
+    <PARAM id="transience_oversampling_03" value="2.0" />
+    <PARAM id="transience_oversampling_04" value="0.0" />
+    <PARAM id="transience_oversampling_05" />
+    <PARAM id="transience_oversampling_06" />
+    <PARAM id="transience_oversampling_07" />
+    <PARAM id="transience_oversampling_08" />
+    <PARAM id="volume_01" value="2.919998168945312" />
+    <PARAM id="volume_02" value="0.0" />
+    <PARAM id="volume_03" value="0.0" />
+    <PARAM id="volume_04" value="8.649997711181641" />
+    <PARAM id="volume_05" />
+    <PARAM id="volume_06" />
+    <PARAM id="volume_07" />
+    <PARAM id="volume_08" />
+    <PARAM id="wet_balance_01" value="-69.59999847412109" />
+    <PARAM id="wet_balance_02" value="-57.60000228881836" />
+    <PARAM id="wet_balance_03" value="0.0" />
+    <PARAM id="wet_balance_04" value="-69.59999847412109" />
+    <PARAM id="wet_balance_05" />
+    <PARAM id="wet_balance_06" value="0.0" />
+    <PARAM id="wet_balance_07" />
+    <PARAM id="wet_balance_08" />
+    <PARAM id="wet_pan_01" />
+    <PARAM id="wet_pan_02" />
+    <PARAM id="wet_pan_03" />
+    <PARAM id="wet_pan_04" />
+    <PARAM id="wet_pan_05" />
+    <PARAM id="wet_pan_06" />
+    <PARAM id="wet_pan_07" />
+    <PARAM id="wet_pan_08" />
+    <PARAM id="wonky_crossv_band1_diff" value="-48.80000305175781" />
+    <PARAM id="wonky_crossv_band1_frequency" value="49.17507934570312" />
+    <PARAM id="wonky_crossv_band1_mode" value="1.0" />
+    <PARAM id="wonky_crossv_band1_out" value="0.0" />
+    <PARAM id="wonky_crossv_band2_diff" />
+    <PARAM id="wonky_crossv_band2_frequency" value="64.51985931396484" />
+    <PARAM id="wonky_crossv_band2_mode" value="3.0" />
+    <PARAM id="wonky_crossv_band2_out" value="1.0" />
+    <PARAM id="wonky_crossv_band3_diff" />
+    <PARAM id="wonky_crossv_band3_frequency" value="108.8631286621094" />
+    <PARAM id="wonky_crossv_band3_mode" value="2.0" />
+    <PARAM id="wonky_crossv_band3_out" value="2.0" />
+    <PARAM id="zebigchorus3_algo_01" />
+    <PARAM id="zebigchorus3_algo_02" />
+    <PARAM id="zebigchorus3_algo_03" />
+    <PARAM id="zebigchorus3_algo_04" />
+    <PARAM id="zebigchorus3_algo_05" />
+    <PARAM id="zebigchorus3_algo_06" />
+    <PARAM id="zebigchorus3_algo_07" />
+    <PARAM id="zebigchorus3_algo_08" />
+    <PARAM id="zebigchorus3_delay_01" />
+    <PARAM id="zebigchorus3_delay_02" />
+    <PARAM id="zebigchorus3_delay_03" />
+    <PARAM id="zebigchorus3_delay_04" />
+    <PARAM id="zebigchorus3_delay_05" />
+    <PARAM id="zebigchorus3_delay_06" />
+    <PARAM id="zebigchorus3_delay_07" />
+    <PARAM id="zebigchorus3_delay_08" />
+    <PARAM id="zebigchorus3_dispmod_01" />
+    <PARAM id="zebigchorus3_dispmod_02" />
+    <PARAM id="zebigchorus3_dispmod_03" />
+    <PARAM id="zebigchorus3_dispmod_04" />
+    <PARAM id="zebigchorus3_dispmod_05" />
+    <PARAM id="zebigchorus3_dispmod_06" />
+    <PARAM id="zebigchorus3_dispmod_07" />
+    <PARAM id="zebigchorus3_dispmod_08" />
+    <PARAM id="zebigchorus3_dispstatic_01" />
+    <PARAM id="zebigchorus3_dispstatic_02" />
+    <PARAM id="zebigchorus3_dispstatic_03" />
+    <PARAM id="zebigchorus3_dispstatic_04" />
+    <PARAM id="zebigchorus3_dispstatic_05" />
+    <PARAM id="zebigchorus3_dispstatic_06" />
+    <PARAM id="zebigchorus3_dispstatic_07" />
+    <PARAM id="zebigchorus3_dispstatic_08" />
+    <PARAM id="zebigchorus3_dmod_01" />
+    <PARAM id="zebigchorus3_dmod_02" />
+    <PARAM id="zebigchorus3_dmod_03" />
+    <PARAM id="zebigchorus3_dmod_04" />
+    <PARAM id="zebigchorus3_dmod_05" />
+    <PARAM id="zebigchorus3_dmod_06" />
+    <PARAM id="zebigchorus3_dmod_07" />
+    <PARAM id="zebigchorus3_dmod_08" />
+    <PARAM id="zebigchorus3_g0_01" />
+    <PARAM id="zebigchorus3_g0_02" />
+    <PARAM id="zebigchorus3_g0_03" />
+    <PARAM id="zebigchorus3_g0_04" />
+    <PARAM id="zebigchorus3_g0_05" />
+    <PARAM id="zebigchorus3_g0_06" />
+    <PARAM id="zebigchorus3_g0_07" />
+    <PARAM id="zebigchorus3_g0_08" />
+    <PARAM id="zebigchorus3_g1_01" />
+    <PARAM id="zebigchorus3_g1_02" />
+    <PARAM id="zebigchorus3_g1_03" />
+    <PARAM id="zebigchorus3_g1_04" />
+    <PARAM id="zebigchorus3_g1_05" />
+    <PARAM id="zebigchorus3_g1_06" />
+    <PARAM id="zebigchorus3_g1_07" />
+    <PARAM id="zebigchorus3_g1_08" />
+    <PARAM id="zebigchorus3_gain_01" />
+    <PARAM id="zebigchorus3_gain_02" />
+    <PARAM id="zebigchorus3_gain_03" />
+    <PARAM id="zebigchorus3_gain_04" />
+    <PARAM id="zebigchorus3_gain_05" />
+    <PARAM id="zebigchorus3_gain_06" />
+    <PARAM id="zebigchorus3_gain_07" />
+    <PARAM id="zebigchorus3_gain_08" />
+    <PARAM id="zebigchorus3_grate_01" />
+    <PARAM id="zebigchorus3_grate_02" />
+    <PARAM id="zebigchorus3_grate_03" />
+    <PARAM id="zebigchorus3_grate_04" />
+    <PARAM id="zebigchorus3_grate_05" />
+    <PARAM id="zebigchorus3_grate_06" />
+    <PARAM id="zebigchorus3_grate_07" />
+    <PARAM id="zebigchorus3_grate_08" />
+    <PARAM id="zebigchorus3_gratedisp_01" />
+    <PARAM id="zebigchorus3_gratedisp_02" />
+    <PARAM id="zebigchorus3_gratedisp_03" />
+    <PARAM id="zebigchorus3_gratedisp_04" />
+    <PARAM id="zebigchorus3_gratedisp_05" />
+    <PARAM id="zebigchorus3_gratedisp_06" />
+    <PARAM id="zebigchorus3_gratedisp_07" />
+    <PARAM id="zebigchorus3_gratedisp_08" />
+    <PARAM id="zebigchorus3_rate_01" />
+    <PARAM id="zebigchorus3_rate_02" />
+    <PARAM id="zebigchorus3_rate_03" />
+    <PARAM id="zebigchorus3_rate_04" />
+    <PARAM id="zebigchorus3_rate_05" />
+    <PARAM id="zebigchorus3_rate_06" />
+    <PARAM id="zebigchorus3_rate_07" />
+    <PARAM id="zebigchorus3_rate_08" />
+    <PARAM id="zebigchorus3_ratedisp_01" />
+    <PARAM id="zebigchorus3_ratedisp_02" />
+    <PARAM id="zebigchorus3_ratedisp_03" />
+    <PARAM id="zebigchorus3_ratedisp_04" />
+    <PARAM id="zebigchorus3_ratedisp_05" />
+    <PARAM id="zebigchorus3_ratedisp_06" />
+    <PARAM id="zebigchorus3_ratedisp_07" />
+    <PARAM id="zebigchorus3_ratedisp_08" />
+    <PARAM id="zelittlechorus_depth_01" />
+    <PARAM id="zelittlechorus_depth_02" />
+    <PARAM id="zelittlechorus_depth_03" />
+    <PARAM id="zelittlechorus_depth_04" />
+    <PARAM id="zelittlechorus_depth_05" />
+    <PARAM id="zelittlechorus_depth_06" value="11.58399963378906" />
+    <PARAM id="zelittlechorus_depth_07" />
+    <PARAM id="zelittlechorus_depth_08" />
+    <PARAM id="zelittlechorus_f0_01" />
+    <PARAM id="zelittlechorus_f0_02" />
+    <PARAM id="zelittlechorus_f0_03" />
+    <PARAM id="zelittlechorus_f0_04" />
+    <PARAM id="zelittlechorus_f0_05" />
+    <PARAM id="zelittlechorus_f0_06" value="3342.39990234375" />
+    <PARAM id="zelittlechorus_f0_07" />
+    <PARAM id="zelittlechorus_f0_08" />
+    <PARAM id="zelittlechorus_f1_01" />
+    <PARAM id="zelittlechorus_f1_02" />
+    <PARAM id="zelittlechorus_f1_03" />
+    <PARAM id="zelittlechorus_f1_04" />
+    <PARAM id="zelittlechorus_f1_05" />
+    <PARAM id="zelittlechorus_f1_06" value="1885.60009765625" />
+    <PARAM id="zelittlechorus_f1_07" />
+    <PARAM id="zelittlechorus_f1_08" />
+    <PARAM id="zelittlechorus_fb_01" />
+    <PARAM id="zelittlechorus_fb_02" />
+    <PARAM id="zelittlechorus_fb_03" />
+    <PARAM id="zelittlechorus_fb_04" />
+    <PARAM id="zelittlechorus_fb_05" />
+    <PARAM id="zelittlechorus_fb_06" value="0.1840000152587891" />
+    <PARAM id="zelittlechorus_fb_07" />
+    <PARAM id="zelittlechorus_fb_08" />
+    <PARAM id="zelittlechorus_fblp_01" />
+    <PARAM id="zelittlechorus_fblp_02" />
+    <PARAM id="zelittlechorus_fblp_03" />
+    <PARAM id="zelittlechorus_fblp_04" />
+    <PARAM id="zelittlechorus_fblp_05" />
+    <PARAM id="zelittlechorus_fblp_06" value="0.6200000047683716" />
+    <PARAM id="zelittlechorus_fblp_07" />
+    <PARAM id="zelittlechorus_fblp_08" />
+    <PARAM id="zelittlechorus_fbtype_01" />
+    <PARAM id="zelittlechorus_fbtype_02" />
+    <PARAM id="zelittlechorus_fbtype_03" />
+    <PARAM id="zelittlechorus_fbtype_04" />
+    <PARAM id="zelittlechorus_fbtype_05" />
+    <PARAM id="zelittlechorus_fbtype_06" value="1.0" />
+    <PARAM id="zelittlechorus_fbtype_07" />
+    <PARAM id="zelittlechorus_fbtype_08" />
+    <PARAM id="zelittlechorus_lfoa_01" />
+    <PARAM id="zelittlechorus_lfoa_02" />
+    <PARAM id="zelittlechorus_lfoa_03" />
+    <PARAM id="zelittlechorus_lfoa_04" />
+    <PARAM id="zelittlechorus_lfoa_05" />
+    <PARAM id="zelittlechorus_lfoa_06" value="3.602999925613403" />
+    <PARAM id="zelittlechorus_lfoa_07" />
+    <PARAM id="zelittlechorus_lfoa_08" />
+    <PARAM id="zelittlechorus_lfob_01" />
+    <PARAM id="zelittlechorus_lfob_02" />
+    <PARAM id="zelittlechorus_lfob_03" />
+    <PARAM id="zelittlechorus_lfob_04" />
+    <PARAM id="zelittlechorus_lfob_05" />
+    <PARAM id="zelittlechorus_lfob_06" value="4.243799686431885" />
+    <PARAM id="zelittlechorus_lfob_07" />
+    <PARAM id="zelittlechorus_lfob_08" />
+    <PARAM id="zelittlechorus_lfof_01" />
+    <PARAM id="zelittlechorus_lfof_02" />
+    <PARAM id="zelittlechorus_lfof_03" />
+    <PARAM id="zelittlechorus_lfof_04" />
+    <PARAM id="zelittlechorus_lfof_05" />
+    <PARAM id="zelittlechorus_lfof_06" value="11.00500011444092" />
+    <PARAM id="zelittlechorus_lfof_07" />
+    <PARAM id="zelittlechorus_lfof_08" />
+    <PARAM id="zelittlechorus_lfomix_01" />
+    <PARAM id="zelittlechorus_lfomix_02" />
+    <PARAM id="zelittlechorus_lfomix_03" />
+    <PARAM id="zelittlechorus_lfomix_04" />
+    <PARAM id="zelittlechorus_lfomix_05" />
+    <PARAM id="zelittlechorus_lfomix_06" value="0.5759999752044678" />
+    <PARAM id="zelittlechorus_lfomix_07" />
+    <PARAM id="zelittlechorus_lfomix_08" />
+    <PARAM id="zelittlechorus_r_01" />
+    <PARAM id="zelittlechorus_r_02" />
+    <PARAM id="zelittlechorus_r_03" />
+    <PARAM id="zelittlechorus_r_04" />
+    <PARAM id="zelittlechorus_r_05" />
+    <PARAM id="zelittlechorus_r_06" value="0.6448000073432922" />
+    <PARAM id="zelittlechorus_r_07" />
+    <PARAM id="zelittlechorus_r_08" />
+    <PARAM id="zelittlechorus_selfpm_01" />
+    <PARAM id="zelittlechorus_selfpm_02" />
+    <PARAM id="zelittlechorus_selfpm_03" />
+    <PARAM id="zelittlechorus_selfpm_04" />
+    <PARAM id="zelittlechorus_selfpm_05" />
+    <PARAM id="zelittlechorus_selfpm_06" value="0.1120000034570694" />
+    <PARAM id="zelittlechorus_selfpm_07" />
+    <PARAM id="zelittlechorus_selfpm_08" />
+    <PARAM id="zelittlechorus_type_01" />
+    <PARAM id="zelittlechorus_type_02" />
+    <PARAM id="zelittlechorus_type_03" />
+    <PARAM id="zelittlechorus_type_04" />
+    <PARAM id="zelittlechorus_type_05" />
+    <PARAM id="zelittlechorus_type_06" value="1.0" />
+    <PARAM id="zelittlechorus_type_07" />
+    <PARAM id="zelittlechorus_type_08" />
+</params>
+
     <PARAM id="gate_expander_hysteresis_07" value="-2.659999847412109" />
     <PARAM id="gate_expander_mode_07" value="1.0" />
     <PARAM id="gate_expander_range_07" value="-50.88000106811523" />
@@ -867,6 +1287,129 @@ static constexpr preset presets[] = {
     <PARAM id="wet_pan_04" value="-59.20000076293945" />
     <PARAM id="zebigchorus3_algo_02" value="7.0" />
     <PARAM id="zebigchorus3_delay_02" value="17.79999923706055" />
+</params>
+     )END"},
+  {.name = "FX: Earthquake",
+   .xml = R"END(
+<?xml version="1.0" encoding="UTF-8"?>
+<params plugin_version="1">
+    <PARAM id="in_selection_01" value="1.0" />
+    <PARAM id="out_selection_01" value="1.0" />
+    <PARAM id="bbe_cv_04" value="8.800000190734863" />
+    <PARAM id="bbe_drive_04" value="11.0" />
+    <PARAM id="bbe_low_contour_04" value="0.0" />
+    <PARAM id="bbe_process_04" value="26.80000114440918" />
+    <PARAM id="fx_mix_02" value="100.0" />
+    <PARAM id="fx_mix_03" value="60.00000381469727" />
+    <PARAM id="fx_mix_04" value="24.40000152587891" />
+    <PARAM id="fx_mix_05" value="100.0" />
+    <PARAM id="fx_mix_06" value="100.0" />
+    <PARAM id="fx_mix_07" value="14.80000114440918" />
+    <PARAM id="fx_mix_08" value="6.800000190734863" />
+    <PARAM id="fx_type_01" value="42.0" />
+    <PARAM id="fx_type_02" value="11.0" />
+    <PARAM id="fx_type_03" value="15.0" />
+    <PARAM id="fx_type_04" value="20.0" />
+    <PARAM id="fx_type_05" value="41.0" />
+    <PARAM id="fx_type_06" value="41.0" />
+    <PARAM id="fx_type_07" value="27.0" />
+    <PARAM id="fx_type_08" value="34.0" />
+    <PARAM id="gate_expander_attack_02" value="7.700000286102295" />
+    <PARAM id="gate_expander_gatethresh_02" value="-17.0" />
+    <PARAM id="gate_expander_hysteresis_02" value="-4.440000057220459" />
+    <PARAM id="gate_expander_range_02" value="-24.15999984741211" />
+    <PARAM id="gate_expander_release_02" value="678.5" />
+    <PARAM id="global_volume" value="-3.649999618530273" />
+    <PARAM id="in_selection_05" value="1.0" />
+    <PARAM id="in_selection_06" value="2.0" />
+    <PARAM id="in_selection_07" value="4.0" />
+    <PARAM id="in_selection_08" value="8.0" />
+    <PARAM id="lr_crossv_band1_diff" value="0.0" />
+    <PARAM id="lr_crossv_band1_frequency" />
+    <PARAM id="lr_crossv_band1_mode" value="3.0" />
+    <PARAM id="lr_crossv_band1_out" value="0.0" />
+    <PARAM id="lr_crossv_band2_diff" value="-2.400001525878906" />
+    <PARAM id="lr_crossv_band2_frequency" value="77.43550872802734" />
+    <PARAM id="lr_crossv_band2_mode" />
+    <PARAM id="lr_crossv_band2_out" value="1.0" />
+    <PARAM id="lr_crossv_band3_diff" value="3.199996948242188" />
+    <PARAM id="lr_crossv_band3_frequency" value="106.9496917724609" />
+    <PARAM id="lr_crossv_band3_mode" />
+    <PARAM id="lr_crossv_band3_out" value="2.0" />
+    <PARAM id="mixer_sends" value="0.0" />
+    <PARAM id="mute_solo_01" value="0.0" />
+    <PARAM id="mute_solo_02" value="0.0" />
+    <PARAM id="mute_solo_03" value="0.0" />
+    <PARAM id="mute_solo_05" value="0.0" />
+    <PARAM id="mute_solo_06" value="0.0" />
+    <PARAM id="mute_solo_07" value="0.0" />
+    <PARAM id="mute_solo_08" value="0.0" />
+    <PARAM id="out_selection_02" value="2.0" />
+    <PARAM id="out_selection_03" value="4.0" />
+    <PARAM id="out_selection_04" value="8.0" />
+    <PARAM id="out_selection_05" value="1.0" />
+    <PARAM id="out_selection_06" value="1.0" />
+    <PARAM id="out_selection_07" value="1.0" />
+    <PARAM id="out_selection_08" value="1.0" />
+    <PARAM id="routing" value="1.0" />
+    <PARAM id="tal_reverb2_decay_08" value="13.60000038146973" />
+    <PARAM id="tal_reverb2_lowshelf_frequency_08" value="114.347412109375" />
+    <PARAM id="tal_reverb2_stereo_width_08" value="83.20000457763672" />
+    <PARAM id="volume_01" value="0.0" />
+    <PARAM id="volume_03" value="4.30999755859375" />
+    <PARAM id="volume_04" value="1.520000457763672" />
+    <PARAM id="volume_06" value="0.0" />
+    <PARAM id="volume_07" value="0.0" />
+    <PARAM id="volume_08" value="-1.799999237060547" />
+    <PARAM id="waveshaper_band_gain_05" value="-2.75" />
+    <PARAM id="waveshaper_band_gain_06" value="0.0" />
+    <PARAM id="waveshaper_drive_05" value="-4.5" />
+    <PARAM id="waveshaper_drive_06" value="-16.25" />
+    <PARAM id="waveshaper_drive_balance_06" value="-13.75" />
+    <PARAM id="waveshaper_emphasis_amount_05" value="1.25" />
+    <PARAM id="waveshaper_emphasis_amount_06" value="20.75" />
+    <PARAM id="waveshaper_emphasis_freq_05" value="38.36567687988281" />
+    <PARAM id="waveshaper_emphasis_freq_06" value="73.51918029785156" />
+    <PARAM id="waveshaper_emphasis_q_05" value="0.4999999701976776" />
+    <PARAM id="waveshaper_emphasis_q_06" value="5.160000324249268" />
+    <PARAM id="waveshaper_envfollow_attack_05" value="14.30000019073486" />
+    <PARAM id="waveshaper_envfollow_attack_06" value="19.30000114440918" />
+    <PARAM id="waveshaper_envfollow_mode_05" value="2.0" />
+    <PARAM id="waveshaper_envfollow_mode_06" value="1.0" />
+    <PARAM id="waveshaper_envfollow_release_05" value="480.0" />
+    <PARAM id="waveshaper_envfollow_release_06" value="481.0" />
+    <PARAM id="waveshaper_envfollow_sensitivity_05" value="-10.23999977111816" />
+    <PARAM id="waveshaper_envfollow_sensitivity_06" value="20.0" />
+    <PARAM id="waveshaper_envfollow_to_dc_06" value="0.0" />
+    <PARAM id="waveshaper_envfollow_to_drive_05" value="0.0" />
+    <PARAM id="waveshaper_envfollow_to_drive_06" value="100.0" />
+    <PARAM id="waveshaper_envfollow_to_emphasis_amount_05" value="0.0" />
+    <PARAM id="waveshaper_envfollow_to_emphasis_amount_06" value="-92.80000305175781" />
+    <PARAM id="waveshaper_envfollow_to_emphasis_freq_05" value="-60.0" />
+    <PARAM id="waveshaper_envfollow_to_emphasis_freq_06" value="-90.40000152587891" />
+    <PARAM id="waveshaper_feedback_05" value="86.10000610351562" />
+    <PARAM id="waveshaper_feedback_06" value="4.599998474121094" />
+    <PARAM id="waveshaper_mode_06" value="2.0" />
+    <PARAM id="waveshaper_type_05" value="1.0" />
+    <PARAM id="waveshaper_type_06" value="2.0" />
+    <PARAM id="wet_balance_01" value="0.0" />
+    <PARAM id="wet_balance_02" value="0.0" />
+    <PARAM id="wet_balance_04" value="0.0" />
+    <PARAM id="wet_balance_08" value="0.0" />
+    <PARAM id="wet_pan_03" value="0.0" />
+    <PARAM id="wet_pan_07" value="-44.0" />
+    <PARAM id="wet_pan_08" value="48.80000305175781" />
+    <PARAM id="zebigchorus3_algo_07" value="5.0" />
+    <PARAM id="zebigchorus3_delay_07" value="7.799999713897705" />
+    <PARAM id="zebigchorus3_dispmod_07" value="0.8919999599456787" />
+    <PARAM id="zebigchorus3_dispstatic_07" value="0.8399999737739563" />
+    <PARAM id="zebigchorus3_dmod_07" value="92.39999389648438" />
+    <PARAM id="zebigchorus3_g0_07" value="0.4459999203681946" />
+    <PARAM id="zebigchorus3_g1_07" value="-0.4824000000953674" />
+    <PARAM id="zebigchorus3_grate_07" value="0.1099999994039536" />
+    <PARAM id="zebigchorus3_gratedisp_07" value="0.7519999742507935" />
+    <PARAM id="zebigchorus3_rate_07" value="0.1180000007152557" />
+    <PARAM id="zebigchorus3_ratedisp_07" value="0.1319999992847443" />
 </params>
      )END"},
 };
