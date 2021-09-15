@@ -111,6 +111,15 @@ public:
   }
   //----------------------------------------------------------------------------
   template <size_t N_bus_chnls = 2> // 2 = stereo
+  void clear (int bus)
+  {
+    auto ptrs = get_write_ptrs (bus);
+    for (value_type* ptr : ptrs) {
+      memset (ptr, 0, sample_count() * sizeof *ptr);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <size_t N_bus_chnls = 2> // 2 = stereo
   void swap (int bus1, int bus2)
   {
     using simd                  = juce::dsp::SIMDRegister<value_type>;

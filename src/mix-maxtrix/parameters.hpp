@@ -84,6 +84,7 @@
 #endif
 
 #include "mix-maxtrix/crossover.hpp"
+#include "mix-maxtrix/wonky_crossover.hpp"
 
 #include "artv-common/dsp/own/classes/mix.hpp"
 #include "artv-common/juce/effect_base.hpp"
@@ -177,7 +178,6 @@ struct routing_mode {
     full,
     blocks_of_4,
     blocks_of_2,
-    crossover,
   };
 };
 //------------------------------------------------------------------------------
@@ -446,6 +446,142 @@ using lr_crossv_params = mp_list<
   lr_crossv_band3_diff,
   lr_crossv_band3_mode,
   lr_crossv_band3_out>;
+//------------------------------------------------------------------------------
+using mm_wonky_crossv = mixmaxtrix_wonky_crossover<crossover_n_bands>;
+
+parameter_cpp_class_define (
+  wonky_crossv_band1_frequency,
+  1,
+  param_common (
+    "1.Freq",
+    declptr<mm_wonky_crossv>(),
+    declptr<mm_wonky_crossv::band1_freq_tag>()),
+  mm_wonky_crossv::get_parameter (mm_wonky_crossv::band1_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  wonky_crossv_band2_frequency,
+  1,
+  param_common (
+    "2.Freq",
+    declptr<mm_wonky_crossv>(),
+    declptr<mm_wonky_crossv::band2_freq_tag>()),
+  mm_wonky_crossv::get_parameter (mm_wonky_crossv::band2_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  wonky_crossv_band3_frequency,
+  1,
+  param_common (
+    "3.Freq",
+    declptr<mm_wonky_crossv>(),
+    declptr<mm_wonky_crossv::band3_freq_tag>()),
+  mm_wonky_crossv::get_parameter (mm_wonky_crossv::band3_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  wonky_crossv_band1_mode,
+  1,
+  param_common (
+    "1.Mode",
+    declptr<mm_wonky_crossv>(),
+    declptr<mm_wonky_crossv::band1_mode_tag>()),
+  mm_wonky_crossv::get_parameter (mm_wonky_crossv::band1_mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  wonky_crossv_band2_mode,
+  1,
+  param_common (
+    "2.Mode",
+    declptr<mm_wonky_crossv>(),
+    declptr<mm_wonky_crossv::band2_mode_tag>()),
+  mm_wonky_crossv::get_parameter (mm_wonky_crossv::band2_mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  wonky_crossv_band3_mode,
+  1,
+  param_common (
+    "3.Mode",
+    declptr<mm_wonky_crossv>(),
+    declptr<mm_wonky_crossv::band3_mode_tag>()),
+  mm_wonky_crossv::get_parameter (mm_wonky_crossv::band3_mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  wonky_crossv_band1_diff,
+  1,
+  param_common (
+    "1.Diff",
+    declptr<mm_wonky_crossv>(),
+    declptr<mm_wonky_crossv::band1_diff_tag>()),
+  mm_wonky_crossv::get_parameter (mm_wonky_crossv::band1_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  wonky_crossv_band2_diff,
+  1,
+  param_common (
+    "2.Diff",
+    declptr<mm_wonky_crossv>(),
+    declptr<mm_wonky_crossv::band2_diff_tag>()),
+  mm_wonky_crossv::get_parameter (mm_wonky_crossv::band2_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  wonky_crossv_band3_diff,
+  1,
+  param_common (
+    "3.Diff",
+    declptr<mm_wonky_crossv>(),
+    declptr<mm_wonky_crossv::band3_diff_tag>()),
+  mm_wonky_crossv::get_parameter (mm_wonky_crossv::band3_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  wonky_crossv_band1_out,
+  1,
+  param_common (
+    "1.Send",
+    declptr<mm_wonky_crossv>(),
+    declptr<mm_wonky_crossv::band1_out_tag>()),
+  mm_wonky_crossv::get_parameter (mm_wonky_crossv::band1_out_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  wonky_crossv_band2_out,
+  1,
+  param_common (
+    "2.Send",
+    declptr<mm_wonky_crossv>(),
+    declptr<mm_wonky_crossv::band2_out_tag>()),
+  mm_wonky_crossv::get_parameter (mm_wonky_crossv::band2_out_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  wonky_crossv_band3_out,
+  1,
+  param_common (
+    "3.Send",
+    declptr<mm_wonky_crossv>(),
+    declptr<mm_wonky_crossv::band3_out_tag>()),
+  mm_wonky_crossv::get_parameter (mm_wonky_crossv::band3_out_tag {}),
+  slider_ext);
+
+using wonky_crossv_params = mp_list<
+  wonky_crossv_band1_frequency,
+  wonky_crossv_band1_diff,
+  wonky_crossv_band1_mode,
+  wonky_crossv_band1_out,
+  wonky_crossv_band2_frequency,
+  wonky_crossv_band2_diff,
+  wonky_crossv_band2_mode,
+  wonky_crossv_band2_out,
+  wonky_crossv_band3_frequency,
+  wonky_crossv_band3_diff,
+  wonky_crossv_band3_mode,
+  wonky_crossv_band3_out>;
 //------------------------------------------------------------------------------
 static constexpr uint console_n_elems
   = n_stereo_busses + 1 + (crossover_n_bands - 1);
@@ -5291,7 +5427,7 @@ parameter_cpp_class_define (
   filter2x_oversampling,
   n_stereo_busses,
   param_common (
-    "Oversample",
+    "OverSmpl",
     declptr<oversampled<filter2x>>(),
     declptr<oversampled_amount_tag>()),
   updownsampled<filter2x>::get_parameter (oversampled_amount_tag {}),
@@ -5596,13 +5732,13 @@ parameter_cpp_class_define (
 using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #endif
 //------------------------------------------------------------------------------
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists
-  = mp_list<saturation_params, lr_crossv_params, eq4x_params>;
+  = mp_list<saturation_params, lr_crossv_params, wonky_crossv_params>;
 
-static constexpr auto fx_choices = make_cstr_array ("none", "FX", "C", "EQ4");
+static constexpr auto fx_choices = make_cstr_array ("none", "FX", "C", "C2");
 
 #else
 // clang-format off
@@ -5648,7 +5784,8 @@ using all_fx_typelists = mp_list<
   track_comp_params,
   signal_crusher_params,
   saturation_params,
-  lr_crossv_params
+  lr_crossv_params,
+  wonky_crossv_params
   >;
 // clang-format on
 //------------------------------------------------------------------------------
@@ -5699,7 +5836,8 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Dynamics Track Comp",
   ":Distortion Signal Crusher",
   ":Distortion Saturation",
-  ":Filter Crossover-4");
+  ":Filter LR-Crossover-4",
+  ":Filter WTF-Crossover-4");
 
 #endif // #if TWEAK_BUILD
 

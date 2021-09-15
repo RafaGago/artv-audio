@@ -3,17 +3,11 @@
 - Enable "-compress-debug-info=zlib" on Debug executables. It takes ages to load
   on GDB when all the FX are enabled.
 
-- Add envelope follower on the filters module for the cutoff. The code already
-  is processing in blocks, so it can run at a reduced pace (samplerate).
-
 - Mixmaxtrix: Add a (back) channel of communication for parameter values, so
   values can react to changes on other parameters. Probaby through plugin-
   context and using parameter IDs as the index on the parameter typelist. The
   tags could actually change from being defined as tag classes to std::integral_constant<uint> and double as parameter IDs, at least on the
   wrapper FX class.
-
-- Oversampler. Ensure alignment and size:
-  https://www.kvraudio.com/forum/viewtopic.php?f=33&t=569388&start=30&sid=90826930d4707e692b3137cd8ba19405
 
 - Track XSIMD broken on fast math bug.
   https://github.com/xtensor-stack/xsimd/issues/547
@@ -22,6 +16,8 @@
   catches them).
 
 - Add low latency (IIR) oversampling.
+
+- Add HQ (FIR) oversampling.
 
 - SVF:
   - Add the version with better precission which uses "sin" for coeff

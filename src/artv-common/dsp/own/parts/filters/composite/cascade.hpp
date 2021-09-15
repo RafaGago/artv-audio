@@ -15,7 +15,8 @@
 
 namespace artv {
 
-// A variable order cascade of Cytomic SVF's and TDF2 onepole (odd orders).
+// A variable order cascade of Cytomic SVF's 2-poles and TDF2 1-pole (odd
+// orders).
 template <class Filter_mode_tag>
 class filter_cascade_any_order {
 public:

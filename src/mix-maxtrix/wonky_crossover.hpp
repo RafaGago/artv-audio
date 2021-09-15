@@ -1,6 +1,7 @@
 #pragma once
+#pragma once
 
-#include "artv-common/dsp/own/classes/lr_crossover.hpp"
+#include "artv-common/dsp/own/classes/wonky_crossover.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
@@ -9,7 +10,7 @@ namespace artv {
 
 //------------------------------------------------------------------------------
 template <uint Bands>
-class mixmaxtrix_lr_crossover {
+class mixmaxtrix_wonky_crossover {
 private:
   enum class paramtype { mode, frequency, diff, out };
 
@@ -56,7 +57,18 @@ public:
   static constexpr auto get_parameter (param<band, paramtype::mode>)
   {
     return choice_param (
-      1, make_cstr_array ("Off", "12dB/Oct", "24dB/Oct", "48dB/Oct"), 15);
+      1,
+      make_cstr_array (
+        "Off",
+        "6dB/Oct",
+        "12dB/Oct",
+        "18dB/Oct",
+        "24dB/Oct",
+        "30dB/Oct",
+        "36dB/Oct",
+        "42dB/Oct",
+        "48dB/Oct"),
+      15);
   }
   //----------------------------------------------------------------------------
   template <uint band>
@@ -164,10 +176,7 @@ private:
     float diff = _cfg[n].diff;
     float f    = _cfg[n].freq;
     _crossv.set_crossover_point (
-      n,
-      f + (f * diff),
-      f - (f * diff),
-      ((uint) (_cfg[n].mode != 0)) << _cfg[n].mode);
+      n, f + (f * diff), f - (f * diff), _cfg[n].mode);
   }
   //----------------------------------------------------------------------------
   struct bandcfg {
@@ -178,7 +187,7 @@ private:
   };
   //----------------------------------------------------------------------------
   std::array<bandcfg, n_crossovers> _cfg;
-  lr_crossover<3, false>            _crossv;
+  wonky_crossover<3>                _crossv;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

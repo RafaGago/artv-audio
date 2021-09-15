@@ -391,10 +391,14 @@ public:
     constexpr uint crossv_id = mp11::mp_find<
       parameters::all_fx_typelists,
       parameters::lr_crossv_params>::value;
+    constexpr uint wonky_crossv_id = mp11::mp_find<
+      parameters::all_fx_typelists,
+      parameters::wonky_crossv_params>::value;
 
     for (uint i = 1; i < parameters::n_stereo_busses; ++i) {
       auto& combo = p_get (parameters::fx_type {})[i]->combo;
       combo.setItemEnabled (crossv_id + 2, false);
+      combo.setItemEnabled (wonky_crossv_id + 2, false);
     }
 
     // size
@@ -885,6 +889,9 @@ public:
       if (std::is_same_v<fxtl, parameters::lr_crossv_params> && chnl != 0) {
         return;
       }
+      if (std::is_same_v<fxtl, parameters::wonky_crossv_params> && chnl != 0) {
+        return;
+      }
       mp11::mp_for_each<fxtl> ([=] (auto param) {
         p_get (param)[chnl]->foreach_component (set_hidden);
       });
@@ -982,9 +989,12 @@ public:
     constexpr uint crossv_id = mp11::mp_find<
       parameters::all_fx_typelists,
       parameters::lr_crossv_params>::value;
+    constexpr uint wonky_crossv_id = mp11::mp_find<
+      parameters::all_fx_typelists,
+      parameters::wonky_crossv_params>::value;
 
     // crossover only on channel 0.
-    no_fx |= ((fx_id == crossv_id) && chnl != 0);
+    no_fx |= ((fx_id == crossv_id || fx_id == wonky_crossv_id) && chnl != 0);
     if (no_fx) {
       // loading a corrupted preset fixup
       combo.setSelectedId (1, juce::NotificationType::dontSendNotification);
@@ -1184,8 +1194,12 @@ public:
   {
     constexpr auto notif = juce::NotificationType::sendNotificationAsync;
     // crossover only exists on channel 0, can't be copied.
+    using non_copyable_sliders = mp11::mp_flatten<mp11::mp_list<
+      parameters::lr_crossv_params,
+      parameters::wonky_crossv_params>>;
+
     using copyable_sliders
-      = mp_remove_all<slider_typelist, parameters::lr_crossv_params>;
+      = mp_remove_all<slider_typelist, non_copyable_sliders>;
 
     mp11::mp_for_each<copyable_sliders> ([=] (auto paramtype) {
       auto&         param = p_get (paramtype);

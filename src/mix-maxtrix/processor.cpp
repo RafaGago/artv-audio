@@ -138,7 +138,7 @@ public:
   void prepareToPlay (double samplerate, int max_block_samples) override
   {
     _fx_context.reset (*this, samplerate, fx_blocksize);
-    _crossv_on = false;
+    _crossv_type = crossv_off;
 
     for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
       _mixer[i].reset (_fx_context);
@@ -253,16 +253,16 @@ private:
 
     // if the channel 0, which is the only one that can have  the crossover, has
     // no inputs, then the crossover is off.
-    _crossv_on &= (ins_arr[0] != 0);
+    _crossv_type     = (ins_arr[0] == 0) ? crossv_off : _crossv_type;
     uint inhibit_opt = 0;
-    if (_crossv_on) {
+    if (_crossv_type != crossv_off) {
       // This was never thought out to be a multifx, so it was never was
       // designed to have multiple ins (sidechain) and outs per fx. It is
       // perfectly doable backend-wise but not on the GUI. The crossover is
       // added by implementing 3 send channels by inhibiting reordering
       // optimizations on the affected channels and manually setting the 3
       // additional crossover's buffers as inputs to the channel. See the
-      // conditional depending on "_crossv_on" below.
+      // conditional depending on "_crossv_type" below.
       for (uint i = 0; i < crossv_outs.size(); ++i) {
         inhibit_opt |= 1 << crossv_outs[i];
       }
@@ -280,7 +280,7 @@ private:
       routing,
       _fx_context.fx_latencies);
 
-    if (_crossv_on) {
+    if (_crossv_type != crossv_off) {
       // buffers -9,-10 and -11 are reserved for crossover outputs.
       uint limit = parameters::n_parallel_buses (routing);
       for (uint i = 0; i < crossv_outs.size(); ++i) {
@@ -295,6 +295,7 @@ private:
     this->setLatencySamples (_io.plugin_latency);
     _fx_context.fx_latencies_changed = false;
     reset_latency_buffers();
+    clear_crossv_buffers();
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -337,14 +338,25 @@ private:
                   parameters::all_fx_typelists,
                   parameters::lr_crossv_params>::value
               + 1;
+            constexpr uint wonky_crossv_id
+              = mp11::mp_find<
+                  parameters::all_fx_typelists,
+                  parameters::wonky_crossv_params>::value
+              + 1;
 
             fx_type_changed[i] = val.changed();
             if (i != 0) {
               return; // crossover only on channel 0
             }
-            _crossv_on = (val.current == crossv_id);
-            crossv_change
-              = fx_type_changed[i] && (_crossv_on || val.previous == crossv_id);
+            if (val.current == crossv_id) {
+              _crossv_type = crossv_normal;
+            }
+            else if (val.current == wonky_crossv_id) {
+              _crossv_type = crossv_wonky;
+            }
+            crossv_change = fx_type_changed[i]
+              && (_crossv_type != crossv_off || val.previous == crossv_id
+                  || val.previous == wonky_crossv_id);
           }
           if constexpr (std::is_same_v<decltype (key), parameters::mute_solo>) {
             mutesolo.changed |= val.changed();
@@ -355,11 +367,24 @@ private:
     }
 
     std::array<uint, parameters::crossover_n_bands - 1> crossv_outs {};
-    if (unlikely (_crossv_on)) {
+    if (unlikely (_crossv_type == crossv_normal)) {
       using band_params = mp11::mp_list<
         parameters::lr_crossv_band1_out,
         parameters::lr_crossv_band2_out,
         parameters::lr_crossv_band3_out>;
+
+      mp_foreach_idx (band_params {}, [&] (auto index, auto param) {
+        auto value = p_refresh (param, 0);
+        // notice: +1 because the crossover can't output on channel 0
+        crossv_outs[index] = value.current + 1;
+        crossv_change |= value.changed();
+      });
+    }
+    else if (unlikely (_crossv_type == crossv_wonky)) {
+      using band_params = mp11::mp_list<
+        parameters::wonky_crossv_band1_out,
+        parameters::wonky_crossv_band2_out,
+        parameters::wonky_crossv_band3_out>;
 
       mp_foreach_idx (band_params {}, [&] (auto index, auto param) {
         auto value = p_refresh (param, 0);
@@ -768,6 +793,14 @@ private:
     _dly_comp_buffers.compensate (id_r, make_crange (chnlptrs[1], samples));
   }
   //----------------------------------------------------------------------------
+  void clear_crossv_buffers()
+  {
+    auto& b = get_buffers (float {});
+    for (uint i = 0; i < _io.n_external_ins; ++i) {
+      b.clear (-(_io.n_busses + 1 + i));
+    }
+  }
+  //----------------------------------------------------------------------------
   struct param_change_counter
     : public juce::AudioProcessorValueTreeState::Listener {
     virtual ~param_change_counter() {};
@@ -801,7 +834,12 @@ private:
   delay_compensation_buffers<float, 2> _dly_comp_buffers;
   uint                                 _program = 0;
 
-  bool _crossv_on;
+  enum crossv_type {
+    crossv_off,
+    crossv_normal,
+    crossv_wonky,
+  };
+  uint _crossv_type;
 
   alignas (128)
     std::array<foleys::LevelMeterSource, parameters::n_stereo_busses> _meters;
