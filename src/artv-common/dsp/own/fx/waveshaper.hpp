@@ -36,7 +36,7 @@
 namespace artv {
 
 //------------------------------------------------------------------------------
-class saturation {
+class waveshaper {
 public:
   //----------------------------------------------------------------------------
   static constexpr dsp_types dsp_type  = dsp_types::waveshaper;

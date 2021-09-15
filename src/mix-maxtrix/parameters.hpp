@@ -76,7 +76,7 @@
 #include "artv-common/dsp/own/fx/eq4x.hpp"
 #include "artv-common/dsp/own/fx/filter2x.hpp"
 #include "artv-common/dsp/own/fx/phaser.hpp"
-#include "artv-common/dsp/own/fx/saturation.hpp"
+#include "artv-common/dsp/own/fx/waveshaper.hpp"
 
 #include "artv-common/dsp/own/fx/sound_delay.hpp"
 #if 0
@@ -5434,261 +5434,261 @@ using filter2x_params = mp_list<
   filter2x_band2_tolerance>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
-  saturation_band_gain,
+  waveshaper_band_gain,
   n_stereo_busses,
   param_common (
     "Sat Vol",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::saturated_out_tag>()),
-  saturation::get_parameter (saturation::saturated_out_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::saturated_out_tag>()),
+  waveshaper::get_parameter (waveshaper::saturated_out_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_trim,
+  waveshaper_trim,
   n_stereo_busses,
   param_common (
     "In Trim",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::trim_tag>()),
-  saturation::get_parameter (saturation::trim_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::trim_tag>()),
+  waveshaper::get_parameter (waveshaper::trim_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_drive,
+  waveshaper_drive,
   n_stereo_busses,
   param_common (
     "Drive",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::drive_tag>()),
-  saturation::get_parameter (saturation::drive_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::drive_tag>()),
+  waveshaper::get_parameter (waveshaper::drive_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_drive_balance,
+  waveshaper_drive_balance,
   n_stereo_busses,
   param_common (
     "Drive Bal",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::drive_balance_tag>()),
-  saturation::get_parameter (saturation::drive_balance_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::drive_balance_tag>()),
+  waveshaper::get_parameter (waveshaper::drive_balance_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_type,
+  waveshaper_type,
   n_stereo_busses,
   param_common (
     "Shape",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::type_tag>()),
-  saturation::get_parameter (saturation::type_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::type_tag>()),
+  waveshaper::get_parameter (waveshaper::type_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_mode,
+  waveshaper_mode,
   n_stereo_busses,
   param_common (
     "Mode",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::mode_tag>()),
-  saturation::get_parameter (saturation::mode_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::mode_tag>()),
+  waveshaper::get_parameter (waveshaper::mode_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_band_lo,
+  waveshaper_band_lo,
   n_stereo_busses,
   param_common (
     "Sat Lo",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::lo_cut_tag>()),
-  saturation::get_parameter (saturation::lo_cut_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::lo_cut_tag>()),
+  waveshaper::get_parameter (waveshaper::lo_cut_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_band_hi,
+  waveshaper_band_hi,
   n_stereo_busses,
   param_common (
     "Sat Hi",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::hi_cut_tag>()),
-  saturation::get_parameter (saturation::hi_cut_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::hi_cut_tag>()),
+  waveshaper::get_parameter (waveshaper::hi_cut_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_lo_mode,
+  waveshaper_lo_mode,
   n_stereo_busses,
   param_common (
     "Sat LoCfg",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::lo_mode_tag>()),
-  saturation::get_parameter (saturation::lo_mode_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::lo_mode_tag>()),
+  waveshaper::get_parameter (waveshaper::lo_mode_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_hi_mode,
+  waveshaper_hi_mode,
   n_stereo_busses,
   param_common (
     "Sat HiCfg",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::hi_mode_tag>()),
-  saturation::get_parameter (saturation::hi_mode_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::hi_mode_tag>()),
+  waveshaper::get_parameter (waveshaper::hi_mode_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_emphasis_amount,
+  waveshaper_emphasis_amount,
   n_stereo_busses,
   param_common (
     "Tone Amt",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::emphasis_amount_tag>()),
-  saturation::get_parameter (saturation::emphasis_amount_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::emphasis_amount_tag>()),
+  waveshaper::get_parameter (waveshaper::emphasis_amount_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_emphasis_freq,
+  waveshaper_emphasis_freq,
   n_stereo_busses,
   param_common (
     "Tone Frq",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::emphasis_freq_tag>()),
-  saturation::get_parameter (saturation::emphasis_freq_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::emphasis_freq_tag>()),
+  waveshaper::get_parameter (waveshaper::emphasis_freq_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_emphasis_q,
+  waveshaper_emphasis_q,
   n_stereo_busses,
   param_common (
     "Tone Q",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::emphasis_q_tag>()),
-  saturation::get_parameter (saturation::emphasis_q_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::emphasis_q_tag>()),
+  waveshaper::get_parameter (waveshaper::emphasis_q_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_envfollow_attack,
+  waveshaper_envfollow_attack,
   n_stereo_busses,
   param_common (
     "EF Attack",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::envfollow_attack_tag>()),
-  saturation::get_parameter (saturation::envfollow_attack_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::envfollow_attack_tag>()),
+  waveshaper::get_parameter (waveshaper::envfollow_attack_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_envfollow_release,
+  waveshaper_envfollow_release,
   n_stereo_busses,
   param_common (
     "EF Rel",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::envfollow_release_tag>()),
-  saturation::get_parameter (saturation::envfollow_release_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::envfollow_release_tag>()),
+  waveshaper::get_parameter (waveshaper::envfollow_release_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_envfollow_sensitivity,
+  waveshaper_envfollow_sensitivity,
   n_stereo_busses,
   param_common (
     "EF Sens",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::envfollow_sensitivity_tag>()),
-  saturation::get_parameter (saturation::envfollow_sensitivity_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::envfollow_sensitivity_tag>()),
+  waveshaper::get_parameter (waveshaper::envfollow_sensitivity_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_envfollow_mode,
+  waveshaper_envfollow_mode,
   n_stereo_busses,
   param_common (
     "EF Mode",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::envfollow_mode_tag>()),
-  saturation::get_parameter (saturation::envfollow_mode_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::envfollow_mode_tag>()),
+  waveshaper::get_parameter (waveshaper::envfollow_mode_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_envfollow_to_drive,
+  waveshaper_envfollow_to_drive,
   n_stereo_busses,
   param_common (
     "EF:Drive",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::envfollow_to_drive_tag>()),
-  saturation::get_parameter (saturation::envfollow_to_drive_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::envfollow_to_drive_tag>()),
+  waveshaper::get_parameter (waveshaper::envfollow_to_drive_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_envfollow_to_emphasis_freq,
+  waveshaper_envfollow_to_emphasis_freq,
   n_stereo_busses,
   param_common (
     "EF:Tone F",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::envfollow_to_emphasis_freq_tag>()),
-  saturation::get_parameter (saturation::envfollow_to_emphasis_freq_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::envfollow_to_emphasis_freq_tag>()),
+  waveshaper::get_parameter (waveshaper::envfollow_to_emphasis_freq_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_envfollow_to_emphasis_amount,
+  waveshaper_envfollow_to_emphasis_amount,
   n_stereo_busses,
   param_common (
     "EF:Tone A",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::envfollow_to_emphasis_amount_tag>()),
-  saturation::get_parameter (saturation::envfollow_to_emphasis_amount_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::envfollow_to_emphasis_amount_tag>()),
+  waveshaper::get_parameter (waveshaper::envfollow_to_emphasis_amount_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_envfollow_to_dc,
+  waveshaper_envfollow_to_dc,
   n_stereo_busses,
   param_common (
     "EF:Asym",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::envfollow_to_dc_tag>()),
-  saturation::get_parameter (saturation::envfollow_to_dc_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::envfollow_to_dc_tag>()),
+  waveshaper::get_parameter (waveshaper::envfollow_to_dc_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_feedback,
+  waveshaper_feedback,
   n_stereo_busses,
   param_common (
     "Feedbk",
-    declptr<updownsampled<saturation>>(),
-    declptr<saturation::feedback_tag>()),
-  saturation::get_parameter (saturation::feedback_tag {}),
+    declptr<updownsampled<waveshaper>>(),
+    declptr<waveshaper::feedback_tag>()),
+  waveshaper::get_parameter (waveshaper::feedback_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  saturation_oversampling,
+  waveshaper_oversampling,
   n_stereo_busses,
   param_common (
     "OverSmpl",
-    declptr<updownsampled<saturation>>(),
+    declptr<updownsampled<waveshaper>>(),
     declptr<oversampled_amount_tag>()),
-  updownsampled<saturation>::get_parameter (oversampled_amount_tag {}),
+  updownsampled<waveshaper>::get_parameter (oversampled_amount_tag {}),
   slider_ext);
 
-using saturation_params = mp_list<
-  saturation_type,
-  saturation_trim,
-  saturation_drive,
-  saturation_drive_balance,
-  saturation_feedback,
-  saturation_emphasis_amount,
-  saturation_emphasis_freq,
-  saturation_emphasis_q,
+using waveshaper_params = mp_list<
+  waveshaper_type,
+  waveshaper_trim,
+  waveshaper_drive,
+  waveshaper_drive_balance,
+  waveshaper_feedback,
+  waveshaper_emphasis_amount,
+  waveshaper_emphasis_freq,
+  waveshaper_emphasis_q,
 
-  saturation_envfollow_attack,
-  saturation_envfollow_release,
-  saturation_envfollow_sensitivity,
-  saturation_envfollow_mode,
-  saturation_envfollow_to_drive,
-  saturation_envfollow_to_dc,
-  saturation_envfollow_to_emphasis_freq,
-  saturation_envfollow_to_emphasis_amount,
+  waveshaper_envfollow_attack,
+  waveshaper_envfollow_release,
+  waveshaper_envfollow_sensitivity,
+  waveshaper_envfollow_mode,
+  waveshaper_envfollow_to_drive,
+  waveshaper_envfollow_to_dc,
+  waveshaper_envfollow_to_emphasis_freq,
+  waveshaper_envfollow_to_emphasis_amount,
 
-  saturation_band_lo,
-  saturation_band_hi,
-  saturation_lo_mode,
-  saturation_hi_mode,
-  saturation_band_gain,
-  saturation_mode,
-  saturation_oversampling>;
+  waveshaper_band_lo,
+  waveshaper_band_hi,
+  waveshaper_lo_mode,
+  waveshaper_hi_mode,
+  waveshaper_band_gain,
+  waveshaper_mode,
+  waveshaper_oversampling>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
@@ -5755,7 +5755,7 @@ using all_fx_typelists = mp_list<
   fdnverb_params,
   track_comp_params,
   signal_crusher_params,
-  saturation_params,
+  waveshaper_params,
   lr_crossv_params,
   wonky_crossv_params
   >;
@@ -5807,7 +5807,7 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Reverb FDN Verb Riser",
   ":Dynamics Track Comp",
   ":Distortion Signal Crusher",
-  ":Distortion Saturation",
+  ":Distortion Waveshaper",
   ":Filter LR-Crossover4",
   ":Filter WTF-Crossover4");
 
