@@ -5808,8 +5808,8 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Dynamics Track Comp",
   ":Distortion Signal Crusher",
   ":Distortion Saturation",
-  ":Filter LR-Crossover-4",
-  ":Filter WTF-Crossover-4");
+  ":Filter LR-Crossover4",
+  ":Filter WTF-Crossover4");
 
 #endif // #if TWEAK_BUILD
 
