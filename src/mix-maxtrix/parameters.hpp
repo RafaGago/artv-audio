@@ -349,7 +349,7 @@ parameter_cpp_class_define (
   lr_crossv_band1_diff,
   1,
   param_common (
-    "1.Diff",
+    "1.LR-Diff",
     declptr<mm_lr_crossv>(),
     declptr<mm_lr_crossv::band1_diff_tag>()),
   mm_lr_crossv::get_parameter (mm_lr_crossv::band1_diff_tag {}),
@@ -359,7 +359,7 @@ parameter_cpp_class_define (
   lr_crossv_band2_diff,
   1,
   param_common (
-    "2.Diff",
+    "2.LR-Diff",
     declptr<mm_lr_crossv>(),
     declptr<mm_lr_crossv::band2_diff_tag>()),
   mm_lr_crossv::get_parameter (mm_lr_crossv::band2_diff_tag {}),
@@ -369,7 +369,7 @@ parameter_cpp_class_define (
   lr_crossv_band3_diff,
   1,
   param_common (
-    "3.Diff",
+    "3.LR-Diff",
     declptr<mm_lr_crossv>(),
     declptr<mm_lr_crossv::band3_diff_tag>()),
   mm_lr_crossv::get_parameter (mm_lr_crossv::band3_diff_tag {}),
@@ -485,7 +485,7 @@ parameter_cpp_class_define (
   wonky_crossv_band1_diff,
   1,
   param_common (
-    "1.Diff",
+    "1.LR-Diff",
     declptr<mm_wonky_crossv>(),
     declptr<mm_wonky_crossv::band1_diff_tag>()),
   mm_wonky_crossv::get_parameter (mm_wonky_crossv::band1_diff_tag {}),
@@ -495,7 +495,7 @@ parameter_cpp_class_define (
   wonky_crossv_band2_diff,
   1,
   param_common (
-    "2.Diff",
+    "2.LR-Diff",
     declptr<mm_wonky_crossv>(),
     declptr<mm_wonky_crossv::band2_diff_tag>()),
   mm_wonky_crossv::get_parameter (mm_wonky_crossv::band2_diff_tag {}),
@@ -505,7 +505,7 @@ parameter_cpp_class_define (
   wonky_crossv_band3_diff,
   1,
   param_common (
-    "3.Diff",
+    "3.LR-Diff",
     declptr<mm_wonky_crossv>(),
     declptr<mm_wonky_crossv::band3_diff_tag>()),
   mm_wonky_crossv::get_parameter (mm_wonky_crossv::band3_diff_tag {}),
@@ -2300,7 +2300,7 @@ parameter_cpp_class_define (
   bbd_echo_age,
   n_stereo_busses,
   param_common (
-    "Age",
+    "LR-Diff",
     declptr<witti::bbd_echo_stereo>(),
     declptr<witti::bbd_echo_stereo::decalibration_tag>()),
   witti::bbd_echo_stereo::get_parameter (
@@ -5239,7 +5239,7 @@ parameter_cpp_class_define (
   filter2x_band1_tolerance,
   n_stereo_busses,
   param_common (
-    "1.Tolerance",
+    "1.LR-Diff",
     declptr<oversampled<filter2x>>(),
     declptr<filter2x::band1_tolerance_tag>()),
   filter2x::get_parameter (filter2x::band1_tolerance_tag {}),
@@ -5319,7 +5319,7 @@ parameter_cpp_class_define (
   filter2x_band2_tolerance,
   n_stereo_busses,
   param_common (
-    "2.Tolerance",
+    "2.LR-Diff",
     declptr<oversampled<filter2x>>(),
     declptr<filter2x::band2_tolerance_tag>()),
   filter2x::get_parameter (filter2x::band2_tolerance_tag {}),
@@ -5467,7 +5467,7 @@ parameter_cpp_class_define (
   waveshaper_drive_balance,
   n_stereo_busses,
   param_common (
-    "Drive Bal",
+    "LR-Diff",
     declptr<updownsampled<waveshaper>>(),
     declptr<waveshaper::drive_balance_tag>()),
   waveshaper::get_parameter (waveshaper::drive_balance_tag {}),
