@@ -1,3 +1,33 @@
+1.1.0
+
+- Add 2x-16x medium quality FIR oversampler and latency compensation.This adds
+   oversampling or upsampling to: 1175 compressor, consolidator, gate/expander,
+   fairly childish, major tom, slax, transience, eq4x, phaser, ripple phaser,
+   filter2x, track comp and event horizon 2.
+-  Introduce waveshaper module (own coded). It is a waveshaper with:
+   - Envelope follower.
+   - Emphasis EQ.
+   - Waveshaping stage with feedback.
+   - A wonky band crossover filter.
+   - Companding.
+   - Oversampling.
+   It is antialiased via ADAA and brute force oversampling.
+- Add Linkwitz-Riley 4 band crossover. This turns mixmaxtrix into a multiband
+   processor. It allows shifting the band cuttoff on the Left and Right
+   channels.
+- Add wonky 4 band crossover (WTF Crossover). A crossover that gets more and
+   more wonky on higher orders. Not phase coherent but it has perfect
+   linear-phase reconstruction. Useful for destructive FX.
+- filters2x: Add envelope follower to control Frequency and Q.
+- filters2x: Various CPU improvements.
+- filters2x: Fix gain bug on the Ladder filters.
+- eq4x: Add one pole allpass filter.
+- editor: Disable mixer to mixer sends at routing block boundaries.
+- editor: Shorten some display names.
+- dragonfly: Add native width control.
+- chow phaser: Mitigate bad sound on high samplerates. Not fully solved. Present
+   on the original too.
+
 1.0.2
 
 - download artifact: Include missing MixMaxtrix.vst3/MixMaxtrix.lv2 folders

@@ -1,3 +1,10 @@
+- Add single pole allpass on Phaser.
+
+- Oversampler: clicks when changing sample rate.
+
+- Linear phase filters/crossover by using windowed forward-bacward filtering
+  (as lkjb QRange)(?)
+
 - Try Chow exciter, Klon centaur and nonlinear Models. Port some.
 
 - Mixmaxtrix: Add a (back) channel of communication for parameter values, so

@@ -5791,7 +5791,7 @@ static constexpr auto fx_choices = make_cstr_array (
   ":EQ Luftikus",
   ":EQ 4-band EQ",
   ":Modulation: Chow Phaser",
-  ":Modulation: Phaser",
+  ":Modulation: ArtV Phaser",
   ":Modulation: Ripple Phaser",
   ":Modulation: Ze Big Chorus",
   ":Modulation: Ze Little Chorus",
@@ -5807,7 +5807,7 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Reverb FDN Verb Riser",
   ":Dynamics Track Comp",
   ":Distortion Signal Crusher",
-  ":Distortion Waveshaper",
+  ":Distortion ArtV Shaper",
   ":Filter LR-Crossover4",
   ":Filter WTF-Crossover4");
 
