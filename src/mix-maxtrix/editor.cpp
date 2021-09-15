@@ -330,7 +330,6 @@ public:
         outs[1]->buttons[i],
         outs[2]->buttons[i],
         outs[3]->buttons[i],
-#if MIXMAXTRIX_CHANNELS == 8
         ins[4]->buttons[i],
         ins[5]->buttons[i],
         ins[6]->buttons[i],
@@ -339,7 +338,6 @@ public:
         outs[5]->buttons[i],
         outs[6]->buttons[i],
         outs[7]->buttons[i],
-#endif
         mods[i]->buttons,
         mutesolo[i]->buttons,
         make_contiguous_range (_page_buttons[i]));
@@ -624,10 +622,6 @@ public:
       grid (
         columns[i],
         sqr_btn_w,
-#if MIXMAXTRIX_CHANNELS == 4
-        make_array (sqr_btn_h),
-        in_btns);
-#elif MIXMAXTRIX_CHANNELS == 8
         make_array (sqr_btn_h, sqr_btn_h),
         in_btns[0],
         in_btns[4],
@@ -637,7 +631,6 @@ public:
         in_btns[6],
         in_btns[3],
         in_btns[7]);
-#endif
     }
 
     area.removeFromTop (sep_h); // separator
@@ -835,10 +828,6 @@ public:
       grid (
         columns[i],
         sqr_btn_w,
-#if MIXMAXTRIX_CHANNELS == 4
-        make_array (sqr_btn_h),
-        out_btns);
-#elif MIXMAXTRIX_CHANNELS == 8
         make_array (sqr_btn_h, sqr_btn_h),
         out_btns[0],
         out_btns[4],
@@ -848,7 +837,6 @@ public:
         out_btns[6],
         out_btns[3],
         out_btns[7]);
-#endif
     }
 
     // place the mixer send buttons

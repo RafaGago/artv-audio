@@ -560,7 +560,6 @@ function (add_mix_maxtrix_plugin_target target channels)
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
         JUCER_ENABLE_GPL_MODE=1
-        MIXMAXTRIX_CHANNELS=${channels}
         VERSION_TXT="${MIXMAXTRIX_VERSION}"
         VERSION_MAJOR=${MIXMAXTRIX_VERSION_MAJOR}
         VERSION_MINOR=${MIXMAXTRIX_VERSION_MINOR}

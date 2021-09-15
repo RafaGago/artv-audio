@@ -100,31 +100,19 @@
 
 #define VERSION_INT VERSION_GET (VERSION_MAJOR, VERSION_MINOR, VERSION_REV)
 
-#ifndef MIXMAXTRIX_CHANNELS
-#define MIXMAXTRIX_CHANNELS 4
-#endif
-
-#if MIXMAXTRIX_CHANNELS != 4 && MIXMAXTRIX_CHANNELS != 8
-#error "MIXMAXTRIX_CHANNELS can only be 4 or 8"
-#endif
-
 namespace artv { namespace parameters {
 
 // parameter definitions in one place ------------------------------------------
-constexpr std::size_t n_stereo_busses = MIXMAXTRIX_CHANNELS;
+constexpr std::size_t n_stereo_busses = 8;
 
 parameter_cpp_class_define (
   in_selection,
   n_stereo_busses,
   param_common(),
-#if MIXMAXTRIX_CHANNELS == 4
-  toggle_buttons_param (0, make_cstr_array ("1", "2 ", "3", "4"), 16),
-#elif MIXMAXTRIX_CHANNELS == 8
   toggle_buttons_param (
     0,
     make_cstr_array ("1", "2 ", "3", "4", "5", "6 ", "7", "8"),
     16),
-#endif
   void // defaulted
 );
 
@@ -132,14 +120,10 @@ parameter_cpp_class_define (
   out_selection,
   n_stereo_busses,
   param_common(),
-#if MIXMAXTRIX_CHANNELS == 4
-  toggle_buttons_param (0, make_cstr_array ("1", "2 ", "3", "4"), 16),
-#elif MIXMAXTRIX_CHANNELS == 8
   toggle_buttons_param (
     0,
     make_cstr_array ("1", "2 ", "3", "4", "5", "6 ", "7", "8"),
     16),
-#endif
   void // defaulted
 );
 
@@ -147,14 +131,10 @@ parameter_cpp_class_define (
   mixer_sends,
   1,
   param_common(),
-#if MIXMAXTRIX_CHANNELS == 4
-  toggle_buttons_param (0, make_cstr_array (">", ">", ">"), 16),
-#elif MIXMAXTRIX_CHANNELS == 8
   toggle_buttons_param (
     0,
     make_cstr_array (">", ">", ">", ">", ">", ">", ">"),
     16),
-#endif
   void // defaulted
 );
 
@@ -172,7 +152,6 @@ parameter_cpp_class_define (
   float_param ("dB", -20.f, 20.f, 0.f, 0.01f),
   slider_ext);
 
-#if MIXMAXTRIX_CHANNELS == 8
 struct routing_mode {
   enum {
     full,
@@ -186,15 +165,11 @@ static constexpr uint n_parallel_buses (uint rm)
   return parameters::n_stereo_busses >> rm;
 }
 //------------------------------------------------------------------------------
-#endif
 
 parameter_cpp_class_define (
   routing,
   1,
   param_common ("Bus Routing"),
-#if MIXMAXTRIX_CHANNELS == 4
-  choice_param (0, make_cstr_array ("[1,2,3,4]", "[1,2]>[3,4]"), 10, false),
-#elif MIXMAXTRIX_CHANNELS == 8
   choice_param (
     0,
     make_cstr_array (
@@ -203,9 +178,6 @@ parameter_cpp_class_define (
       "[1,2]>[3,4]>[5,6]>[7,8]"),
     10,
     false),
-#else
-#error "TBI"
-#endif
   combobox_ext);
 
 parameter_cpp_class_define (
