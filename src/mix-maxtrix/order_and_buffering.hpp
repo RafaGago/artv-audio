@@ -47,7 +47,7 @@ private
 };
 //------------------------------------------------------------------------------
 // N == channel count, Ext = externally managed inputs.
-template <size_t N, ssize_t Ext = 0>
+template <size_t N, size_t Ext = 0>
 class order_and_buffering {
 public:
   using bus_latency_arr                  = std::array<u16, N>;

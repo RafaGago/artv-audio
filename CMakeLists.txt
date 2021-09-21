@@ -88,14 +88,16 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         #-Rpass-analysis=loop-vectorize
         )
     if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-        list (TRANSFORM ARTV_DSP_COMPILE_OPTIONS   PREPEND "/clang:")
-        list (TRANSFORM ARTV_PLAIN_COMPILE_OPTIONS PREPEND "/clang:")
-        list (TRANSFORM ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST PREPEND "/clang:")
+        list (TRANSFORM ARTV_DSP_COMPILE_OPTIONS_LIST PREPEND "-clang:")
+        list (TRANSFORM ARTV_PLAIN_COMPILE_OPTIONS_LIST PREPEND "-clang:")
+        list (TRANSFORM ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST PREPEND "-clang:")
     endif()
 endif()
 
 set (CMAKE_CXX_FLAGS_RELEASE "${ARTV_CMAKE_CXX_FLAGS_RELEASE}")
 set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+
+# message(FATAL_ERROR ${ARTV_DSP_COMPILE_OPTIONS_LIST})
 
 # These targets are flag overrides that have to be added last, just to avoid
 # dealing with CMake configuration messes which I refuse to learn and debug:
@@ -108,9 +110,13 @@ add_library (dsp_target_compile_options INTERFACE)
 target_compile_options(
     dsp_target_compile_options INTERFACE ${ARTV_DSP_COMPILE_OPTIONS_LIST}
     )
+
 # CMake string/list awfulness . Depressing...
 string(
-    REPLACE ";" " " ARTV_DSP_COMPILE_OPTIONS "${ARTV_DSP_COMPILE_OPTIONS_LIST}"
+    REPLACE
+    ";" " "
+    ARTV_DSP_COMPILE_OPTIONS
+    "${ARTV_DSP_COMPILE_OPTIONS_LIST}"
     )
 string(
     REPLACE
@@ -124,6 +130,7 @@ string(
     CMAKE_CXX_FLAGS_RELEASE
     "${ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST}"
     )
+
 #-- Juce -----------------------------------------------------------------------
 add_compile_definitions(
     JUCER_ENABLE_GPL_MODE=1

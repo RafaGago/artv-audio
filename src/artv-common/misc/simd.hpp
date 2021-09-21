@@ -284,6 +284,9 @@ static inline auto vec_to_intrin (V simdvec)
   else if constexpr (std::is_same_v<T, float> && traits.bytes == sse_bytes) {
     return *reinterpret_cast<__m128*> (&simdvec);
   }
+#if 0
+  //TODO: these types are not found when compiling for Windows. Keeping them
+  // disabled until they are needed, as I wasn't able to fix it quickly.
   else if constexpr (std::is_integral_v<T> && traits.bytes == avx_bytes) {
     return *reinterpret_cast<__m256i*> (&simdvec);
   }
@@ -293,6 +296,7 @@ static inline auto vec_to_intrin (V simdvec)
   else if constexpr (std::is_same_v<T, float> && traits.bytes == avx_bytes) {
     return *reinterpret_cast<__m256*> (&simdvec);
   }
+#endif
   else {
     static_assert (!std::is_same_v<V, V>, "Unkown intrinsic conversion");
     return 0;

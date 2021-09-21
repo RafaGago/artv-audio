@@ -22,86 +22,74 @@ jobs:
     strategy:
       fail-fast: false # show all errors for each platform (vs. cancel jobs on error)
       matrix:
-        os: ["ubuntu-latest", "windows-latest"]
+        os: ["ubuntu-latest"]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
       - name: Ccache
-        if: runner.os == 'Linux'
         uses: hendrikmuhs/ccache-action@v1
 
-      - name: Install Juce Deps
-        if: runner.os == 'Linux'
+      - name: Install Deps
         run: |
-          sudo apt-get update
-          sudo apt install libasound2-dev libcurl4-openssl-dev libx11-dev libxinerama-dev libxext-dev libfreetype6-dev libwebkit2gtk-4.0-dev libglu1-mesa-dev libjack-jackd2-dev lv2-dev clang-12
+          echo "deb http://apt.llvm.org/focal/ llvm-toolchain-focal main" | sudo tee -a /etc/apt/sources.list
+          echo "deb-src http://apt.llvm.org/focal/ llvm-toolchain-focal main" | sudo tee -a /etc/apt/sources.list
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          sudo apt update
+          sudo apt install libasound2-dev libcurl4-openssl-dev libx11-dev libxinerama-dev libxext-dev libfreetype6-dev libwebkit2gtk-4.0-dev libglu1-mesa-dev libjack-jackd2-dev lv2-dev clang-14 clang-tools-14 lld-14
 
       - name: Get latest CMake
         uses: lukka/get-cmake@latest
 
-      - name: Ninja Windows
-        if: runner.os == 'Windows'
-        uses: seanmiddleditch/gha-setup-ninja@master
-
-      - name: Configure Linux
-        if: runner.os == 'Linux'
-        # Not using ninja. I don't remember the reason but it wasn't really running parallel builds
-        run: CC=/usr/bin/clang-12 CXX=/usr/bin/clang++-12 cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_LV2=On
-
-      - name: Configure Windows
-        if: runner.os == 'Windows'
-        # MSVC doesn't compile neither Dishtro (on Dragonfly) nor the parameter definition macros.
-        # Disthro is doing variable length arrays, which isn't standard, but the parameter definition macros should probably
-        # compile as they are. Anyways, I'd be using clang-cl anyways...
-        shell: cmd
+      - name: Versions
         run: |
           cmake --version
-          call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On -G "Ninja" -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl
 
-      - name: Build Linux
-        if: runner.os == 'Linux'
-        run: |
-          cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --parallel --target ${{env.VST3_TARGETS}} ${{env.LV2_TARGETS}}
+      # Build Windows first. It has more likelyhood to fail.
+      - name: Get Windows SDK
+        run: ./scripts/xwin.sh
+
+      - name: Configure Windows
+        # Not using ninja. I don't remember the reason but it wasn't really running parallel builds
+        # ccache seems to not play well on this Windows build. Not using it unfortunately.
+        run: cmake -B ${{github.workspace}}/build-windows -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On  -DBUILD_LV2=Off -DCMAKE_TOOLCHAIN_FILE=build/clang-cl-xwin-x86_64.toolchain.cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
 
       - name: Build Windows
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: |
-          call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --parallel --target ${{env.VST3_TARGETS}}
+        run: cmake --build ${{github.workspace}}/build-windows --config ${{env.BUILD_TYPE}} --parallel --target ${{env.VST3_TARGETS}}
 
-      - name: Strip
-        if: runner.os == 'Linux'
+      - name: Configure Linux
+        # Not using ninja. I don't remember the reason but it wasn't really running parallel builds
+        run: CC=/usr/bin/clang-14 CXX=/usr/bin/clang++-14 cmake -B ${{github.workspace}}/build-linux -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_LV2=On -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
+
+      - name: Build Linux
+        run: cmake --build ${{github.workspace}}/build-linux --config ${{env.BUILD_TYPE}} --parallel --target ${{env.VST3_TARGETS}} ${{env.LV2_TARGETS}}
+
+      - name: Strip Linux
         # TODO: strip LV2
         run: |
-          strip --strip-unneeded build/MixMaxTrix_artefacts/Release/VST3/MixMaxTrix.vst3/Contents/x86_64-linux/MixMaxTrix.so
+          strip --strip-unneeded build-linux/MixMaxTrix_artefacts/Release/VST3/MixMaxTrix.vst3/Contents/x86_64-linux/MixMaxTrix.so
 
       - name: Test
-        working-directory: ${{github.workspace}}/build
+        working-directory: ${{github.workspace}}/build-linux
         # Execute tests defined by the CMake configuration.
         # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
         run: ctest -C ${{env.BUILD_TYPE}}
 
       # LV2 Linux
       - uses: actions/upload-artifact@v2
-        if: runner.os == 'Linux'
         with:
           name: mix-maxtrix-linux-lv2-latest
-          path: ${{github.workspace}}/build/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/LV2/MixMaxTrix*.lv2/**
+          path: ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/LV2/MixMaxTrix*.lv2/**
 
       # VST3 Linux
       - uses: actions/upload-artifact@v2
-        if: runner.os == 'Linux'
         with:
           name: mix-maxtrix-linux-vst3-latest
-          path: ${{github.workspace}}/build/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
+          path: ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
 
       # VST3 Windows
       - uses: actions/upload-artifact@v2
-        if: runner.os == 'Windows'
         with:
           name: mix-maxtrix-windows-vst3-latest
-          path: ${{github.workspace}}/build/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
+          path: ${{github.workspace}}/build-windows/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
