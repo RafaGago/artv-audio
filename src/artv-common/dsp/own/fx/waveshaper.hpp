@@ -51,7 +51,7 @@ public:
   static constexpr auto get_parameter (type_tag)
   {
     return choice_param (
-      0, make_cstr_array ("Hardclip", "Tanh", "Sqrt", "SqrtSin"), 40);
+      1, make_cstr_array ("Hardclip", "Tanh", "Sqrt", "SqrtSin"), 40);
   }
   //----------------------------------------------------------------------------
   struct mode_tag {};
