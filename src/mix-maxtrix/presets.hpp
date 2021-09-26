@@ -1374,7 +1374,7 @@ static constexpr preset presets[] = {
     <PARAM id="waveshaper_emphasis_q_06" value="5.160000324249268" />
     <PARAM id="waveshaper_envfollow_attack_05" value="14.30000019073486" />
     <PARAM id="waveshaper_envfollow_attack_06" value="19.30000114440918" />
-    <PARAM id="waveshaper_envfollow_mode_05" value="2.0" />
+    <PARAM id="waveshaper_envfollow_mode_05" value="4.0" />
     <PARAM id="waveshaper_envfollow_mode_06" value="1.0" />
     <PARAM id="waveshaper_envfollow_release_05" value="480.0" />
     <PARAM id="waveshaper_envfollow_release_06" value="481.0" />

@@ -68,6 +68,8 @@ public:
       case mode_normal:
         delcomp = 1;
         break;
+      case mode_compand_pow:
+      case mode_compand_1b:
       case mode_compand_1a:
       case mode_compand_sqrt:
         delcomp = 3;
@@ -86,7 +88,12 @@ public:
     return choice_param (
       0,
       make_cstr_array (
-        "Normal no AA", "Normal", "Compand High", "Compand Squash"),
+        "Normal no AA",
+        "Normal",
+        "Very Low Levels",
+        "Low Levels",
+        "High Levels",
+        "Very High Levels"),
       40);
   }
   //----------------------------------------------------------------------------
@@ -534,6 +541,18 @@ public:
       // Using "compand_1b_aa" first required extremely good DC blocking
       // unfortunately. The sound easily broke.
       switch (p.mode) {
+      case mode_compand_pow:
+        for (uint i = 0; i < subblock_size; ++i) {
+          sat[i] = pow2_aa::tick (
+            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
+        }
+        break;
+      case mode_compand_1b:
+        for (uint i = 0; i < subblock_size; ++i) {
+          sat[i] = compand_1b_aa::tick (
+            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
+        }
+        break;
       case mode_compand_1a:
         for (uint i = 0; i < subblock_size; ++i) {
           sat[i] = compand_1a_aa::tick (
@@ -735,16 +754,21 @@ public:
         sat[i] *= inv_drive * _sparams.get (sm_out);
         sat[i] += lo[i] + hi[i];
       }
-      // Post DC-blocker.
-      for (uint i = 0; i < subblock_size; ++i) {
-        sat[i] = dc_blocker::tick (
-          _dc_block_coeffs,
-          _dc_block_states[dc_block_out],
-          sat[i],
-          single_coeff_set_tag {});
-      }
       // post process / restore if required
       switch (p.mode) {
+      case mode_compand_pow:
+        for (uint i = 0; i < subblock_size; ++i) {
+          // sat[i] = vec_clamp (sat[i], -pow2compand_clip, pow2compand_clip);
+          sat[i] = sqrt_aa::tick (
+            _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
+        }
+        break;
+      case mode_compand_1b:
+        for (uint i = 0; i < subblock_size; ++i) {
+          sat[i] = compand_1a_aa::tick (
+            _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
+        }
+        break;
       case mode_compand_1a:
         for (uint i = 0; i < subblock_size; ++i) {
           sat[i] = compand_1b_aa::tick (
@@ -762,6 +786,14 @@ public:
       case mode_normal:
       default:
         break;
+      }
+      // Post DC-blocker.
+      for (uint i = 0; i < subblock_size; ++i) {
+        sat[i] = dc_blocker::tick (
+          _dc_block_coeffs,
+          _dc_block_states[dc_block_out],
+          sat[i],
+          single_coeff_set_tag {});
       }
       // Deinterleaving
       for (uint i = 0; i < subblock_size; ++i) {
@@ -895,7 +927,9 @@ private:
     mode_no_aa,
     mode_normal,
     mode_compander_first,
-    mode_compand_1a = mode_compander_first,
+    mode_compand_pow = mode_compander_first,
+    mode_compand_1b,
+    mode_compand_1a,
     mode_compand_sqrt,
     mode_count,
   };
