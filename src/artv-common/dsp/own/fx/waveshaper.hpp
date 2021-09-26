@@ -454,7 +454,7 @@ public:
     // this DC blocker at a very low frequency is critical for the sound of
     // the companded modes to be acceptable. Unfortunately it causes DC itself
     // when the sound is muted. I didn't find a solution.
-    mystran_dc_blocker::reset_coeffs (
+    dc_blocker::reset_coeffs (
       _dc_block_coeffs, make_vec_x1 (1.), pc.get_sample_rate());
 
     _p = params {};
@@ -516,18 +516,19 @@ public:
       uint subblock_size
         = std::min (block_samples - samples_processed, max_block_size);
 
-      // Input DC blocking
+      // interleaving
       for (uint i = 0; i < subblock_size; ++i) {
         sat[i][0] = ins[0][samples_processed + i];
         sat[i][1] = ins[1][samples_processed + i];
-
-        sat[i] = mystran_dc_blocker::tick (
+      }
+      // Input DC blocking
+      for (uint i = 0; i < subblock_size; ++i) {
+        sat[i] = dc_blocker::tick (
           _dc_block_coeffs,
           _dc_block_states[dc_block_in],
           sat[i],
           single_coeff_set_tag {});
       }
-
       // pre process/Companding + data initialization block
       //
       // Using "compand_1b_aa" first required extremely good DC blocking
@@ -550,7 +551,6 @@ public:
       default:
         break;
       }
-
       // Crossover section. Notice that this is a crossover that sums to flat
       // frequency and phase response but has ripples on the passed band.
       for (uint i = 0; i < subblock_size; ++i) {
@@ -600,7 +600,6 @@ public:
           hi[i] = double_x2 {};
         }
       }
-
       // Main block with audio-rate modulations. Done sample-wise for
       // simplicity
       for (uint i = 0; i < subblock_size; ++i, ++_n_processed_samples) {
@@ -689,7 +688,6 @@ public:
         // pre emphasis
         sat[i] = andy::svf::tick (
           _pre_emphasis_coeffs, _pre_emphasis_states, sat[i]);
-
         // waveshaping
         auto wsh_type
           = p.type + (sat_type_count * (uint) waveshaper_type_is_adaa (p.mode));
@@ -723,7 +721,6 @@ public:
           assert (false);
           break;
         }
-
         // post emphasis
         sat[i] = andy::svf::tick (
           _post_emphasis_coeffs, _post_emphasis_states, sat[i]);
@@ -734,25 +731,19 @@ public:
         sat[i] -= dcmod;
         _sat_prev   = sat[i];
         _dcmod_prev = dcmod;
-
         // gain and crossover join
         sat[i] *= inv_drive * _sparams.get (sm_out);
         sat[i] += lo[i] + hi[i];
       }
-
       // Post DC-blocker.
       for (uint i = 0; i < subblock_size; ++i) {
-        sat[i] = mystran_dc_blocker::tick (
+        sat[i] = dc_blocker::tick (
           _dc_block_coeffs,
           _dc_block_states[dc_block_out],
           sat[i],
           single_coeff_set_tag {});
-
-        outs[0][samples_processed + i] = sat[i][0];
-        outs[1][samples_processed + i] = sat[i][1];
       }
-
-      // post process / restore
+      // post process / restore if required
       switch (p.mode) {
       case mode_compand_1a:
         for (uint i = 0; i < subblock_size; ++i) {
@@ -772,6 +763,12 @@ public:
       default:
         break;
       }
+      // Deinterleaving
+      for (uint i = 0; i < subblock_size; ++i) {
+        outs[0][samples_processed + i] = sat[i][0];
+        outs[1][samples_processed + i] = sat[i][1];
+      }
+
       samples_processed += subblock_size;
     }
   }
@@ -980,6 +977,8 @@ private:
 
   using smoother = onepole_smoother;
 
+  using dc_blocker = mystran_dc_blocker;
+
   static constexpr uint n_channels = 2;
   using wsh_state_array
     = simd_array<double, wsh_max_states * n_channels, sse_bytes>;
@@ -1015,9 +1014,9 @@ private:
     = simd_array<double, slew_limiter::n_states * n_channels, sse_bytes>;
 
   using dc_block_coeff_array
-    = simd_array<double, mystran_dc_blocker::n_coeffs * n_channels, sse_bytes>;
+    = simd_array<double, dc_blocker::n_coeffs * n_channels, sse_bytes>;
   using dc_block_state_array
-    = simd_array<double, mystran_dc_blocker::n_states * n_channels, sse_bytes>;
+    = simd_array<double, dc_blocker::n_states * n_channels, sse_bytes>;
 
   // all arrays are multiples of the simd size, no need to alignas on
   // everything.

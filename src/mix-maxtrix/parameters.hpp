@@ -5708,7 +5708,7 @@ using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 
 #if TWEAK_BUILD
 using all_fx_typelists
-  = mp_list<saturation_params, lr_crossv_params, wonky_crossv_params>;
+  = mp_list<waveshaper_params, lr_crossv_params, wonky_crossv_params>;
 
 static constexpr auto fx_choices = make_cstr_array ("none", "FX", "C", "C2");
 

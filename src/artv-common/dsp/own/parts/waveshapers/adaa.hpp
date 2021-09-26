@@ -17,11 +17,15 @@ namespace artv { namespace adaa {
 //------------------------------------------------------------------------------
 static constexpr double epsilon (double)
 {
-  return 0.0000000001;
+  // if not going that low, e.g. the sqrt sigmoid makes noise after
+  // transitioning to silence, the DC blockers go crazy, inverse companding is
+  // not possible, etc.
+  return 1.0e-46;
 }
 static constexpr float epsilon (float)
 {
-  return 0.00001;
+  // untested
+  return 1.0e-7;
 }
 //------------------------------------------------------------------------------
 template <class functions, uint order>
