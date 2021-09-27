@@ -154,9 +154,10 @@ public:
     if (v == _p.crossv_hz[lo_crossv]) {
       return;
     }
-    _p.crossv_hz[lo_crossv]      = v;
-    _p.crossv_enabled[lo_crossv] = (v > lo_cut_min_hz);
-    update_crossover (lo_crossv, !_p.crossv_enabled[lo_crossv]);
+    _p.crossv_hz[lo_crossv] = v;
+    if (_p.crossv_enabled[lo_crossv]) {
+      update_crossover (lo_crossv, false);
+    }
   }
 
   static constexpr auto get_parameter (lo_cut_tag)
@@ -174,9 +175,10 @@ public:
     if (v == _p.crossv_hz[hi_crossv]) {
       return;
     }
-    _p.crossv_hz[hi_crossv]      = v;
-    _p.crossv_enabled[hi_crossv] = (v < hi_cut_max_hz);
-    update_crossover (hi_crossv, !_p.crossv_enabled[hi_crossv]);
+    _p.crossv_hz[hi_crossv] = v;
+    if (_p.crossv_enabled[hi_crossv]) {
+      update_crossover (hi_crossv, false);
+    }
   }
 
   static constexpr auto get_parameter (hi_cut_tag)
@@ -190,8 +192,9 @@ public:
 
   void set (lo_mode_tag, int v)
   {
-    int  order = v + 1;
-    bool is_lp = order <= max_crossv_order;
+    _p.crossv_enabled[lo_crossv] = (v != 0);
+    int  order                   = v;
+    bool is_lp                   = order <= max_crossv_order;
     order -= is_lp ? 0 : max_crossv_order;
 
     if (
@@ -212,22 +215,23 @@ public:
     return choice_param (
       0,
       make_cstr_array (
-        "6dB/Oct",
-        "12dB/Oct",
-        "18dB/Oct",
-        "24dB/Oct",
-        "30dB/Oct",
-        "36dB/Oct",
-        "42dB/Oct",
-        "48dB/Oct",
-        "drop 6dB/Oct",
-        "drop 12dB/Oct",
-        "drop 18dB/Oct",
-        "drop 24dB/Oct",
-        "drop 30dB/Oct",
-        "drop 36dB/Oct",
-        "drop 42dB/Oct",
-        "drop 48dB/Oct"),
+        "Off",
+        "HP 6dB/Oct",
+        "HP 12dB/Oct",
+        "HP 18dB/Oct",
+        "HP 24dB/Oct",
+        "HP 30dB/Oct",
+        "HP 36dB/Oct",
+        "HP 42dB/Oct",
+        "HP 48dB/Oct",
+        "LR 6dB/Oct",
+        "LR 12dB/Oct",
+        "LR 18dB/Oct",
+        "LR 24dB/Oct",
+        "LR 30dB/Oct",
+        "LR 36dB/Oct",
+        "LR 42dB/Oct",
+        "LR 48dB/Oct"),
       32);
   }
   //----------------------------------------------------------------------------
@@ -235,8 +239,9 @@ public:
 
   void set (hi_mode_tag, int v)
   {
-    int  order = v + 1;
-    bool is_lp = (order > max_crossv_order);
+    _p.crossv_enabled[hi_crossv] = (v != 0);
+    int  order                   = v;
+    bool is_lp                   = (order > max_crossv_order);
     order -= is_lp ? max_crossv_order : 0;
 
     if (
@@ -254,7 +259,27 @@ public:
 
   static constexpr auto get_parameter (hi_mode_tag)
   {
-    return get_parameter (lo_mode_tag {});
+    return choice_param (
+      0,
+      make_cstr_array (
+        "Off",
+        "LP 6dB/Oct",
+        "LP 12dB/Oct",
+        "LP 18dB/Oct",
+        "LP 24dB/Oct",
+        "LP 30dB/Oct",
+        "LP 36dB/Oct",
+        "LP 42dB/Oct",
+        "LP 48dB/Oct",
+        "HR 6dB/Oct",
+        "HR 12dB/Oct",
+        "HR 18dB/Oct",
+        "HR 24dB/Oct",
+        "HR 30dB/Oct",
+        "HR 36dB/Oct",
+        "HR 42dB/Oct",
+        "HR 48dB/Oct"),
+      32);
   }
   //----------------------------------------------------------------------------
   struct feedback_tag {};
@@ -752,8 +777,8 @@ public:
           _dc_block_states[dc_block_feedback],
           sat[i],
           single_coeff_set_tag {});
+        _sat_prev = sat[i];
 
-        _sat_prev   = sat[i];
         _dcmod_prev = dcmod;
         // gain and crossover join
         sat[i] *= inv_drive * _sparams.get (sm_out);

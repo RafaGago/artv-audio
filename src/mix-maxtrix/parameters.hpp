@@ -5682,10 +5682,10 @@ using waveshaper_params = mp_list<
   waveshaper_envfollow_to_emphasis_freq,
   waveshaper_envfollow_to_emphasis_amount,
 
-  waveshaper_band_lo,
-  waveshaper_band_hi,
   waveshaper_lo_mode,
+  waveshaper_band_lo,
   waveshaper_hi_mode,
+  waveshaper_band_hi,
   waveshaper_band_gain,
   waveshaper_mode,
   waveshaper_oversampling>;
