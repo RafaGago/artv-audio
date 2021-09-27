@@ -68,9 +68,9 @@ public:
       case mode_normal:
         delcomp = 1;
         break;
-      case mode_compand_pow:
       case mode_compand_1b:
       case mode_compand_1a:
+      case mode_compand_pow:
       case mode_compand_sqrt:
         delcomp = 3;
         break;
@@ -90,9 +90,9 @@ public:
       make_cstr_array (
         "Normal no AA",
         "Normal",
-        "Very Low Levels",
         "Low Levels",
         "High Levels",
+        "Very Low Levels",
         "Very High Levels"),
       40);
   }
@@ -541,12 +541,6 @@ public:
       // Using "compand_1b_aa" first required extremely good DC blocking
       // unfortunately. The sound easily broke.
       switch (p.mode) {
-      case mode_compand_pow:
-        for (uint i = 0; i < subblock_size; ++i) {
-          sat[i] = pow2_aa::tick (
-            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
-        }
-        break;
       case mode_compand_1b:
         for (uint i = 0; i < subblock_size; ++i) {
           sat[i] = compand_1b_aa::tick (
@@ -556,6 +550,12 @@ public:
       case mode_compand_1a:
         for (uint i = 0; i < subblock_size; ++i) {
           sat[i] = compand_1a_aa::tick (
+            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
+        }
+        break;
+      case mode_compand_pow:
+        for (uint i = 0; i < subblock_size; ++i) {
+          sat[i] = pow2_aa::tick (
             _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
         }
         break;
@@ -700,8 +700,11 @@ public:
         feedback += feedback * feedback_follow;
 
         sat[i] += feedback;
-        auto dcmod = (0.5 * follow * _sparams.get (sm_ef_to_dc));
-        dcmod += _dcmod_prev * 0.5; // Kind-of moving average LP
+        auto ef2dc = _sparams.get (sm_ef_to_dc);
+        auto amt   = fabs (ef2dc) * 0.40;
+        auto dcmod = follow * amt;
+        dcmod += _dcmod_prev;
+        dcmod *= 0.5; // Moving average LP
         sat[i] += dcmod;
 
         // pre emphasis
@@ -744,10 +747,12 @@ public:
         sat[i] = andy::svf::tick (
           _post_emphasis_coeffs, _post_emphasis_states, sat[i]);
 
-        // not a DC blocker, but reduces DC on the FB path. Notice that adding
-        // a third DC blocker here had negative effect on the sound when using
-        // "mode_compand_1b".
-        sat[i] -= dcmod;
+        sat[i] = dc_blocker::tick (
+          _dc_block_coeffs,
+          _dc_block_states[dc_block_feedback],
+          sat[i],
+          single_coeff_set_tag {});
+
         _sat_prev   = sat[i];
         _dcmod_prev = dcmod;
         // gain and crossover join
@@ -756,13 +761,6 @@ public:
       }
       // post process / restore if required
       switch (p.mode) {
-      case mode_compand_pow:
-        for (uint i = 0; i < subblock_size; ++i) {
-          // sat[i] = vec_clamp (sat[i], -pow2compand_clip, pow2compand_clip);
-          sat[i] = sqrt_aa::tick (
-            _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
-        }
-        break;
       case mode_compand_1b:
         for (uint i = 0; i < subblock_size; ++i) {
           sat[i] = compand_1a_aa::tick (
@@ -772,6 +770,13 @@ public:
       case mode_compand_1a:
         for (uint i = 0; i < subblock_size; ++i) {
           sat[i] = compand_1b_aa::tick (
+            _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
+        }
+        break;
+      case mode_compand_pow:
+        for (uint i = 0; i < subblock_size; ++i) {
+          // sat[i] = vec_clamp (sat[i], -pow2compand_clip, pow2compand_clip);
+          sat[i] = sqrt_aa::tick (
             _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
         }
         break;
@@ -927,9 +932,9 @@ private:
     mode_no_aa,
     mode_normal,
     mode_compander_first,
-    mode_compand_pow = mode_compander_first,
-    mode_compand_1b,
+    mode_compand_1b = mode_compander_first,
     mode_compand_1a,
+    mode_compand_pow,
     mode_compand_sqrt,
     mode_count,
   };
@@ -943,6 +948,7 @@ private:
 
   enum ef_block_type {
     dc_block_in,
+    dc_block_feedback,
     dc_block_out,
     dc_block_count,
   };
