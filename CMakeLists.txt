@@ -78,6 +78,25 @@ else()
     # Warnings on debug/dev builds
     set (ARTV_DSP_COMPILE_OPTIONS_LIST -ffast-math)
     set (ARTV_PLAIN_COMPILE_OPTIONS_LIST -ffast-math)
+
+    if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    else()
+        set(
+            CMAKE_EXE_LINKER_FLAGS
+            ${CMAKE_EXE_LINKER_FLAGS}
+            -Wl,--compress-debug-sections=zlib
+            )
+        set (
+            CMAKE_MODULE_LINKER_FLAGS
+            ${CMAKE_MODULE_LINKER_FLAGS}
+            -Wl,--compress-debug-sections=zlib
+            )
+        set(
+            CMAKE_SHARED_LINKER_FLAGS
+            ${CMAKE_SHARED_LINKER_FLAGS}
+            -Wl,--compress-debug-sections=zlib
+            )
+    endif()
 endif()
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
