@@ -5417,12 +5417,12 @@ using filter2x_params = mp_list<
 
   filter2x_envfollow_attack,
   filter2x_envfollow_release,
+  filter2x_envfollow_sensitivity,
+  filter2x_oversampling,
   filter2x_band1_ef_to_freq,
   filter2x_band2_ef_to_freq,
   filter2x_band1_ef_to_reso,
   filter2x_band2_ef_to_reso,
-  filter2x_envfollow_sensitivity,
-  filter2x_oversampling,
 
   filter2x_band2_type,
   filter2x_band2_topology,
