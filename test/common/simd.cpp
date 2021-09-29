@@ -235,4 +235,20 @@ TEST (simd, sqrt)
     [] (auto v) { return sqrt (v); }, [] (auto v) { return vec_sqrt (v); });
 }
 //------------------------------------------------------------------------------
+TEST (simd, all_ones)
+{
+  u64_x2 v {1, 3};
+  ASSERT_FALSE (vec_is_all_ones (v > 2));
+  ASSERT_FALSE (vec_is_all_ones (v > 3));
+  ASSERT_TRUE (vec_is_all_ones (v > 0));
+}
+//------------------------------------------------------------------------------
+TEST (simd, all_zeros)
+{
+  u64_x2 v {1, 3};
+  ASSERT_FALSE (vec_is_all_zeros (v > 2));
+  ASSERT_FALSE (vec_is_all_zeros (v > 0));
+  ASSERT_TRUE (vec_is_all_zeros (v > 3));
+}
+//------------------------------------------------------------------------------
 } // namespace artv

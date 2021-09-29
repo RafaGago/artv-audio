@@ -13,19 +13,12 @@
 #include "artv-common/misc/util.hpp"
 
 namespace artv { namespace adaa {
-
 //------------------------------------------------------------------------------
-static constexpr double epsilon (double)
-{
-  // if not going that low, e.g. the sqrt sigmoid makes noise after
-  // transitioning to silence, the DC blockers go crazy, inverse companding is
-  // not possible, etc.
-  return 1.0e-46;
-}
+template <class T>
 static constexpr float epsilon (float)
 {
   // untested
-  return 1.0e-7;
+  return (T) 1.0e-5;
 }
 //------------------------------------------------------------------------------
 template <class functions, uint order>

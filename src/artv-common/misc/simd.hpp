@@ -1148,11 +1148,11 @@ bool vec_is_all_zeros (V v)
     if constexpr (sizeof (Vv) == 16) {
       // hoping that this translates to e.g. PSET on SSE4.1
       V64 u = *reinterpret_cast<V64*> (&v);
-      return !(u[0] & u[1]);
+      return (u[0] | u[1]) == 0;
     }
     else if constexpr (sizeof (Vv) == 32) {
       V64 u = *reinterpret_cast<V64*> (&v);
-      return !(u[0] & u[1] & u[2] & u[3]);
+      return (u[0] | u[1] | u[2] | u[3]) == 0;
     }
     else {
       static_assert (!std::is_same_v<V, V>, "To be implemented");
@@ -1182,7 +1182,7 @@ bool vec_is_all_ones (V v)
     }
     else if constexpr (sizeof (Vv) == 32) {
       V64 u = *reinterpret_cast<V64*> (&v);
-      return !!(u[0] & u[1] & u[2] & u[3]) == (u64) -1ull;
+      return (u[0] & u[1] & u[2] & u[3]) == (u64) -1ull;
     }
     else {
       static_assert (!std::is_same_v<V, V>, "To be implemented");
