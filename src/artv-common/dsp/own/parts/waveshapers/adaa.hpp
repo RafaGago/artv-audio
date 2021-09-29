@@ -15,7 +15,7 @@
 namespace artv { namespace adaa {
 //------------------------------------------------------------------------------
 template <class T>
-static constexpr float epsilon (float)
+static constexpr float epsilon (T)
 {
   // untested
   return (T) 1.0e-5;
