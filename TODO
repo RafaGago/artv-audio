@@ -2,8 +2,9 @@
 
 - Oversampler: clicks when changing sample rate.
 
-- Linear phase filters/crossover by using windowed forward-bacward filtering
-  (as lkjb QRange)(?)
+- Linear phase filters/crossover by using windowed forward-backward filtering
+  (as lkjb QRange)(?) Maybe a truncated reverse IIR?
+  https://www.vicanek.de/articles.htm
 
 - Try Chow exciter, Klon centaur and nonlinear Models. Port some.
 

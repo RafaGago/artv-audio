@@ -1,3 +1,7 @@
+1.1.1
+- waveshaper: fix noise on low level companding mode caused by a now removed DC
+   blocker.
+
 1.1.0
 
 - Add 2x-16x medium quality FIR oversampler and latency compensation.This adds
