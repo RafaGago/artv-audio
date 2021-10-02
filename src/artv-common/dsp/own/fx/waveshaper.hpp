@@ -772,11 +772,7 @@ public:
         sat[i] = andy::svf::tick (
           _post_emphasis_coeffs, _post_emphasis_states, sat[i]);
 
-        sat[i] = dc_blocker::tick (
-          _dc_block_coeffs,
-          _dc_block_states[dc_block_feedback],
-          sat[i],
-          single_coeff_set_tag {});
+        sat[i] -= dcmod;
         _sat_prev = sat[i];
 
         _dcmod_prev = dcmod;
@@ -973,7 +969,6 @@ private:
 
   enum ef_block_type {
     dc_block_in,
-    dc_block_feedback,
     dc_block_out,
     dc_block_count,
   };
