@@ -120,7 +120,7 @@ public:
             smoothed_band_coefs, _state[b], in, single_coeff_set_tag {});
           break;
         case bandtype::onepole_allpass:
-          out = onepole::tick (
+          out = onepole_allpass::tick (
             smoothed_band_coefs, _state[b], in, single_coeff_set_tag {});
           break;
         default:
@@ -357,8 +357,8 @@ private:
         sr);
     } break;
     case bandtype::onepole_allpass: {
-      onepole::reset_coeffs (
-        _coeffs[band], make_vec_x1<double> (b.freq), sr, allpass_tag {});
+      onepole_allpass::reset_coeffs (
+        _coeffs[band], make_vec_x1<double> (b.freq), sr);
     } break;
     default:
       jassert (false);
@@ -388,7 +388,7 @@ private:
   //----------------------------------------------------------------------------
   using filters = mp_list<
     andy::svf,
-    onepole,
+    onepole_allpass,
     butterworth_lowpass<max_butterworth_order>,
     butterworth_highpass<max_butterworth_order>,
     liteon::presence_high_shelf>;

@@ -1,5 +1,9 @@
 - Add single pole allpass on Phaser.
 
+- Check csound's ZDF filters.
+
+- Check csound's DC blocker (dcblock2).
+
 - Oversampler: clicks when changing sample rate.
 
 - Linear phase filters/crossover by using windowed forward-backward filtering

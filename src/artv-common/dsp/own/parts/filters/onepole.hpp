@@ -90,7 +90,133 @@ struct onepole_smoother {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
+// Chapter 3.10 THE ART OF VA FILTER DESIGN
+//
+// Vadim Zavalishin
+// https://www.native-instruments.com/fileadmin/ni_media/downloads/pdf/VAFilterDesign_2.1.0.pdf
+//------------------------------------------------------------------------------
+template <class... Tags>
 struct onepole {
+  //----------------------------------------------------------------------------
+  using enabled_modes                 = mp11::mp_unique<mp11::mp_list<Tags...>>;
+  static constexpr bool returns_array = mp11::mp_size<enabled_modes>::value > 1;
+  //----------------------------------------------------------------------------
+  enum coeffs { G, n_coeffs };
+  enum state { s, n_states };
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<vec_value_type_t<V>> co,
+    V                           freq,
+    vec_value_type_t<V>         srate)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (n_coeffs * traits.size));
+
+    T inv_sr_div_2 = (T) 0.5 / (srate);
+    V wd           = (T) (M_PI * 2.) * freq;
+    V wa           = (T) 2. * srate * vec_tan (wd * inv_sr_div_2);
+    V g            = wa * inv_sr_div_2;
+    vec_store (&co[G * traits.size], g / ((T) 1.0 + g));
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void fix_unsmoothable_coeffs (
+    crange<vec_value_type_t<V>>,
+    crange<vec_value_type_t<const V>>)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<vec_value_type_t<V>> st)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    uint numstates = traits.size * n_states;
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (T) * numstates);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static auto tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 x)
+  {
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= traits.size * n_coeffs);
+    return tick (vec_load<V> (&co[G * traits.size]), st, x);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static auto tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
+    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    V                                 x,
+    single_coeff_set_tag)
+  {
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= traits.size * n_coeffs);
+    return tick (vec_set<V> (co[G]), st, x);
+  }
+  //----------------------------------------------------------------------------
+private:
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static auto tick (
+    V                           G_v,
+    crange<vec_value_type_t<V>> st, // states (interleaved, SIMD aligned)
+    V                           x)
+  {
+    constexpr auto traits = vec_traits<V>();
+
+    V lp, hp;
+
+    V s_v = vec_load<V> (&st[s * traits.size]);
+    V v   = (x - s_v) * G_v;
+    lp    = v + s_v;
+    vec_store (&st[s * traits.size], lp + v);
+
+    std::array<V, mp11::mp_size<enabled_modes>::value> ret;
+
+    mp_foreach_idx (enabled_modes {}, [&] (auto index, auto mode) {
+      using tag = decltype (mode);
+
+      if constexpr (std::is_same_v<tag, lowpass_tag>) {
+        ret[index.value] = lp;
+      }
+      else if constexpr (std::is_same_v<tag, highpass_tag>) {
+        hp               = x - lp;
+        ret[index.value] = hp;
+      }
+      else if constexpr (std::is_same_v<tag, allpass_tag>) {
+        // The optimizer should trivially detect hp being calculated twice when
+        // both allpass and higpass are enabled. Avoiding throwing templates to
+        // the problem.
+        hp               = x - lp;
+        ret[index.value] = lp - hp;
+      }
+    });
+
+    if constexpr (returns_array) {
+      return ret;
+    }
+    else {
+      return ret[0];
+    }
+  }
+};
+//------------------------------------------------------------------------------
+using onepole_lowpass  = onepole<lowpass_tag>;
+using onepole_highpass = onepole<highpass_tag>;
+using onepole_allpass  = onepole<allpass_tag>;
+//------------------------------------------------------------------------------
+// Kept for legacy reasons. The TPT variant has only 1 coeff and 1 state.
+struct onepole_tdf2 {
   //----------------------------------------------------------------------------
   enum coeffs { b0, b1, a1, n_coeffs };
   enum state { s1, n_states };

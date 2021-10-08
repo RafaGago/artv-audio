@@ -31,9 +31,14 @@ template <>
 class linkwitz_riley_stage<2> {
 public:
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs            = 2 * onepole::n_coeffs;
-  static constexpr uint n_states            = 3 * onepole::n_states;
-  static constexpr uint n_correction_states = onepole::n_states;
+  // uses allpass + lowpass to use the same code everywhere for the corrector,
+  // informed-guessing that tighter code is of more value than saving 2
+  // subtractions.
+  using onepole_type = onepole<lowpass_tag, allpass_tag>;
+  //----------------------------------------------------------------------------
+  static constexpr uint n_coeffs            = 1 * onepole_type::n_coeffs;
+  static constexpr uint n_states            = 2 * onepole_type::n_states;
+  static constexpr uint n_correction_states = onepole_type::n_states;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
@@ -43,13 +48,8 @@ public:
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
-
     assert (c.size() >= (n_coeffs * traits.size));
-
-    auto params = onepole::get_sub_coeffs (freq, sr);
-    onepole::reset_coeffs (c, params, lowpass_tag {});
-    onepole::reset_coeffs (
-      c.shrink_head (onepole::n_coeffs * traits.size), params, allpass_tag {});
+    onepole_type::reset_coeffs (c, freq, sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -82,16 +82,13 @@ public:
     assert (s.size() >= (n_states * traits.size));
 
     lr_crossover_out<V> ret;
-    // LP
-    ret.lp = onepole::tick (c, s, in);
-    ret.lp = onepole::tick (
-      c, s.shrink_head (onepole::n_states * traits.size), ret.lp);
-    // HP = Allpass - LP
-    ret.hp = onepole::tick (
-      c.shrink_head (onepole::n_coeffs * traits.size),
-      s.shrink_head (2 * onepole::n_states * traits.size),
-      in);
-    ret.hp -= ret.lp;
+    // LP + AP. lowpasses on index 0, allpasses on 1.
+    auto stage1 = onepole_type::tick (c, s, in);
+    auto stage2 = onepole_type::tick (
+      c, s.shrink_head (onepole_type::n_states * traits.size), stage1[0]);
+
+    ret.lp = stage2[0];
+    ret.hp = stage1[1] - ret.lp; // HP = Allpass - LP
     return ret;
   }
   //----------------------------------------------------------------------------
@@ -107,8 +104,7 @@ public:
     assert (c.size() >= (n_coeffs * traits.size));
     assert (extern_s.size() >= (n_correction_states * traits.size));
 
-    return onepole::tick (
-      c.shrink_head (onepole::n_coeffs * traits.size), extern_s, in);
+    return onepole_type::tick (c, extern_s, in)[1]; // Return allpass out.
   }
   //----------------------------------------------------------------------------
 };

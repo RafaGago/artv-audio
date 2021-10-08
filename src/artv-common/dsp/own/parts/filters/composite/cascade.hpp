@@ -23,20 +23,21 @@ public:
   //----------------------------------------------------------------------------
   using mode_tag                  = Filter_mode_tag;
   using svf_type                  = andy::svf_multimode<mode_tag>;
+  using onepole_type              = onepole<mode_tag>;
   static constexpr uint max_order = 16;
   //----------------------------------------------------------------------------
   static constexpr uint n_coeffs_for_order (uint order)
   {
     uint n_onepole = (order % 2);
     uint n_twopole = order - n_onepole;
-    return n_twopole * svf_type::n_coeffs + n_onepole * onepole::n_coeffs;
+    return n_twopole * svf_type::n_coeffs + n_onepole * onepole_type::n_coeffs;
   }
   //----------------------------------------------------------------------------
   static constexpr uint n_states_for_order (uint order)
   {
     uint n_onepole = (order % 2);
     uint n_twopole = order - n_onepole;
-    return n_twopole * svf_type::n_states + n_onepole * onepole::n_states;
+    return n_twopole * svf_type::n_states + n_onepole * onepole_type::n_states;
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -56,8 +57,8 @@ public:
     assert (q_list.size() >= n_svfs);
 
     if (order & 1) {
-      onepole::reset_coeffs (co, freq, sr, mode_tag {});
-      co = co.shrink_head (onepole::n_coeffs * traits.size);
+      onepole_type::reset_coeffs (co, freq, sr);
+      co = co.shrink_head (onepole_type::n_coeffs * traits.size);
     }
     for (uint i = 0; i < n_svfs; ++i) {
       svf_type::reset_coeffs (co, freq, vec_set<V> (q_list[i]), sr);
@@ -125,13 +126,13 @@ private:
 
     if (order & 1) {
       if constexpr (!is_single_coeff) {
-        out = onepole::tick (co, st, out);
+        out = onepole_type::tick (co, st, out);
       }
       else {
-        out = onepole::tick (co, st, out, Tag {});
+        out = onepole_type::tick (co, st, out, Tag {});
       }
-      co = co.shrink_head (onepole::n_coeffs * coeff_vec_size);
-      st = st.shrink_head (onepole::n_states * traits.size);
+      co = co.shrink_head (onepole_type::n_coeffs * coeff_vec_size);
+      st = st.shrink_head (onepole_type::n_states * traits.size);
     }
     for (uint i = 0; i < (order / 2); ++i) {
       if constexpr (!is_single_coeff) {

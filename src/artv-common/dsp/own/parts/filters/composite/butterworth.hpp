@@ -63,7 +63,7 @@ struct butterworth_2p_cascade_q_list {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-// Variable order Butterworth as a cascade of onepole TDF2's and Andy SVF's
+// Variable order Butterworth as a cascade of onepole TPT's and Andy SVF's
 template <class Filter_mode_tag>
 class butterworth_any_order {
 public:
@@ -157,7 +157,7 @@ using butterworth_lowpass_any_order  = butterworth_any_order<lowpass_tag>;
 using butterworth_highpass_any_order = butterworth_any_order<highpass_tag>;
 using butterworth_allpass_any_order  = butterworth_any_order<allpass_tag>;
 //------------------------------------------------------------------------------
-// Fixed order Butterworth as a cascade of onepole TDF2's and Andy SVF's
+// Fixed order Butterworth as a cascade of onepole TPT's and Andy SVF's
 template <uint N, class Filter_mode_tag>
 class butterworth {
 public:
