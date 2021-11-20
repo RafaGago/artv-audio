@@ -210,35 +210,38 @@ target_include_directories (bl_headers INTERFACE ${BL_REPO}/include)
 add_dependencies (bl_headers bl_fetch)
 #-- Boost hanna-----------------------------------------------------------------
 set (HANA_REPO ${CMAKE_BINARY_DIR}/boost-hana-git)
-set (HANA_INSTALL ${CMAKE_BINARY_DIR}/boost-hana-install)
+
 ExternalProject_Add(
     hana_fetch
     GIT_REPOSITORY https://github.com/boostorg/hana.git
     GIT_TAG        v1.7.0
     SOURCE_DIR     "${HANA_REPO}"
-    UPDATE_COMMAND ""
+    UPDATE_COMMAND    ""
     BUILD_ALWAYS   False
-    CMAKE_ARGS     "-DCMAKE_INSTALL_PREFIX=${HANA_INSTALL}"
-    INSTALL_DIR    "${HANA_INSTALL}"
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND     ""
+    INSTALL_COMMAND   ""
     )
 add_library (hana INTERFACE)
-target_include_directories (hana INTERFACE ${HANA_INSTALL}/include)
+target_include_directories (hana INTERFACE ${HANA_REPO}/include)
 add_dependencies (hana hana_fetch)
 #-- Boost mp11------------------------------------------------------------------
 set (MP11_REPO ${CMAKE_BINARY_DIR}/boost-mp11-git)
-set (MP11_INSTALL ${CMAKE_BINARY_DIR}/boost-mp11-install)
+
 ExternalProject_Add(
     mp11_fetch
     GIT_REPOSITORY https://github.com/boostorg/mp11.git
-    GIT_TAG        boost-1.75.0
+    GIT_TAG        boost-1.77.0
+    SOURCE_DIR     "${MP11_REPO}"
     UPDATE_COMMAND    ""
     BUILD_ALWAYS   False
-    SOURCE_DIR     "${MP11_REPO}"
-    CMAKE_ARGS     "-DCMAKE_INSTALL_PREFIX=${MP11_INSTALL}"
-    INSTALL_DIR    "${MP11_INSTALL}"
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND     ""
+    INSTALL_COMMAND   ""
     )
+
 add_library (mp11 INTERFACE)
-target_include_directories (mp11 INTERFACE ${MP11_INSTALL}/include)
+target_include_directories (mp11 INTERFACE ${MP11_REPO}/include)
 add_dependencies (mp11 mp11_fetch)
 #-- XSIMD ----------------------------------------------------------------------
 set (XSIMD_REPO ${CMAKE_BINARY_DIR}/xsimd-git)
