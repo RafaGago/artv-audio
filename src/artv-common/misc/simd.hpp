@@ -99,18 +99,27 @@ static constexpr auto get_traits()
 //------------------------------------------------------------------------------
 // Template specialization doesn't play nice with attributes, using constexpr...
 template <uint size_of, class T>
-static inline constexpr bool is_vec (T)
+static constexpr bool is_vec (T)
 {
   return false;
 }
 
 template <uint size_of, class T>
-static inline constexpr bool is_vec (
+static constexpr bool is_vec (
   T __attribute__ ((vector_size (size_of), __may_alias__)))
 {
   return true;
 }
 
+// caveats: to implement "is_vec", aka attribute detection, only constexpr
+// overloaded functions work on Clang13+ (totally broken on GCC). This puts a
+// requirement on that every class passed to "is_vec" must be default constexpr
+// constructible, otherwise the compiler will complain.
+//
+// This renders some of the SFINAE overload usages a bit broken when passing a
+// random class. This is left as-is, as it works mostly as intended by catching
+// user errors, it's that the error message will be about constant expressions
+// instead of about non found vector functions, hence this comment to clarify.
 template <class T>
 static constexpr bool is_vec_v
   = is_vec<sizeof (T)> (std::remove_reference_t<std::remove_cv_t<T>> {});
