@@ -324,10 +324,28 @@ public:
   constexpr const_iterator end() const { return _start + _size; }
 
   constexpr size_t   size() const { return _size; }
+  constexpr size_t   byte_size() const { return _size * sizeof (value_type); }
   constexpr T*       data() { return _start; }
   constexpr T const* data() const { return _start; }
 
   constexpr bool empty() const { return size() == 0; }
+
+  template <class U>
+  contiguous_range<U> cast() const
+  {
+    constexpr auto big   = std::max (sizeof (value_type), sizeof (U));
+    constexpr auto small = std::min (sizeof (value_type), sizeof (U));
+
+    static_assert ((big % small) == 0, "sizes are not multiples");
+
+    return {reinterpret_cast<U*> (_start), byte_size() / sizeof (U)};
+  }
+  // dummy parameter version to avoid calling make_crange(x).template cast<T>();
+  template <class U>
+  contiguous_range<U> cast (U) const
+  {
+    return cast<U>();
+  }
 
 private:
   //----------------------------------------------------------------------------
@@ -492,6 +510,18 @@ template <class... Ts>
 static auto make_crange (Ts&&... args)
 {
   return make_contiguous_range (std::forward<Ts> (args)...);
+}
+//------------------------------------------------------------------------------
+template <class T>
+static void contiguous_range_memset (crange<T> range, int value = 0)
+{
+  memset (range.data(), value, range.size() * sizeof range[0]);
+}
+
+template <class T>
+static void crange_memset (crange<T> range, int value = 0)
+{
+  contiguous_range_memset (range, value);
 }
 //------------------------------------------------------------------------------
 // Double pointers don't const convert, this is annoying on crange.
