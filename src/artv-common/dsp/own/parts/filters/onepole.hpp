@@ -215,7 +215,7 @@ using onepole_lowpass  = onepole<lowpass_tag>;
 using onepole_highpass = onepole<highpass_tag>;
 using onepole_allpass  = onepole<allpass_tag>;
 //------------------------------------------------------------------------------
-// Kept for legacy reasons. The TPT variant has only 1 coeff and 1 state.
+// Kept for reference only. The TPT variant has only 1 coeff and 1 state.
 struct onepole_tdf2 {
   //----------------------------------------------------------------------------
   enum coeffs { b0, b1, a1, n_coeffs };
