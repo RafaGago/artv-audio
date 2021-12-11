@@ -34,18 +34,13 @@ public:
   {
     _cfg         = decltype (_cfg) {};
     _plugcontext = &pc;
-
-    std::array<float, n_crossovers> min_freq;
-    mp11::mp_for_each<mp11::mp_iota_c<n_crossovers>> ([&] (auto i) {
-      static constexpr uint idx = decltype (i)::value;
-      auto note   = get_parameter (param<idx, paramtype::frequency> {}).min;
-      min_freq[i] = midi_note_to_hz (note);
-    });
-    _crossv.reset (pc.get_sample_rate(), min_freq, 120.f);
+    _snr_db      = 120.;
+    reset_snr();
 
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
     });
+    _plugcontext->set_delay_compensation (_crossv.get_latency());
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -143,6 +138,40 @@ public:
     }
   }
   //----------------------------------------------------------------------------
+  struct snr_tag {};
+  void set (snr_tag, int v)
+  {
+    uint snr = v * 20;
+    snr += 80;
+    if ((float) snr == _snr_db) {
+      return;
+    }
+    _snr_db = snr;
+    reset_snr();
+    for (uint i = 0; i < n_crossovers; ++i) {
+      update_crossv (i);
+    }
+    _plugcontext->set_delay_compensation (_crossv.get_latency());
+  }
+
+  static constexpr auto get_parameter (snr_tag)
+  {
+    return choice_param (
+      2,
+      make_cstr_array (
+        "80dB",
+        "100dB",
+        "120dB",
+        "140dB",
+        "160dB",
+        "180dB",
+        "200dB",
+        "220dB",
+        "240dB",
+        "260dB"),
+      16);
+  }
+  //----------------------------------------------------------------------------
   using band1_mode_tag = param<0, paramtype::mode>;
   using band2_mode_tag = param<1, paramtype::mode>;
   using band3_mode_tag = param<2, paramtype::mode>;
@@ -171,9 +200,21 @@ public:
     band3_freq_tag,
     band3_diff_tag,
     band3_mode_tag,
-    band3_out_tag>;
+    band3_out_tag,
+    snr_tag>;
   //----------------------------------------------------------------------------
 private:
+  //----------------------------------------------------------------------------
+  void reset_snr()
+  {
+    std::array<float, n_crossovers> min_freq;
+    mp11::mp_for_each<mp11::mp_iota_c<n_crossovers>> ([&] (auto i) {
+      static constexpr uint idx = decltype (i)::value;
+      auto note   = get_parameter (param<idx, paramtype::frequency> {}).min;
+      min_freq[i] = midi_note_to_hz (note);
+    });
+    _crossv.reset (_plugcontext->get_sample_rate(), min_freq, _snr_db);
+  }
   //----------------------------------------------------------------------------
   void update_crossv (uint n)
   {
@@ -195,6 +236,7 @@ private:
   //----------------------------------------------------------------------------
   std::array<bandcfg, n_crossovers> _cfg;
   linphase_iir_crossover<3>         _crossv;
+  float                             _snr_db      = 120.;
   plugin_context*                   _plugcontext = nullptr;
 };
 //------------------------------------------------------------------------------

@@ -680,6 +680,16 @@ parameter_cpp_class_define (
   mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band3_out_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  lin_iir_snr,
+  1,
+  param_common (
+    "SNR/Q",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::snr_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::snr_tag {}),
+  slider_ext);
+
 using lin_iir_crossv_params = mp_list<
   lin_iir_crossv_band1_frequency,
   lin_iir_crossv_band1_diff,
@@ -692,7 +702,8 @@ using lin_iir_crossv_params = mp_list<
   lin_iir_crossv_band3_frequency,
   lin_iir_crossv_band3_diff,
   lin_iir_crossv_band3_mode,
-  lin_iir_crossv_band3_out>;
+  lin_iir_crossv_band3_out,
+  lin_iir_snr>;
 //------------------------------------------------------------------------------
 static constexpr uint console_n_elems
   = n_stereo_busses + 1 + (crossover_n_bands - 1);

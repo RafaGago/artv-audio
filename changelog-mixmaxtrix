@@ -1,3 +1,14 @@
+1.2.0
+- Fix latency not resetting to 0 correctly when switching back from a latency
+  compensated plugin.
+- Add linear-phase crossover. This crossover is based on Martin Vicanek's paper
+  "A new reverse IIR algorithm". It allows a linear phase filter with easy
+  coefficient calculation that can respond well to automation at the expense of
+  having a non-windowed truncated response before the transient. The algorithm
+  is more efficient than a FIR in number of operations, but it touches memory
+  sparsely, so it is not as cache-friendly, which may result in higher CPU
+  usage.
+
 1.1.1
 - waveshaper: fix noise on low level companding mode caused by a now removed DC
    blocker.
