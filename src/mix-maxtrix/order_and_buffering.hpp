@@ -221,8 +221,8 @@ public:
     }
     // redo ins and outs to match the order, so we can detect dependencies
     // with just the ">" operator and masking.
-    ins  = update_bitfields_for_current_order (ins);
-    outs = update_bitfields_for_current_order (outs);
+    auto ins_s  = update_bitfields_for_current_order (ins);
+    auto outs_s = update_bitfields_for_current_order (outs);
 
     for (uint i = 0; i < N; ++i) {
       u64       chnl_idx       = order[i];
@@ -231,21 +231,21 @@ public:
       u64       ro_bit_in_self = chnl.bit << (i * N); // reordered
 
       // Detect intermediate buffer needs.
-      if (((ins & ~ro_mask) & chnl.bit_in_all) > ro_mask) {
+      if (((ins_s & ~ro_mask) & chnl.bit_in_all) > ro_mask) {
         // Someone processed later depends on the passed input, we
         // might not be able to overwrite the buffer passed by the DAW.
-        if ((ins & ro_mask) != ro_bit_in_self || has_processing[chnl_idx]) {
+        if ((ins_s & ro_mask) != ro_bit_in_self || has_processing[chnl_idx]) {
           // there is either summing or processing that will destroy
           // the passed DAW buffer's contents. Requires internal
           // buffer (negative idx)
           mix[chnl_idx] = -(chnl_idx + 1);
         }
       }
-      if (((outs & ~ro_mask) & chnl.bit_in_all) > ro_mask) {
+      if (((outs_s & ~ro_mask) & chnl.bit_in_all) > ro_mask) {
         // Someone processed later depends on this mix buffer, we
         // might not be able to use the buffer passed by the DAW as mix
         // buffer.
-        if ((outs & ro_mask) != ro_bit_in_self) {
+        if ((outs_s & ro_mask) != ro_bit_in_self) {
           // there is summing that will destroy the mix buffer's
           // contents. Requires internal buffer (negative idx)
           mix[chnl_idx] = -(chnl_idx + 1);
@@ -256,7 +256,7 @@ public:
     // assigning IO
     u64 ch1_receive_bits = 0;
     for (uint chnl = 0; chnl < N; ++chnl) {
-      // update outs
+      // update outs with the mixing channels, now that they are known
       for (uint i = 0; i < N; ++i) {
         if (out[chnl][i] != 0) {
           out[chnl][i] = mix[i];

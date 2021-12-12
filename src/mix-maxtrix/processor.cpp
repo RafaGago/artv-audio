@@ -439,7 +439,7 @@ private:
 
         if (unlikely (!refresh_fx_params_and_mix_inputs (
               chnl, buffers, fx_type_changed[chnl]))) {
-          zeroed[chnl] = true;
+          zeroed[chnl] = true; // TODO: meter suspended?
           continue; // content is 0.s (unconnected, etc.)
         }
         process_mix<T> (chnl, !mixer_crossfade.is_channel_active (chnl));
