@@ -103,6 +103,35 @@ struct linear_iir_butterworth_order_2_lowpass {
     return out;
   }
   //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void tick (
+    crange<V>                         io, // ins on call, outs when returning
+    crange<const vec_value_type_t<V>> co,
+    crange<vec_value_type_t<V>>       st,
+    uint                              n_stages,
+    uint                              sample_idx) // sample counter (external)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (n_coeffs * traits.size));
+    assert (st.size() >= (get_n_states (n_stages) * traits.size));
+    assert (n_stages);
+
+    V gain_v = vec_load<V> (&co[gain * traits.size]);
+
+    t_rev_rpole_rzero::tick (io, co, st, n_stages, sample_idx);
+    co = co.shrink_head (t_rev_rpole_rzero::n_coeffs * traits.size);
+    st = st.shrink_head (
+      t_rev_rpole_rzero::get_n_states (n_stages) * traits.size);
+
+    for (uint i = 0; i < io.size(); ++i) {
+      io[i] *= gain_v; // gain from previous stage
+      io[i] = rpole_rzero::tick (co, st, io[i]);
+      io[i] *= gain_v; // gain from this stage
+    }
+  }
+  //----------------------------------------------------------------------------
 };
 
 // just multiples of 4.
@@ -230,6 +259,46 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
     return out;
   }
   //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void tick (
+    crange<V>                         io, // ins on call, outs when returning
+    crange<const vec_value_type_t<V>> co,
+    crange<vec_value_type_t<V>>       st,
+    uint                              order,
+    uint                              n_stages,
+    uint                              sample_idx) // sample counter (external)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (get_n_coeffs (order) * traits.size));
+    assert (st.size() >= (get_n_states (order, n_stages) * traits.size));
+    assert (n_stages);
+    assert ((order % 4) == 0);
+
+    V gain_v = vec_load<V> (&co[gain * traits.size]);
+    co       = co.shrink_head (traits.size);
+
+    for (uint i = 0; i < (order / 4); ++i) {
+      rev_2pole::tick (io, co, st, n_stages, sample_idx);
+      co = co.shrink_head (rev_2pole::n_coeffs * traits.size);
+      st = st.shrink_head (rev_2pole::get_n_states (n_stages) * traits.size);
+    }
+    for (uint i = 0; i < io.size(); ++i) {
+      io[i] *= gain_v;
+    }
+    for (uint j = 0; j < (order / 4); ++j) {
+      for (uint i = 0; i < io.size(); ++i) {
+        io[i] = fwd_2pole::tick (co, st, io[i]);
+      }
+      co = co.shrink_head (fwd_2pole::n_coeffs * traits.size);
+      st = st.shrink_head (fwd_2pole::n_states * traits.size);
+    }
+    for (uint i = 0; i < io.size(); ++i) {
+      io[i] *= gain_v;
+    }
+  }
+  //----------------------------------------------------------------------------
 private:
   using rev_2pole = t_rev_ccpole_pair_rzero_pair;
   using fwd_2pole = ccpole_pair_rzero_pair;
@@ -317,6 +386,25 @@ struct linear_iir_butterworth_lowpass_any_order {
     }
     else {
       return any::tick (co, st, v, order, n_stages, sample_idx);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void tick (
+    crange<V>                         io,
+    crange<const vec_value_type_t<V>> co,
+    crange<vec_value_type_t<V>>       st,
+    uint                              order,
+    uint                              n_stages,
+    uint                              sample_idx) // sample counter (external)
+  {
+    assert ((order % 2) == 0);
+    assert (order <= max_order);
+    if (order == 2) {
+      two::tick (io, co, st, n_stages, sample_idx);
+    }
+    else {
+      any::tick (io, co, st, order, n_stages, sample_idx);
     }
   }
   //----------------------------------------------------------------------------

@@ -195,16 +195,15 @@ public:
           continue;
         }
         // process and place non latency compensated lp in band out
-        for (uint i = 0; i < blocksize; ++i) {
-          auto lp = lp_type::tick (
-            make_crange (_coeffs[c]).cast (double {}),
-            _states[c].cast (double {}),
-            hp[i],
-            _order[c],
-            _n_stages[c],
-            _sample_idx + i);
-          _block->bands[c][i] = lp;
-        }
+        memcpy (&_block->bands[c], hp, blocksize * sizeof hp[0]);
+        lp_type::tick (
+          make_crange (&_block->bands[c][0], blocksize),
+          make_crange (_coeffs[c]).cast (double {}),
+          _states[c].cast (double {}),
+          _order[c],
+          _n_stages[c],
+          _sample_idx);
+
         // compute hp for next band
         for (uint i = 0; i < blocksize; ++i) {
           auto lp         = _block->bands[c][i];
