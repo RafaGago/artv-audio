@@ -11,12 +11,18 @@
 namespace artv {
 // -----------------------------------------------------------------------------
 // This class is a helper for doing delay compensation on non-owned buffers,
-// buffers that for some reason can't have its size changed, so the only option
-// is to save reminders and do memory move operations on them instead of having
-// extra space.
+// buffers that for some reason can't have its size changed, e.g. those coming
+// from the DAW, so the only option is to save reminders and do memory move
+// operations on them instead of having extra space.
+//
+// This class holds the memory for the remainders for all managed buffers on
+// a single memory chunk.
+//
+// The amount of delay on each channel is set on "reset". Then each buffer is
+// passed and compensated in place on the compensate function.
 // -----------------------------------------------------------------------------
 template <class T, uint N_channels = 2, class Index = u32>
-class delay_compensation_buffers {
+class block_delay_compensation {
 public:
   // ---------------------------------------------------------------------------
   using value_type                 = T;
@@ -97,26 +103,27 @@ private:
   crange<T>                    _tmp_buff;
 };
 // -----------------------------------------------------------------------------
-// This class is a helper for doing delay compensation an owned buffers. The
-// owned buffer is ironically not owned by the class itself, the class just
-// manages them.
+// This class is a helper for doing delay compensation on overallocated buffers.
 //
 // The usage is basically calling:
 // -get_write_buffer, process and modify there
 // -get_read_buffer: to pass the delay compensated buffer somewhere.
 // -iteration_end: To prepare the buffer head for the next call
 //
-// The "delay" is a fixed paramter, but not owned by the class.
+// The "delay" parameter on function calls is expected to be fixed, but not
+// owned by this class.
 // -----------------------------------------------------------------------------
 template <class T>
-class owned_delay_compensation_buffer {
+class delay_compensated_block {
 public:
   //----------------------------------------------------------------------------
+  // buffer contains a buffer that is the number of usable bytes + max_delay
+  // long.
   void reset (crange<T> buffer, uint max_delay)
   {
     _buff      = buffer;
     _max_delay = max_delay;
-    memset (_buff.data(), 0, sizeof _buff[0] * _buff.size());
+    crange_memset (_buff, 0);
   }
   //----------------------------------------------------------------------------
   void iteration_end (uint delay, uint total_bytes_written)
@@ -145,5 +152,47 @@ private:
   uint      _max_delay;
   // ---------------------------------------------------------------------------
 };
+// -----------------------------------------------------------------------------
+// This class is a helper for doing sample-wise delay compensation on an
+// externally owned buffer (the previous two classes operate blockwise).
+template <class T>
+class delay_compensated_buffer {
+public:
+  //----------------------------------------------------------------------------
+  void reset (crange<T> buffer, uint delay)
+  {
+    assert (buffer.size() >= delay);
+    _buffer = buffer;
+    _pos    = 0;
+    _delay  = delay;
+    crange_memset (_buffer, 0);
+  }
+  //----------------------------------------------------------------------------
+  void reset (uint delay) { reset (_buffer, delay); }
+  //----------------------------------------------------------------------------
+  T exchange (T in)
+  {
+    T ret         = _buffer[_pos];
+    _buffer[_pos] = in;
+    _pos          = next_idx();
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+  uint delay() const { return _delay; }
+  //----------------------------------------------------------------------------
+  crange<T> memory() const { return _buffer; }
+  //----------------------------------------------------------------------------
+private:
+  uint next_idx() const
+  {
+    auto next = _pos + 1;
+    return next < _delay ? next : 0;
+  }
+  //----------------------------------------------------------------------------
+  crange<T> _buffer {};
+  uint      _delay = 0;
+  uint      _pos   = 0;
+};
+// -----------------------------------------------------------------------------
 
 } // namespace artv

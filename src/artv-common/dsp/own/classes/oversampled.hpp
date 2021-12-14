@@ -94,6 +94,7 @@ public:
     _work_buffers_mem.clear();
     _work_buffers_mem.resize (bfsz * n_channels);
     for (uint i = 0; i < n_channels; ++i) {
+      // work buffers is a fractional correction buffer.
       _work_buffers[i].reset (
         {&_work_buffers_mem[i * bfsz], bfsz}, max_oversampling);
     }
@@ -233,12 +234,12 @@ private:
     return _oversample_delay + module_delay;
   }
   //----------------------------------------------------------------------------
-  oversampled_plugin_context _pc;
-  uint                       _n_samples_fractional;
-  uint                       _module_delay;
-  uint                       _oversample_delay;
-  std::array<owned_delay_compensation_buffer<T>, n_channels> _work_buffers;
-  std::vector<T>                                             _work_buffers_mem;
+  oversampled_plugin_context                         _pc;
+  uint                                               _n_samples_fractional;
+  uint                                               _module_delay;
+  uint                                               _oversample_delay;
+  std::array<delay_compensated_block<T>, n_channels> _work_buffers;
+  std::vector<T>                                     _work_buffers_mem;
 };
 //------------------------------------------------------------------------------
 // an external adaptor class to oversample a DSP module.

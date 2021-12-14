@@ -7,6 +7,7 @@
 
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/simd_complex.hpp"
 #include "artv-common/misc/util.hpp"
 
 #include "artv-common/dsp/own/parts/filters/composite/cascade.hpp"
@@ -218,5 +219,145 @@ template <uint N>
 using butterworth_highpass = butterworth<N, highpass_tag>;
 template <uint N>
 using butterworth_allpass = butterworth<N, allpass_tag>;
+//------------------------------------------------------------------------------
+struct butterworth_lp_complex {
+  // returns first the poles:
+  //  - central (if odd order)
+  //  - positive imaginary
+  //  - negative imaginary / conjugates
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void poles (
+    crange<vec_complex<V>> poles,
+    V                      freq,
+    vec_value_type_t<V>    srate,
+    uint                   order)
+  {
+
+    /*
+     This function places the poles of a normalized filter on the S-plane.
+
+                 (s - z1) (s - z2) ... ( s - zn)
+      H(s) = K * -------------------------------
+                 (s - p1) (s - p2) ... ( s - pn)
+
+
+     Then does the bilinear transform to the z plane.
+
+                (z - z1) (z - z2) ... ( z - zn)
+     H(z) = K * -------------------------------
+                (z - p1) (z - p2) ... ( z - pn)
+
+    It just returns the poles. The gain and the zeros are to be obtained
+    separately.
+    */
+
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    assert (poles.size() >= order);
+
+    V w         = freq / srate;
+    V w_prewarp = vec_tan ((T) M_PI * w);
+
+    T poles_angle = (T) M_PI / (T) order;
+    T degrees;
+
+    uint idx = 0;
+    if (order & 1) {
+      degrees = M_PI_2 + poles_angle;
+    }
+    else {
+      degrees = M_PI_2 + (poles_angle * (T) 0.5);
+    }
+    // positive Im
+    for (uint i = 0; i < (order / 2); ++i) {
+      auto pole = vec_polar<V> (1., degrees);
+      pole *= w_prewarp; // freq transform
+      poles[idx] = (1. + pole) / (1. - pole); // BLT LP
+      degrees += poles_angle; // float addition will add error, but not a lot.
+      ++idx;
+    }
+    // central
+    if (order & 1) {
+      auto pole = vec_complex<V> {-1.};
+      pole *= w_prewarp; // freq transform
+      poles[idx] = (1. + pole) / (1. - pole); // BLT LP
+      ++idx;
+    }
+    // conjugates
+    for (uint i = 0; i < (order / 2); ++i) {
+      poles[idx] = vec_conj (poles[idx - (order / 2)]);
+      ++idx;
+    }
+  }
+  //----------------------------------------------------------------------------
+  // just a formality. All zeroes are real at -1.
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void zeros (
+    crange<vec_complex<V>> zeros,
+    V,
+    vec_value_type_t<V>,
+    uint order)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    assert (zeros.size() >= order);
+
+    for (uint i = 0; i < order; ++i) {
+      zeros[i] = vec_complex<V> {(T) -1., (T) 0.};
+    }
+  }
+
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V gain (const crange<vec_complex<V>> poles, uint order)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    /*
+    This gets poles on the Z-plane (the zeros are implied):
+
+               (z - z1) (z - z2) ... ( z - zn)
+    H(z) = K * -------------------------------
+               (z - p1) (z - p2) ... ( z - pn)
+
+
+    Substituting z by 1 (evaluate at DC), the gain for 1 (normalized) and the
+    zeros by -1, that would leave:
+
+                      2^(n zeros)
+    1 = K * -------------------------------
+             (1 - p1) (1 - p2) ... ( 1 - pn)
+
+
+        (1 - p1) (1 - p2) ... ( 1 - pn)
+    K = -------------------------------
+                 2^(n zeros)
+    */
+
+    assert (poles.size() >= order);
+
+    auto den = (T) (1u << order);
+    auto num = vec_set<V> ((T) 1.);
+
+    // handling conjugates.
+    uint i = 0;
+    for (; i < (order / 2); ++i) {
+      num *= vec_real (vec_conj_mul (poles[i]));
+    }
+    // handling real pole if present.
+    if (order & 1) {
+      num *= (T) 1 - vec_real (poles[i]);
+    }
+
+    V ret = num / den;
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+};
 //------------------------------------------------------------------------------
 } // namespace artv

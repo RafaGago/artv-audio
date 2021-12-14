@@ -92,7 +92,7 @@ public:
     : effect_base {get_default_bus_properties(), make_apvts_layout()}
     , _fsamples {
         parameters::n_stereo_busses * 2,
-        (parameters::crossover_n_bands - 1) * 2}
+        (parameters::crossover_n_bands - 1) * 3}
   {
     this->init_aptvs_references (params);
     for (auto& meter_src : _meters) {
@@ -251,46 +251,27 @@ private:
       outs |= (((u64) outs_arr[i]) << (i * parameters::n_stereo_busses));
     }
 
-    // if the channel 0, which is the only one that can have  the crossover, has
-    // no inputs, then the crossover is off.
-    _crossv_type     = (ins_arr[0] == 0) ? crossv_off : _crossv_type;
-    uint inhibit_opt = 0;
+    // assigning crossover buffers. They override mixer 2 mixer sends.
+    decltype (_io)::channel_io ch1_recvs {};
+    _crossv_type = (ins_arr[0] == 0) ? crossv_off : _crossv_type;
     if (_crossv_type != crossv_off) {
-      // This was never thought out to be a multifx, so it was never was
-      // designed to have multiple ins (sidechain) and outs per fx. It is
-      // perfectly doable backend-wise but not on the GUI. The crossover is
-      // added by implementing 3 send channels by inhibiting reordering
-      // optimizations on the affected channels and manually setting the 3
-      // additional crossover's buffers as inputs to the channel. See the
-      // conditional depending on "_crossv_type" below.
-      for (uint i = 0; i < crossv_outs.size(); ++i) {
-        inhibit_opt |= 1 << crossv_outs[i];
+      auto crossv_buff = -((s8) _io.n_busses + 1); // start at -9
+      for (uint i = 0; i < crossv_outs.size(); ++i, --crossv_buff) {
+        assert (crossv_outs[i] < parameters::n_stereo_busses);
+        ch1_recvs[crossv_outs[i]] = crossv_buff;
       }
     }
 
-    uint routing = (uint) routing_arr[0];
+    uint routing_mode = (uint) routing_arr[0];
 
-    auto latency_prev = _io.plugin_latency;
     _io.recompute (
       ins,
       outs,
       mute_solo_bits,
       mixsends_arr[0],
-      inhibit_opt,
-      routing,
+      ch1_recvs,
+      routing_mode,
       _fx_context.fx_latencies);
-
-    if (_crossv_type != crossv_off) {
-      // buffers -9,-10 and -11 are reserved for crossover outputs.
-      uint limit = parameters::n_parallel_buses (routing);
-      for (uint i = 0; i < crossv_outs.size(); ++i) {
-        if (crossv_outs[i] < limit) {
-          // only sending to the first group of parallel busses.
-          _io.in[crossv_outs[i]][_io.n_busses + i]
-            = -((int) _io.n_busses) - 1 - i;
-        }
-      }
-    }
 
     this->setLatencySamples (_io.plugin_latency);
     _fx_context.fx_latencies_changed = false;
@@ -343,16 +324,25 @@ private:
                   parameters::all_fx_typelists,
                   parameters::wonky_crossv_params>::value
               + 1;
+            constexpr uint lin_iir_crossv_id
+              = mp11::mp_find<
+                  parameters::all_fx_typelists,
+                  parameters::lin_iir_crossv_params>::value
+              + 1;
 
             fx_type_changed[i] = val.changed();
             if (i != 0) {
               return; // crossover only on channel 0
             }
+            _crossv_type = crossv_off;
             if (val.current == crossv_id) {
               _crossv_type = crossv_normal;
             }
             else if (val.current == wonky_crossv_id) {
               _crossv_type = crossv_wonky;
+            }
+            else if (val.current == lin_iir_crossv_id) {
+              _crossv_type = crossv_lin_iir;
             }
             crossv_change = fx_type_changed[i]
               && (_crossv_type != crossv_off || val.previous == crossv_id
@@ -385,6 +375,19 @@ private:
         parameters::wonky_crossv_band1_out,
         parameters::wonky_crossv_band2_out,
         parameters::wonky_crossv_band3_out>;
+
+      mp_foreach_idx (band_params {}, [&] (auto index, auto param) {
+        auto value = p_refresh (param, 0);
+        // notice: +1 because the crossover can't output on channel 0
+        crossv_outs[index] = value.current + 1;
+        crossv_change |= value.changed();
+      });
+    }
+    else if (unlikely (_crossv_type == crossv_lin_iir)) {
+      using band_params = mp11::mp_list<
+        parameters::lin_iir_crossv_band1_out,
+        parameters::lin_iir_crossv_band2_out,
+        parameters::lin_iir_crossv_band3_out>;
 
       mp_foreach_idx (band_params {}, [&] (auto index, auto param) {
         auto value = p_refresh (param, 0);
@@ -524,6 +527,7 @@ private:
       if (unlikely (fx_type_changed)) {
         _fx_dsp[channel] = dsp_class{};
         auto& fx = std::get<dsp_class> (_fx_dsp[channel]);
+        _fx_context.set_delay_compensation(0);
         fx.reset (_fx_context);
       }
 
@@ -671,17 +675,26 @@ private:
     constexpr auto crossv_head = parameters::n_stereo_busses * 2;
     // getting the buffer for the negative indexes, where we store the mix
     // buffers not provided by Juce and the Crossover buffers
+    //
+    // TODO: as all the crossovers can only be set on channel 1, why was this
+    // duplication needed.
     auto& internal_audiobuff = buffers.get_audiobuffer (-1);
     static_assert (parameters::crossover_n_bands == 4, "Fix this");
     auto out_ptrs = make_array<T*> (
       mix_buffer[0].data(),
       mix_buffer[1].data(),
+      // linkwitz-riley
       internal_audiobuff.getWritePointer (crossv_head),
       internal_audiobuff.getWritePointer (crossv_head + 1),
       internal_audiobuff.getWritePointer (crossv_head + 2),
+      // wonky
       internal_audiobuff.getWritePointer (crossv_head + 3),
       internal_audiobuff.getWritePointer (crossv_head + 4),
-      internal_audiobuff.getWritePointer (crossv_head + 5));
+      internal_audiobuff.getWritePointer (crossv_head + 5),
+      // linear-phase IIR
+      internal_audiobuff.getWritePointer (crossv_head + 6),
+      internal_audiobuff.getWritePointer (crossv_head + 7),
+      internal_audiobuff.getWritePointer (crossv_head + 8));
 
     for (uint i = 0; i < samples;) {
       uint bsz = std::min<uint> (samples - i, fx_blocksize);
@@ -796,7 +809,7 @@ private:
   void clear_crossv_buffers()
   {
     auto& b = get_buffers (float {});
-    for (uint i = 0; i < _io.n_external_ins; ++i) {
+    for (uint i = 0; i < (parameters::crossover_n_bands - 1); ++i) {
       b.clear (-(_io.n_busses + 1 + i));
     }
   }
@@ -818,9 +831,7 @@ private:
     std::atomic<uint> _count {0};
   };
   //----------------------------------------------------------------------------
-  using io_engine = order_and_buffering<
-    parameters::n_stereo_busses,
-    parameters::crossover_n_bands - 1>;
+  using io_engine = order_and_buffering<parameters::n_stereo_busses>;
 
   mix_maxtrix_fx_context                                 _fx_context;
   buffers<float>                                         _fsamples;
@@ -831,13 +842,14 @@ private:
 
   static constexpr uint fx_blocksize = 128;
   alignas (32) std::array<std::array<float, fx_blocksize>, 2> _fx_mix_buffer;
-  delay_compensation_buffers<float, 2> _dly_comp_buffers;
-  uint                                 _program = 0;
+  block_delay_compensation<float, 2> _dly_comp_buffers;
+  uint                               _program = 0;
 
   enum crossv_type {
     crossv_off,
     crossv_normal,
     crossv_wonky,
+    crossv_lin_iir,
   };
   uint _crossv_type;
 

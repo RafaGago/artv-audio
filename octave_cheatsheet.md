@@ -8,7 +8,7 @@ Symbolic math
 
 Package import:
 
-    package load symbolic
+    pkg load symbolic
 
 Define equations by:
 

@@ -47,21 +47,30 @@ private
 };
 //------------------------------------------------------------------------------
 // N == channel count, Ext = externally managed inputs.
-template <size_t N, size_t Ext = 0>
+template <size_t N>
 class order_and_buffering {
 public:
-  using bus_latency_arr                  = std::array<u16, N>;
-  static constexpr size_t n_busses       = N;
-  static constexpr size_t n_external_ins = Ext;
+  using bus_latency_arr            = std::array<u16, N>;
+  static constexpr size_t n_busses = N;
+  using channel_io                 = std::array<s8, N>;
   //----------------------------------------------------------------------------
+  // ch1_receives contains indexes of externally managed output buffers that
+  // channel 1 can send elsewhere. As channel 1 sends might be latency
+  // compensated, to keep things simple and not requiring compensation on
+  // multiple inputs (and ordering them) before mixing them to a channel mixer 2
+  // mixer sends are not available on channels that receive from channel 1.
+  //
+  // Alternative wording: only one latency compesated input is allowed per
+  // channel, either a channel 1 send or a neighboring mixer send. channel1
+  // sends have more priority.
   template <class T>
   void recompute (
-    u64  ins, // bit stream of size N * N representing receives of mix chnls
-    u64  send_outs, // bit stream of size N * N representing sends of mix chnls
-    u64  mute_solo_v, // bit stream of size N * 2 (2 = mute + solo)
-    u64  mixer2mixer_sends, // bit stream of size N.
-    u64  inhibit_optimizations, // bit stream of size N.
-    uint n_groups_log2,
+    u64 ins, // bit stream of size N * N representing receives of mix chnls
+    u64 send_outs, // bit stream of size N * N representing sends of mix chnls
+    u64 mute_solo_v, // bit stream of size N * 2 (2 = mute + solo)
+    u64 mixer2mixer_sends, // bit stream of size N.
+    channel_io             ch1_receives, // Ch1 sends a buffer
+    uint                   n_groups_log2,
     bus_latency_arr const& mix_latencies,
     T                      channel_has_processing)
   {
@@ -78,6 +87,11 @@ public:
 
     mixer2mixer_sends &= ~m2ms_mask;
     u64 mixer2mixer_receives = mixer2mixer_sends << 1;
+
+    // inhibit sending from channel 1 to channels on different groups
+    for (uint i = (N / (1u << n_groups_log2)); i < N; ++i) {
+      ch1_receives[i] = 0;
+    }
 
     memset (&in, 0, sizeof in);
     memset (&receives, 0, sizeof receives);
@@ -170,8 +184,8 @@ public:
           // create another indentation level.
           break;
         }
-        if ((chnl.bit_in_self & inhibit_optimizations) != 0) {
-          // manually specified to not reorder this channel.
+        if (ch1_receives[chnl_idx] != 0) {
+          // receives from channel1, inhibiting reordering optimization too.
           break;
         }
 
@@ -239,12 +253,20 @@ public:
       }
     }
 
+    // assigning IO
+    u64 ch1_receive_bits = 0;
     for (uint chnl = 0; chnl < N; ++chnl) {
       // update outs
       for (uint i = 0; i < N; ++i) {
         if (out[chnl][i] != 0) {
           out[chnl][i] = mix[i];
         }
+      }
+      if (ch1_receives[chnl] != 0) {
+        assert (chnl != 0);
+        ch1_receive_bits |= 1u << chnl;
+        receives[chnl] = ch1_receives[chnl];
+        continue; // precedence over mixer 2 mixer receives
       }
       // update neighboring mixer inputs
       if (((1 << chnl) & mixer2mixer_receives) != 0) {
@@ -280,18 +302,18 @@ public:
       send_outs,
       mixer2mixer_sends,
       mixer2mixer_receives,
-      inhibit_optimizations);
+      ch1_receive_bits);
   }
   //----------------------------------------------------------------------------
   // just a variant adding default parameters, as this can't be done on the
   // original function because of the lamda
   void recompute (
-    u64  ins, // bit stream of size N * N representing receives of mix chnls
-    u64  send_outs, // bit stream of size N * N representing sends of mix chnls
-    u64  mute_solo_v, // bit stream of size N * 2 (2 = mute + solo)
-    u64  mixer2mixer_sends, // bit stream of size N.
-    u64  inhibit_optimizations           = 0, // bit stream of size N.
-    uint n_groups_log2                   = 0,
+    u64 ins, // bit stream of size N * N representing receives of mix chnls
+    u64 send_outs, // bit stream of size N * N representing sends of mix chnls
+    u64 mute_solo_v, // bit stream of size N * 2 (2 = mute + solo)
+    u64 mixer2mixer_sends, // bit stream of size N.
+    channel_io             ch1_receives  = channel_io {}, // Ch1 sends a buffer
+    uint                   n_groups_log2 = 0,
     bus_latency_arr const& mix_latencies = bus_latency_arr {})
   {
     recompute (
@@ -299,7 +321,7 @@ public:
       send_outs,
       mute_solo_v,
       mixer2mixer_sends,
-      inhibit_optimizations,
+      ch1_receives,
       n_groups_log2,
       mix_latencies,
       [] (uint chnl) { return true; });
@@ -314,12 +336,12 @@ public:
   //
   // // input buffers to each output channel: 1 based indexes
 
-  std::array<std::array<s8, N + Ext>, N> in; // ins
-  std::array<s8, N>                receives; // rcv from neighbouring mixer
-  std::array<std::array<s8, N>, N> out;
-  std::array<s8, N>                mix; // buffers: 1 based indexes
-  std::array<s8, N>                swaps; // buffers: 1 based indexes
-  std::array<u8, N>                order; // channels: 0 based indexes
+  std::array<channel_io, N> in; // ins
+  channel_io                receives; // rcv (from neighbouring mixer or chnl 1>
+  std::array<channel_io, N> out;
+  channel_io                mix; // buffers: 1 based indexes
+  channel_io                swaps; // buffers: 1 based indexes
+  channel_io                order; // channels: 0 based indexes
 
   channels_mute_solo<N> mute_solo;
 
@@ -395,7 +417,7 @@ private:
     u64                    outs_as_bits,
     u64                    mixer2mixer_sends,
     u64                    mixer2mixer_receives,
-    u64                    optimization_inhibited)
+    u64                    ch1_receives)
   {
     // Summarizing the relevant parts only. Each channel/bus has on this order:
     //
@@ -429,7 +451,7 @@ private:
       outs_as_bits,
       mixer2mixer_sends,
       mixer2mixer_receives,
-      optimization_inhibited);
+      ch1_receives);
 
     for (uint c = 0; c < N; ++c) {
       if (chnl_io[c] == dead_channel) {
@@ -439,14 +461,14 @@ private:
       this->fx_delay_samples[c]  = mix_latencies[c];
       post_fx_cummulative_dly[c] = mix_latencies[c];
 
-      u64  chnl_mask      = lsb_mask<u64> (N) << (c * N);
-      bool has_daw_inputs = !!(ins_as_bits & chnl_mask);
-      bool has_receives   = mixer2mixer_receives & bit<uint> (c);
-
       if (chnl_io[c] & has_recvs_bit) {
+        u64  chnl_mask         = lsb_mask<u64> (N) << (c * N);
+        bool has_daw_inputs    = !!(ins_as_bits & chnl_mask);
+        bool receives_from_ch1 = !!((1u << c) & ch1_receives);
         // "mixer2mixer_receives" has always zeroes on the first element of a
         // group. It is safe to access the previous neighbor.
-        uint rcv_delay_samples = post_fx_cummulative_dly[c - 1];
+        uint send_channel      = receives_from_ch1 ? 0 : c - 1;
+        uint rcv_delay_samples = post_fx_cummulative_dly[send_channel];
         post_fx_cummulative_dly[c] += rcv_delay_samples;
         // no imput compensation if there is no input.
         this->post_input_mix_delay_samples[c] = rcv_delay_samples;
@@ -484,7 +506,7 @@ private:
     u64 outs_as_bits,
     u64 mixer2mixer_sends,
     u64 mixer2mixer_receives,
-    u64 optimization_inhibited)
+    u64 ch1_receive_bits)
   {
     // this function requires "mixer2mixer_sends" and "mixer2mixer_receives" to
     // be corrected for grouping.
@@ -495,11 +517,11 @@ private:
     for (uint c = 0; c < N; ++c) {
       u64  chnl_mask = lsb_mask<u64> (N) << (c * N);
       bool has_ins   = !!(ins_as_bits & chnl_mask);
-      // assuming "optimization_inhibited" channels as if connected to an input.
-      has_ins |= !!(optimization_inhibited & bit<uint> (c));
       bool has_outs  = !!(outs_as_bits & chnl_mask);
       bool has_sends = mixer2mixer_sends & bit<uint> (c);
+      has_sends |= (c == 0) & (ch1_receive_bits != 0); // ch1 sends
       bool has_recvs = mixer2mixer_receives & bit<uint> (c);
+      has_recvs |= ch1_receive_bits & bit<uint> (c);
 
       chnl_io[c] = has_ins ? has_ins_bit : 0;
       chnl_io[c] |= has_outs ? has_outs_bit : 0;

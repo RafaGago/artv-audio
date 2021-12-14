@@ -84,6 +84,7 @@
 #endif
 
 #include "mix-maxtrix/crossover.hpp"
+#include "mix-maxtrix/linphase_iir_crossover.hpp"
 #include "mix-maxtrix/wonky_crossover.hpp"
 
 #include "artv-common/dsp/own/classes/mix.hpp"
@@ -100,7 +101,8 @@
 
 #define VERSION_INT VERSION_GET (VERSION_MAJOR, VERSION_MINOR, VERSION_REV)
 
-namespace artv { namespace parameters {
+namespace artv {
+namespace parameters {
 
 // parameter definitions in one place ------------------------------------------
 constexpr std::size_t n_stereo_busses = 8;
@@ -554,6 +556,143 @@ using wonky_crossv_params = mp_list<
   wonky_crossv_band3_diff,
   wonky_crossv_band3_mode,
   wonky_crossv_band3_out>;
+
+//------------------------------------------------------------------------------
+using mm_lin_iir_crossv = mixmaxtrix_linphase_iir_crossover<crossover_n_bands>;
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band1_frequency,
+  1,
+  param_common (
+    "1.Freq",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band1_freq_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band1_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band2_frequency,
+  1,
+  param_common (
+    "2.Freq",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band2_freq_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band2_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band3_frequency,
+  1,
+  param_common (
+    "3.Freq",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band3_freq_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band3_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band1_mode,
+  1,
+  param_common (
+    "1.Mode",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band1_mode_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band1_mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band2_mode,
+  1,
+  param_common (
+    "2.Mode",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band2_mode_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band2_mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band3_mode,
+  1,
+  param_common (
+    "3.Mode",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band3_mode_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band3_mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band1_diff,
+  1,
+  param_common (
+    "1.LR-Diff",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band1_diff_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band1_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band2_diff,
+  1,
+  param_common (
+    "2.LR-Diff",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band2_diff_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band2_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band3_diff,
+  1,
+  param_common (
+    "3.LR-Diff",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band3_diff_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band3_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band1_out,
+  1,
+  param_common (
+    "1.Send",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band1_out_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band1_out_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band2_out,
+  1,
+  param_common (
+    "2.Send",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band2_out_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band2_out_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band3_out,
+  1,
+  param_common (
+    "3.Send",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band3_out_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band3_out_tag {}),
+  slider_ext);
+
+using lin_iir_crossv_params = mp_list<
+  lin_iir_crossv_band1_frequency,
+  lin_iir_crossv_band1_diff,
+  lin_iir_crossv_band1_mode,
+  lin_iir_crossv_band1_out,
+  lin_iir_crossv_band2_frequency,
+  lin_iir_crossv_band2_diff,
+  lin_iir_crossv_band2_mode,
+  lin_iir_crossv_band2_out,
+  lin_iir_crossv_band3_frequency,
+  lin_iir_crossv_band3_diff,
+  lin_iir_crossv_band3_mode,
+  lin_iir_crossv_band3_out>;
 //------------------------------------------------------------------------------
 static constexpr uint console_n_elems
   = n_stereo_busses + 1 + (crossover_n_bands - 1);
@@ -5704,13 +5843,71 @@ parameter_cpp_class_define (
 using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #endif
 //------------------------------------------------------------------------------
+#if 1 // experiments
+}
+} // namespace artv::parameters
+
+#include "artv-common/dsp/own/fx/experiments.hpp"
+
+namespace artv {
+namespace parameters {
+
+parameter_cpp_class_define (
+  experiments_a,
+  n_stereo_busses,
+  param_common (
+    "A",
+    declptr<experiments>(),
+    declptr<experiments::param_a_tag>()),
+  experiments::get_parameter (experiments::param_a_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  experiments_b,
+  n_stereo_busses,
+  param_common (
+    "B",
+    declptr<experiments>(),
+    declptr<experiments::param_b_tag>()),
+  experiments::get_parameter (experiments::param_b_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  experiments_c,
+  n_stereo_busses,
+  param_common (
+    "C",
+    declptr<experiments>(),
+    declptr<experiments::param_c_tag>()),
+  experiments::get_parameter (experiments::param_c_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  experiments_d,
+  n_stereo_busses,
+  param_common (
+    "D",
+    declptr<experiments>(),
+    declptr<experiments::param_d_tag>()),
+  experiments::get_parameter (experiments::param_d_tag {}),
+  slider_ext);
+
+using experiments_params
+  = mp_list<experiments_a, experiments_b, experiments_c, experiments_d>;
+
+#endif // experiments
+
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists
-  = mp_list<waveshaper_params, lr_crossv_params, wonky_crossv_params>;
+using all_fx_typelists = mp_list<
+  lr_crossv_params,
+  wonky_crossv_params,
+  lin_iir_crossv_params,
+  experiments_params>;
 
-static constexpr auto fx_choices = make_cstr_array ("none", "FX", "C", "C2");
+static constexpr auto fx_choices
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "exp");
 
 #else
 // clang-format off
@@ -5757,7 +5954,8 @@ using all_fx_typelists = mp_list<
   signal_crusher_params,
   waveshaper_params,
   lr_crossv_params,
-  wonky_crossv_params
+  wonky_crossv_params,
+  lin_iir_crossv_params
   >;
 // clang-format on
 //------------------------------------------------------------------------------
@@ -5808,8 +6006,9 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Dynamics Track Comp",
   ":Distortion Signal Crusher",
   ":Distortion ArtV Shaper",
-  ":Filter LR-Crossover4",
-  ":Filter WTF-Crossover4");
+  ":Filter Crossover LR",
+  ":Filter Crossover WTF",
+  ":Filter Crossover Lin");
 
 #endif // #if TWEAK_BUILD
 
@@ -5869,7 +6068,7 @@ static constexpr char const* about_text =
 "CREDITS\n"
 "--------"
 "\n"
-"Powered by Open Source DSP and libraries. Credits (Alphabetical order on the DSP):\n"
+"Powered by Open Source DSP and libraries. Credits (In no particular order):\n"
 "\n"
 "From Airwindows (Chris Johnson).\n"
 "https://www.patreon.com/airwindows \n"
@@ -6008,6 +6207,14 @@ static constexpr char const* about_text =
 "ADAA by Jatin Chowdhury (CHOW):\n"
 "https://github.com/jatinchowdhury18/ADAA\n"
 "\n"
+"Special thanks to the folks on the KVR DSP forum. From the top of my head, (not \n"
+"everyone might be mentioned, but I aim to):\n"
+"\n"
+"-mystran (Teemu Voipio)\n"
+"-martinvicanek (Martin Vicanek)\n"
+"-rs-met (Robin Schmidt)\n"
+"\n"
 ;
 // clang-format on
-}} // namespace artv::parameters
+}
+} // namespace artv::parameters
