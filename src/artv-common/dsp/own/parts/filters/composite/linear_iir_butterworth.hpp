@@ -7,6 +7,8 @@
 #include "artv-common/misc/simd_complex.hpp"
 #include "artv-common/misc/util.hpp"
 
+#include "artv-common/dsp/own/parts/filters/onepole.hpp"
+
 #include "artv-common/dsp/own/parts/filters/composite/butterworth.hpp"
 #include "artv-common/dsp/own/parts/filters/poles_zeros.hpp"
 #include "artv-common/dsp/own/parts/filters/poles_zeros_reversed.hpp"
@@ -15,19 +17,21 @@
 // filters (Andy's SVF and Vadim's onepole).
 namespace artv {
 //------------------------------------------------------------------------------
-struct linear_iir_butterworth_order_2_lowpass {
+class linear_iir_butterworth_order_2_lowpass {
+private:
+  using rev_1pole = t_rev_rpole_rzero;
+  using fwd_1pole = onepole_lowpass;
+
+public:
   //----------------------------------------------------------------------------
   static constexpr uint n_complex = 2;
   static constexpr uint order     = 2;
   //----------------------------------------------------------------------------
-  enum coeffs {
-    gain = t_rev_rpole_rzero::n_coeffs + rpole_rzero::n_coeffs,
-    n_coeffs
-  };
+  enum coeffs { gain = fwd_1pole::n_coeffs + rev_1pole::n_coeffs, n_coeffs };
   //----------------------------------------------------------------------------
   static constexpr uint get_n_states (uint n_stages)
   {
-    return rpole_rzero::n_states + t_rev_rpole_rzero::get_n_states (n_stages);
+    return fwd_1pole::n_states + rev_1pole::get_n_states (n_stages);
   }
   //----------------------------------------------------------------------------
   static constexpr uint get_latency (uint n_stages) { return 1 << n_stages; }
@@ -49,10 +53,10 @@ struct linear_iir_butterworth_order_2_lowpass {
     auto gain_ptr = &co[gain * traits.size]; // gain is last
     vec_store (gain_ptr, gain_v);
 
-    t_rev_rpole_rzero::reset_coeffs (co, vec_real (poles), vec_real (zeros));
-    co = co.shrink_head (t_rev_rpole_rzero::n_coeffs * traits.size);
+    rev_1pole::reset_coeffs (co, vec_real (poles), vec_real (zeros));
+    co = co.shrink_head (rev_1pole::n_coeffs * traits.size);
 
-    rpole_rzero::reset_coeffs (co, vec_real (poles), vec_real (zeros));
+    fwd_1pole::reset_coeffs (co, freq, sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -91,15 +95,12 @@ struct linear_iir_butterworth_order_2_lowpass {
     V gain_v = vec_load<V> (&co[gain * traits.size]);
     V out    = v;
 
-    out = t_rev_rpole_rzero::tick (co, st, out, n_stages, sample_idx);
+    out = rev_1pole::tick (co, st, out, n_stages, sample_idx);
     out *= gain_v;
-    co = co.shrink_head (t_rev_rpole_rzero::n_coeffs * traits.size);
-    st = st.shrink_head (
-      t_rev_rpole_rzero::get_n_states (n_stages) * traits.size);
+    co = co.shrink_head (rev_1pole::n_coeffs * traits.size);
+    st = st.shrink_head (rev_1pole::get_n_states (n_stages) * traits.size);
 
-    out = rpole_rzero::tick (co, st, out);
-    out *= gain_v;
-
+    out = fwd_1pole::tick (co, st, out);
     return out;
   }
   //----------------------------------------------------------------------------
@@ -120,15 +121,13 @@ struct linear_iir_butterworth_order_2_lowpass {
 
     V gain_v = vec_load<V> (&co[gain * traits.size]);
 
-    t_rev_rpole_rzero::tick (io, co, st, n_stages, sample_idx);
-    co = co.shrink_head (t_rev_rpole_rzero::n_coeffs * traits.size);
-    st = st.shrink_head (
-      t_rev_rpole_rzero::get_n_states (n_stages) * traits.size);
+    rev_1pole::tick (io, co, st, n_stages, sample_idx);
+    co = co.shrink_head (rev_1pole::n_coeffs * traits.size);
+    st = st.shrink_head (rev_1pole::get_n_states (n_stages) * traits.size);
 
     for (uint i = 0; i < io.size(); ++i) {
       io[i] *= gain_v; // gain from previous stage
-      io[i] = rpole_rzero::tick (co, st, io[i]);
-      io[i] *= gain_v; // gain from this stage
+      io[i] = fwd_1pole::tick (co, st, io[i]);
     }
   }
   //----------------------------------------------------------------------------
@@ -147,7 +146,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
   static constexpr uint get_n_coeffs (uint order)
   {
     uint n_2poles = order / 4;
-    uint fwd      = fwd_2pole::n_coeffs * n_2poles;
+    uint fwd      = fwd_2pole::n_coeffs_for_order (order / 2);
     uint rev      = rev_2pole::n_coeffs * n_2poles;
     return fwd + rev + 1; // + 1: gain
   }
@@ -155,7 +154,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
   static constexpr uint get_n_states (uint order, uint n_stages)
   {
     uint n_2poles = order / 4;
-    uint fwd      = fwd_2pole::n_states * n_2poles;
+    uint fwd      = fwd_2pole::n_states_for_order (order / 2);
     uint rev      = rev_2pole::get_n_states (n_stages) * n_2poles;
     return fwd + rev + 1; // + 1: gain
   }
@@ -192,10 +191,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
       rev_2pole::reset_coeffs (co, poles[i], vec_real (zeros[0]));
       co = co.shrink_head (rev_2pole::n_coeffs * traits.size);
     }
-    for (uint i = 0; i < (order / 4); ++i) {
-      fwd_2pole::reset_coeffs (co, poles[i], vec_real (zeros[0]));
-      co = co.shrink_head (fwd_2pole::n_coeffs * traits.size);
-    }
+    fwd_2pole::reset_coeffs (co, freq, sr, order / 2);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -249,14 +245,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
       st  = st.shrink_head (rev_2pole::get_n_states (n_stages) * traits.size);
     }
     out *= gain_v;
-
-    for (uint i = 0; i < (order / 4); ++i) {
-      out = fwd_2pole::tick (co, st, out);
-      co  = co.shrink_head (fwd_2pole::n_coeffs * traits.size);
-      st  = st.shrink_head (fwd_2pole::n_states * traits.size);
-    }
-    out *= gain_v;
-    return out;
+    return fwd_2pole::tick (co, st, out, order / 2);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -286,22 +275,13 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
     }
     for (uint i = 0; i < io.size(); ++i) {
       io[i] *= gain_v;
-    }
-    for (uint j = 0; j < (order / 4); ++j) {
-      for (uint i = 0; i < io.size(); ++i) {
-        io[i] = fwd_2pole::tick (co, st, io[i]);
-      }
-      co = co.shrink_head (fwd_2pole::n_coeffs * traits.size);
-      st = st.shrink_head (fwd_2pole::n_states * traits.size);
-    }
-    for (uint i = 0; i < io.size(); ++i) {
-      io[i] *= gain_v;
+      io[i] = fwd_2pole::tick (co, st, io[i], order / 2);
     }
   }
   //----------------------------------------------------------------------------
 private:
   using rev_2pole = t_rev_ccpole_pair_rzero_pair;
-  using fwd_2pole = ccpole_pair_rzero_pair;
+  using fwd_2pole = butterworth_lowpass_any_order;
 };
 //------------------------------------------------------------------------------
 struct linear_iir_butterworth_lowpass_any_order {
