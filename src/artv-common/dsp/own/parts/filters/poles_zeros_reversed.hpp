@@ -97,6 +97,44 @@ struct t_rev_rpole {
     return y;
   }
   //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void tick (
+    crange<V>                         io, // ins on call, outs when returning
+    crange<const vec_value_type_t<V>> co,
+    crange<vec_value_type_t<V>>       st,
+    uint                              n_stages,
+    uint                              sample_idx) // sample counter (external)
+  {
+    // block version, the intent with it is to run some iterations on the same
+    // cache lines before moving to the next.
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (traits.size * n_coeffs));
+    assert (st.size() >= (traits.size * get_n_states (n_stages)));
+    assert (n_stages >= 1);
+
+    V    c_v    = vec_load<V> (&co[c * traits.size]);
+    T*   z_ptr  = &st[0];
+    uint z_size = 1;
+
+    for (uint s = 0; s < n_stages; ++s) {
+      uint mask = z_size - 1;
+      // process the block stage-wise
+      for (uint i = 0; i < io.size(); ++i) {
+        V    y   = io[i];
+        uint pos = ((z_size + sample_idx + i) & mask) * traits.size;
+        auto z_y = vec_load<V> (&z_ptr[pos]);
+        vec_store (&z_ptr[pos], y);
+        y     = y * c_v + z_y;
+        io[i] = y;
+      }
+      z_ptr += z_size * traits.size;
+      z_size *= 2;
+      c_v *= c_v;
+    }
+  }
+  //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
 // time reversed complex pole
@@ -191,13 +229,74 @@ struct t_rev_cpole {
       // as this is a serial algorithm, the initial assumption is that
       // precomputing the powers of 2 for each stage wouldn't make a lot of
       // difference because the pipelines are probably at low capacity. Favoring
-      // less memory usage, as this is 4mul + 1add that can probably be
-      // parallelized by the CPU (TODO: measure).
+      // less and fixed-size coefficient memory usage, as this is 4mul + 1add
+      // that can probably be parallelized by the CPU, it has no dependencies on
+      // the code above (TODO: measure).
       auto a_cp = a_v;
       a_v       = a_cp * a_cp - b_v * b_v;
       b_v       = (T) 2. * a_cp * b_v;
     }
     return vec_complex<V> (y_re, y_im);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void tick (
+    crange<V>                         io_re, // ins on call, outs when returning
+    crange<V>                         io_im, // ins on call, outs when returning
+    crange<const vec_value_type_t<V>> co,
+    crange<vec_value_type_t<V>>       st,
+    uint                              n_stages,
+    uint                              sample_idx) // sample counter (external)
+  {
+    // block version, the intent with it is to run some iterations on the same
+    // cache lines before moving to the next.
+
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (traits.size * n_coeffs));
+    assert (st.size() >= (traits.size * get_n_states (n_stages)));
+    assert (io_re.size() <= io_im.size());
+
+    V a_v = vec_load<V> (&co[a * traits.size]);
+    V b_v = vec_load<V> (&co[b * traits.size]);
+
+    T*   z_re_ptr = &st[0];
+    T*   z_im_ptr;
+    uint z_size = 1;
+
+    for (uint i = 0; i < n_stages; ++i) {
+      // recomputing imaginary buffer position (done)
+      z_im_ptr = z_re_ptr + (z_size * traits.size);
+      // computing sample position on each of the same-sized buffers
+      uint mask = z_size - 1;
+
+      for (uint i = 0; i < io_re.size(); ++i) {
+        uint pos  = ((z_size + sample_idx + i) & mask) * traits.size;
+        V    y_re = io_re[i];
+        V    y_im = io_im[i];
+        // calculation
+        auto z_re = vec_load<V> (&z_re_ptr[pos]);
+        auto z_im = vec_load<V> (&z_im_ptr[pos]);
+        vec_store (&z_re_ptr[pos], y_re);
+        vec_store (&z_im_ptr[pos], y_im);
+        auto y_re_cp = y_re;
+        io_re[i]     = (a_v * y_re_cp) - (b_v * y_im) + z_re;
+        io_im[i]     = (b_v * y_re_cp) + (a_v * y_im) + z_im;
+      }
+      // adjusting real buffer position and buffers size for the next stage
+      z_re_ptr = z_im_ptr + (z_size * traits.size);
+      z_size *= 2;
+      // as this is a serial algorithm, the initial assumption is that
+      // precomputing the powers of 2 for each stage wouldn't make a lot of
+      // difference because the pipelines are probably at low capacity. Favoring
+      // less and fixed-size coefficient memory usage, as this is 4mul + 1add
+      // that can probably be parallelized by the CPU, it has no dependencies on
+      // the code above (TODO: measure).
+      auto a_cp = a_v;
+      a_v       = a_cp * a_cp - b_v * b_v;
+      b_v       = (T) 2. * a_cp * b_v;
+    }
   }
   //----------------------------------------------------------------------------
 };
@@ -263,6 +362,41 @@ struct t_rev_ccpole_pair {
     return vec_real (y) + vec_load<V> (&co[ratio * traits.size]) * vec_imag (y);
   }
   //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void tick (
+    crange<V>                         io, // ins on call, outs when returning
+    crange<const vec_value_type_t<V>> co,
+    crange<vec_value_type_t<V>>       st,
+    uint                              n_stages, // sample counter (external)
+    uint                              sample_idx)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    assert (co.size() >= (traits.size * n_coeffs));
+
+    std::array<V, 32> imag;
+    auto              ratio_v = vec_load<V> (&co[ratio * traits.size]);
+
+    while (io.size() > 0) {
+      uint blocksize = std::min (io.size(), imag.size());
+      memset (&imag[0], 0, blocksize * sizeof imag[0]);
+      t_rev_cpole::tick (
+        make_crange (io.data(), blocksize),
+        make_crange (imag),
+        co,
+        st,
+        n_stages,
+        sample_idx);
+
+      for (uint i = 0; i < blocksize; ++i) {
+        io[i] += ratio_v * imag[i];
+      }
+      sample_idx += blocksize;
+      io = io.shrink_head (blocksize);
+    }
+  }
+  //----------------------------------------------------------------------------
 };
 //----------------------------------------------------------------------------
 // one time reversed real pole one real zero filter
@@ -323,6 +457,26 @@ struct t_rev_rpole_rzero {
     return rzero::tick (co, st, out);
   }
   //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void tick (
+    crange<V>                         io, // ins on call, outs when returning
+    crange<const vec_value_type_t<V>> co,
+    crange<vec_value_type_t<V>>       st,
+    uint                              n_stages,
+    uint                              sample_idx)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    t_rev_rpole::tick (io, co, st, n_stages, sample_idx);
+    co = co.shrink_head (t_rev_rpole::n_coeffs * traits.size);
+    st = st.shrink_head (t_rev_rpole::get_n_states (n_stages) * traits.size);
+
+    for (uint i = 0; i < io.size(); ++i) {
+      io[i] = rzero::tick (co, st, io[i]);
+    }
+  }
+  //----------------------------------------------------------------------------
 };
 // time reversed complex conjugate poles pair + two real zeros filter ----------
 struct t_rev_ccpole_pair_rzero_pair {
@@ -367,8 +521,8 @@ struct t_rev_ccpole_pair_rzero_pair {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (1 set)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    crange<const vec_value_type_t<V>> co,
+    crange<vec_value_type_t<V>>       st,
     V                                 x,
     uint                              n_stages,
     uint                              sample_idx)
@@ -389,6 +543,30 @@ struct t_rev_ccpole_pair_rzero_pair {
       st = st.shrink_head (rzero::n_states * traits.size);
     }
     return out;
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void tick (
+    crange<V>                         io, // ins on call, outs when returning
+    crange<const vec_value_type_t<V>> co,
+    crange<vec_value_type_t<V>>       st,
+    uint                              n_stages,
+    uint                              sample_idx)
+  {
+    using T               = vec_value_type_t<V>;
+    constexpr auto traits = vec_traits<V>();
+
+    t_rev_ccpole_pair::tick (io, co, st, n_stages, sample_idx);
+    co = co.shrink_head (t_rev_ccpole_pair::n_coeffs * traits.size);
+    st = st.shrink_head (
+      t_rev_ccpole_pair::get_n_states (n_stages) * traits.size);
+
+    for (uint j = 0; j < 2; ++j) {
+      for (uint i = 0; i < io.size(); ++i) {
+        io[i] = rzero::tick (co, st, io[i]);
+      }
+      st = st.shrink_head (rzero::n_states * traits.size);
+    }
   }
   //----------------------------------------------------------------------------
 };
