@@ -222,6 +222,7 @@ public:
     using simd                  = juce::dsp::SIMDRegister<T>;
     constexpr size_t simd_elems = simd::SIMDNumElements;
     // TODO: test if/how the compiler vectorizes this and simplify if possible.
+    // TODO: This is legacy. Use own vector wrappers instead.
     auto vect = [=] (std::array<T*, 4> c, uint blocks) {
       T* end = c[0] + (blocks * simd_elems);
 
@@ -326,6 +327,7 @@ public:
 
     // TODO: test if/how the compiler vectorizes this and simplify if
     // possible.
+    // TODO: This is legacy. Use own vector wrappers instead.
     auto vect = [=] (std::array<T*, 2> c, uint blocks) {
       T* end = c[0] + (blocks * simd_elems);
 
@@ -378,7 +380,6 @@ public:
     // this "const_cast" is because making "block_divide" const aware could be
     // a real mess. The wet channels are unnmodified.
     std::array<T*, 2> dryb = {outs[0], outs[1]};
-
     block_divide (simd::SIMDRegisterSize, dryb, samples, vect, unvect);
 
     _gain[wet].l.skip (samples);

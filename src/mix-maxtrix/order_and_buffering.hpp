@@ -47,18 +47,24 @@ private
 };
 //------------------------------------------------------------------------------
 // N == channel count, Ext = externally managed inputs.
-template <size_t N>
+template <size_t N, size_t N_receives>
 class order_and_buffering {
 public:
-  using bus_latency_arr            = std::array<u16, N>;
-  static constexpr size_t n_busses = N;
-  using channel_io                 = std::array<s8, N>;
+  using bus_latency_arr              = std::array<u16, N>;
+  static constexpr size_t n_busses   = N;
+  static constexpr size_t n_receives = N_receives;
+  using channel_io                   = std::array<s8, N>;
+  using receives_in = std::array<std::array<s8, n_receives>, N>;
   //----------------------------------------------------------------------------
   // ch1_receives contains indexes of externally managed output buffers that
   // channel 1 can send elsewhere. As channel 1 sends might be latency
   // compensated, to keep things simple and not requiring compensation on
-  // multiple inputs (and ordering them) before mixing them to a channel mixer 2
+  // multiple inputs (and sorting) before mixing them to a channel mixer 2
   // mixer sends are not available on channels that receive from channel 1.
+  //
+  // The use case of sending from Ch1 and receiving from the neighboring mixer
+  // seems rare enough to not be worth adding more complexity. This is already
+  // needing a refactor.
   //
   // Alternative wording: only one latency compesated input is allowed per
   // channel, either a channel 1 send or a neighboring mixer send. channel1
@@ -69,7 +75,7 @@ public:
     u64 send_outs, // bit stream of size N * N representing sends of mix chnls
     u64 mute_solo_v, // bit stream of size N * 2 (2 = mute + solo)
     u64 mixer2mixer_sends, // bit stream of size N.
-    channel_io             ch1_receives, // Ch1 sends a buffer
+    receives_in            ch1_receives, // Ch1 sends a buffer
     uint                   n_groups_log2,
     bus_latency_arr const& mix_latencies,
     T                      channel_has_processing)
@@ -90,7 +96,7 @@ public:
 
     // inhibit sending from channel 1 to channels on different groups
     for (uint i = (N / (1u << n_groups_log2)); i < N; ++i) {
-      ch1_receives[i] = 0;
+      memset (&ch1_receives[i], 0, sizeof ch1_receives[i]);
     }
 
     memset (&in, 0, sizeof in);
@@ -116,6 +122,15 @@ public:
     // we get the sends for each mixer to which output, to detect buffer deps
     // is easier to operate with receives on the outputs from the mixers
     u64 outs = from_send_to_rcvs (send_outs);
+
+    // a summary of which channels receive from ch 1
+    u64 ch1_receive_bits = 0;
+    for (uint i = 0; i < ch1_receives.size(); ++i) {
+      if (ch1_receives[i][0] != 0) {
+        assert (i != 0);
+        ch1_receive_bits |= 1u << i;
+      }
+    }
 
     // The FX processor runs in three passes over the channels:
     // -1) direct channel swaps
@@ -184,7 +199,11 @@ public:
           // create another indentation level.
           break;
         }
-        if (ch1_receives[chnl_idx] != 0) {
+        if (chnl_idx == 0 && ch1_receive_bits) {
+          // avoid placing ch1 afterwards its receivers
+          break;
+        }
+        if (ch1_receives[chnl_idx][0] != 0) {
           // receives from channel1, inhibiting reordering optimization too.
           break;
         }
@@ -254,7 +273,6 @@ public:
     }
 
     // assigning IO
-    u64 ch1_receive_bits = 0;
     for (uint chnl = 0; chnl < N; ++chnl) {
       // update outs with the mixing channels, now that they are known
       for (uint i = 0; i < N; ++i) {
@@ -262,17 +280,18 @@ public:
           out[chnl][i] = mix[i];
         }
       }
-      if (ch1_receives[chnl] != 0) {
-        assert (chnl != 0);
-        ch1_receive_bits |= 1u << chnl;
+      if (ch1_receives[chnl][0] != 0) {
         receives[chnl] = ch1_receives[chnl];
-        continue; // precedence over mixer 2 mixer receives
+        // As of now, to avoid 2 latencty compensation stages, the Ch1 recieves
+        // override neighboring receives. I can see a clear use case for adding
+        // it.
+        continue;
       }
       // update neighboring mixer inputs
       if (((1 << chnl) & mixer2mixer_receives) != 0) {
         // receives from neighboring mixer
         assert (chnl > 0 && "The leftmost channel has no left neighbor mixer");
-        receives[chnl] = mix[chnl - 1];
+        receives[chnl][0] = mix[chnl - 1];
       }
     }
 
@@ -312,7 +331,7 @@ public:
     u64 send_outs, // bit stream of size N * N representing sends of mix chnls
     u64 mute_solo_v, // bit stream of size N * 2 (2 = mute + solo)
     u64 mixer2mixer_sends, // bit stream of size N.
-    channel_io             ch1_receives  = channel_io {}, // Ch1 sends a buffer
+    receives_in            ch1_receives, // Ch1 sends a buffer
     uint                   n_groups_log2 = 0,
     bus_latency_arr const& mix_latencies = bus_latency_arr {})
   {
@@ -328,7 +347,62 @@ public:
   }
   //----------------------------------------------------------------------------
   static_assert (N <= 127, "overflowing signed char");
+  //----------------------------------------------------------------------------
+  void dump()
+  {
+    printf ("ins:");
+    for (uint i = 0; i < in.size(); ++i) {
+      for (uint j = 0; j < in[0].size(); ++j) {
+        if (in[i][j] != 0) {
+          printf ("%d->%d(b %d) ", (int) i + 1, (int) j + 1, (int) in[i][j]);
+        }
+      }
+    }
+    printf ("\n");
+    printf ("receives:");
+    for (uint i = 0; i < receives.size(); ++i) {
+      for (uint j = 0; j < receives[0].size(); ++j) {
+        if (receives[i][j] != 0) {
+          printf ("%d->%d ", (int) i + 1, (int) receives[i][j]);
+        }
+      }
+    }
+    printf ("\n");
+    printf ("outs:");
+    for (uint i = 0; i < out.size(); ++i) {
+      for (uint j = 0; j < out[0].size(); ++j) {
+        if (out[i][j] != 0) {
+          printf ("%d(b %d)->%d ", (int) j + 1, (int) out[i][j], (int) i + 1);
+        }
+      }
+    }
+    printf ("\n");
+    printf ("swaps:");
+    for (uint i = 0; i < swaps.size(); ++i) {
+      if (swaps[i] != 0) {
+        printf ("%d->%d ", (int) i + 1, (int) swaps[i]);
+      }
+    }
+    printf ("\n");
 
+    printf ("mix:");
+    dump_array (mix);
+
+    printf ("order:");
+    dump_array (order);
+
+    printf ("receives_latency:");
+    dump_array (receives_latency);
+
+    printf ("fx_latency:");
+    dump_array (fx_latency);
+
+    printf ("pre_output_mix_latency:");
+    dump_array (pre_output_mix_latency);
+
+    printf ("plugin latency: %d\n\n", plugin_latency);
+  }
+  //----------------------------------------------------------------------------
   // input buffers to each mixer: 1 based indexes. It contains N+1 entries
   // because they can input from its neighboring mixer.
   //
@@ -337,7 +411,7 @@ public:
   // // input buffers to each output channel: 1 based indexes
 
   std::array<channel_io, N> in; // ins
-  channel_io                receives; // rcv (from neighbouring mixer or chnl 1>
+  receives_in               receives; // rcv (from neighbouring mixer or Ch1)
   std::array<channel_io, N> out;
   channel_io                mix; // buffers: 1 based indexes
   channel_io                swaps; // buffers: 1 based indexes
@@ -345,12 +419,21 @@ public:
 
   channels_mute_solo<N> mute_solo;
 
-  bus_latency_arr post_input_mix_delay_samples;
-  bus_latency_arr fx_delay_samples;
-  bus_latency_arr pre_output_mix_delay_samples;
+  bus_latency_arr receives_latency;
+  bus_latency_arr fx_latency;
+  bus_latency_arr pre_output_mix_latency;
   uint            plugin_latency;
 
 private:
+  //----------------------------------------------------------------------------
+  template <class T>
+  void dump_array (T const& arr)
+  {
+    for (uint i = 0; i < arr.size(); ++i) {
+      printf ("%d ", (int) arr[i]);
+    }
+    puts ("");
+  }
   //----------------------------------------------------------------------------
   u64 update_bitfields_for_current_order (u64 v)
   {
@@ -432,10 +515,10 @@ private:
     //
     // This function is about computing the delays on 2 and 6.
 
-    this->post_input_mix_delay_samples = bus_latency_arr {};
-    this->pre_output_mix_delay_samples = bus_latency_arr {};
-    this->fx_delay_samples             = bus_latency_arr {};
-    this->plugin_latency               = 0;
+    this->receives_latency       = bus_latency_arr {};
+    this->pre_output_mix_latency = bus_latency_arr {};
+    this->fx_latency             = bus_latency_arr {};
+    this->plugin_latency         = 0;
 
     // Cummulative latencies at point 5. See leading comment.
     bus_latency_arr post_fx_cummulative_dly = {};
@@ -455,10 +538,11 @@ private:
 
     for (uint c = 0; c < N; ++c) {
       if (chnl_io[c] == dead_channel) {
+        memset (&receives[c], 0, sizeof receives[c]);
         continue;
       }
 
-      this->fx_delay_samples[c]  = mix_latencies[c];
+      this->fx_latency[c]        = mix_latencies[c];
       post_fx_cummulative_dly[c] = mix_latencies[c];
 
       if (chnl_io[c] & has_recvs_bit) {
@@ -471,8 +555,8 @@ private:
         uint rcv_delay_samples = post_fx_cummulative_dly[send_channel];
         post_fx_cummulative_dly[c] += rcv_delay_samples;
         // no imput compensation if there is no input.
-        this->post_input_mix_delay_samples[c] = rcv_delay_samples;
-        this->post_input_mix_delay_samples[c] *= has_daw_inputs;
+        this->receives_latency[c] = rcv_delay_samples;
+        this->receives_latency[c] *= has_daw_inputs;
       }
     }
 
@@ -485,7 +569,7 @@ private:
 
       for (uint c = beg; c < end; ++c) {
         if (chnl_io[c] != dead_channel) {
-          this->pre_output_mix_delay_samples[c]
+          this->pre_output_mix_latency[c]
             = max_group_latency - post_fx_cummulative_dly[c];
         }
       }
@@ -520,8 +604,9 @@ private:
       bool has_outs  = !!(outs_as_bits & chnl_mask);
       bool has_sends = mixer2mixer_sends & bit<uint> (c);
       has_sends |= (c == 0) & (ch1_receive_bits != 0); // ch1 sends
-      bool has_recvs = mixer2mixer_receives & bit<uint> (c);
-      has_recvs |= ch1_receive_bits & bit<uint> (c);
+      bool has_recvs     = !!(mixer2mixer_receives & bit<uint> (c));
+      bool has_ch1_recvs = !!(ch1_receive_bits & bit<uint> (c));
+      has_recvs |= has_ch1_recvs;
 
       chnl_io[c] = has_ins ? has_ins_bit : 0;
       chnl_io[c] |= has_outs ? has_outs_bit : 0;
@@ -529,11 +614,16 @@ private:
       chnl_io[c] |= has_recvs ? has_recvs_bit : 0;
 
       // dead by no io
-      bool dead   = ((!has_ins && !has_recvs) || (!has_outs && !has_sends));
-      uint prev_c = (c == 0) ? 0 : c - 1; // no underflow reads of prev chnl.
+      bool dead = ((!has_ins && !has_recvs) || (!has_outs && !has_sends));
+      uint src_c;
+      if (has_ch1_recvs) {
+        src_c = 0;
+      }
+      else {
+        src_c = (c == 0) ? 0 : c - 1; // no underflow reads of prev chnl.
+      }
       // dead by dead receive
-      dead |= (!has_ins && has_recvs) && (chnl_io[prev_c] == 0);
-
+      dead |= (!has_ins && has_recvs) && (chnl_io[src_c] == 0);
       chnl_io[c] *= dead ? 0 : 1;
     }
     // detecting dead channels because of dead sends requires the subsequent

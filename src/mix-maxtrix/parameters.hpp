@@ -284,6 +284,7 @@ using busscolors4_params
   = mp_list<busscolors4_drive, busscolors4_color, busscolors4_dry_wet>;
 //------------------------------------------------------------------------------
 static constexpr uint crossover_n_bands = 4;
+static constexpr uint n_crossovers      = crossover_n_bands - 1;
 
 using mm_lr_crossv = mixmaxtrix_lr_crossover<crossover_n_bands>;
 
@@ -5908,7 +5909,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
