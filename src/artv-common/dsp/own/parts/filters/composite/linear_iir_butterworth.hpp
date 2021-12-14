@@ -257,6 +257,16 @@ struct linear_iir_butterworth_lowpass_any_order {
                         : any::get_latency (order, n_stages);
   }
   //----------------------------------------------------------------------------
+  static uint get_n_stages (float freq, float samplerate, float snr_db)
+  {
+    vec_complex<double_x2> pole;
+    // worst case, 1 pole.
+    butterworth_lp_complex::poles (
+      make_crange (pole), vec_set<double_x2> (freq), (double) samplerate, 1);
+    return get_reversed_pole_n_stages (
+      {vec_real (pole)[0], vec_imag (pole)[0]}, snr_db);
+  }
+  //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)

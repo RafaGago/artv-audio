@@ -12,7 +12,7 @@ namespace artv {
 template <uint Bands>
 class mixmaxtrix_linphase_iir_crossover {
 private:
-  enum class paramtype { mode, frequency, diff, out };
+  enum class paramtype { mode, frequency, diff, out, quality };
 
 public:
   template <uint Band, paramtype Type>
@@ -32,15 +32,46 @@ public:
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
-    _cfg         = decltype (_cfg) {};
-    _plugcontext = &pc;
-    _snr_db      = 120.;
-    reset_snr();
+    _cfg                          = decltype (_cfg) {};
+    _plugcontext                  = &pc;
+    auto                   sr     = pc.get_sample_rate();
+    static constexpr float snr_db = 120;
 
+    // Ultra Bad SNR
+    _q_n_stages[0] = _crossv.get_n_stages (15000.f, sr, snr_db - 60.);
+    // Bad SNR
+    _q_n_stages[1] = _crossv.get_n_stages (15000.f, sr, snr_db - 30.);
+    // Ultra treble
+    _q_n_stages[2] = _crossv.get_n_stages (15000.f, sr, snr_db);
+    // Treble
+    _q_n_stages[3] = _crossv.get_n_stages (5000.f, sr, snr_db);
+    // High mids
+    _q_n_stages[4] = _crossv.get_n_stages (2500.f, sr, snr_db);
+    // Mids
+    _q_n_stages[5] = _crossv.get_n_stages (1000.f, sr, snr_db);
+    // Low Mids
+    _q_n_stages[6] = _crossv.get_n_stages (400.f, sr, snr_db);
+    // High Lows
+    _q_n_stages[7] = _crossv.get_n_stages (180.f, sr, snr_db);
+    // Lows
+    _q_n_stages[8] = _crossv.get_n_stages (100.f, sr, snr_db);
+    // Ultra Lows
+    _q_n_stages[9] = _crossv.get_n_stages (50.f, sr, snr_db);
+    // High quality
+    _q_n_stages[10] = _crossv.get_n_stages (20.f, sr, snr_db);
+    // Ultra quality
+    _q_n_stages[11] = _crossv.get_n_stages (20.f, sr, snr_db + 40.);
+    // Insane
+    _q_n_stages[12] = _crossv.get_n_stages (20.f, sr, snr_db + 180.);
+
+    for (auto& bcfg : _cfg) {
+      bcfg.n_stages = _q_n_stages[0]; // temporary setting
+    }
+
+    reset_n_stages();
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
     });
-    _plugcontext->set_delay_compensation (_crossv.get_latency());
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -58,7 +89,6 @@ public:
     update_crossv (band);
     uint new_latency = _crossv.get_latency();
     if (latency != new_latency) {
-      // TODO: latency change. Will this be propagated for crossovers?
       _plugcontext->set_delay_compensation (new_latency);
     }
   }
@@ -82,16 +112,16 @@ public:
   static constexpr auto get_parameter (param<band, paramtype::frequency>)
   {
     if constexpr (band == 0) {
-      return frequency_parameter (50.0, 20000.0, 140.0);
+      return frequency_parameter (20.0, 20000.0, 180.0);
     }
     else if constexpr (band == 1) {
-      return frequency_parameter (120.0, 20000.0, 390.0);
+      return frequency_parameter (20.0, 20000.0, 690.0);
     }
     else if constexpr (band == 2) {
-      return frequency_parameter (250.0, 20000.0, 2200.0);
+      return frequency_parameter (20.0, 20000.0, 3400.0);
     }
     else {
-      return frequency_parameter (400.0, 20000.0, 440.0);
+      return frequency_parameter (20.0, 20000.0, 440.0);
     }
   }
   //----------------------------------------------------------------------------
@@ -138,38 +168,54 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  struct snr_tag {};
-  void set (snr_tag, int v)
+  template <uint band>
+  void set (param<band, paramtype::quality>, int v)
   {
-    uint snr = v * 20;
-    snr += 80;
-    if ((float) snr == _snr_db) {
+    assert (v >= 0 && v < _q_n_stages.size());
+    uint stages = _q_n_stages[v];
+    if (_cfg[band].n_stages == stages) {
       return;
     }
-    _snr_db = snr;
-    reset_snr();
-    for (uint i = 0; i < n_crossovers; ++i) {
-      update_crossv (i);
-    }
-    _plugcontext->set_delay_compensation (_crossv.get_latency());
+    _cfg[band].n_stages = stages;
+    reset_n_stages();
   }
 
-  static constexpr auto get_parameter (snr_tag)
+  static constexpr uint n_quality_steps = 13;
+
+  template <uint band>
+  static constexpr auto get_parameter (param<band, paramtype::quality>)
   {
-    return choice_param (
-      2,
-      make_cstr_array (
-        "80dB",
-        "100dB",
-        "120dB",
-        "140dB",
-        "160dB",
-        "180dB",
-        "200dB",
-        "220dB",
-        "240dB",
-        "260dB"),
-      16);
+    auto str_array = make_cstr_array (
+      "15kHz Broken",
+      "15kHz Bad",
+      "15kHz",
+      "5kHz",
+      "2.5kHz",
+      "1kHz",
+      "400Hz",
+      "180Hz",
+      "100Hz",
+      "50Hz",
+      "20Hz",
+      "20Hz Ultra",
+      "20Hz Insane");
+
+    static_assert (str_array.size() == n_quality_steps);
+
+    constexpr uint n_future_choices = 16;
+
+    if constexpr (band == 0) {
+      return choice_param (7, str_array, n_future_choices);
+    }
+    else if constexpr (band == 1) {
+      return choice_param (6, str_array, n_future_choices);
+    }
+    else if constexpr (band == 2) {
+      return choice_param (4, str_array, n_future_choices);
+    }
+    else {
+      return choice_param (8, str_array, n_future_choices);
+    }
   }
   //----------------------------------------------------------------------------
   using band1_mode_tag = param<0, paramtype::mode>;
@@ -187,6 +233,10 @@ public:
   using band1_out_tag = param<0, paramtype::out>;
   using band2_out_tag = param<1, paramtype::out>;
   using band3_out_tag = param<2, paramtype::out>;
+
+  using band1_quality_tag = param<0, paramtype::quality>;
+  using band2_quality_tag = param<1, paramtype::quality>;
+  using band3_quality_tag = param<2, paramtype::quality>;
   //----------------------------------------------------------------------------
   using parameters = mp_list<
     band1_freq_tag,
@@ -201,19 +251,27 @@ public:
     band3_diff_tag,
     band3_mode_tag,
     band3_out_tag,
-    snr_tag>;
+    band1_quality_tag,
+    band2_quality_tag,
+    band3_quality_tag>;
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  void reset_snr()
+  void reset_n_stages()
   {
-    std::array<float, n_crossovers> min_freq;
-    mp11::mp_for_each<mp11::mp_iota_c<n_crossovers>> ([&] (auto i) {
-      static constexpr uint idx = decltype (i)::value;
-      auto note   = get_parameter (param<idx, paramtype::frequency> {}).min;
-      min_freq[i] = midi_note_to_hz (note);
-    });
-    _crossv.reset (_plugcontext->get_sample_rate(), min_freq, _snr_db);
+    std::array<uint, n_crossovers> stages;
+    for (uint i = 0; i < n_crossovers; ++i) {
+      stages[i] = _cfg[i].n_stages;
+    }
+    uint latency = _crossv.get_latency();
+    _crossv.reset (_plugcontext->get_sample_rate(), stages);
+    for (uint i = 0; i < n_crossovers; ++i) {
+      update_crossv (i);
+    }
+    uint new_latency = _crossv.get_latency();
+    if (latency != new_latency) {
+      _plugcontext->set_delay_compensation (new_latency);
+    }
   }
   //----------------------------------------------------------------------------
   void update_crossv (uint n)
@@ -228,16 +286,18 @@ private:
   }
   //----------------------------------------------------------------------------
   struct bandcfg {
-    float freq = 30.f;
-    float diff = 0.f;
-    uint  mode = 0;
-    uint  out  = 0;
+    float freq     = 30.f;
+    float diff     = 0.f;
+    uint  mode     = 0;
+    uint  out      = 0;
+    uint  n_stages = 0;
   };
   //----------------------------------------------------------------------------
   std::array<bandcfg, n_crossovers> _cfg;
   linphase_iir_crossover<3>         _crossv;
   float                             _snr_db      = 120.;
   plugin_context*                   _plugcontext = nullptr;
+  std::array<uint, n_quality_steps> _q_n_stages;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

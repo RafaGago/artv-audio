@@ -23,27 +23,12 @@ public:
 
   static_assert (n_bands >= 2, "not a crossover");
   //----------------------------------------------------------------------------
-  void reset (float samplerate, crange<float> min_freq, float snr_db)
+  void reset (float samplerate, std::array<uint, n_crossovers> n_stages)
   {
-    assert (min_freq.size() >= n_crossovers);
-
     _mem.clear();
     memset (this, 0, sizeof *this); // YOLO, assuming std::vector can take it.
     _samplerate = samplerate;
-
-    vec_complex<double_x2> pole;
-
-    // As we have to take the real value of the pole, the pole with the
-    // maximum Re magnitude are all odd ones, that have a pure real pole on
-    // the X axis.
-    for (uint i = 0; i < n_crossovers; ++i) {
-      butterworth_lp_complex::poles (
-        make_crange (pole),
-        vec_set<double_x2> (min_freq[i]),
-        (double) samplerate,
-        1);
-      _n_stages[i] = get_reversed_pole_n_stages (vec_real (pole)[0], snr_db);
-    }
+    _n_stages   = n_stages;
 
     // compute max requirements for crossovers
     std::array<uint, n_crossovers> stage_state; // states (samples)
@@ -105,6 +90,12 @@ public:
       }
     }
     return 0;
+  }
+  //----------------------------------------------------------------------------
+  static uint get_n_stages (float freq, float samplerate, float snr_db)
+  {
+    return linear_iir_butterworth_lowpass_any_order::get_n_stages (
+      freq, samplerate, snr_db);
   }
   //----------------------------------------------------------------------------
   void set_crossover_point (

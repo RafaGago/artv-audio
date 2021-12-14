@@ -84,7 +84,7 @@
 #endif
 
 #include "mix-maxtrix/crossover.hpp"
-#include "mix-maxtrix/linphase_iir_crossover.hpp"
+#include "mix-maxtrix/lin_crossover.hpp"
 #include "mix-maxtrix/wonky_crossover.hpp"
 
 #include "artv-common/dsp/own/classes/mix.hpp"
@@ -101,8 +101,7 @@
 
 #define VERSION_INT VERSION_GET (VERSION_MAJOR, VERSION_MINOR, VERSION_REV)
 
-namespace artv {
-namespace parameters {
+namespace artv { namespace parameters {
 
 // parameter definitions in one place ------------------------------------------
 constexpr std::size_t n_stereo_busses = 8;
@@ -682,13 +681,33 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  lin_iir_snr,
+  lin_iir_crossv_band1_quality,
   1,
   param_common (
-    "SNR/Q",
+    "1.Quality",
     declptr<mm_lin_iir_crossv>(),
-    declptr<mm_lin_iir_crossv::snr_tag>()),
-  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::snr_tag {}),
+    declptr<mm_lin_iir_crossv::band1_quality_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band1_quality_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band2_quality,
+  1,
+  param_common (
+    "2.Quality",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band2_quality_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band2_quality_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_iir_crossv_band3_quality,
+  1,
+  param_common (
+    "3.Quality",
+    declptr<mm_lin_iir_crossv>(),
+    declptr<mm_lin_iir_crossv::band3_quality_tag>()),
+  mm_lin_iir_crossv::get_parameter (mm_lin_iir_crossv::band3_quality_tag {}),
   slider_ext);
 
 using lin_iir_crossv_params = mp_list<
@@ -704,7 +723,9 @@ using lin_iir_crossv_params = mp_list<
   lin_iir_crossv_band3_diff,
   lin_iir_crossv_band3_mode,
   lin_iir_crossv_band3_out,
-  lin_iir_snr>;
+  lin_iir_crossv_band1_quality,
+  lin_iir_crossv_band2_quality,
+  lin_iir_crossv_band3_quality>;
 //------------------------------------------------------------------------------
 static constexpr uint console_n_elems
   = n_stereo_busses + 1 + (crossover_n_bands - 1);
@@ -5855,7 +5876,7 @@ parameter_cpp_class_define (
 using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #endif
 //------------------------------------------------------------------------------
-#if 1 // experiments
+#if 0 // experiments
 }
 } // namespace artv::parameters
 
@@ -5912,14 +5933,11 @@ using experiments_params
 #define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<
-  lr_crossv_params,
-  wonky_crossv_params,
-  lin_iir_crossv_params,
-  experiments_params>;
+using all_fx_typelists
+  = mp_list<lr_crossv_params, wonky_crossv_params, lin_iir_crossv_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "exp");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR");
 
 #else
 // clang-format off
@@ -6228,5 +6246,4 @@ static constexpr char const* about_text =
 "\n"
 ;
 // clang-format on
-}
-} // namespace artv::parameters
+}} // namespace artv::parameters

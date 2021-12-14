@@ -1,13 +1,18 @@
 #pragma once
 
+#include <complex>
+
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/simd_complex.hpp"
 
 namespace artv {
 
-static uint get_reversed_pole_n_stages (double pole_re, double snr_db)
+static uint get_reversed_pole_n_stages (
+  std::complex<double> pole,
+  double               snr_db)
 {
-  double stages = std::log2 (-snr_db / (20. * std::log10 (pole_re)));
+  auto   pole_mod = std::abs (pole); // modulus
+  double stages   = std::log2 (-snr_db / (20. * std::log10 (pole_mod)));
   return (uint) std::ceil (stages);
 }
 
