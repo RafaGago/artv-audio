@@ -37,8 +37,6 @@
   - Add the version with better precission which uses "sin" for coeff
    calculation ?
 
-- Channel labels (? The plugin is too cluttered vertically).
-
 - Now that latency compensation is implemented, plugins like Sonic Anomaly's
   Bass Professor mkII and VOLA are viable. Many that I ignored because of
   latencies are suitable again.

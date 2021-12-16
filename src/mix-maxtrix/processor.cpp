@@ -81,6 +81,7 @@ using indexed_all_fx_params_typelists
 juce::AudioProcessorEditor* new_editor (
   juce::AudioProcessor&               p,
   juce::AudioProcessorValueTreeState& params,
+  juce::ValueTree&                    gui_params,
   crange<foleys::LevelMeterSource>    meter_srcs);
 // -----------------------------------------------------------------------------
 class processor
@@ -96,9 +97,8 @@ public:
     for (auto& meter_src : _meters) {
       meter_src.setSuspended (true);
     }
-    // adding version
-    params.state.setProperty (
-      juce::Identifier ("plugin_version"), VERSION_INT, nullptr);
+
+    init_gui_params();
     this->setCurrentProgram (0);
 
     // register listeners for parameter changes.
@@ -123,7 +123,7 @@ public:
   //----------------------------------------------------------------------------
   juce::AudioProcessorEditor* createEditor() override
   {
-    return new_editor (*this, this->params, this->_meters);
+    return new_editor (*this, this->params, this->gui_data, this->_meters);
   }
   //----------------------------------------------------------------------------
   void processBlock (juce::AudioBuffer<float>& samples, juce::MidiBuffer& midi)
@@ -200,7 +200,12 @@ public:
   {
     assert (index >= 0 && index < getNumPrograms());
     _program = index;
-    set_apvts_state (juce::parseXML (presets[_program].xml));
+    set_state (juce::parseXML (presets[_program].xml));
+  }
+  //----------------------------------------------------------------------------
+  void setStateInformation (void const* src, int src_bytes) override
+  {
+    effect_base::setStateInformation (src, src_bytes);
   }
   //----------------------------------------------------------------------------
   const juce::String getProgramName (int index) override
@@ -210,6 +215,11 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
+  void preset_was_loaded (std::unique_ptr<juce::XmlElement>) override
+  {
+    params.state.setProperty (
+      juce::Identifier ("plugin_version"), VERSION_INT, nullptr);
+  }
   //----------------------------------------------------------------------------
   buffers<float>& get_buffers (float) { return _fsamples; }
   //----------------------------------------------------------------------------
@@ -781,6 +791,13 @@ private:
     }
     // creates "lat.size() * 2(L/R) buffers.
     _dly_comp_buffers.reset<uint> (lat);
+  }
+  //----------------------------------------------------------------------------
+  void init_gui_params()
+  {
+    for (auto txt : parameters::channel_text_keys) {
+      gui_data.setProperty (juce::Identifier (txt), "", nullptr);
+    }
   }
   //----------------------------------------------------------------------------
   void dly_compensate_post_input_mix (uint mix_chnl)

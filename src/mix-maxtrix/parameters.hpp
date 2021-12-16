@@ -6079,6 +6079,19 @@ using all_channel_sliders_typelist = mp11::mp_flatten<
 using parameters_typelist = mp11::mp_flatten<
   mp11::mp_list<all_controls_typelist, all_channel_sliders_typelist>>;
 
+//------------------------------------------------------------------------------
+static constexpr auto channel_text_keys = make_cstr_array (
+  "bus1_text",
+  "bus2_text",
+  "bus3_text",
+  "bus4_text",
+  "bus5_text",
+  "bus6_text",
+  "bus7_text",
+  "bus8_text");
+
+static_assert (channel_text_keys.size() == n_stereo_busses, "");
+//------------------------------------------------------------------------------
 // clang-format off
 static constexpr char const* about_text =
 "v" VERSION_TXT "\n"
@@ -6216,6 +6229,9 @@ static constexpr char const* about_text =
 "\n"
 "Using GCEM:\n"
 "https://github.com/kthohr/gcem.git\n"
+"\n"
+"Using FF-meters:\n"
+"https://github.com/ffAudio/ff_meters\n"
 "\n"
 "Some code is ported from DISHTRO-ports instead of its original repos:\n"
 "https://github.com/DISTRHO/DISTRHO-Ports\n"

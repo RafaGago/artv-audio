@@ -19,6 +19,7 @@
 #include "artv-common/juce/look_and_feel.hpp"
 #include "artv-common/juce/math.hpp"
 #include "artv-common/juce/parameters.hpp"
+#include "artv-common/juce/value_tree_attachments.hpp"
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/short_ints.hpp"
 
@@ -65,10 +66,12 @@ class editor : public juce::AudioProcessorEditor,
                public juce::DragAndDropContainer,
                private has_editor_params<parameters::parameters_typelist> {
 public:
+  static constexpr uint n_stereo_busses = parameters::n_stereo_busses;
   //----------------------------------------------------------------------------
   explicit editor (
     juce::AudioProcessor&               p,
     juce::AudioProcessorValueTreeState& params,
+    juce::ValueTree&                    gui_params,
     crange<foleys::LevelMeterSource>    meter_srcs)
     : AudioProcessorEditor (p), _processor (p)
   {
@@ -79,7 +82,7 @@ public:
     //        juce::Colours::red.brighter (0.4),
     //        juce::Colours::sienna,
 
-    for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
+    for (uint i = 0; i < n_stereo_busses; ++i) {
       _meters[i].setLookAndFeel (&_meters_look_feel[i]);
       _meters[i].setMeterSource (&meter_srcs[i]);
       meter_srcs[i].setSuspended (false);
@@ -144,7 +147,7 @@ public:
     }
 
     // setting descriptive names to the mixer to mixer send buttons
-    for (uint i = 1; i < parameters::n_stereo_busses; ++i) {
+    for (uint i = 1; i < n_stereo_busses; ++i) {
       // TODO: get {fmt}
       char str[64];
       str[0] = 0;
@@ -281,7 +284,7 @@ public:
     }
 
     // meter colors
-    for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
+    for (uint i = 0; i < n_stereo_busses; ++i) {
       _meters_look_feel[i].setColour (
         foleys::LevelMeter::lmMeterGradientLowColour,
         ch_color[i].brighter (1.1));
@@ -317,8 +320,8 @@ public:
     auto& mutesolo = p_get (parameters::mute_solo {});
 
     // button colors
-    constexpr uint nbuses = parameters::n_stereo_busses;
-    for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
+    constexpr uint nbuses = n_stereo_busses;
+    for (uint i = 0; i < n_stereo_busses; ++i) {
       set_color (
         juce::TextButton::buttonOnColourId,
         ch_color[i].brighter (0.5),
@@ -348,7 +351,7 @@ public:
       p_get (parameters::mixer_sends {})[0]->buttons);
 
     // radio grouping
-    for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
+    for (uint i = 0; i < n_stereo_busses; ++i) {
       mutesolo[i]->set_radio_group (radio_id::solo_mute_beg + i, true);
       mods[i]->set_radio_group (radio_id::stereo_cfg_beg + i, 1, 3, true);
       for (auto& btn : _page_buttons[i]) {
@@ -366,7 +369,7 @@ public:
       });
 
     // fx type events
-    for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
+    for (uint i = 0; i < n_stereo_busses; ++i) {
       auto& combo = p_get (parameters::fx_type {})[i]->combo;
       // fx change
       combo.onChange = [=] { on_fx_type_or_page_change (i, -1); };
@@ -396,11 +399,22 @@ public:
       parameters::all_fx_typelists,
       parameters::lin_iir_crossv_params>::value;
 
-    for (uint i = 1; i < parameters::n_stereo_busses; ++i) {
+    for (uint i = 1; i < n_stereo_busses; ++i) {
       auto& combo = p_get (parameters::fx_type {})[i]->combo;
       combo.setItemEnabled (crossv_id + 2, false);
       combo.setItemEnabled (wonky_crossv_id + 2, false);
       combo.setItemEnabled (lin_iir_crossv_id + 2, false);
+    }
+
+    // channel labels
+    for (uint i = 0; i < n_stereo_busses; ++i) {
+      juce::Label& lbl = _chnl_names[i];
+      lbl.setJustificationType (juce::Justification::centred);
+      lbl.setLookAndFeel (&_lookfeel);
+      lbl.setEditable (true);
+      _chnl_name_updates[i].reset (
+        gui_params, lbl, {parameters::channel_text_keys[i]}, nullptr, "-");
+      addAndMakeVisible (lbl);
     }
 
     // size
@@ -428,6 +442,9 @@ public:
     clear_widgets();
     _parameter_value.setLookAndFeel (nullptr);
     _parameter_value_frame.setLookAndFeel (nullptr);
+    for (auto& lbl : _chnl_names) {
+      lbl.setLookAndFeel (nullptr);
+    }
     for (auto& a1 : _fx_off_sliders) {
       for (auto& s : a1) {
         s.clear();
@@ -451,7 +468,7 @@ public:
   }
   //----------------------------------------------------------------------------
   struct sizes {
-    static constexpr float columns = parameters::n_stereo_busses;
+    static constexpr float columns = n_stereo_busses;
 
     static constexpr float sqr_btn_divs         = 4.f;
     static constexpr float fx_combobox_row_divs = sqr_btn_divs * 0.66;
@@ -512,7 +529,7 @@ public:
     static constexpr float mute_solo_button_col_divs = sqr_btn_divs * 2.;
 
     static constexpr float io_btns_row_divs
-      = sqr_btn_divs * (parameters::n_stereo_busses / 4);
+      = sqr_btn_divs * (n_stereo_busses / 4);
 
     static constexpr float w_divs
       = (columns * col_divs) + ((columns + 1.f) * col_separation_divs);
@@ -561,7 +578,7 @@ public:
     auto col_w = sizes::col_divs * w;
 
     auto get_columns = [=] (auto& area) {
-      std::array<juce::Rectangle<int>, parameters::n_stereo_busses> areas;
+      std::array<juce::Rectangle<int>, n_stereo_busses> areas;
       area.removeFromLeft (sep_w); // left margin
       for (size_t i = 0; i < areas.size(); ++i) {
         areas[i] = area.removeFromLeft (col_w);
@@ -848,7 +865,7 @@ public:
     area.removeFromTop (mix_snd_btn_rm_header);
     area.removeFromBottom (mix_snd_btn_rm_footer);
 
-    std::array<juce::Rectangle<int>, parameters::n_stereo_busses + 1> btn_areas;
+    std::array<juce::Rectangle<int>, n_stereo_busses + 1> btn_areas;
     for (uint i = 0; i < btn_areas.size(); ++i) {
       btn_areas[i] = area.removeFromLeft (sep_w);
       area.removeFromLeft (col_w);
@@ -860,6 +877,13 @@ public:
       mixsend_buttons[i - 1].setBounds (btn_areas[i]);
     }
     _side_lines[1].setBounds (btn_areas.back());
+
+    // Place the editable channel labels on top of the channel gains.
+    auto& chnl_params = p_get (parameters::volume {});
+    for (uint i = 0; i < n_stereo_busses; ++i) {
+      _chnl_names[i].setBounds (chnl_params[i]->label.getBounds());
+      chnl_params[i]->label.setVisible (false);
+    }
   }
   //----------------------------------------------------------------------------
   void paint (juce::Graphics& g) override
@@ -1026,7 +1050,7 @@ public:
     for (auto cptr : mixer_sends->get_components()) {
       cptr->setEnabled (true);
     }
-    for (uint i = gsz; i < parameters::n_stereo_busses; i += gsz) {
+    for (uint i = gsz; i < n_stereo_busses; i += gsz) {
       mixer_sends->get_components()[i - 1]->setEnabled (false);
     }
   }
@@ -1257,27 +1281,31 @@ private:
   using chnl_page_btns
     = std::array<add_juce_callbacks<juce::TextButton>, num_fx_pages>;
 
-  std::array<chnl_slider_array, parameters::n_stereo_busses> _fx_off_sliders;
-  std::array<chnl_page_btns, parameters::n_stereo_busses>    _page_buttons;
+  std::array<chnl_slider_array, n_stereo_busses> _fx_off_sliders;
+  std::array<chnl_page_btns, n_stereo_busses>    _page_buttons;
 
-  juce::Label                  _parameter_value;
-  juce::TextButton             _parameter_value_frame;
-  juce::TextButton             _about;
-  std::array<vertical_line, 2> _side_lines;
-  std::array<vertical_line, parameters::n_stereo_busses * 2> _fx_lines;
+  juce::Label                                    _parameter_value;
+  juce::TextButton                               _parameter_value_frame;
+  juce::TextButton                               _about;
+  std::array<vertical_line, 2>                   _side_lines;
+  std::array<vertical_line, n_stereo_busses * 2> _fx_lines;
 
-  std::array<foleys::LevelMeterLookAndFeel, parameters::n_stereo_busses>
-                                                              _meters_look_feel;
-  std::array<foleys::LevelMeter, parameters::n_stereo_busses> _meters;
-  crange<foleys::LevelMeterSource>                            _meter_srcs;
+  std::array<foleys::LevelMeterLookAndFeel, n_stereo_busses> _meters_look_feel;
+  std::array<foleys::LevelMeter, n_stereo_busses>            _meters;
+  crange<foleys::LevelMeterSource>                           _meter_srcs;
+
+  std::array<juce::Label, n_stereo_busses>                 _chnl_names;
+  std::array<value_tree_label_attachment, n_stereo_busses> _chnl_name_updates;
+
 }; // namespace artv
 //------------------------------------------------------------------------------
 juce::AudioProcessorEditor* new_editor (
   juce::AudioProcessor&               p,
   juce::AudioProcessorValueTreeState& params,
+  juce::ValueTree&                    gui_params,
   crange<foleys::LevelMeterSource>    meter_srcs)
 {
-  return new artv::editor (p, params, meter_srcs);
+  return new artv::editor (p, params, gui_params, meter_srcs);
 }
 // -----------------------------------------------------------------------------
 } // namespace artv

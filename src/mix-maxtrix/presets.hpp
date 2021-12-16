@@ -104,6 +104,7 @@ static constexpr preset presets[] = {
     <PARAM id="out_selection_05" value="0.0" />
     <PARAM id="out_selection_07" value="0.0" />
     <PARAM id="routing" value="0.0" />
+    <gui_data  bus1_text="Lows" bus2_text="Low Mids" bus3_text="Mids" bus4_text="Highs" />
 </params>
      )END"},
   {.name = "Mix: Console 6 Companding",
@@ -163,6 +164,7 @@ static constexpr preset presets[] = {
     <PARAM id="wet_balance_04" value="100.0" />
     <PARAM id="wet_pan_01" value="-100.0" />
     <PARAM id="wet_pan_02" value="100.0" />
+    <gui_data bus1_text="Left" bus2_text="Right" bus3_text="Mid" bus4_text="Side" bus5_text="All" bus7_text="Passhtrough" />
 </params>
      )END"},
   {.name = "FX: Phased Delay",
@@ -847,7 +849,7 @@ static constexpr preset presets[] = {
     <PARAM id="waveshaper_emphasis_q_06" value="5.160000324249268" />
     <PARAM id="waveshaper_envfollow_attack_05" value="14.30000019073486" />
     <PARAM id="waveshaper_envfollow_attack_06" value="19.30000114440918" />
-    <PARAM id="waveshaper_envfollow_mode_05" value="4.0" />
+    <PARAM id="waveshaper_envfollow_mode_05" value="3.0" />
     <PARAM id="waveshaper_envfollow_mode_06" value="1.0" />
     <PARAM id="waveshaper_envfollow_release_05" value="480.0" />
     <PARAM id="waveshaper_envfollow_release_06" value="481.0" />
