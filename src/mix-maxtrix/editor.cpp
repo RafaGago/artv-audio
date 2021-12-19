@@ -398,12 +398,16 @@ public:
     constexpr uint lin_iir_crossv_id = mp11::mp_find<
       parameters::all_fx_typelists,
       parameters::lin_iir_crossv_params>::value;
+    constexpr uint trans_crossv_id = mp11::mp_find<
+      parameters::all_fx_typelists,
+      parameters::trans_crossv_params>::value;
 
     for (uint i = 1; i < n_stereo_busses; ++i) {
       auto& combo = p_get (parameters::fx_type {})[i]->combo;
       combo.setItemEnabled (crossv_id + 2, false);
       combo.setItemEnabled (wonky_crossv_id + 2, false);
       combo.setItemEnabled (lin_iir_crossv_id + 2, false);
+      combo.setItemEnabled (trans_crossv_id + 2, false);
     }
 
     // channel labels
@@ -912,6 +916,9 @@ public:
         std::is_same_v<fxtl, parameters::lin_iir_crossv_params> && chnl != 0) {
         return;
       }
+      if (std::is_same_v<fxtl, parameters::trans_crossv_params> && chnl != 0) {
+        return;
+      }
       mp11::mp_for_each<fxtl> ([=] (auto param) {
         p_get (param)[chnl]->foreach_component (set_hidden);
       });
@@ -1015,10 +1022,13 @@ public:
     constexpr uint lin_iir_crossv_id = mp11::mp_find<
       parameters::all_fx_typelists,
       parameters::lin_iir_crossv_params>::value;
+    constexpr uint trans_crossv_id = mp11::mp_find<
+      parameters::all_fx_typelists,
+      parameters::trans_crossv_params>::value;
 
     // crossover only on channel 0.
     no_fx
-      |= ((fx_id == crossv_id || fx_id == wonky_crossv_id || fx_id == lin_iir_crossv_id) && chnl != 0);
+      |= ((fx_id == crossv_id || fx_id == wonky_crossv_id || fx_id == lin_iir_crossv_id || fx_id == trans_crossv_id) && chnl != 0);
     if (no_fx) {
       // loading a corrupted preset fixup
       combo.setSelectedId (1, juce::NotificationType::dontSendNotification);
@@ -1221,7 +1231,8 @@ public:
     using non_copyable_sliders = mp11::mp_flatten<mp11::mp_list<
       parameters::lr_crossv_params,
       parameters::wonky_crossv_params,
-      parameters::lin_iir_crossv_params>>;
+      parameters::lin_iir_crossv_params,
+      parameters::trans_crossv_params>>;
 
     using copyable_sliders
       = mp_remove_all<slider_typelist, non_copyable_sliders>;

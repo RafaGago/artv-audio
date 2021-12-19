@@ -85,6 +85,7 @@
 
 #include "mix-maxtrix/crossover.hpp"
 #include "mix-maxtrix/lin_crossover.hpp"
+#include "mix-maxtrix/transient_crossover.hpp"
 #include "mix-maxtrix/wonky_crossover.hpp"
 
 #include "artv-common/dsp/own/classes/mix.hpp"
@@ -727,6 +728,66 @@ using lin_iir_crossv_params = mp_list<
   lin_iir_crossv_band2_quality,
   lin_iir_crossv_band3_quality>;
 //------------------------------------------------------------------------------
+
+using mm_trans_crossv = mixmaxtrix_transient_crossover;
+
+parameter_cpp_class_define (
+  trans_crossv_attack,
+  1,
+  param_common (
+    "Attack",
+    declptr<mm_trans_crossv>(),
+    declptr<mm_trans_crossv::sattack_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::sattack_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  trans_crossv_decay,
+  1,
+  param_common (
+    "Decay",
+    declptr<mm_trans_crossv>(),
+    declptr<mm_trans_crossv::sdecay_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::sdecay_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  trans_crossv_gain_smooth,
+  1,
+  param_common (
+    "G Smooth",
+    declptr<mm_trans_crossv>(),
+    declptr<mm_trans_crossv::gainsmoothing_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::gainsmoothing_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  trans_crossv_detector,
+  1,
+  param_common (
+    "Detector",
+    declptr<mm_trans_crossv>(),
+    declptr<mm_trans_crossv::mode_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  trans_crossv_transient_bus,
+  1,
+  param_common (
+    "Trans Out",
+    declptr<mm_trans_crossv>(),
+    declptr<mm_trans_crossv::transient_output>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::transient_output {}),
+  slider_ext);
+
+using trans_crossv_params = mp_list<
+  trans_crossv_attack,
+  trans_crossv_decay,
+  trans_crossv_gain_smooth,
+  trans_crossv_detector,
+  trans_crossv_transient_bus>;
+//------------------------------------------------------------------------------
 static constexpr uint console_n_elems
   = n_stereo_busses + 1 + (crossover_n_bands - 1);
 
@@ -1279,7 +1340,7 @@ parameter_cpp_class_define (
   transience_mode,
   n_stereo_busses,
   param_common (
-    "Mode",
+    "Detector",
     declptr<updownsampled<saike::transience>>(),
     declptr<saike::transience::mode_tag>()),
   saike::transience::get_parameter (saike::transience::mode_tag {}),
@@ -5941,14 +6002,14 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  transience_params>;
+  trans_crossv_params>;
 
 static constexpr auto fx_choices
   = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "tran");
@@ -5999,7 +6060,8 @@ using all_fx_typelists = mp_list<
   waveshaper_params,
   lr_crossv_params,
   wonky_crossv_params,
-  lin_iir_crossv_params
+  lin_iir_crossv_params,
+  trans_crossv_params
   >;
 // clang-format on
 //------------------------------------------------------------------------------
@@ -6052,7 +6114,8 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Distortion ArtV Shaper",
   ":Filter Crossover LR",
   ":Filter Crossover WTF",
-  ":Filter Crossover Lin");
+  ":Filter Crossover Lin",
+  ":Filter Crossover Trans");
 
 #endif // #if TWEAK_BUILD
 

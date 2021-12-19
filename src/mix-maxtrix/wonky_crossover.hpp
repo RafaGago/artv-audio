@@ -1,5 +1,4 @@
 #pragma once
-#pragma once
 
 #include "artv-common/dsp/own/classes/wonky_crossover.hpp"
 #include "artv-common/dsp/types.hpp"

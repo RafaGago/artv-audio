@@ -6,10 +6,11 @@
   is more efficient than a FIR in number of operations, but it touches memory
   sparsely, so it is not as cache-friendly, which may result in higher CPU
   usage.
-- Make channel/bus labels editable and saved with the plugin state.
+- Add simple transient splitter/crossover.
+- Add channel/bus editable labels. Saved with the plugin state.
 - Fix latency not resetting to 0 correctly when switching back from a latency
   compensated plugin.
-- Fix some ordering issues when using the crossover.
+- Fix some processing ordering issues when using the crossover.
 
 1.1.1
 - waveshaper: fix noise on low level companding mode caused by a now removed DC

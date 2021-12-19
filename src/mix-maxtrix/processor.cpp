@@ -267,7 +267,8 @@ private:
 
       auto ch1_out_buff = -((s8) _io.n_busses + 1); // start at -9
 
-      for (uint i = 0; i < crossv_outs.size(); ++i, --ch1_out_buff) {
+      uint n_outs = _crossv_type != crossv_transient ? crossv_outs.size() : 1;
+      for (uint i = 0; i < n_outs; ++i, --ch1_out_buff) {
         uint dst_chnl = crossv_outs[i];
         assert (dst_chnl < parameters::n_stereo_busses);
         uint j = 0;
@@ -353,6 +354,11 @@ private:
                   parameters::all_fx_typelists,
                   parameters::lin_iir_crossv_params>::value
               + 1;
+            constexpr uint transient_crossv_id
+              = mp11::mp_find<
+                  parameters::all_fx_typelists,
+                  parameters::trans_crossv_params>::value
+              + 1;
 
             fx_type_changed[i] = val.changed();
             if (i != 0) {
@@ -368,14 +374,18 @@ private:
             else if (val.current == lin_iir_crossv_id) {
               _crossv_type = crossv_lin_iir;
             }
+            else if (val.current == transient_crossv_id) {
+              _crossv_type = crossv_transient;
+            }
             crossv_change = fx_type_changed[i]
               && (_crossv_type != crossv_off || val.previous == crossv_id
-                  || val.previous == wonky_crossv_id);
+                  || val.previous == wonky_crossv_id
+                  || val.previous == transient_crossv_id);
           }
           if constexpr (std::is_same_v<decltype (key), parameters::mute_solo>) {
             mutesolo.changed |= val.changed();
-            mutesolo.bits |= ((u64) val.current)
-              << (i * 2); // 2 mute solo bits.
+            // 2 = N mute solo bits.
+            mutesolo.bits |= ((u64) val.current) << (i * 2);
           }
         });
     }
@@ -420,7 +430,12 @@ private:
         crossv_change |= value.changed();
       });
     }
-
+    else if (unlikely (_crossv_type == crossv_transient)) {
+      auto value = p_refresh (parameters::trans_crossv_transient_bus {}, 0);
+      // notice: +1 because the crossover can't output on channel 0
+      crossv_outs[0] = value.current + 1;
+      crossv_change |= value.changed();
+    }
     if (unlikely (_non_fx_slider_refreshed.get_and_clear())) {
       p_refresh_many (parameters::all_nonfx_sliders_typelist {});
     }
@@ -880,6 +895,7 @@ private:
     crossv_normal,
     crossv_wonky,
     crossv_lin_iir,
+    crossv_transient
   };
   uint _crossv_type;
 
