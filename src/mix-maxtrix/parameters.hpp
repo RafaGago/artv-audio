@@ -1289,7 +1289,7 @@ parameter_cpp_class_define (
   transience_attack,
   n_stereo_busses,
   param_common (
-    "Attack",
+    "Attk T",
     declptr<updownsampled<saike::transience>>(),
     declptr<saike::transience::sattack_tag>()),
   saike::transience::get_parameter (saike::transience::sattack_tag {}),
@@ -1309,7 +1309,7 @@ parameter_cpp_class_define (
   transience_decay,
   n_stereo_busses,
   param_common (
-    "Decay",
+    "Decay T",
     declptr<updownsampled<saike::transience>>(),
     declptr<saike::transience::sdecay_tag>()),
   saike::transience::get_parameter (saike::transience::sdecay_tag {}),
@@ -1336,6 +1336,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  transience_gaincompensation,
+  n_stereo_busses,
+  param_common (
+    "G Compen",
+    declptr<updownsampled<saike::transience>>(),
+    declptr<saike::transience::compensate_tag>()),
+  saike::transience::get_parameter (saike::transience::compensate_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   transience_oversampling,
   n_stereo_busses,
   param_common (
@@ -1352,6 +1362,7 @@ using transience_params = mp_list<
   transience_decay_amt,
   transience_mode,
   transience_gainsmoothing,
+  transience_gaincompensation,
   transience_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
@@ -5933,11 +5944,14 @@ using experiments_params
 #define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
-using all_fx_typelists
-  = mp_list<lr_crossv_params, wonky_crossv_params, lin_iir_crossv_params>;
+using all_fx_typelists = mp_list<
+  lr_crossv_params,
+  wonky_crossv_params,
+  lin_iir_crossv_params,
+  transience_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "tran");
 
 #else
 // clang-format off

@@ -5,6 +5,9 @@
   use them, it will avoid multiplying every access by traits.size (the compiler
   will do it instead). I vaguely remember that this is legacy.
 
+- When applicable. Use the class to wrap our own (DSP) parts. It results in
+  more readable code.
+
 - Check csound's ZDF filters.
 
 - Check csound's DC blocker (dcblock2).

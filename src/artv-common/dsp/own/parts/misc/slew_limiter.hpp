@@ -33,13 +33,19 @@ struct slew_limiter {
 
     assert (c.size() >= (n_coeffs * traits.size));
 
-    attack_sec *= samplerate;
-    attack_sec = vec_exp ((T) -1. / attack_sec);
-    vec_store (&c[attack * traits.size], attack_sec);
+    auto zero = vec_set<V> ((T) 0);
 
-    release_sec *= samplerate;
-    release_sec = vec_exp ((T) -1. / release_sec);
-    vec_store (&c[release * traits.size], release_sec);
+    V atk = attack_sec;
+    atk *= samplerate;
+    atk = vec_exp ((T) -1. / atk);
+    atk = attack_sec != zero ? atk : zero;
+    vec_store (&c[attack * traits.size], atk);
+
+    V rel = release_sec;
+    rel *= samplerate;
+    rel = vec_exp ((T) -1. / rel);
+    rel = release_sec != zero ? rel : zero;
+    vec_store (&c[release * traits.size], rel);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
