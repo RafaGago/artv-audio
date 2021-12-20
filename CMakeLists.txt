@@ -99,6 +99,8 @@ else()
     endif()
 endif()
 
+set(HANA_CXX_FLAGS "-Wno-unused-value")
+
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set (
         ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST
@@ -110,6 +112,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         list (TRANSFORM ARTV_DSP_COMPILE_OPTIONS_LIST PREPEND "-clang:")
         list (TRANSFORM ARTV_PLAIN_COMPILE_OPTIONS_LIST PREPEND "-clang:")
         list (TRANSFORM ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST PREPEND "-clang:")
+        list (TRANSFORM HANA_CXX_FLAGS PREPEND "-clang:")
     endif()
 endif()
 
@@ -225,6 +228,8 @@ ExternalProject_Add(
 add_library (hana INTERFACE)
 target_include_directories (hana INTERFACE ${HANA_REPO}/include)
 add_dependencies (hana hana_fetch)
+# TODO check if future versions remove the need for this supression
+target_compile_options(hana INTERFACE ${HANA_CXX_FLAGS})
 #-- Boost mp11------------------------------------------------------------------
 set (MP11_REPO ${CMAKE_BINARY_DIR}/boost-mp11-git)
 
