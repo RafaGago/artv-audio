@@ -697,6 +697,24 @@ static inline auto vec_sqrt (V&& x)
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+static inline auto vec_cbrt (V&& x)
+{
+#if XSIMD_DISABLED == 0
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) { return xsimd::cbrt (std::forward<decltype (v)> (v)); },
+    [] (auto&& v) { return cbrt (v); });
+#else
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
+  for (uint i = 0; i < traits.size; ++i) {
+    ret[i] = cbrt (x[i]);
+  }
+  return ret;
+#endif
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_log (V&& x)
 {
 #if XSIMD_DISABLED == 0
@@ -727,6 +745,27 @@ static inline auto vec_log2 (V&& x)
   std::remove_reference_t<std::remove_cv_t<V>> ret;
   for (uint i = 0; i < traits.size; ++i) {
     ret[i] = log2 (x[i]);
+  }
+  return ret;
+#endif
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+static inline auto vec_log10 (V&& x)
+{
+#if XSIMD_DISABLED == 0
+  using T = vec_value_type_t<V>;
+  return detail::call_vec_function (
+    std::forward<V> (x),
+    [] (auto&& v) {
+      return xsimd::log (std::forward<decltype (v)> (v)) * (T) M_LOG10E;
+    },
+    [] (auto&& v) { return log10 (v); });
+#else
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
+  for (uint i = 0; i < traits.size; ++i) {
+    ret[i] = log10 (x[i]);
   }
   return ret;
 #endif

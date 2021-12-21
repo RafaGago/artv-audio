@@ -6,21 +6,19 @@
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
 
-// Quick and dirty. As of now just using the variant with M/L = 2. No need to
-// care about a recursive/non-recursive implementation (the recursive variant is
-// very efficient but has cummulative errors. Implementing as a template.
-//------------------------------------------------------------------------------
 namespace artv {
 
-// Aka box/boxcar
+// Quick and dirty. As of now just using the variant with M/L = 2. No need to
+// care about a recursive/non-recursive implementation (the recursive variant is
+// very efficient but has cummulative errors). Very small sizes are used.
+// Implementing as a template.
+//------------------------------------------------------------------------------
 template <uint L>
-struct moving_average;
-
-template <>
-struct moving_average<2> {
+struct moving_average {
+  static constexpr uint length = L;
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs };
-  enum state { z1, n_states };
+  enum state { n_states = length - 1 };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<vec_value_type_t<V>>)
@@ -54,15 +52,20 @@ struct moving_average<2> {
 
     assert (z.size() >= (traits.size * n_states));
 
-    auto z1_ptr = &z[z1 * traits.size];
-    V    ret    = vec_load<V> (z1_ptr);
-    ret += in;
-    ret *= (T) 0.5;
-    vec_store (z1_ptr, in);
-    return ret;
+    V sum  = in;
+    V prev = in;
+    for (uint i = 0; i < (length - 1); ++i) {
+      V next = vec_load<V> (z.data());
+      vec_store (z.data(), prev);
+      sum += next;
+      prev = next;
+      z    = z.shrink_head (traits.size);
+    }
+    static constexpr double coeff = (T) 1 / (T) length;
+    sum *= coeff;
+    return sum;
   }
   //----------------------------------------------------------------------------
 };
-
 //------------------------------------------------------------------------------
 } // namespace artv

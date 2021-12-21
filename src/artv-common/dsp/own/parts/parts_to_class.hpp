@@ -33,21 +33,22 @@ public:
   void reset_coeffs_on_idx (uint idx, Ts&&... args)
   {
     assert (idx < n_elems);
-    part::reset_coeffs (
+    part::template reset_coeffs<value_type> (
       make_crange (_coeffs[idx]).cast (builtin {}), std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   void reset_states_on_idx (uint idx)
   {
     assert (idx < n_elems);
-    part::reset_states (make_crange (_states[idx]).cast (builtin {}));
+    part::template reset_states<value_type> (
+      make_crange (_states[idx]).cast (builtin {}));
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
   auto tick_on_idx (uint idx, Ts&&... args)
   {
     assert (idx < n_elems);
-    return part::tick (
+    return part::template tick<value_type> (
       make_crange (_coeffs[idx]).cast (builtin {}),
       make_crange (_states[idx]).cast (builtin {}),
       std::forward<Ts> (args)...);

@@ -732,43 +732,74 @@ using lin_iir_crossv_params = mp_list<
 using mm_trans_crossv = mixmaxtrix_transient_crossover;
 
 parameter_cpp_class_define (
-  trans_crossv_attack,
-  1,
-  param_common (
-    "Attack",
-    declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::sattack_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::sattack_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
   trans_crossv_decay,
   1,
   param_common (
-    "Decay",
+    "Decay T",
     declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::sdecay_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::sdecay_tag {}),
+    declptr<mm_trans_crossv::decay_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::decay_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  trans_crossv_gain_smooth,
+  trans_crossv_decay_curve,
   1,
   param_common (
-    "G Smooth",
+    "Dec Curve",
     declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::gainsmoothing_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::gainsmoothing_tag {}),
+    declptr<mm_trans_crossv::decay_curve_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::decay_curve_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  trans_crossv_detector,
+  trans_crossv_detect_thres,
   1,
   param_common (
-    "Detector",
+    "Det Thres",
     declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::mode_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::mode_tag {}),
+    declptr<mm_trans_crossv::detector_threshold_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_threshold_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  trans_crossv_detect_hyster,
+  1,
+  param_common (
+    "Det Hyst",
+    declptr<mm_trans_crossv>(),
+    declptr<mm_trans_crossv::detector_hysteresis_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_hysteresis_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  trans_crossv_detect_ch_mode,
+  1,
+  param_common (
+    "Det Chnl",
+    declptr<mm_trans_crossv>(),
+    declptr<mm_trans_crossv::detector_channel_mode_tag>()),
+  mm_trans_crossv::get_parameter (
+    mm_trans_crossv::detector_channel_mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  trans_crossv_detect_curve,
+  1,
+  param_common (
+    "Det Curve",
+    declptr<mm_trans_crossv>(),
+    declptr<mm_trans_crossv::detector_curve_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_curve_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  trans_crossv_detect_speed,
+  1,
+  param_common (
+    "Det speed",
+    declptr<mm_trans_crossv>(),
+    declptr<mm_trans_crossv::detector_speed_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_speed_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -782,10 +813,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 using trans_crossv_params = mp_list<
-  trans_crossv_attack,
   trans_crossv_decay,
-  trans_crossv_gain_smooth,
-  trans_crossv_detector,
+  trans_crossv_decay_curve,
+  trans_crossv_detect_thres,
+  trans_crossv_detect_hyster,
+  trans_crossv_detect_ch_mode,
+  trans_crossv_detect_curve,
+  trans_crossv_detect_speed,
   trans_crossv_transient_bus>;
 //------------------------------------------------------------------------------
 static constexpr uint console_n_elems
