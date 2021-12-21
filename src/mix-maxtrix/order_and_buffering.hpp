@@ -55,6 +55,28 @@ public:
   static constexpr size_t n_receives = N_receives;
   using channel_io                   = std::array<s8, N>;
   using receives_in = std::array<std::array<s8, n_receives>, N>;
+
+  struct buff {
+    // buffer 0 means no buffer. Positive buffers are the ones passed by the
+    // DAW, negative ones our own.
+    // positive
+    static constexpr int daw     = 1;
+    static constexpr int daw_end = 1 + n_busses;
+    // negative
+    static constexpr int bus     = -1;
+    static constexpr int bus_end = bus - (int) n_busses;
+
+    static constexpr int send     = bus_end;
+    static constexpr int send_end = send - (int) (n_busses - 1);
+
+    static constexpr int crossv     = send_end;
+    static constexpr int crossv_end = crossv - (int) n_receives;
+
+    static constexpr uint total_daw      = daw_end - daw;
+    static constexpr uint total_internal = (-crossv_end) - 1;
+    static constexpr uint total          = total_daw + total_internal;
+    static constexpr uint n_send_busses  = -send_end - -send;
+  };
   //----------------------------------------------------------------------------
   // ch1_receives contains indexes of externally managed output buffers that
   // channel 1 can send elsewhere. As channel 1 sends might be latency
@@ -75,6 +97,7 @@ public:
     u64 send_outs, // bit stream of size N * N representing sends of mix chnls
     u64 mute_solo_v, // bit stream of size N * 2 (2 = mute + solo)
     u64 mixer2mixer_sends, // bit stream of size N.
+    u64 mixer2mixer_diff_sends, // bit stream of size N.
     receives_in            ch1_receives, // Ch1 sends a buffer
     uint                   n_groups_log2,
     bus_latency_arr const& mix_latencies,
@@ -94,6 +117,14 @@ public:
     mixer2mixer_sends &= ~m2ms_mask;
     u64 mixer2mixer_receives = mixer2mixer_sends << 1;
 
+    mixer2mixer_diff_sends &= ~m2ms_mask;
+    u64 mixer2mixer_diff_receives = mixer2mixer_diff_sends << 1;
+
+    // For dependency purposes receives with inverted channel are receives, it
+    // is just that the inverted ones need to use additioanal buffering
+    mixer2mixer_receives |= mixer2mixer_diff_receives;
+    mixer2mixer_sends |= mixer2mixer_diff_sends;
+
     // inhibit sending from channel 1 to channels on different groups
     for (uint i = (N / (1u << n_groups_log2)); i < N; ++i) {
       memset (&ch1_receives[i], 0, sizeof ch1_receives[i]);
@@ -103,9 +134,10 @@ public:
     memset (&receives, 0, sizeof receives);
     memset (&out, 0, sizeof out);
     memset (&swaps, 0, sizeof swaps);
+    memset (&diff_sends, 0, sizeof diff_sends);
 
     for (uint i = 0; i < N; ++i) {
-      mix[i]   = i + 1; // buffer ids are 1-indexed
+      mix[i]   = i + buff::daw; // buffer ids are 1-indexed
       order[i] = i;
     }
 
@@ -158,7 +190,7 @@ public:
         if ((ins & swap.bit_in_all) == (swap.bit_in_all & chnl.mask)) {
           // only this channel has the remote channel as input. Good
           // to swap.
-          swaps[chnl_idx] = swap_idx + 1; // buffers are 1 indexed
+          swaps[chnl_idx] = swap_idx + buff::daw;
           // update "ins" so the swap is not seen on the next steps.
           ins &= ~chnl.bit_in_all;
           ins |= chnl.bit << chnl.offset;
@@ -171,10 +203,10 @@ public:
       // after swapping.
       for (uint j = 0; j < N; ++j) {
         if ((ins >> chnl.offset) & (1 << j)) {
-          in[chnl_idx][j] = j + 1;
+          in[chnl_idx][j] = j + buff::daw;
         }
         if ((outs >> chnl.offset) & (1 << j)) {
-          out[chnl_idx][j] = j + 1;
+          out[chnl_idx][j] = j + buff::daw;
         }
       }
 
@@ -257,7 +289,7 @@ public:
           // there is either summing or processing that will destroy
           // the passed DAW buffer's contents. Requires internal
           // buffer (negative idx)
-          mix[chnl_idx] = -(chnl_idx + 1);
+          mix[chnl_idx] = buff::bus - (int) chnl_idx;
         }
       }
       if (((outs_s & ~ro_mask) & chnl.bit_in_all) > ro_mask) {
@@ -267,7 +299,7 @@ public:
         if ((outs_s & ro_mask) != ro_bit_in_self) {
           // there is summing that will destroy the mix buffer's
           // contents. Requires internal buffer (negative idx)
-          mix[chnl_idx] = -(chnl_idx + 1);
+          mix[chnl_idx] = buff::bus - (int) chnl_idx;
         }
       }
     }
@@ -288,10 +320,21 @@ public:
         continue;
       }
       // update neighboring mixer inputs
-      if (((1 << chnl) & mixer2mixer_receives) != 0) {
+      uint chnl_bit = 1 << chnl;
+      if ((chnl_bit & mixer2mixer_receives) != 0) {
         // receives from neighboring mixer
         assert (chnl > 0 && "The leftmost channel has no left neighbor mixer");
-        receives[chnl][0] = mix[chnl - 1];
+        bool needs_own_buffer = (chnl_bit & mixer2mixer_diff_receives) != 0;
+        if (!needs_own_buffer) {
+          receives[chnl][0] = mix[chnl - 1];
+        }
+        else {
+          // Signal diff channel sends needs a new buffer to store the data.
+          int l_neighbour         = chnl - 1;
+          int buff_id             = buff::send - l_neighbour;
+          receives[chnl][0]       = buff_id;
+          diff_sends[l_neighbour] = buff_id;
+        }
       }
     }
 
@@ -331,6 +374,7 @@ public:
     u64 send_outs, // bit stream of size N * N representing sends of mix chnls
     u64 mute_solo_v, // bit stream of size N * 2 (2 = mute + solo)
     u64 mixer2mixer_sends, // bit stream of size N.
+    u64 mixer2mixer_diff_sends, // bit stream of size N.
     receives_in            ch1_receives, // Ch1 sends a buffer
     uint                   n_groups_log2 = 0,
     bus_latency_arr const& mix_latencies = bus_latency_arr {})
@@ -340,6 +384,7 @@ public:
       send_outs,
       mute_solo_v,
       mixer2mixer_sends,
+      mixer2mixer_diff_sends,
       ch1_receives,
       n_groups_log2,
       mix_latencies,
@@ -385,6 +430,9 @@ public:
     }
     printf ("\n");
 
+    printf ("diff sends:");
+    dump_array (diff_sends);
+
     printf ("mix:");
     dump_array (mix);
 
@@ -414,6 +462,7 @@ public:
   receives_in               receives; // rcv (from neighbouring mixer or Ch1)
   std::array<channel_io, N> out;
   channel_io                mix; // buffers: 1 based indexes
+  channel_io                diff_sends; // buffers: 1 based indexes
   channel_io                swaps; // buffers: 1 based indexes
   channel_io                order; // channels: 0 based indexes
 

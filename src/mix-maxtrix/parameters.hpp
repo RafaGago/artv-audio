@@ -135,7 +135,21 @@ parameter_cpp_class_define (
   param_common(),
   toggle_buttons_param (
     0,
-    make_cstr_array (">", ">", ">", ">", ">", ">", ">"),
+    make_cstr_array (
+      ">",
+      ">",
+      ">",
+      ">",
+      ">",
+      ">",
+      ">",
+      "D",
+      "D",
+      "D",
+      "D",
+      "D",
+      "D",
+      "D"),
     16),
   void // defaulted
 );
@@ -6024,7 +6038,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<

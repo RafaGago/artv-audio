@@ -59,6 +59,7 @@ struct radio_id {
     solo_mute_beg  = (0 * parameters::n_stereo_busses) + 1,
     stereo_cfg_beg = (1 * parameters::n_stereo_busses) + 1,
     page_beg       = (2 * parameters::n_stereo_busses) + 1,
+    send_beg       = (3 * parameters::n_stereo_busses) + 1,
   };
 };
 // -----------------------------------------------------------------------------
@@ -146,13 +147,27 @@ public:
       widg_ptr->buttons[3].setName ("L/R swap");
     }
 
+    auto& mixer_sends = p_get (parameters::mixer_sends {});
     // setting descriptive names to the mixer to mixer send buttons
-    for (uint i = 1; i < n_stereo_busses; ++i) {
+    for (uint i = 0; i < num_mixer_sends; ++i) {
       // TODO: get {fmt}
       char str[64];
-      str[0] = 0;
-      snprintf (str, sizeof str, "Mix%u to Mix%u", i, i + 1);
-      p_get (parameters::mixer_sends {})[0]->buttons[i - 1].setName (str);
+      snprintf (str, sizeof str, "Mix%u to Mix%u", i + 1, i + 2);
+      mixer_sends[0]->buttons[i].setName (str);
+      uint up   = juce::TextButton::ConnectedOnTop;
+      uint left = juce::TextButton::ConnectedOnLeft;
+      mixer_sends[0]->buttons[i].setConnectedEdges (up | left);
+    }
+
+    for (uint i = num_mixer_sends; i < (num_mixer_sends * 2); ++i) {
+      // TODO: get {fmt}
+      char str[64];
+      auto idx = i - num_mixer_sends;
+      snprintf (str, sizeof str, "(Dry - Wet)%-u to Mix%u", idx + 1, idx + 2);
+      mixer_sends[0]->buttons[i].setName (str);
+      uint down = juce::TextButton::ConnectedOnBottom;
+      uint left = juce::TextButton::ConnectedOnLeft;
+      mixer_sends[0]->buttons[i].setConnectedEdges (down | left);
     }
 
     // setting a better description to the Dry/Wet parameters modifiers
@@ -356,6 +371,12 @@ public:
       mods[i]->set_radio_group (radio_id::stereo_cfg_beg + i, 1, 3, true);
       for (auto& btn : _page_buttons[i]) {
         btn.setRadioGroupId (radio_id::page_beg + i);
+      }
+      if (i < num_mixer_sends) {
+        auto id = i;
+        mixer_sends[0]->set_radio_group (radio_id::send_beg + i, id, id, true);
+        id = num_mixer_sends + i;
+        mixer_sends[0]->set_radio_group (radio_id::send_beg + i, id, id, true);
       }
     }
 
@@ -878,11 +899,20 @@ public:
     auto& mixsend_buttons = p_get (parameters::mixer_sends {})[0]->buttons;
     _side_lines[0].setBounds (btn_areas[0]);
     for (uint i = 1; i < btn_areas.size() - 1; ++i) {
-      mixsend_buttons[i - 1].setBounds (btn_areas[i]);
+      float w   = btn_areas[i].getWidth();
+      float h   = btn_areas[i].getHeight();
+      auto  idx = i - 1;
+      grid (
+        btn_areas[i],
+        w,
+        make_array (h / 2, h / 2),
+        mixsend_buttons[idx + n_stereo_busses - 1],
+        mixsend_buttons[idx]);
     }
     _side_lines[1].setBounds (btn_areas.back());
 
-    // Place the editable channel labels on top of the channel gains.
+    // Place the user-editable channel labels on the position of the channel
+    // gain labels.
     auto& chnl_params = p_get (parameters::volume {});
     for (uint i = 0; i < n_stereo_busses; ++i) {
       _chnl_names[i].setBounds (chnl_params[i]->label.getBounds());
@@ -1055,13 +1085,14 @@ public:
     assert (selected_id);
     --selected_id;
 
-    auto& mixer_sends = p_get (parameters::mixer_sends {})[0];
-    uint  gsz         = parameters::n_parallel_buses (selected_id);
-    for (auto cptr : mixer_sends->get_components()) {
+    auto mixer_sends = p_get (parameters::mixer_sends {})[0]->get_components();
+    uint gsz         = parameters::n_parallel_buses (selected_id);
+    for (auto cptr : mixer_sends) {
       cptr->setEnabled (true);
     }
     for (uint i = gsz; i < n_stereo_busses; i += gsz) {
-      mixer_sends->get_components()[i - 1]->setEnabled (false);
+      mixer_sends[i - 1]->setEnabled (false);
+      mixer_sends[i - 1 + num_mixer_sends]->setEnabled (false);
     }
   }
   //----------------------------------------------------------------------------
@@ -1284,6 +1315,7 @@ private:
   static constexpr uint num_fx_params   = 24;
   static constexpr uint num_fx_pages    = 3;
   static constexpr uint num_page_params = num_fx_params / num_fx_pages;
+  static constexpr uint num_mixer_sends = n_stereo_busses - 1;
 
   juce::AudioProcessor& _processor; // unused
   look_and_feel         _lookfeel;

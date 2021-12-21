@@ -10,6 +10,10 @@
 - Add channel/bus editable labels. Saved with the plugin state.
 - Fix latency not resetting to 0 correctly when switching back from a latency
   compensated plugin.
+- Allow sending the difference between the pre-fader Dry and the Wet signals to
+  the neighboring mixer. This allows e.g. having a transient gate act as a
+  transient splitter, get the inverted filter output from any linear-phase
+  or a pole IIR filter, etc.
 - Fix some processing ordering issues when using the crossover.
 
 1.1.1

@@ -91,8 +91,12 @@ public:
   //----------------------------------------------------------------------------
   processor()
     : effect_base {get_default_bus_properties(), make_apvts_layout()}
-    , _fsamples {parameters::n_stereo_busses * 2, parameters::n_crossovers * 3}
+    , _fsamples {
+        io_engine::buff::total_daw * 2,
+        (io_engine::buff::total_internal - io_engine::buff::total_daw) * 2}
   {
+    static_assert (io_engine::buff::total_daw == n_busses, ""); // documentation
+
     this->init_aptvs_references (params);
     for (auto& meter_src : _meters) {
       meter_src.setSuspended (true);
@@ -138,7 +142,7 @@ public:
     _fx_context.reset (*this, samplerate, fx_blocksize);
     _crossv_type = crossv_off;
 
-    for (uint i = 0; i < parameters::n_stereo_busses; ++i) {
+    for (uint i = 0; i < n_busses; ++i) {
       _mixer[i].reset (_fx_context);
       _mixer[i].skip_smoothing();
       _meters[i].resize (2, samplerate * 0.1 / max_block_samples);
@@ -156,7 +160,7 @@ public:
     // value on one variable affecting the routing, so when it is refreshed it
     // // will always have a change. This hack is done to avoid code bloating
     // this function.
-    p_get (parameters::in_selection {})[0] = 1 << parameters::n_stereo_busses;
+    p_get (parameters::in_selection {})[0] = 1 << n_busses;
     // force reloading of all parameters
     _routing_refreshed.parameterChanged ("", 0.f);
     _non_routing_refreshed.parameterChanged ("", 0.f);
@@ -167,17 +171,17 @@ public:
   {
     using namespace juce;
 
-    if (buses.inputBuses.size() > parameters::n_stereo_busses) {
+    if (buses.inputBuses.size() > n_busses) {
       return false;
     }
-    if (buses.outputBuses.size() > parameters::n_stereo_busses) {
+    if (buses.outputBuses.size() > n_busses) {
       return false;
     }
 
     AudioChannelSet stereo   = AudioChannelSet::stereo();
     AudioChannelSet disabled = AudioChannelSet::disabled();
 
-    for (int bus = 0; bus < parameters::n_stereo_busses; ++bus) {
+    for (int bus = 0; bus < n_busses; ++bus) {
       // only stereo or disabled buses.
       auto const& inbus  = buses.getChannelSet (true, bus);
       auto const& outbus = buses.getChannelSet (false, bus);
@@ -228,7 +232,7 @@ private:
   static BusesProperties get_default_bus_properties()
   {
     BusesProperties b;
-    for (uint i = 1; i <= parameters::n_stereo_busses; ++i) {
+    for (uint i = 1; i <= n_busses; ++i) {
       auto n = juce::String (i);
       b.addBus (true, "In-" + n, juce::AudioChannelSet::stereo(), true);
       b.addBus (false, "Out-" + n, juce::AudioChannelSet::stereo(), true);
@@ -255,8 +259,8 @@ private:
 
     assert (ins_arr.size() == outs_arr.size());
     for (uint i = 0; i < ins_arr.size(); ++i) {
-      ins |= (((u64) ins_arr[i]) << (i * parameters::n_stereo_busses));
-      outs |= (((u64) outs_arr[i]) << (i * parameters::n_stereo_busses));
+      ins |= (((u64) ins_arr[i]) << (i * n_busses));
+      outs |= (((u64) outs_arr[i]) << (i * n_busses));
     }
 
     // assigning crossover buffers. They override mixer 2 mixer sends.
@@ -265,12 +269,12 @@ private:
     _crossv_type = (ins_arr[0] == 0) ? crossv_off : _crossv_type;
     if (_crossv_type != crossv_off) {
 
-      auto ch1_out_buff = -((s8) _io.n_busses + 1); // start at -9
+      auto ch1_out_buff = io_engine::buff::crossv; // negative index
 
       uint n_outs = _crossv_type != crossv_transient ? crossv_outs.size() : 1;
       for (uint i = 0; i < n_outs; ++i, --ch1_out_buff) {
         uint dst_chnl = crossv_outs[i];
-        assert (dst_chnl < parameters::n_stereo_busses);
+        assert (dst_chnl < n_busses);
         uint j = 0;
         for (; j < ch1_recvs[0].size(); ++j) {
           if (ch1_recvs[dst_chnl][j] == 0) {
@@ -289,7 +293,8 @@ private:
       ins,
       outs,
       mute_solo_bits,
-      mixsends_arr[0],
+      mixsends_arr[0] & lsb_mask<u64> (io_engine::buff::n_send_busses),
+      mixsends_arr[0] >> io_engine::buff::n_send_busses,
       ch1_recvs,
       routing_mode,
       _fx_context.fx_latencies);
@@ -315,9 +320,9 @@ private:
     auto& buffers = get_buffers (T {});
     buffers.on_block (passed_buffers);
 
-    bool                                          routing_change = false;
-    mutesolo_state                                mutesolo {false, 0};
-    std::array<bool, parameters::n_stereo_busses> fx_type_changed = {};
+    bool                       routing_change = false;
+    mutesolo_state             mutesolo {false, 0};
+    std::array<bool, n_busses> fx_type_changed = {};
 
     // move (refresh) all non-fx parameters from JUCE's atomic_ptrs to local
     // member variables, so we read the same value for the whole duration on
@@ -448,7 +453,7 @@ private:
       mutesolo.changed = false;
     }
 
-    channels_mute_solo<parameters::n_stereo_busses> mixer_crossfade;
+    channels_mute_solo<n_busses> mixer_crossfade;
 
     if (likely (!mutesolo.changed)) {
       mixer_crossfade = _io.mute_solo;
@@ -464,7 +469,7 @@ private:
       }
     }
 
-    std::array<bool, parameters::n_stereo_busses> zeroed {};
+    std::array<bool, n_busses> zeroed {};
 
     uint rmode     = p_get (parameters::routing {})[0];
     uint n_gbusses = parameters::n_parallel_buses (rmode);
@@ -717,18 +722,25 @@ private:
     // getting the subbuffer for the negative bus buffer indexes, where the own
     // mix buffers and the crossover buffers are stored. Indexes become
     // positive.
-    constexpr auto crossv_1st         = parameters::n_stereo_busses * 2;
-    auto&          internal_audiobuff = buffers.get_audiobuffer (-1);
+    constexpr int crossv_1st    = (-io_engine::buff::crossv - 1) * 2;
+    auto&         internal_buff = buffers.get_audiobuffer (-1);
     static_assert (parameters::crossover_n_bands == 4, "Fix this");
+
     auto out_ptrs = make_array<T*> (
       blockbuff[0].data(),
       blockbuff[1].data(),
-      internal_audiobuff.getWritePointer (crossv_1st + 0), // -9 (pair)
-      internal_audiobuff.getWritePointer (crossv_1st + 1),
-      internal_audiobuff.getWritePointer (crossv_1st + 2), // -10 (pair)
-      internal_audiobuff.getWritePointer (crossv_1st + 3),
-      internal_audiobuff.getWritePointer (crossv_1st + 4), // -11 (pair)
-      internal_audiobuff.getWritePointer (crossv_1st + 5));
+      internal_buff.getWritePointer (crossv_1st + 0),
+      internal_buff.getWritePointer (crossv_1st + 1),
+      internal_buff.getWritePointer (crossv_1st + 2),
+      internal_buff.getWritePointer (crossv_1st + 3),
+      internal_buff.getWritePointer (crossv_1st + 4),
+      internal_buff.getWritePointer (crossv_1st + 5));
+
+    constexpr int inv_send_1st = (-io_engine::buff::send - 1) * 2;
+
+    auto diff_send = make_array<T*> (
+      internal_buff.getWritePointer (inv_send_1st + channel * 2),
+      internal_buff.getWritePointer (inv_send_1st + 1 + channel * 2));
 
     for (uint i = 0; i < samples;) {
       uint bsz = std::min<uint> (samples - i, fx_blocksize);
@@ -741,6 +753,17 @@ private:
         dly_compensate_fx_dry (channel, mix_bus, bsz);
       }
 
+      if (_io.diff_sends[channel] != 0) {
+        // send latency-compensated post-fx dry/wet difference to the neighbour
+        // bus at the right side.
+        for (uint i = 0; i < bsz; ++i) {
+          diff_send[0][i] = mix_bus[0][i] - blockbuff[0][i];
+          diff_send[1][i] = mix_bus[1][i] - blockbuff[1][i];
+        }
+        diff_send[0] += bsz;
+        diff_send[1] += bsz;
+      }
+
       auto mixer_in = make_array<T const*> (
         mix_bus[0], mix_bus[1], blockbuff[0].data(), blockbuff[1].data());
 
@@ -750,6 +773,7 @@ private:
       // advance non-blockwise buffers.
       mix_bus[0] += bsz;
       mix_bus[1] += bsz;
+
       for (uint j = 2; j < out_ptrs.size(); ++j) {
         out_ptrs[j] += bsz;
       }
@@ -794,15 +818,13 @@ private:
     // placing on the memory buffer in the most likely processing order:
     //
     // for all channels (post input mix + fx)
-    constexpr auto nbuses = parameters::n_stereo_busses;
+    std::array<uint, n_busses * 3> lat;
 
-    std::array<uint, nbuses * 3> lat;
-
-    for (uint i = 0; i < nbuses; ++i) {
-      uint off              = i * 2;
-      lat[off]              = _io.receives_latency[i];
-      lat[off + 1]          = _io.fx_latency[i];
-      lat[(nbuses * 2) + i] = _io.pre_output_mix_latency[i];
+    for (uint i = 0; i < n_busses; ++i) {
+      uint off                = i * 2;
+      lat[off]                = _io.receives_latency[i];
+      lat[off + 1]            = _io.fx_latency[i];
+      lat[(n_busses * 2) + i] = _io.pre_output_mix_latency[i];
     }
     // creates "lat.size() * 2(L/R) buffers.
     _dly_comp_buffers.reset<uint> (lat);
@@ -843,7 +865,7 @@ private:
     uint samples  = _fsamples.sample_count();
     auto chnlptrs = _fsamples.get_write_ptrs (_io.mix[mix_chnl]);
     // Mix bus compensations at the bottom, see "reset_latency_buffers"
-    uint id_l = (parameters::n_stereo_busses * (2 + 2)) + (mix_chnl * 2);
+    uint id_l = (n_busses * (2 + 2)) + (mix_chnl * 2);
     uint id_r = id_l + 1;
     _dly_comp_buffers.compensate (id_l, make_crange (chnlptrs[0], samples));
     _dly_comp_buffers.compensate (id_r, make_crange (chnlptrs[1], samples));
@@ -853,7 +875,7 @@ private:
   {
     auto& b = get_buffers (float {});
     for (uint i = 0; i < parameters::n_crossovers; ++i) {
-      b.clear (-(_io.n_busses + 1 + i));
+      b.clear (io_engine::buff::crossv - i);
     }
   }
   //----------------------------------------------------------------------------
@@ -874,16 +896,15 @@ private:
     std::atomic<uint> _count {0};
   };
   //----------------------------------------------------------------------------
-  using io_engine = order_and_buffering<
-    parameters::n_stereo_busses,
-    parameters::n_crossovers>;
+  static constexpr uint n_busses = parameters::n_stereo_busses;
+  using io_engine = order_and_buffering<n_busses, parameters::n_crossovers>;
 
-  mix_maxtrix_fx_context                                 _fx_context;
-  buffers<float>                                         _fsamples;
-  io_engine                                              _io;
-  std::array<dry_wet_mixer, parameters::n_stereo_busses> _mixer;
+  mix_maxtrix_fx_context              _fx_context;
+  buffers<float>                      _fsamples;
+  io_engine                           _io;
+  std::array<dry_wet_mixer, n_busses> _mixer;
 
-  std::array<dsp_variant, parameters::n_stereo_busses> _fx_dsp;
+  std::array<dsp_variant, n_busses> _fx_dsp;
 
   static constexpr uint fx_blocksize = 128;
   alignas (32) std::array<std::array<float, fx_blocksize>, 2> _fx_blockbuff;
@@ -899,8 +920,7 @@ private:
   };
   uint _crossv_type;
 
-  alignas (128)
-    std::array<foleys::LevelMeterSource, parameters::n_stereo_busses> _meters;
+  alignas (128) std::array<foleys::LevelMeterSource, n_busses> _meters;
 
   alignas (128) param_change_counter _routing_refreshed;
   param_change_counter _non_routing_refreshed;

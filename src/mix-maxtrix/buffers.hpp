@@ -15,12 +15,19 @@ namespace artv {
 // -----------------------------------------------------------------------------
 // This class gets really confusing, partially because a juce::AudioBuffer is
 // actually a collection of buffers. E.g. on an 8 in plugin it has 16 buffers.
+//
+// On this class the channel index refers to a null channel. Positive indexes
+// get the DAW/JUCE owned buffers. Negative indexes the internally owned ones.
 template <class T>
 struct buffers {
 public:
   using value_type = T;
   static_assert (std::is_floating_point<T>::value, "");
   //----------------------------------------------------------------------------
+  // channel_count: the number of mono buses required for storing the DAW passed
+  // buffers. An equal number of internal buses will be created.
+  //
+  // extra_count: An aditional number of internal mono buses to create.
   buffers (size_t channel_count, size_t extra_count = 0)
     : _internal {(int) channel_count + (int) extra_count, 64}
   {
