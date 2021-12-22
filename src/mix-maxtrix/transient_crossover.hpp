@@ -34,110 +34,106 @@ public:
     return choice_param (1, str_array, n_future_choices);
   }
   //----------------------------------------------------------------------------
-  struct detector_threshold_tag {};
+  struct detector_hipass_tag {};
 
-  void set (detector_threshold_tag, float v)
+  void set (detector_hipass_tag, float v)
   {
-    _transient.set_detector_threshold (v);
+    // Original slider line: slider3:scFreq=75<20, 500, 1>SC high pass [Hz]
+    // Range: min:20.0, max:500.0, default: 75.0, step: 1.0
+    v = midi_note_to_hz (v);
+    if (v == _hipass) {
+      return;
+    }
+    _hipass = v;
+    _transient.set_detector_hipass (v);
   }
 
-  static constexpr auto get_parameter (detector_threshold_tag)
+  static constexpr auto get_parameter (detector_hipass_tag)
   {
-    return float_param ("dB", 7.0, 30.0, 12.0, 0.01);
-  }
-  //----------------------------------------------------------------------------
-  struct detector_curve_tag {};
-
-  void set (detector_curve_tag, uint v) { _transient.set_detector_curve (v); }
-
-  static constexpr auto get_parameter (detector_curve_tag)
-  {
-    return choice_param (
-      2,
-      make_cstr_array (
-        "Inv Cubic", "Inv Squared", "Linear", "Squared", "Cubic"),
-      16);
+    return frequency_parameter (10.0, 1000.0, 75.0);
   }
   //----------------------------------------------------------------------------
-  struct detector_channel_mode_tag {};
+  struct detector_recovery_tag {};
 
-  void set (detector_channel_mode_tag, uint v)
+  void set (detector_recovery_tag, float v)
   {
-    _transient.set_channel_mode (v);
+    v *= 0.01f;
+    if (v == _recovery) {
+      return;
+    }
+    _recovery = v;
+    _transient.set_detector_recovery (v);
   }
 
-  static constexpr auto get_parameter (detector_channel_mode_tag)
+  static constexpr auto get_parameter (detector_recovery_tag)
+  {
+    return float_param ("%", 0.0, 100.0, 35., 0.1);
+  }
+  //----------------------------------------------------------------------------
+  struct detector_channels_tag {};
+
+  void set (detector_channels_tag, uint v)
+  {
+    _transient.set_detector_channels (v);
+  }
+
+  static constexpr auto get_parameter (detector_channels_tag)
   {
     return choice_param (0, make_cstr_array ("Stereo", "Mid", "L", "R"), 16);
   }
   //----------------------------------------------------------------------------
-  struct detector_hysteresis_tag {};
+  struct detector_shape_tag {};
 
-  void set (detector_hysteresis_tag, float v)
-  {
-    _transient.set_detector_hysteresis (v);
-  }
+  void set (detector_shape_tag, uint v) { _transient.set_detector_shape (v); }
 
-  static constexpr auto get_parameter (detector_hysteresis_tag)
+  static constexpr auto get_parameter (detector_shape_tag)
   {
-    return float_param ("", 0.0, 23.0, 7.0, 0.01);
-  }
-  //----------------------------------------------------------------------------
-  struct detector_speed_tag {};
-
-  void set (detector_speed_tag, float v)
-  {
-    if (v == _speed) {
-      return;
-    }
-    _speed = v;
-    _transient.set_detector_speed (v);
-  }
-
-  static constexpr auto get_parameter (detector_speed_tag)
-  {
-    return float_param ("", 0.0, 1.0, 0.35, 0.001);
+    return choice_param (
+      0,
+      make_cstr_array ("Linear", "Squared", "Cubic", "Quadratic", "Quintic"),
+      16);
   }
   //----------------------------------------------------------------------------
   struct decay_tag {};
 
   void set (decay_tag, float v)
   {
+    v *= 0.01f;
     if (v == _decay) {
       return;
     }
     _decay = v;
-    _transient.set_decay (v);
+    _transient.set_curve_decay (v);
   }
 
   static constexpr auto get_parameter (decay_tag)
   {
-    return float_param ("", 0.0, 1.0, 0.5, 0.001);
+    return float_param ("%", 0.0, 100.0, 25., 0.1);
   }
   //----------------------------------------------------------------------------
-  struct decay_curve_tag {};
+  struct decay_shape_tag {};
 
-  void set (decay_curve_tag, uint v) { _transient.set_decay_curve (v); }
+  void set (decay_shape_tag, uint v) { _transient.set_curve_decay_shape (v); }
 
-  static constexpr auto get_parameter (decay_curve_tag)
+  static constexpr auto get_parameter (decay_shape_tag)
   {
-    return get_parameter (detector_curve_tag {});
+    return get_parameter (detector_shape_tag {});
   }
   //----------------------------------------------------------------------------
   using parameters = mp_list<
     transient_output,
-    detector_threshold_tag,
-    detector_hysteresis_tag,
-    detector_curve_tag,
-    detector_channel_mode_tag,
-    detector_speed_tag,
+    detector_hipass_tag,
+    detector_recovery_tag,
+    detector_channels_tag,
+    detector_shape_tag,
     decay_tag,
-    decay_curve_tag>;
+    decay_shape_tag>;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
-    _speed = -1.;
-    _decay = -1.;
+    _recovery = -1.;
+    _decay    = -1.;
+    _hipass   = -1.;
     _transient.reset (pc.get_sample_rate());
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
@@ -178,8 +174,9 @@ public:
   //----------------------------------------------------------------------------
 private:
   transient_gate _transient;
-  float          _speed;
+  float          _hipass;
   float          _decay;
+  float          _recovery;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

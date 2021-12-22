@@ -742,64 +742,53 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  trans_crossv_decay_curve,
+  trans_crossv_decay_shape,
   1,
   param_common (
-    "Dec Curve",
+    "Dec Shape",
     declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::decay_curve_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::decay_curve_tag {}),
+    declptr<mm_trans_crossv::decay_shape_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::decay_shape_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  trans_crossv_detect_thres,
+  trans_crossv_detect_hipass,
   1,
   param_common (
-    "Det Thres",
+    "Det Hipass",
     declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::detector_threshold_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_threshold_tag {}),
+    declptr<mm_trans_crossv::detector_hipass_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_hipass_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  trans_crossv_detect_hyster,
+  trans_crossv_detect_recovery,
   1,
   param_common (
-    "Det Hyst",
+    "Det Recov",
     declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::detector_hysteresis_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_hysteresis_tag {}),
+    declptr<mm_trans_crossv::detector_recovery_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_recovery_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  trans_crossv_detect_ch_mode,
+  trans_crossv_detect_channels,
   1,
   param_common (
     "Det Chnl",
     declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::detector_channel_mode_tag>()),
-  mm_trans_crossv::get_parameter (
-    mm_trans_crossv::detector_channel_mode_tag {}),
+    declptr<mm_trans_crossv::detector_channels_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_channels_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  trans_crossv_detect_curve,
+  trans_crossv_detect_shape,
   1,
   param_common (
-    "Det Curve",
+    "Det Shape",
     declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::detector_curve_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_curve_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
-  trans_crossv_detect_speed,
-  1,
-  param_common (
-    "Det speed",
-    declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::detector_speed_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_speed_tag {}),
+    declptr<mm_trans_crossv::detector_shape_tag>()),
+  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_shape_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -814,12 +803,11 @@ parameter_cpp_class_define (
 
 using trans_crossv_params = mp_list<
   trans_crossv_decay,
-  trans_crossv_decay_curve,
-  trans_crossv_detect_thres,
-  trans_crossv_detect_hyster,
-  trans_crossv_detect_ch_mode,
-  trans_crossv_detect_curve,
-  trans_crossv_detect_speed,
+  trans_crossv_decay_shape,
+  trans_crossv_detect_recovery,
+  trans_crossv_detect_shape,
+  trans_crossv_detect_hipass,
+  trans_crossv_detect_channels,
   trans_crossv_transient_bus>;
 //------------------------------------------------------------------------------
 static constexpr uint console_n_elems
@@ -6036,7 +6024,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<

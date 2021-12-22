@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 
 #include <gcem.hpp>
@@ -8,7 +9,7 @@
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
 
-#include "artv-common/dsp/own/parts/filters/moving_average.hpp"
+#include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/dsp/own/parts/misc/slew_limiter.hpp"
 
 namespace artv {
@@ -26,154 +27,138 @@ public:
     detector_mid,
     detector_l,
     detector_r,
-    n_channel_modes
+    n_det_modes
   };
   //----------------------------------------------------------------------------
-  void set_channel_mode (uint m)
+  void set_detector_hipass (float hz)
   {
-    assert (m < n_channel_modes);
-    _channel_mode = (detector_mode) m;
+    _in_filter.reset_coeffs (vec_set<vec_type> (hz), _sample_rate);
   }
   //----------------------------------------------------------------------------
-  void set_detector_threshold (float db)
-  {
-    auto hyst     = _hi_threshold - _lo_threshold;
-    _hi_threshold = db;
-    set_detector_hysteresis (hyst);
-  }
-  //----------------------------------------------------------------------------
-  void set_detector_hysteresis (float db)
-  {
-    _lo_threshold = _hi_threshold - db;
-  }
-  //----------------------------------------------------------------------------
-  void set_detector_speed (float ratio)
+  void set_detector_recovery (float ratio)
   {
     assert (ratio >= 0. && ratio <= 1.);
-    static constexpr double beta  = gcem::log (80);
-    static constexpr double alpha = gcem::log (180.) - beta;
 
-    auto speed = exp (alpha * ratio + beta);
+    static constexpr double minv = gcem::log (1. / 10.);
+    static constexpr double maxv = gcem::log (1.) - minv;
+
+    double release_sec = exp (maxv * ratio + minv);
 
     _followers.reset_coeffs<flw_slow> (
-      vec_set<vec_type> (speed * 0.001),
-      vec_set<vec_type> (0.2 * 0.001),
+      vec_set<vec_type> (attack_sec),
+      vec_set<vec_type> (release_sec),
+      _sample_rate);
+
+    _followers.reset_coeffs<flw_fast> (
+      vec_set<vec_type> (attack_sec * 0.1),
+      vec_set<vec_type> (release_sec),
       _sample_rate);
   }
   //----------------------------------------------------------------------------
-  void set_decay (float ratio)
+  void set_detector_channels (uint m)
+  {
+    assert (m < n_det_modes);
+    _det_mode = (detector_mode) m;
+  }
+  //----------------------------------------------------------------------------
+  void set_curve_decay (float ratio)
   {
     assert (ratio >= 0. && ratio <= 1.);
-    static constexpr double beta  = gcem::log (40);
-    static constexpr double alpha = gcem::log (320.) - beta;
 
-    auto decay = exp (alpha * ratio + beta);
-    // the sample rate is divided by 2 because this was prototyped on JSFX using
-    // another envelope code. TODO: fix on the constants above.
+    static constexpr double minv = gcem::log (1. / 1000.);
+    static constexpr double maxv = gcem::log (.5) - minv;
+
+    double release_sec = exp (maxv * ratio + minv);
+
     _followers.reset_coeffs<flw_gate> (
-      vec_set<vec_type> (0.001 * 0.001),
-      vec_set<vec_type> (decay * 0.001),
+      vec_set<vec_type> (1. / 2000.),
+      vec_set<vec_type> (release_sec),
       _sample_rate);
   }
   //----------------------------------------------------------------------------
-  void set_decay_curve (uint v)
+  void set_curve_decay_shape (uint v)
   {
     assert (v <= 5);
-    _decay_curve = v;
+    _curve_shape = v;
   }
   //----------------------------------------------------------------------------
-  void set_detector_curve (uint v)
+  void set_detector_shape (uint v)
   {
     assert (v <= 5);
-    _detector_curve = v;
+    _det_shape = v;
   }
   //----------------------------------------------------------------------------
   void reset (uint sample_rate)
   {
-    _sample_rate    = sample_rate;
-    _hi_threshold   = 0.;
-    _lo_threshold   = 0.;
-    _channel_mode   = detector_stereo;
-    _decay_curve    = 2;
-    _detector_curve = 2;
+    _sample_rate = sample_rate;
+    _det_mode    = detector_stereo;
+    _det_shape   = 0;
+    _curve_shape = 0;
+
     _followers.reset_states_cascade();
     _in_filter.reset_states();
-    // the sample rate is divided by 2 because this was prototyped on JSFX using
-    // another envelope code. TODO: fix on the constants above.
-    _followers.reset_coeffs<flw_fast> (
-      vec_set<vec_type> (1. * 0.001),
-      vec_set<vec_type> (1. * 0.001),
-      _sample_rate);
+    _gate_filter.reset_states();
+    _gate_filter.reset_coeffs (vec_set<vec_type> (250.), _sample_rate);
   };
   //----------------------------------------------------------------------------
   vec_type tick (vec_type in)
   {
-    // filter
-    vec_type lp = _in_filter.tick (in);
-    // not strictly a correct hipass without an input delay, as the boxcar has
-    // latency. This is still enough for the purposes of a detector.
-    vec_type hp = in - lp;
+    vec_type spl = _in_filter.tick (in);
 
-    // detector channel/mode select
-    switch (_channel_mode) {
+    switch (_det_mode) {
     case detector_stereo:
-      hp = vec_abs (hp);
+      spl = vec_abs (spl);
       break;
     case detector_mid:
-      hp[0] = (std::abs (hp[0]) + std::abs (hp[1])) * 0.5;
-      hp[1] = hp[0];
+      spl[0] = (std::abs (spl[0]) + std::abs (spl[1])) * 0.5;
+      spl[1] = spl[0];
       break;
     case detector_l:
-      hp[1] = hp[0];
-      hp    = vec_abs (hp);
+      spl[1] = spl[0];
+      spl    = vec_abs (spl);
       break;
     case detector_r:
-      hp[0] = hp[1];
-      hp    = vec_abs (hp);
+      spl[0] = spl[1];
+      spl    = vec_abs (spl);
       break;
     default:
       assert (false);
     }
 
-    hp = apply_curve (hp, _detector_curve); // tons of aliasing on the detector?
+    spl = apply_shape (spl, _det_shape);
+    // logaritmic space envelopes
+    spl           = vec_log (spl + 0.00000000000000001);
+    vec_type fast = vec_exp (_followers.tick<flw_fast> (spl));
+    vec_type slow = vec_exp (_followers.tick<flw_slow> (spl));
 
-    // dB space detection.
-    vec_type gain = 20. * vec_log10 (vec_max (vec_set<vec_type> (0.001), hp));
-    vec_type fast = _followers.tick<flw_fast> (gain);
-    vec_type slow = _followers.tick<flw_slow> (gain);
-    vec_type diff = fast - slow;
+    vec_type gate = (fast - slow) / fast; // A ratio. 0 to 1
 
-    auto over  = diff > vec_set<vec_type> (_hi_threshold);
-    auto under = diff < vec_set<vec_type> (_lo_threshold);
-    _detect_on = _detect_on && !under ? !vec_set<vec_cmp_type> (0) : over;
-    vec_type gate
-      = _detect_on ? vec_set<vec_type> (1.) : vec_set<vec_type> (0.);
-
-    // Smooth the transient gate signal with a third follower
     gate = _followers.tick<flw_gate> (gate);
-    gate = apply_curve (gate, _decay_curve);
+    gate = _gate_filter.tick (gate);
+    gate = apply_shape (gate, _curve_shape);
 
     return in * gate;
   }
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  vec_type apply_curve (vec_type in, uint mode)
+  vec_type apply_shape (vec_type in, uint mode)
   {
+    // TODO: ADAA for the aliasing?
     switch (mode) {
     case 0:
-      in = vec_cbrt (in);
       break;
     case 1:
-      in = vec_sqrt (in);
-      break;
-    case 2:
-      break;
-    case 3:
       in *= in;
       break;
-    case 4:
+    case 2:
       in *= in * in;
+      break;
+    case 3:
+      in *= in * in * in;
+      break;
+    case 4:
+      in *= in * in * in * in;
       break;
     default:
       assert (false);
@@ -181,17 +166,18 @@ private:
     return in;
   }
   //----------------------------------------------------------------------------
+  static constexpr double attack_sec = 1. / 200.; // 200Hz seconds
+
   enum followers { flw_gate, flw_fast, flw_slow, n_flw };
   part_to_class<vec_type, slew_limiter, n_flw> _followers;
-  part_to_class<vec_type, moving_average<4>>   _in_filter;
+  part_to_class<vec_type, onepole_highpass>    _in_filter;
+  part_to_class<vec_type, onepole_lowpass>     _gate_filter;
 
-  double        _sample_rate;
-  double        _hi_threshold;
-  double        _lo_threshold;
-  detector_mode _channel_mode;
-  uint          _decay_curve;
-  uint          _detector_curve;
-  vec_cmp_type  _detect_on {};
+  double _sample_rate;
+  uint   _det_shape;
+  uint   _curve_shape;
+
+  detector_mode _det_mode;
 };
 //------------------------------------------------------------------------------
 }; // namespace artv
