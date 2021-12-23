@@ -168,6 +168,7 @@ public:
       uint down = juce::TextButton::ConnectedOnBottom;
       uint left = juce::TextButton::ConnectedOnLeft;
       mixer_sends[0]->buttons[i].setConnectedEdges (down | left);
+      mixer_sends[0]->buttons[i].setEnabled (false);
     }
 
     // setting a better description to the Dry/Wet parameters modifiers
@@ -1056,6 +1057,12 @@ public:
       parameters::all_fx_typelists,
       parameters::trans_crossv_params>::value;
 
+    if (chnl < num_mixer_sends) {
+      uint groupsize = get_n_parallel_buses();
+      bool on = channel_send_always_disabled (chnl, groupsize) ? false : !no_fx;
+      auto msends = p_get (parameters::mixer_sends {})[0]->get_components();
+      msends[num_mixer_sends + chnl]->setEnabled (on);
+    }
     // crossover only on channel 0.
     no_fx
       |= ((fx_id == crossv_id || fx_id == wonky_crossv_id || fx_id == lin_iir_crossv_id || fx_id == trans_crossv_id) && chnl != 0);
@@ -1080,20 +1087,34 @@ public:
   //----------------------------------------------------------------------------
   void on_routing_change()
   {
+    auto mixer_sends = p_get (parameters::mixer_sends {})[0]->get_components();
+    uint group_size  = get_n_parallel_buses();
+    for (auto cptr : mixer_sends) {
+      cptr->setEnabled (true);
+    }
+    for (uint i = 0; i < n_stereo_busses; ++i) {
+      // redraw by fx, as the mixer send diff buttons might be disabled already
+      on_fx_type_or_page_change (i, -1);
+      if (channel_send_always_disabled (i, group_size)) {
+        mixer_sends[i - 1]->setEnabled (false);
+        mixer_sends[i - 1 + num_mixer_sends]->setEnabled (false);
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  uint get_n_parallel_buses()
+  {
     auto& routing_combo = p_get (parameters::routing {})[0]->combo;
     auto  selected_id   = routing_combo.getSelectedId();
     assert (selected_id);
     --selected_id;
-
-    auto mixer_sends = p_get (parameters::mixer_sends {})[0]->get_components();
-    uint gsz         = parameters::n_parallel_buses (selected_id);
-    for (auto cptr : mixer_sends) {
-      cptr->setEnabled (true);
-    }
-    for (uint i = gsz; i < n_stereo_busses; i += gsz) {
-      mixer_sends[i - 1]->setEnabled (false);
-      mixer_sends[i - 1 + num_mixer_sends]->setEnabled (false);
-    }
+    return parameters::n_parallel_buses (selected_id);
+  }
+  //----------------------------------------------------------------------------
+  bool channel_send_always_disabled (uint chnl, uint n_parallel_buses)
+  {
+    assert (chnl < n_stereo_busses);
+    return ((chnl + 1) % n_parallel_buses) == 0;
   }
   //----------------------------------------------------------------------------
   void mouse_event (

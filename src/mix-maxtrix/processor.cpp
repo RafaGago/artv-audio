@@ -247,6 +247,7 @@ private:
   //----------------------------------------------------------------------------
   void io_recompute (
     u64                                         mute_solo_bits,
+    u64                                         fx_enabled_bits,
     std::array<uint, parameters::n_crossovers>& crossv_outs)
   {
     auto& ins_arr      = p_get (parameters::in_selection {});
@@ -268,7 +269,6 @@ private:
 
     _crossv_type = (ins_arr[0] == 0) ? crossv_off : _crossv_type;
     if (_crossv_type != crossv_off) {
-
       auto ch1_out_buff = io_engine::buff::crossv; // negative index
 
       uint n_outs = _crossv_type != crossv_transient ? crossv_outs.size() : 1;
@@ -287,6 +287,8 @@ private:
       }
     }
 
+    auto& fx_type = p_get (parameters::fx_type {});
+
     uint routing_mode = (uint) routing_arr[0];
 
     _io.recompute (
@@ -294,7 +296,7 @@ private:
       outs,
       mute_solo_bits,
       mixsends_arr[0] & lsb_mask<u64> (io_engine::buff::n_send_busses),
-      mixsends_arr[0] >> io_engine::buff::n_send_busses,
+      (mixsends_arr[0] >> io_engine::buff::n_send_busses) & fx_enabled_bits,
       ch1_recvs,
       routing_mode,
       _fx_context.fx_latencies);
@@ -323,6 +325,7 @@ private:
     bool                       routing_change = false;
     mutesolo_state             mutesolo {false, 0};
     std::array<bool, n_busses> fx_type_changed = {};
+    u64                        fx_enabled_bits = 0;
 
     // move (refresh) all non-fx parameters from JUCE's atomic_ptrs to local
     // member variables, so we read the same value for the whole duration on
@@ -342,7 +345,7 @@ private:
       // because io recompute will need the mute_solo bits.
       p_refresh_many (
         parameters::non_routing_controls_typelist {},
-        [&] (auto key, uint i, auto val) {
+        [&] (auto key, uint chnl, auto val) {
           if constexpr (std::is_same_v<decltype (key), parameters::fx_type>) {
             constexpr uint crossv_id
               = mp11::mp_find<
@@ -365,8 +368,11 @@ private:
                   parameters::trans_crossv_params>::value
               + 1;
 
-            fx_type_changed[i] = val.changed();
-            if (i != 0) {
+            // this channel was sending an FX diff that now has to be cleared
+            fx_enabled_bits |= ((u64) val.current != 0) << chnl;
+            routing_change |= (val.current == 0 && _io.diff_sends[chnl] != 0);
+            fx_type_changed[chnl] = val.changed();
+            if (chnl != 0) {
               return; // crossover only on channel 0
             }
             _crossv_type = crossv_off;
@@ -382,7 +388,7 @@ private:
             else if (val.current == transient_crossv_id) {
               _crossv_type = crossv_transient;
             }
-            crossv_change = fx_type_changed[i]
+            crossv_change = fx_type_changed[chnl]
               && (_crossv_type != crossv_off || val.previous == crossv_id
                   || val.previous == wonky_crossv_id
                   || val.previous == transient_crossv_id);
@@ -390,7 +396,7 @@ private:
           if constexpr (std::is_same_v<decltype (key), parameters::mute_solo>) {
             mutesolo.changed |= val.changed();
             // 2 = N mute solo bits.
-            mutesolo.bits |= ((u64) val.current) << (i * 2);
+            mutesolo.bits |= ((u64) val.current) << (chnl * 2);
           }
         });
     }
@@ -449,7 +455,7 @@ private:
           routing_change || _fx_context.fx_latencies_changed
           || crossv_change)) {
       // not delaying mute and solo...
-      io_recompute (mutesolo.bits, crossv_outs);
+      io_recompute (mutesolo.bits, fx_enabled_bits, crossv_outs);
       mutesolo.changed = false;
     }
 
@@ -518,7 +524,7 @@ private:
       // cause a 1 audio buffer delay when unmuting + 1 audio buffer
       // crossfade when unmuting, but it is the only sensible way to do when
       // having a dynamic buffer ordering optimization.
-      io_recompute (mutesolo.bits, crossv_outs);
+      io_recompute (mutesolo.bits, fx_enabled_bits, crossv_outs);
     }
   }
   //----------------------------------------------------------------------------
