@@ -164,12 +164,6 @@ struct presence_high_shelf {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>)
-  {}
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st)
   {
     using T               = vec_value_type_t<V>;

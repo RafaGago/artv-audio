@@ -67,12 +67,6 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>)
-  {}
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st, uint order)
   {
     using T               = vec_value_type_t<V>;
@@ -166,8 +160,7 @@ public:
   static_assert (
     order > 0 && order <= cascade_type::max_order
     && "Unsupported filter order.");
-  //----------------------------------------------------------------------------
-  static void fix_unsmoothable_coeffs (crange<double>, crange<const double>) {}
+
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
@@ -189,12 +182,6 @@ public:
     assert (st.size() >= numstates);
     memset (st.data(), 0, sizeof (T) * numstates);
   }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>)
-  {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (

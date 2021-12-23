@@ -113,9 +113,13 @@ public:
     }
     return out;
   }
-//----------------------------------------------------------------------------
-#if 0
-  // TODO: forward fix unsmoothable coeffs if external smoothing is required.
+  //----------------------------------------------------------------------------
+  template <uint Idx>
+  std::array<value_type, part::n_coeffs>& get_coeffs()
+  {
+    static_assert (Idx < n_elems, "");
+    return _coeffs[Idx];
+  }
   //----------------------------------------------------------------------------
   std::array<value_type, part::n_coeffs>* get_coeffs (uint idx = 0)
   {
@@ -123,7 +127,6 @@ public:
     return (idx < n_elems) ? &_coeffs[idx] : nullptr;
   }
   //----------------------------------------------------------------------------
-#endif
 private:
   std::array<std::array<value_type, part::n_coeffs>, n_elems> _coeffs;
   std::array<std::array<value_type, part::n_states>, n_elems> _states;

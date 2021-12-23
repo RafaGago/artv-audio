@@ -150,12 +150,6 @@ struct svf_multimode {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>)
-  {}
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st)
   {
     using T               = vec_value_type_t<V>;
@@ -442,12 +436,6 @@ struct svf {
     vec_store (&c[m1 * traits.size], coeffs.k * (1. - coeffs.A) * coeffs.A);
     vec_store (&c[m2 * traits.size], 1. - (coeffs.A * coeffs.A));
   }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>)
-  {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st)

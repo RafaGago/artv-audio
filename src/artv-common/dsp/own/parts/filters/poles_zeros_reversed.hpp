@@ -46,13 +46,6 @@ struct t_rev_rpole {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>,
-    uint stages)
-  {}
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st, uint n_stages)
   {
     using T               = vec_value_type_t<V>;
@@ -167,13 +160,6 @@ struct t_rev_cpole {
     vec_store (&co[a * traits.size], real);
     vec_store (&co[b * traits.size], imag);
   }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>,
-    uint)
-  {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st, uint n_stages)
@@ -331,13 +317,6 @@ struct t_rev_ccpole_pair {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>,
-    uint)
-  {}
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st, uint n_stages)
   {
     t_rev_cpole::reset_states (st, n_stages);
@@ -424,12 +403,6 @@ struct t_rev_rpole_rzero {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>)
-  {}
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st, uint n_stages)
   {
     using T               = vec_value_type_t<V>;
@@ -501,12 +474,6 @@ struct t_rev_ccpole_pair_rzero_pair {
     co = co.shrink_head (t_rev_ccpole_pair::n_coeffs * traits.size);
     rzero::reset_coeffs (co, re_zero);
   }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>)
-  {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st, uint n_stages)

@@ -60,13 +60,6 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>,
-    uint stages)
-  {}
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st, uint stages)
   {
     using T               = vec_value_type_t<V>;
@@ -195,16 +188,6 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>       dst,
-    crange<vec_value_type_t<const V>> src,
-    uint                              order,
-    uint                              stages)
-  {
-    // TODO: it is actually known to be a no-op. Left for when required.
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (
     crange<vec_value_type_t<V>> st,
     uint                        order,
@@ -330,23 +313,6 @@ struct linear_iir_butterworth_lowpass_any_order {
     }
     else {
       any::reset_coeffs (co, freq, sr, order);
-    }
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>       dst,
-    crange<vec_value_type_t<const V>> src,
-    uint                              order,
-    uint                              n_stages)
-  {
-    assert ((order % 2) == 0);
-    assert (order <= max_order);
-    if (order == 2) {
-      two::fix_unsmoothable_coeffs (dst, src, n_stages);
-    }
-    else {
-      any::fix_unsmoothable_coeffs (dst, src, order, n_stages);
     }
   }
   //----------------------------------------------------------------------------

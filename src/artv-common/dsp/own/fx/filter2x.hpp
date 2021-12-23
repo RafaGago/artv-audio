@@ -407,13 +407,9 @@ public:
 
         double_x2 fb_gain = vec_set<double_x2> (smoothed_p.vars.feedback);
         if (is_moog_1 (btype)) {
-          saike::moog_1::fix_unsmoothable_coeffs<double_x2> (
-            smoothed_band_coeffs, _coeffs[b]);
           fb_gain *= 0.03; // moogs are extremely unstable reduce feedback
         }
         else if (is_moog_2 (btype)) {
-          saike::moog_2::fix_unsmoothable_coeffs<double_x2> (
-            smoothed_band_coeffs, _coeffs[b]);
           fb_gain *= 0.03; // moogs are extremely unstable reduce feedback
         }
 

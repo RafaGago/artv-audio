@@ -36,10 +36,6 @@ struct iir_dc_blocker {
     vec_store (&c[R * traits.size], Rv);
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static void fix_unsmoothable_coeffs (crange<T>, crange<const T>)
-  {}
-  //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
     crange<const vec_value_type_t<V>> c,
@@ -106,12 +102,6 @@ struct mystran_dc_blocker {
   {
     onepole_smoother::reset_coeffs (c, freq, sr);
   }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>)
-  {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st)
@@ -183,12 +173,6 @@ struct mystran_dc_blocker_2pole {
 
     andy::svf_lowpass::reset_coeffs (c, freq, vec_set<V> (butterworth_q), sr);
   }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>)
-  {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st)

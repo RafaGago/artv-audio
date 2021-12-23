@@ -117,14 +117,6 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>       dst,
-    crange<vec_value_type_t<const V>> src)
-  {
-    cascade_type::fix_unsmoothable_coeffs (dst, src);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st, uint order)
   {
     cascade_type::reset_states (st, order);
@@ -183,14 +175,6 @@ public:
   static void reset_states (crange<vec_value_type_t<V>> st)
   {
     butterworth_type::reset_states (st, order);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>       dst,
-    crange<vec_value_type_t<const V>> src)
-  {
-    butterworth_type::fix_unsmoothable_coeffs (dst, src);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

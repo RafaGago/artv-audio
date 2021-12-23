@@ -55,12 +55,6 @@ struct ms20_base {
   enum state { y1, y2, d1, d2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>)
-  {}
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st)
   {
     using T               = vec_value_type_t<V>;
@@ -789,12 +783,6 @@ struct steiner_base {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>,
-    crange<vec_value_type_t<const V>>)
-  {}
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st)
   {
     using T               = vec_value_type_t<V>;
@@ -1129,22 +1117,6 @@ struct moog_1 {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>       co_smooth,
-    crange<vec_value_type_t<const V>> co)
-  {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= (n_coeffs * traits.size));
-    assert (co_smooth.size() >= (n_coeffs * traits.size));
-
-    // the filter type as an integer can't be smoothed
-    memcpy (
-      &co_smooth[choice * traits.size], &co[choice * traits.size], sizeof (V));
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st)
   {
     using T               = vec_value_type_t<V>;
@@ -1164,41 +1136,37 @@ struct moog_1 {
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
-    using uint_vec        = typename decltype (traits)::same_size_uint_type;
 
     assert (st.size() >= (n_states * traits.size));
     assert (co.size() >= (n_coeffs * traits.size));
 
-    V k_v    = vec_load<V> (&co[k * traits.size]);
-    V q0s_v  = vec_load<V> (&co[q0s * traits.size]);
-    V r1s_v  = vec_load<V> (&co[r1s * traits.size]);
-    V k0s_v  = vec_load<V> (&co[k0s * traits.size]);
-    V k0g_v  = vec_load<V> (&co[k0g * traits.size]);
-    V rg1_v  = vec_load<V> (&co[rg1 * traits.size]);
-    V rg2_v  = vec_load<V> (&co[rg2 * traits.size]);
-    V rg3_v  = vec_load<V> (&co[rg3 * traits.size]);
-    V rg4_v  = vec_load<V> (&co[rg4 * traits.size]);
-    V qg1_v  = vec_load<V> (&co[qg1 * traits.size]);
-    V qg2_v  = vec_load<V> (&co[qg2 * traits.size]);
-    V qg3_v  = vec_load<V> (&co[qg3 * traits.size]);
-    V qg4_v  = vec_load<V> (&co[qg4 * traits.size]);
-    V frac_v = vec_load<V> (&co[frac * traits.size]);
-
-    auto choice_f = vec_load<V> (&co[choice * traits.size]);
-    auto choice_v = *reinterpret_cast<uint_vec*> (&choice_f);
-
-    V sf1_v = vec_load<V> (&st[sf1 * traits.size]);
-    V sf2_v = vec_load<V> (&st[sf2 * traits.size]);
-    V sf3_v = vec_load<V> (&st[sf3 * traits.size]);
-    V sf4_v = vec_load<V> (&st[sf4 * traits.size]);
-    V sg1_v = vec_load<V> (&st[sg1 * traits.size]);
-    V sg2_v = vec_load<V> (&st[sg2 * traits.size]);
-    V sg3_v = vec_load<V> (&st[sg3 * traits.size]);
-    V sg4_v = vec_load<V> (&st[sg4 * traits.size]);
-    V si1_v = vec_load<V> (&st[si1 * traits.size]);
-    V si2_v = vec_load<V> (&st[si2 * traits.size]);
-    V si3_v = vec_load<V> (&st[si3 * traits.size]);
-    V si4_v = vec_load<V> (&st[si4 * traits.size]);
+    V k_v      = vec_load<V> (&co[k * traits.size]);
+    V q0s_v    = vec_load<V> (&co[q0s * traits.size]);
+    V r1s_v    = vec_load<V> (&co[r1s * traits.size]);
+    V k0s_v    = vec_load<V> (&co[k0s * traits.size]);
+    V k0g_v    = vec_load<V> (&co[k0g * traits.size]);
+    V rg1_v    = vec_load<V> (&co[rg1 * traits.size]);
+    V rg2_v    = vec_load<V> (&co[rg2 * traits.size]);
+    V rg3_v    = vec_load<V> (&co[rg3 * traits.size]);
+    V rg4_v    = vec_load<V> (&co[rg4 * traits.size]);
+    V qg1_v    = vec_load<V> (&co[qg1 * traits.size]);
+    V qg2_v    = vec_load<V> (&co[qg2 * traits.size]);
+    V qg3_v    = vec_load<V> (&co[qg3 * traits.size]);
+    V qg4_v    = vec_load<V> (&co[qg4 * traits.size]);
+    V frac_v   = vec_load<V> (&co[frac * traits.size]);
+    V choice_v = vec_load<V> (&co[choice * traits.size]);
+    V sf1_v    = vec_load<V> (&st[sf1 * traits.size]);
+    V sf2_v    = vec_load<V> (&st[sf2 * traits.size]);
+    V sf3_v    = vec_load<V> (&st[sf3 * traits.size]);
+    V sf4_v    = vec_load<V> (&st[sf4 * traits.size]);
+    V sg1_v    = vec_load<V> (&st[sg1 * traits.size]);
+    V sg2_v    = vec_load<V> (&st[sg2 * traits.size]);
+    V sg3_v    = vec_load<V> (&st[sg3 * traits.size]);
+    V sg4_v    = vec_load<V> (&st[sg4 * traits.size]);
+    V si1_v    = vec_load<V> (&st[si1 * traits.size]);
+    V si2_v    = vec_load<V> (&st[si2 * traits.size]);
+    V si3_v    = vec_load<V> (&st[si3 * traits.size]);
+    V si4_v    = vec_load<V> (&st[si4 * traits.size]);
 
     V yo  = vec_tanh_approx_vaneev (k0g_v * (in + sg1_v));
     V a   = yo;
@@ -1236,7 +1204,7 @@ struct moog_1 {
     sg4_v = rg4_v * in + qg4_v * yf;
 
     V f1, f2;
-    switch (choice_v[0]) {
+    switch ((uint) choice_v[0]) {
     case 0:
       f1 = y * ((T) 1. + k_v);
       f2 = (T) vt2 * ((T) 2. * c - (T) 2. * b);
@@ -1292,7 +1260,6 @@ private:
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
-    using uint_vec        = typename decltype (traits)::same_size_uint_type;
 
     assert (co.size() >= (n_coeffs * traits.size));
     // The original filter freq seems to be off by 10% 22000 vs 20000kHz.
@@ -1341,9 +1308,11 @@ private:
     vec_store (&co[qg3 * traits.size], -4.0 * (kgn + acc));
     acc *= tmp;
     vec_store (&co[qg4 * traits.size], -1.0 * (kgn + acc));
-    // vector types are defined with __may_alias__ reinterpret is fine.
-    auto ft = vec_set<uint_vec> (filter_type);
-    vec_store (&co[choice * traits.size], *reinterpret_cast<V*> (&ft));
+
+    // this integer shouldn't be part of a filter, it will delay when smoothing
+    // adding 0.5 so it can effectively reach its value when casted to uint.
+    auto cho = vec_set<V> ((T) filter_type + (T) 0.5);
+    vec_store (&co[choice * traits.size], cho);
     vec_store (&co[frac * traits.size], fraction);
   }
 };
@@ -1392,7 +1361,6 @@ struct moog_2 {
   {
     reset_coeffs (co, freq, reso, 1, vec_set<V> (0.), sr);
   }
-
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
@@ -1417,22 +1385,6 @@ struct moog_2 {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void fix_unsmoothable_coeffs (
-    crange<vec_value_type_t<V>>       co_smooth,
-    crange<vec_value_type_t<const V>> co)
-  {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= (n_coeffs * traits.size));
-    assert (co_smooth.size() >= (n_coeffs * traits.size));
-
-    // the filter type as an integer can't be smoothed
-    memcpy (
-      &co_smooth[choice * traits.size], &co[choice * traits.size], sizeof (V));
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st)
   {
     using T               = vec_value_type_t<V>;
@@ -1452,31 +1404,27 @@ struct moog_2 {
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
-    using uint_vec        = typename decltype (traits)::same_size_uint_type;
 
     assert (st.size() >= (n_states * traits.size));
     assert (co.size() >= (n_coeffs * traits.size));
 
-    V k_v    = vec_load<V> (&co[k * traits.size]);
-    V q0s_v  = vec_load<V> (&co[q0s * traits.size]);
-    V r1s_v  = vec_load<V> (&co[r1s * traits.size]);
-    V k0s_v  = vec_load<V> (&co[k0s * traits.size]);
-    V k0g_v  = vec_load<V> (&co[k0g * traits.size]);
-    V rg1_v  = vec_load<V> (&co[rg1 * traits.size]);
-    V rg2_v  = vec_load<V> (&co[rg2 * traits.size]);
-    V qg1_v  = vec_load<V> (&co[qg1 * traits.size]);
-    V qg2_v  = vec_load<V> (&co[qg2 * traits.size]);
-    V frac_v = vec_load<V> (&co[frac * traits.size]);
-
-    auto choice_f = vec_load<V> (&co[choice * traits.size]);
-    auto choice_v = *reinterpret_cast<uint_vec*> (&choice_f);
-
-    V sf1_v = vec_load<V> (&st[sf1 * traits.size]);
-    V sf2_v = vec_load<V> (&st[sf2 * traits.size]);
-    V sg1_v = vec_load<V> (&st[sg1 * traits.size]);
-    V sg2_v = vec_load<V> (&st[sg2 * traits.size]);
-    V si1_v = vec_load<V> (&st[si1 * traits.size]);
-    V si2_v = vec_load<V> (&st[si2 * traits.size]);
+    V k_v      = vec_load<V> (&co[k * traits.size]);
+    V q0s_v    = vec_load<V> (&co[q0s * traits.size]);
+    V r1s_v    = vec_load<V> (&co[r1s * traits.size]);
+    V k0s_v    = vec_load<V> (&co[k0s * traits.size]);
+    V k0g_v    = vec_load<V> (&co[k0g * traits.size]);
+    V rg1_v    = vec_load<V> (&co[rg1 * traits.size]);
+    V rg2_v    = vec_load<V> (&co[rg2 * traits.size]);
+    V qg1_v    = vec_load<V> (&co[qg1 * traits.size]);
+    V qg2_v    = vec_load<V> (&co[qg2 * traits.size]);
+    V frac_v   = vec_load<V> (&co[frac * traits.size]);
+    V choice_v = vec_load<V> (&co[choice * traits.size]);
+    V sf1_v    = vec_load<V> (&st[sf1 * traits.size]);
+    V sf2_v    = vec_load<V> (&st[sf2 * traits.size]);
+    V sg1_v    = vec_load<V> (&st[sg1 * traits.size]);
+    V sg2_v    = vec_load<V> (&st[sg2 * traits.size]);
+    V si1_v    = vec_load<V> (&st[si1 * traits.size]);
+    V si2_v    = vec_load<V> (&st[si2 * traits.size]);
 
     V yo  = vec_tanh_approx_vaneev (k0g_v * (in + sg1_v));
     V a   = yo;
@@ -1498,7 +1446,7 @@ struct moog_2 {
     sg2_v = rg2_v * in + qg2_v * yf;
 
     V f1, f2;
-    switch (choice_v[0]) {
+    switch ((uint) choice_v[0]) {
     case 0:
       f1 = y * ((T) 1. + k_v);
       f2 = (T) vt2 * ((T) 2. * b - (T) 2. * yo) * (T) 8.;
@@ -1549,7 +1497,6 @@ private:
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
-    using uint_vec        = typename decltype (traits)::same_size_uint_type;
 
     assert (co.size() >= (n_coeffs * traits.size));
     // The original filter freq seems to be off by 10% 22000 vs 20000kHz.
@@ -1592,9 +1539,10 @@ private:
     vec_store (&co[rg2 * traits.size], rg2_v);
     vec_store (&co[qg1 * traits.size], qg1_v);
     vec_store (&co[qg2 * traits.size], qg2_v);
-    // vector types are defined with __may_alias__ reinterpret is fine.
-    auto ft = vec_set<uint_vec> (filter_type);
-    vec_store (&co[choice * traits.size], *reinterpret_cast<V*> (&ft));
+    // this integer shouldn't be part of a filter, it will delay when smoothing
+    // adding 0.5 so it can effectively reach its value when casted to uint.
+    auto cho = vec_set<V> ((T) filter_type + (T) 0.5);
+    vec_store (&co[choice * traits.size], cho);
     vec_store (&co[frac * traits.size], fraction);
   }
 };
