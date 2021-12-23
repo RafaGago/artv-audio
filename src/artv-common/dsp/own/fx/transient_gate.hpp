@@ -8,7 +8,7 @@
 namespace artv {
 
 //------------------------------------------------------------------------------
-struct mixmaxtrix_transient_crossover {
+struct transient_gate_fx {
 public:
   using V = vec<double, 1>;
   using T = double;
@@ -16,30 +16,21 @@ public:
   static constexpr dsp_types dsp_type  = dsp_types::dynamics;
   static constexpr bus_types bus_type  = bus_types::stereo;
   static constexpr uint      n_inputs  = 1;
-  static constexpr uint      n_outputs = 2;
+  static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
-  struct transient_output {};
+  struct output_tag {};
 
-  void set (transient_output, int)
-  {
-    // dummy, to be used by processor
-  }
-  //----------------------------------------------------------------------------
-  static constexpr auto get_parameter (transient_output)
-  {
-    constexpr auto str_array = make_cstr_array (
-      "bus2", "bus3", "bus4", "bus5", "bus6", "bus7", "bus8");
-    constexpr uint n_future_choices = 16;
+  void set (output_tag, uint v) { _is_tonal = (v == 1); }
 
-    return choice_param (1, str_array, n_future_choices);
+  static constexpr auto get_parameter (output_tag)
+  {
+    return choice_param (0, make_cstr_array ("Transient", "Tonal"), 8);
   }
   //----------------------------------------------------------------------------
   struct detector_hipass_tag {};
 
   void set (detector_hipass_tag, float v)
   {
-    // Original slider line: slider3:scFreq=75<20, 500, 1>SC high pass [Hz]
-    // Range: min:20.0, max:500.0, default: 75.0, step: 1.0
     v = midi_note_to_hz (v);
     if (v == _hipass) {
       return;
@@ -121,7 +112,7 @@ public:
   }
   //----------------------------------------------------------------------------
   using parameters = mp_list<
-    transient_output,
+    output_tag,
     detector_hipass_tag,
     detector_recovery_tag,
     detector_channels_tag,
@@ -134,6 +125,7 @@ public:
     _recovery = -1.;
     _decay    = -1.;
     _hipass   = -1.;
+    _is_tonal = false;
     _transient.reset (pc.get_sample_rate());
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
@@ -143,30 +135,36 @@ public:
   template <class T>
   void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
-    std::array<double_x2, 32>                in;
-    std::array<std::array<double_x2, 2>, 32> out;
+    static constexpr uint in  = 0;
+    static constexpr uint out = 1;
+
+    std::array<std::array<double_x2, 2>, 32> io;
 
     size_t done = 0;
     while (done < samples) {
-      uint blocksize = std::min (samples - done, in.size());
+      uint blocksize = std::min (samples - done, io.size());
       // interleaving
       for (uint i = 0; i < blocksize; ++i) {
-        in[i][0] = ins[0][done + i];
-        in[i][1] = ins[1][done + i];
+        io[i][in][0] = ins[0][done + i];
+        io[i][in][1] = ins[1][done + i];
       }
       // process
       for (uint i = 0; i < blocksize; ++i) {
-        auto spl       = in[i];
-        auto transient = _transient.tick (spl);
-        out[i][0]      = spl - transient;
-        out[i][1]      = transient;
+        io[i][out] = _transient.tick (io[i][in]);
       }
       // deinterleaving
-      for (uint i = 0; i < blocksize; ++i) {
-        outs[0][done + i] = out[i][0][0];
-        outs[1][done + i] = out[i][0][1];
-        outs[2][done + i] = out[i][1][0];
-        outs[3][done + i] = out[i][1][1];
+      if (!_is_tonal) {
+        for (uint i = 0; i < blocksize; ++i) {
+          outs[0][done + i] = io[i][out][0];
+          outs[1][done + i] = io[i][out][1];
+        }
+      }
+      else {
+        for (uint i = 0; i < blocksize; ++i) {
+          auto diff         = io[i][in] - io[i][out];
+          outs[0][done + i] = diff[0];
+          outs[1][done + i] = diff[1];
+        }
       }
       done += blocksize;
     };
@@ -177,6 +175,7 @@ private:
   float          _hipass;
   float          _decay;
   float          _recovery;
+  bool           _is_tonal;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

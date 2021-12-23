@@ -76,6 +76,7 @@
 #include "artv-common/dsp/own/fx/eq4x.hpp"
 #include "artv-common/dsp/own/fx/filter2x.hpp"
 #include "artv-common/dsp/own/fx/phaser.hpp"
+#include "artv-common/dsp/own/fx/transient_gate.hpp"
 #include "artv-common/dsp/own/fx/waveshaper.hpp"
 
 #include "artv-common/dsp/own/fx/sound_delay.hpp"
@@ -85,7 +86,6 @@
 
 #include "mix-maxtrix/crossover.hpp"
 #include "mix-maxtrix/lin_crossover.hpp"
-#include "mix-maxtrix/transient_crossover.hpp"
 #include "mix-maxtrix/wonky_crossover.hpp"
 
 #include "artv-common/dsp/own/classes/mix.hpp"
@@ -742,88 +742,6 @@ using lin_iir_crossv_params = mp_list<
   lin_iir_crossv_band2_quality,
   lin_iir_crossv_band3_quality>;
 //------------------------------------------------------------------------------
-
-using mm_trans_crossv = mixmaxtrix_transient_crossover;
-
-parameter_cpp_class_define (
-  trans_crossv_decay,
-  1,
-  param_common (
-    "Decay T",
-    declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::decay_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::decay_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
-  trans_crossv_decay_shape,
-  1,
-  param_common (
-    "Dec Shape",
-    declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::decay_shape_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::decay_shape_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
-  trans_crossv_detect_hipass,
-  1,
-  param_common (
-    "Det Hipass",
-    declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::detector_hipass_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_hipass_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
-  trans_crossv_detect_recovery,
-  1,
-  param_common (
-    "Det Recov",
-    declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::detector_recovery_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_recovery_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
-  trans_crossv_detect_channels,
-  1,
-  param_common (
-    "Det Chnl",
-    declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::detector_channels_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_channels_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
-  trans_crossv_detect_shape,
-  1,
-  param_common (
-    "Det Shape",
-    declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::detector_shape_tag>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::detector_shape_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
-  trans_crossv_transient_bus,
-  1,
-  param_common (
-    "Trans Out",
-    declptr<mm_trans_crossv>(),
-    declptr<mm_trans_crossv::transient_output>()),
-  mm_trans_crossv::get_parameter (mm_trans_crossv::transient_output {}),
-  slider_ext);
-
-using trans_crossv_params = mp_list<
-  trans_crossv_decay,
-  trans_crossv_decay_shape,
-  trans_crossv_detect_recovery,
-  trans_crossv_detect_shape,
-  trans_crossv_detect_hipass,
-  trans_crossv_detect_channels,
-  trans_crossv_transient_bus>;
-//------------------------------------------------------------------------------
 static constexpr uint console_n_elems
   = n_stereo_busses + 1 + (crossover_n_bands - 1);
 
@@ -1406,7 +1324,7 @@ parameter_cpp_class_define (
   transience_decay,
   n_stereo_busses,
   param_common (
-    "Decay T",
+    "Dec Time",
     declptr<updownsampled<saike::transience>>(),
     declptr<saike::transience::sdecay_tag>()),
   saike::transience::get_parameter (saike::transience::sdecay_tag {}),
@@ -5970,6 +5888,87 @@ using waveshaper_params = mp_list<
   waveshaper_mode,
   waveshaper_oversampling>;
 //------------------------------------------------------------------------------
+parameter_cpp_class_define (
+  transient_gate_decay,
+  n_stereo_busses,
+  param_common (
+    "Dec Time",
+    declptr<transient_gate_fx>(),
+    declptr<transient_gate_fx::decay_tag>()),
+  transient_gate_fx::get_parameter (transient_gate_fx::decay_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  transient_gate_decay_shape,
+  n_stereo_busses,
+  param_common (
+    "Dec Shape",
+    declptr<transient_gate_fx>(),
+    declptr<transient_gate_fx::decay_shape_tag>()),
+  transient_gate_fx::get_parameter (transient_gate_fx::decay_shape_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  transient_gate_detect_hipass,
+  n_stereo_busses,
+  param_common (
+    "Det Hipass",
+    declptr<transient_gate_fx>(),
+    declptr<transient_gate_fx::detector_hipass_tag>()),
+  transient_gate_fx::get_parameter (transient_gate_fx::detector_hipass_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  transient_gate_detect_recovery,
+  n_stereo_busses,
+  param_common (
+    "Det Recov",
+    declptr<transient_gate_fx>(),
+    declptr<transient_gate_fx::detector_recovery_tag>()),
+  transient_gate_fx::get_parameter (
+    transient_gate_fx::detector_recovery_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  transient_gate_detect_channels,
+  n_stereo_busses,
+  param_common (
+    "Det Chnl",
+    declptr<transient_gate_fx>(),
+    declptr<transient_gate_fx::detector_channels_tag>()),
+  transient_gate_fx::get_parameter (
+    transient_gate_fx::detector_channels_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  transient_gate_detect_shape,
+  n_stereo_busses,
+  param_common (
+    "Det Shape",
+    declptr<transient_gate_fx>(),
+    declptr<transient_gate_fx::detector_shape_tag>()),
+  transient_gate_fx::get_parameter (transient_gate_fx::detector_shape_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  transient_gate_output,
+  n_stereo_busses,
+  param_common (
+    "Output",
+    declptr<transient_gate_fx>(),
+    declptr<transient_gate_fx::output_tag>()),
+  transient_gate_fx::get_parameter (transient_gate_fx::output_tag {}),
+  slider_ext);
+
+using transient_gate_params = mp_list<
+  transient_gate_decay,
+  transient_gate_decay_shape,
+  transient_gate_detect_recovery,
+  transient_gate_detect_shape,
+  transient_gate_detect_hipass,
+  transient_gate_detect_channels,
+  transient_gate_output>;
+//------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
   polyphase_fir_test_gain,
@@ -6045,7 +6044,7 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  trans_crossv_params>;
+  transient_gate_params>;
 
 static constexpr auto fx_choices
   = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "tran");
@@ -6097,7 +6096,7 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  trans_crossv_params
+  transient_gate_params
   >;
 // clang-format on
 //------------------------------------------------------------------------------
@@ -6151,7 +6150,7 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Filter Crossover LR",
   ":Filter Crossover WTF",
   ":Filter Crossover Lin",
-  ":Filter Crossover Trans");
+  ":Dynamics Transient Gate");
 
 #endif // #if TWEAK_BUILD
 

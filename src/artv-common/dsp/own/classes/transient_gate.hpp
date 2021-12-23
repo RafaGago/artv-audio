@@ -66,7 +66,7 @@ public:
     assert (ratio >= 0. && ratio <= 1.);
 
     static constexpr double minv = gcem::log (1. / 1000.);
-    static constexpr double maxv = gcem::log (.5) - minv;
+    static constexpr double maxv = gcem::log (2.5) - minv;
 
     double release_sec = exp (maxv * ratio + minv);
 

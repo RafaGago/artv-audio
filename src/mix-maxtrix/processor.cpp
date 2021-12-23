@@ -270,9 +270,7 @@ private:
     _crossv_type = (ins_arr[0] == 0) ? crossv_off : _crossv_type;
     if (_crossv_type != crossv_off) {
       auto ch1_out_buff = io_engine::buff::crossv; // negative index
-
-      uint n_outs = _crossv_type != crossv_transient ? crossv_outs.size() : 1;
-      for (uint i = 0; i < n_outs; ++i, --ch1_out_buff) {
+      for (uint i = 0; i < crossv_outs.size(); ++i, --ch1_out_buff) {
         uint dst_chnl = crossv_outs[i];
         assert (dst_chnl < n_busses);
         uint j = 0;
@@ -362,11 +360,6 @@ private:
                   parameters::all_fx_typelists,
                   parameters::lin_iir_crossv_params>::value
               + 1;
-            constexpr uint transient_crossv_id
-              = mp11::mp_find<
-                  parameters::all_fx_typelists,
-                  parameters::trans_crossv_params>::value
-              + 1;
 
             // this channel was sending an FX diff that now has to be cleared
             fx_enabled_bits |= ((u64) val.current != 0) << chnl;
@@ -385,13 +378,10 @@ private:
             else if (val.current == lin_iir_crossv_id) {
               _crossv_type = crossv_lin_iir;
             }
-            else if (val.current == transient_crossv_id) {
-              _crossv_type = crossv_transient;
-            }
             crossv_change = fx_type_changed[chnl]
               && (_crossv_type != crossv_off || val.previous == crossv_id
                   || val.previous == wonky_crossv_id
-                  || val.previous == transient_crossv_id);
+                  || val.previous == lin_iir_crossv_id);
           }
           if constexpr (std::is_same_v<decltype (key), parameters::mute_solo>) {
             mutesolo.changed |= val.changed();
@@ -440,12 +430,6 @@ private:
         crossv_outs[index] = value.current + 1;
         crossv_change |= value.changed();
       });
-    }
-    else if (unlikely (_crossv_type == crossv_transient)) {
-      auto value = p_refresh (parameters::trans_crossv_transient_bus {}, 0);
-      // notice: +1 because the crossover can't output on channel 0
-      crossv_outs[0] = value.current + 1;
-      crossv_change |= value.changed();
     }
     if (unlikely (_non_fx_slider_refreshed.get_and_clear())) {
       p_refresh_many (parameters::all_nonfx_sliders_typelist {});
@@ -922,7 +906,6 @@ private:
     crossv_normal,
     crossv_wonky,
     crossv_lin_iir,
-    crossv_transient
   };
   uint _crossv_type;
 
