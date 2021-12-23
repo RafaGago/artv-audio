@@ -167,6 +167,23 @@ static constexpr preset presets[] = {
     <gui_data bus1_text="Left" bus2_text="Right" bus3_text="Mid" bus4_text="Side" bus5_text="All" bus7_text="Passhtrough" />
 </params>
      )END"},
+  {.name = "Mix: Transient Splitter",
+   .xml = R"END(
+<?xml version="1.0" encoding="UTF-8"?>
+<params plugin_version="1002000">
+    <PARAM id="in_selection_01" value="1.0" />
+    <PARAM id="out_selection_01" value="1.0" />
+    <PARAM id="fx_type_01" value="45.0" />
+    <PARAM id="mixer_sends" value="128.0" />
+    <PARAM id="out_selection_02" value="2.0" />
+    <PARAM id="transient_gate_decay_01" value="47.40000152587891" />
+    <PARAM id="transient_gate_decay_shape_01" value="0.0" />
+    <PARAM id="transient_gate_detect_hipass_01" value="39.64512634277344" />
+    <PARAM id="transient_gate_detect_recovery_01" value="29.39999961853027" />
+    <PARAM id="transient_gate_detect_shape_01" value="0.0" />
+    <gui_data bus1_text="Transient" bus2_text="Tonal" bus3_text="" bus4_text="" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
+</params>
+    )END"},
   {.name = "FX: Phased Delay",
    .xml = R"END(
 <?xml version="1.0" encoding="UTF-8"?>
