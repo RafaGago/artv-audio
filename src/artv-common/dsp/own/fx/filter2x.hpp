@@ -70,7 +70,7 @@ public:
   static constexpr auto get_parameter (param<band, paramtype::band_type>)
   {
     return choice_param (
-      0,
+      band == 0 ? 1 : 0,
       make_cstr_array (
         "Off",
         "K35",
