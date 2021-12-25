@@ -31,7 +31,7 @@ function (configure_memory_sanitizer target)
     target_compile_options(
         ${target}
         PUBLIC
-        -fsanitize=address -fno-omit-frame-pointer
+        -fsanitize=address -fno-omit-frame-pointer2
         )
     target_link_options(${target} PUBLIC -fsanitize=address)
 endfunction()

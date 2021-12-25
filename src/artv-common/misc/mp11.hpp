@@ -4,6 +4,8 @@
 // might not need to pull MP11.
 #ifndef ARTV_NO_MP11
 
+#include "artv-common/misc/short_ints.hpp"
+
 #include <boost/mp11.hpp>
 
 namespace artv {
