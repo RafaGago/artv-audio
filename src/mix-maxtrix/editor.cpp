@@ -83,6 +83,11 @@ public:
     //        juce::Colours::red.brighter (0.4),
     //        juce::Colours::sienna,
 
+    static constexpr uint up    = juce::TextButton::ConnectedOnTop;
+    static constexpr uint down  = juce::TextButton::ConnectedOnBottom;
+    static constexpr uint left  = juce::TextButton::ConnectedOnLeft;
+    static constexpr uint right = juce::TextButton::ConnectedOnRight;
+
     for (uint i = 0; i < n_stereo_busses; ++i) {
       _meters[i].setLookAndFeel (&_meters_look_feel[i]);
       _meters[i].setMeterSource (&meter_srcs[i]);
@@ -127,6 +132,10 @@ public:
     for (uint src = 0; src < ins.size(); ++src) {
       for (uint dst = 0; dst < ins.size(); ++dst) {
         // TODO: get {fmt}
+        // auto conn_l  = (dst % 4) == 0 ? 0 : left;
+        // auto conn_r  = ((dst + 1) % 4) == 0 ? 0 : right;
+        // auto conn_ud = (dst < 4) ? down : up;
+
         char str[64];
         str[0] = 0;
         snprintf (str, sizeof str, "In%u to Mix%u", dst + 1, src + 1);
@@ -143,8 +152,11 @@ public:
     for (auto& widg_ptr : mods) {
       widg_ptr->buttons[0].setName ("Phase inv");
       widg_ptr->buttons[1].setName ("Mono L");
+      widg_ptr->buttons[1].setConnectedEdges (right);
       widg_ptr->buttons[2].setName ("Mono R");
+      widg_ptr->buttons[2].setConnectedEdges (left | right);
       widg_ptr->buttons[3].setName ("L/R swap");
+      widg_ptr->buttons[3].setConnectedEdges (left);
     }
 
     auto& mixer_sends = p_get (parameters::mixer_sends {});
@@ -154,8 +166,7 @@ public:
       char str[64];
       snprintf (str, sizeof str, "Mix%u to Mix%u", i + 1, i + 2);
       mixer_sends[0]->buttons[i].setName (str);
-      uint up   = juce::TextButton::ConnectedOnTop;
-      uint left = juce::TextButton::ConnectedOnLeft;
+
       mixer_sends[0]->buttons[i].setConnectedEdges (up | left);
     }
 
@@ -165,8 +176,6 @@ public:
       auto idx = i - num_mixer_sends;
       snprintf (str, sizeof str, "(Dry - Wet)%-u to Mix%u", idx + 1, idx + 2);
       mixer_sends[0]->buttons[i].setName (str);
-      uint down = juce::TextButton::ConnectedOnBottom;
-      uint left = juce::TextButton::ConnectedOnLeft;
       mixer_sends[0]->buttons[i].setConnectedEdges (down | left);
       mixer_sends[0]->buttons[i].setEnabled (false);
     }
@@ -220,10 +229,10 @@ public:
         btn.setClickingTogglesState (true);
         btn.setToggleState (
           b == 0, juce::NotificationType::dontSendNotification);
-        btn.onClick = [=]() { on_fx_type_or_page_change (chnl, b); };
-        uint right = b < (pb_size - 1) ? juce::TextButton::ConnectedOnRight : 0;
-        uint left  = (b != 0) ? juce::TextButton::ConnectedOnLeft : 0;
-        btn.setConnectedEdges (left | right);
+        btn.onClick  = [=]() { on_fx_type_or_page_change (chnl, b); };
+        uint c_right = b < (pb_size - 1) ? right : 0;
+        uint c_left  = (b != 0) ? left : 0;
+        btn.setConnectedEdges (c_left | c_right);
         using namespace std::placeholders;
         btn.setLookAndFeel (&_lookfeel);
         btn.on_mouse_event
@@ -334,7 +343,11 @@ public:
     }
 
     auto& mutesolo = p_get (parameters::mute_solo {});
-
+    // mute solo edges
+    for (uint i = 0; i < n_stereo_busses; ++i) {
+      mutesolo[i]->buttons[0].setConnectedEdges (right);
+      mutesolo[i]->buttons[1].setConnectedEdges (left);
+    }
     // button colors
     constexpr uint nbuses = n_stereo_busses;
     for (uint i = 0; i < n_stereo_busses; ++i) {
