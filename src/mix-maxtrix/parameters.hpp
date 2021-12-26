@@ -6232,7 +6232,7 @@ static constexpr char const* about_text =
 "-Aw Consoles: Console4, 5, 6 and 7.\n"
 "-Density2.\n"
 "\n"
-"From Chokehold (Chris Johnson).\n"
+"From Chokehold.\n"
 "http://free.chokehold.net/\n"
 "\n"
 "-Consolidator.\n"
