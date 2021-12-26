@@ -4,6 +4,7 @@
 #include <type_traits>
 
 #include "artv-common/misc/delay_compensation_buffers.hpp"
+#include "artv-common/misc/overaligned_allocator.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
@@ -279,13 +280,14 @@ private:
 
   static constexpr uint n_crossv_coeffs = lp_type::get_n_coeffs (max_order);
 
-  std::array<std::array<double_x2, n_crossv_coeffs>, n_crossovers> _coeffs;
+  alignas (sse_bytes)
+    std::array<std::array<double_x2, n_crossv_coeffs>, n_crossovers> _coeffs;
 
   std::array<crange<double_x2>, n_crossovers>                   _states;
   std::array<delay_compensated_buffer<double_x2>, n_crossovers> _in_delcomp;
   std::array<delay_compensated_buffer<double_x2>, n_crossovers> _out_delcomp;
-  std::vector<double_x2>                                        _mem;
-  block_mem*                                                    _block;
+  std::vector<double_x2, overaligned_allocator<double_x2, sse_bytes>> _mem;
+  block_mem*                                                          _block;
 
   std::array<uint, n_crossovers>                       _order {};
   std::array<uint, n_crossovers>                       _n_stages;

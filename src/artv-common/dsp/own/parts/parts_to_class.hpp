@@ -148,8 +148,10 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  std::array<std::array<value_type, part::n_coeffs>, n_elems> _coeffs;
-  std::array<std::array<value_type, part::n_states>, n_elems> _states;
+  alignas (sizeof (value_type))
+    std::array<std::array<value_type, part::n_coeffs>, n_elems> _coeffs;
+  alignas (sizeof (value_type))
+    std::array<std::array<value_type, part::n_states>, n_elems> _states;
 };
 //------------------------------------------------------------------------------
 template <class Vect, class... Parts>
@@ -251,8 +253,8 @@ private:
   template <uint Idx>
   using get_part = mp11::mp_at_c<mp_list<Parts...>, Idx>;
 
-  std::tuple<coeffs_array<Parts>...> _coeffs;
-  std::tuple<states_array<Parts>...> _states;
+  alignas (sizeof (value_type)) std::tuple<coeffs_array<Parts>...> _coeffs;
+  alignas (sizeof (value_type)) std::tuple<states_array<Parts>...> _states;
 };
 //------------------------------------------------------------------------------
 } // namespace artv
