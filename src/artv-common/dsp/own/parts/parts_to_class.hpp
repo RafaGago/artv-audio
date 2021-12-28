@@ -33,7 +33,7 @@ public:
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <class... Ts>
-  static void reset_target_coeffs (crange<value_type> coeff_out, Ts&&... args)
+  static void reset_coeffs_ext (crange<value_type> coeff_out, Ts&&... args)
   {
     assert (coeff_out.size() >= part::n_coeffs);
     part::template reset_coeffs<value_type> (
@@ -44,7 +44,7 @@ public:
   void reset_coeffs_on_idx (uint idx, Ts&&... args)
   {
     assert (idx < size);
-    reset_target_coeffs (_coeffs[idx], std::forward<Ts> (args)...);
+    reset_coeffs_ext (_coeffs[idx], std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   void reset_states_on_idx (uint idx)
@@ -167,7 +167,7 @@ public:
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <class... Ts>
-  static void reset_target_coeffs (crange<builtin> coeff_out, Ts&&... args)
+  static void reset_coeffs_ext (crange<builtin> coeff_out, Ts&&... args)
   {
     assert (coeff_out.size() >= part::n_coeffs);
     using x1_t = vec<builtin, 1>;
@@ -178,7 +178,7 @@ public:
   template <class... Ts>
   void reset_coeffs (Ts&&... args)
   {
-    reset_target_coeffs (_coeffs, std::forward<Ts> (args)...);
+    reset_coeffs_ext (_coeffs, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   void reset_states_on_idx (uint idx)
@@ -259,7 +259,7 @@ public:
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <uint Idx, class... Ts>
-  static void reset_target_coeffs (crange<value_type> coeff_out, Ts&&... args)
+  static void reset_coeffs_ext (crange<value_type> coeff_out, Ts&&... args)
   {
     static_assert (Idx < sizeof...(Parts));
     using part = get_part<Idx>;
@@ -273,7 +273,7 @@ public:
   void reset_coeffs (Ts&&... args)
   {
     auto& coeffs = std::get<Idx> (_coeffs);
-    reset_target_coeffs<Idx> (coeffs, std::forward<Ts> (args)...);
+    reset_coeffs_ext<Idx> (coeffs, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <uint Idx>
@@ -372,7 +372,7 @@ public:
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <class Part, class... Ts>
-  static void reset_target_coeffs (crange<coeff_type> coeff_out, Ts&&... args)
+  static void reset_coeffs_ext (crange<coeff_type> coeff_out, Ts&&... args)
   {
     static_assert (mp11::mp_find<parts, Part>::value < n_parts, "");
 
@@ -393,7 +393,7 @@ public:
   void reset_coeffs_on_idx (uint idx, Ts&&... args)
   {
     assert (idx < size);
-    reset_target_coeffs<Part> (_coeffs[idx], std::forward<Ts> (args)...);
+    reset_coeffs_ext<Part> (_coeffs[idx], std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <class Part>
