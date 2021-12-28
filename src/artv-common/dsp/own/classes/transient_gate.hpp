@@ -169,9 +169,9 @@ private:
   static constexpr double attack_sec = 1. / 200.; // 200Hz seconds
 
   enum followers { flw_gate, flw_fast, flw_slow, n_flw };
-  part_to_class<vec_type, slew_limiter, n_flw> _followers;
-  part_to_class<vec_type, onepole_highpass>    _in_filter;
-  part_to_class<vec_type, onepole_lowpass>     _gate_filter;
+  part_class_array<vec_type, slew_limiter, n_flw> _followers;
+  part_class_array<vec_type, onepole_highpass>    _in_filter;
+  part_class_array<vec_type, onepole_lowpass>     _gate_filter;
 
   double _sample_rate;
   uint   _det_shape;

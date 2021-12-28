@@ -252,8 +252,8 @@ private:
   float _db_gain_prev = 0.;
 
   enum followers { flw_main, flw_attack, flw_decay, n_flw };
-  part_to_class<V, slew_limiter, n_flw> _followers;
-  float                                 _sample_rate = 0;
+  part_class_array<V, slew_limiter, n_flw> _followers;
+  float                                    _sample_rate = 0;
 };
 }} // namespace artv::saike
 //------------------------------------------------------------------------------

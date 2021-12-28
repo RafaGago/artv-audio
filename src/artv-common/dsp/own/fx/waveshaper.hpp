@@ -957,7 +957,7 @@ private:
   using pow2_aa       = adaa::fix_eq_and_delay<adaa_order, pow2_adaa>;
   using compand_1a_aa = adaa::fix_eq_and_delay<adaa_order, compand_1a_adaa>;
   using compand_1b_aa = adaa::fix_eq_and_delay<adaa_order, compand_1b_adaa>;
-  using waveshapers   = parts_to_class_one_of<
+  using waveshapers   = parts_union_array<
     double_x2,
     n_waveshapers,
     sqrt_sigmoid_adaa<0>,
@@ -976,26 +976,26 @@ private:
   using lp_type = butterworth_lowpass_any_order;
   using hp_type = butterworth_highpass_any_order;
 
-  using crossv = parts_to_class_one_of<double_x2, n_crossv, lp_type, hp_type>;
+  using crossv = parts_union_array<double_x2, n_crossv, lp_type, hp_type>;
 
-  using dc_blockers = part_to_class_single_coeff_all<
+  using dc_blockers = part_class_array_coeffs_global<
     double_x2,
     mystran_dc_blocker,
     dc_block_count>;
 
-  params                                 _p;
-  value_smoother<float, sm_count>        _sparams;
-  part_to_class<double_x2, andy::svf>    _pre_emphasis;
-  crossv                                 _crossv;
-  waveshapers                            _wvsh;
-  part_to_class<double_x2, slew_limiter> _envfollow;
-  dc_blockers                            _dc_block;
-  part_to_class<double_x2, andy::svf>    _post_emphasis;
-  double_x2                              _sat_prev;
-  double_x2                              _dcmod_prev;
-  std::array<double_x2, n_crossv>        _crossv_prev;
-  uint                                   _n_processed_samples;
-  uint                                   _control_rate_mask;
+  params                                    _p;
+  value_smoother<float, sm_count>           _sparams;
+  part_class_array<double_x2, andy::svf>    _pre_emphasis;
+  crossv                                    _crossv;
+  waveshapers                               _wvsh;
+  part_class_array<double_x2, slew_limiter> _envfollow;
+  dc_blockers                               _dc_block;
+  part_class_array<double_x2, andy::svf>    _post_emphasis;
+  double_x2                                 _sat_prev;
+  double_x2                                 _dcmod_prev;
+  std::array<double_x2, n_crossv>           _crossv_prev;
+  uint                                      _n_processed_samples;
+  uint                                      _control_rate_mask;
 
   plugin_context* _plugcontext = nullptr;
 };

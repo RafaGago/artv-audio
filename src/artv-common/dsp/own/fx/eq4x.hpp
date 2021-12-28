@@ -372,7 +372,7 @@ private:
   using btw_lp = butterworth_any_order<lowpass_tag, max_butterworth_order>;
   using btw_hp = butterworth_any_order<highpass_tag, max_butterworth_order>;
 
-  using eqs = parts_to_class_one_of<
+  using eqs = parts_union_array<
     double_x2,
     n_bands,
     btw_lp,

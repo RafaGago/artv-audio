@@ -20,7 +20,7 @@ namespace artv {
 //------------------------------------------------------------------------------
 // A DSP part to (optionally) an array of instances.
 template <class Vect, class Part, uint Size = 1>
-struct part_to_class {
+struct part_class_array {
 public:
   static_assert (is_vec_of_float_type_v<Vect>, "");
   static_assert (Size > 0, "");
@@ -154,7 +154,7 @@ private:
 // coefficient set for element of the array and is of width = 1 independently of
 // the passed vector (Vect) width. Useful for things like e.g. DC blockers
 template <class Vect, class Part, uint Size = 1>
-struct part_to_class_single_coeff_all {
+struct part_class_array_coeffs_global {
 public:
   static_assert (is_vec_of_float_type_v<Vect>, "");
   static_assert (Size > 0, "");
@@ -248,7 +248,7 @@ private:
 //------------------------------------------------------------------------------
 // Different DSP parts stored on a single class and accessed by index.
 template <class Vect, class... Parts>
-struct parts_to_class {
+struct part_classes {
 public:
   static_assert (sizeof...(Parts) > 0);
   static_assert (is_vec_of_float_type_v<Vect>, "");
@@ -282,7 +282,7 @@ public:
     static_assert (Idx < sizeof...(Parts));
     using part   = get_part<Idx>;
     auto& states = std::get<Idx> (_states);
-    part::template reset_states<value_type> (_states);
+    part::template reset_states<value_type> (states);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class... Ts>
@@ -293,7 +293,7 @@ public:
     auto& coeffs = std::get<Idx> (_coeffs);
     auto& states = std::get<Idx> (_states);
     return part::template tick<value_type> (
-      _coeffs, _states, std::forward<Ts> (args)...);
+      coeffs, states, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
@@ -353,7 +353,7 @@ public:
 //------------------------------------------------------------------------------
 namespace detail {
 template <class Vect, class CoeffType, uint Size, class... Parts>
-struct parts_to_class_one_of {
+struct parts_union_array {
 public:
   static_assert (is_vec_of_float_type_v<Vect>, "");
   static_assert (Size > 0, "");
@@ -511,13 +511,12 @@ private:
 // N instances of one of many different DSP parts. Every instance can be only
 // one of the available DSP parts simultaneously. This is controlled externally.
 template <class Vect, uint Size, class... Parts>
-using parts_to_class_one_of
-  = detail::parts_to_class_one_of<Vect, Vect, Size, Parts...>;
+using parts_union_array = detail::parts_union_array<Vect, Vect, Size, Parts...>;
 //------------------------------------------------------------------------------
-// As "parts_to_class_one_of" but the coefficient set is of width = 1,
+// As "parts_union_array" but the coefficient set is of width = 1,
 // independently of the with of "Vect"
 template <class Vect, uint Size, class... Parts>
-using parts_to_class_one_of_single_coeff
-  = detail::parts_to_class_one_of<Vect, vec_value_type_t<Vect>, Size, Parts...>;
+using parts_union_array_coeffs_by_idx
+  = detail::parts_union_array<Vect, vec_value_type_t<Vect>, Size, Parts...>;
 //------------------------------------------------------------------------------
 } // namespace artv

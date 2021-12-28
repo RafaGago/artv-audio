@@ -534,8 +534,8 @@ private:
   std::array<float, n_channels> _feedback_samples;
   parameter_values              _params;
 
-  part_to_class<float_x4, andy::svf_allpass, 16> _allpass;
-  part_to_class<double_x2, mystran_dc_blocker>   _dc_blocker;
+  part_class_array<float_x4, andy::svf_allpass, 16> _allpass;
+  part_class_array<double_x2, mystran_dc_blocker>   _dc_blocker;
 
   std::array<lfo, n_channels> _lfos; // 0 = L, 1 = R
   uint                        _n_processed_samples;

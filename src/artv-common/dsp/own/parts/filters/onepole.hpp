@@ -19,8 +19,8 @@ struct onepole_smoother {
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> srate)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto pi_x2  = (T) (2. * M_PI);
+    using T              = vec_value_type_t<V>;
+    constexpr auto pi_x2 = (T) (2. * M_PI);
 
     c[b1] = vec_exp (-pi_x2 * freq / srate);
   }
