@@ -15,6 +15,7 @@
 #include "artv-common/dsp/own/parts/filters/presence.hpp"
 #include "artv-common/dsp/own/parts/filters/saike.hpp"
 #include "artv-common/dsp/own/parts/misc/slew_limiter.hpp"
+#include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"
@@ -315,16 +316,16 @@ public:
     smoother::reset_coeffs (
       make_crange (_smooth_coeff).cast (x1_t {}),
       vec_set<x1_t> (1. / 0.08),
-
       pc.get_sample_rate());
-    memset (&_smooth_state, 0, sizeof _smooth_state);
-    memset (&_state, 0, sizeof _state);
-    memset (&_last_sample, 0, sizeof _last_sample);
-    memset (&_envfollow_states, 0, sizeof _envfollow_states);
-    memset (&_dc_states, 0, sizeof _dc_states);
 
-    mystran_dc_blocker::reset_coeffs (
-      make_crange (_dc_coeffs), vec_set<double_x2> (1.), pc.get_sample_rate());
+    memset (&_smooth_pars, 0, sizeof _smooth_pars);
+    memset (&_last_sample, 0, sizeof _last_sample);
+
+    _filter.reset_states();
+    _proc.reset_states<proc_envfollow>();
+    _proc.reset_states<proc_dc_block>();
+    _proc.reset_coeffs<proc_dc_block> (
+      vec_set<double_x2> (1.), pc.get_sample_rate());
 
     _ef_value = vec_set<double_x2> (0.);
 
@@ -338,6 +339,7 @@ public:
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
+
     for (uint block_smp = 0; block_smp < samples; block_smp += blocksize) {
       uint n_samples = std::min<uint> (blocksize, samples - block_smp);
 
@@ -356,8 +358,7 @@ public:
       if (is_control_block) {
         // Envelope follower/modulation
         auto prev = _ef_value;
-        _ef_value = slew_limiter::tick<double_x2> (
-          _envfollow_coeffs, _envfollow_states, in_cp[control_offset]);
+        _ef_value = _proc.tick<proc_envfollow> (in_cp[control_offset]);
         // Make unipolar and clip at 1.
         _ef_value = vec_min (vec_abs (_ef_value * _ef.gain), 1.);
         _ef_value = (_ef_value + prev) * 0.5; // Box LP
@@ -374,35 +375,32 @@ public:
           continue;
         }
 
-        alignas (sse_bytes) coeff_array     smooth_co;
-        alignas (sse_bytes) smoothed_params smoothed_p;
+        alignas (sse_bytes) smoothed_params target_pars;
 
         for (uint i = 0; i < n_samples; ++i) {
           // parameter update block
-          static_assert (
-            sizeof _smooth_state[b].params / sizeof (float) == 4, "");
+          static_assert (sizeof _smooth_pars[b] / sizeof (float) == 4, "");
 
-          smoothed_p.vars.pre_drive_l = _cfg[b].pre_drive_l;
-          smoothed_p.vars.pre_drive_r = _cfg[b].pre_drive_r;
-          smoothed_p.vars.post_drive  = _cfg[b].post_drive;
-          smoothed_p.vars.feedback    = _cfg[b].feedback;
+          set_target_params (target_pars, b);
+          auto smcoeff = (float) _smooth_coeff;
 
-          auto     smcoeff = (float) _smooth_coeff;
-          float_x4 params  = smoother::tick<float_x4> (
+          smoother::tick<float_x4> (
             make_crange (smcoeff),
-            make_crange (_smooth_state[b].params.arr).cast (float_x4 {}),
-            vec_load<float_x4> (smoothed_p.arr.data()));
+            make_crange (_smooth_pars[b].arr).cast (float_x4 {}),
+            vec_load<float_x4> (target_pars.arr.data()));
+        }
 
-          memcpy (smoothed_p.arr.data(), &params, sizeof params);
-
-          for (uint co = 0; co < smooth_co.size(); co += 1) {
-            double_x2 out = smoother::tick<double_x2> (
+        crange<double_x2> internal = _filter.get_coeffs (b);
+        for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
+          for (uint i = 0; i < n_samples; ++i) {
+            internal[j] = smoother::tick (
               make_crange (_smooth_coeff),
-              make_crange (_smooth_state[b].filter[co]),
-              _coeffs[b][co]);
-            smooth_co[co] = out;
+              make_crange (internal[j]),
+              _target_coeffs[b][j]);
           }
         }
+
+        auto& smoothed_p = _smooth_pars[b];
 
         double_x2 fb_gain = vec_set<double_x2> (smoothed_p.vars.feedback);
         if (is_moog_1 (btype)) {
@@ -425,73 +423,57 @@ public:
         case bandtype::ms20_lp:
           for (uint i = 0; i < n_samples; ++i) {
             auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
-            out[i]
-              = saike::ms20_lowpass::tick<double_x2> (smooth_co, _state[b], in);
-            last = mystran_dc_blocker::tick<double_x2> (
-              _dc_coeffs, _dc_states[b], out[i]);
+            out[i]  = _filter.tick_on_idx<saike::ms20_lowpass> (b, in);
+            last    = _proc.tick<proc_dc_block> (out[i]);
           }
           break;
         case bandtype::ms20_hp:
           for (uint i = 0; i < n_samples; ++i) {
             auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
-            out[i]  = saike::ms20_highpass::tick<double_x2> (
-              smooth_co, _state[b], in);
-            last = mystran_dc_blocker::tick<double_x2> (
-              _dc_coeffs, _dc_states[b], out[i]);
+            out[i]  = _filter.tick_on_idx<saike::ms20_highpass> (b, in);
+            last    = _proc.tick<proc_dc_block> (out[i]);
           }
           break;
         case bandtype::ms20_bp:
           for (uint i = 0; i < n_samples; ++i) {
             auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
-            out[i]  = saike::ms20_bandpass::tick<double_x2> (
-              smooth_co, _state[b], in);
-            last = mystran_dc_blocker::tick<double_x2> (
-              _dc_coeffs, _dc_states[b], out[i]);
+            out[i]  = _filter.tick_on_idx<saike::ms20_bandpass> (b, in);
+            last    = _proc.tick<proc_dc_block> (out[i]);
           }
           break;
         case bandtype::ms20_br:
           for (uint i = 0; i < n_samples; ++i) {
             auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
-            out[i]
-              = saike::ms20_notch::tick<double_x2> (smooth_co, _state[b], in);
-            last = mystran_dc_blocker::tick<double_x2> (
-              _dc_coeffs, _dc_states[b], out[i]);
+            out[i]  = _filter.tick_on_idx<saike::ms20_notch> (b, in);
+            last    = _proc.tick<proc_dc_block> (out[i]);
           }
           break;
         case bandtype::ms20_asym_lp:
           for (uint i = 0; i < n_samples; ++i) {
             auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
-            out[i]  = saike::ms20_asym_lowpass::tick<double_x2> (
-              smooth_co, _state[b], in);
-            last = mystran_dc_blocker::tick<double_x2> (
-              _dc_coeffs, _dc_states[b], out[i]);
+            out[i]  = _filter.tick_on_idx<saike::ms20_asym_lowpass> (b, in);
+            last    = _proc.tick<proc_dc_block> (out[i]);
           }
           break;
         case bandtype::ms20_asym_hp:
           for (uint i = 0; i < n_samples; ++i) {
             auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
-            out[i]  = saike::ms20_asym_highpass::tick<double_x2> (
-              smooth_co, _state[b], in);
-            last = mystran_dc_blocker::tick<double_x2> (
-              _dc_coeffs, _dc_states[b], out[i]);
+            out[i]  = _filter.tick_on_idx<saike::ms20_asym_highpass> (b, in);
+            last    = _proc.tick<proc_dc_block> (out[i]);
           }
           break;
         case bandtype::ms20_asym_bp:
           for (uint i = 0; i < n_samples; ++i) {
             auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
-            out[i]  = saike::ms20_asym_bandpass::tick<double_x2> (
-              smooth_co, _state[b], in);
-            last = mystran_dc_blocker::tick<double_x2> (
-              _dc_coeffs, _dc_states[b], out[i]);
+            out[i]  = _filter.tick_on_idx<saike::ms20_asym_bandpass> (b, in);
+            last    = _proc.tick<proc_dc_block> (out[i]);
           }
           break;
         case bandtype::ms20_asym_br:
           for (uint i = 0; i < n_samples; ++i) {
             auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
-            out[i]  = saike::ms20_asym_notch::tick<double_x2> (
-              smooth_co, _state[b], in);
-            last = mystran_dc_blocker::tick<double_x2> (
-              _dc_coeffs, _dc_states[b], out[i]);
+            out[i]  = _filter.tick_on_idx<saike::ms20_asym_notch> (b, in);
+            last    = _proc.tick<proc_dc_block> (out[i]);
           }
           break;
         case bandtype::steiner_1_lp:
@@ -500,10 +482,8 @@ public:
         case bandtype::steiner_1_br:
           for (uint i = 0; i < n_samples; ++i) {
             auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
-            out[i]
-              = saike::steiner_1::tick<double_x2> (smooth_co, _state[b], in);
-            last = mystran_dc_blocker::tick<double_x2> (
-              _dc_coeffs, _dc_states[b], out[i]);
+            out[i]  = _filter.tick_on_idx<saike::steiner_1> (b, in);
+            last    = _proc.tick<proc_dc_block> (out[i]);
           }
           break;
         case bandtype::steiner_2_lp:
@@ -512,10 +492,8 @@ public:
         case bandtype::steiner_2_br:
           for (uint i = 0; i < n_samples; ++i) {
             auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
-            out[i]
-              = saike::steiner_2::tick<double_x2> (smooth_co, _state[b], in);
-            last = mystran_dc_blocker::tick<double_x2> (
-              _dc_coeffs, _dc_states[b], out[i]);
+            out[i]  = _filter.tick_on_idx<saike::steiner_2> (b, in);
+            last    = _proc.tick<proc_dc_block> (out[i]);
           }
           break;
         case bandtype::moog_1_lp:
@@ -524,9 +502,8 @@ public:
         case bandtype::moog_1_br:
           for (uint i = 0; i < n_samples; ++i) {
             auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
-            out[i]  = saike::moog_1::tick<double_x2> (smooth_co, _state[b], in);
-            last    = mystran_dc_blocker::tick<double_x2> (
-              _dc_coeffs, _dc_states[b], out[i]);
+            out[i]  = _filter.tick_on_idx<saike::moog_1> (b, in);
+            last    = _proc.tick<proc_dc_block> (out[i]);
           }
           break;
         case bandtype::moog_2_lp:
@@ -535,9 +512,8 @@ public:
         case bandtype::moog_2_br:
           for (uint i = 0; i < n_samples; ++i) {
             auto in = (in_cp[i] * pre_drive) + (last * fb_gain);
-            out[i]  = saike::moog_2::tick<double_x2> (smooth_co, _state[b], in);
-            last    = mystran_dc_blocker::tick<double_x2> (
-              _dc_coeffs, _dc_states[b], out[i]);
+            out[i]  = _filter.tick_on_idx<saike::moog_2> (b, in);
+            last    = _proc.tick<proc_dc_block> (out[i]);
           }
           break;
         default:
@@ -666,83 +642,102 @@ private:
 
     auto btype = get_band_type (band);
 
-    auto co = make_crange (_coeffs[band]);
+    auto co = make_crange (_target_coeffs[band]);
 
     switch (btype) {
     case bandtype::off:
-      memset (&_coeffs[band], 0, sizeof _coeffs[band]);
+      _filter.reset_states_on_idx (band);
       break;
     case bandtype::ms20_lp:
-      saike::ms20_lowpass::reset_coeffs (co, freq, reso, sr);
+      _filter.reset_target_coeffs<saike::ms20_lowpass> (co, freq, reso, sr);
       break;
     case bandtype::ms20_hp:
-      saike::ms20_highpass::reset_coeffs (co, freq, reso, sr);
+      _filter.reset_target_coeffs<saike::ms20_highpass> (co, freq, reso, sr);
       break;
     case bandtype::ms20_bp:
-      saike::ms20_bandpass::reset_coeffs (co, freq, reso, sr);
+      _filter.reset_target_coeffs<saike::ms20_bandpass> (co, freq, reso, sr);
       break;
     case bandtype::ms20_br:
-      saike::ms20_notch::reset_coeffs (co, freq, reso, sr);
+      _filter.reset_target_coeffs<saike::ms20_notch> (co, freq, reso, sr);
       break;
     case bandtype::ms20_asym_lp:
-      saike::ms20_asym_lowpass::reset_coeffs (co, freq, reso, sr);
+      _filter.reset_target_coeffs<saike::ms20_asym_lowpass> (
+        co, freq, reso, sr);
       break;
     case bandtype::ms20_asym_hp:
-      saike::ms20_asym_highpass::reset_coeffs (co, freq, reso, sr);
+      _filter.reset_target_coeffs<saike::ms20_asym_highpass> (
+        co, freq, reso, sr);
       break;
     case bandtype::ms20_asym_bp:
-      saike::ms20_asym_bandpass::reset_coeffs (co, freq, reso, sr);
+      _filter.reset_target_coeffs<saike::ms20_asym_bandpass> (
+        co, freq, reso, sr);
       break;
     case bandtype::ms20_asym_br:
-      saike::ms20_asym_notch::reset_coeffs (co, freq, reso, sr);
+      _filter.reset_target_coeffs<saike::ms20_asym_notch> (co, freq, reso, sr);
       break;
     case bandtype::steiner_1_lp:
-      saike::steiner_1::reset_coeffs (co, freq, reso, sr, lowpass_tag {});
+      _filter.reset_target_coeffs<saike::steiner_1> (
+        co, freq, reso, sr, lowpass_tag {});
       break;
     case bandtype::steiner_1_hp:
-      saike::steiner_1::reset_coeffs (co, freq, reso, sr, highpass_tag {});
+      _filter.reset_target_coeffs<saike::steiner_1> (
+        co, freq, reso, sr, highpass_tag {});
       break;
     case bandtype::steiner_1_bp:
-      saike::steiner_1::reset_coeffs (co, freq, reso, sr, bandpass_tag {});
+      _filter.reset_target_coeffs<saike::steiner_1> (
+        co, freq, reso, sr, bandpass_tag {});
       break;
     case bandtype::steiner_1_br:
-      saike::steiner_1::reset_coeffs (co, freq, reso, sr, notch_tag {});
+      _filter.reset_target_coeffs<saike::steiner_1> (
+        co, freq, reso, sr, notch_tag {});
       break;
     case bandtype::steiner_2_lp:
-      saike::steiner_2::reset_coeffs (co, freq, reso, sr, lowpass_tag {});
+      _filter.reset_target_coeffs<saike::steiner_2> (
+        co, freq, reso, sr, lowpass_tag {});
       break;
     case bandtype::steiner_2_hp:
-      saike::steiner_2::reset_coeffs (co, freq, reso, sr, highpass_tag {});
+      _filter.reset_target_coeffs<saike::steiner_2> (
+        co, freq, reso, sr, highpass_tag {});
       break;
     case bandtype::steiner_2_bp:
-      saike::steiner_2::reset_coeffs (co, freq, reso, sr, bandpass_tag {});
+      _filter.reset_target_coeffs<saike::steiner_2> (
+        co, freq, reso, sr, bandpass_tag {});
       break;
     case bandtype::steiner_2_br:
-      saike::steiner_2::reset_coeffs (co, freq, reso, sr, notch_tag {});
+      _filter.reset_target_coeffs<saike::steiner_2> (
+        co, freq, reso, sr, notch_tag {});
       break;
     case bandtype::moog_1_lp:
-      saike::moog_1::reset_coeffs (co, freq, reso, sr, lowpass_tag {});
+      _filter.reset_target_coeffs<saike::moog_1> (
+        co, freq, reso, sr, lowpass_tag {});
       break;
     case bandtype::moog_1_hp:
-      saike::moog_1::reset_coeffs (co, freq, reso, sr, highpass_tag {});
+      _filter.reset_target_coeffs<saike::moog_1> (
+        co, freq, reso, sr, highpass_tag {});
       break;
     case bandtype::moog_1_bp:
-      saike::moog_1::reset_coeffs (co, freq, reso, sr, bandpass_tag {});
+      _filter.reset_target_coeffs<saike::moog_1> (
+        co, freq, reso, sr, bandpass_tag {});
       break;
     case bandtype::moog_1_br:
-      saike::moog_1::reset_coeffs (co, freq, reso, sr, notch_tag {});
+      _filter.reset_target_coeffs<saike::moog_1> (
+        co, freq, reso, sr, notch_tag {});
       break;
     case bandtype::moog_2_lp:
-      saike::moog_2::reset_coeffs (co, freq, reso, sr, lowpass_tag {});
+      _filter.reset_target_coeffs<saike::moog_2> (
+        co, freq, reso, sr, lowpass_tag {});
       break;
     case bandtype::moog_2_hp:
-      saike::moog_2::reset_coeffs (co, freq, reso, sr, highpass_tag {});
+      _filter.reset_target_coeffs<saike::moog_2> (
+        co, freq, reso, sr, highpass_tag {});
       break;
     case bandtype::moog_2_bp:
-      saike::moog_2::reset_coeffs (co, freq, reso, sr, bandpass_tag {});
+      _filter.reset_target_coeffs<saike::moog_2> (
+        co, freq, reso, sr, bandpass_tag {});
       break;
     case bandtype::moog_2_br:
-      saike::moog_2::reset_coeffs (co, freq, reso, sr, notch_tag {});
+      _filter.reset_target_coeffs<saike::moog_2> (
+        co, freq, reso, sr, notch_tag {});
       break;
     default:
       jassert (false);
@@ -780,8 +775,9 @@ private:
 
     // reset smoothing
     if (_cfg[band].reset_band_state) {
-      memset (&_state[band], 0, sizeof _state[band]);
-      memset (&_smooth_state[band], 0, sizeof _smooth_state[band]);
+      _filter.reset_states_on_idx (band);
+      crange_copy<double_x2> (_filter.get_coeffs (band), co);
+      set_target_params (_smooth_pars[band], band);
     }
     _cfg[band].has_changes      = false;
     _cfg[band].reset_band_state = false;
@@ -789,8 +785,7 @@ private:
   //----------------------------------------------------------------------------
   void update_envelope_follower()
   {
-    slew_limiter::reset_coeffs (
-      make_crange (_envfollow_coeffs),
+    _proc.reset_coeffs<proc_envfollow> (
       vec_set<double_x2> (_ef.attack),
       vec_set<double_x2> (_ef.release),
       _plugcontext->get_sample_rate() / (float) _control.get_period());
@@ -805,10 +800,12 @@ private:
     ef_pow3,
   };
   //----------------------------------------------------------------------------
-  static constexpr uint n_bands    = 4;
+  static constexpr uint n_bands    = 2;
   static constexpr uint n_channels = 2;
   //----------------------------------------------------------------------------
-  using filters = mp_list<
+  using filters = parts_union_array<
+    double_x2,
+    n_bands,
     saike::ms20_lowpass,
     saike::ms20_highpass,
     saike::ms20_bandpass,
@@ -821,30 +818,7 @@ private:
     saike::steiner_2,
     saike::moog_1,
     saike::moog_2>;
-
-  template <class T>
-  using to_n_coeffs = k_int<T::n_coeffs>;
-  template <class T>
-  using to_n_states = k_int<T::n_states>;
-
-  using n_coeffs_types = mp11::mp_transform<to_n_coeffs, filters>;
-  using n_states_types = mp11::mp_transform<to_n_states, filters>;
-
-  static constexpr uint max_coeffs
-    = mp11::mp_max_element<n_coeffs_types, mp11::mp_less>::value;
-
-  static constexpr uint max_states
-    = mp11::mp_max_element<n_states_types, mp11::mp_less>::value;
-
   using smoother = onepole_smoother;
-  //----------------------------------------------------------------------------
-  using state_array = std::array<double_x2, max_states>;
-  using coeff_array = std::array<double_x2, max_coeffs>;
-  //----------------------------------------------------------------------------
-  using dc_blocker_coeffs_array
-    = std::array<double_x2, mystran_dc_blocker::n_coeffs>;
-  using dc_blocker_states_array
-    = std::array<double_x2, mystran_dc_blocker::n_states>;
   //----------------------------------------------------------------------------
   struct bandconfig {
     float freq             = 440.f;
@@ -852,11 +826,11 @@ private:
     float drive_db         = 0.f;
     float gain_db          = 0.f;
     float tolerance        = 0.f;
-    float feedback         = 0.f;
     float dry_wet          = 1.f;
     float pre_drive_l      = 1.f;
     float pre_drive_r      = 1.f;
     float post_drive       = 1.f;
+    float feedback         = 0.f;
     float ef_to_freq       = 0.f;
     float ef_to_reso       = 0.f;
     u8    type             = 0;
@@ -872,10 +846,13 @@ private:
     std::array<float, 4> arr;
   };
   //----------------------------------------------------------------------------
-  struct smooth_states {
-    alignas (sse_bytes) coeff_array filter;
-    smoothed_params params;
-  };
+  void set_target_params (smoothed_params& dst, uint band)
+  {
+    dst.vars.pre_drive_l = _cfg[band].pre_drive_l;
+    dst.vars.pre_drive_r = _cfg[band].pre_drive_r;
+    dst.vars.post_drive  = _cfg[band].post_drive;
+    dst.vars.feedback    = _cfg[band].feedback;
+  }
   //----------------------------------------------------------------------------
   struct ef_cfg {
     float attack  = 0;
@@ -884,18 +861,15 @@ private:
     float gain = 0.;
   };
   //----------------------------------------------------------------------------
-  using envfollow_coeff_array = std::array<double_x2, slew_limiter::n_coeffs>;
-  using envfollow_state_array = std::array<double_x2, slew_limiter::n_states>;
-  //----------------------------------------------------------------------------
-  std::array<bandconfig, n_bands>    _cfg;
-  std::array<state_array, n_bands>   _state;
-  std::array<smooth_states, n_bands> _smooth_state;
+  std::array<bandconfig, n_bands> _cfg;
 
-  alignas (sse_bytes) std::array<coeff_array, n_bands> _coeffs;
-  alignas (sse_bytes) envfollow_coeff_array _envfollow_coeffs;
-  alignas (sse_bytes) dc_blocker_coeffs_array _dc_coeffs;
-  alignas (sse_bytes) envfollow_state_array _envfollow_states;
-  alignas (sse_bytes) std::array<dc_blocker_states_array, n_bands> _dc_states;
+  alignas (sse_bytes) std::array<smoothed_params, n_bands> _smooth_pars;
+
+  std::array<filters::coeff_array, n_bands> _target_coeffs;
+  filters                                   _filter;
+  enum { proc_envfollow, proc_dc_block };
+  part_classes<double_x2, slew_limiter, mystran_dc_blocker> _proc;
+
   alignas (sse_bytes) std::array<double_x2, n_bands> _last_sample;
   double_x2    _ef_value;
   ef_cfg       _ef;
