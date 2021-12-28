@@ -17,14 +17,14 @@ namespace artv {
 
 // A variable order cascade of Cytomic SVF's 2-poles and TDF2 1-pole (odd
 // orders).
-template <class Filter_mode_tag>
+template <class Filter_mode_tag, uint MaxOrder = 16>
 class filter_cascade_any_order {
 public:
   //----------------------------------------------------------------------------
   using mode_tag                  = Filter_mode_tag;
   using svf_type                  = andy::svf_multimode<mode_tag>;
   using onepole_type              = onepole<mode_tag>;
-  static constexpr uint max_order = 16;
+  static constexpr uint max_order = MaxOrder;
   //----------------------------------------------------------------------------
   static constexpr uint n_coeffs_for_order (uint order)
   {
@@ -39,6 +39,9 @@ public:
     uint n_twopole = order / 2;
     return n_twopole * svf_type::n_states + n_onepole * onepole_type::n_states;
   }
+  //----------------------------------------------------------------------------
+  static constexpr uint n_coeffs = n_coeffs_for_order (max_order);
+  static constexpr uint n_states = n_states_for_order (max_order);
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
@@ -133,10 +136,10 @@ template <uint N, class Filter_mode_tag>
 class filter_cascade {
 public:
   using mode_tag                 = Filter_mode_tag;
-  using cascade_type             = filter_cascade_any_order<mode_tag>;
+  using cascade_type             = filter_cascade_any_order<mode_tag, N>;
   static constexpr uint order    = N;
-  static constexpr uint n_states = cascade_type::n_states_for_order (order);
-  static constexpr uint n_coeffs = cascade_type::n_coeffs_for_order (order);
+  static constexpr uint n_states = cascade_type::n_states;
+  static constexpr uint n_coeffs = cascade_type::n_coeffs;
 
   static_assert (
     order > 0 && order <= cascade_type::max_order

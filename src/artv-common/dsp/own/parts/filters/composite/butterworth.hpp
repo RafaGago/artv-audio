@@ -65,13 +65,13 @@ struct butterworth_2p_cascade_q_list {
 };
 //------------------------------------------------------------------------------
 // Variable order Butterworth as a cascade of onepole TPT's and Andy SVF's
-template <class Filter_mode_tag>
+template <class Filter_mode_tag, uint MaxOrder = 16>
 class butterworth_any_order {
 public:
-  using mode_tag     = Filter_mode_tag;
-  using cascade_type = filter_cascade_any_order<mode_tag>;
+  static constexpr auto max_order = MaxOrder;
 
-  static constexpr auto max_order = cascade_type::max_order;
+  using mode_tag     = Filter_mode_tag;
+  using cascade_type = filter_cascade_any_order<mode_tag, max_order>;
 
   // clang-format off
   static_assert (
@@ -90,8 +90,8 @@ public:
     return cascade_type::n_states_for_order (order);
   }
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs = n_coeffs_for_order (max_order);
-  static constexpr uint n_states = n_states_for_order (max_order);
+  static constexpr uint n_coeffs = cascade_type::n_coeffs;
+  static constexpr uint n_states = cascade_type::n_states;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
@@ -157,11 +157,11 @@ template <uint N, class Filter_mode_tag>
 class butterworth {
 public:
   using mode_tag         = Filter_mode_tag;
-  using butterworth_type = butterworth_any_order<mode_tag>;
+  using butterworth_type = butterworth_any_order<mode_tag, N>;
 
   static constexpr uint order    = N;
-  static constexpr uint n_states = butterworth_type::n_states_for_order (order);
-  static constexpr uint n_coeffs = butterworth_type::n_coeffs_for_order (order);
+  static constexpr uint n_states = butterworth_type::n_states;
+  static constexpr uint n_coeffs = butterworth_type::n_coeffs;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
@@ -218,7 +218,6 @@ struct butterworth_lp_complex {
     vec_value_type_t<V>    srate,
     uint                   order)
   {
-
     /*
      This function places the poles of a normalized filter on the S-plane.
 
@@ -295,7 +294,6 @@ struct butterworth_lp_complex {
       zeros[i] = vec_complex<V> {(T) -1., (T) 0.};
     }
   }
-
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V gain (const crange<vec_complex<V>> poles, uint order)
