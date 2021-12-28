@@ -235,9 +235,16 @@ static constexpr uint sse_bytes = 16;
 static constexpr uint avx_bytes = 32;
 
 // just an array rounded to a simd width.
-template <class T, size_t N, size_t instr_set_bytes>
+template <class T, size_t N, size_t simd_reg_bytes>
 using simd_array
-  = std::array<T, round_ceil<size_t> (N, (instr_set_bytes / sizeof (T)))>;
+  = std::array<T, round_ceil<size_t> (N, (simd_reg_bytes / sizeof (T)))>;
+
+// another array rounded to simd width, but this one contains SIMD vectors.
+// "vec_sizeof" is totally equivalent to "simd_reg_bytes" above.
+template <class T, size_t N, size_t vec_sizeof>
+using simd_vec_array = std::array<
+  vec<T, vec_sizeof / sizeof (T)>,
+  round_ceil<size_t> (N * sizeof (T), vec_sizeof) / vec_sizeof>;
 
 template <class V>
 using enable_if_vec_t = std::enable_if_t<is_vec_v<V>>;
@@ -277,6 +284,7 @@ vec<T, 1> make_vec_x1 (T v)
 {
   return {v};
 }
+
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
 static inline auto vec_to_intrin (V simdvec)

@@ -92,53 +92,44 @@ public:
   enum coeffs { n_coeffs };
   enum state { x1, x1_sqrt, n_states };
   //----------------------------------------------------------------------------
-  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<vec_value_type_t<V>>)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (crange<V>)
   {
   }
   //----------------------------------------------------------------------------
-  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<V> st)
   {
-    using T = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>>,
-    crange<vec_value_type_t<V>> st,
+    crange<const V>,
+    crange<V> st,
     V x)
   {
-    static_assert (std::is_floating_point_v<T>, "");
-    using batch                      = simd_reg<T, simd_bytes>;
-    static constexpr auto n_builtins = batch::size;
+    using T = vec_value_type_t<V>;
 
-    assert (st.size() >= n_builtins * n_states);
+    assert (st.size() >= n_states);
 
-    T* x1v_ptr      = &st[x1 * n_builtins];
-    T* x1v_sqrt_ptr = &st[x1_sqrt * n_builtins];
+    V x1v = st[x1];
+    V x1vsqrt = st[x1_sqrt];
 
-    batch x1v {x1v_ptr, xsimd::aligned_mode {}};
-    batch x1vsqrt {x1v_sqrt_ptr, xsimd::aligned_mode {}};
-
-    auto ax = xsimd::abs (x);
+    auto ax = vec_abs (x);
     // likely avoid NaN, this value is almost out of resolution.
-    ax += batch {std::numeric_limits<T>::min()};
-    batch xsqrt = xsimd::sqrt (ax) * x;
+    ax += vec_set<V> (std::numeric_limits<T>::min());
+    V xsqrt = vec_sqrt (ax) * x;
     // likely avoid division by zero, this value will get out of resolution.
-    xsqrt += batch {std::numeric_limits<T>::min()};
+    xsqrt += vec_set<V> (std::numeric_limits<T>::min());
 
-    x.store_aligned (x1v_ptr);
-    xsqrt.store_aligned (x1v_sqrt_ptr);
+    st[x1] = x;
+    st[x1_sqrt] = xsqrt;
 
-    batch num = (x * x + x * x1v + x1v * x1v);
-    num *= sgn_no_zero (x, batch {(T) -9.}, batch {(T) 9.});
-    batch den = (xsqrt + x1vsqrt) * ((T) 6.);
+    V num = (x * x + x * x1v + x1v * x1v);
+    num *= vec_sgn_no_zero (x, vec_set<V>((T) -9.), vec_set<V>((T) 9.));
+    V den = (xsqrt + x1vsqrt) * (T) 6.;
     return (num / den);
   }
 };

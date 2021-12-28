@@ -6044,10 +6044,10 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  transient_gate_params>;
+  chow_phaser_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "tran");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "FX");
 
 #else
 // clang-format off

@@ -21,39 +21,33 @@ struct moving_average {
   enum state { n_states = length - 1 };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<vec_value_type_t<V>>)
+  static void reset_coeffs (crange<V>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>>,
-    crange<vec_value_type_t<V>> z, // state 'z1' 1 to N
-    V                           in) // in' 1 to N
+    crange<const V>,
+    crange<V> z, // state 'z1' 1 to N
+    V         in) // in' 1 to N
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (z.size() >= (traits.size * n_states));
+    using T = vec_value_type_t<V>;
+    assert (z.size() >= n_states);
 
     V sum  = in;
     V prev = in;
     for (uint i = 0; i < (length - 1); ++i) {
-      V next = vec_load<V> (z.data());
-      vec_store (z.data(), prev);
+      V next = z[0];
+      z[0]   = prev;
       sum += next;
       prev = next;
-      z    = z.shrink_head (traits.size);
+      z    = z.shrink_head (1);
     }
     static constexpr double coeff = (T) 1 / (T) length;
     sum *= coeff;

@@ -53,7 +53,7 @@ public:
 
     if (order != 0) {
       double_x2 f = {freq_l, freq_r};
-      lr::reset_coeffs (_coeffs[idx], f, _samplerate, order);
+      lr::reset_coeffs<double_x2> (_coeffs[idx], f, _samplerate, order);
     }
 
     if (order == _order[idx]) {
@@ -102,7 +102,8 @@ public:
       if (_order[crv] == 0) {
         continue;
       }
-      crossv = lr::tick (_coeffs[crv], _states[crv], crossv.lp, _order[crv]);
+      crossv = lr::tick<double_x2> (
+        _coeffs[crv], _states[crv], crossv.lp, _order[crv]);
 
       bands[bnd] = crossv.hp;
     }
@@ -140,7 +141,7 @@ public:
           continue;
         }
         uint band = n_crossovers - i;
-        ret[band] = lr::apply_correction (
+        ret[band] = lr::apply_correction<double_x2> (
           _coeffs[crv], _corr_states[correction_idx], ret[band], _order[crv]);
       }
     }
@@ -294,17 +295,13 @@ private:
     : decltype (get_n_correctors())::value;
 
   //----------------------------------------------------------------------------
-  static constexpr uint n_chnls             = 2;
-  static constexpr uint n_crossv_coeffs     = n_chnls * lr::n_coeffs;
-  static constexpr uint n_crossv_states     = n_chnls * lr::n_states;
-  static constexpr uint n_correction_states = n_chnls * lr::n_correction_states;
-
   alignas (double_x2)
-    std::array<std::array<double, n_crossv_coeffs>, n_crossovers> _coeffs;
+    std::array<std::array<double_x2, lr::n_coeffs>, n_crossovers> _coeffs;
   alignas (double_x2)
-    std::array<std::array<double, n_crossv_states>, n_crossovers> _states;
-  alignas (double_x2) std::
-    array<std::array<double, n_correction_states>, n_correctors> _corr_states;
+    std::array<std::array<double_x2, lr::n_states>, n_crossovers> _states;
+  alignas (double_x2) std::array<
+    std::array<double_x2, lr::n_correction_states>,
+    n_correctors> _corr_states;
 
   std::array<uint, n_crossovers>                 _order {};
   std::array<std::array<float, 2>, n_crossovers> _freq {};

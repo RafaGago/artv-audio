@@ -513,19 +513,17 @@ static inline void vec_store (crange<complex_float_type_t<C>> dst, C src)
 }
 
 template <class C, enable_if_complex_vec_t<C>* = nullptr>
-static inline void vec_store_unaligned (complex_float_type_t<C>* dst, C src)
+static inline void vec_store (complex_value_type_t<C>* dst, C src)
 {
-  // dummy
-  vec_store (dst, src);
+  memcpy (dst, &src, sizeof src);
 }
 
 template <class C, enable_if_complex_vec_t<C>* = nullptr>
-static inline void vec_store_unaligned (
-  crange<complex_float_type_t<C>> dst,
-  C                               src)
+static inline void vec_store (crange<complex_value_type_t<C>> dst, C src)
 {
-  assert (dst.size() >= C::size);
-  vec_store_unaligned (dst.data(), src);
+  assert (dst.size() >= C::vec_size);
+  vec_store (dst.data(), src);
 }
+
 //------------------------------------------------------------------------------
 } // namespace artv

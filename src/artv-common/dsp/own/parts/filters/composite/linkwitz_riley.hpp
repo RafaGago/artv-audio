@@ -41,45 +41,33 @@ public:
   static constexpr uint n_correction_states = onepole_type::n_states;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> c,
-    V                           freq,
-    vec_value_type_t<V>         sr)
+  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> sr)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-    assert (c.size() >= (n_coeffs * traits.size));
+    assert (c.size() >= n_coeffs);
     onepole_type::reset_coeffs (c, freq, sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static lr_crossover_out<V> tick (
-    crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       s, // states (interleaved, SIMD aligned)
-    V                                 in)
+    crange<const V> c, // coeffs (interleaved, SIMD aligned)
+    crange<V>       s, // states (interleaved, SIMD aligned)
+    V               in)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (c.size() >= (n_coeffs * traits.size));
-    assert (s.size() >= (n_states * traits.size));
+    assert (c.size() >= n_coeffs);
+    assert (s.size() >= n_states);
 
     lr_crossover_out<V> ret;
     // LP + AP. lowpasses on index 0, allpasses on 1.
     auto stage1 = onepole_type::tick (c, s, in);
     auto stage2 = onepole_type::tick (
-      c, s.shrink_head (onepole_type::n_states * traits.size), stage1[0]);
+      c, s.shrink_head (onepole_type::n_states), stage1[0]);
 
     ret.lp = stage2[0];
     ret.hp = stage1[1] - ret.lp; // HP = Allpass - LP
@@ -88,15 +76,12 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V apply_correction (
-    crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       extern_s, // coeffs "
-    V                                 in)
+    crange<const V> c, // coeffs (interleaved, SIMD aligned)
+    crange<V>       extern_s, // coeffs "
+    V               in)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (c.size() >= (n_coeffs * traits.size));
-    assert (extern_s.size() >= (n_correction_states * traits.size));
+    assert (c.size() >= n_coeffs);
+    assert (extern_s.size() >= n_correction_states);
 
     return onepole_type::tick (c, extern_s, in)[1]; // Return allpass out.
   }
@@ -120,47 +105,34 @@ public:
 
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> c,
-    V                           freq,
-    vec_value_type_t<V>         sr)
+  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> sr)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
-    constexpr auto        traits = vec_traits<V>();
-    static constexpr auto qlist  = butterworth_2p_cascade_q_list::cget<2>();
+    static constexpr auto qlist = butterworth_2p_cascade_q_list::cget<2>();
 
-    assert (c.size() >= (n_coeffs * traits.size));
+    assert (c.size() >= n_coeffs);
     svf_lp_ap::reset_coeffs (c, freq, vec_set<V> (qlist[0]), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static lr_crossover_out<V> tick (
-    crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       s, // states (interleaved, SIMD aligned)
-    V                                 in)
+    crange<const V> c, // coeffs (interleaved, SIMD aligned)
+    crange<V>       s, // states (interleaved, SIMD aligned)
+    V               in)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (c.size() >= (n_coeffs * traits.size));
-    assert (s.size() >= (n_states * traits.size));
+    assert (c.size() >= n_coeffs);
+    assert (s.size() >= n_states);
     lr_crossover_out<V> ret;
     // LP
     auto multimode = svf_lp_ap::tick (c, s, in);
-    ret.lp         = svf_lp::tick (
-      c, s.shrink_head (svf_lp_ap::n_states * traits.size), multimode[0]);
+    ret.lp
+      = svf_lp::tick (c, s.shrink_head (svf_lp_ap::n_states), multimode[0]);
     // HP = Allpass - LP
     ret.hp = multimode[1] - ret.lp;
     return ret;
@@ -168,15 +140,12 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V apply_correction (
-    crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       extern_s, // coeffs "
-    V                                 in)
+    crange<const V> c, // coeffs (interleaved, SIMD aligned)
+    crange<V>       extern_s, // coeffs "
+    V               in)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (c.size() >= (n_coeffs * traits.size));
-    assert (extern_s.size() >= (n_correction_states * traits.size));
+    assert (c.size() >= n_coeffs);
+    assert (extern_s.size() >= n_correction_states);
 
     return svf_lp_ap::tick (c, extern_s, in)[1];
   }
@@ -202,42 +171,29 @@ public:
 
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> c,
-    V                           freq,
-    vec_value_type_t<V>         sr)
+  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> sr)
   {
-    using T = vec_value_type_t<V>;
-    static_assert (std::is_floating_point<T>::value, "");
-    constexpr auto        traits = vec_traits<V>();
-    static constexpr auto qlist  = butterworth_2p_cascade_q_list::cget<4>();
+    static constexpr auto qlist = butterworth_2p_cascade_q_list::cget<4>();
 
-    assert (c.size() >= (n_coeffs * traits.size));
+    assert (c.size() >= n_coeffs);
 
     svf_lp_ap::reset_coeffs (c, freq, vec_set<V> (qlist[0]), sr);
     svf_lp_ap::reset_coeffs (
-      c.shrink_head (svf_lp_ap::n_coeffs * traits.size),
-      freq,
-      vec_set<V> (qlist[1]),
-      sr);
+      c.shrink_head (svf_lp_ap::n_coeffs), freq, vec_set<V> (qlist[1]), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static lr_crossover_out<V> tick (
-    crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       s, // states (interleaved, SIMD aligned)
-    V                                 in)
+    crange<const V> c, // coeffs (interleaved, SIMD aligned)
+    crange<V>       s, // states (interleaved, SIMD aligned)
+    V               in)
   {
     // Look at:
     // https://www.kvraudio.com/forum/viewtopic.php?t=557465
@@ -264,29 +220,29 @@ public:
     // the corrective allpass can run in parallel once the first LP is
     // processed, so if going for this optimization, measure performance.
 
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (c.size() >= (n_coeffs * traits.size));
-    assert (s.size() >= (n_states * traits.size));
+    assert (c.size() >= n_coeffs);
+    assert (s.size() >= n_states);
 
     lr_crossover_out<V> ret;
 
     // First Butterworth LP + AP
-    auto      coeffs1 = c;
-    auto      coeffs2 = c.shrink_head (svf_lp_ap::n_coeffs * traits.size);
-    crange<T> s_ptr   = s;
+    auto coeffs1 = c;
+    auto coeffs2 = c.shrink_head (svf_lp_ap::n_coeffs);
+    auto s_ptr   = s;
 
     auto multimode = svf_lp_ap::tick (coeffs1, s_ptr, in);
-    s_ptr          = s_ptr.shrink_head (svf_lp_ap::n_states * traits.size);
-    V ap           = svf_lp_ap::tick (coeffs2, s_ptr, multimode[1])[1];
-    s_ptr          = s_ptr.shrink_head (svf_lp_ap::n_states * traits.size);
-    ret.lp         = svf_lp::tick (coeffs2, s_ptr, multimode[0]);
-    s_ptr          = s_ptr.shrink_head (svf_lp::n_states * traits.size);
+    s_ptr          = s_ptr.shrink_head (svf_lp_ap::n_states);
+
+    V ap  = svf_lp_ap::tick (coeffs2, s_ptr, multimode[1])[1];
+    s_ptr = s_ptr.shrink_head (svf_lp_ap::n_states);
+
+    ret.lp = svf_lp::tick (coeffs2, s_ptr, multimode[0]);
+    s_ptr  = s_ptr.shrink_head (svf_lp::n_states);
 
     // Second Butterworth LP
     ret.lp = svf_lp::tick (coeffs1, s_ptr, ret.lp);
-    s_ptr  = s_ptr.shrink_head (svf_lp::n_states * traits.size);
+    s_ptr  = s_ptr.shrink_head (svf_lp::n_states);
+
     ret.lp = svf_lp::tick (coeffs2, s_ptr, ret.lp);
 
     // HP = Allpass - LP
@@ -296,20 +252,17 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V apply_correction (
-    crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       extern_s, // coeffs "
-    V                                 in)
+    crange<const V> c, // coeffs (interleaved, SIMD aligned)
+    crange<V>       extern_s, // coeffs "
+    V               in)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (c.size() >= (n_coeffs * traits.size));
-    assert (extern_s.size() >= (n_correction_states * traits.size));
+    assert (c.size() >= n_coeffs);
+    assert (extern_s.size() >= n_correction_states);
 
     V r = svf_lp_ap::tick (c, extern_s, in)[1];
     return svf_lp_ap::tick (
-      c.shrink_head (svf_lp_ap::n_coeffs * traits.size),
-      extern_s.shrink_head (svf_lp_ap::n_states * traits.size),
+      c.shrink_head (svf_lp_ap::n_coeffs),
+      extern_s.shrink_head (svf_lp_ap::n_states),
       r)[1];
   }
   //----------------------------------------------------------------------------
@@ -338,15 +291,12 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<vec_value_type_t<V>> c,
-    V                           freq,
-    vec_value_type_t<V>         sr,
-    uint                        order)
+    crange<V>           c,
+    V                   freq,
+    vec_value_type_t<V> sr,
+    uint                order)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (c.size() >= (n_coeffs * traits.size));
+    assert (c.size() >= n_coeffs);
 
     switch (order) {
     case 2:
@@ -367,71 +317,56 @@ public:
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<vec_value_type_t<V>> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static lr_crossover_out<V> tick (
-    crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       s, // states (interleaved, SIMD aligned)
-    V                                 in,
-    uint                              order)
+    crange<const V> c,
+    crange<V>       s,
+    V               in,
+    uint            order)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (c.size() >= (n_coeffs * traits.size));
-    assert (s.size() >= (n_states * traits.size));
+    assert (c.size() >= n_coeffs);
+    assert (s.size() >= n_states);
 
     switch (order) {
     case 2:
       return lr2::tick (c, s, in);
-      break;
     case 4:
       return lr4::tick (c, s, in);
-      break;
     case 8:
       return lr8::tick (c, s, in);
-      break;
     default:
       assert (false);
       return lr_crossover_out<V> {};
-      break;
     }
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V apply_correction (
-    crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>> extern_s, // states (interleaved, SIMD aligned)
-    V                           in,
-    uint                        order)
+    crange<const V> c,
+    crange<V>       extern_s,
+    V               in,
+    uint            order)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= (n_coeffs * traits.size));
-    assert (extern_s.size() >= (n_correction_states * traits.size));
+    assert (c.size() >= n_coeffs);
+    assert (extern_s.size() >= n_correction_states);
 
     switch (order) {
     case 2:
       return lr2::apply_correction (c, extern_s, in);
-      break;
     case 4:
       return lr4::apply_correction (c, extern_s, in);
-      break;
     case 8:
       return lr8::apply_correction (c, extern_s, in);
-      break;
     default:
       assert (false);
       return V {};
-      break;
     }
   }
   //----------------------------------------------------------------------------

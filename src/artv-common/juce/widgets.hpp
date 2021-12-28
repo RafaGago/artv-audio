@@ -567,7 +567,7 @@ private:
     char const* str;
     uint        id;
 
-    bool operator< (comboitem const& other)
+    bool operator<(comboitem const& other)
     {
       return strcmp (str, other.str) < 0;
     }

@@ -20,11 +20,11 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<vec_value_type_t<V>> co,
-    V                           freq,
-    V                           q,
-    V                           gain_db,
-    vec_value_type_t<V>         sr)
+    crange<V>           co,
+    V                   freq,
+    V                   q,
+    V                   gain_db,
+    vec_value_type_t<V> sr)
   {
     assert (co.size() >= n_coeffs);
     andy::svf::reset_coeffs (co, freq, q, gain_db, sr, lowshelf_tag {});
@@ -33,50 +33,41 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
     crange<const vec_value_type_t<V>> co, // coeffs (single set)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 in,
-    single_coeff_set_tag              t)
+    crange<V>                         st, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
-    using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
     assert (co.size() >= n_coeffs);
-    assert (st.size() >= (n_states * traits.size));
+    assert (st.size() >= n_states);
 
-    in = andy::svf::tick (co, st, in, t);
+    in = andy::svf::tick (co, st, in);
     co = co.shrink_head (andy::svf::n_coeffs);
-    st = st.shrink_head (andy::svf::n_states * traits.size);
-    return andy::svf::tick (co, st, in, t);
+    st = st.shrink_head (andy::svf::n_states);
+    return andy::svf::tick (co, st, in);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> co, // states (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 in)
+    crange<const V> co, // states (interleaved, SIMD aligned)
+    crange<V>       st, // states (interleaved, SIMD aligned)
+    V               in)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= (n_coeffs * traits.size));
-    assert (st.size() >= (n_states * traits.size));
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= n_states);
 
     in = andy::svf::tick (co, st, in);
-    co = co.shrink_head (andy::svf::n_coeffs * traits.size);
-    st = st.shrink_head (andy::svf::n_states * traits.size);
+    co = co.shrink_head (andy::svf::n_coeffs);
+    st = st.shrink_head (andy::svf::n_states);
     return andy::svf::tick (co, st, in);
   }
   //----------------------------------------------------------------------------

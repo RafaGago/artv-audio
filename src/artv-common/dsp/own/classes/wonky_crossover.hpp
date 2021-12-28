@@ -55,7 +55,7 @@ public:
 
     if (order != 0) {
       double_x2 f = {freq_l, freq_r};
-      crossv::reset_coeffs (_coeffs[idx], f, _samplerate, order);
+      crossv::reset_coeffs<double_x2> (_coeffs[idx], f, _samplerate, order);
     }
 
     if (order == _order[idx]) {
@@ -77,7 +77,8 @@ public:
       if (_order[i] == 0) {
         continue;
       }
-      bands[i] = crossv::tick (_coeffs[i], _states[i], residue, _order[i]);
+      bands[i]
+        = crossv::tick<double_x2> (_coeffs[i], _states[i], residue, _order[i]);
       residue -= bands[i];
     }
     bands[n_crossovers] = residue;
@@ -124,16 +125,15 @@ private:
   static constexpr uint max_order = 8;
   static_assert (max_order < crossv::max_order, "");
 
-  static constexpr uint n_chnls = 2;
   static constexpr uint n_crossv_coeffs
-    = n_chnls * crossv::n_coeffs_for_order (max_order);
+    = crossv::n_coeffs_for_order (max_order);
   static constexpr uint n_crossv_states
-    = n_chnls * crossv::n_states_for_order (max_order);
+    = crossv::n_states_for_order (max_order);
 
   alignas (double_x2)
-    std::array<std::array<double, n_crossv_coeffs>, n_crossovers> _coeffs;
+    std::array<std::array<double_x2, n_crossv_coeffs>, n_crossovers> _coeffs;
   alignas (double_x2)
-    std::array<std::array<double, n_crossv_states>, n_crossovers> _states;
+    std::array<std::array<double_x2, n_crossv_states>, n_crossovers> _states;
 
   std::array<uint, n_crossovers>                 _order {};
   std::array<std::array<float, 2>, n_crossovers> _freq {};

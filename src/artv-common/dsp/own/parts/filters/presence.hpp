@@ -18,15 +18,14 @@ struct presence_high_shelf {
   //----------------------------------------------------------------------------
   // BW on the original JSFX is unitless BW from 0.007 to 0.4 and the lower end
   // makes it narrower (?). I scale it from 0 to 1.
-
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<vec_value_type_t<V>> co,
-    V                           freq,
-    V                           bogus_q,
-    V                           gain_db,
-    vec_value_type_t<V>         sr)
+    crange<V>           co,
+    V                   freq,
+    V                   bogus_q,
+    V                   gain_db,
+    vec_value_type_t<V> sr)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
@@ -156,36 +155,31 @@ struct presence_high_shelf {
     b1_v = -b1_v;
     b2_v = -b2_v;
 
-    vec_store (&co[a0 * traits.size], a0_v);
-    vec_store (&co[a1 * traits.size], a1_v);
-    vec_store (&co[a2 * traits.size], a2_v);
-    vec_store (&co[b1 * traits.size], b1_v);
-    vec_store (&co[b2 * traits.size], b2_v);
+    co[a0] = a0_v;
+    co[a1] = a1_v;
+    co[a2] = a2_v;
+    co[b1] = b1_v;
+    co[b2] = b2_v;
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
     crange<const vec_value_type_t<V>> co, // coeffs (1 set)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 in,
-    single_coeff_set_tag)
+    crange<V>                         st, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
-    assert (co.size() >= (n_coeffs));
-    assert (st.size() >= (traits.size * n_states));
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= n_states);
 
     V a0v = vec_set<V> (co[a0]);
     V a1v = vec_set<V> (co[a1]);
@@ -193,58 +187,36 @@ struct presence_high_shelf {
     V b1v = vec_set<V> (co[b1]);
     V b2v = vec_set<V> (co[b2]);
 
-    V x1v = vec_load<V> (&st[x1 * traits.size]);
-    V x2v = vec_load<V> (&st[x2 * traits.size]);
-    V y1v = vec_load<V> (&st[y1 * traits.size]);
-    V y2v = vec_load<V> (&st[y2 * traits.size]);
-
     V out = in;
     out *= a0v;
+    out += a1v * st[x1] + a2v * st[x2] + b1v * st[y1] + b2v * st[y2];
 
-    // TODO: worth all that load and storing for this (?)
-    out += a1v * x1v + a2v * x2v + b1v * y1v + b2v * y2v;
-
-    vec_store (&st[x2 * traits.size], x1v);
-    vec_store (&st[x1 * traits.size], in);
-    vec_store (&st[y2 * traits.size], y1v);
-    vec_store (&st[y1 * traits.size], out);
+    st[x2] = st[x1];
+    st[x1] = in;
+    st[y2] = st[y1];
+    st[y1] = out;
 
     return out;
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 in)
+    crange<const V> co, // coeffs (interleaved, SIMD aligned)
+    crange<V>       st, // states (interleaved, SIMD aligned)
+    V               in)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= (traits.size * n_coeffs));
-    assert (st.size() >= (traits.size * n_states));
-
-    V a0v = vec_load<V> (&co[a0 * traits.size]);
-    V a1v = vec_load<V> (&co[a1 * traits.size]);
-    V a2v = vec_load<V> (&co[a2 * traits.size]);
-    V b1v = vec_load<V> (&co[b1 * traits.size]);
-    V b2v = vec_load<V> (&co[b2 * traits.size]);
-
-    V x1v = vec_load<V> (&st[x1 * traits.size]);
-    V x2v = vec_load<V> (&st[x2 * traits.size]);
-    V y1v = vec_load<V> (&st[y1 * traits.size]);
-    V y2v = vec_load<V> (&st[y2 * traits.size]);
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= n_states);
 
     V out = in;
-    out *= a0v;
+    out *= co[a0];
+    out
+      += co[a1] * st[x1] + co[a2] * st[x2] + co[b1] * st[y1] + co[b2] * st[y2];
 
-    // TODO: worth all that load and storing for this (?)
-    out += a1v * x1v + a2v * x2v + b1v * y1v + b2v * y2v;
-
-    vec_store (&st[x2 * traits.size], x1v);
-    vec_store (&st[x1 * traits.size], in);
-    vec_store (&st[y2 * traits.size], y1v);
-    vec_store (&st[y1 * traits.size], out);
+    st[x2] = st[x1];
+    st[x1] = in;
+    st[y2] = st[y1];
+    st[y1] = out;
 
     return out;
   }

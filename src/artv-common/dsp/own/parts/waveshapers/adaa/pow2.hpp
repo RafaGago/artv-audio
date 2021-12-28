@@ -55,41 +55,36 @@ public:
   enum state { x1, x1_pow2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<vec_value_type_t<V>>)
+  static void reset_coeffs (crange<V>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>>,
-    crange<vec_value_type_t<V>> st,
+    crange<const V>,
+    crange<V> st,
     V                           x)
   {
     using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
 
-    assert (st.size() >= traits.size * n_states);
+    assert (st.size() >= n_states);
 
-    T* x1v_ptr     = &st[x1 * traits.size];
-    T* x1_pow2_ptr = &st[x1_pow2 * traits.size];
+    T* x1v_ptr     = &st[x1];
+    T* x1_pow2_ptr = &st[x1_pow2];
 
-    V x1v      = vec_load<V> (x1v_ptr);
-    V x1_pow2v = vec_load<V> (x1_pow2_ptr);
+    V x1v      = st[x1];
+    V x1_pow2v = st[x1_pow2];
 
     V xpow2 = x * x;
 
-    vec_store (x1v_ptr, x);
-    vec_store (x1_pow2_ptr, xpow2);
+    st[x1] = x;
+    st[x1_pow2] = xpow2;
 
     return vec_abs (xpow2 + (x1v * x) + x1_pow2v)
       * vec_sgn_no_zero (

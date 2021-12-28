@@ -12,7 +12,7 @@ struct czero {
   enum state { z1_re, z1_im, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<vec_value_type_t<V>> co, vec_complex<V> zero)
+  static void reset_coeffs (crange<V> co, vec_complex<V> zero)
   {
     assert (co.size() >= vec_complex<V>::size);
 
@@ -20,24 +20,20 @@ struct czero {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static vec_complex<V> tick (
-    crange<const vec_value_type_t<V>> co,
-    crange<vec_value_type_t<V>>       st,
-    vec_complex<V>                    x)
+    crange<const V> co,
+    crange<V>       st,
+    vec_complex<V>  x)
   {
-    assert (co.size() >= vec_complex<V>::size);
-    assert (st.size() >= vec_complex<V>::size);
+    assert (co.size() >= vec_complex<V>::vec_size);
+    assert (st.size() >= vec_complex<V>::vec_size);
 
     auto zero = vec_load<vec_complex<V>> (co.data());
     auto z1   = vec_load<vec_complex<V>> (st.data());
@@ -55,7 +51,7 @@ struct cpole {
   enum state { y1_re, y1_im, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<vec_value_type_t<V>> co, vec_complex<V> pole)
+  static void reset_coeffs (crange<V> co, vec_complex<V> pole)
   {
     assert (co.size() >= vec_complex<V>::size);
 
@@ -63,24 +59,20 @@ struct cpole {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static vec_complex<V> tick (
-    crange<const vec_value_type_t<V>> co,
-    crange<vec_value_type_t<V>>       st,
-    vec_complex<V>                    x)
+    crange<const V> co,
+    crange<V>       st,
+    vec_complex<V>  x)
   {
-    assert (co.size() >= vec_complex<V>::size);
-    assert (st.size() >= vec_complex<V>::size);
+    assert (co.size() >= vec_complex<V>::vec_size);
+    assert (st.size() >= vec_complex<V>::vec_size);
 
     auto pole = vec_load<vec_complex<V>> (co.data());
     auto y1   = vec_load<vec_complex<V>> (st.data());
@@ -98,39 +90,27 @@ struct rzero {
   enum state { z1, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<vec_value_type_t<V>> co, V re_zero)
+  static void reset_coeffs (crange<V> co, V re_zero)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    vec_store (&co[re * traits.size], re_zero);
+    assert (co.size() >= n_coeffs);
+    co[re] = re_zero;
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (1 set)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 x)
+  static V tick (crange<const V> co, crange<V> st, V x)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= n_states);
 
-    V re_v = vec_load<V> (&co[re * traits.size]);
-    V z1_v = vec_load<V> (&st[z1 * traits.size]);
-
-    V ret = x - re_v * z1_v;
-    vec_store (&st[z1 * traits.size], x);
+    V ret  = x - co[re] * st[z1];
+    st[z1] = x;
     return ret;
   }
   //----------------------------------------------------------------------------
@@ -142,39 +122,27 @@ struct rpole {
   enum state { y1, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<vec_value_type_t<V>> co, V re_zero)
+  static void reset_coeffs (crange<V> co, V re_zero)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    vec_store (&co[re * traits.size], re_zero);
+    assert (co.size() >= n_coeffs);
+    co[re] = re_zero;
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (1 set)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 x)
+  static V tick (crange<const V> co, crange<V> st, V x)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= n_states);
 
-    V re_v = vec_load<V> (&co[re * traits.size]);
-    V y1_v = vec_load<V> (&st[y1 * traits.size]);
-
-    V ret = re_v * y1_v + x;
-    vec_store (&st[y1 * traits.size], ret);
+    V ret  = co[re] * st[y1] + x;
+    st[y1] = ret;
     return ret;
   }
   //----------------------------------------------------------------------------
@@ -189,40 +157,27 @@ struct ccpole_pair {
   enum state { n_states = cpole::n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<vec_value_type_t<V>> co, vec_complex<V> pole)
+  static void reset_coeffs (crange<V> co, vec_complex<V> pole)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
     cpole::reset_coeffs (co, pole);
-    vec_store (&co[ratio * traits.size], vec_real (pole) / vec_imag (pole));
+    co[ratio] = vec_real (pole) / vec_imag (pole);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>> co,
-    crange<vec_value_type_t<V>>       st,
-    V                                 x)
+  static V tick (crange<const V> co, crange<V> st, V x)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= (traits.size * n_coeffs));
-    assert (st.size() >= (traits.size * n_states));
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= n_states);
 
     vec_complex<V> y = cpole::tick (co, st, vec_complex<V> {x});
-    return vec_real (y) + vec_load<V> (&co[ratio * traits.size]) * vec_imag (y);
+    return vec_real (y) + co[ratio] * vec_imag (y);
   }
   //----------------------------------------------------------------------------
 };
@@ -233,42 +188,26 @@ struct rpole_rzero {
   enum state { n_states = rzero::n_states + rpole::n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> co,
-    V                           re_pole,
-    V                           re_zero)
+  static void reset_coeffs (crange<V> co, V re_pole, V re_zero)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
     rpole::reset_coeffs (co, re_pole);
-    co = co.shrink_head (rpole::n_coeffs * traits.size);
+    co = co.shrink_head (rpole::n_coeffs);
     rzero::reset_coeffs (co, re_zero);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (1 set)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 x)
+  static V tick (crange<const V> co, crange<V> st, V x)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
     V out = rpole::tick (co, st, x);
-    co    = co.shrink_head (rpole::n_coeffs * traits.size);
-    st    = st.shrink_head (rpole::n_states * traits.size);
+    co    = co.shrink_head (rpole::n_coeffs);
+    st    = st.shrink_head (rpole::n_states);
     return rzero::tick (co, st, out);
   }
   //----------------------------------------------------------------------------
@@ -280,47 +219,31 @@ struct ccpole_pair_rzero_pair {
   enum state { n_states = 2 * rzero::n_states + ccpole_pair::n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> co,
-    vec_complex<V>              pole,
-    V                           re_zero)
+  static void reset_coeffs (crange<V> co, vec_complex<V> pole, V re_zero)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
     ccpole_pair::reset_coeffs (co, pole);
-    co = co.shrink_head (ccpole_pair::n_coeffs * traits.size);
+    co = co.shrink_head (ccpole_pair::n_coeffs);
     rzero::reset_coeffs (co, re_zero);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (1 set)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 x)
+  static V tick (crange<const V> co, crange<V> st, V x)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
     V out = ccpole_pair::tick (co, st, x);
-    co    = co.shrink_head (ccpole_pair::n_coeffs * traits.size);
-    st    = st.shrink_head (ccpole_pair::n_states * traits.size);
+    co    = co.shrink_head (ccpole_pair::n_coeffs);
+    st    = st.shrink_head (ccpole_pair::n_states);
 
     for (uint i = 0; i < 2; ++i) {
       out = rzero::tick (co, st, out);
       // same zero location
-      st = st.shrink_head (rzero::n_states * traits.size);
+      st = st.shrink_head (rzero::n_states);
     }
     return out;
   }

@@ -15,6 +15,7 @@
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/dsp/own/parts/misc/interpolators.hpp"
 #include "artv-common/dsp/own/parts/misc/slew_limiter.hpp"
+#include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/own/parts/waveshapers/adaa/compand1.hpp"
 #include "artv-common/dsp/own/parts/waveshapers/adaa/hardclip.hpp"
 #include "artv-common/dsp/own/parts/waveshapers/adaa/pow2.hpp"
@@ -68,10 +69,10 @@ public:
       case mode_normal:
         delcomp = 1;
         break;
-      case mode_compand_1b:
-      case mode_compand_1a:
-      case mode_compand_pow:
-      case mode_compand_sqrt:
+      case mode_wvsh_1b:
+      case mode_wvsh_1a:
+      case mode_wvsh_pow:
+      case mode_wvsh_sqrt:
         delcomp = 3;
         break;
       default:
@@ -468,26 +469,21 @@ public:
   {
     _plugcontext = &pc;
 
-    memset (&_envfollow_states, 0, sizeof _envfollow_states);
-    memset (&_compressor_states, 0, sizeof _compressor_states);
-    memset (&_expander_states, 0, sizeof _expander_states);
-    memset (&_wvsh_states, 0, sizeof _wvsh_states);
-    memset (&_crossv_states, 0, sizeof _crossv_states);
-    memset (&_dc_block_states, 0, sizeof _dc_block_states);
-    memset (&_crossv_coeffs, 0, sizeof _crossv_coeffs);
-    memset (&_pre_emphasis_states, 0, sizeof _pre_emphasis_states);
-    memset (&_pre_emphasis_coeffs, 0, sizeof _pre_emphasis_coeffs);
-    memset (&_post_emphasis_states, 0, sizeof _post_emphasis_states);
-    memset (&_post_emphasis_coeffs, 0, sizeof _post_emphasis_coeffs);
+    _envfollow.reset_states();
+    _pre_emphasis.reset_states();
+    _post_emphasis.reset_states();
+    _crossv.reset_states();
+    _wvsh.reset_states();
 
-    adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::reset_coeffs<
-      double_x2> (_adaa_fix_eq_delay_coeffs);
+    // all instances have the same coefficients
+    _wvsh.reset_coeffs_on_idx<sqrt_aa> (compand_in);
+    _wvsh.reset_coeffs_on_idx<sqrt_aa> (sigmoid_wsh);
+    _wvsh.reset_coeffs_on_idx<sqrt_aa> (compand_out);
 
     // this DC blocker at a very low frequency is critical for the sound of
     // the companded modes to be acceptable. Unfortunately it causes DC itself
     // when the sound is muted. I didn't find a solution.
-    dc_blocker::reset_coeffs (
-      _dc_block_coeffs, make_vec_x1 (1.), pc.get_sample_rate());
+    _dc_block.reset_coeffs (make_vec_x1 (1.), pc.get_sample_rate());
 
     _p = params {};
 
@@ -517,9 +513,8 @@ public:
     params                  p                = _p;
 
     if (unlikely (p.type_prev != p.type || p.mode_prev != p.mode)) {
-      memset (&_dc_block_states, 0, sizeof _dc_block_states);
-      memset (&_compressor_states, 0, sizeof _compressor_states);
-      memset (&_expander_states, 0, sizeof _expander_states);
+      _dc_block.reset_states();
+      _wvsh.reset_states();
       // some waveshapers will create peaks, as the integral on 0 might not be
       // 0. Running them for some samples of silence to initialize. This avoids
       // too having to run the "reset_states" functions on the waveshapers.
@@ -555,39 +550,31 @@ public:
       }
       // Input DC blocking
       for (uint i = 0; i < subblock_size; ++i) {
-        sat[i] = dc_blocker::tick (
-          _dc_block_coeffs,
-          _dc_block_states[dc_block_in],
-          sat[i],
-          single_coeff_set_tag {});
+        sat[i] = _dc_block.tick_on_idx (dc_block_in, sat[i]);
       }
       // pre process/Companding + data initialization block
       //
       // Using "compand_1b_aa" first required extremely good DC blocking
       // unfortunately. The sound easily broke.
       switch (p.mode) {
-      case mode_compand_1b:
+      case mode_wvsh_1b:
         for (uint i = 0; i < subblock_size; ++i) {
-          sat[i] = compand_1b_aa::tick (
-            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
+          sat[i] = _wvsh.tick_on_idx<compand_1b_aa> (compand_in, sat[i]);
         }
         break;
-      case mode_compand_1a:
+      case mode_wvsh_1a:
         for (uint i = 0; i < subblock_size; ++i) {
-          sat[i] = compand_1a_aa::tick (
-            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
+          sat[i] = _wvsh.tick_on_idx<compand_1a_aa> (compand_in, sat[i]);
         }
         break;
-      case mode_compand_pow:
+      case mode_wvsh_pow:
         for (uint i = 0; i < subblock_size; ++i) {
-          sat[i] = pow2_aa::tick (
-            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
+          sat[i] = _wvsh.tick_on_idx<pow2_aa> (compand_in, sat[i]);
         }
         break;
-      case mode_compand_sqrt:
+      case mode_wvsh_sqrt:
         for (uint i = 0; i < subblock_size; ++i) {
-          sat[i] = sqrt_aa::tick (
-            _adaa_fix_eq_delay_coeffs, _compressor_states, sat[i]);
+          sat[i] = _wvsh.tick_on_idx<sqrt_aa> (compand_in, sat[i]);
         }
         break;
       case mode_no_aa:
@@ -600,19 +587,13 @@ public:
       for (uint i = 0; i < subblock_size; ++i) {
         if (_p.crossv_enabled[lo_crossv]) {
           if (p.crossv_is_lp[lo_crossv]) {
-            lo[i] = butterworth_lowpass_any_order::tick (
-              _crossv_coeffs[lo_crossv],
-              _crossv_states[lo_crossv],
-              sat[i],
-              p.crossv_order[lo_crossv]);
+            lo[i] = _crossv.tick_on_idx<lp_type> (
+              lo_crossv, sat[i], p.crossv_order[lo_crossv]);
             sat[i] = sat[i] - lo[i];
           }
           else {
-            lo[i] = butterworth_highpass_any_order::tick (
-              _crossv_coeffs[lo_crossv],
-              _crossv_states[lo_crossv],
-              sat[i],
-              p.crossv_order[lo_crossv]);
+            lo[i] = _crossv.tick_on_idx<hp_type> (
+              lo_crossv, sat[i], p.crossv_order[lo_crossv]);
             sat[i] = lo[i];
             lo[i]  = double_x2 {};
           }
@@ -623,19 +604,13 @@ public:
 
         if (_p.crossv_enabled[hi_crossv]) {
           if (!p.crossv_is_lp[hi_crossv]) {
-            hi[i] = butterworth_highpass_any_order::tick (
-              _crossv_coeffs[hi_crossv],
-              _crossv_states[hi_crossv],
-              sat[i],
-              p.crossv_order[hi_crossv]);
+            hi[i] = _crossv.tick_on_idx<hp_type> (
+              hi_crossv, sat[i], p.crossv_order[hi_crossv]);
             sat[i] = sat[i] - hi[i];
           }
           else {
-            hi[i] = butterworth_lowpass_any_order::tick (
-              _crossv_coeffs[hi_crossv],
-              _crossv_states[hi_crossv],
-              sat[i],
-              p.crossv_order[hi_crossv]);
+            hi[i] = _crossv.tick_on_idx<lp_type> (
+              hi_crossv, sat[i], p.crossv_order[hi_crossv]);
             sat[i] = hi[i];
             hi[i]  = double_x2 {};
           }
@@ -662,8 +637,7 @@ public:
         inv_drive *= _sparams.get (sm_trim);
 
         // Envelope follower/modulation
-        double_x2 follow
-          = slew_limiter::tick (_envfollow_coeffs, _envfollow_states, sat[i]);
+        double_x2 follow = _envfollow.tick (sat[i]);
         // Make unipolar and clip at 1.
         follow = vec_min (vec_abs (follow) * p.ef_gain, 1.);
 
@@ -732,45 +706,43 @@ public:
         dcmod *= 0.5; // Moving average LP
         sat[i] += dcmod;
 
-        // pre emphasis
-        sat[i] = andy::svf::tick (
-          _pre_emphasis_coeffs, _pre_emphasis_states, sat[i]);
+        sat[i] = _pre_emphasis.tick (sat[i]);
         // waveshaping
         auto wsh_type
           = p.type + (sat_type_count * (uint) waveshaper_type_is_adaa (p.mode));
 
         switch (wsh_type) {
         case sat_hardclip:
-          sat[i] = wavesh_tick<hardclip_adaa<0>> (sat[i]);
+          sat[i] = _wvsh.tick_on_idx<hardclip_adaa<0>> (sigmoid_wsh, sat[i]);
           break;
         case sat_tanh:
-          sat[i] = wavesh_tick<tanh_adaa<0>> (sat[i]);
+          sat[i] = _wvsh.tick_on_idx<tanh_adaa<0>> (sigmoid_wsh, sat[i]);
           break;
         case sat_sqrt:
-          sat[i] = wavesh_tick<sqrt_sigmoid_adaa<0>> (sat[i]);
+          sat[i]
+            = _wvsh.tick_on_idx<sqrt_sigmoid_adaa<0>> (sigmoid_wsh, sat[i]);
           break;
         case sat_sqrt_sin:
-          sat[i] = wavesh_tick<sqrt_sin_sigmoid_adaa<0>> (sat[i]);
+          sat[i]
+            = _wvsh.tick_on_idx<sqrt_sin_sigmoid_adaa<0>> (sigmoid_wsh, sat[i]);
           break;
         case sat_hardclip_adaa:
-          sat[i] = wavesh_tick<hardclip_aa> (sat[i]);
+          sat[i] = _wvsh.tick_on_idx<hardclip_aa> (sigmoid_wsh, sat[i]);
           break;
         case sat_tanh_adaa:
-          sat[i] = wavesh_tick<tanh_aa> (sat[i]);
+          sat[i] = _wvsh.tick_on_idx<tanh_aa> (sigmoid_wsh, sat[i]);
           break;
         case sat_sqrt_adaa:
-          sat[i] = wavesh_tick<sqrt_sigmoid_aa> (sat[i]);
+          sat[i] = _wvsh.tick_on_idx<sqrt_sigmoid_aa> (sigmoid_wsh, sat[i]);
           break;
         case sat_sqrt_sin_adaa:
-          sat[i] = wavesh_tick<sqrt_sin_sigmoid_aa> (sat[i]);
+          sat[i] = _wvsh.tick_on_idx<sqrt_sin_sigmoid_aa> (sigmoid_wsh, sat[i]);
           break;
         default:
           assert (false);
           break;
         }
-        // post emphasis
-        sat[i] = andy::svf::tick (
-          _post_emphasis_coeffs, _post_emphasis_states, sat[i]);
+        sat[i] = _post_emphasis.tick (sat[i]);
 
         sat[i] -= dcmod;
         _sat_prev = sat[i];
@@ -782,30 +754,26 @@ public:
       }
       // post process / restore if required
       switch (p.mode) {
-      case mode_compand_1b:
+      case mode_wvsh_1b:
         for (uint i = 0; i < subblock_size; ++i) {
-          sat[i] = compand_1a_aa::tick (
-            _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
+          sat[i] = _wvsh.tick_on_idx<compand_1a_aa> (compand_out, sat[i]);
         }
         break;
-      case mode_compand_1a:
+      case mode_wvsh_1a:
         for (uint i = 0; i < subblock_size; ++i) {
-          sat[i] = compand_1b_aa::tick (
-            _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
+          sat[i] = _wvsh.tick_on_idx<compand_1b_aa> (compand_out, sat[i]);
         }
         break;
-      case mode_compand_pow:
+      case mode_wvsh_pow:
         for (uint i = 0; i < subblock_size; ++i) {
           // sat[i] = vec_clamp (sat[i], -pow2compand_clip, pow2compand_clip);
-          sat[i] = sqrt_aa::tick (
-            _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
+          sat[i] = _wvsh.tick_on_idx<sqrt_aa> (compand_out, sat[i]);
         }
         break;
-      case mode_compand_sqrt:
+      case mode_wvsh_sqrt:
         for (uint i = 0; i < subblock_size; ++i) {
           // sat[i] = vec_clamp (sat[i], -pow2compand_clip, pow2compand_clip);
-          sat[i] = pow2_aa::tick (
-            _adaa_fix_eq_delay_coeffs, _expander_states, sat[i]);
+          sat[i] = _wvsh.tick_on_idx<pow2_aa> (compand_out, sat[i]);
         }
         break;
       case mode_no_aa:
@@ -815,11 +783,7 @@ public:
       }
       // Post DC-blocker.
       for (uint i = 0; i < subblock_size; ++i) {
-        sat[i] = dc_blocker::tick (
-          _dc_block_coeffs,
-          _dc_block_states[dc_block_out],
-          sat[i],
-          single_coeff_set_tag {});
+        sat[i] = _dc_block.tick_on_idx (dc_block_out, sat[i]);
       }
       // Deinterleaving
       for (uint i = 0; i < subblock_size; ++i) {
@@ -856,23 +820,17 @@ private:
   {
     auto f = double_x2 {_p.crossv_hz[idx], _p.crossv_hz[idx] * 1.009};
     if (_p.crossv_is_lp[idx]) {
-      butterworth_lowpass_any_order::reset_coeffs (
-        _crossv_coeffs[idx],
-        f,
-        _plugcontext->get_sample_rate(),
-        _p.crossv_order[idx]);
+      _crossv.reset_coeffs_on_idx<lp_type> (
+        idx, f, _plugcontext->get_sample_rate(), _p.crossv_order[idx]);
     }
     else {
-      butterworth_highpass_any_order::reset_coeffs (
-        _crossv_coeffs[idx],
-        f,
-        _plugcontext->get_sample_rate(),
-        _p.crossv_order[idx]);
+      _crossv.reset_coeffs_on_idx<hp_type> (
+        idx, f, _plugcontext->get_sample_rate(), _p.crossv_order[idx]);
     }
 
     if (reset_states) {
       _crossv_prev[idx] = double_x2 {};
-      memset (&_crossv_states[idx], 0, sizeof _crossv_states[idx]);
+      _crossv.reset_states_on_idx (idx);
     }
   }
   //----------------------------------------------------------------------------
@@ -887,9 +845,9 @@ private:
     return mode != mode_no_aa;
   }
   //----------------------------------------------------------------------------
-  static constexpr bool has_compander (char mode)
+  static constexpr bool has_wvsher (char mode)
   {
-    return mode >= mode_compander_first;
+    return mode >= mode_wvsher_first;
   }
   //----------------------------------------------------------------------------
   void update_emphasis (
@@ -903,40 +861,22 @@ private:
     f += freq_offset;
     db += amt_offset;
 
-    andy::svf::reset_coeffs (
-      _pre_emphasis_coeffs,
-      f,
-      q,
-      db,
-      _plugcontext->get_sample_rate(),
-      bell_tag {});
+    _pre_emphasis.reset_coeffs (
+      f, q, db, _plugcontext->get_sample_rate(), bell_tag {});
 
-    andy::svf::reset_coeffs (
-      _post_emphasis_coeffs,
-      f,
-      q,
-      -db,
-      _plugcontext->get_sample_rate(),
-      bell_tag {});
+    _post_emphasis.reset_coeffs (
+      f, q, -db, _plugcontext->get_sample_rate(), bell_tag {});
   }
   //----------------------------------------------------------------------------
   void update_envelope_follower()
   {
-    slew_limiter::reset_coeffs (
-      _envfollow_coeffs,
+    _envfollow.reset_coeffs (
       vec_set<double_x2> (_p.ef_attack),
       vec_set<double_x2> (_p.ef_release),
       _plugcontext->get_sample_rate());
   }
   //----------------------------------------------------------------------------
-  template <class wsh>
-  double_x2 wavesh_tick (double_x2 x)
-  {
-    return wsh::template tick (_adaa_fix_eq_delay_coeffs, _wvsh_states, x);
-  }
-  //----------------------------------------------------------------------------
   enum sat_type {
-
     sat_hardclip,
     sat_tanh,
     sat_sqrt,
@@ -949,16 +889,20 @@ private:
     sat_type_count = (sat_sqrt_sin_adaa + 1) / 2,
   };
 
+  enum crossv_indexes { lo_crossv, hi_crossv, n_crossv };
+
   enum mode_type {
     mode_no_aa,
     mode_normal,
-    mode_compander_first,
-    mode_compand_1b = mode_compander_first,
-    mode_compand_1a,
-    mode_compand_pow,
-    mode_compand_sqrt,
+    mode_wvsher_first,
+    mode_wvsh_1b = mode_wvsher_first,
+    mode_wvsh_1a,
+    mode_wvsh_pow,
+    mode_wvsh_sqrt,
     mode_count,
   };
+
+  enum waveshaper_idx { compand_in, sigmoid_wsh, compand_out, n_waveshapers };
 
   enum ef_type {
     ef_sqrt,
@@ -972,8 +916,6 @@ private:
     dc_block_out,
     dc_block_count,
   };
-
-  enum crossv_indexes { lo_crossv, hi_crossv, n_crossv };
 
   struct params {
     params()
@@ -1003,12 +945,6 @@ private:
     std::array<bool, n_crossv>  crossv_enabled;
   };
 
-  template <class T>
-  using to_n_states = std::integral_constant<int, T::n_states>;
-
-  template <class T>
-  using to_n_coeffs = std::integral_constant<int, T::n_coeffs>;
-
   static constexpr uint adaa_order = 1;
 
   using sqrt_sigmoid_aa = adaa::fix_eq_and_delay<adaa_order, sqrt_sigmoid_adaa>;
@@ -1017,91 +953,49 @@ private:
   using sqrt_sin_sigmoid_aa
     = adaa::fix_eq_and_delay<adaa_order, sqrt_sin_sigmoid_adaa>;
 
-  using shapers
-    = mp_list<sqrt_sigmoid_aa, tanh_aa, hardclip_aa, sqrt_sin_sigmoid_aa>;
-
-  static constexpr uint wsh_max_states = mp11::mp_max_element<
-    mp11::mp_transform<to_n_states, shapers>,
-    mp11::mp_less>::value;
-
   using sqrt_aa       = adaa::fix_eq_and_delay<adaa_order, sqrt_adaa>;
   using pow2_aa       = adaa::fix_eq_and_delay<adaa_order, pow2_adaa>;
   using compand_1a_aa = adaa::fix_eq_and_delay<adaa_order, compand_1a_adaa>;
   using compand_1b_aa = adaa::fix_eq_and_delay<adaa_order, compand_1b_adaa>;
+  using waveshapers   = parts_to_class_one_of<
+    double_x2,
+    n_waveshapers,
+    sqrt_sigmoid_adaa<0>,
+    sqrt_sigmoid_aa,
+    tanh_adaa<0>,
+    tanh_aa,
+    hardclip_adaa<0>,
+    hardclip_aa,
+    sqrt_sin_sigmoid_adaa<0>,
+    sqrt_sin_sigmoid_aa,
+    sqrt_aa,
+    pow2_aa,
+    compand_1a_aa,
+    compand_1b_aa>;
 
-  using companders = mp_list<sqrt_aa, pow2_aa, compand_1a_aa, compand_1b_aa>;
+  using lp_type = butterworth_lowpass_any_order;
+  using hp_type = butterworth_highpass_any_order;
 
-  static constexpr uint compander_max_states = mp11::mp_max_element<
-    mp11::mp_transform<to_n_states, companders>,
-    mp11::mp_less>::value;
+  using crossv = parts_to_class_one_of<double_x2, n_crossv, lp_type, hp_type>;
 
-  using smoother = onepole_smoother;
+  using dc_blockers = part_to_class_single_coeff_all<
+    double_x2,
+    mystran_dc_blocker,
+    dc_block_count>;
 
-  using dc_blocker = mystran_dc_blocker;
-
-  static constexpr uint n_channels = 2;
-  using wsh_state_array
-    = simd_array<double, wsh_max_states * n_channels, sse_bytes>;
-  using compander_state_array
-    = simd_array<double, compander_max_states * n_channels, sse_bytes>;
-  using fix_eq_and_delay_coeff_array = simd_array<
-    double,
-    adaa::fix_eq_and_delay_coeff_initialization<adaa_order>::n_coeffs
-      * n_channels,
-    sse_bytes>;
-
-  static constexpr uint max_butterw_coeffs = std::max (
-    butterworth_lowpass<max_crossv_order>::n_coeffs,
-    butterworth_highpass<max_crossv_order>::n_coeffs);
-
-  static constexpr uint max_butterw_states = std::max (
-    butterworth_lowpass<max_crossv_order>::n_states,
-    butterworth_highpass<max_crossv_order>::n_states);
-
-  using crossv_coeff_array
-    = simd_array<double, max_butterw_coeffs * n_channels, sse_bytes>;
-  using crossv_state_array
-    = simd_array<double, max_butterw_states * n_channels, sse_bytes>;
-
-  using emphasis_coeff_array
-    = simd_array<double, andy::svf::n_coeffs * n_channels, sse_bytes>;
-  using emphasis_state_array
-    = simd_array<double, andy::svf::n_states * n_channels, sse_bytes>;
-
-  using envfollow_coeff_array
-    = simd_array<double, slew_limiter::n_coeffs * n_channels, sse_bytes>;
-  using envfollow_state_array
-    = simd_array<double, slew_limiter::n_states * n_channels, sse_bytes>;
-
-  using dc_block_coeff_array
-    = simd_array<double, dc_blocker::n_coeffs * n_channels, sse_bytes>;
-  using dc_block_state_array
-    = simd_array<double, dc_blocker::n_states * n_channels, sse_bytes>;
-
-  // all arrays are multiples of the simd size, no need to alignas on
-  // everything.
-  params _p;
-  alignas (sse_bytes) envfollow_coeff_array _envfollow_coeffs;
-  envfollow_state_array                    _envfollow_states;
-  fix_eq_and_delay_coeff_array             _adaa_fix_eq_delay_coeffs;
-  compander_state_array                    _compressor_states;
-  std::array<crossv_coeff_array, n_crossv> _crossv_coeffs;
-  std::array<crossv_state_array, n_crossv> _crossv_states;
-  value_smoother<float, sm_count>          _sparams;
-
-  alignas (sse_bytes) emphasis_coeff_array _pre_emphasis_coeffs;
-  emphasis_state_array                             _pre_emphasis_states;
-  wsh_state_array                                  _wvsh_states;
-  dc_block_coeff_array                             _dc_block_coeffs;
-  std::array<dc_block_state_array, dc_block_count> _dc_block_states;
-  emphasis_coeff_array                             _post_emphasis_coeffs;
-  emphasis_state_array                             _post_emphasis_states;
-  compander_state_array                            _expander_states;
-  double_x2                                        _sat_prev;
-  double_x2                                        _dcmod_prev;
-  std::array<double_x2, n_crossv>                  _crossv_prev;
-  uint                                             _n_processed_samples;
-  uint                                             _control_rate_mask;
+  params                                 _p;
+  value_smoother<float, sm_count>        _sparams;
+  part_to_class<double_x2, andy::svf>    _pre_emphasis;
+  crossv                                 _crossv;
+  waveshapers                            _wvsh;
+  part_to_class<double_x2, slew_limiter> _envfollow;
+  dc_blockers                            _dc_block;
+  part_to_class<double_x2, andy::svf>    _post_emphasis;
+  double_x2                              _sat_prev;
+  double_x2                              _dcmod_prev;
+  std::array<double_x2, n_crossv>        _crossv_prev;
+  uint                                   _n_processed_samples;
+  uint                                   _control_rate_mask;
 
   plugin_context* _plugcontext = nullptr;
 };

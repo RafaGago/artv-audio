@@ -17,69 +17,50 @@ struct onepole_smoother {
   enum state { z1, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> c,
-    V                           freq,
-    vec_value_type_t<V>         srate)
+  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> srate)
   {
     using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-    constexpr T    pi_x2  = (T) 6.283185307179586476925286766559;
+    constexpr auto pi_x2  = (T) (2. * M_PI);
 
-    vec_store (c, vec_exp (-pi_x2 * freq / srate)); // just on coeff
+    c[b1] = vec_exp (-pi_x2 * freq / srate);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
     crange<const vec_value_type_t<V>> c, // coeffs (1 set)
-    crange<vec_value_type_t<V>>       z, // states (interleaved, SIMD aligned)
-    V                                 in,
-    single_coeff_set_tag)
+    crange<V>                         z, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    using T = vec_value_type_t<V>;
 
-    assert (z.size() >= traits.size * n_states);
+    assert (z.size() >= n_states);
     assert (c.size() >= n_coeffs);
 
     V a0_v = vec_set<V> (((T) 1.) - c[b1]);
     V b1_v = vec_set<V> (c[b1]);
-    V z1_v = vec_load<V> (z); // 1 coeff only
 
-    z1_v = (in * a0_v) + (z1_v * b1_v);
-    vec_store (z, z1_v); // 1 coeff only
-    return z1_v;
+    z[z1] = (in * a0_v) + (z[z1] * b1_v);
+    return z[z1];
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> c, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       z, // states (interleaved, SIMD aligned)
-    V                                 in)
+    crange<const V> c, // coeffs (interleaved, SIMD aligned)
+    crange<V>       z, // states (interleaved, SIMD aligned)
+    V               in)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (z.size() >= traits.size * n_states);
+    assert (z.size() >= n_states);
     assert (c.size() >= n_coeffs);
 
-    V b1v = vec_load<V> (c); // 1 coeff only
-    V z1v = vec_load<V> (z); // 1 coeff only
-
-    z1v = (in * (1. - b1v)) + (z1v * b1v);
-    vec_store (z, z1v);
-    return z1v;
+    z[z1] = (in * (1. - c[b1])) + (z[z1] * c[b1]);
+    return z[z1];
   }
   //----------------------------------------------------------------------------
 };
@@ -99,75 +80,57 @@ struct onepole {
   enum state { s, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> co,
-    V                           freq,
-    vec_value_type_t<V>         srate)
+  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> srate)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= (n_coeffs * traits.size));
+    using T = vec_value_type_t<V>;
+    assert (co.size() >= n_coeffs);
 
     T inv_sr_div_2 = (T) 0.5 / (srate);
     V wd           = (T) (M_PI * 2.) * freq;
     V wa           = (T) 2. * srate * vec_tan (wd * inv_sr_div_2);
     V g            = wa * inv_sr_div_2;
-    vec_store (&co[G * traits.size], g / ((T) 1.0 + g));
+    co[G]          = g / ((T) 1.0 + g);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    crange<const V> co, // coeffs (interleaved, SIMD aligned)
+    crange<V>       st, // states (interleaved, SIMD aligned)
+    V               x)
+  {
+    assert (co.size() >= n_coeffs);
+    return tick (co[G], st, x);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static auto tick (
+    crange<const vec_value_type_t<V>> co, // coeffs (single set)
+    crange<V>                         st, // states (interleaved, SIMD aligned)
     V                                 x)
   {
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= traits.size * n_coeffs);
-    return tick (vec_load<V> (&co[G * traits.size]), st, x);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static auto tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 x,
-    single_coeff_set_tag)
-  {
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= traits.size * n_coeffs);
+    assert (co.size() >= n_coeffs);
     return tick (vec_set<V> (co[G]), st, x);
   }
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static auto tick (
-    V                           G_v,
-    crange<vec_value_type_t<V>> st, // states (interleaved, SIMD aligned)
-    V                           x)
+  static auto tick (V G_v, crange<V> st, V x)
   {
     constexpr auto traits = vec_traits<V>();
 
     V lp, hp;
 
-    V s_v = vec_load<V> (&st[s * traits.size]);
-    V v   = (x - s_v) * G_v;
-    lp    = v + s_v;
-    vec_store (&st[s * traits.size], lp + v);
+    V v   = (x - st[s]) * G_v;
+    lp    = v + st[s];
+    st[s] = lp + v;
 
     std::array<V, mp11::mp_size<enabled_modes>::value> ret;
 
@@ -230,93 +193,74 @@ struct onepole_tdf2 {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> co,
-    sub_coeffs<V>               wn,
-    lowpass_tag)
+  static void reset_coeffs (crange<V> co, sub_coeffs<V> wn, lowpass_tag)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    using T = vec_value_type_t<V>;
+    assert (co.size() >= n_coeffs);
 
-    assert (co.size() >= (n_coeffs * traits.size));
-
-    vec_store (&co[b0 * traits.size], wn.w * wn.n);
-    vec_store (&co[b1 * traits.size], wn.w * wn.n);
-    vec_store (&co[a1 * traits.size], wn.n * (wn.w - 1.));
+    co[b0] = wn.w * wn.n;
+    co[b1] = co[b0];
+    co[a1] = wn.n * (wn.w - (T) 1.);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> co,
-    sub_coeffs<V>               wn,
-    highpass_tag)
+  static void reset_coeffs (crange<V> co, sub_coeffs<V> wn, highpass_tag)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    using T = vec_value_type_t<V>;
+    assert (co.size() >= n_coeffs);
 
-    assert (co.size() >= (n_coeffs * traits.size));
-
-    vec_store (&co[b0 * traits.size], wn.n);
-    vec_store (&co[b1 * traits.size], -wn.n);
-    vec_store (&co[a1 * traits.size], wn.n * (wn.w - 1.));
+    co[b0] = wn.n;
+    co[b1] = -wn.n;
+    co[a1] = wn.n * (wn.w - (T) 1.);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> co,
-    sub_coeffs<V>               wn,
-    allpass_tag)
+  static void reset_coeffs (crange<V> co, sub_coeffs<V> wn, allpass_tag)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= (n_coeffs * traits.size));
+    using T = vec_value_type_t<V>;
+    assert (co.size() >= n_coeffs);
 
     // Found empirically
-    vec_store (&co[b0 * traits.size], wn.n * (wn.w - (T) 1.));
-    vec_store (&co[b1 * traits.size], vec_set<V> ((T) 1.));
-    vec_store (&co[a1 * traits.size], wn.n * (wn.w - (T) 1.));
+    co[b0] = wn.n * (wn.w - (T) 1.);
+    co[b1] = vec_set<V> ((T) 1.);
+    co[a1] = co[b0];
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<vec_value_type_t<V>> co,
-    V                           freq,
-    vec_value_type_t<V>         srate,
-    lowpass_tag                 t)
+    crange<V>           co,
+    V                   freq,
+    vec_value_type_t<V> srate,
+    lowpass_tag         t)
   {
     reset_coeffs (co, get_sub_coeffs (freq, srate), t);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<vec_value_type_t<V>> co,
-    V                           freq,
-    vec_value_type_t<V>         srate,
-    highpass_tag                t)
+    crange<V>           co,
+    V                   freq,
+    vec_value_type_t<V> srate,
+    highpass_tag        t)
   {
     reset_coeffs (co, get_sub_coeffs (freq, srate), t);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<vec_value_type_t<V>> co,
-    V                           freq,
-    vec_value_type_t<V>         srate,
-    allpass_tag                 t)
+    crange<V>           co,
+    V                   freq,
+    vec_value_type_t<V> srate,
+    allpass_tag         t)
   {
     reset_coeffs (co, get_sub_coeffs (freq, srate), t);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   // 1 set of coeffs, N outs. (E.g. stereo filter using double). Interleaved
@@ -324,49 +268,36 @@ struct onepole_tdf2 {
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
     crange<const vec_value_type_t<V>> co, // coeffs (1 set)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    crange<V>                         st, // states (interleaved, SIMD aligned)
     V                                 in,
     single_coeff_set_tag)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
     assert (co.size() >= n_coeffs);
-    assert (st.size() >= traits.size * n_states);
+    assert (st.size() >= n_states);
 
     V b0v = vec_set<V> (co[b0]);
     V b1v = vec_set<V> (co[b1]);
     V a1v = vec_set<V> (co[a1]);
-    V s1v = vec_load<V> (&st[s1 * traits.size]);
 
-    // TDF II
-    auto out = in * b0v + s1v;
-    s1v      = in * b1v - out * a1v;
-    vec_store<V> (&st[s1 * traits.size], s1v);
+    auto out = in * b0v + st[s1];
+    +st[s1]  = in * b1v - out * a1v;
     return out;
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 in)
+    crange<const V> co, // coeffs (interleaved, SIMD aligned)
+    crange<V>       st, // states (interleaved, SIMD aligned)
+    V               in)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
-    assert (co.size() >= traits.size * n_coeffs);
-    assert (st.size() >= traits.size * n_states);
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= n_states);
 
-    V b0v = vec_load<V> (&co[b0 * traits.size]);
-    V b1v = vec_load<V> (&co[b1 * traits.size]);
-    V a1v = vec_load<V> (&co[a1 * traits.size]);
-    V s1v = vec_load<V> (&st[s1 * traits.size]);
-
-    // TDF II
-    auto out = in * b0v + s1v;
-    s1v      = in * b1v - out * a1v;
-    vec_store<V> (&st[s1 * traits.size], s1v);
+    auto out = in * co[b0] + st[s1];
+    st[s1]   = in * co[b1] - out * co[a1];
     return out;
   }
 };

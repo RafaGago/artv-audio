@@ -90,12 +90,15 @@ public:
     return cascade_type::n_states_for_order (order);
   }
   //----------------------------------------------------------------------------
+  static constexpr uint n_coeffs = n_coeffs_for_order (max_order);
+  static constexpr uint n_states = n_states_for_order (max_order);
+  //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<vec_value_type_t<V>> co, // coeffs interleaved
-    V                           freq,
-    vec_value_type_t<V>         sr,
-    uint                        order)
+    crange<V>           co, // coeffs interleaved
+    V                   freq,
+    vec_value_type_t<V> sr,
+    uint                order)
   {
     using T                 = vec_value_type_t<V>;
     constexpr auto traits   = vec_traits<V>();
@@ -117,7 +120,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st, uint order)
+  static void reset_states (crange<V> st, uint order)
   {
     cascade_type::reset_states (st, order);
   }
@@ -125,21 +128,20 @@ public:
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
     crange<const vec_value_type_t<V>> co, // coeffs (single set)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
+    crange<V>                         st, // states (interleaved, SIMD aligned)
     V                                 in,
-    uint                              order,
-    single_coeff_set_tag              t)
+    uint                              order)
   {
-    return cascade_type::tick (co, st, in, order, t);
+    return cascade_type::tick (co, st, in, order);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 in,
-    uint                              order)
+    crange<const V> co, // coeffs (interleaved, SIMD aligned)
+    crange<V>       st, // states (interleaved, SIMD aligned)
+    V               in,
+    uint            order)
   {
     return cascade_type::tick (co, st, in, order);
   }
@@ -163,16 +165,16 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
-    V                           freq,
-    vec_value_type_t<V>         sr,
+    crange<V>           co, // coeffs (interleaved, SIMD aligned)
+    V                   freq,
+    vec_value_type_t<V> sr,
     lowpass_tag)
   {
     butterworth_type::reset_coeffs (co, freq, sr, order);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
     butterworth_type::reset_states (st, order);
   }
@@ -180,18 +182,17 @@ public:
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
     crange<const vec_value_type_t<V>> co, // coeffs (single set)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 in,
-    single_coeff_set_tag              t)
+    crange<V>                         st, // states (interleaved, SIMD aligned)
+    V                                 in)
   {
-    return butterworth_type::tick (co, st, in, order, t);
+    return butterworth_type::tick (co, st, in, order);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       st, // states (interleaved, SIMD aligned)
-    V                                 in)
+    crange<const V> co, // coeffs (interleaved, SIMD aligned)
+    crange<V>       st, // states (interleaved, SIMD aligned)
+    V               in)
   {
     return butterworth_type::tick (co, st, in, order);
   }

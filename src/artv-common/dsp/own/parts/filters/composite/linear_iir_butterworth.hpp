@@ -37,61 +37,47 @@ public:
   static constexpr uint get_latency (uint n_stages) { return 1 << n_stages; }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> co,
-    V                           freq,
-    vec_value_type_t<V>         sr)
+  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> sr)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
     vec_complex<V> poles, zeros;
     butterworth_lp_complex::poles (make_crange (poles), freq, sr, 1);
     butterworth_lp_complex::zeros (make_crange (zeros), freq, sr, 1);
-    V gain_v = butterworth_lp_complex::gain (make_crange (poles), 1);
-
-    auto gain_ptr = &co[gain * traits.size]; // gain is last
-    vec_store (gain_ptr, gain_v);
+    // gain is last, storing before moving "co"
+    co[gain] = butterworth_lp_complex::gain (make_crange (poles), 1);
 
     rev_1pole::reset_coeffs (co, vec_real (poles), vec_real (zeros));
-    co = co.shrink_head (rev_1pole::n_coeffs * traits.size);
+    co = co.shrink_head (rev_1pole::n_coeffs);
 
     fwd_1pole::reset_coeffs (co, freq, sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st, uint stages)
+  static void reset_states (crange<V> st, uint stages)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * get_n_states (stages);
+    uint numstates = get_n_states (stages);
     assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    memset (st.data(), 0, sizeof (V) * numstates);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (
-    crange<const vec_value_type_t<V>> co,
-    crange<vec_value_type_t<V>>       st,
-    V                                 v,
-    uint                              n_stages,
-    uint                              sample_idx) // sample counter (external)
+    crange<const V> co,
+    crange<V>       st,
+    V               v,
+    uint            n_stages,
+    uint            sample_idx) // sample counter (external)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= (n_coeffs * traits.size));
-    assert (st.size() >= (get_n_states (n_stages) * traits.size));
+    assert (co.size() >= (n_coeffs));
+    assert (st.size() >= (get_n_states (n_stages)));
     assert (n_stages);
 
-    V gain_v = vec_load<V> (&co[gain * traits.size]);
+    V gain_v = co[gain];
     V out    = v;
 
     out = rev_1pole::tick (co, st, out, n_stages, sample_idx);
     out *= gain_v;
-    co = co.shrink_head (rev_1pole::n_coeffs * traits.size);
-    st = st.shrink_head (rev_1pole::get_n_states (n_stages) * traits.size);
+    co = co.shrink_head (rev_1pole::n_coeffs);
+    st = st.shrink_head (rev_1pole::get_n_states (n_stages));
 
     out = fwd_1pole::tick (co, st, out);
     return out;
@@ -99,24 +85,21 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void tick (
-    crange<V>                         io, // ins on call, outs when returning
-    crange<const vec_value_type_t<V>> co,
-    crange<vec_value_type_t<V>>       st,
-    uint                              n_stages,
-    uint                              sample_idx) // sample counter (external)
+    crange<const V> co,
+    crange<V>       st,
+    crange<V>       io, // ins on call, outs when returning
+    uint            n_stages,
+    uint            sample_idx) // sample counter (external)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= (n_coeffs * traits.size));
-    assert (st.size() >= (get_n_states (n_stages) * traits.size));
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= get_n_states (n_stages));
     assert (n_stages);
 
-    V gain_v = vec_load<V> (&co[gain * traits.size]);
+    V gain_v = co[gain];
 
-    rev_1pole::tick (io, co, st, n_stages, sample_idx);
-    co = co.shrink_head (rev_1pole::n_coeffs * traits.size);
-    st = st.shrink_head (rev_1pole::get_n_states (n_stages) * traits.size);
+    rev_1pole::tick (co, st, io, n_stages, sample_idx);
+    co = co.shrink_head (rev_1pole::n_coeffs);
+    st = st.shrink_head (rev_1pole::get_n_states (n_stages));
 
     for (uint i = 0; i < io.size(); ++i) {
       io[i] *= gain_v; // gain from previous stage
@@ -160,14 +143,11 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
-    V                           freq,
-    vec_value_type_t<V>         sr,
-    uint                        order)
+    crange<V>           co,
+    V                   freq,
+    vec_value_type_t<V> sr,
+    uint                order)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
     assert ((order % 4) == 0);
 
     std::array<vec_complex<V>, 1>             zeros;
@@ -175,57 +155,47 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
 
     butterworth_lp_complex::zeros (make_crange (zeros), freq, sr, 1);
     butterworth_lp_complex::poles (make_crange (poles), freq, sr, order / 2);
-    V gain_v = butterworth_lp_complex::gain (make_crange (poles), order / 2);
 
-    vec_store (&co[gain * traits.size], gain_v);
-    co = co.shrink_head (traits.size); // advance the gain coefficient
+    co[gain] = butterworth_lp_complex::gain (make_crange (poles), order / 2);
+    co       = co.shrink_head (1); // advance the gain coefficient
 
     for (uint i = 0; i < (order / 4); ++i) {
       rev_2pole::reset_coeffs (co, poles[i], vec_real (zeros[0]));
-      co = co.shrink_head (rev_2pole::n_coeffs * traits.size);
+      co = co.shrink_head (rev_2pole::n_coeffs);
     }
     fwd_2pole::reset_coeffs (co, freq, sr, order / 2);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (
-    crange<vec_value_type_t<V>> st,
-    uint                        order,
-    uint                        stages)
+  static void reset_states (crange<V> st, uint order, uint stages)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * get_n_states (order, stages);
+    uint numstates = get_n_states (order, stages);
     assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    memset (st.data(), 0, sizeof (V) * numstates);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (
-    crange<const vec_value_type_t<V>> co,
-    crange<vec_value_type_t<V>>       st,
-    V                                 v,
-    uint                              order,
-    uint                              n_stages,
-    uint                              sample_idx) // sample counter (external)
+    crange<const V> co,
+    crange<V>       st,
+    V               v,
+    uint            order,
+    uint            n_stages,
+    uint            sample_idx) // sample counter (external)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (co.size() >= (get_n_coeffs (order) * traits.size));
-    assert (st.size() >= (get_n_states (order, n_stages) * traits.size));
+    assert (co.size() >= get_n_coeffs (order));
+    assert (st.size() >= get_n_states (order, n_stages));
     assert (n_stages);
     assert ((order % 4) == 0);
 
     V out    = v;
-    V gain_v = vec_load<V> (&co[gain * traits.size]);
-    co       = co.shrink_head (traits.size);
+    V gain_v = co[gain];
+    co       = co.shrink_head (1);
 
     for (uint i = 0; i < (order / 4); ++i) {
       out = rev_2pole::tick (co, st, out, n_stages, sample_idx);
-      co  = co.shrink_head (rev_2pole::n_coeffs * traits.size);
-      st  = st.shrink_head (rev_2pole::get_n_states (n_stages) * traits.size);
+      co  = co.shrink_head (rev_2pole::n_coeffs);
+      st  = st.shrink_head (rev_2pole::get_n_states (n_stages));
     }
     out *= gain_v;
     return fwd_2pole::tick (co, st, out, order / 2);
@@ -233,28 +203,28 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void tick (
-    crange<V>                         io, // ins on call, outs when returning
-    crange<const vec_value_type_t<V>> co,
-    crange<vec_value_type_t<V>>       st,
-    uint                              order,
-    uint                              n_stages,
-    uint                              sample_idx) // sample counter (external)
+    crange<const V> co,
+    crange<V>       st,
+    crange<V>       io, // ins on call, outs when returning
+    uint            order,
+    uint            n_stages,
+    uint            sample_idx) // sample counter (external)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
-    assert (co.size() >= (get_n_coeffs (order) * traits.size));
-    assert (st.size() >= (get_n_states (order, n_stages) * traits.size));
+    assert (co.size() >= get_n_coeffs (order));
+    assert (st.size() >= get_n_states (order, n_stages));
     assert (n_stages);
     assert ((order % 4) == 0);
 
-    V gain_v = vec_load<V> (&co[gain * traits.size]);
-    co       = co.shrink_head (traits.size);
+    V gain_v = co[gain];
+    co       = co.shrink_head (1);
 
     for (uint i = 0; i < (order / 4); ++i) {
-      rev_2pole::tick (io, co, st, n_stages, sample_idx);
-      co = co.shrink_head (rev_2pole::n_coeffs * traits.size);
-      st = st.shrink_head (rev_2pole::get_n_states (n_stages) * traits.size);
+      rev_2pole::tick (co, st, io, n_stages, sample_idx);
+      co = co.shrink_head (rev_2pole::n_coeffs);
+      st = st.shrink_head (rev_2pole::get_n_states (n_stages));
     }
     for (uint i = 0; i < io.size(); ++i) {
       io[i] *= gain_v;
@@ -301,56 +271,56 @@ struct linear_iir_butterworth_lowpass_any_order {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
-    V                           freq,
-    vec_value_type_t<V>         sr,
-    uint                        order)
+    crange<V>           co, // coeffs (interleaved, SIMD aligned)
+    V                   freq,
+    vec_value_type_t<V> sr,
+    uint                order)
   {
     assert ((order % 2) == 0);
     assert (order <= max_order);
     if (order == 2) {
-      two::reset_coeffs (co, freq, sr);
+      two::reset_coeffs<V> (co, freq, sr);
     }
     else {
-      any::reset_coeffs (co, freq, sr, order);
+      any::reset_coeffs<V> (co, freq, sr, order);
     }
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (
-    crange<const vec_value_type_t<V>> co,
-    crange<vec_value_type_t<V>>       st,
-    V                                 v,
-    uint                              order,
-    uint                              n_stages,
-    uint                              sample_idx) // sample counter (external)
+    crange<const V> co,
+    crange<V>       st,
+    V               v,
+    uint            order,
+    uint            n_stages,
+    uint            sample_idx) // sample counter (external)
   {
     assert ((order % 2) == 0);
     assert (order <= max_order);
     if (order == 2) {
-      return two::tick (co, st, v, n_stages, sample_idx);
+      return two::tick<V> (co, st, v, n_stages, sample_idx);
     }
     else {
-      return any::tick (co, st, v, order, n_stages, sample_idx);
+      return any::tick<V> (co, st, v, order, n_stages, sample_idx);
     }
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void tick (
-    crange<V>                         io,
-    crange<const vec_value_type_t<V>> co,
-    crange<vec_value_type_t<V>>       st,
-    uint                              order,
-    uint                              n_stages,
-    uint                              sample_idx) // sample counter (external)
+    crange<const V> co,
+    crange<V>       st,
+    crange<V>       io,
+    uint            order,
+    uint            n_stages,
+    uint            sample_idx) // sample counter (external)
   {
     assert ((order % 2) == 0);
     assert (order <= max_order);
     if (order == 2) {
-      two::tick (io, co, st, n_stages, sample_idx);
+      two::tick<V> (co, st, io, n_stages, sample_idx);
     }
     else {
-      any::tick (io, co, st, order, n_stages, sample_idx);
+      any::tick<V> (co, st, io, order, n_stages, sample_idx);
     }
   }
   //----------------------------------------------------------------------------

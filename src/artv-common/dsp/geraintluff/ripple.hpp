@@ -4091,10 +4091,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (
-    crange<T*>       outs,
-    crange<T const*> ins,
-    uint             block_samples)
+  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));

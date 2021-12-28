@@ -17,57 +17,47 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<vec_value_type_t<V>> c,
-    V                           freq,
-    vec_value_type_t<V>         sr,
+    crange<V>           c,
+    V                   freq,
+    vec_value_type_t<V> sr,
     highpass_tag)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    using T = vec_value_type_t<V>;
+    assert (c.size() >= n_coeffs);
 
-    assert (c.size() >= (n_coeffs * traits.size));
-    vec_store (&c[a * traits.size], (T) 2. * vec_sin ((T) M_PI * freq / srate));
+    c[a] = (T) 2. * vec_sin ((T) M_PI * freq / srate);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    reset_states (st, vec_set<V> ((vec_value_type_t<V>) 1.0));
+    using T = vec_value_type_t<V>;
+    reset_states (st, vec_set<V> ((T) 1.0));
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st, V bipolar_ampl)
+  static void reset_states (crange<V> st, V bipolar_ampl)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    assert (st.size() >= n_states);
 
-    assert (st.size() >= (n_states * traits.size));
-
-    vec_store (&st[z0 * traits.size], bipolar_ampl);
-    vec_store (&st[z1 * traits.size], vec_set<V> ((T) 0.));
+    st[z0] = bipolar_ampl;
+    st[z1] = vec_set<V> ((T) 0.);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (interleaved, SIMD aligned)
-    crange<vec_value_type_t<V>>       st) // states (interleaved, SIMD aligned)
+    crange<const V> co, // coeffs (interleaved, SIMD aligned)
+    crange<V>       st) // states (interleaved, SIMD aligned)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
-    assert (co.size() >= traits.size * n_coeffs);
-    assert (st.size() >= traits.size * n_states);
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= n_states);
 
-    V a_v  = vec_load<V> (&co[a * traits.size]);
-    V z0_v = vec_load<V> (&st[z0 * traits.size]);
-    V z1_v = vec_load<V> (&st[z1 * traits.size]);
-
-    z0_v = z0_v - a_v * z1_v;
-    z1_v = z1_v + a_v * z0_v;
-
-    vec_store (&st[z0 * traits.size], z0_v);
-    vec_store (&st[z1 * traits.size], z1_v);
-    return z0_v;
+    st[z0] = st[z0] - co[a] * st[z1];
+    st[z1] = st[z1] + co[a] * st[z0];
+    return st[z9];
   }
   //----------------------------------------------------------------------------
 };

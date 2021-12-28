@@ -1,10 +1,5 @@
 - Add single pole allpass on Phaser.
 
-- Check why all DSP functions are taking memory ranges pointing to builtin types
-  instead of pointing to vector types directly. If there is no impediment, just
-  use them, it will avoid multiplying every access by traits.size (the compiler
-  will do it instead). I vaguely remember that this is legacy.
-
 - When applicable. Use the class to wrap our own (DSP) parts. It results in
   more readable code.
 

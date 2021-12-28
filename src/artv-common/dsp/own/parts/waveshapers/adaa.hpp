@@ -31,18 +31,15 @@ public:
   enum state { n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<vec_value_type_t<V>>)
+  static void reset_coeffs (crange<V>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>>,
-    crange<vec_value_type_t<V>> st,
-    V                           x)
+  static V tick (crange<const V>, crange<V>, V x)
   {
     return functions::fn (x);
   }
@@ -56,42 +53,28 @@ public:
   enum state { x1, x1_int, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<vec_value_type_t<V>>)
+  static void reset_coeffs (crange<V>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
-  {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
-  }
+  static void reset_states (crange<V> st)
+  {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>>,
-    crange<vec_value_type_t<V>> st,
-    V                           x)
+  static V tick (crange<const V>, crange<V> st, V x)
   {
     // as this has to calculate both branches, it might not be worth bothering.
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    using T = vec_value_type_t<V>;
 
-    assert (st.size() >= (traits.size * n_states));
+    assert (st.size() >= n_states);
 
-    T* x1v_ptr     = &st[x1 * traits.size];
-    T* x1v_int_ptr = &st[x1_int * traits.size];
-
-    V x1v     = vec_load<V> (x1v_ptr);
-    V x1v_int = vec_load<V> (x1v_int_ptr);
+    V x1v     = st[x1];
+    V x1v_int = st[x1_int];
 
     V x_int = functions::int_fn (x);
 
-    vec_store (x1v_ptr, x);
-    vec_store (x1v_int_ptr, x_int);
+    st[x1]     = x;
+    st[x1_int] = x_int;
 
     V diff = x - x1v;
     V big, small;
@@ -118,18 +101,14 @@ public:
   enum state { x1, x2, x2_der, x1_int2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<vec_value_type_t<V>>)
+  static void reset_coeffs (crange<V>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   // kept as an impl reference if going for it.
@@ -169,10 +148,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>>,
-    crange<vec_value_type_t<V>> st,
-    V                           x)
+  static V tick (crange<const V>, crange<V> st, V x)
   {
     // Real SIMD: TODO. Might not be worth because of the high number of
     // branches.
@@ -222,12 +198,11 @@ public:
   };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<vec_value_type_t<V>> c)
+  static void reset_coeffs (crange<V> c)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    using T = vec_value_type_t<V>;
 
-    assert (c.size() >= (n_coeffs * traits.size));
+    assert (c.size() >= n_coeffs);
 
     static_assert (moving_average<2>::n_coeffs == 0, "Add initialization!");
     static_assert (Impl<1, Ts...>::n_coeffs == 0, "Add initialization!");
@@ -236,33 +211,24 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> s)
+  static void reset_states (crange<V> s)
   {
-    using T = vec_value_type_t<V>;
-
     // maybe memset delay line and boxcar?
-    Impl<1, Ts...>::template reset_states<V> (
-      s.shrink_head (impl_states_idx * vec_traits<V>().size));
+    Impl<1, Ts...>::template reset_states<V> (s.shrink_head (impl_states_idx));
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>> c,
-    crange<vec_value_type_t<V>>       st,
-    V                                 x)
+  static V tick (crange<const V> c, crange<V> st, V x)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (c.size() >= (traits.size * n_coeffs));
-    assert (st.size() >= (traits.size * n_states));
+    assert (c.size() >= n_coeffs);
+    assert (st.size() >= n_states);
 
     // comments on the non-vectorized version
     V delayed = allpass_interpolator::tick (c, st, x);
-    st        = st.shrink_head (allpass_interpolator::n_states * traits.size);
+    st        = st.shrink_head (allpass_interpolator::n_states);
 
     V filtered = moving_average<2>::tick ({}, st, x);
-    st         = st.shrink_head (moving_average<2>::n_states * traits.size);
+    st         = st.shrink_head (moving_average<2>::n_states);
 
     V eq = delayed + (delayed - filtered);
     return Impl<1, Ts...>::tick ({}, st, eq);
@@ -277,10 +243,7 @@ struct null_shaper {
   enum state { n_states };
 
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>> c,
-    crange<vec_value_type_t<V>>       st,
-    V                                 x)
+  static V tick (crange<const V> c, crange<V> st, V x)
   {
     return x;
   }

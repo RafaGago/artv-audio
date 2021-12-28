@@ -95,8 +95,7 @@ public:
   //----------------------------------------------------------------------------
   static uint get_n_stages (float freq, float samplerate, float snr_db)
   {
-    return linear_iir_butterworth_lowpass_any_order::get_n_stages (
-      freq, samplerate, snr_db);
+    return lp_type::get_n_stages (freq, samplerate, snr_db);
   }
   //----------------------------------------------------------------------------
   void set_crossover_point (
@@ -118,8 +117,7 @@ public:
 
     if (order != 0) {
       double_x2 f = {freq_l, freq_r};
-      lp_type::reset_coeffs (
-        make_crange (_coeffs[idx]).cast (double {}), f, _samplerate, order);
+      lp_type::reset_coeffs<double_x2> (_coeffs[idx], f, _samplerate, order);
     }
 
     if (order == _order[idx]) {
@@ -142,13 +140,8 @@ public:
         continue;
       }
 
-      auto lp_out = lp_type::tick (
-        make_crange (_coeffs[c]).cast (double {}),
-        _states[c].cast (double {}),
-        hp_out,
-        _order[c],
-        _n_stages[c],
-        _sample_idx);
+      auto lp_out = lp_type::tick<double_x2> (
+        _coeffs[c], _states[c], hp_out, _order[c], _n_stages[c], _sample_idx);
 
       auto delayed_in = _in_delcomp[c].exchange (hp_out);
 
@@ -197,10 +190,10 @@ public:
         }
         // process and place non latency compensated lp in band out
         memcpy (&_block->bands[c], hp, blocksize * sizeof hp[0]);
-        lp_type::tick (
+        lp_type::tick<double_x2> (
+          _coeffs[c],
+          _states[c],
           make_crange (&_block->bands[c][0], blocksize),
-          make_crange (_coeffs[c]).cast (double {}),
-          _states[c].cast (double {}),
           _order[c],
           _n_stages[c],
           _sample_idx);

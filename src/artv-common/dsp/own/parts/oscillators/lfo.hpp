@@ -27,7 +27,9 @@ public:
   {
     _phasor.set_freq (f, samplerate);
     onepole_smoother::reset_coeffs (
-      make_crange (_smooth_coeff), make_vec_x1 (f * 2), samplerate);
+      make_crange (_smooth_coeff).cast (vec<float, 1> {}),
+      make_vec_x1 (f * 2),
+      samplerate);
   }
   //----------------------------------------------------------------------------
   void set_phase (phase p) { _phasor.set_phase (p); }
@@ -113,7 +115,7 @@ public:
     for (uint i = 0; i < n; ++i) {
       ret = onepole_smoother::tick (
         make_crange (_smooth_coeff),
-        make_crange (_smooth_state),
+        make_crange (_smooth_state).cast (vec<float, 1> {}),
         make_vec_x1 (_noise_value))[0];
     }
     return ret;

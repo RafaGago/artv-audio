@@ -20,8 +20,6 @@
 
 namespace artv {
 
-#define SOUND_DELAY_LEAN 1
-
 //------------------------------------------------------------------------------
 class sound_delay {
 public:
@@ -108,12 +106,6 @@ public:
       * (1. / 16.)));
 
     _delay.reset (2, std::max (_max_delay_samples, _max_tempo_delay));
-
-#if !SOUND_DELAY_LEAN
-    onepole_smoother<double>::lowpass (
-      make_crange (_smooth_coeff), 1 / 0.015, pc.get_sample_rate());
-    _smooth_state[0] = _smooth_state[1] = 0.;
-#endif
     _delay_times_samples[0] = _delay_times_samples[1] = 0.;
   }
   //----------------------------------------------------------------------------
@@ -125,16 +117,8 @@ public:
     update_delay_times();
 
     for (uint i = 0; i < block_samples; ++i) {
-#if SOUND_DELAY_LEAN
       auto t_samples = _delay_times_samples;
-#else
-      auto t_samples = onepole_smoother<double>::tick (
-        make_crange (_smooth_coeff),
-        make_array (
-          make_crange (_smooth_state[0]), make_crange (_smooth_state[1])),
-        _delay_times_samples);
-#endif
-      auto in = make_array (ins[0][i], ins[1][i]);
+      auto in        = make_array (ins[0][i], ins[1][i]);
       _delay.push (in);
 
       outs[0][i] = _delay.get (0, t_samples[0]);
@@ -179,12 +163,8 @@ private:
   float _delay_samples;
 
   std::array<double, 2> _delay_times_samples;
-#if !SOUND_DELAY_LEAN
-  std::array<double, 2> _smooth_state;
-  double                _smooth_coeff;
-#endif
-  delay_line<float> _delay;
-  plugin_context*   _plugcontext = nullptr;
+  delay_line<float>     _delay;
+  plugin_context*       _plugcontext = nullptr;
 };
 //------------------------------------------------------------------------------
 }; // namespace artv

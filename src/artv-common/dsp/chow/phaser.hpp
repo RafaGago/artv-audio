@@ -133,6 +133,8 @@ public:
     double             fbAmt,
     double             fs)
   {
+    using x1_vec = vec<value_type, 1>;
+
     assert (c.size() >= n_coeffs);
     // jassert (R > 0.0f);
 
@@ -166,8 +168,8 @@ public:
 
     // DC blockers, could be only done once...
     auto dc_coeffs = c.shrink_head (n_own_coeffs);
-    // float! not going low on frequency.
-    mystran_dc_blocker::reset_coeffs (dc_coeffs, make_vec_x1 (2.), fs);
+    mystran_dc_blocker::reset_coeffs<x1_vec> (
+      dc_coeffs.cast (x1_vec {}), make_vec_x1 (2.), fs);
   }
   //----------------------------------------------------------------------------
   static void reset_states (crange<value_type> s)
@@ -184,11 +186,13 @@ public:
     float                    d2,
     float                    d3) noexcept
   {
+    using x1_vec = vec<value_type, 1>;
+
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
 
-    auto dc_coeffs = c.shrink_head (n_own_coeffs);
-    auto dc_states = s.shrink_head (n_own_states);
+    auto dc_coeffs = c.shrink_head (n_own_coeffs).cast<const x1_vec>();
+    auto dc_states = s.shrink_head (n_own_states).cast (x1_vec {});
 
     double y      = s[z1] + x * c[b0];
     auto   ydrive = drive (y, d3);
@@ -338,11 +342,13 @@ public:
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
+    using x1_t = vec<decltype (_smooth_coeff), 1>;
+
     _plugcontext = &pc;
 
     smoother::reset_coeffs (
-      make_crange (_smooth_coeff),
-      make_vec_x1<decltype (_smooth_coeff)> (1. / 0.1),
+      make_crange (_smooth_coeff).cast (x1_t {}),
+      vec_set<x1_t> (1. / 0.1),
       pc.get_sample_rate());
 
     memset (&_ph_coeffs, 0, sizeof _ph_coeffs);
@@ -388,9 +394,8 @@ public:
       for (uint j = 0; j < param_tgt.arr.size(); j += sse_step) {
         float_x4 out = smoother::tick (
           make_crange (_smooth_coeff),
-          make_crange (&_param_state.arr[j], sse_step),
-          vec_load<float_x4> (&param_tgt.arr[j]),
-          single_coeff_set_tag {});
+          make_crange (&_param_state.arr[j], sse_step).cast (float_x4 {}),
+          vec_load<float_x4> (&param_tgt.arr[j]));
 
         vec_store (&smooth.arr[j], out);
       }

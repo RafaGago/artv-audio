@@ -22,64 +22,41 @@ struct iir_dc_blocker {
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> c,
-    V                           freq,
-    vec_value_type_t<V>         sr)
+  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> sr)
+  {
+    using T = vec_value_type_t<V>;
+    assert (c.size() >= n_coeffs);
+
+    c[R] = (T) 1. - ((T) M_PI * (T) 2. * freq / sr);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (crange<const V> c, crange<V> s, V x)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
 
-    assert (c.size() >= (traits.size * n_coeffs));
-
-    auto Rv = 1. - (M_PI * 2. * freq / sr);
-    vec_store (&c[R * traits.size], Rv);
+    assert (c.size() >= n_coeffs);
+    return tick (s, x, c[R]);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>> c,
-    crange<vec_value_type_t<V>>       s,
-    V                                 x)
+  static V tick (crange<const vec_value_type_t<V>> c, crange<V> s, V x)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    assert (c.size() >= (traits.size * n_coeffs));
-    return tick (s, x, vec_load<V> (&c[R * traits.size]));
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>> c,
-    crange<vec_value_type_t<V>>       s,
-    V                                 x,
-    single_coeff_set_tag)
-  {
-    assert (c.size() >= (n_coeffs));
+    assert (c.size() >= n_coeffs);
     return tick (s, x, vec_set<V> (c[R]));
   }
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<vec_value_type_t<V>> s, V x, V Rv)
+  static V tick (crange<V> s, V x, V Rv)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    assert (s.size() >= n_states);
 
-    assert (s.size() >= (traits.size * n_states));
-
-    auto x1_ptr = &s[x1 * traits.size];
-    auto y1_ptr = &s[y1 * traits.size];
-
-    auto x1v = vec_load<V> (x1_ptr);
-    auto y1v = vec_load<V> (y1_ptr);
-
-    auto y = x - x1v + Rv * y1v;
-
-    vec_store (x1_ptr, x);
-    vec_store (y1_ptr, y);
+    auto y = x - s[x1] + Rv * s[y1];
+    s[x1]  = x;
+    s[y1]  = y;
     return y;
   }
 };
@@ -95,57 +72,40 @@ struct mystran_dc_blocker {
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> c,
-    V                           freq,
-    vec_value_type_t<V>         sr)
+  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> sr)
   {
     onepole_smoother::reset_coeffs (c, freq, sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>> c,
-    crange<vec_value_type_t<V>>       s,
-    V                                 x)
+  static V tick (crange<const V> c, crange<V> s, V x)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    assert (c.size() >= n_coeffs);
+    assert (s.size() >= n_states);
 
-    assert (c.size() >= (traits.size * n_coeffs));
-    assert (s.size() >= (traits.size * n_states));
-
-    auto prev_lp_out = vec_load<V> (&s[onepole_smoother::z1 * traits.size]);
+    auto prev_lp_out = s[onepole_smoother::z1];
     onepole_smoother::tick (c, s, x);
     return x - prev_lp_out;
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> c,
-    crange<vec_value_type_t<V>>       s,
-    V                                 x,
-    single_coeff_set_tag              t)
+    crange<const vec_value_type_t<V>> c, // single coeff set
+    crange<V>                         s,
+    V                                 x)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    assert (c.size() >= n_coeffs);
+    assert (s.size() >= n_states);
 
-    assert (c.size() >= (traits.size));
-    assert (s.size() >= (traits.size * n_states));
-
-    auto prev_lp_out = vec_load<V> (&s[onepole_smoother::z1 * traits.size]);
-    onepole_smoother::tick (c, s, x, t);
+    auto prev_lp_out = s[onepole_smoother::z1];
+    onepole_smoother::tick (c, s, x);
     return x - prev_lp_out;
   }
   //----------------------------------------------------------------------------
@@ -162,65 +122,47 @@ struct mystran_dc_blocker_2pole {
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<vec_value_type_t<V>> c,
-    V                           freq,
-    vec_value_type_t<V>         sr)
+  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> sr)
   {
-    using T                      = vec_value_type_t<V>;
-    constexpr auto traits        = vec_traits<V>();
-    constexpr T    butterworth_q = M_SQRT1_2;
+    using T                   = vec_value_type_t<V>;
+    constexpr T butterworth_q = M_SQRT1_2;
 
     andy::svf_lowpass::reset_coeffs (c, freq, vec_set<V> (butterworth_q), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
-
-    uint numstates = traits.size * n_states;
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (T) * numstates);
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const vec_value_type_t<V>> c,
-    crange<vec_value_type_t<V>>       s,
-    V                                 x)
+  static V tick (crange<const V> c, crange<V> s, V x)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    assert (c.size() >= n_coeffs);
+    assert (s.size() >= n_states);
 
-    assert (c.size() >= (traits.size * n_coeffs));
-    assert (s.size() >= (traits.size * n_states));
-
-    V  now  = andy::svf_lowpass::tick (c, s, x);
-    T* prev = s.shrink_head (traits.size * andy::svf_lowpass::n_states).data();
-    V  prev_lp_out = vec_load<V> (prev);
-    vec_store (prev, now);
+    V  now         = andy::svf_lowpass::tick (c, s, x);
+    V* prev        = s.shrink_head (andy::svf_lowpass::n_states).data();
+    V  prev_lp_out = *prev;
+    *prev          = now;
     return x - prev_lp_out;
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> c,
-    crange<vec_value_type_t<V>>       s,
-    V                                 x,
-    single_coeff_set_tag              t)
+    crange<const vec_value_type_t<V>> c, // single coeff set
+    crange<V>                         s,
+    V                                 x)
   {
-    using T               = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    assert (c.size() >= n_coeffs);
+    assert (s.size() >= n_states);
 
-    assert (c.size() >= (traits.size));
-    assert (s.size() >= (traits.size * n_states));
-
-    V  now  = andy::svf_lowpass::tick (c, s, x, t);
-    T* prev = s.shrink_head (traits.size * andy::svf_lowpass::n_states).data();
-    V  prev_lp_out = vec_load<V> (prev);
-    vec_store (prev, now);
+    V  now         = andy::svf_lowpass::tick (c, s, x);
+    V* prev        = s.shrink_head (andy::svf_lowpass::n_states).data();
+    V  prev_lp_out = *prev;
+    *prev          = now;
     return x - prev_lp_out;
   }
   //----------------------------------------------------------------------------

@@ -109,41 +109,29 @@ public:
   enum state { x1, x1_exp, x1_int, n_states };
   //----------------------------------------------------------------------------
   template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<vec_value_type_t<V>>)
+  static void reset_coeffs (crange<V>)
   {
   }
   //----------------------------------------------------------------------------
   template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (crange<V> st)
   {
-    using T = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
+    assert (st.size() >= n_states);
 
-    assert (st.size() >= (traits.size * n_states));
-
-    T* x1v_ptr     = &st[x1 * traits.size];
-    T* x1_expv_ptr = &st[x1_exp * traits.size];
-    T* x1_intv_ptr = &st[x1_int * traits.size];
-
-    auto x1v     = vec_set ((T) 0.);
-    auto x1_expv = vec_set ((T) 1.); // exp (0)
-    auto x1_intv = vec_set ((T) 0.6931471805599453); // log (2)
-
-    vec_store (x1v_ptr, x1v);
-    vec_store (x1_expv_ptr, x1_expv);
-    vec_store (x1_intv_ptr, x1_intv);
+    st[x1] = vec_set ((T) 0.);
+    st[x1_exp] = vec_set ((T) 1.); // exp (0);
+    st[x1_int] = vec_set ((T) 0.6931471805599453); // log (2);
   }
   //----------------------------------------------------------------------------
   template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick_simd (
-    crange<const vec_value_type_t<V>>,
-    crange<vec_value_type_t<V>> st,
+    crange<const V>,
+    crange<V> st,
     V                           x)
   {
     using T = vec_value_type_t<V>;
-    constexpr auto traits = vec_traits<V>();
 
-    assert (st.size() >= traits.size * n_states);
+    assert (st.size() >= n_states);
 
     // avoid exp going out of range by clipping the input. clipping at a point
     // that allows "x_exp * x1_expv" to not result on infinity.
@@ -155,20 +143,16 @@ public:
                      (T) 150.); // untested
     }
 
-    T* x1v_ptr     = &st[x1 * traits.size];
-    T* x1_expv_ptr = &st[x1_exp * traits.size];
-    T* x1_intv_ptr = &st[x1_int * traits.size];
-
-    V x1v     = vec_load<V> (x1v_ptr);
-    V x1_expv = vec_load<V> (x1_expv_ptr);
-    V x1_intv = vec_load<V> (x1_intv_ptr);
+    V x1v     = st[x1];
+    V x1_expv = st[x1_exp];
+    V x1_intv = st[x1_int];
 
     V x_exp = vec_exp (x);
     V x_int = vec_log (x_exp + ((T) 1. / x_exp));
 
-    vec_store (x1v_ptr, x);
-    vec_store (x1_expv_ptr, x_exp);
-    vec_store (x1_intv_ptr, x_int);
+    st[x1] = x;
+    st[x1_exp] = x_exp;
+    st[x1_int] = x_int;
 
     V num      = x_int - x1_intv;
     V den      = x - x1v;

@@ -9,6 +9,7 @@
 #include "artv-common/dsp/own/parts/filters/dc_blocker.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/dsp/own/parts/oscillators/lfo.hpp"
+#include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"
@@ -219,7 +220,7 @@ public:
   void reset (plugin_context& pc)
   {
     _plugcontext = &pc;
-    memset (&_allpass, 0, sizeof _allpass);
+    _allpass.reset_states_cascade();
     memset (&_feedback_samples, 0, sizeof _feedback_samples);
 
     _lfos[0].reset();
@@ -249,15 +250,16 @@ public:
     refresh_lfo_hz();
 
     memset (&_params.smooth_state, 0, sizeof _params.smooth_state);
-    memset (&_dc_block_states, 0, sizeof _dc_block_states);
 
-    mystran_dc_blocker::reset_coeffs (
-      _dc_block_coeffs, vec_set<double_x2> (2.), pc.get_sample_rate());
+    using x1_type = vec<decltype (_lp_smooth_coeff), 1>;
 
     onepole_smoother::reset_coeffs (
-      make_crange (_lp_smooth_coeff),
-      make_vec_x1<decltype (_lp_smooth_coeff)> (1. / 0.01),
+      make_crange (_lp_smooth_coeff).cast (x1_type {}),
+      vec_set<x1_type> (1. / 0.01),
       pc.get_sample_rate());
+
+    _dc_blocker.reset_states();
+    _dc_blocker.reset_coeffs (vec_set<double_x2> (2.), pc.get_sample_rate());
 
     _n_processed_samples = 0;
 
@@ -287,9 +289,9 @@ public:
           = make_crange (_params.smooth_target.arr, vec_size, vec_size * j);
         onepole_smoother::tick (
           make_crange (_lp_smooth_coeff),
-          make_crange (_params.smooth_state.arr, vec_size, vec_size * j),
-          vec_load<float_x4> (in),
-          single_coeff_set_tag {});
+          make_crange (_params.smooth_state.arr, vec_size, vec_size * j)
+            .cast (float_x4 {}),
+          vec_load<float_x4> (in));
       }
       // from now on access parameters without caring if they are smoothed or
       // not. This copy also has the aditional advantage of telling the compiler
@@ -434,11 +436,9 @@ public:
               f += fconstant_even;
             }
           }
-          andy::svf_allpass::reset_coeffs (
-            get_allpass_group_coeffs (s),
-            freqs,
-            qs,
-            _plugcontext->get_sample_rate());
+
+          _allpass.reset_coeffs_on_idx (
+            s, freqs, qs, _plugcontext->get_sample_rate());
         }
       }
 
@@ -451,8 +451,7 @@ public:
 
       for (uint g = 0; g < (pars.n_allpasses / vec_size); ++g) {
         // as of now this processes both in parallel and in series.
-        out = andy::svf_allpass::tick (
-          get_allpass_group_coeffs (g), get_allpass_group_states (g), out);
+        out = _allpass.tick_on_idx (g, out);
       }
       assert (
         (pars.n_allpasses % vec_size) == 0
@@ -464,8 +463,7 @@ public:
       outs[0][i] = outx2[0];
       outs[1][i] = outx2[1];
 
-      outx2
-        = mystran_dc_blocker::tick (_dc_block_coeffs, _dc_block_states, outx2);
+      outx2 = _dc_blocker.tick (outx2);
 
       _feedback_samples[0] = outx2[0];
       _feedback_samples[1] = outx2[1];
@@ -495,20 +493,6 @@ private:
     }
     hz += _params.unsmoothed.lfo_hz_user;
     _params.smooth_target.value.lfo_hz_final = hz;
-  }
-  //----------------------------------------------------------------------------
-  crange<float> get_allpass_group_coeffs (uint n)
-  {
-    return make_crange (
-      &_allpass[n][0],
-      andy::svf_allpass::n_coeffs * vec_traits<float_x4>().size);
-  }
-  //----------------------------------------------------------------------------
-  crange<float> get_allpass_group_states (uint n)
-  {
-    return make_crange (
-      &_allpass[n][andy::svf_allpass::n_coeffs * vec_traits<float_x4>().size],
-      andy::svf_allpass::n_states * vec_traits<float_x4>().size);
   }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
@@ -548,25 +532,14 @@ private:
   static constexpr uint n_channels = 2;
 
   std::array<float, n_channels> _feedback_samples;
-  using simd_allpass_group = std::array<
-    float,
-    (andy::svf_allpass::n_coeffs + andy::svf_allpass::n_states)
-      * vec_traits_t<float_x4>::size>;
+  parameter_values              _params;
 
-  using dc_block_coeff_array
-    = simd_array<double, mystran_dc_blocker::n_coeffs * n_channels, sse_bytes>;
-  using dc_block_state_array
-    = simd_array<double, mystran_dc_blocker::n_states * n_channels, sse_bytes>;
+  part_to_class<float_x4, andy::svf_allpass, 16> _allpass;
+  part_to_class<double_x2, mystran_dc_blocker>   _dc_blocker;
 
-  parameter_values _params;
-  // 16 groups of 4 filters (SIMD), 32 allpasses, interleaved for L and R = 16
-  alignas (sse_bytes) std::array<simd_allpass_group, 16> _allpass;
-  alignas (sse_bytes) dc_block_coeff_array _dc_block_coeffs;
-  alignas (sse_bytes) dc_block_state_array _dc_block_states;
-
-  std::array<lfo, 2> _lfos; // 0 = L, 1 = R
-  uint               _n_processed_samples;
-  uint               _control_rate_mask;
+  std::array<lfo, n_channels> _lfos; // 0 = L, 1 = R
+  uint                        _n_processed_samples;
+  uint                        _control_rate_mask;
 
   float _lp_smooth_coeff;
 
