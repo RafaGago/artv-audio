@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -522,6 +523,32 @@ template <class T>
 static void crange_memset (crange<T> range, int value = 0)
 {
   contiguous_range_memset (range, value);
+}
+//------------------------------------------------------------------------------
+template <class T, class U>
+static uint contiguous_range_memcpy (crange<T> dst, crange<const U> src)
+{
+  uint size = std::min (dst.size() * sizeof (T), src.size() * sizeof (U));
+  memcpy (dst.data(), src.data(), size);
+  return size;
+}
+
+template <class T, class U>
+static uint crange_memcpy (crange<T> dst, crange<const U> src)
+{
+  return contiguous_range_memcpy (dst, src);
+}
+//------------------------------------------------------------------------------
+template <class T>
+static uint contiguous_range_copy (crange<T> dst, crange<const T> src)
+{
+  return crange_memcpy (dst, src) / sizeof (T);
+}
+
+template <class T>
+static uint crange_copy (crange<T> dst, crange<const T> src)
+{
+  return crange_memcpy (dst, src) / sizeof (T);
 }
 //------------------------------------------------------------------------------
 // Double pointers don't const convert, this is annoying on crange.
