@@ -22,7 +22,7 @@ namespace artv {
 //------------------------------------------------------------------------------
 class eq4x {
 private:
-  enum class paramtype { band_type, frequency, q, gain };
+  enum class paramtype { band_type, frequency, q, gain, diff };
 
 public:
   template <uint Band, paramtype Type>
@@ -204,6 +204,21 @@ public:
     return float_param ("dB", -20.f, 20.f, 0.f, 0.25f, 0.6f, true);
   }
   //----------------------------------------------------------------------------
+  template <uint band>
+  void set (param<band, paramtype::diff>, float v)
+  {
+    static_assert (band < n_bands, "");
+    v *= 0.01 * 2.; // 2 octaves up and down
+    _cfg[band].has_changes |= _cfg[band].diff != v;
+    _cfg[band].diff = v;
+  }
+
+  template <uint band>
+  static constexpr auto get_parameter (param<band, paramtype::diff>)
+  {
+    return float_param ("%", -100.f, 100.f, 0.f, 0.05f);
+  }
+  //----------------------------------------------------------------------------
   using band1_type_tag = param<0, paramtype::band_type>;
   using band2_type_tag = param<1, paramtype::band_type>;
   using band3_type_tag = param<2, paramtype::band_type>;
@@ -220,6 +235,10 @@ public:
   using band2_gain_tag = param<1, paramtype::gain>;
   using band3_gain_tag = param<2, paramtype::gain>;
   using band4_gain_tag = param<3, paramtype::gain>;
+  using band1_diff_tag = param<0, paramtype::diff>;
+  using band2_diff_tag = param<1, paramtype::diff>;
+  using band3_diff_tag = param<2, paramtype::diff>;
+  using band4_diff_tag = param<3, paramtype::diff>;
   //----------------------------------------------------------------------------
   using parameters = mp_list<
     band1_type_tag,
@@ -237,7 +256,11 @@ public:
     band4_type_tag,
     band4_freq_tag,
     band4_gain_tag,
-    band4_q_tag>;
+    band4_q_tag,
+    band1_diff_tag,
+    band2_diff_tag,
+    band3_diff_tag,
+    band4_diff_tag>;
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
@@ -261,6 +284,7 @@ private:
     float    freq             = 440.f;
     float    q                = 0.7f;
     float    gain_db          = 0.f;
+    float    diff             = 0.f;
     bool     has_changes      = false;
     bool     reset_band_state = false;
   };
@@ -274,7 +298,9 @@ private:
     auto  sr            = (float) _plugcontext->get_sample_rate();
 
     auto freq = vec_set<double_x2> (b.freq);
-    auto q    = vec_set<double_x2> (b.q);
+    freq[1] *= exp2 (b.diff);
+    auto q = vec_set<double_x2> (b.q);
+    q[1] += q[1] * b.diff * 0.05;
     auto gain = vec_set<double_x2> (b.gain_db);
 
     switch (b.type) {
@@ -310,6 +336,7 @@ private:
         _target_coeffs[band], freq, q, gain, sr);
       break;
     case bandtype::presence: {
+      q[1]              = q[0]; // undo diff
       auto qnorm_0_to_1 = q / get_parameter (band1_q_tag {}).max;
       _eq.reset_target_coeffs<liteon::presence_high_shelf> (
         _target_coeffs[band], freq, qnorm_0_to_1, gain, sr);

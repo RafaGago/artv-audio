@@ -5335,6 +5335,46 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  eq4x_band1_tolerance,
+  n_stereo_busses,
+  param_common (
+    "1.LR-Diff",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band1_diff_tag>()),
+  eq4x::get_parameter (eq4x::band1_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  eq4x_band2_tolerance,
+  n_stereo_busses,
+  param_common (
+    "2.LR-Diff",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band2_diff_tag>()),
+  eq4x::get_parameter (eq4x::band2_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  eq4x_band3_tolerance,
+  n_stereo_busses,
+  param_common (
+    "3.LR-Diff",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band3_diff_tag>()),
+  eq4x::get_parameter (eq4x::band3_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  eq4x_band4_tolerance,
+  n_stereo_busses,
+  param_common (
+    "4.LR-Diff",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::band4_diff_tag>()),
+  eq4x::get_parameter (eq4x::band4_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   eq4x_upsampling,
   n_stereo_busses,
   param_common (
@@ -5361,6 +5401,10 @@ using eq4x_params = mp_list<
   eq4x_band4_gain,
   eq4x_band4_freq,
   eq4x_band4_q,
+  eq4x_band1_tolerance,
+  eq4x_band2_tolerance,
+  eq4x_band3_tolerance,
+  eq4x_band4_tolerance,
   eq4x_upsampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
@@ -6044,7 +6088,7 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  chow_phaser_params>;
+  eq4x_params>;
 
 static constexpr auto fx_choices
   = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "FX");

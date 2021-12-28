@@ -545,7 +545,7 @@ add_executable(
 target_link_libraries (oversampler-util PUBLIC common hiir)
 #-- Mix-maxtrix ----------------------------------------------------------------
 set (MIXMAXTRIX_VERSION_MAJOR 1)
-set (MIXMAXTRIX_VERSION_MINOR 2)
+set (MIXMAXTRIX_VERSION_MINOR 3)
 set (MIXMAXTRIX_VERSION_REV 0)
 set(
     MIXMAXTRIX_VERSION
