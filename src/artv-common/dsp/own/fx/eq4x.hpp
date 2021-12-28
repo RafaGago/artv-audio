@@ -8,7 +8,7 @@
 #include "artv-common/dsp/own/parts/filters/composite/tilt.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/dsp/own/parts/filters/presence.hpp"
-#include "artv-common/dsp/own/parts/filters/saike.hpp"
+#include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"
@@ -46,7 +46,6 @@ public:
       make_crange (_smooth_coeff).cast (x1_t {}),
       vec_set<x1_t> (1. / 0.02),
       pc.get_sample_rate());
-    memset (&_smooth_state, 0, sizeof _smooth_state);
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -66,30 +65,22 @@ public:
       }
 
       ++n_enabled_bands;
-      alignas (sse_bytes) coeff_array smoothed_band_coefs;
 
       for (uint i = 0; i < samples; ++i) {
-        constexpr uint sse_step = vec_traits<double_x2>().size;
-        static_assert (smoothed_band_coefs.size() % sse_step == 0, "");
-        for (uint j = 0; j < smoothed_band_coefs.size(); j += sse_step) {
-          // coefficient change smoothing.TODO: if filters start differing
-          // broadly on coefficient sizes this might have to be optimized
-          // (maybe to a) small/medium/high iteration or to the exact number
-          // of elements.
-          double_x2 out = smoother::tick (
+        // coefficient change smoothing.TODO: if filters start differing
+        // broadly on coefficient sizes this might have to be optimized
+        // (maybe to a) small/medium/high iteration or to the exact number
+        // of elements.
+        crange<double_x2> internal = _eq.get_coeffs (b);
+        for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
+          internal[j] = smoother::tick (
             make_crange (_smooth_coeff),
-            make_crange (&_smooth_state[b].filter[j], sse_step)
-              .cast (double_x2 {}),
-            vec_load<double_x2> (&_coeffs[b][j]));
-          vec_store (&smoothed_band_coefs[j], out);
+            make_crange (internal[j]),
+            _target_coeffs[b][j]);
         }
-
         double_x2 in, out;
         in[0] = ins[0][i];
         in[1] = ins[1][i];
-
-        auto smooth_co = make_crange (smoothed_band_coefs);
-        auto states    = make_crange (_state[b]);
 
         switch (_cfg[b].type) {
         case bandtype::off: // not reachable
@@ -97,24 +88,24 @@ public:
         case bandtype::svf_lshelf:
         case bandtype::svf_hshelf:
         case bandtype::svf_allpass:
-          out = andy::svf::tick (smooth_co, states, in);
+          out = _eq.tick_on_idx<andy::svf> (b, in);
           break;
         case bandtype::butterworth_lp:
-          out = butterworth_lowpass_any_order::tick (
-            smooth_co, states, in, q_to_butterworth_order (_cfg[b].q));
+          out = _eq.tick_on_idx<btw_lp> (
+            b, in, q_to_butterworth_order (_cfg[b].q));
           break;
         case bandtype::butterworth_hp:
-          out = butterworth_highpass_any_order::tick (
-            smooth_co, states, in, q_to_butterworth_order (_cfg[b].q));
+          out = _eq.tick_on_idx<btw_hp> (
+            b, in, q_to_butterworth_order (_cfg[b].q));
           break;
         case bandtype::svf_tilt:
-          out = tilt_eq::tick (smooth_co, states, in);
+          out = _eq.tick_on_idx<tilt_eq> (b, in);
           break;
         case bandtype::presence:
-          out = liteon::presence_high_shelf::tick (smooth_co, states, in);
+          out = _eq.tick_on_idx<liteon::presence_high_shelf> (b, in);
           break;
         case bandtype::onepole_allpass:
-          out = onepole_allpass::tick (smooth_co, states, in);
+          out = _eq.tick_on_idx<onepole_allpass> (b, in);
           break;
         default:
           jassert (false);
@@ -281,90 +272,58 @@ private:
     auto& b             = _cfg[band];
     auto  bandtype_prev = b.type;
     auto  sr            = (float) _plugcontext->get_sample_rate();
+
+    auto freq = vec_set<double_x2> (b.freq);
+    auto q    = vec_set<double_x2> (b.q);
+    auto gain = vec_set<double_x2> (b.gain_db);
+
     switch (b.type) {
     case bandtype::off:
-      memset (&_coeffs[band], 0, sizeof _coeffs[band]);
+      _eq.reset_states_on_idx (band);
       break;
     case bandtype::svf_bell:
-      andy::svf::reset_coeffs (
-        make_crange (_coeffs[band]).cast (x1_t {}),
-        make_vec_x1<double> (b.freq),
-        make_vec_x1<double> (b.q),
-        make_vec_x1<double> (b.gain_db),
-        sr,
-        bell_tag {});
+      _eq.reset_target_coeffs<andy::svf> (
+        _target_coeffs[band], freq, q, gain, sr, bell_tag {});
       break;
     case bandtype::svf_lshelf:
-      andy::svf::reset_coeffs (
-        make_crange (_coeffs[band]).cast (x1_t {}),
-        make_vec_x1<double> (b.freq),
-        make_vec_x1<double> (b.q),
-        make_vec_x1<double> (b.gain_db),
-        sr,
-        lowshelf_tag {});
+      _eq.reset_target_coeffs<andy::svf> (
+        _target_coeffs[band], freq, q, gain, sr, lowshelf_tag {});
       break;
     case bandtype::svf_hshelf:
-      andy::svf::reset_coeffs (
-        make_crange (_coeffs[band]).cast (x1_t {}),
-        make_vec_x1<double> (b.freq),
-        make_vec_x1<double> (b.q),
-        make_vec_x1<double> (b.gain_db),
-        sr,
-        highshelf_tag {});
+      _eq.reset_target_coeffs<andy::svf> (
+        _target_coeffs[band], freq, q, gain, sr, highshelf_tag {});
       break;
     case bandtype::svf_allpass:
-      andy::svf::reset_coeffs (
-        make_crange (_coeffs[band]).cast (x1_t {}),
-        make_vec_x1<double> (b.freq),
-        make_vec_x1<double> (b.q),
-        sr,
-        allpass_tag {});
+      _eq.reset_target_coeffs<andy::svf> (
+        _target_coeffs[band], freq, q, sr, allpass_tag {});
       break;
     case bandtype::butterworth_lp:
-      butterworth_lowpass_any_order::reset_coeffs (
-        make_crange (_coeffs[band]).cast (x1_t {}),
-        make_vec_x1<double> (b.freq),
-        sr,
-        q_to_butterworth_order (b.q));
+      _eq.reset_target_coeffs<btw_lp> (
+        _target_coeffs[band], freq, sr, q_to_butterworth_order (b.q));
       break;
     case bandtype::butterworth_hp:
-      butterworth_highpass_any_order::reset_coeffs (
-        make_crange (_coeffs[band]).cast (x1_t {}),
-        make_vec_x1<double> (b.freq),
-        sr,
-        q_to_butterworth_order (b.q));
+      _eq.reset_target_coeffs<btw_hp> (
+        _target_coeffs[band], freq, sr, q_to_butterworth_order (b.q));
       break;
     case bandtype::svf_tilt:
-      tilt_eq::reset_coeffs (
-        make_crange (_coeffs[band]).cast (x1_t {}),
-        make_vec_x1<double> (b.freq),
-        make_vec_x1<double> (b.q),
-        make_vec_x1<double> (b.gain_db),
-        sr);
+      _eq.reset_target_coeffs<tilt_eq> (
+        _target_coeffs[band], freq, q, gain, sr);
       break;
     case bandtype::presence: {
-      float qnorm_0_to_1 = b.q / get_parameter (band1_q_tag {}).max;
-      liteon::presence_high_shelf::reset_coeffs (
-        make_crange (_coeffs[band]).cast (x1_t {}),
-        make_vec_x1<double> (b.freq),
-        make_vec_x1<double> (qnorm_0_to_1),
-        make_vec_x1<double> (b.gain_db),
-        sr);
+      auto qnorm_0_to_1 = q / get_parameter (band1_q_tag {}).max;
+      _eq.reset_target_coeffs<liteon::presence_high_shelf> (
+        _target_coeffs[band], freq, qnorm_0_to_1, gain, sr);
     } break;
     case bandtype::onepole_allpass: {
-      onepole_allpass::reset_coeffs (
-        make_crange (_coeffs[band]).cast (x1_t {}),
-        make_vec_x1<double> (b.freq),
-        sr);
+      _eq.reset_target_coeffs<onepole_allpass> (_target_coeffs[band], freq, sr);
     } break;
     default:
       jassert (false);
     }
     // reset smoothing
     if (_cfg[band].reset_band_state) {
-      memset (&_state[0][band], 0, sizeof _state[0][band]);
-      memset (&_state[1][band], 0, sizeof _state[1][band]);
-      memset (&_smooth_state[band], 0, sizeof _smooth_state[band]);
+      _eq.reset_states_on_idx (band);
+      crange_copy<double_x2> (_eq.get_coeffs (band), _target_coeffs[band]);
     }
     _cfg[band].has_changes      = false;
     _cfg[band].reset_band_state = false;
@@ -383,41 +342,25 @@ private:
   //----------------------------------------------------------------------------
   static constexpr uint max_butterworth_order = 6;
   //----------------------------------------------------------------------------
-  using filters = mp_list<
+  using btw_lp = butterworth_any_order<lowpass_tag, max_butterworth_order>;
+  using btw_hp = butterworth_any_order<highpass_tag, max_butterworth_order>;
+
+  using eqs = parts_to_class_one_of<
+    double_x2,
+    n_bands,
+    btw_lp,
+    btw_hp,
     andy::svf,
     onepole_allpass,
-    butterworth_lowpass<max_butterworth_order>,
-    butterworth_highpass<max_butterworth_order>,
+    tilt_eq,
     liteon::presence_high_shelf>;
-
-  template <class T>
-  using to_n_coeffs = k_int<T::n_coeffs>;
-  template <class T>
-  using to_n_states = k_int<T::n_states>;
-
-  using n_coeffs_types = mp11::mp_transform<to_n_coeffs, filters>;
-  using n_states_types = mp11::mp_transform<to_n_states, filters>;
-
-  static constexpr uint max_coeffs
-    = mp11::mp_max_element<n_coeffs_types, mp11::mp_less>::value;
-
-  static constexpr uint max_states
-    = mp11::mp_max_element<n_states_types, mp11::mp_less>::value;
-
+  //----------------------------------------------------------------------------
   using smoother = onepole_smoother;
   //----------------------------------------------------------------------------
-  using state_array = std::array<double_x2, max_states>;
-  using coeff_array = simd_array<double, max_coeffs, sse_bytes>;
-  //----------------------------------------------------------------------------
-  struct smooth_states {
-    alignas (sse_bytes) coeff_array filter;
-  };
-  //----------------------------------------------------------------------------
-  std::array<bandconfig, n_bands>    _cfg;
-  std::array<smooth_states, n_bands> _smooth_state;
-  alignas (sse_bytes) std::array<coeff_array, n_bands> _coeffs;
-  alignas (sse_bytes) std::array<state_array, n_bands> _state;
-  double _smooth_coeff;
+  std::array<bandconfig, n_bands>       _cfg;
+  std::array<eqs::coeff_array, n_bands> _target_coeffs;
+  eqs                                   _eq;
+  double                                _smooth_coeff;
 
   plugin_context* _plugcontext = nullptr;
 };
