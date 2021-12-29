@@ -1096,12 +1096,12 @@ public:
     for (auto cptr : mixer_sends) {
       cptr->setEnabled (true);
     }
-    for (uint i = 0; i < n_stereo_busses; ++i) {
+    for (uint i = 0; i < num_mixer_sends; ++i) {
       // redraw by fx, as the mixer send diff buttons might be disabled already
       on_fx_type_or_page_change (i, -1);
       if (channel_send_always_disabled (i, group_size)) {
-        mixer_sends[i - 1]->setEnabled (false);
-        mixer_sends[i - 1 + num_mixer_sends]->setEnabled (false);
+        mixer_sends[i]->setEnabled (false);
+        mixer_sends[i + num_mixer_sends]->setEnabled (false);
       }
     }
   }

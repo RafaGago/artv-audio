@@ -10,6 +10,7 @@
   the fact that this project has almost no following I deliberately made the
   lowest effort fix.
 - transient gate: Add oversampling.
+- editor: Fix mixer to mixer send buttons incorrectly disabled.
 
 1.2.0
 - Add linear-phase crossover. This crossover is based on Martin Vicanek's paper
