@@ -5937,7 +5937,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Dec Time",
-    declptr<transient_gate_fx>(),
+    declptr<updownsampled<transient_gate_fx>>(),
     declptr<transient_gate_fx::decay_tag>()),
   transient_gate_fx::get_parameter (transient_gate_fx::decay_tag {}),
   slider_ext);
@@ -5947,7 +5947,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Dec Shape",
-    declptr<transient_gate_fx>(),
+    declptr<updownsampled<transient_gate_fx>>(),
     declptr<transient_gate_fx::decay_shape_tag>()),
   transient_gate_fx::get_parameter (transient_gate_fx::decay_shape_tag {}),
   slider_ext);
@@ -5957,7 +5957,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Det Hipass",
-    declptr<transient_gate_fx>(),
+    declptr<updownsampled<transient_gate_fx>>(),
     declptr<transient_gate_fx::detector_hipass_tag>()),
   transient_gate_fx::get_parameter (transient_gate_fx::detector_hipass_tag {}),
   slider_ext);
@@ -5967,7 +5967,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Det Recov",
-    declptr<transient_gate_fx>(),
+    declptr<updownsampled<transient_gate_fx>>(),
     declptr<transient_gate_fx::detector_recovery_tag>()),
   transient_gate_fx::get_parameter (
     transient_gate_fx::detector_recovery_tag {}),
@@ -5978,7 +5978,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Det Chnl",
-    declptr<transient_gate_fx>(),
+    declptr<updownsampled<transient_gate_fx>>(),
     declptr<transient_gate_fx::detector_channels_tag>()),
   transient_gate_fx::get_parameter (
     transient_gate_fx::detector_channels_tag {}),
@@ -5989,7 +5989,7 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Det Shape",
-    declptr<transient_gate_fx>(),
+    declptr<updownsampled<transient_gate_fx>>(),
     declptr<transient_gate_fx::detector_shape_tag>()),
   transient_gate_fx::get_parameter (transient_gate_fx::detector_shape_tag {}),
   slider_ext);
@@ -5999,9 +5999,19 @@ parameter_cpp_class_define (
   n_stereo_busses,
   param_common (
     "Output",
-    declptr<transient_gate_fx>(),
+    declptr<updownsampled<transient_gate_fx>>(),
     declptr<transient_gate_fx::output_tag>()),
   transient_gate_fx::get_parameter (transient_gate_fx::output_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  transient_gate_oversampling,
+  n_stereo_busses,
+  param_common (
+    "OverSmpl",
+    declptr<updownsampled<transient_gate_fx>>(),
+    declptr<oversampled_amount_tag>()),
+  updownsampled<transient_gate_fx>::get_parameter (oversampled_amount_tag {}),
   slider_ext);
 
 using transient_gate_params = mp_list<
@@ -6011,7 +6021,8 @@ using transient_gate_params = mp_list<
   transient_gate_detect_shape,
   transient_gate_detect_hipass,
   transient_gate_detect_channels,
-  transient_gate_output>;
+  transient_gate_output,
+  transient_gate_oversampling>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
