@@ -5375,6 +5375,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  eq4x_band4_topology,
+  n_stereo_busses,
+  param_common (
+    "Topology",
+    declptr<upsampled<eq4x>>(),
+    declptr<eq4x::topology_tag>()),
+  eq4x::get_parameter (eq4x::topology_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   eq4x_upsampling,
   n_stereo_busses,
   param_common (
@@ -5405,6 +5415,7 @@ using eq4x_params = mp_list<
   eq4x_band2_tolerance,
   eq4x_band3_tolerance,
   eq4x_band4_tolerance,
+  eq4x_band4_topology,
   eq4x_upsampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (

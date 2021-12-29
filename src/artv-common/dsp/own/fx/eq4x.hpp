@@ -56,6 +56,9 @@ public:
 
     uint n_enabled_bands = 0;
 
+    std::array<bool, 2>       is_copied {false, false};
+    std::array<double_x2, 32> io;
+
     for (uint b = 0; b < n_bands; ++b) {
       if (_cfg[b].has_changes) {
         reset_band (b);
@@ -66,58 +69,121 @@ public:
 
       ++n_enabled_bands;
 
-      for (uint i = 0; i < samples; ++i) {
-        // coefficient change smoothing.TODO: if filters start differing
-        // broadly on coefficient sizes this might have to be optimized
-        // (maybe to a) small/medium/high iteration or to the exact number
-        // of elements.
+      for (uint offset = 0; offset < samples; offset += io.size()) {
+        uint blocksize = std::min<uint> (io.size(), samples - offset);
+        // interleaving
+
+        std::array<T const*, 2> src;
+        src[0] = is_copied[0] ? &outs[0][offset] : &ins[0][offset];
+        src[1] = is_copied[1] ? &outs[1][offset] : &ins[1][offset];
+
+        for (uint i = 0; i < blocksize; ++i) {
+          io[i][0] = src[0][i];
+          io[i][1] = src[1][i];
+        }
+
+        // smoothing (at blocksize rate)
         crange<double_x2> internal = _eq.get_coeffs (b);
         for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
-          internal[j] = smoother::tick (
-            make_crange (_smooth_coeff),
-            make_crange (internal[j]),
-            _target_coeffs[b][j]);
+          for (uint i = 0; i < blocksize; ++i) {
+            internal[j] = smoother::tick (
+              make_crange (_smooth_coeff),
+              make_crange (internal[j]),
+              _target_coeffs[b][j]);
+          }
         }
-        double_x2 in, out;
-        in[0] = ins[0][i];
-        in[1] = ins[1][i];
-
+        // processing
         switch (_cfg[b].type) {
         case bandtype::off: // not reachable
         case bandtype::svf_bell:
         case bandtype::svf_lshelf:
         case bandtype::svf_hshelf:
         case bandtype::svf_allpass:
-          out = _eq.tick_on_idx<andy::svf> (b, in);
+          for (uint i = 0; i < blocksize; ++i) {
+            io[i] = _eq.tick_on_idx<andy::svf> (b, io[i]);
+          }
           break;
         case bandtype::butterworth_lp:
-          out = _eq.tick_on_idx<btw_lp> (
-            b, in, q_to_butterworth_order (_cfg[b].q));
+          for (uint i = 0; i < blocksize; ++i) {
+            io[i] = _eq.tick_on_idx<btw_lp> (
+              b, io[i], q_to_butterworth_order (_cfg[b].q));
+          }
           break;
         case bandtype::butterworth_hp:
-          out = _eq.tick_on_idx<btw_hp> (
-            b, in, q_to_butterworth_order (_cfg[b].q));
+          for (uint i = 0; i < blocksize; ++i) {
+            io[i] = _eq.tick_on_idx<btw_hp> (
+              b, io[i], q_to_butterworth_order (_cfg[b].q));
+          }
           break;
         case bandtype::svf_tilt:
-          out = _eq.tick_on_idx<tilt_eq> (b, in);
+          for (uint i = 0; i < blocksize; ++i) {
+            io[i] = _eq.tick_on_idx<tilt_eq> (b, io[i]);
+          }
           break;
         case bandtype::presence:
-          out = _eq.tick_on_idx<liteon::presence_high_shelf> (b, in);
+          for (uint i = 0; i < blocksize; ++i) {
+            io[i] = _eq.tick_on_idx<liteon::presence_high_shelf> (b, io[i]);
+          }
           break;
         case bandtype::onepole_allpass:
-          out = _eq.tick_on_idx<onepole_allpass> (b, in);
+          for (uint i = 0; i < blocksize; ++i) {
+            io[i] = _eq.tick_on_idx<onepole_allpass> (b, io[i]);
+          }
           break;
         default:
           jassert (false);
           break;
         }
-        outs[0][i] = out[0];
-        outs[1][i] = out[1];
+        // deinterleaving
+        switch (_topology) {
+        case topology::stereo:
+          for (uint i = 0; i < blocksize; ++i) {
+            outs[0][offset + i] = io[i][0];
+            outs[1][offset + i] = io[i][1];
+          }
+          break;
+        case topology::l:
+          for (uint i = 0; i < blocksize; ++i) {
+            outs[0][offset + i] = io[i][0];
+          }
+          break;
+        case topology::r:
+          for (uint i = 0; i < blocksize; ++i) {
+            outs[1][offset + i] = io[i][1];
+          }
+          break;
+        case topology::lr_half: {
+          uint chnl = b & 1;
+          for (uint i = 0; i < blocksize; ++i) {
+            outs[chnl][offset + i] = io[i][chnl];
+          }
+        } break;
+        default:
+          assert (false);
+          break;
+        }
+      }
+
+      switch (_topology) {
+      case topology::stereo:
+        is_copied[0] = is_copied[1] = true;
+        break;
+      case topology::l:
+        is_copied[0] = true;
+        break;
+      case topology::r:
+        is_copied[1] = true;
+        break;
+      case topology::lr_half:
+        is_copied[b & 1] = true;
+        break;
+      default:
+        break;
       }
     }
-    if (unlikely (n_enabled_bands == 0)) {
-      for (uint i = 0; i < (uint) bus_type; ++i) {
-        memcpy (outs[i], ins[i], samples * sizeof outs[0][0]);
+    for (uint c = 0; c < 2; ++c) {
+      if (unlikely (!is_copied[c])) {
+        memcpy (outs[c], ins[c], samples * sizeof outs[c][0]);
       }
     }
   }
@@ -173,14 +239,19 @@ public:
   {
     static_assert (band < n_bands, "");
     auto& b = _cfg[band];
-    // changing butterworth slope requires a state reset, as they are different
-    // filters under the same menu.
-    bool reset = (b.type == bandtype::butterworth_hp);
+    // changing butterworth slope requires a state reset, as they are
+    // different filters under the same menu.
+    bool change = false;
+    bool reset  = (b.type == bandtype::butterworth_hp);
     reset |= (b.type == bandtype::butterworth_lp);
-    reset &= (q_to_butterworth_order (b.q) != q_to_butterworth_order (v));
-
+    if (reset) {
+      reset &= (q_to_butterworth_order (b.q) != q_to_butterworth_order (v));
+    }
+    else {
+      change = _cfg[band].q != v;
+    }
     b.reset_band_state |= reset;
-    b.has_changes |= reset;
+    b.has_changes |= reset | change;
     _cfg[band].q = v;
   }
 
@@ -217,6 +288,15 @@ public:
   static constexpr auto get_parameter (param<band, paramtype::diff>)
   {
     return float_param ("%", -100.f, 100.f, 0.f, 0.05f);
+  }
+  //----------------------------------------------------------------------------
+  struct topology_tag {};
+  void set (topology_tag, int v) { _topology = (topology) v; }
+
+  static constexpr auto get_parameter (topology_tag)
+  {
+    return choice_param (
+      0, make_cstr_array ("Stereo", "L", "R", "L:1-3, R:2-4"), 16);
   }
   //----------------------------------------------------------------------------
   using band1_type_tag = param<0, paramtype::band_type>;
@@ -260,7 +340,8 @@ public:
     band1_diff_tag,
     band2_diff_tag,
     band3_diff_tag,
-    band4_diff_tag>;
+    band4_diff_tag,
+    topology_tag>;
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
@@ -384,10 +465,13 @@ private:
   //----------------------------------------------------------------------------
   using smoother = onepole_smoother;
   //----------------------------------------------------------------------------
+  enum class topology { stereo, l, r, lr_half };
+  //----------------------------------------------------------------------------
   std::array<bandconfig, n_bands>       _cfg;
   std::array<eqs::coeff_array, n_bands> _target_coeffs;
   eqs                                   _eq;
   double                                _smooth_coeff;
+  topology                              _topology;
 
   plugin_context* _plugcontext = nullptr;
 };

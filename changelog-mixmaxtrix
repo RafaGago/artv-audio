@@ -1,6 +1,7 @@
 1.3.0
-- eq4x: Add per-band setting to have slight variation between L and R channels.
+- eq4x: Add per-band setting to have variation between L and R channels.
 - eq4x: Fix processing only the last band enabled (Big bug, sorry).
+- eq4x: Fix Q not updating until another parameter is changed (Big bug, again).
 - eq4x: Add topology setting: Stereo, L, R and half L half R
 - waveshaper: Change default enveloper curve, it was defaulting to an extreme
   one.
