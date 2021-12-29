@@ -355,7 +355,7 @@ public:
   static constexpr auto get_parameter (envfollow_mode_tag)
   {
     return choice_param (
-      0, make_cstr_array ("sqrt(exp)", "exp", "exp^2", "exp^3"), 20);
+      1, make_cstr_array ("sqrt(exp)", "exp", "exp^2", "exp^3"), 20);
   }
   //----------------------------------------------------------------------------
   struct envfollow_release_tag {};
