@@ -1,3 +1,5 @@
+1.4.0
+
 1.3.0
 - eq4x: Add per-band setting to have variation between L and R channels.
 - eq4x: Fix processing only the last band enabled (Big bug, sorry).
