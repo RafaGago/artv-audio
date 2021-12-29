@@ -5,6 +5,10 @@
 - eq4x: Add topology setting: Stereo, L, R and half L half R
 - waveshaper: Change default enveloper curve, it was defaulting to an extreme
   one.
+- waveshaper: Redo timings. Previously the attack/release range on the envelope
+  follower was useless. Will break presets using the envelope follower. Given
+  the fact that this project has almost no following I deliberately made the
+  lowest effort fix.
 - transient gate: Add oversampling.
 
 1.2.0

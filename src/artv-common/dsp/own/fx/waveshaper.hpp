@@ -345,7 +345,7 @@ public:
 
   static constexpr auto get_parameter (envfollow_attack_tag)
   {
-    return float_param ("ms", 1, 180., 20., 0.1);
+    return float_param ("ms", 1, 180., 20., 0.02);
   }
   //----------------------------------------------------------------------------
   struct envfollow_mode_tag {};
@@ -355,7 +355,7 @@ public:
   static constexpr auto get_parameter (envfollow_mode_tag)
   {
     return choice_param (
-      1, make_cstr_array ("sqrt(exp)", "exp", "exp^2", "exp^3"), 20);
+      2, make_cstr_array ("sqrt(exp)", "exp", "exp^2", "exp^3"), 20);
   }
   //----------------------------------------------------------------------------
   struct envfollow_release_tag {};
@@ -371,7 +371,7 @@ public:
 
   static constexpr auto get_parameter (envfollow_release_tag)
   {
-    return float_param ("ms", 40., 1000., 150., 1.);
+    return float_param ("ms", 1., 300., 56., 0.02);
   }
   //----------------------------------------------------------------------------
   struct envfollow_sensitivity_tag {};
