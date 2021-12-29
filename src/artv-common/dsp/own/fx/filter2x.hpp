@@ -801,20 +801,21 @@ private:
   static constexpr uint n_channels = 2;
   //----------------------------------------------------------------------------
   using filters = parts_union_array<
+    mp_list<
+      saike::ms20_lowpass,
+      saike::ms20_highpass,
+      saike::ms20_bandpass,
+      saike::ms20_notch,
+      saike::ms20_asym_lowpass,
+      saike::ms20_asym_highpass,
+      saike::ms20_asym_bandpass,
+      saike::ms20_asym_notch,
+      saike::steiner_1,
+      saike::steiner_2,
+      saike::moog_1,
+      saike::moog_2>,
     double_x2,
-    n_bands,
-    saike::ms20_lowpass,
-    saike::ms20_highpass,
-    saike::ms20_bandpass,
-    saike::ms20_notch,
-    saike::ms20_asym_lowpass,
-    saike::ms20_asym_highpass,
-    saike::ms20_asym_bandpass,
-    saike::ms20_asym_notch,
-    saike::steiner_1,
-    saike::steiner_2,
-    saike::moog_1,
-    saike::moog_2>;
+    n_bands>;
   using smoother = onepole_smoother;
   //----------------------------------------------------------------------------
   struct bandconfig {
@@ -865,7 +866,7 @@ private:
   std::array<filters::coeff_array, n_bands> _target_coeffs;
   filters                                   _filter;
   enum { proc_envfollow, proc_dc_block };
-  part_classes<double_x2, slew_limiter, mystran_dc_blocker> _proc;
+  part_classes<mp_list<slew_limiter, mystran_dc_blocker>, double_x2> _proc;
 
   alignas (sse_bytes) std::array<double_x2, n_bands> _last_sample;
   double_x2    _ef_value;

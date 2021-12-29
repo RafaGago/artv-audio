@@ -19,7 +19,7 @@ namespace artv {
 
 //------------------------------------------------------------------------------
 // A DSP part to (optionally) an array of instances.
-template <class Vect, class Part, uint Size = 1>
+template <class Part, class Vect, uint Size = 1>
 struct part_class_array {
 public:
   static_assert (is_vec_of_float_type_v<Vect>, "");
@@ -153,7 +153,7 @@ private:
 // A DSP part to (optionally) an array of instances that uses a single
 // coefficient set for element of the array and is of width = 1 independently of
 // the passed vector (Vect) width. Useful for things like e.g. DC blockers
-template <class Vect, class Part, uint Size = 1>
+template <class Part, class Vect, uint Size = 1>
 struct part_class_array_coeffs_global {
 public:
   static_assert (is_vec_of_float_type_v<Vect>, "");
@@ -246,9 +246,12 @@ private:
     std::array<std::array<value_type, part::n_states>, size> _states;
 };
 //------------------------------------------------------------------------------
+template <class PartList, class Vect>
+struct part_classes;
+
 // Different DSP parts stored on a single class and accessed by index.
-template <class Vect, class... Parts>
-struct part_classes {
+template <template <class...> class List, class Vect, class... Parts>
+struct part_classes<List<Parts...>, Vect> {
 public:
   static_assert (sizeof...(Parts) > 0);
   static_assert (is_vec_of_float_type_v<Vect>, "");
@@ -316,8 +319,8 @@ public:
   template <class T, class... Ts>
   auto tick_cascade (T in, Ts&&... args)
   {
-    // This might not compile if all internal FX doesn't use the same parameters
-    // and return types
+    // This might not compile if all internal FX doesn't use the same
+    // parameters and return types
     T out = in;
     mp11::mp_for_each<mp11::mp_iota_c<sizeof...(Parts)>> ([&, this] (auto val) {
       static constexpr uint idx = decltype (val)::value;
@@ -352,8 +355,18 @@ public:
 };
 //------------------------------------------------------------------------------
 namespace detail {
-template <class Vect, class CoeffType, uint Size, class... Parts>
-struct parts_union_array {
+
+template <class PartList, class Vect, class CoeffType, uint Size>
+struct parts_union_array;
+
+template <
+  template <class...>
+  class List,
+  class Vect,
+  class CoeffType,
+  uint Size,
+  class... Parts>
+struct parts_union_array<List<Parts...>, Vect, CoeffType, Size> {
 public:
   static_assert (is_vec_of_float_type_v<Vect>, "");
   static_assert (Size > 0, "");
@@ -509,14 +522,15 @@ private:
 
 //------------------------------------------------------------------------------
 // N instances of one of many different DSP parts. Every instance can be only
-// one of the available DSP parts simultaneously. This is controlled externally.
-template <class Vect, uint Size, class... Parts>
-using parts_union_array = detail::parts_union_array<Vect, Vect, Size, Parts...>;
+// one of the available DSP parts simultaneously. This is controlled
+// externally.
+template <class PartList, class Vect, uint Size = 1>
+using parts_union_array = detail::parts_union_array<PartList, Vect, Vect, Size>;
 //------------------------------------------------------------------------------
 // As "parts_union_array" but the coefficient set is of width = 1,
 // independently of the with of "Vect"
-template <class Vect, uint Size, class... Parts>
+template <class PartList, class Vect, uint Size = 1>
 using parts_union_array_coeffs_by_idx
-  = detail::parts_union_array<Vect, vec_value_type_t<Vect>, Size, Parts...>;
+  = detail::parts_union_array<PartList, Vect, vec_value_type_t<Vect>, Size>;
 //------------------------------------------------------------------------------
 } // namespace artv

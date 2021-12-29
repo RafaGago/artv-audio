@@ -372,14 +372,15 @@ private:
   using btw_hp = butterworth_any_order<highpass_tag, max_butterworth_order>;
 
   using eqs = parts_union_array<
+    mp_list<
+      btw_lp,
+      btw_hp,
+      andy::svf,
+      onepole_allpass,
+      tilt_eq,
+      liteon::presence_high_shelf>,
     double_x2,
-    n_bands,
-    btw_lp,
-    btw_hp,
-    andy::svf,
-    onepole_allpass,
-    tilt_eq,
-    liteon::presence_high_shelf>;
+    n_bands>;
   //----------------------------------------------------------------------------
   using smoother = onepole_smoother;
   //----------------------------------------------------------------------------

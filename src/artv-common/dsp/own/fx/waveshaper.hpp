@@ -958,39 +958,41 @@ private:
   using compand_1a_aa = adaa::fix_eq_and_delay<adaa_order, compand_1a_adaa>;
   using compand_1b_aa = adaa::fix_eq_and_delay<adaa_order, compand_1b_adaa>;
   using waveshapers   = parts_union_array<
+    mp_list<
+      sqrt_sigmoid_adaa<0>,
+      sqrt_sigmoid_aa,
+      tanh_adaa<0>,
+      tanh_aa,
+      hardclip_adaa<0>,
+      hardclip_aa,
+      sqrt_sin_sigmoid_adaa<0>,
+      sqrt_sin_sigmoid_aa,
+      sqrt_aa,
+      pow2_aa,
+      compand_1a_aa,
+      compand_1b_aa>,
     double_x2,
-    n_waveshapers,
-    sqrt_sigmoid_adaa<0>,
-    sqrt_sigmoid_aa,
-    tanh_adaa<0>,
-    tanh_aa,
-    hardclip_adaa<0>,
-    hardclip_aa,
-    sqrt_sin_sigmoid_adaa<0>,
-    sqrt_sin_sigmoid_aa,
-    sqrt_aa,
-    pow2_aa,
-    compand_1a_aa,
-    compand_1b_aa>;
+    n_waveshapers>;
 
   using lp_type = butterworth_lowpass_any_order;
   using hp_type = butterworth_highpass_any_order;
 
-  using crossv = parts_union_array<double_x2, n_crossv, lp_type, hp_type>;
+  using crossv
+    = parts_union_array<mp_list<lp_type, hp_type>, double_x2, n_crossv>;
 
   using dc_blockers = part_class_array_coeffs_global<
-    double_x2,
     mystran_dc_blocker,
+    double_x2,
     dc_block_count>;
 
   params                                    _p;
   value_smoother<float, sm_count>           _sparams;
-  part_class_array<double_x2, andy::svf>    _pre_emphasis;
+  part_class_array<andy::svf, double_x2>    _pre_emphasis;
   crossv                                    _crossv;
   waveshapers                               _wvsh;
-  part_class_array<double_x2, slew_limiter> _envfollow;
+  part_class_array<slew_limiter, double_x2> _envfollow;
   dc_blockers                               _dc_block;
-  part_class_array<double_x2, andy::svf>    _post_emphasis;
+  part_class_array<andy::svf, double_x2>    _post_emphasis;
   double_x2                                 _sat_prev;
   double_x2                                 _dcmod_prev;
   std::array<double_x2, n_crossv>           _crossv_prev;
