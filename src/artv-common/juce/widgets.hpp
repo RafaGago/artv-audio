@@ -307,6 +307,7 @@ struct slider_ext
   {
     slider.setLookAndFeel (nullptr);
     label.setLookAndFeel (nullptr);
+    _paramslider.setLookAndFeel (nullptr);
   }
 
   std::array<juce::Component*, 2> get_components() { return {&slider, &label}; }
@@ -487,7 +488,12 @@ struct combobox_ext
     parent.addAndMakeVisible (next);
   }
 
-  void clear() { combo.setLookAndFeel (nullptr); }
+  void clear()
+  {
+    combo.setLookAndFeel (nullptr);
+    prev.setLookAndFeel (nullptr);
+    next.setLookAndFeel (nullptr);
+  }
 
   std::array<juce::Component*, 3> get_components()
   {

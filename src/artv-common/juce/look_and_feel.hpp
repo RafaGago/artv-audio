@@ -35,7 +35,16 @@ public:
     //            Slider::textBoxOutlineColourId,
     //            findColour (ResizableWindow::backgroundColourId)
     //            );
+    // notice:
+    // juce::Array<juce::Font> fonts;
+    // juce::Font::findFonts (fonts);
+    // fonts[x].font.getTypefaceName()
+
+    // setDefaultSansSerifTypefaceName ("TODO");
+    setDefaultLookAndFeel (this);
   }
+
+  ~look_and_feel() { setDefaultLookAndFeel (nullptr); }
 
   juce::Font getLabelFont (juce::Label& obj) override
   {
