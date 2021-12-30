@@ -1,0 +1,56 @@
+From d1817e37e9deeb0ea9949b7a099f5ebedd80c108 Mon Sep 17 00:00:00 2001
+From: Rafael Gago <rafael.gago@zenseact.com>
+Date: Thu, 30 Dec 2021 10:59:58 +0100
+Subject: [PATCH] Slider: Add fine scrolling
+
+This adds fine scrolling. Code copied from:
+https://forum.juce.com/t/slider-fine-adjustment-by-mouse-wheel/49438/2
+---
+ modules/juce_gui_basics/widgets/juce_Slider.cpp | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/modules/juce_gui_basics/widgets/juce_Slider.cpp b/modules/juce_gui_basics/widgets/juce_Slider.cpp
+index 731193ff1..ccc697f6d 100644
+--- a/modules/juce_gui_basics/widgets/juce_Slider.cpp
++++ b/modules/juce_gui_basics/widgets/juce_Slider.cpp
+@@ -1071,6 +1071,17 @@ public:
+             if (e.eventTime != lastMouseWheelTime)
+             {
+                 lastMouseWheelTime = e.eventTime;
++            
++                double dFactor = 1.0;
++                
++                if (isAbsoluteDragMode (e.mods) || (normRange.end - normRange.start) / sliderRegionSize < normRange.interval)
++                {
++                    dFactor = 1.0;
++                }
++                else
++                {
++                    dFactor = 0.005;
++                }
+ 
+                 if (normRange.end > normRange.start && ! e.mods.isAnyMouseButtonDown())
+                 {
+@@ -1078,7 +1089,7 @@ public:
+                         valueBox->hideEditor (false);
+ 
+                     auto value = static_cast<double> (currentValue.getValue());
+-                    auto delta = getMouseWheelDelta (value, (std::abs (wheel.deltaX) > std::abs (wheel.deltaY)
++                    auto delta = dFactor * getMouseWheelDelta (value, (std::abs (wheel.deltaX) > std::abs (wheel.deltaY)
+                                                                   ? -wheel.deltaX : wheel.deltaY)
+                                                                * (wheel.isReversed ? -1.0f : 1.0f));
+                     if (delta != 0.0)
+@@ -1090,10 +1101,8 @@ public:
+                     }
+                 }
+             }
+-
+             return true;
+         }
+-
+         return false;
+     }
+ 
+-- 
+2.25.1
+

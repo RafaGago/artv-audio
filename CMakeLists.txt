@@ -154,6 +154,8 @@ string(
     )
 
 #-- Juce -----------------------------------------------------------------------
+set (JUCE_PATCH ${CMAKE_CURRENT_SOURCE_DIR}/patches/juce/0001-Slider-Add-fine-scrolling.patch)
+
 add_compile_definitions(
     JUCER_ENABLE_GPL_MODE=1
     JUCE_DISPLAY_SPLASH_SCREEN=0
@@ -163,6 +165,7 @@ FetchContent_Declare(
     juce
     GIT_REPOSITORY https://github.com/lv2-porting-project/JUCE
     GIT_TAG        f00a420bc348d79c4688b33b2b905b8ca0f25a3a
+    PATCH_COMMAND  git apply --whitespace=fix ${JUCE_PATCH}
     )
 FetchContent_MakeAvailable (juce)
 set (JUCE_REPO ${juce_SOURCE_DIR})
