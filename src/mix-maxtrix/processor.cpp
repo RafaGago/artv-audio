@@ -178,18 +178,18 @@ public:
       return false;
     }
 
-    AudioChannelSet stereo   = AudioChannelSet::stereo();
-    AudioChannelSet disabled = AudioChannelSet::disabled();
+    const AudioChannelSet stereo   = AudioChannelSet::stereo();
+    const AudioChannelSet disabled = AudioChannelSet::disabled();
 
     for (int bus = 0; bus < n_busses; ++bus) {
       // only stereo or disabled buses.
       auto const& inbus  = buses.getChannelSet (true, bus);
       auto const& outbus = buses.getChannelSet (false, bus);
 
-      if (inbus != stereo || inbus != disabled) {
+      if (inbus != stereo && inbus != disabled) {
         return false;
       }
-      if (outbus != stereo || outbus != disabled) {
+      if (outbus != stereo && outbus != disabled) {
         return false;
       }
     }
