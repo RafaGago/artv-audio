@@ -126,8 +126,8 @@ struct t_rev_cpole {
   // file:///home/s0001192/Downloads/ReverseIIR.pdf
   //----------------------------------------------------------------------------
   enum coeffs {
-    a, // re
-    b, // im
+    c_re, // re
+    c_im, // im
     n_coeffs,
   };
   //----------------------------------------------------------------------------
@@ -141,8 +141,7 @@ struct t_rev_cpole {
   {
     assert (co.size() >= n_coeffs);
 
-    co[a] = vec_real (pole);
-    co[b] = vec_imag (pole);
+    vec_store (&co[c_re], pole);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -166,31 +165,23 @@ struct t_rev_cpole {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= get_n_states (n_stages));
 
-    V a_v  = co[a];
-    V b_v  = co[b];
-    V y_re = vec_real (in);
-    V y_im = vec_imag (in);
-
-    V*   z_re_ptr = &st[0];
-    V*   z_im_ptr;
+    auto y = in;
+    auto c = vec_load<vec_complex<V>> (&co[c_re]);
+    // strict aliasing broken, but vector types are __may_alias__
+    auto z_ptr  = (vec_complex<V>*) &st[0];
     uint z_size = 1;
 
     for (uint i = 0; i < n_stages; ++i) {
-      // recomputing imaginary buffer position (done)
-      z_im_ptr = z_re_ptr + z_size;
       // computing sample position on each of the same-sized buffers
       uint mask = z_size - 1;
       uint pos  = (z_size + sample_idx) & mask;
       // calculation
-      auto z_re     = z_re_ptr[pos];
-      auto z_im     = z_im_ptr[pos];
-      z_re_ptr[pos] = y_re;
-      z_im_ptr[pos] = y_im;
-      auto y_re_cp  = y_re;
-      y_re          = (a_v * y_re_cp) - (b_v * y_im) + z_re;
-      y_im          = (b_v * y_re_cp) + (a_v * y_im) + z_im;
+      auto z     = z_ptr[pos];
+      z_ptr[pos] = y;
+
+      y = y * c + z;
       // adjusting real buffer position and buffers size for the next stage
-      z_re_ptr = z_im_ptr + z_size;
+      z_ptr += z_size;
       z_size *= 2;
       // as this is a serial algorithm, the initial assumption is that
       // precomputing the powers of 2 for each stage wouldn't make a lot of
@@ -198,11 +189,9 @@ struct t_rev_cpole {
       // less and fixed-size coefficient memory usage, as this is 4mul + 1add
       // that can probably be parallelized by the CPU, it has no dependencies on
       // the code above (TODO: measure).
-      auto a_cp = a_v;
-      a_v       = a_cp * a_cp - b_v * b_v;
-      b_v       = (T) 2. * a_cp * b_v;
+      c *= c;
     }
-    return vec_complex<V> (y_re, y_im);
+    return y;
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -217,51 +206,37 @@ struct t_rev_cpole {
     // block version, the intent with it is to run some iterations on the same
     // cache/delay line before moving to the next. This is a theoretically
     // better memory access pattern once the delay lines become separated enough
-
     using T = vec_value_type_t<V>;
 
     assert (co.size() >= n_coeffs);
     assert (st.size() >= get_n_states (n_stages));
     assert (io_re.size() <= io_im.size());
 
-    V a_v = co[a];
-    V b_v = co[b];
-
-    V*   z_re_ptr = &st[0];
-    V*   z_im_ptr;
+    auto c = vec_load<vec_complex<V>> (&co[c_re]);
+    // strict aliasing broken, but vector types are __may_alias__
+    auto z_ptr  = (vec_complex<V>*) &st[0];
     uint z_size = 1;
 
     for (uint i = 0; i < n_stages; ++i) {
-      // recomputing imaginary buffer position (done)
-      z_im_ptr = z_re_ptr + z_size;
       // computing sample position on each of the same-sized buffers
       uint mask = z_size - 1;
 
       for (uint i = 0; i < io_re.size(); ++i) {
-        uint pos  = (z_size + sample_idx + i) & mask;
-        V    y_re = io_re[i];
-        V    y_im = io_im[i];
-        // calculation
-        auto z_re     = z_re_ptr[pos];
-        auto z_im     = z_im_ptr[pos];
-        z_re_ptr[pos] = y_re;
-        z_im_ptr[pos] = y_im;
-        auto y_re_cp  = y_re;
-        io_re[i]      = (a_v * y_re_cp) - (b_v * y_im) + z_re;
-        io_im[i]      = (b_v * y_re_cp) + (a_v * y_im) + z_im;
+        uint pos = (z_size + sample_idx + i) & mask;
+
+        vec_complex<V> y {io_re[i], io_im[i]};
+        auto           z = z_ptr[pos];
+        z_ptr[pos]       = y;
+
+        y = y * c + z;
+
+        io_re[i] = vec_real (y);
+        io_im[i] = vec_imag (y);
       }
       // adjusting real buffer position and buffers size for the next stage
-      z_re_ptr = z_im_ptr + z_size;
+      z_ptr += z_size;
       z_size *= 2;
-      // as this is a serial algorithm, the initial assumption is that
-      // precomputing the powers of 2 for each stage wouldn't make a lot of
-      // difference because the pipelines are probably at low capacity. Favoring
-      // less and fixed-size coefficient memory usage, as this is 4mul + 1add
-      // that can probably be parallelized by the CPU, it has no dependencies on
-      // the code above (TODO: measure).
-      auto a_cp = a_v;
-      a_v       = a_cp * a_cp - b_v * b_v;
-      b_v       = (T) 2. * a_cp * b_v;
+      c *= c;
     }
   }
   //----------------------------------------------------------------------------

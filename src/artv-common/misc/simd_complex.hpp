@@ -470,6 +470,33 @@ static inline void vec_load (C& dst, crange<const complex_float_type_t<C>> src)
 }
 
 template <class C, enable_if_complex_vec_t<C>* = nullptr>
+static inline C vec_load (complex_value_type_t<C> const* src)
+{
+  C ret;
+  memcpy (&ret, src, sizeof ret);
+  return ret;
+}
+
+template <class C, enable_if_complex_vec_t<C>* = nullptr>
+static inline void vec_load (C& dst, complex_value_type_t<C> const* src)
+{
+  dst = vec_load<C> (src);
+}
+
+template <class C, enable_if_complex_vec_t<C>* = nullptr>
+static inline C vec_load (crange<const complex_value_type_t<C>> src)
+{
+  assert (src.size() >= C::size);
+  return vec_load<C> (src.data());
+}
+
+template <class C, enable_if_complex_vec_t<C>* = nullptr>
+static inline void vec_load (C& dst, crange<const complex_value_type_t<C>> src)
+{
+  dst = vec_load<C> (src);
+}
+
+template <class C, enable_if_complex_vec_t<C>* = nullptr>
 static inline C vec_load_unaligned (complex_float_type_t<C> const* src)
 {
   // dummy
@@ -495,6 +522,36 @@ template <class C, enable_if_complex_vec_t<C>* = nullptr>
 static inline void vec_load_unaligned (
   C&                                    dst,
   crange<const complex_float_type_t<C>> src)
+{
+  dst = vec_load_unaligned<C> (src);
+}
+
+template <class C, enable_if_complex_vec_t<C>* = nullptr>
+static inline C vec_load_unaligned (complex_value_type_t<C> const* src)
+{
+  // dummy
+  return vec_load<C> (src);
+}
+
+template <class C, enable_if_complex_vec_t<C>* = nullptr>
+static inline void vec_load_unaligned (
+  C&                             dst,
+  complex_value_type_t<C> const* src)
+{
+  dst = vec_load_unaligned<C> (src);
+}
+
+template <class C, enable_if_complex_vec_t<C>* = nullptr>
+static inline C vec_load_unaligned (crange<const complex_value_type_t<C>> src)
+{
+  assert (src.size() >= C::size);
+  return vec_load_unaligned<C> (src.data());
+}
+
+template <class C, enable_if_complex_vec_t<C>* = nullptr>
+static inline void vec_load_unaligned (
+  C&                                    dst,
+  crange<const complex_value_type_t<C>> src)
 {
   dst = vec_load_unaligned<C> (src);
 }
