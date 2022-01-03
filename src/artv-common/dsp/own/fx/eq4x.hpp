@@ -467,11 +467,13 @@ private:
   //----------------------------------------------------------------------------
   enum class topology { stereo, l, r, lr_half };
   //----------------------------------------------------------------------------
-  std::array<bandconfig, n_bands>       _cfg;
-  std::array<eqs::coeff_array, n_bands> _target_coeffs;
-  eqs                                   _eq;
-  double                                _smooth_coeff;
-  topology                              _topology;
+  using coeff_array = std::array<eqs::value_type, eqs::n_coeffs>;
+  std::array<bandconfig, n_bands> _cfg;
+
+  alignas (eqs::value_type) std::array<coeff_array, n_bands> _target_coeffs;
+  eqs      _eq;
+  double   _smooth_coeff;
+  topology _topology;
 
   plugin_context* _plugcontext = nullptr;
 };

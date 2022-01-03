@@ -32,7 +32,7 @@ namespace artv {
 #define PP_TO_STR(x) #x
 
 // usage error_with_template_type<whatever> v; The compiler will print the type.
-template <class T>
+template <class... Ts>
 struct error_with_template_type;
 //------------------------------------------------------------------------------
 #define array_elems(x) sizeof (x) / sizeof (x[0])
@@ -347,6 +347,8 @@ public:
   {
     return cast<U>();
   }
+
+  contiguous_range<std::add_const_t<T>> to_const() const { return *this; }
 
 private:
   //----------------------------------------------------------------------------

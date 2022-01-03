@@ -472,8 +472,8 @@ public:
     _envfollow.reset_states();
     _pre_emphasis.reset_states();
     _post_emphasis.reset_states();
-    _crossv.reset_states();
-    _wvsh.reset_states();
+    _crossv.zero_all_states();
+    _wvsh.zero_all_states();
 
     // all instances have the same coefficients
     _wvsh.reset_coeffs_on_idx<sqrt_aa> (compand_in);
@@ -514,7 +514,7 @@ public:
 
     if (unlikely (p.type_prev != p.type || p.mode_prev != p.mode)) {
       _dc_block.reset_states();
-      _wvsh.reset_states();
+      _wvsh.zero_all_states();
       // some waveshapers will create peaks, as the integral on 0 might not be
       // 0. Running them for some samples of silence to initialize. This avoids
       // too having to run the "reset_states" functions on the waveshapers.

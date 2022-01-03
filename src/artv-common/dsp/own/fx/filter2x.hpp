@@ -321,7 +321,7 @@ public:
     memset (&_smooth_pars, 0, sizeof _smooth_pars);
     memset (&_last_sample, 0, sizeof _last_sample);
 
-    _filter.reset_states();
+    _filter.zero_all_states();
     _proc.reset_states<proc_envfollow>();
     _proc.reset_states<proc_dc_block>();
     _proc.reset_coeffs<proc_dc_block> (
@@ -863,8 +863,10 @@ private:
 
   alignas (sse_bytes) std::array<smoothed_params, n_bands> _smooth_pars;
 
-  std::array<filters::coeff_array, n_bands> _target_coeffs;
-  filters                                   _filter;
+  using coeff_array = std::array<filters::value_type, filters::n_coeffs>;
+
+  alignas (sse_bytes) std::array<coeff_array, n_bands> _target_coeffs;
+  filters _filter;
   enum { proc_envfollow, proc_dc_block };
   part_classes<mp_list<slew_limiter, mystran_dc_blocker>, double_x2> _proc;
 

@@ -7,29 +7,195 @@
 
 #include <array>
 #include <cassert>
-#include <tuple>
 #include <utility>
 
 #include "artv-common/misc/mp11.hpp"
+#include "artv-common/misc/overaligned_allocator.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
 
 namespace artv {
 
+namespace detail {
+//------------------------------------------------------------------------------
+template <
+  class T_co,
+  uint N_co,
+  uint N_co_layers,
+  class T_st,
+  uint N_st,
+  uint N_st_layers,
+  bool dynamic>
+class part_memory;
+//------------------------------------------------------------------------------
+// array-backed specialization
+template <
+  class T_co,
+  uint N_co,
+  uint N_co_layers,
+  class T_st,
+  uint N_st,
+  uint N_st_layers>
+class part_memory<T_co, N_co, N_co_layers, T_st, N_st, N_st_layers, false> {
+public:
+  //----------------------------------------------------------------------------
+  void reset() { memset (this, 0, sizeof *this); }
+  //----------------------------------------------------------------------------
+  crange<T_co> get_coeffs (uint layer = 0)
+  {
+    assert (layer < N_co_layers);
+    return _coeffs[layer];
+  }
+  //----------------------------------------------------------------------------
+  crange<T_co> get_all_coeffs()
+  {
+    return {_coeffs[0].data(), _coeffs.size() * _coeffs[0].size()};
+  }
+  //----------------------------------------------------------------------------
+  crange<T_st> get_states (uint layer = 0)
+  {
+    assert (layer < N_st_layers);
+    return _states[layer];
+  }
+  //----------------------------------------------------------------------------
+  crange<T_st> get_all_states()
+  {
+    return {_states[0].data(), _states.size() * _states[0].size()};
+  }
+  //----------------------------------------------------------------------------
+private:
+  alignas (T_co) std::array<std::array<T_co, N_co>, N_co_layers> _coeffs;
+  alignas (T_st) std::array<std::array<T_st, N_st>, N_st_layers> _states;
+};
+//------------------------------------------------------------------------------
+// vector-backed specialization, same types
+template <class T, uint N_co, uint N_co_layers, uint N_st, uint N_st_layers>
+class part_memory<T, N_co, N_co_layers, T, N_st, N_st_layers, true> {
+public:
+  //----------------------------------------------------------------------------
+  void reset()
+  {
+    _mem.clear();
+    _mem.resize (N_co * N_co_layers + N_st + N_st_layers);
+  }
+  //----------------------------------------------------------------------------
+  crange<T> get_coeffs (uint layer = 0)
+  {
+    assert (layer < N_co_layers);
+    return {&_mem[coeff_offset + layer * N_co], N_co};
+  }
+  //----------------------------------------------------------------------------
+  crange<T> get_all_coeffs()
+  {
+    return {&_mem[coeff_offset], N_co * N_co_layers};
+  }
+  //----------------------------------------------------------------------------
+  crange<T> get_states (uint layer = 0)
+  {
+    assert (layer < N_st_layers);
+    return {&_mem[states_offset + layer * N_st], N_st};
+  }
+  //----------------------------------------------------------------------------
+  crange<T> get_all_states()
+  {
+    return {&_mem[states_offset], N_st * N_st_layers};
+  }
+  //----------------------------------------------------------------------------
+private:
+  static constexpr uint coeff_offset  = 0;
+  static constexpr uint states_offset = N_co * N_co_layers;
+
+  std::vector<T, overaligned_allocator<T, sizeof (T)>> _mem;
+};
+//------------------------------------------------------------------------------
+// vector-backed specialization, different types, could be the only one used
+// instead of the same-type variant, which was done for the debugger's
+// convenience.
+template <
+  class T_co,
+  uint N_co,
+  uint N_co_layers,
+  class T_st,
+  uint N_st,
+  uint N_st_layers>
+class part_memory<T_co, N_co, N_co_layers, T_st, N_st, N_st_layers, true> {
+public:
+  //----------------------------------------------------------------------------
+  void reset()
+  {
+    _mem.clear();
+    _mem.resize (n_bytes);
+  }
+  //----------------------------------------------------------------------------
+  crange<T_co> get_coeffs (uint layer = 0)
+  {
+    assert (layer < N_co_layers);
+    // This is intended to be used with __may_alias__ types, hence the C casts
+    auto offset = (T_co*) &_mem[co_offset];
+    return {offset + (layer * N_co), N_co};
+  }
+  //----------------------------------------------------------------------------
+  crange<T_co> get_all_coeffs()
+  {
+    // This is intended to be used with __may_alias__ types, hence the C casts
+    auto offset = (T_co*) &_mem[co_offset];
+    return {offset, N_co * N_co_layers};
+  }
+  //----------------------------------------------------------------------------
+  crange<T_st> get_states (uint layer = 0)
+  {
+    // This is intended to be used with __may_alias__ types, hence the C casts
+    auto offset = (T_st*) &_mem[st_offset];
+    return {offset + (layer * N_st), N_st};
+  }
+  //----------------------------------------------------------------------------
+  crange<T_st> get_all_states()
+  {
+    // This is intended to be used with __may_alias__ types, hence the C casts
+    auto offset = (T_st*) &_mem[st_offset];
+    return {offset, N_st * N_st_layers};
+  }
+  //----------------------------------------------------------------------------
+private:
+  // this could work generically by looking at the first bit set of the size of
+  // the type, but it is not portable and constexpr until C++20
+  // (std::countr_zero). Restricting to arithmetic types, which are powers of
+  // two, so if the first is the biggest the second is guaranteed to be
+  // correctly aligned.
+  static_assert (std::is_arithmetic_v<T_co> || is_vec_v<T_co>, "");
+  static_assert (std::is_arithmetic_v<T_st> || is_vec_v<T_co>, "");
+
+  static constexpr bool co_is_big_type = sizeof (T_co) >= sizeof (T_st);
+  using big_type   = std::conditional_t<co_is_big_type, T_co, T_st>;
+  using small_type = std::conditional_t<!co_is_big_type, T_co, T_st>;
+
+  static constexpr uint n_co_bytes = N_co * N_co_layers * sizeof (T_co);
+  static constexpr uint n_st_bytes = N_st * N_st_layers * sizeof (T_st);
+  static constexpr uint n_bytes    = n_co_bytes + n_st_bytes;
+
+  static constexpr uint co_offset = co_is_big_type ? 0 : n_st_bytes;
+  static constexpr uint st_offset = co_is_big_type ? n_co_bytes : 0;
+
+  std::vector<u8, overaligned_allocator<u8, sizeof (big_type)>> _mem;
+};
+//------------------------------------------------------------------------------
+} // namespace detail
 //------------------------------------------------------------------------------
 // A DSP part to (optionally) an array of instances.
-template <class Part, class Vect, uint Size = 1>
+template <class Part, class Vect, uint Size = 1, bool dynamic_mem = false>
 struct part_class_array {
 public:
   static_assert (is_vec_of_float_type_v<Vect>, "");
   static_assert (Size > 0, "");
   //----------------------------------------------------------------------------
-  using part                 = Part;
-  using value_type           = Vect;
-  using builtin              = vec_value_type_t<value_type>;
-  using coeff_array          = std::array<value_type, part::n_coeffs>;
-  static constexpr uint size = Size;
+  using part                     = Part;
+  using value_type               = Vect;
+  using builtin                  = vec_value_type_t<value_type>;
+  static constexpr uint size     = Size;
+  static constexpr uint n_coeffs = part::n_coeffs;
+  //----------------------------------------------------------------------------
+  void reset() { _mem.reset(); }
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <class... Ts>
@@ -43,22 +209,23 @@ public:
   template <class... Ts>
   void reset_coeffs_on_idx (uint idx, Ts&&... args)
   {
-    assert (idx < size);
-    reset_coeffs_ext (_coeffs[idx], std::forward<Ts> (args)...);
+    auto co = get_coeffs (idx);
+    reset_coeffs_ext (co, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
-  void reset_states_on_idx (uint idx)
+  template <class... Ts>
+  void reset_states_on_idx (uint idx, Ts&&... args)
   {
-    assert (idx < size);
-    part::template reset_states<value_type> (_states[idx]);
+    auto st = _mem.get_states (idx);
+    part::template reset_states<value_type> (st, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
   auto tick_on_idx (uint idx, Ts&&... args)
   {
-    assert (idx < size);
-    return part::template tick<value_type> (
-      _coeffs[idx], _states[idx], std::forward<Ts> (args)...);
+    auto co = get_coeffs (idx);
+    auto st = _mem.get_states (idx);
+    return part::template tick<value_type> (co, st, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
@@ -67,7 +234,11 @@ public:
     reset_coeffs_on_idx (0, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
-  void reset_states() { reset_states_on_idx (0); }
+  template <class... Ts>
+  void reset_states (Ts&&... args)
+  {
+    reset_states_on_idx (0, std::forward<Ts> (args)...);
+  }
   //----------------------------------------------------------------------------
   template <class... Ts>
   auto tick (Ts&&... args)
@@ -82,11 +253,11 @@ public:
     reset_coeffs_on_idx (Idx, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx>
-  void reset_states()
+  template <uint Idx, class... Ts>
+  void reset_states (Ts&&... args)
   {
     static_assert (Idx < size);
-    reset_states_on_idx (Idx);
+    reset_states_on_idx (Idx, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class... Ts>
@@ -105,10 +276,11 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  void reset_states_cascade()
+  template <class... Ts>
+  void reset_states_cascade (Ts&&... args)
   {
     for (uint i = 0; i < size; ++i) {
-      reset_states_on_idx (i);
+      reset_states_on_idx (i, std::forward<Ts> (args)...);
     }
   }
   //----------------------------------------------------------------------------
@@ -124,80 +296,80 @@ public:
     return out;
   }
   //----------------------------------------------------------------------------
-  template <uint Idx>
-  std::array<value_type, part::n_coeffs>& get_coeffs()
-  {
-    static_assert (Idx < size, "");
-    return _coeffs[Idx];
-  }
+  // for bulk coefficient smoothing
+  crange<value_type> get_coeffs (uint idx = 0) { return _mem.get_coeffs (idx); }
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
-  crange<value_type> get_coeffs (uint idx = 0)
-  {
-    assert (idx < size);
-    return (idx < size) ? make_crange (_coeffs[idx]) : crange<value_type> {};
-  }
+  crange<value_type> get_all_coeffs() { return _mem.get_all_coeffs(); }
   //----------------------------------------------------------------------------
-  // for bulk coefficient smoothing
-  crange<value_type> get_all_coeffs()
-  {
-    return {_coeffs.data(), _coeffs.size() * _coeffs[0].size()};
-  }
+  void zero_all_states() { crange_memset (_mem.get_all_states(), 0); }
   //----------------------------------------------------------------------------
 private:
-  alignas (sizeof (value_type)) std::array<coeff_array, size> _coeffs;
-  alignas (sizeof (value_type))
-    std::array<std::array<value_type, part::n_states>, size> _states;
+  detail::part_memory<
+    value_type,
+    part::n_coeffs,
+    size,
+    value_type,
+    part::n_states,
+    size,
+    dynamic_mem>
+    _mem;
 };
 //------------------------------------------------------------------------------
 // A DSP part to (optionally) an array of instances that uses a single
 // coefficient set for element of the array and is of width = 1 independently of
 // the passed vector (Vect) width. Useful for things like e.g. DC blockers
-template <class Part, class Vect, uint Size = 1>
+template <class Part, class Vect, uint Size = 1, bool dynamic_mem = false>
 struct part_class_array_coeffs_global {
 public:
   static_assert (is_vec_of_float_type_v<Vect>, "");
   static_assert (Size > 0, "");
   //----------------------------------------------------------------------------
-  using part                 = Part;
-  using value_type           = Vect;
-  using builtin              = vec_value_type_t<value_type>;
-  using coeff_array          = std::array<builtin, part::n_coeffs>;
-  static constexpr uint size = Size;
+  using part                     = Part;
+  using value_type               = Vect;
+  using builtin                  = vec_value_type_t<value_type>;
+  using co_vec_type              = vec<builtin, 1>;
+  static constexpr uint n_coeffs = part::n_coeffs;
+  static constexpr uint size     = Size;
+  //----------------------------------------------------------------------------
+  void reset() { _mem.reset(); }
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <class... Ts>
   static void reset_coeffs_ext (crange<builtin> coeff_out, Ts&&... args)
   {
     assert (coeff_out.size() >= part::n_coeffs);
-    using x1_t = vec<builtin, 1>;
-    part::template reset_coeffs<x1_t> (
-      coeff_out.cast (x1_t {}), std::forward<Ts> (args)...);
+    part::template reset_coeffs<co_vec_type> (
+      coeff_out.cast (co_vec_type {}), std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
   void reset_coeffs (Ts&&... args)
   {
-    reset_coeffs_ext (_coeffs, std::forward<Ts> (args)...);
+    auto co = get_coeffs();
+    reset_coeffs_ext (co, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
-  void reset_states_on_idx (uint idx)
+  template <class... Ts>
+  void reset_states_on_idx (uint idx, Ts&&... args)
   {
-    assert (idx < size);
-    part::template reset_states<value_type> (_states[idx]);
+    auto st = _mem.get_states (idx);
+    part::template reset_states<value_type> (st, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
   auto tick_on_idx (uint idx, Ts&&... args)
   {
-    assert (idx < size);
-    return part::template tick<value_type> (
-      make_crange (_coeffs),
-      make_crange (_states[idx]),
-      std::forward<Ts> (args)...);
+    auto co = get_coeffs();
+    auto st = _mem.get_states (idx);
+    return part::template tick<value_type> (co, st, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
-  void reset_states() { reset_states_on_idx (0); }
+  template <class... Ts>
+  void reset_states (Ts&&... args)
+  {
+    reset_states_on_idx (0, std::forward<Ts> (args)...);
+  }
   //----------------------------------------------------------------------------
   template <class... Ts>
   auto tick (Ts&&... args)
@@ -205,11 +377,11 @@ public:
     return tick_on_idx (0, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx>
-  void reset_states()
+  template <uint Idx, class... Ts>
+  void reset_states (Ts&&... args)
   {
     static_assert (Idx < size);
-    reset_states_on_idx (Idx);
+    reset_states_on_idx (Idx, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class... Ts>
@@ -219,10 +391,11 @@ public:
     return tick_on_idx (Idx, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
-  void reset_states_cascade()
+  template <class... Ts>
+  void reset_states_cascade (Ts&&... args)
   {
     for (uint i = 0; i < size; ++i) {
-      reset_states_on_idx (i);
+      reset_states_on_idx (i, std::forward<Ts> (args)...);
     }
   }
   //----------------------------------------------------------------------------
@@ -238,27 +411,47 @@ public:
     return out;
   }
   //----------------------------------------------------------------------------
-  std::array<value_type, part::n_coeffs>& get_coeffs() { return _coeffs; }
+  crange<builtin> get_coeffs() { return _mem.get_coeffs(); }
+  crange<builtin> get_all_coeffs() { return _mem.get_all_coeffs(); }
+  //----------------------------------------------------------------------------
+  void zero_all_states() { crange_memset (_mem.get_all_states(), 0); }
   //----------------------------------------------------------------------------
 private:
-  alignas (sizeof (value_type)) coeff_array _coeffs;
-  alignas (sizeof (value_type))
-    std::array<std::array<value_type, part::n_states>, size> _states;
+  detail::part_memory<
+    builtin,
+    part::n_coeffs,
+    1,
+    value_type,
+    part::n_states,
+    size,
+    dynamic_mem>
+    _mem;
 };
 //------------------------------------------------------------------------------
-template <class PartList, class Vect>
+template <class PartList, class Vect, bool dynamic_mem = false>
 struct part_classes;
 
 // Different DSP parts stored on a single class and accessed by index.
-template <template <class...> class List, class Vect, class... Parts>
-struct part_classes<List<Parts...>, Vect> {
+template <
+  template <class...>
+  class List,
+  class Vect,
+  class... Parts,
+  bool dynamic_mem>
+struct part_classes<List<Parts...>, Vect, dynamic_mem> {
 public:
   static_assert (sizeof...(Parts) > 0);
   static_assert (is_vec_of_float_type_v<Vect>, "");
   //----------------------------------------------------------------------------
-  using parts      = mp_list<Parts...>;
-  using value_type = Vect;
-  using builtin    = vec_value_type_t<value_type>;
+  using parts                   = mp_list<Parts...>;
+  using value_type              = Vect;
+  using builtin                 = vec_value_type_t<value_type>;
+  static constexpr uint n_parts = sizeof...(Parts);
+
+  template <uint Idx>
+  using get_part = mp11::mp_at_c<parts, Idx>;
+  //----------------------------------------------------------------------------
+  void reset() { _mem.reset(); }
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <uint Idx, class... Ts>
@@ -266,6 +459,7 @@ public:
   {
     static_assert (Idx < sizeof...(Parts));
     using part = get_part<Idx>;
+
     assert (coeff_out.size() >= part::n_coeffs);
 
     part::template reset_coeffs<value_type> (
@@ -275,28 +469,33 @@ public:
   template <uint Idx, class... Ts>
   void reset_coeffs (Ts&&... args)
   {
-    auto& coeffs = std::get<Idx> (_coeffs);
-    reset_coeffs_ext<Idx> (coeffs, std::forward<Ts> (args)...);
+    static_assert (Idx < sizeof...(Parts));
+    using part = get_part<Idx>;
+
+    auto co = get_coeffs<Idx, part::n_coeffs>();
+    part::template reset_coeffs<value_type> (co, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx>
-  void reset_states()
+  template <uint Idx, class... Ts>
+  void reset_states (Ts&&... args)
   {
     static_assert (Idx < sizeof...(Parts));
-    using part   = get_part<Idx>;
-    auto& states = std::get<Idx> (_states);
-    part::template reset_states<value_type> (states);
+    using part = get_part<Idx>;
+
+    auto st = get_states<Idx, part::n_states>();
+    part::template reset_states<value_type> (st, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class... Ts>
   auto tick (Ts&&... args)
   {
     static_assert (Idx < sizeof...(Parts));
-    using part   = get_part<Idx>;
-    auto& coeffs = std::get<Idx> (_coeffs);
-    auto& states = std::get<Idx> (_states);
-    return part::template tick<value_type> (
-      coeffs, states, std::forward<Ts> (args)...);
+    using part = get_part<Idx>;
+
+    auto co = get_coeffs<Idx, part::n_coeffs>();
+    auto st = get_states<Idx, part::n_states>();
+
+    return part::template tick<value_type> (co, st, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
@@ -308,16 +507,17 @@ public:
     });
   }
   //----------------------------------------------------------------------------
-  void reset_states_cascade()
+  template <class... Ts>
+  void reset_states_cascade (Ts&&... args)
   {
     mp11::mp_for_each<mp11::mp_iota_c<sizeof...(Parts)>> ([&, this] (auto val) {
       static constexpr uint idx = decltype (val)::value;
-      reset_states<idx>();
+      reset_states<idx> (std::forward<Ts> (args)...);
     });
   }
   //----------------------------------------------------------------------------
   template <class T, class... Ts>
-  auto tick_cascade (T in, Ts&&... args)
+  T tick_cascade (T in, Ts&&... args)
   {
     // This might not compile if all internal FX doesn't use the same
     // parameters and return types
@@ -330,33 +530,94 @@ public:
   }
   //----------------------------------------------------------------------------
   template <uint Idx>
-  auto& get_coeffs()
+  crange<value_type> get_coeffs()
   {
     static_assert (Idx < sizeof...(Parts));
-    return std::get<Idx> (_coeffs);
+    using part = get_part<Idx>;
+    return get_coeffs<Idx, part::n_coeffs>();
   }
+  //----------------------------------------------------------------------------
+  // for bulk coefficient smoothing
+  crange<value_type> get_all_coeffs() { return _mem.get_all_coeffs(); }
+  //----------------------------------------------------------------------------
+  template <uint Idx>
+  static constexpr uint get_coeff_offset()
+  {
+    static_assert (Idx < n_parts, "");
+    return get_offset<n_coeffs_list, Idx>();
+  }
+  //----------------------------------------------------------------------------
+  void zero_all_states() { crange_memset (_mem.get_all_states(), 0); }
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  template <class T>
-  using coeffs_array = std::array<value_type, T::n_coeffs>;
-  template <class T>
-  using states_array = std::array<value_type, T::n_states>;
-
   template <uint Idx>
-  using get_part = mp11::mp_at_c<mp_list<Parts...>, Idx>;
+  crange<value_type> get_states()
+  {
+    using part = get_part<Idx>;
+    return get_states<Idx, part::n_states>();
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, uint N_states>
+  crange<value_type> get_states()
+  {
+    constexpr auto offset = get_offset<n_states_list, Idx>();
 
-  alignas (sizeof (value_type)) std::tuple<coeffs_array<Parts>...> _coeffs;
-  alignas (sizeof (value_type)) std::tuple<states_array<Parts>...> _states;
+    auto st = _mem.get_states (0);
+    return {&st[offset], N_states};
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, uint N_coeffs>
+  crange<value_type> get_coeffs()
+  {
+    constexpr auto offset = get_coeff_offset<Idx>();
+
+    auto co = _mem.get_coeffs (0);
+    return {&co[offset], N_coeffs};
+  }
+  //----------------------------------------------------------------------------
+  template <class SizeList, uint End>
+  static constexpr uint get_offset()
+  {
+    // for some reason I didn't get working C++17's fold expressions with
+    // compile time types. TODO (...or not, live is too short).
+    using lst = mp11::mp_take_c<SizeList, End>;
+    return mp11::mp_fold<lst, k_int<0>, mp11::mp_plus>::value;
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  using to_n_coeffs = k_int<T::n_coeffs>;
+  template <class T>
+  using to_n_states = k_int<T::n_states>;
+
+  using n_coeffs_list = mp11::mp_transform<to_n_coeffs, parts>;
+  using n_states_list = mp11::mp_transform<to_n_states, parts>;
+
+  static constexpr uint n_coeffs_total = get_offset<n_coeffs_list, n_parts>();
+  static constexpr uint n_states_total = get_offset<n_states_list, n_parts>();
+
+  detail::part_memory<
+    value_type,
+    n_coeffs_total,
+    1,
+    value_type,
+    n_states_total,
+    1,
+    dynamic_mem>
+    _mem;
 
 public:
-  template <uint Idx>
-  using coeff_array = std::array<value_type, get_part<Idx>::n_coeffs>;
+  static constexpr uint n_coeffs = n_coeffs_total;
 };
 //------------------------------------------------------------------------------
 namespace detail {
 
-template <class PartList, class Vect, class CoeffType, uint Size>
+template <
+  class PartList,
+  class Vect,
+  class CoeffType,
+  uint Size,
+  bool dynamic_mem>
 struct parts_union_array;
 
 template <
@@ -365,8 +626,9 @@ template <
   class Vect,
   class CoeffType,
   uint Size,
+  bool dynamic_mem,
   class... Parts>
-struct parts_union_array<List<Parts...>, Vect, CoeffType, Size> {
+struct parts_union_array<List<Parts...>, Vect, CoeffType, Size, dynamic_mem> {
 public:
   static_assert (is_vec_of_float_type_v<Vect>, "");
   static_assert (Size > 0, "");
@@ -382,6 +644,8 @@ public:
   static_assert (
     std::is_same_v<Vect, CoeffType> || std::is_same_v<builtin, CoeffType>,
     "");
+  //----------------------------------------------------------------------------
+  void reset() { _mem.reset(); }
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <class Part, class... Ts>
@@ -405,32 +669,34 @@ public:
   template <class Part, class... Ts>
   void reset_coeffs_on_idx (uint idx, Ts&&... args)
   {
-    assert (idx < size);
-    reset_coeffs_ext<Part> (_coeffs[idx], std::forward<Ts> (args)...);
+    auto co = get_coeffs (idx);
+    reset_coeffs_ext<Part> (co, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
-  template <class Part>
-  void reset_states_on_idx (uint idx)
+  template <class Part, class... Ts>
+  void reset_states_on_idx (uint idx, Ts&&... args)
   {
     static_assert (mp11::mp_find<parts, Part>::value < n_parts, "");
-    assert (idx < size);
-    Part::template reset_states<value_type> (_states[idx]);
+
+    auto st = _mem.get_states (idx);
+    Part::template reset_states<value_type> (st, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   // generic 0 setting, for safety use the variant above
   void reset_states_on_idx (uint idx)
   {
-    assert (idx < size);
-    crange_memset (make_crange (_states[idx]), 0);
+    auto st = _mem.get_states (idx);
+    crange_memset (st, 0);
   }
   //----------------------------------------------------------------------------
   template <class Part, class... Ts>
   auto tick_on_idx (uint idx, Ts&&... args)
   {
     static_assert (mp11::mp_find<parts, Part>::value < n_parts, "");
-    assert (idx < size);
-    return Part::template tick<value_type> (
-      _coeffs[idx], _states[idx], std::forward<Ts> (args)...);
+
+    auto co = get_coeffs (idx);
+    auto st = _mem.get_states (idx);
+    return Part::template tick<value_type> (co, st, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <class Part, class... Ts>
@@ -439,10 +705,10 @@ public:
     reset_coeffs_on_idx<Part> (0, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
-  template <class Part>
-  void reset_states()
+  template <class Part, class... Ts>
+  void reset_states (Ts&&... args)
   {
-    reset_states_on_idx<Part> (0);
+    reset_states_on_idx<Part> (0, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <class Part, class... Ts>
@@ -458,11 +724,11 @@ public:
     reset_coeffs_on_idx<Part> (Idx, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
-  template <class Part, uint Idx>
-  void reset_states()
+  template <class Part, uint Idx, class... Ts>
+  void reset_states (Ts&&... args)
   {
     static_assert (Idx < size);
-    reset_states_on_idx<Part> (Idx);
+    reset_states_on_idx<Part> (Idx, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <class Part, uint Idx, class... Ts>
@@ -472,27 +738,13 @@ public:
     return tick_on_idx<Part> (Idx, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx>
-  auto& get_coeffs()
-  {
-    static_assert (Idx < size, "");
-    return _coeffs[Idx];
-  }
+  // for bulk coefficient smoothing
+  crange<coeff_type> get_coeffs (uint idx = 0) { return _mem.get_coeffs (idx); }
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
-  crange<coeff_type> get_coeffs (uint idx = 0)
-  {
-    assert (idx < size);
-    return (idx < size) ? make_crange (_coeffs[idx]) : crange<value_type> {};
-  }
+  crange<coeff_type> get_all_coeffs() { return _mem.get_all_coeffs(); }
   //----------------------------------------------------------------------------
-  // for bulk coefficient smoothing
-  crange<coeff_type> get_all_coeffs()
-  {
-    return {_coeffs.data(), _coeffs.size() * _coeffs[0].size()};
-  }
-  //----------------------------------------------------------------------------
-  void reset_states() { crange_memset (make_crange (_states), 0); }
+  void zero_all_states() { crange_memset (_mem.get_all_states(), 0); }
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
@@ -510,13 +762,18 @@ private:
   static constexpr uint max_states
     = mp11::mp_max_element<n_states_types, mp11::mp_less>::value;
 
-public:
-  using coeff_array = std::array<coeff_type, max_coeffs>;
+  detail::part_memory<
+    coeff_type,
+    max_coeffs,
+    size,
+    value_type,
+    max_states,
+    size,
+    dynamic_mem>
+    _mem;
 
-private:
-  alignas (sizeof (value_type)) std::array<coeff_array, size> _coeffs;
-  alignas (sizeof (
-    value_type)) std::array<std::array<value_type, max_states>, size> _states;
+public:
+  static constexpr uint n_coeffs = max_coeffs;
 };
 } // namespace detail
 
@@ -524,13 +781,14 @@ private:
 // N instances of one of many different DSP parts. Every instance can be only
 // one of the available DSP parts simultaneously. This is controlled
 // externally.
-template <class PartList, class Vect, uint Size = 1>
-using parts_union_array = detail::parts_union_array<PartList, Vect, Vect, Size>;
+template <class PartList, class Vect, uint Size = 1, bool dynamic_mem = false>
+using parts_union_array
+  = detail::parts_union_array<PartList, Vect, Vect, Size, dynamic_mem>;
 //------------------------------------------------------------------------------
 // As "parts_union_array" but the coefficient set is of width = 1,
 // independently of the with of "Vect"
-template <class PartList, class Vect, uint Size = 1>
-using parts_union_array_coeffs_by_idx
-  = detail::parts_union_array<PartList, Vect, vec_value_type_t<Vect>, Size>;
+template <class PartList, class Vect, uint Size = 1, bool dynamic_mem = false>
+using parts_union_array_coeffs_by_idx = detail::
+  parts_union_array<PartList, Vect, vec_value_type_t<Vect>, Size, dynamic_mem>;
 //------------------------------------------------------------------------------
 } // namespace artv
