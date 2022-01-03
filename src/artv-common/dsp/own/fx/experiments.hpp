@@ -285,7 +285,7 @@ public:
 
     _gain = butterworth_lp_complex::gain (make_crange (poles), 2);
 
-    t_rev_ccpole_pair_rzero_pair::reset_coeffs (
+    t_rev_ccpole_pair_rzero_eq_pair::reset_coeffs (
       make_crange (co_rev_poles).cast (double {}),
       poles[0],
       vec_real (zeros[0]));
@@ -305,7 +305,7 @@ public:
       auto prev   = _delay[pos];
       _delay[pos] = out;
 
-      out = t_rev_ccpole_pair_rzero_pair::tick (
+      out = t_rev_ccpole_pair_rzero_eq_pair::tick (
         make_crange (co_rev_poles).cast (double {}),
         make_crange (st_rev_poles).cast (double {}),
         out,
@@ -338,10 +338,10 @@ private:
   static constexpr uint delay    = (1 << n_stages) + 1;
 
   std::array<double_x2, ccpole_pair_rzero_pair::n_coeffs>       co_poles;
-  std::array<double_x2, t_rev_ccpole_pair_rzero_pair::n_coeffs> co_rev_poles;
+  std::array<double_x2, t_rev_ccpole_pair_rzero_eq_pair::n_coeffs> co_rev_poles;
 
   std::array<double_x2, ccpole_pair_rzero_pair::n_states> st_poles;
-  std::array<double_x2, t_rev_ccpole_pair_rzero_pair::get_n_states (n_stages)>
+  std::array<double_x2, t_rev_ccpole_pair_rzero_eq_pair::get_n_states (n_stages)>
     st_rev_poles;
 
   std::array<double_x2, delay> _delay;

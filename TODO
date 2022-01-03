@@ -1,3 +1,16 @@
+- Chore: Check correct usage of crange<const T> vs const crange<T>.
+
+- Chore: Introduce unsmootable coeffs, as second parameter on all functions.
+  Probably to be done along with the preceding point, then use them on the
+  reversed pole that switches from real to complex conjugate mode and on Saike's
+  filter types (again).
+
+- Chore: Use vec_set<1> instead of vec_set<x1_type>.
+
+- Chore: For C conformance, substitute many pointer reads/writes by memcpy.
+
+- Feature: lin_eq4x: Spike protection on fast sweeps down. Especially on band1.
+
 - Feature: Add single pole allpass on Phaser.
 
 - Feature: Check csound's ZDF filters(?).

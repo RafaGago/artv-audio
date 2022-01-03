@@ -75,6 +75,7 @@
 
 #include "artv-common/dsp/own/fx/eq4x.hpp"
 #include "artv-common/dsp/own/fx/filter2x.hpp"
+#include "artv-common/dsp/own/fx/lin_eq4x.hpp"
 #include "artv-common/dsp/own/fx/phaser.hpp"
 #include "artv-common/dsp/own/fx/transient_gate.hpp"
 #include "artv-common/dsp/own/fx/waveshaper.hpp"
@@ -5419,6 +5420,238 @@ using eq4x_params = mp_list<
   eq4x_upsampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
+  lin_eq4x_band1_type,
+  n_stereo_busses,
+  param_common (
+    "1.Type",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band1_type_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band1_type_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band1_freq,
+  n_stereo_busses,
+  param_common (
+    "1.Freq",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band1_freq_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band1_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band1_q,
+  n_stereo_busses,
+  param_common ("1.Q", declptr<lin_eq4x>(), declptr<lin_eq4x::band1_q_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band1_q_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band1_gain,
+  n_stereo_busses,
+  param_common (
+    "1.Gain",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band1_gain_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band1_gain_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band2_type,
+  n_stereo_busses,
+  param_common (
+    "2.Type",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band2_type_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band2_type_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band2_freq,
+  n_stereo_busses,
+  param_common (
+    "2.Freq",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band2_freq_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band2_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band2_q,
+  n_stereo_busses,
+  param_common ("2.Q", declptr<lin_eq4x>(), declptr<lin_eq4x::band2_q_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band2_q_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band2_gain,
+  n_stereo_busses,
+  param_common (
+    "2.Gain",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band2_gain_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band2_gain_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band3_type,
+  n_stereo_busses,
+  param_common (
+    "3.Type",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band3_type_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band3_type_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band3_freq,
+  n_stereo_busses,
+  param_common (
+    "3.Freq",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band3_freq_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band3_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band3_q,
+  n_stereo_busses,
+  param_common ("3.Q", declptr<lin_eq4x>(), declptr<lin_eq4x::band3_q_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band3_q_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band3_gain,
+  n_stereo_busses,
+  param_common (
+    "3.Gain",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band3_gain_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band3_gain_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band4_type,
+  n_stereo_busses,
+  param_common (
+    "4.Type",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band4_type_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band4_type_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band4_freq,
+  n_stereo_busses,
+  param_common (
+    "4.Freq",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band4_freq_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band4_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band4_q,
+  n_stereo_busses,
+  param_common ("4.Q", declptr<lin_eq4x>(), declptr<lin_eq4x::band4_q_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band4_q_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band4_gain,
+  n_stereo_busses,
+  param_common (
+    "4.Gain",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band4_gain_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band4_gain_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band1_tolerance,
+  n_stereo_busses,
+  param_common (
+    "1.LR-Diff",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band1_diff_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band1_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band2_tolerance,
+  n_stereo_busses,
+  param_common (
+    "2.LR-Diff",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band2_diff_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band2_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band3_tolerance,
+  n_stereo_busses,
+  param_common (
+    "3.LR-Diff",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band3_diff_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band3_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_band4_tolerance,
+  n_stereo_busses,
+  param_common (
+    "4.LR-Diff",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::band4_diff_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::band4_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_quality,
+  n_stereo_busses,
+  param_common (
+    "Quality",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::quality_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::quality_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lin_eq4x_topology,
+  n_stereo_busses,
+  param_common (
+    "Topology",
+    declptr<lin_eq4x>(),
+    declptr<lin_eq4x::topology_tag>()),
+  lin_eq4x::get_parameter (lin_eq4x::topology_tag {}),
+  slider_ext);
+
+using lin_eq4x_params = mp_list<
+  lin_eq4x_band1_type,
+  lin_eq4x_band1_gain,
+  lin_eq4x_band1_freq,
+  lin_eq4x_band1_q,
+  lin_eq4x_band2_type,
+  lin_eq4x_band2_gain,
+  lin_eq4x_band2_freq,
+  lin_eq4x_band2_q,
+  lin_eq4x_band3_type,
+  lin_eq4x_band3_gain,
+  lin_eq4x_band3_freq,
+  lin_eq4x_band3_q,
+  lin_eq4x_band4_type,
+  lin_eq4x_band4_gain,
+  lin_eq4x_band4_freq,
+  lin_eq4x_band4_q,
+  lin_eq4x_band1_tolerance,
+  lin_eq4x_band2_tolerance,
+  lin_eq4x_band3_tolerance,
+  lin_eq4x_band4_tolerance,
+  lin_eq4x_topology,
+  lin_eq4x_quality>;
+//------------------------------------------------------------------------------
+parameter_cpp_class_define (
   filter2x_band1_type,
   n_stereo_busses,
   param_common (
@@ -6103,17 +6336,18 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  filter2x_params>;
+  lin_eq4x_params,
+  eq4x_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "FX");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "EQlin", "EQ4x");
 
 #else
 // clang-format off

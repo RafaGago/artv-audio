@@ -1,12 +1,13 @@
 #pragma once
 
+#include <complex>
+
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
-#include "artv-common/dsp/own/parts/filters/composite/butterworth.hpp"
-#include "artv-common/dsp/own/parts/filters/composite/tilt.hpp"
-#include "artv-common/dsp/own/parts/filters/onepole.hpp"
-#include "artv-common/dsp/own/parts/filters/presence.hpp"
+#include "artv-common/dsp/own/parts/filters/biquad.hpp"
+#include "artv-common/dsp/own/parts/filters/poles_zeros_reversed.hpp"
+
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
@@ -19,9 +20,9 @@
 namespace artv {
 
 //------------------------------------------------------------------------------
-class eq4x {
+class lin_eq4x {
 private:
-  enum class paramtype { band_type, frequency, q, gain, diff };
+  enum class paramtype { band_type, frequency, q, gain, diff, quality };
 
 public:
   template <uint Band, paramtype Type>
@@ -37,12 +38,22 @@ public:
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
-    using x1_t   = vec<decltype (_smooth_coeff), 1>;
+    for (auto& eq : _eq) {
+      eq.reset(); // realloc
+    }
+    using x1_t = vec<decltype (_smooth_coeff), 1>;
+    _sample    = 0;
+    _latency   = 0;
+    _quality   = 0;
+
     _plugcontext = &pc;
     _cfg         = decltype (_cfg) {};
+
+    reset_quality_settings (pc.get_sample_rate());
+
     smoother::reset_coeffs (
       make_crange (_smooth_coeff).cast (x1_t {}),
-      vec_set<x1_t> (1. / 0.02),
+      vec_set<x1_t> (1.5),
       pc.get_sample_rate());
   }
   //----------------------------------------------------------------------------
@@ -55,7 +66,7 @@ public:
     uint n_enabled_bands = 0;
 
     std::array<bool, 2>       is_copied {false, false};
-    std::array<double_x2, 32> io;
+    std::array<double_x2, 16> io;
 
     for (uint b = 0; b < n_bands; ++b) {
       if (_cfg[b].has_changes) {
@@ -79,9 +90,9 @@ public:
           io[i][0] = src[0][i];
           io[i][1] = src[1][i];
         }
-
-        // smoothing (at blocksize rate)
-        crange<double_x2> internal = _eq.get_coeffs (b);
+#if 0
+        // bulk smoothing (at blocksize rate)
+        crange<double_x2> internal = _eq[b].get_all_coeffs();
         for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
           for (uint i = 0; i < blocksize; ++i) {
             internal[j] = smoother::tick (
@@ -90,47 +101,27 @@ public:
               _target_coeffs[b][j]);
           }
         }
-        // processing
-        switch (_cfg[b].type) {
-        case bandtype::off: // not reachable
-        case bandtype::svf_bell:
-        case bandtype::svf_lshelf:
-        case bandtype::svf_hshelf:
-        case bandtype::svf_allpass:
-          for (uint i = 0; i < blocksize; ++i) {
-            io[i] = _eq.tick_on_idx<andy::svf> (b, io[i]);
-          }
-          break;
-        case bandtype::butterworth_lp:
-          for (uint i = 0; i < blocksize; ++i) {
-            io[i] = _eq.tick_on_idx<btw_lp> (
-              b, io[i], q_to_butterworth_order (_cfg[b].q));
-          }
-          break;
-        case bandtype::butterworth_hp:
-          for (uint i = 0; i < blocksize; ++i) {
-            io[i] = _eq.tick_on_idx<btw_hp> (
-              b, io[i], q_to_butterworth_order (_cfg[b].q));
-          }
-          break;
-        case bandtype::svf_tilt:
-          for (uint i = 0; i < blocksize; ++i) {
-            io[i] = _eq.tick_on_idx<tilt_eq> (b, io[i]);
-          }
-          break;
-        case bandtype::presence:
-          for (uint i = 0; i < blocksize; ++i) {
-            io[i] = _eq.tick_on_idx<liteon::presence_high_shelf> (b, io[i]);
-          }
-          break;
-        case bandtype::onepole_allpass:
-          for (uint i = 0; i < blocksize; ++i) {
-            io[i] = _eq.tick_on_idx<onepole_allpass> (b, io[i]);
-          }
-          break;
-        default:
-          jassert (false);
-          break;
+#else
+        crange<double_x2>       inter = _eq[b].get_all_coeffs();
+        crange<const double_x2> exter
+          = make_crange (_target_coeffs[b]).to_const();
+        crange_memcpy (inter, exter);
+#endif
+
+        // backward zeros
+        for (uint i = 0; i < blocksize; ++i) {
+          io[i]
+            = _eq[b].tick<bckwd_zeros_idx> (io[i], biquad::rev_zeros_tag {});
+        }
+        // backward poles
+        _eq[b].tick<bckwd_poles_idx> (
+          make_crange (io.data(), blocksize),
+          _n_stages[b][_quality],
+          _sample + offset,
+          _cfg[b].is_real);
+        // forward
+        for (uint i = 0; i < blocksize; ++i) {
+          io[i] = _eq[b].tick<fwd_idx> (io[i]);
         }
         // deinterleaving
         switch (_topology) {
@@ -150,12 +141,6 @@ public:
             outs[1][offset + i] = io[i][1];
           }
           break;
-        case topology::lr_half: {
-          uint chnl = b & 1;
-          for (uint i = 0; i < blocksize; ++i) {
-            outs[chnl][offset + i] = io[i][chnl];
-          }
-        } break;
         default:
           assert (false);
           break;
@@ -172,9 +157,6 @@ public:
       case topology::r:
         is_copied[1] = true;
         break;
-      case topology::lr_half:
-        is_copied[b & 1] = true;
-        break;
       default:
         break;
       }
@@ -184,6 +166,7 @@ public:
         memcpy (outs[c], ins[c], samples * sizeof outs[c][0]);
       }
     }
+    _sample += samples;
   }
   //----------------------------------------------------------------------------
   template <uint band>
@@ -205,66 +188,78 @@ public:
   static constexpr auto get_parameter (param<band, paramtype::band_type>)
   {
     return choice_param (
-      0,
-      make_cstr_array (
-        "Off",
-        "Peak",
-        "LowShelf",
-        "HighShelf",
-        "Allpass",
-        "Butterworth LP",
-        "Butterworth HP",
-        "Tilt",
-        "Presence HiShelf",
-        "Allpass OnePole"),
-      30);
+      0, make_cstr_array ("Off", "Peak", "LowShelf", "HighShelf"), 16);
   }
   //----------------------------------------------------------------------------
   template <uint band>
   void set (param<band, paramtype::frequency>, float v)
   {
     static_assert (band < n_bands, "");
-    _cfg[band].has_changes |= _cfg[band].freq_note != v;
+    if (_cfg[band].freq_note == v) {
+      return;
+    }
+    _cfg[band].has_changes = true;
+    // the filter generates spikes on its delay line if not sweeped gently,
+    // protect from them by doing a full clear on abrupt note sweeps. Notice
+    // that it's only sweeping from high to low frequency that is a problem.
+    _cfg[band].has_changes |= (_cfg[band].freq_note - v) > 12.;
     _cfg[band].freq_note = v;
   }
 
   template <uint band>
   static constexpr auto get_parameter (param<band, paramtype::frequency>)
   {
-    return frequency_parameter (20.0, 20000.0, 440.0);
+    if constexpr (band == 0) {
+      return frequency_parameter (80.0, 20000.0, 100.0);
+    }
+    else if constexpr (band == 1) {
+      return frequency_parameter (200.0, 20000.0, 300.0);
+    }
+    else if constexpr (band == 2) {
+      return frequency_parameter (600.0, 20000.0, 1000.0);
+    }
+    else if constexpr (band == 3) {
+      return frequency_parameter (2000.0, 20000.0, 3000.0);
+    }
+    else {
+      return frequency_parameter (20.0, 20000.0, 440.0);
+    }
   }
   //----------------------------------------------------------------------------
   template <uint band>
   void set (param<band, paramtype::q>, float v)
   {
     static_assert (band < n_bands, "");
-    auto& b = _cfg[band];
-    // changing butterworth slope requires a state reset, as they are
-    // different filters under the same menu.
-    bool change = false;
-    bool reset  = (b.type == bandtype::butterworth_hp);
-    reset |= (b.type == bandtype::butterworth_lp);
-    if (reset) {
-      reset &= (q_to_butterworth_order (b.q) != q_to_butterworth_order (v));
-    }
-    else {
-      change = _cfg[band].q != v;
-    }
-    b.reset_band_state |= reset;
-    b.has_changes |= reset | change;
+
+    _cfg[band].has_changes |= _cfg[band].q != v;
     _cfg[band].q = v;
   }
 
   template <uint band>
   static constexpr auto get_parameter (param<band, paramtype::q>)
   {
-    return float_param ("", 0.1f, 20.f, 0.5f, 0.0001f, 0.3f);
+    if constexpr (band == 0) {
+      return float_param ("", 0.1f, 1.0f, 0.5f, 0.0001f, 0.9f);
+    }
+    else if constexpr (band == 1) {
+      return float_param ("", 0.1f, 1.7f, 0.5f, 0.0001f, 0.8f);
+    }
+    else if constexpr (band == 2) {
+      return float_param ("", 0.1f, 3.f, 0.5f, 0.0001f, 0.6f);
+    }
+    else if constexpr (band == 3) {
+      return float_param ("", 0.1f, 6.f, 0.5f, 0.0001f, 0.3f);
+    }
+    else {
+      return float_param ("", 0.1f, 2.f, 0.5f, 0.0001f, 0.3f);
+    }
   }
   //----------------------------------------------------------------------------
   template <uint band>
   void set (param<band, paramtype::gain>, float v)
   {
     static_assert (band < n_bands, "");
+    v *= 0.5; // cascaded response...
     _cfg[band].has_changes |= _cfg[band].gain_db != v;
     _cfg[band].gain_db = v;
   }
@@ -279,7 +274,7 @@ public:
   void set (param<band, paramtype::diff>, float v)
   {
     static_assert (band < n_bands, "");
-    v *= 0.01 * 2.; // 2 octaves up and down
+    v *= 0.01 * 0.25; // a quarter octave up and down
     _cfg[band].has_changes |= _cfg[band].diff != v;
     _cfg[band].diff = v;
   }
@@ -290,13 +285,36 @@ public:
     return float_param ("%", -100.f, 100.f, 0.f, 0.05f);
   }
   //----------------------------------------------------------------------------
+  static constexpr uint n_quality_steps = 4;
+
+  struct quality_tag {};
+
+  void set (quality_tag, int v)
+  {
+    // Can't happen while processing!
+    assert (v >= 0 && v < n_quality_steps);
+    if (_quality == v) {
+      return;
+    }
+    for (auto& band : _cfg) {
+      band.has_changes      = true;
+      band.reset_band_state = true;
+    }
+    _quality = v;
+  }
+
+  static constexpr auto get_parameter (quality_tag)
+  {
+    return choice_param (
+      0, make_cstr_array ("Normal", "High", "Overspeced", "Snake oil"), 8);
+  }
+  //----------------------------------------------------------------------------
   struct topology_tag {};
   void set (topology_tag, int v) { _topology = (topology) v; }
 
   static constexpr auto get_parameter (topology_tag)
   {
-    return choice_param (
-      0, make_cstr_array ("Stereo", "L", "R", "L:1-3, R:2-4"), 16);
+    return choice_param (0, make_cstr_array ("Stereo", "L", "R"), 16);
   }
   //----------------------------------------------------------------------------
   using band1_type_tag = param<0, paramtype::band_type>;
@@ -341,141 +359,193 @@ public:
     band2_diff_tag,
     band3_diff_tag,
     band4_diff_tag,
+    quality_tag,
     topology_tag>;
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  enum class bandtype {
-    off,
-    svf_bell,
-    svf_lshelf,
-    svf_hshelf,
-    svf_nodrive_last = svf_hshelf,
-    svf_allpass,
-    butterworth_lp,
-    butterworth_hp,
-    svf_tilt,
-    presence,
-    onepole_allpass,
-    size
-  };
+  void try_reset_latency()
+  {
+    uint new_latency = 0;
+    for (uint b = 0; b < n_bands; ++b) {
+      uint latency = (1 << _n_stages[b][_quality]) + 1;
+      new_latency += _cfg[b].type == bandtype::off ? 0 : latency;
+    }
+    if (_latency != new_latency) {
+      _latency = new_latency;
+      _plugcontext->set_delay_compensation (new_latency);
+    }
+  }
+  //----------------------------------------------------------------------------
+  enum class bandtype { off, svf_bell, svf_lshelf, svf_hshelf, size };
   //----------------------------------------------------------------------------
   struct bandconfig {
     bandtype type             = bandtype::off;
     float    freq_note        = constexpr_midi_note_to_hz (440.f);
+    uint     freq_spl         = 0;
     float    q                = 0.7f;
     float    gain_db          = 0.f;
     float    diff             = 0.f;
+    bool     is_real          = true;
     bool     has_changes      = false;
     bool     reset_band_state = false;
   };
   //----------------------------------------------------------------------------
   void reset_band (uint band)
   {
-    using x1_t = vec<double, 1>;
-
     auto& b             = _cfg[band];
     auto  bandtype_prev = b.type;
     auto  sr            = (float) _plugcontext->get_sample_rate();
 
     auto freq = vec_set<double_x2> (midi_note_to_hz (b.freq_note));
     freq[1] *= exp2 (b.diff);
-    auto q = vec_set<double_x2> (b.q);
-    q[1] += q[1] * b.diff * 0.05;
+    // not changing the Q, as we want both poles to either be real or conjugate
+    auto q    = vec_set<double_x2> (b.q);
     auto gain = vec_set<double_x2> (b.gain_db);
+
+    auto co        = make_crange (_target_coeffs[band]);
+    auto co_biquad = co.shrink_head (_eq[0].get_coeff_offset<fwd_idx>());
+    auto co_bwd_poles
+      = co.shrink_head (_eq[0].get_coeff_offset<bckwd_poles_idx>());
+    auto co_bwd_zeros
+      = co.shrink_head (_eq[0].get_coeff_offset<bckwd_zeros_idx>());
+
+    std::array<double_x2, biquad::n_coeffs> coeffs;
 
     switch (b.type) {
     case bandtype::off:
-      _eq.reset_states_on_idx (band);
+      _eq[band].reset_states<fwd_idx>();
+      _eq[band].reset_states<bckwd_poles_idx> (_n_stages[band][_quality]);
+      _eq[band].reset_states<bckwd_zeros_idx>();
       break;
     case bandtype::svf_bell:
-      _eq.reset_coeffs_ext<andy::svf> (
-        _target_coeffs[band], freq, q, gain, sr, bell_tag {});
+      _eq[band].reset_coeffs_ext<fwd_idx> (
+        co_biquad, freq, q, gain, sr, bell_tag {});
       break;
     case bandtype::svf_lshelf:
-      _eq.reset_coeffs_ext<andy::svf> (
-        _target_coeffs[band], freq, q, gain, sr, lowshelf_tag {});
+      _eq[band].reset_coeffs_ext<fwd_idx> (
+        co_biquad, freq, q, gain, sr, lowshelf_tag {});
       break;
     case bandtype::svf_hshelf:
-      _eq.reset_coeffs_ext<andy::svf> (
-        _target_coeffs[band], freq, q, gain, sr, highshelf_tag {});
+      _eq[band].reset_coeffs_ext<fwd_idx> (
+        co_biquad, freq, q, gain, sr, highshelf_tag {});
       break;
-    case bandtype::svf_allpass:
-      _eq.reset_coeffs_ext<andy::svf> (
-        _target_coeffs[band], freq, q, sr, allpass_tag {});
-      break;
-    case bandtype::butterworth_lp:
-      _eq.reset_coeffs_ext<btw_lp> (
-        _target_coeffs[band], freq, sr, q_to_butterworth_order (b.q));
-      break;
-    case bandtype::butterworth_hp:
-      _eq.reset_coeffs_ext<btw_hp> (
-        _target_coeffs[band], freq, sr, q_to_butterworth_order (b.q));
-      break;
-    case bandtype::svf_tilt:
-      _eq.reset_coeffs_ext<tilt_eq> (_target_coeffs[band], freq, q, gain, sr);
-      break;
-    case bandtype::presence: {
-      q[1]              = q[0]; // undo diff
-      auto qnorm_0_to_1 = q / get_parameter (band1_q_tag {}).max;
-      _eq.reset_coeffs_ext<liteon::presence_high_shelf> (
-        _target_coeffs[band], freq, qnorm_0_to_1, gain, sr);
-    } break;
-    case bandtype::onepole_allpass: {
-      _eq.reset_coeffs_ext<onepole_allpass> (_target_coeffs[band], freq, sr);
-    } break;
     default:
       jassert (false);
     }
+
+    crange_memcpy (co_bwd_zeros, co_biquad);
+
+    std::array<vec_complex<double_x2>, 2> poles;
+    biquad::get_poles<double_x2> (co_biquad, poles);
+    _cfg[band].is_real = std::abs (poles[0].im[0]) == 0.;
+
+    _eq[band].reset_coeffs_ext<bckwd_poles_idx> (
+      co_bwd_poles, poles[0], poles[1]);
+
     // reset smoothing
     if (_cfg[band].reset_band_state) {
-      _eq.reset_states_on_idx (band);
-      crange_copy<double_x2> (_eq.get_coeffs (band), _target_coeffs[band]);
+      _eq[band].reset_states<bckwd_poles_idx> (_n_stages[band][_quality]);
+      _eq[band].reset_states<bckwd_zeros_idx>();
+      _eq[band].reset_states<fwd_idx>();
+      crange_copy<double_x2> (_eq[band].get_all_coeffs(), _target_coeffs[band]);
+      try_reset_latency();
     }
     _cfg[band].has_changes      = false;
     _cfg[band].reset_band_state = false;
   }
   //----------------------------------------------------------------------------
-  uint q_to_butterworth_order (double q)
-  {
-    auto order = (uint) q;
-    order      = std::max (1u, order);
-    order      = std::min (max_butterworth_order, order);
-    return order;
-  }
-  //----------------------------------------------------------------------------
   static constexpr uint n_bands    = 4;
   static constexpr uint n_channels = 2;
   //----------------------------------------------------------------------------
-  static constexpr uint max_butterworth_order = 6;
+  static uint get_n_stages (
+    double freq,
+    double q,
+    double gain,
+    double samplerate,
+    double snr_db)
+  {
+    std::array<double_x1, biquad::n_coeffs> co;
+    biquad::reset_coeffs<double_x1> (
+      co,
+      vec_set<1> (freq),
+      vec_set<1> (q),
+      vec_set<1> (gain),
+      samplerate,
+      bell_tag {});
+    std::array<vec_complex<double_x1>, 2> poles;
+    biquad::get_poles<double_x1> (co, poles);
+    return get_reversed_pole_n_stages (poles[0].to_std (0), snr_db);
+  }
   //----------------------------------------------------------------------------
-  using btw_lp = butterworth_any_order<lowpass_tag, max_butterworth_order>;
-  using btw_hp = butterworth_any_order<highpass_tag, max_butterworth_order>;
+  void reset_quality_settings (double samplerate)
+  {
+    std::array<double, n_bands> freq, gain, q;
 
-  using eqs = parts_union_array<
-    mp_list<
-      btw_lp,
-      btw_hp,
-      andy::svf,
-      onepole_allpass,
-      tilt_eq,
-      liteon::presence_high_shelf>,
-    double_x2,
-    n_bands>;
+    mp11::mp_for_each<mp11::mp_iota_c<n_bands>> ([&] (auto band) {
+      constexpr uint b = decltype (band)::value;
+
+      using freq_param = param<b, paramtype::frequency>;
+      using q_param    = param<b, paramtype::q>;
+      using gain_param = param<b, paramtype::gain>;
+
+      freq[b] = get_parameter (freq_param {}).min;
+      freq[b] = midi_note_to_hz (freq[b]);
+      gain[b] = get_parameter (gain_param {}).max;
+      q[b]    = get_parameter (q_param {}).max;
+    });
+
+    for (uint b = 0; b < n_bands; ++b) {
+      _n_stages[b][0] = get_n_stages (freq[b], q[b], gain[b], samplerate, 90.);
+      _n_stages[b][1] = get_n_stages (freq[b], q[b], gain[b], samplerate, 120.);
+      _n_stages[b][2] = _n_stages[b][1] + 1;
+      _n_stages[b][3] = _n_stages[b][1] + 2;
+      static_assert (n_quality_steps == 4, "Update this!");
+
+      for (auto& stages : _n_stages[b]) {
+        stages = std::min (stages, max_n_stages);
+      }
+    }
+  }
   //----------------------------------------------------------------------------
   using smoother = onepole_smoother;
   //----------------------------------------------------------------------------
-  enum class topology { stereo, l, r, lr_half };
+  enum class topology { stereo, l, r };
   //----------------------------------------------------------------------------
+  // Big amount of preallocated memory to cope with high samplerates. This was
+  // to use the convenience of "part_classes" at the expense of always
+  // allocating the worst case amount of memory.
+  static constexpr uint max_n_stages = 18;
+  //----------------------------------------------------------------------------
+  enum idx {
+    bckwd_poles_idx,
+    bckwd_zeros_idx,
+    fwd_idx,
+  };
+
+  using eqs = part_classes<
+    mp_list<
+      // make_max_stages_t_rev<t_rev_cpole_pair_czero_pair, max_n_stages>,
+      make_max_stages_t_rev<t_rev_pole_pair, max_n_stages>,
+      biquad,
+      biquad>,
+
+    double_x2,
+    true>;
+
   using coeff_array = std::array<eqs::value_type, eqs::n_coeffs>;
-  std::array<bandconfig, n_bands> _cfg;
 
   alignas (eqs::value_type) std::array<coeff_array, n_bands> _target_coeffs;
-  eqs      _eq;
-  double   _smooth_coeff;
-  topology _topology;
+  std::array<eqs, n_bands> _eq;
 
-  plugin_context* _plugcontext = nullptr;
+  std::array<bandconfig, n_bands>                        _cfg;
+  uint                                                   _sample;
+  double                                                 _smooth_coeff;
+  topology                                               _topology;
+  uint                                                   _quality;
+  std::array<std::array<uint, n_quality_steps>, n_bands> _n_stages;
+  uint                                                   _latency     = 0;
+  plugin_context*                                        _plugcontext = nullptr;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

@@ -283,6 +283,8 @@ struct biquad {
   {
     assert (poles.size() >= 2);
 
+    // ffast-math is enabled, so the compiler can decide to remove the divisions
+    // by 2 * a when seeing it is set to 1.
     get_quadratic_roots (poles[0], poles[1], vec_set<V> (1.), co[a1], co[a2]);
   }
   //----------------------------------------------------------------------------

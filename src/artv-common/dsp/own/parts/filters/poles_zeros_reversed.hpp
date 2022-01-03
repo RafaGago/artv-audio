@@ -39,9 +39,10 @@ struct t_rev_zero_stage_op {
   template <class T>
   static T run (T c, T in, T& state)
   {
-    T& y1 = state; // just documentation...
-    T  y  = c * -y1 + in; // TODO: has "in" to be reversed too?
-    y1    = y;
+    // This requires no delay line to perform time reversal.
+    T& z1 = state; // just documentation...
+    T  y  = in - c * z1;
+    z1    = in;
     return y;
   }
 };
@@ -396,6 +397,7 @@ private:
     co_k2,
   };
 };
+#if 0
 //------------------------------------------------------------------------------
 // Time reversed partial fraction expansion pole pair.
 // A class to be used when the poles can be mutate between:
@@ -502,29 +504,337 @@ struct t_rev_naive_cascade_pair {
   }
   //----------------------------------------------------------------------------
 };
-
+#endif
 //------------------------------------------------------------------------------
 } // namespace detail
 //------------------------------------------------------------------------------
-// time reversed real pole or zero
-using t_rev_rzero = detail::t_rev_single<detail::t_rev_zero_stage_op, false>;
+// t_rev = time reversed
 using t_rev_rpole = detail::t_rev_single<detail::t_rev_pole_stage_op, false>;
-// time reversed complex pole or zero
-using t_rev_czero = detail::t_rev_single<detail::t_rev_zero_stage_op, true>;
 using t_rev_cpole = detail::t_rev_single<detail::t_rev_pole_stage_op, true>;
-// time reversed complex conjugate pole or zero pair (TODO: unverified math for
-// zeroes)
-using t_rev_cczero_pair = detail::t_rev_conjugate<detail::t_rev_zero_stage_op>;
+// time reversed complex conjugate pole pair
 using t_rev_ccpole_pair = detail::t_rev_conjugate<detail::t_rev_pole_stage_op>;
-
 // The poles pairs run in parallel and use partial fraction expansion
 using t_rev_rpole_pair = detail::t_rev_pfe_pole_pair<false>;
 using t_rev_cpole_pair = detail::t_rev_pfe_pole_pair<true>;
-// The zeros pairs run naively... (TODO: make a full biquad run in parallel)
-using t_rev_rzero_pair
-  = detail::t_rev_naive_cascade_pair<detail::t_rev_zero_stage_op, false>;
-using t_rev_czero_pair
-  = detail::t_rev_naive_cascade_pair<detail::t_rev_zero_stage_op, true>;
+
+//------------------------------------------------------------------------------
+// realtime switches between two real poles or two complex conjugates from the
+// same internal state.
+struct t_rev_pole_pair {
+  //----------------------------------------------------------------------------
+  enum coeffs {
+    co_c1,
+    co_c2,
+    co_k1,
+    co_k2,
+    co_ratio,
+    n_coeffs,
+  };
+  //----------------------------------------------------------------------------
+  static constexpr uint get_n_states (uint n_stages)
+  {
+    return t_rev_rpole::get_n_states (n_stages) * 3;
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<V>      co,
+    vec_complex<V> pole1,
+    vec_complex<V> pole2)
+  {
+    using T = vec_value_type_t<V>;
+
+    assert (co.size() >= n_coeffs);
+
+    if (pole1.im[0] == 0) {
+#ifndef NDEBUG
+      for (uint i = 0; i < vec_traits<V>().size; ++i) {
+        assert (pole1.im[i] == (T) 0. || pole1.im[i] == (T) -0.);
+        assert (pole2.im[i] == (T) 0. || pole2.im[i] == (T) -0.);
+        assert (
+          (pole1.re[i] != pole2.re[i] || pole1.re[i] == (T) 0.
+           || pole2.re[i] == (T) 0.)
+          && "Handle the equal pole case (if possible)");
+      }
+#endif
+      // two real poles, assuming no different Q.
+      co[co_c1] = pole1.re;
+      co[co_c2] = pole2.re;
+    }
+    else {
+#ifndef NDEBUG
+      for (uint i = 0; i < vec_traits<V>().size; ++i) {
+        assert (pole1.im[i] != (T) 0. && pole1.im[i] != (T) -0.);
+        assert (pole2.im[i] != (T) 0. && pole2.im[i] != (T) -0.);
+      }
+#endif
+      // complex conjugate
+      co[co_c1] = pole1.re;
+      co[co_c2] = pole1.im;
+    }
+    // these are always calculated for easier smoothing
+    co[co_ratio] = pole1.re / pole1.im;
+    co[co_k1]    = (T) 1 / ((T) 1 - pole2.re / pole1.re);
+    co[co_k2]    = (T) 1 / ((T) 1 - pole1.re / pole2.re);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<V> st, uint n_stages)
+  {
+    uint numstates = get_n_states (n_stages);
+    assert (st.size() >= numstates);
+    memset (st.data(), 0, sizeof (V) * numstates);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const V> co,
+    crange<V>       st,
+    V               in,
+    uint            n_stages,
+    uint            sample_idx, // sample counter (external)
+    bool            is_real) // external, as for now parameters can be smoothed
+  {
+    using T = vec_value_type_t<V>;
+
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= get_n_states (n_stages));
+    assert (n_stages >= 1);
+
+    if (!is_real) {
+      return tick_cc (co, st, in, n_stages, sample_idx);
+    }
+    else {
+      return tick_pfe (co, st, in, n_stages, sample_idx);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static crange<V> tick (
+    crange<const V> co,
+    crange<V>       st,
+    crange<V>       io, // ins on call, outs when returning
+    uint            n_stages,
+    uint            sample_idx, // sample counter (external)
+    bool            is_real) // external, as for now parameters can be smoothed
+  {
+    using T = vec_value_type_t<V>;
+
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= get_n_states (n_stages));
+    assert (n_stages >= 1);
+
+    if (!is_real) {
+      return tick_cc (co, st, io, n_stages, sample_idx);
+    }
+    else {
+      return tick_pfe (co, st, io, n_stages, sample_idx);
+    }
+  }
+  //----------------------------------------------------------------------------
+private:
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick_pfe (
+    crange<const V> co,
+    crange<V>       st,
+    V               in,
+    uint            n_stages,
+    uint            sample_idx) // sample counter (external)
+  {
+    using T = vec_value_type_t<V>;
+
+    auto c1     = co[co_c1];
+    auto c2     = co[co_c1];
+    auto k1     = co[co_k1];
+    auto k2     = co[co_k2];
+    auto z_ptr  = &st[0];
+    uint z_size = 1;
+    auto y1     = in;
+    auto y2     = in;
+
+    for (uint i = 0; i < n_stages; ++i) {
+      uint mask = z_size - 1;
+      uint pos  = ((z_size + sample_idx) & mask) * n_lanes;
+
+      // Interleaving/lane 0: complex pole real or pole1 real part
+      // Interleaving/lane 1: complex pole imaginary part
+      // Interleaving/lane 2: pole2 real part
+      y1 = detail::t_rev_pole_stage_op::run (c1, y1, z_ptr[pos + 0]);
+      z_ptr[pos + 1] = vec_set<V> ((T) 0);
+      y2 = detail::t_rev_pole_stage_op::run (c2, y2, z_ptr[pos + 2]);
+
+      c1 *= c1;
+      c2 *= c2;
+
+      z_ptr += z_size * n_lanes;
+      z_size *= 2;
+    }
+
+    auto pfe = y1 * k1 + y2 * k2;
+    return pfe;
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static crange<V> tick_pfe (
+    crange<const V> co,
+    crange<V>       st,
+    crange<V>       io, // ins on call, outs when returning
+    uint            n_stages,
+    uint            sample_idx) // sample counter (external)
+  {
+    using T = vec_value_type_t<V>;
+
+    constexpr uint pole1 = 0;
+    constexpr uint pole2 = 1;
+
+    std::array<std::array<V, 2>, 64> buff;
+
+    auto k1 = co[co_k1];
+    auto k2 = co[co_k2];
+
+    for (uint offset = 0; offset < io.size(); offset += buff.size()) {
+      uint blocksize = std::min<uint> (buff.size(), io.size() - offset);
+
+      // prepare new inputs
+      for (uint i = 0; i < blocksize; ++i) {
+        buff[i][pole1] = buff[i][pole2] = io[offset + i];
+      }
+
+      auto c1     = co[co_c1];
+      auto c2     = co[co_c2];
+      auto z_ptr  = &st[0];
+      uint z_size = 1;
+
+      // process a block stage-wise
+      for (uint s = 0; s < n_stages; ++s) {
+        uint mask     = z_size - 1;
+        uint idx_base = z_size + sample_idx + offset;
+
+        for (uint i = 0; i < blocksize; ++i) {
+          uint pos = ((idx_base + i) & mask) * n_lanes;
+
+          auto& y1 = buff[i][pole1];
+          auto& y2 = buff[i][pole2];
+          // Interleaving/lane 0: complex pole real or pole1 real part
+          // Interleaving/lane 1: complex pole imaginary part
+          // Interleaving/lane 2: pole2 real part
+          y1 = detail::t_rev_pole_stage_op::run (c1, y1, z_ptr[pos + 0]);
+          z_ptr[pos + 1] = vec_set<V> ((T) 0);
+          y2 = detail::t_rev_pole_stage_op::run (c2, y2, z_ptr[pos + 2]);
+        }
+
+        z_ptr += z_size * n_lanes;
+        z_size *= 2;
+        c1 *= c1;
+        c2 *= c2;
+      }
+      // store outs
+      for (uint i = 0; i < blocksize; ++i) {
+        auto pfe       = buff[i][pole1] * k1 + buff[i][pole2] * k2;
+        io[offset + i] = pfe;
+      }
+    }
+    return io; // forwarding
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick_cc (
+    crange<const V> co,
+    crange<V>       st,
+    V               in,
+    uint            n_stages,
+    uint            sample_idx) // sample counter (external)
+  {
+    using T = vec_value_type_t<V>;
+
+    auto c = vec_load<vec_complex<V>> (&co[co_c1]);
+
+    auto z_ptr  = &st[0];
+    uint z_size = 1;
+    auto y      = in;
+
+    for (uint i = 0; i < n_stages; ++i) {
+      uint mask = z_size - 1;
+      uint pos  = ((z_size + sample_idx) & mask) * n_lanes;
+
+      // Interleaving/lane 0: complex pole real or pole1 real part
+      // Interleaving/lane 1: complex pole imaginary part
+      // Interleaving/lane 2: pole2 real part
+
+      auto z = vec_load<vec_complex<V>> (&z_ptr[pos + 0]);
+      y      = detail::t_rev_pole_stage_op::run (c, y, z);
+      vec_store<vec_complex<V>> (&z_ptr[pos + 0], z);
+      z_ptr[pos + 2] = z_ptr[pos];
+
+      c *= c;
+      z_ptr += z_size * n_lanes;
+      z_size *= 2;
+    }
+
+    auto ratio = co[co_ratio];
+    return y.re + ratio * y.im;
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static crange<V> tick_cc (
+    crange<const V> co,
+    crange<V>       st,
+    crange<V>       io, // ins on call, outs when returning
+    uint            n_stages,
+    uint            sample_idx) // sample counter (external)
+  {
+
+    std::array<vec_complex<V>, 64> io_c;
+    auto                           ratio = co[co_ratio];
+
+    for (uint offset = 0; offset < io.size(); offset += io_c.size()) {
+      uint blocksize = std::min<uint> (io_c.size(), io.size() - offset);
+      // interleave
+      for (uint i = 0; i < blocksize; ++i) {
+        io_c[i] = vec_complex<V> {io[offset + i]};
+      }
+      // process a block stage-wise
+      auto c      = vec_load<vec_complex<V>> (&co[co_c1]);
+      auto z_ptr  = &st[0];
+      uint z_size = 1;
+
+      for (uint s = 0; s < n_stages; ++s) {
+        uint mask     = z_size - 1;
+        uint idx_base = z_size + sample_idx + offset;
+
+        for (uint i = 0; i < blocksize; ++i) {
+          uint pos = ((idx_base + i) & mask) * n_lanes;
+
+          // Interleaving/lane 0: complex pole real or pole1 real part
+          // Interleaving/lane 1: complex pole imaginary part
+          // Interleaving/lane 2: pole2 real part
+          auto z  = vec_load<vec_complex<V>> (&z_ptr[pos + 0]);
+          io_c[i] = detail::t_rev_pole_stage_op::run (c, io_c[i], z);
+          vec_store<vec_complex<V>> (&z_ptr[pos + 0], z);
+          z_ptr[pos + 2] = z_ptr[pos];
+        }
+
+        z_ptr += z_size * n_lanes;
+        z_size *= 2;
+        c *= c;
+      }
+      // deinterleave
+      for (uint i = 0; i < blocksize; ++i) {
+        io[offset + i] = io_c[i].re + ratio * io_c[i].im;
+      }
+    }
+    return io; // forwarding
+  }
+  //----------------------------------------------------------------------------
+  enum delay_lanes {
+    lane_rpole1_or_cpole_re,
+    lane_cpole_im,
+    lane_rpole2,
+    n_lanes
+  };
+  //----------------------------------------------------------------------------
+};
 //------------------------------------------------------------------------------
 // one time reversed real pole one real zero filter
 struct t_rev_rpole_rzero {
@@ -585,8 +895,8 @@ struct t_rev_rpole_rzero {
   }
   //----------------------------------------------------------------------------
 };
-// time reversed complex conjugate poles pair + two real zeros filter ----------
-struct t_rev_ccpole_pair_rzero_pair {
+// time reversed complex conjugate poles pair + two equal real zeros filter ----
+struct t_rev_ccpole_pair_rzero_eq_pair {
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs = rzero::n_coeffs + t_rev_ccpole_pair::n_coeffs };
   //----------------------------------------------------------------------------
@@ -652,138 +962,6 @@ struct t_rev_ccpole_pair_rzero_pair {
       st = st.shrink_head (rzero::n_states);
     }
     return io; // forwarding
-  }
-  //----------------------------------------------------------------------------
-};
-//------------------------------------------------------------------------------
-struct t_rev_cpole_pair_czero_pair {
-  //----------------------------------------------------------------------------
-  enum coeffs { n_coeffs = czero_pair::n_coeffs + t_rev_cpole_pair::n_coeffs };
-  //----------------------------------------------------------------------------
-  static constexpr uint get_n_states (uint n_stages)
-  {
-    return czero_pair::n_states + t_rev_cpole_pair::get_n_states (n_stages);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<V>      co,
-    vec_complex<V> pole1,
-    vec_complex<V> pole2,
-    vec_complex<V> zero1,
-    vec_complex<V> zero2)
-  {
-    czero_pair::reset_coeffs (co, zero1, zero2);
-    co = co.shrink_head (czero_pair::n_coeffs);
-    t_rev_cpole_pair::reset_coeffs (co, pole1, pole2);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, uint n_stages)
-  {
-    uint numstates = get_n_states (n_stages);
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (V) * numstates);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const V> co,
-    crange<V>       st,
-    V               x,
-    uint            n_stages,
-    uint            sample_idx)
-  {
-    auto out = x;
-
-    out = czero_pair::tick (co, st, out);
-    co  = co.shrink_head (czero_pair::n_coeffs);
-    st  = st.shrink_head (czero_pair::n_states);
-    out = t_rev_cpole_pair::tick (co, st, out, n_stages, sample_idx);
-    return out;
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static crange<V> tick (
-    crange<const V> co,
-    crange<V>       st,
-    crange<V>       io, // ins on call, outs when returning
-    uint            n_stages,
-    uint            sample_idx)
-  {
-    for (uint i = 0; i < io.size(); ++i) {
-      io[i] = czero_pair::tick (co, st, io[i]);
-    }
-    co = co.shrink_head (czero_pair::n_coeffs);
-    st = st.shrink_head (czero_pair::n_states);
-    t_rev_cpole_pair::tick (co, st, io, n_stages, sample_idx);
-    return io; // forwarding
-  }
-  //----------------------------------------------------------------------------
-};
-struct t_rev_cpole_pair_t_rev_czero_pair {
-  //----------------------------------------------------------------------------
-  enum coeffs {
-    n_coeffs = t_rev_czero_pair::n_coeffs + t_rev_cpole_pair::n_coeffs
-  };
-  //----------------------------------------------------------------------------
-  static constexpr uint get_n_states (uint n_stages)
-  {
-    return t_rev_czero_pair::get_n_states (n_stages)
-      + t_rev_cpole_pair::get_n_states (n_stages);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<V>      co,
-    vec_complex<V> pole1,
-    vec_complex<V> pole2,
-    vec_complex<V> zero1,
-    vec_complex<V> zero2)
-  {
-    t_rev_czero_pair::reset_coeffs (co, zero1, zero2);
-    co = co.shrink_head (t_rev_czero_pair::n_coeffs);
-    t_rev_cpole_pair::reset_coeffs (co, pole1, pole2);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, uint n_stages)
-  {
-    uint numstates = get_n_states (n_stages);
-    assert (st.size() >= numstates);
-    memset (st.data(), 0, sizeof (V) * numstates);
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const V> co,
-    crange<V>       st,
-    V               x,
-    uint            n_stages,
-    uint            sample_idx)
-  {
-    auto out = x;
-
-    out = t_rev_czero_pair::tick (co, st, out, n_stages, sample_idx);
-    co  = co.shrink_head (t_rev_czero_pair::n_coeffs);
-    st  = st.shrink_head (t_rev_czero_pair::get_n_states (n_stages));
-    out = t_rev_cpole_pair::tick (co, st, out, n_stages, sample_idx);
-    return out;
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static crange<V> tick (
-    crange<const V> co,
-    crange<V>       st,
-    crange<V>       io, // ins on call, outs when returning
-    uint            n_stages,
-    uint            sample_idx)
-  {
-    t_rev_czero_pair::tick (co, st, io, n_stages, sample_idx);
-    co = co.shrink_head (t_rev_czero_pair::n_coeffs);
-    st = st.shrink_head (t_rev_czero_pair::get_n_states (n_stages));
-    t_rev_cpole_pair::tick (co, st, io, n_stages, sample_idx);
-    return io;
   }
   //----------------------------------------------------------------------------
 };

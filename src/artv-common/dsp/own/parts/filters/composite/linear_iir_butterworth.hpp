@@ -233,7 +233,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
   }
   //----------------------------------------------------------------------------
 private:
-  using rev_2pole = t_rev_ccpole_pair_rzero_pair;
+  using rev_2pole = t_rev_ccpole_pair_rzero_eq_pair;
   using fwd_2pole = butterworth_lowpass_any_order;
 };
 //------------------------------------------------------------------------------

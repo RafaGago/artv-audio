@@ -16,4 +16,8 @@ struct bell_tag {}; // as in a parametric EQ
 struct lowshelf_tag {}; // as in a parametric EQ
 struct highshelf_tag {}; // as in a parametric EQ
 
+// Random tags used elsewhere.
+template <uint n>
+struct part_tick_tag {};
+
 }; // namespace artv
