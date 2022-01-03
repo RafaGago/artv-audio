@@ -1,0 +1,115 @@
+desc:ArtvSplitter2
+tags: Transient Splitter
+version: 0.1
+author: Arthur Vandelay
+license: GPLv3
+
+slider1:d_hp=10<10,1200,1>Det HP(Hz)
+slider2:d_recovery=0.85<0,1,.000000001>Det Recovery
+slider3:d_mode=0<0,1,1>Det Shape
+
+slider6:c_decay=0.5<0,1,.000000001>Curve Decay
+slider7:c_lp=2200<200,20000,1>Curve LP(Hz)
+slider8:c_shape=2<0,5,1>Curve shape
+
+@init
+function init_follower (atk, rel) (
+    this.at = ( atk > 0 ) ? exp (-1 / (atk*srate)) : 0;
+    this.rt = ( rel > 0 ) ? exp (-1 / (rel*srate)) : 0;
+);
+
+function eval_follower (x) local(coeff) (
+    coeff = x > this.level ? this.at : this.rt;
+    this.level = x + coeff * (this.level - x);
+);
+
+// Vadim's TPT one pole
+function onepole_reset (freq) local(inv_sr_d2, wd, wa)(
+    inv_sr_d2 = 0.5 / srate;
+    wd = 2 * $pi * freq;
+    wa = 2 * srate * tan (wd * inv_sr_d2);
+    this.g = wa * inv_sr_d2;
+    this.g = this.g / (1 + this.g); 
+);
+
+
+function onepole_tick_lp (in) local(v, lp)(
+    v      = (in - this.s) * this.g;
+    lp     = v + this.s;
+    this.s = lp + v;
+    lp;
+);
+
+function onepole_tick_hp (in) local(v, lp)(
+    in - onepole_tick_lp (in);
+);
+
+DECAY_SEC = 1/20;
+ATTACK_SEC = 1/200;
+
+@slider
+release_min = log (1/10);
+release_max = log (1) - release_min;
+release     = exp (release_max * d_recovery + release_min);
+
+env_slow.init_follower (ATTACK_SEC, release);
+
+//fast_min   = log (ATTACK_SEC / 150);
+//fast_max   = log (ATTACK_SEC / 50) - fast_min;
+//det_attack = exp (fast_max * d_speed + fast_min);
+det_attack = ATTACK_SEC / 10;
+
+env_fast.init_follower (det_attack, release);
+
+//c_attack_min = fast_min / 2;
+//c_attack_max = fast_min * 2;
+//curve_attack = exp (c_attack_max * c_attack + c_attack_min);
+curve_attack = 1/2000;
+
+c_decay_min = log (1/1000);
+c_decay_max = log (.5) - c_decay_min;
+curve_decay = exp (c_decay_max * c_decay + c_decay_min);
+
+env_curve.init_follower(curve_attack, curve_decay);
+
+hp.onepole_reset(d_hp);
+lp.onepole_reset(c_lp);
+
+@block
+
+@sample
+
+in_l = spl0; // hipass: TODO
+in_r = spl1;
+
+( d_mode == 0 ) ? (
+ gain = log (abs (in_l) + abs (in_r));
+) : (
+ gain = log (in_l * in_l +  in_r * in_r);
+);
+
+gain = hp.onepole_tick_hp(gain);
+
+e_fast = env_fast.eval_follower (gain);
+e_slow = env_slow.eval_follower (gain);
+l_fast = exp (e_fast);
+l_slow = exp (e_slow);
+gate = (l_fast - l_slow) / l_fast; // A ratio. 0 to 1
+
+mix = gate;
+mix = env_curve.eval_follower (gate);
+mix = lp.onepole_tick_lp (mix);
+
+mix = c_shape == 0 ? pow (mix, 1/3) : mix;
+mix = c_shape == 1 ? sqrt(mix) : mix;
+mix = c_shape == 3 ? mix * mix : mix;
+mix = c_shape == 4 ? mix * mix * mix : mix;
+mix = c_shape == 5 ? mix * mix * mix * mix : mix;
+ 
+spl0 = in_l * mix; 
+spl1 = in_r * mix;
+//spl0 = mix;
+//spl1 = mix;
+spl2 = in_l - spl0;
+spl3 = in_r - spl1;
+

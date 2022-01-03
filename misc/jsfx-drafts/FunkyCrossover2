@@ -1,0 +1,71 @@
+desc:FunkyCrossover2
+
+slider1:q=0.5<0.001,2.,.001>Q
+slider2:f1=300<20,22000,1.>f1
+slider3:f2=1000<20,22000,1.>f2
+slider4:f3=2000<20,22000,1.>f3
+slider5:f4=5000<20,22000,1.>f4
+
+@init
+
+function svf_lp(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 0;
+  this.m1 = 0;
+  this.m2 = 1;
+  
+  this.ic1eq = 0;
+  this.ic2eq = 0;
+);
+
+function svf_hp(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = -k;
+  this.m2 = -1;
+  
+  this.ic1eq = 0;
+  this.ic2eq = 0;
+);
+
+function svf_tick(in) local (v1, v2, v3)(
+  v3 = in - this.ic2eq;
+  v1 = this.a1 * this.ic1eq + this.a2 * v3;
+  v2 = this.ic2eq + this.a2 * this.ic1eq + this.a3 * v3;
+  this.ic1eq = 2 * v1 - this.ic1eq;
+  this.ic2eq = 2 * v2 - this.ic2eq;
+  
+  this.m0 * in + this.m1 * v1 + this.m2 * v2;
+);
+
+
+@block
+
+lp1.svf_lp(f1, q, srate);
+lp2.svf_lp(f2, q, srate);
+lp3.svf_lp(f3, q, srate);
+lp4.svf_lp(f4, q, srate);
+
+@sample
+lo1 = lp1.svf_tick(spl0);
+hi1 = spl0 - lo1;
+lo2 = lp2.svf_tick(hi1);
+hi2 = hi1 - lo2;
+lo3 = lp3.svf_tick(hi2);
+hi3 = hi2 - lo3;
+lo4 = lp4.svf_tick(hi3);
+hi4 = hi3 - lo4;
+
+
+spl0=lo1 + lo2 + lo3 + lo4 + hi4;
+spl1=lo1; 
+
+

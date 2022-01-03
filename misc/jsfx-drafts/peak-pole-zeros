@@ -1,0 +1,165 @@
+desc:EQ poles zeros
+
+slider1:freq=550<20,2500,1>freq (Hz)
+slider2:q=0.8<0.1,5.,0.1>Q
+slider3:gain_db=0<-15,15,0.1>gain (dB)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+function get_rbj_peak_filter_coeffs (freq, gain, q) 
+  local(A, w0, cosw0, alpha, alpha_div_a, a0i) (
+  A = (10^(gain/40));
+  w0 = 2 * $pi * freq / srate;
+  cosw0 = cos(w0);
+  alpha = sin(w0) / (2 * q);
+  alpha_div_a = alpha / A; 
+
+  a0i = 1 / (1 + alpha_div_a);
+
+  this.b0 = (1 + alpha * A) * a0i;
+  this.b1 = (-2 * cosw0) * a0i;
+  this.b2 = (1 - alpha * A) * a0i;
+  this.a1 = this.b1;
+  this.a2 = (1 - alpha_div_a) * a0i;
+);
+
+function peak_tdf2_biquad_init(freq, gain, q)(
+  this.get_rbj_peak_filter_coeffs (freq, gain, q);
+  this.z1 = 0;
+  this.z2 = 0;
+);
+
+function peak_df1_biquad_init(freq, gain, q)(
+  this.peak_tdf2_biquad_init(freq, gain, q);
+  this.y1 = 0;
+  this.y2 = 0;
+);
+
+function biquad_df1_tick(x) local(out)(
+  out  = x * this.b0 + this.z1 * this.b1 + this.b2 * this.z2;
+  out += -this.a1 * this.y1 - this.a2 * this.y2;
+  this.z2 = this.z1;
+  this.z1 = x;
+  this.y2 = this.y1;
+  this.y1 = out;
+  out;
+);
+
+function biquad_tdf2_tick(x) local(out)(
+  out     = (x * this.b0 + this.z1);
+  this.z1 = x * this.b1 + this.z2 - this.a1 * out;
+  this.z2 = x * this.b2 - this.a2 * out;
+  out;
+);
+
+function get_quadratic_roots (a, b, c)
+(
+  this.re0 = -b / (2 * a); 
+  this.im0 = (b * b) - 4 * a * c;
+  this.im0 < 0 ? (
+    this.im0 = sqrt (-this.im0) / (2 * a);
+    this.im1 = -this.im0;
+    this.re1 = this.re0;
+  ) : ( //else
+    this.im0 = sqrt (this.im0) / (2 * a);
+    this.re1 = this.re0 - this.im0;
+    this.re0 += this.im0;
+    this.im0 = 0;
+    this.im1 = 0;
+  );
+);
+
+function two_rpoles_init (re1, re2)(
+  // partial fraction expansion on two real poles
+  this.p1 = re1;
+  this.p2 = re2;
+  this.kp1  = 1 / (1 - re2 / re1);
+  this.kp2  = 1 / (1 - re1 / re2);
+  this.yp1  = 0;
+  this.yp2  = 0;
+);
+
+function two_rpoles_tick (x)(
+  this.yp1 = this.p1 * this.yp1 + x;
+  this.yp2 = this.p2 * this.yp2 + x;
+  this.yp1 * this.kp1 + this.yp2 * this.kp2;
+);
+
+function cpole_init (re, im)(
+  this.re = re;
+  this.im = im;
+  this.y_re = 0;
+  this.y_im = 0;
+);
+
+function cpole_tick (x_re, x_im) local (re)(
+  // in complex: (pole * y) + x
+  
+  // complex mul
+  re        = this.re * this.y_re - this.im * this.y_im;
+  this.y_im = this.re * this.y_im + this.im * this.y_re;
+  this.y_re = re;
+  // complex add
+  this.y_re = x_re + this.y_re;
+  this.y_im = x_im + this.y_im;
+);
+
+function czero_init (re, im)(
+  this.re = re;
+  this.im = im;
+  this.z_re = 0;
+  this.z_im = 0;
+  this.y_re = 0; // last results stored here, two values can't be returned
+  this.y_im = 0; // last results stored here, two values can't be returned
+);
+
+function czero_tick (x_re, x_im) local (re)(
+  // in complex: x - (zero * z)
+  
+  // complex mul
+  re        = this.re * this.z_re - this.im * this.z_im;
+  this.y_im = this.re * this.z_im + this.im * this.z_re;
+  this.y_re = re;
+  // complex sub
+  this.y_re = x_re - this.y_re;
+  this.y_im = x_im - this.y_im;
+  this.z_re = x_re;
+  this.z_im = x_im;
+);
+
+@slider
+coeffs.get_rbj_peak_filter_coeffs(freq, gain_db, q);
+poles.get_quadratic_roots (1, coeffs.a1, coeffs.a2);
+zeros.get_quadratic_roots (coeffs.b0, coeffs.b1, coeffs.b2);
+pole1.cpole_init (poles.re0, poles.im0);
+pole2.cpole_init (poles.re1, poles.im1);
+zero1.czero_init (zeros.re0, zeros.im0);
+zero2.czero_init (zeros.re1, zeros.im1);
+two_rpoles.two_rpoles_init(poles.re0, poles.re1);
+
+biquad.peak_tdf2_biquad_init(freq, gain_db, q);
+
+@sample
+re = spl0;
+
+(poles.im0 != 0) ? (
+  pole1.cpole_tick (re, 0);
+  pole2.cpole_tick (pole1.y_re, pole1.y_im);
+  re = pole2.y_re;
+) : (
+  re = two_rpoles.two_rpoles_tick(re);
+);
+
+zero1.czero_tick (re, 0);
+zero2.czero_tick (zero1.y_re, zero1.y_im);
+re = zero2.y_re * coeffs.b0;
+
+spl1 = biquad.biquad_tdf2_tick (spl0);
+spl0 = re;
+//spl1 = re;
+
+

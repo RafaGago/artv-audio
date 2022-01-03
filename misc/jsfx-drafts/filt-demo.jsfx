@@ -1,0 +1,82 @@
+desc:new effect
+slider1:filt_freq=30<10,20000,1>freq(Hz)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+// Chapter 3.10 THE ART OF VA FILTER DESIGN
+//
+// Vadim Zavalishin
+// https://www.native-instruments.com/fileadmin/ni_media/downloads/pdf/VAFilterDesign_2.1.0.pdf
+
+function tpt_1p_reset (freq) local(inv_sr_d2, wd, wa)(
+    inv_sr_d2 = 0.5 / srate;
+    wd = 2 * $pi * freq;
+    wa = 2 * srate * tan (wd * inv_sr_d2);
+    this.g = wa * inv_sr_d2;
+    this.g = this.g / (1 + this.g); 
+);
+
+
+function tpt_1p_tick_lp (in) local(v, lp)(
+    v      = (in - this.s) * this.g;
+    lp     = v + this.s;
+    this.s = lp + v;
+    lp;
+);
+
+function tpt_1p_tick_hp (in)(
+    in - this.tpt_1p_tick_lp (in);
+);
+
+function tpt_1p_tick_ap (in) local(lp, hp)(
+    lp = this.tpt_1p_tick_lp (in);
+    lp - (in - lp);
+);
+
+
+// Standard TDF2 (transposed direct form 2) 1pole 1zero filter
+function tdf2_1p_reset_lp (freq) local(w, n)(
+    w = tan ($pi * freq / srate); 
+    n = 1 / (1 + w);
+    this.b0 = w * n;
+    this.b1 = this.b0;
+    this.a1 = n * (w - 1.);
+);
+
+
+function tdf2_1p_reset_hp (freq) local(w, n)(
+    w = tan ($pi * freq / srate); 
+    n = 1 / (1 + w);
+    this.b0 = n;
+    this.b1 = -n;
+    this.a1 = n * (w - 1.);
+);
+
+function tdf2_1p_reset_ap (freq) local(w, n)(
+    w = tan ($pi * freq / srate); 
+    n = 1 / (1 + w);
+    this.b0 = n * (w - 1.);
+    this.b1 = 1;
+    this.a1 = n * (w - 1.);
+);
+
+function tdf2_1p_tick (in) local (out)(
+    out = in * this.b0 + this.s1;
+    this.s1 = in * this.b1 - out * this.a1;
+    out;
+);
+
+
+@slider
+filt_l.tpt_1p_reset(filt_freq);
+filt_r.tdf2_1p_reset_ap(filt_freq);
+
+@sample
+spl0 = filt_l.tpt_1p_tick_ap(spl0);
+spl1 = filt_r.tdf2_1p_tick(spl1);
+
+
