@@ -1,3 +1,7 @@
 /*debug*
 /*release*
 __pycache__*
+.xwin-cache/*
+.vscode/*
+CMakeFiles/*
+xwin-*/*
