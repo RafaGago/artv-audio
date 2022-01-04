@@ -38,12 +38,13 @@ struct czero {
     auto zero = vec_load<vec_complex<V>> (co.data());
     auto z1   = vec_load<vec_complex<V>> (st.data());
 
-    auto ret = x - zero * z1;
+    auto y = x - zero * z1;
     vec_store (st.data(), x);
-    return ret;
+    return y;
   }
   //----------------------------------------------------------------------------
 };
+
 // complex one-pole filter -----------------------------------------------------
 struct cpole {
   //----------------------------------------------------------------------------
@@ -77,9 +78,9 @@ struct cpole {
     auto pole = vec_load<vec_complex<V>> (co.data());
     auto y1   = vec_load<vec_complex<V>> (st.data());
 
-    auto ret = pole * y1 + x;
-    vec_store (st.data(), ret);
-    return ret;
+    auto y = pole * y1 + x;
+    vec_store (st.data(), y);
+    return y;
   }
   //----------------------------------------------------------------------------
 };
@@ -109,9 +110,9 @@ struct rzero {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);
 
-    V ret  = x - co[re] * st[z1];
+    V y    = x - co[re] * st[z1];
     st[z1] = x;
-    return ret;
+    return y;
   }
   //----------------------------------------------------------------------------
 };
@@ -141,12 +142,13 @@ struct rpole {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);
 
-    V ret  = co[re] * st[y1] + x;
-    st[y1] = ret;
-    return ret;
+    V y    = co[re] * st[y1] + x;
+    st[y1] = y;
+    return y;
   }
   //----------------------------------------------------------------------------
 };
+
 // complex conjugate pole pair filter ------------------------------------------
 // Based on paper from Martin Vicanek "A New Reverse IIR Algorithm".
 // https://www.vicanek.de/articles.htm
@@ -249,4 +251,137 @@ struct ccpole_pair_rzero_pair {
   }
   //----------------------------------------------------------------------------
 };
+
+// complex zero pair, either real or complex conjugate, so it gets real input
+// and output.
+struct czero_pair {
+  //----------------------------------------------------------------------------
+  enum coeffs { c1_re, c1_im, c2_re, c2_im, n_coeffs };
+  enum state { z1_c1_re, z1_c2_re, z1_c2_im, n_states };
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<V>      co,
+    vec_complex<V> zero1,
+    vec_complex<V> zero2)
+  {
+    assert (co.size() >= vec_complex<V>::size);
+
+    vec_store (&co[c1_re], zero1);
+    vec_store (&co[c2_re], zero2);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<V> st)
+  {
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (crange<const V> co, crange<V> st, V x)
+  {
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= n_states);
+
+    auto zero1 = vec_load<vec_complex<V>> (&co[c1_re]);
+    auto zero2 = vec_load<vec_complex<V>> (&co[c2_re]);
+    auto z1_2  = vec_load<vec_complex<V>> (&st[z1_c2_re]);
+
+    auto out1    = x - zero1 * st[z1_c1_re];
+    st[z1_c1_re] = x;
+    auto out2    = out1 - zero2 * z1_2;
+    vec_store (&st[z1_c2_re], out1);
+    return vec_real (out2);
+  }
+  //----------------------------------------------------------------------------
+};
+
+// complex zero pair, either real or complex conjugate, so it gets real input
+// and output.
+struct cpole_pair {
+  //----------------------------------------------------------------------------
+  enum coeffs { c1_re, c1_im, c2_re, c2_im, n_coeffs };
+  enum state { y1_c1_re, y1_c1_im, y1_c2_re, n_states };
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<V>      co,
+    vec_complex<V> pole1,
+    vec_complex<V> pole2)
+  {
+    assert (co.size() >= vec_complex<V>::size);
+
+    vec_store (&co[c1_re], pole1);
+    vec_store (&co[c2_re], pole2);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<V> st)
+  {
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (crange<const V> co, crange<V> st, V x)
+  {
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= n_states);
+
+    auto pole1 = vec_load<vec_complex<V>> (&co[c1_re]);
+    auto pole2 = vec_load<vec_complex<V>> (&co[c2_re]);
+    auto y     = vec_load<vec_complex<V>> (&st[y1_c1_re]);
+
+    y = pole1 * y + x;
+    vec_store (&st[y1_c1_re], y);
+    y            = pole2 * st[y1_c2_re] + y;
+    V y_re       = vec_real (y);
+    st[y1_c2_re] = y_re;
+    return y_re;
+  }
+  //----------------------------------------------------------------------------
+};
+//----------------------------------------------------------------------------
+struct cpole_pair_czero_pair {
+  //----------------------------------------------------------------------------
+  enum coeffs { n_coeffs = cpole_pair::n_coeffs + czero_pair::n_coeffs };
+  enum state { n_states = cpole_pair::n_states + czero_pair::n_states };
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<V>      co,
+    vec_complex<V> pole1,
+    vec_complex<V> pole2,
+    vec_complex<V> zero1,
+    vec_complex<V> zero2)
+  {
+    assert (co.size() >= vec_complex<V>::size);
+
+    czero_pair::reset_coeffs (co, zero1, zero2);
+    co = co.shrink_head (czero_pair::n_coeffs);
+    cpole_pair::reset_coeffs (co, pole1, pole2);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<V> st)
+  {
+    czero_pair::reset_states (st);
+    st = st.shrink_head (czero_pair::n_states);
+    cpole_pair::reset_states (st);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (crange<const V> co, crange<V> st, V x)
+  {
+    V out = x;
+    out   = czero_pair::tick (co, st, out);
+    co    = co.shrink_head (czero_pair::n_coeffs);
+    st    = st.shrink_head (czero_pair::n_states);
+    out   = cpole_pair::tick (co, st, out);
+    return out;
+  }
+  //----------------------------------------------------------------------------
+};
+
 } // namespace artv
