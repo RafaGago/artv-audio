@@ -195,9 +195,12 @@ public:
     if (v >= (int) bandtype::size || v < 0) {
       v = (int) bandtype::off;
     }
-    _cfg[band].has_changes |= (int) _cfg[band].type != (int) v;
-    _cfg[band].reset_band_state |= _cfg[band].has_changes;
-    _cfg[band].type = (bandtype) v;
+    if ((int) _cfg[band].type == (int) v) {
+      return;
+    }
+    _cfg[band].has_changes      = true;
+    _cfg[band].reset_band_state = true;
+    _cfg[band].type             = (bandtype) v;
   }
 
   template <uint band>
