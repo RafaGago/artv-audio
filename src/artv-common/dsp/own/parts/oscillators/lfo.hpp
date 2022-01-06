@@ -126,6 +126,7 @@ private:
   float                 _noise_value;
   white_noise_generator _whitenoise;
   static_assert (onepole_smoother::n_coeffs == 1, "");
+  static_assert (onepole_smoother::n_coeffs_int == 0, "");
   float _smooth_coeff;
   static_assert (onepole_smoother::n_states == 1, "");
   float _smooth_state;

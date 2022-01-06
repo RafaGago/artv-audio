@@ -90,8 +90,9 @@ public:
     return cascade_type::n_states_for_order (order);
   }
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs = cascade_type::n_coeffs;
-  static constexpr uint n_states = cascade_type::n_states;
+  static constexpr uint n_coeffs     = cascade_type::n_coeffs;
+  static constexpr uint n_coeffs_int = cascade_type::n_coeffs_int;
+  static constexpr uint n_states     = cascade_type::n_states;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
@@ -159,9 +160,10 @@ public:
   using mode_tag         = Filter_mode_tag;
   using butterworth_type = butterworth_any_order<mode_tag, N>;
 
-  static constexpr uint order    = N;
-  static constexpr uint n_states = butterworth_type::n_states;
-  static constexpr uint n_coeffs = butterworth_type::n_coeffs;
+  static constexpr uint order        = N;
+  static constexpr uint n_states     = butterworth_type::n_states;
+  static constexpr uint n_coeffs_int = butterworth_type::n_coeffs_int;
+  static constexpr uint n_coeffs     = butterworth_type::n_coeffs;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (

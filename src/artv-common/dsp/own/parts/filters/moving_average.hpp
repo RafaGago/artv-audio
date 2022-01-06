@@ -18,6 +18,7 @@ struct moving_average {
   static constexpr uint length = L;
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { n_states = length - 1 };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

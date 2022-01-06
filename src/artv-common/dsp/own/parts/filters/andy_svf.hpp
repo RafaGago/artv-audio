@@ -124,6 +124,7 @@ struct svf_multimode {
 
   //----------------------------------------------------------------------------
   enum coeffs { a1, a2, a3, k, n_coeffs = k + (uint) needs_k_coeff };
+  enum coeffs_int { n_coeffs_int };
   enum state { ic1eq, ic2eq, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -250,6 +251,7 @@ using svf_peak     = svf_multimode<peak_tag>;
 struct svf {
   //----------------------------------------------------------------------------
   enum coeffs { a1, a2, a3, m0, m1, m2, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { ic1eq, ic2eq, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

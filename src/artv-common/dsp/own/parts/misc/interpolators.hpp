@@ -8,6 +8,7 @@ namespace artv {
 struct allpass_interpolator {
   //----------------------------------------------------------------------------
   enum coeffs { nu, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { y0, d0, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

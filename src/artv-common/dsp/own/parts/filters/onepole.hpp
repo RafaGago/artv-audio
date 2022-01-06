@@ -14,6 +14,7 @@ namespace artv {
 struct onepole_smoother {
   //----------------------------------------------------------------------------
   enum coeffs { b1, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { z1, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -77,6 +78,7 @@ struct onepole {
   static constexpr bool returns_array = mp11::mp_size<enabled_modes>::value > 1;
   //----------------------------------------------------------------------------
   enum coeffs { G, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { s, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -170,6 +172,7 @@ using onepole_allpass  = onepole<allpass_tag>;
 struct onepole_tdf2 {
   //----------------------------------------------------------------------------
   enum coeffs { b0, b1, a1, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { s1, n_states };
 
   template <class T>

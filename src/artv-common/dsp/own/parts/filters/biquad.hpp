@@ -21,6 +21,7 @@ namespace artv {
 struct biquad {
   //----------------------------------------------------------------------------
   enum coeffs { b0, b1, b2, a1, a2, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum states { z1, z2, n_states };
 
   using rev_zeros_tag = part_tick_tag<0>;

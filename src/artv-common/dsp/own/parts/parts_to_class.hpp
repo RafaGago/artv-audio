@@ -22,6 +22,7 @@ namespace detail {
 template <
   class T_co,
   uint N_co,
+  uint N_co_int,
   uint N_co_layers,
   class T_st,
   uint N_st,
@@ -33,11 +34,20 @@ class part_memory;
 template <
   class T_co,
   uint N_co,
+  uint N_co_int,
   uint N_co_layers,
   class T_st,
   uint N_st,
   uint N_st_layers>
-class part_memory<T_co, N_co, N_co_layers, T_st, N_st, N_st_layers, false> {
+class part_memory<
+  T_co,
+  N_co,
+  N_co_int,
+  N_co_layers,
+  T_st,
+  N_st,
+  N_st_layers,
+  false> {
 public:
   //----------------------------------------------------------------------------
   void reset() { memset (this, 0, sizeof *this); }
@@ -53,6 +63,17 @@ public:
     return {_coeffs[0].data(), _coeffs.size() * _coeffs[0].size()};
   }
   //----------------------------------------------------------------------------
+  crange<T_co> get_coeffs_int (uint layer = 0)
+  {
+    assert (layer < N_co_layers);
+    return _coeffs_int[layer];
+  }
+  //----------------------------------------------------------------------------
+  crange<T_co> get_all_coeffs_int()
+  {
+    return {_coeffs_int[0].data(), _coeffs_int.size() * _coeffs_int[0].size()};
+  }
+  //----------------------------------------------------------------------------
   crange<T_st> get_states (uint layer = 0)
   {
     assert (layer < N_st_layers);
@@ -66,18 +87,26 @@ public:
   //----------------------------------------------------------------------------
 private:
   alignas (T_co) std::array<std::array<T_co, N_co>, N_co_layers> _coeffs;
+  alignas (
+    T_co) std::array<std::array<T_co, N_co_int>, N_co_layers> _coeffs_int;
   alignas (T_st) std::array<std::array<T_st, N_st>, N_st_layers> _states;
 };
 //------------------------------------------------------------------------------
 // vector-backed specialization, same types
-template <class T, uint N_co, uint N_co_layers, uint N_st, uint N_st_layers>
-class part_memory<T, N_co, N_co_layers, T, N_st, N_st_layers, true> {
+template <
+  class T,
+  uint N_co,
+  uint N_co_int,
+  uint N_co_layers,
+  uint N_st,
+  uint N_st_layers>
+class part_memory<T, N_co, N_co_int, N_co_layers, T, N_st, N_st_layers, true> {
 public:
   //----------------------------------------------------------------------------
   void reset()
   {
     _mem.clear();
-    _mem.resize (N_co * N_co_layers + N_st + N_st_layers);
+    _mem.resize ((N_co + N_co_int) * N_co_layers + (N_st * N_st_layers));
   }
   //----------------------------------------------------------------------------
   crange<T> get_coeffs (uint layer = 0)
@@ -89,6 +118,17 @@ public:
   crange<T> get_all_coeffs()
   {
     return {&_mem[coeff_offset], N_co * N_co_layers};
+  }
+  //----------------------------------------------------------------------------
+  crange<T> get_coeffs_int (uint layer = 0)
+  {
+    assert (layer < N_co_layers);
+    return {&_mem[coeff_int_offset + layer * N_co_int], N_co_int};
+  }
+  //----------------------------------------------------------------------------
+  crange<T> get_all_coeffs_int()
+  {
+    return {&_mem[coeff_int_offset], N_co_int * N_co_layers};
   }
   //----------------------------------------------------------------------------
   crange<T> get_states (uint layer = 0)
@@ -103,8 +143,10 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  static constexpr uint coeff_offset  = 0;
-  static constexpr uint states_offset = N_co * N_co_layers;
+  static constexpr uint coeff_offset     = 0;
+  static constexpr uint coeff_int_offset = N_co * N_co_layers;
+  static constexpr uint states_offset
+    = coeff_int_offset + (N_co_int * N_co_layers);
 
   std::vector<T, overaligned_allocator<T, sizeof (T)>> _mem;
 };
@@ -115,11 +157,20 @@ private:
 template <
   class T_co,
   uint N_co,
+  uint N_co_int,
   uint N_co_layers,
   class T_st,
   uint N_st,
   uint N_st_layers>
-class part_memory<T_co, N_co, N_co_layers, T_st, N_st, N_st_layers, true> {
+class part_memory<
+  T_co,
+  N_co,
+  N_co_int,
+  N_co_layers,
+  T_st,
+  N_st,
+  N_st_layers,
+  true> {
 public:
   //----------------------------------------------------------------------------
   void reset()
@@ -141,6 +192,21 @@ public:
     // This is intended to be used with __may_alias__ types, hence the C casts
     auto offset = (T_co*) &_mem[co_offset];
     return {offset, N_co * N_co_layers};
+  }
+  //----------------------------------------------------------------------------
+  crange<T_co> get_coeffs_int (uint layer = 0)
+  {
+    assert (layer < N_co_layers);
+    // This is intended to be used with __may_alias__ types, hence the C casts
+    auto offset = (T_co*) &_mem[co_int_offset];
+    return {offset + (layer * N_co_int), N_co_int};
+  }
+  //----------------------------------------------------------------------------
+  crange<T_co> get_all_coeffs_int()
+  {
+    // This is intended to be used with __may_alias__ types, hence the C casts
+    auto offset = (T_co*) &_mem[co_int_offset];
+    return {offset, N_co_int * N_co_layers};
   }
   //----------------------------------------------------------------------------
   crange<T_st> get_states (uint layer = 0)
@@ -170,12 +236,15 @@ private:
   using big_type   = std::conditional_t<co_is_big_type, T_co, T_st>;
   using small_type = std::conditional_t<!co_is_big_type, T_co, T_st>;
 
-  static constexpr uint n_co_bytes = N_co * N_co_layers * sizeof (T_co);
-  static constexpr uint n_st_bytes = N_st * N_st_layers * sizeof (T_st);
-  static constexpr uint n_bytes    = n_co_bytes + n_st_bytes;
+  static constexpr uint n_co_bytes     = N_co * N_co_layers * sizeof (T_co);
+  static constexpr uint n_co_int_bytes = N_co_int * N_co_layers * sizeof (T_co);
+  static constexpr uint n_st_bytes     = N_st * N_st_layers * sizeof (T_st);
+  static constexpr uint n_bytes = n_co_bytes + n_co_int_bytes + n_st_bytes;
 
-  static constexpr uint co_offset = co_is_big_type ? 0 : n_st_bytes;
-  static constexpr uint st_offset = co_is_big_type ? n_co_bytes : 0;
+  static constexpr uint co_offset     = co_is_big_type ? 0 : n_st_bytes;
+  static constexpr uint co_int_offset = co_offset + n_co_bytes;
+  static constexpr uint st_offset
+    = co_is_big_type ? (co_int_offset + n_co_int_bytes) : 0;
 
   std::vector<u8, overaligned_allocator<u8, sizeof (big_type)>> _mem;
 };
@@ -199,18 +268,26 @@ public:
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <class... Ts>
-  static void reset_coeffs_ext (crange<value_type> coeff_out, Ts&&... args)
+  void reset_coeffs_ext (uint idx, crange<value_type> coeff_out, Ts&&... args)
   {
     assert (coeff_out.size() >= part::n_coeffs);
-    part::template reset_coeffs<value_type> (
-      coeff_out, std::forward<Ts> (args)...);
+
+    if constexpr (part::n_coeffs_int == 0) {
+      part::template reset_coeffs<value_type> (
+        coeff_out, std::forward<Ts> (args)...);
+    }
+    else {
+      auto co_int = _mem.get_coeffs_int (idx);
+      part::template reset_coeffs<value_type> (
+        coeff_out, co_int, std::forward<Ts> (args)...);
+    }
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
   void reset_coeffs_on_idx (uint idx, Ts&&... args)
   {
     auto co = get_coeffs (idx);
-    reset_coeffs_ext (co, std::forward<Ts> (args)...);
+    reset_coeffs_ext (idx, co, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
@@ -225,7 +302,16 @@ public:
   {
     auto co = get_coeffs (idx);
     auto st = _mem.get_states (idx);
-    return part::template tick<value_type> (co, st, std::forward<Ts> (args)...);
+
+    if constexpr (part::n_coeffs_int == 0) {
+      return part::template tick<value_type> (
+        co, st, std::forward<Ts> (args)...);
+    }
+    else {
+      auto co_int = _mem.get_coeffs_int (idx);
+      return part::template tick<value_type> (
+        co, co_int, st, std::forward<Ts> (args)...);
+    }
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
@@ -308,6 +394,7 @@ private:
   detail::part_memory<
     value_type,
     part::n_coeffs,
+    part::n_coeffs_int,
     size,
     value_type,
     part::n_states,
@@ -336,11 +423,21 @@ public:
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <class... Ts>
-  static void reset_coeffs_ext (crange<builtin> coeff_out, Ts&&... args)
+  void reset_coeffs_ext (crange<builtin> coeff_out, Ts&&... args)
   {
     assert (coeff_out.size() >= part::n_coeffs);
-    part::template reset_coeffs<co_vec_type> (
-      coeff_out.cast (co_vec_type {}), std::forward<Ts> (args)...);
+
+    if constexpr (part::n_coeffs_int == 0) {
+      part::template reset_coeffs<co_vec_type> (
+        coeff_out.cast (co_vec_type {}), std::forward<Ts> (args)...);
+    }
+    else {
+      auto co_int = _mem.get_coeffs_int();
+      part::template reset_coeffs<co_vec_type> (
+        coeff_out.cast (co_vec_type {}),
+        co_int.cast (co_vec_type {}),
+        std::forward<Ts> (args)...);
+    }
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
@@ -362,7 +459,16 @@ public:
   {
     auto co = get_coeffs();
     auto st = _mem.get_states (idx);
-    return part::template tick<value_type> (co, st, std::forward<Ts> (args)...);
+
+    if constexpr (part::n_coeffs_int == 0) {
+      return part::template tick<value_type> (
+        co, st, std::forward<Ts> (args)...);
+    }
+    else {
+      auto co_int = _mem.get_coeffs_int();
+      return part::template tick<value_type> (
+        co, co_int, st, std::forward<Ts> (args)...);
+    }
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
@@ -420,6 +526,7 @@ private:
   detail::part_memory<
     builtin,
     part::n_coeffs,
+    part::n_coeffs_int,
     1,
     value_type,
     part::n_states,
@@ -455,15 +562,22 @@ public:
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <uint Idx, class... Ts>
-  static void reset_coeffs_ext (crange<value_type> coeff_out, Ts&&... args)
+  void reset_coeffs_ext (crange<value_type> coeff_out, Ts&&... args)
   {
     static_assert (Idx < sizeof...(Parts));
     using part = get_part<Idx>;
 
     assert (coeff_out.size() >= part::n_coeffs);
 
-    part::template reset_coeffs<value_type> (
-      coeff_out, std::forward<Ts> (args)...);
+    if constexpr (part::n_coeffs_int == 0) {
+      part::template reset_coeffs<value_type> (
+        coeff_out, std::forward<Ts> (args)...);
+    }
+    else {
+      auto co_int = get_coeffs_int<Idx, part::n_coeffs_int>();
+      part::template reset_coeffs<value_type> (
+        coeff_out, co_int, std::forward<Ts> (args)...);
+    }
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class... Ts>
@@ -495,7 +609,15 @@ public:
     auto co = get_coeffs<Idx, part::n_coeffs>();
     auto st = get_states<Idx, part::n_states>();
 
-    return part::template tick<value_type> (co, st, std::forward<Ts> (args)...);
+    if constexpr (part::n_coeffs_int == 0) {
+      return part::template tick<value_type> (
+        co, st, std::forward<Ts> (args)...);
+    }
+    else {
+      auto co_int = get_coeffs_int<Idx, part::n_coeffs_int>();
+      return part::template tick<value_type> (
+        co, co_int, st, std::forward<Ts> (args)...);
+    }
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
@@ -568,6 +690,15 @@ private:
   }
   //----------------------------------------------------------------------------
   template <uint Idx, uint N_coeffs>
+  crange<value_type> get_coeffs_int()
+  {
+    constexpr auto offset = get_offset<n_coeffs_int_list, Idx>();
+
+    auto co = _mem.get_coeffs_int (0);
+    return {&co[offset], N_coeffs};
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, uint N_coeffs>
   crange<value_type> get_coeffs()
   {
     constexpr auto offset = get_coeff_offset<Idx>();
@@ -588,17 +719,23 @@ private:
   template <class T>
   using to_n_coeffs = k_int<T::n_coeffs>;
   template <class T>
+  using to_n_coeffs_int = k_int<T::n_coeffs_int>;
+  template <class T>
   using to_n_states = k_int<T::n_states>;
 
-  using n_coeffs_list = mp11::mp_transform<to_n_coeffs, parts>;
-  using n_states_list = mp11::mp_transform<to_n_states, parts>;
+  using n_coeffs_list     = mp11::mp_transform<to_n_coeffs, parts>;
+  using n_coeffs_int_list = mp11::mp_transform<to_n_coeffs_int, parts>;
+  using n_states_list     = mp11::mp_transform<to_n_states, parts>;
 
   static constexpr uint n_coeffs_total = get_offset<n_coeffs_list, n_parts>();
+  static constexpr uint n_coeffs_int_total
+    = get_offset<n_coeffs_int_list, n_parts>();
   static constexpr uint n_states_total = get_offset<n_states_list, n_parts>();
 
   detail::part_memory<
     value_type,
     n_coeffs_total,
+    n_coeffs_int_total,
     1,
     value_type,
     n_states_total,
@@ -649,20 +786,36 @@ public:
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <class Part, class... Ts>
-  static void reset_coeffs_ext (crange<coeff_type> coeff_out, Ts&&... args)
+  void reset_coeffs_ext (uint idx, crange<coeff_type> coeff_out, Ts&&... args)
   {
     static_assert (mp11::mp_find<parts, Part>::value < n_parts, "");
 
     assert (coeff_out.size() >= Part::n_coeffs);
 
     if constexpr (std::is_same_v<value_type, coeff_type>) {
-      Part::template reset_coeffs<value_type> (
-        coeff_out, std::forward<Ts> (args)...);
+      if constexpr (Part::n_coeffs_int == 0) {
+        Part::template reset_coeffs<value_type> (
+          coeff_out, std::forward<Ts> (args)...);
+      }
+      else {
+        auto co_int = _mem.get_coeffs_int (idx);
+        Part::template reset_coeffs<value_type> (
+          coeff_out, co_int, std::forward<Ts> (args)...);
+      }
     }
     else {
       using x1_t = vec<builtin, 1>;
-      Part::template reset_coeffs<x1_t> (
-        make_crange (coeff_out).cast (x1_t {}), std::forward<Ts> (args)...);
+      if constexpr (Part::n_coeffs_int == 0) {
+        Part::template reset_coeffs<x1_t> (
+          make_crange (coeff_out).cast (x1_t {}), std::forward<Ts> (args)...);
+      }
+      else {
+        auto co_int = _mem.get_coeffs_int (idx);
+        Part::template reset_coeffs<x1_t> (
+          make_crange (coeff_out).cast (x1_t {}),
+          co_int.cast (x1_t {}),
+          std::forward<Ts> (args)...);
+      }
     }
   }
   //----------------------------------------------------------------------------
@@ -670,7 +823,7 @@ public:
   void reset_coeffs_on_idx (uint idx, Ts&&... args)
   {
     auto co = get_coeffs (idx);
-    reset_coeffs_ext<Part> (co, std::forward<Ts> (args)...);
+    reset_coeffs_ext<Part> (idx, co, std::forward<Ts> (args)...);
   }
   //----------------------------------------------------------------------------
   template <class Part, class... Ts>
@@ -696,7 +849,16 @@ public:
 
     auto co = get_coeffs (idx);
     auto st = _mem.get_states (idx);
-    return Part::template tick<value_type> (co, st, std::forward<Ts> (args)...);
+
+    if constexpr (Part::n_coeffs_int == 0) {
+      return Part::template tick<value_type> (
+        co, st, std::forward<Ts> (args)...);
+    }
+    else {
+      auto co_int = _mem.get_coeffs_int (idx);
+      return Part::template tick<value_type> (
+        co, co_int, st, std::forward<Ts> (args)...);
+    }
   }
   //----------------------------------------------------------------------------
   template <class Part, class... Ts>
@@ -751,13 +913,19 @@ private:
   template <class T>
   using to_n_coeffs = k_int<T::n_coeffs>;
   template <class T>
+  using to_n_coeffs_int = k_int<T::n_coeffs_int>;
+  template <class T>
   using to_n_states = k_int<T::n_states>;
 
-  using n_coeffs_types = mp11::mp_transform<to_n_coeffs, parts>;
-  using n_states_types = mp11::mp_transform<to_n_states, parts>;
+  using n_coeffs_types     = mp11::mp_transform<to_n_coeffs, parts>;
+  using n_coeffs_int_types = mp11::mp_transform<to_n_coeffs_int, parts>;
+  using n_states_types     = mp11::mp_transform<to_n_states, parts>;
 
   static constexpr uint max_coeffs
     = mp11::mp_max_element<n_coeffs_types, mp11::mp_less>::value;
+
+  static constexpr uint max_coeffs_int
+    = mp11::mp_max_element<n_coeffs_int_types, mp11::mp_less>::value;
 
   static constexpr uint max_states
     = mp11::mp_max_element<n_states_types, mp11::mp_less>::value;
@@ -765,6 +933,7 @@ private:
   detail::part_memory<
     coeff_type,
     max_coeffs,
+    max_coeffs_int,
     size,
     value_type,
     max_states,

@@ -57,6 +57,8 @@ struct t_rev_single {
     n_coeffs = is_complex ? 2 : 1,
   };
   //----------------------------------------------------------------------------
+  enum coeffs_int { n_coeffs_int };
+  //----------------------------------------------------------------------------
   static constexpr uint get_n_states (uint n_stages)
   {
     // sum of powers = (2^n+1) - 1.
@@ -153,6 +155,7 @@ struct t_rev_conjugate {
     ratio = base::n_coeffs,
     n_coeffs,
   };
+  enum coeffs_int { n_coeffs_int };
   //----------------------------------------------------------------------------
   static constexpr uint get_n_states (uint n_stages)
   {
@@ -242,6 +245,8 @@ struct t_rev_pfe_pole_pair {
     k_coeff_first = base::n_coeffs * 2,
     n_coeffs      = k_coeff_first * 2,
   };
+  //----------------------------------------------------------------------------
+  enum coeffs_int { n_coeffs_int };
   //----------------------------------------------------------------------------
   static constexpr uint get_n_states (uint n_stages)
   {
@@ -414,6 +419,8 @@ struct t_rev_naive_cascade_pair {
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs = base::n_coeffs * 2 };
   //----------------------------------------------------------------------------
+  enum coeffs_int { n_coeffs_int };
+  //----------------------------------------------------------------------------
   static constexpr uint get_n_states (uint n_stages)
   {
     return base::get_n_states (n_stages) * 2;
@@ -520,7 +527,8 @@ using t_rev_cpole_pair = detail::t_rev_pfe_pole_pair<true>;
 //------------------------------------------------------------------------------
 // realtime switches between two real poles or two complex conjugates from the
 // same internal state.
-struct t_rev_pole_pair {
+class t_rev_pole_pair {
+public:
   //----------------------------------------------------------------------------
   enum coeffs {
     co_c1,
@@ -530,6 +538,7 @@ struct t_rev_pole_pair {
     co_ratio,
     n_coeffs,
   };
+  enum coeffs_int { n_coeffs_int };
   //----------------------------------------------------------------------------
   static constexpr uint get_n_states (uint n_stages)
   {
@@ -841,6 +850,10 @@ struct t_rev_rpole_rzero {
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs = rzero::n_coeffs + t_rev_rpole::n_coeffs };
   //----------------------------------------------------------------------------
+  enum coeffs_int {
+    n_coeffs_int = rzero::n_coeffs_int + t_rev_rpole::n_coeffs_int
+  };
+  //----------------------------------------------------------------------------
   static constexpr uint get_n_states (uint n_stages)
   {
     return rzero::n_states + t_rev_rpole::get_n_states (n_stages);
@@ -899,6 +912,10 @@ struct t_rev_rpole_rzero {
 struct t_rev_ccpole_pair_rzero_eq_pair {
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs = rzero::n_coeffs + t_rev_ccpole_pair::n_coeffs };
+  //----------------------------------------------------------------------------
+  enum coeffs_int {
+    n_coeffs_int = rzero::n_coeffs_int + t_rev_ccpole_pair::n_coeffs_int
+  };
   //----------------------------------------------------------------------------
   static constexpr uint get_n_states (uint n_stages)
   {
@@ -972,6 +989,7 @@ struct make_max_stages_t_rev : private Base {
 
   using base::get_n_states;
   using base::n_coeffs;
+  using base::n_coeffs_int;
   using base::reset_coeffs;
   using base::reset_states;
   using base::tick;

@@ -15,8 +15,9 @@ namespace artv {
 class tilt_eq {
 public:
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs = 2 * andy::svf::n_coeffs;
-  static constexpr uint n_states = 2 * andy::svf::n_states;
+  static constexpr uint n_coeffs     = 2 * andy::svf::n_coeffs;
+  static constexpr uint n_coeffs_int = 2 * andy::svf::n_coeffs_int;
+  static constexpr uint n_states     = 2 * andy::svf::n_states;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (

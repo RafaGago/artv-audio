@@ -19,6 +19,7 @@ namespace artv {
 struct slew_limiter {
   //----------------------------------------------------------------------------
   enum coeffs { attack, release, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { prev, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

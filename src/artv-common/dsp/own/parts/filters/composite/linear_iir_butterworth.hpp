@@ -28,6 +28,9 @@ public:
   static constexpr uint order     = 2;
   //----------------------------------------------------------------------------
   enum coeffs { gain = fwd_1pole::n_coeffs + rev_1pole::n_coeffs, n_coeffs };
+  enum coeffs_int {
+    n_coeffs_int = fwd_1pole::n_coeffs_int + rev_1pole::n_coeffs_int,
+  };
   //----------------------------------------------------------------------------
   static constexpr uint get_n_states (uint n_stages)
   {

@@ -28,6 +28,7 @@ template <class functions>
 class waveshaper<functions, 0> {
 public:
   enum coeffs { n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -50,6 +51,7 @@ template <class functions>
 class waveshaper<functions, 1> {
 public:
   enum coeffs { n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { x1, x1_int, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -98,6 +100,7 @@ template <class functions>
 class waveshaper<functions, 2> {
 public:
   enum coeffs { n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { x1, x2, x2_der, x1_int2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -190,6 +193,7 @@ public:
     impl_coeffs_idx   = boxcar_coeffs_idx + moving_average<2>::n_coeffs,
     n_coeffs          = impl_coeffs_idx + Impl<1, Ts...>::n_coeffs
   };
+  enum coeffs_int { n_coeffs_int };
   enum state {
     allpass_states_idx,
     boxcar_states_idx = allpass_states_idx + allpass_interpolator::n_states,

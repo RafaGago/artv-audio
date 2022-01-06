@@ -13,6 +13,7 @@ class cheap_sin_osc {
 public:
   //----------------------------------------------------------------------------
   enum coeffs { a, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { z0, z1, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

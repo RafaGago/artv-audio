@@ -52,6 +52,7 @@ struct pow2_functions {
 class pow2_adaa_1 {
 public:
   enum coeffs { n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { x1, x1_pow2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

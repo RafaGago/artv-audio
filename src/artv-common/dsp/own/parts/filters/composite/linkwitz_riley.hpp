@@ -37,6 +37,7 @@ public:
   using onepole_type = onepole<lowpass_tag, allpass_tag>;
   //----------------------------------------------------------------------------
   static constexpr uint n_coeffs            = 1 * onepole_type::n_coeffs;
+  static constexpr uint n_coeffs_int        = 1 * onepole_type::n_coeffs_int;
   static constexpr uint n_states            = 2 * onepole_type::n_states;
   static constexpr uint n_correction_states = onepole_type::n_states;
   //----------------------------------------------------------------------------
@@ -99,8 +100,9 @@ private:
 
 public:
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs = svf_lp_ap::n_coeffs;
-  static constexpr uint n_states = svf_lp_ap::n_states + svf_lp::n_states;
+  static constexpr uint n_coeffs     = svf_lp_ap::n_coeffs;
+  static constexpr uint n_coeffs_int = svf_lp_ap::n_coeffs_int;
+  static constexpr uint n_states     = svf_lp_ap::n_states + svf_lp::n_states;
   static constexpr uint n_correction_states = svf_lp_ap::n_states;
 
   //----------------------------------------------------------------------------
@@ -164,7 +166,8 @@ private:
 
 public:
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs = 2 * svf_lp_ap::n_coeffs;
+  static constexpr uint n_coeffs     = 2 * svf_lp_ap::n_coeffs;
+  static constexpr uint n_coeffs_int = 2 * svf_lp_ap::n_coeffs_int;
   static constexpr uint n_states
     = (2 * svf_lp_ap::n_states) + (3 * svf_lp::n_states);
   static constexpr uint n_correction_states = 2 * svf_lp_ap::n_states;
@@ -281,6 +284,10 @@ public:
   //----------------------------------------------------------------------------
   static constexpr uint n_coeffs
     = std::max (lr2::n_coeffs, std::max (lr4::n_coeffs, lr8::n_coeffs));
+
+  static constexpr uint n_coeffs_int = std::max (
+    lr2::n_coeffs_int,
+    std::max (lr4::n_coeffs_int, lr8::n_coeffs_int));
 
   static constexpr uint n_states
     = std::max (lr2::n_states, std::max (lr4::n_states, lr8::n_states));

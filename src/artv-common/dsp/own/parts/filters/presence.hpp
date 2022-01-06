@@ -14,6 +14,7 @@ namespace artv { namespace liteon {
 struct presence_high_shelf {
   //----------------------------------------------------------------------------
   enum coeffs { a0, a1, a2, b1, b2, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { y1, y2, x1, x2, n_states };
   //----------------------------------------------------------------------------
   // BW on the original JSFX is unitless BW from 0.007 to 0.4 and the lower end

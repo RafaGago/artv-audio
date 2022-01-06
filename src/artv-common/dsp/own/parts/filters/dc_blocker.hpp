@@ -17,6 +17,7 @@ namespace artv {
 struct iir_dc_blocker {
   //----------------------------------------------------------------------------
   enum coeffs { R, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { x1, y1, n_states };
   //----------------------------------------------------------------------------
   // warning, if going to very low frequencies, use "double".
@@ -66,8 +67,9 @@ private:
 // https://www.kvraudio.com/forum/viewtopic.php?f=33&t=545280#top
 struct mystran_dc_blocker {
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs = onepole_smoother::n_coeffs;
-  static constexpr uint n_states = onepole_smoother::n_states;
+  static constexpr uint n_coeffs     = onepole_smoother::n_coeffs;
+  static constexpr uint n_coeffs_int = onepole_smoother::n_coeffs_int;
+  static constexpr uint n_states     = onepole_smoother::n_states;
   //----------------------------------------------------------------------------
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
@@ -116,8 +118,9 @@ struct mystran_dc_blocker {
 //------------------------------------------------------------------------------
 struct mystran_dc_blocker_2pole {
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs = andy::svf_lowpass::n_coeffs;
-  static constexpr uint n_states = andy::svf_lowpass::n_states + 1;
+  static constexpr uint n_coeffs     = andy::svf_lowpass::n_coeffs;
+  static constexpr uint n_coeffs_int = andy::svf_lowpass::n_coeffs_int;
+  static constexpr uint n_states     = andy::svf_lowpass::n_states + 1;
   //----------------------------------------------------------------------------
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------

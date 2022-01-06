@@ -9,6 +9,7 @@ namespace artv {
 struct czero {
   //----------------------------------------------------------------------------
   enum coeffs { re, im, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { z1_re, z1_im, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -49,6 +50,7 @@ struct czero {
 struct cpole {
   //----------------------------------------------------------------------------
   enum coeffs { re, im, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { y1_re, y1_im, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -88,6 +90,7 @@ struct cpole {
 struct rzero {
   //----------------------------------------------------------------------------
   enum coeffs { re, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { z1, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -120,6 +123,7 @@ struct rzero {
 struct rpole {
   //----------------------------------------------------------------------------
   enum coeffs { re, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { y1, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -156,6 +160,7 @@ struct rpole {
 struct ccpole_pair {
   //----------------------------------------------------------------------------
   enum coeffs { ratio = cpole::n_coeffs, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { n_states = cpole::n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -187,6 +192,7 @@ struct ccpole_pair {
 struct rpole_rzero {
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs = rzero::n_coeffs + rpole::n_coeffs };
+  enum coeffs_int { n_coeffs_int = rzero::n_coeffs_int + rpole::n_coeffs_int };
   enum state { n_states = rzero::n_states + rpole::n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -218,6 +224,9 @@ struct rpole_rzero {
 struct ccpole_pair_rzero_pair {
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs = rzero::n_coeffs + ccpole_pair::n_coeffs };
+  enum coeffs_int {
+    n_coeffs_int = rzero::n_coeffs_int + ccpole_pair::n_coeffs_int
+  };
   enum state { n_states = 2 * rzero::n_states + ccpole_pair::n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -257,6 +266,7 @@ struct ccpole_pair_rzero_pair {
 struct czero_pair {
   //----------------------------------------------------------------------------
   enum coeffs { c1_re, c1_im, c2_re, c2_im, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { z1_c1_re, z1_c2_re, z1_c2_im, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -302,6 +312,7 @@ struct czero_pair {
 struct cpole_pair {
   //----------------------------------------------------------------------------
   enum coeffs { c1_re, c1_im, c2_re, c2_im, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { y1_c1_re, y1_c1_im, y1_c2_re, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -346,6 +357,9 @@ struct cpole_pair {
 struct cpole_pair_czero_pair {
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs = cpole_pair::n_coeffs + czero_pair::n_coeffs };
+  enum coeffs_int {
+    n_coeffs_int = cpole_pair::n_coeffs_int + czero_pair::n_coeffs_int
+  };
   enum state { n_states = cpole_pair::n_states + czero_pair::n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

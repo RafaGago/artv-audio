@@ -106,6 +106,7 @@ struct tanh_functions {
 class tanh_adaa_1 {
 public:
   enum coeffs { n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { x1, x1_exp, x1_int, n_states };
   //----------------------------------------------------------------------------
   template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>

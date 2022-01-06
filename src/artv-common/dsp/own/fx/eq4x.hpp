@@ -390,39 +390,41 @@ private:
       break;
     case bandtype::svf_bell:
       _eq.reset_coeffs_ext<andy::svf> (
-        _target_coeffs[band], freq, q, gain, sr, bell_tag {});
+        band, _target_coeffs[band], freq, q, gain, sr, bell_tag {});
       break;
     case bandtype::svf_lshelf:
       _eq.reset_coeffs_ext<andy::svf> (
-        _target_coeffs[band], freq, q, gain, sr, lowshelf_tag {});
+        band, _target_coeffs[band], freq, q, gain, sr, lowshelf_tag {});
       break;
     case bandtype::svf_hshelf:
       _eq.reset_coeffs_ext<andy::svf> (
-        _target_coeffs[band], freq, q, gain, sr, highshelf_tag {});
+        band, _target_coeffs[band], freq, q, gain, sr, highshelf_tag {});
       break;
     case bandtype::svf_allpass:
       _eq.reset_coeffs_ext<andy::svf> (
-        _target_coeffs[band], freq, q, sr, allpass_tag {});
+        band, _target_coeffs[band], freq, q, sr, allpass_tag {});
       break;
     case bandtype::butterworth_lp:
       _eq.reset_coeffs_ext<btw_lp> (
-        _target_coeffs[band], freq, sr, q_to_butterworth_order (b.q));
+        band, _target_coeffs[band], freq, sr, q_to_butterworth_order (b.q));
       break;
     case bandtype::butterworth_hp:
       _eq.reset_coeffs_ext<btw_hp> (
-        _target_coeffs[band], freq, sr, q_to_butterworth_order (b.q));
+        band, _target_coeffs[band], freq, sr, q_to_butterworth_order (b.q));
       break;
     case bandtype::svf_tilt:
-      _eq.reset_coeffs_ext<tilt_eq> (_target_coeffs[band], freq, q, gain, sr);
+      _eq.reset_coeffs_ext<tilt_eq> (
+        band, _target_coeffs[band], freq, q, gain, sr);
       break;
     case bandtype::presence: {
       q[1]              = q[0]; // undo diff
       auto qnorm_0_to_1 = q / get_parameter (band1_q_tag {}).max;
       _eq.reset_coeffs_ext<liteon::presence_high_shelf> (
-        _target_coeffs[band], freq, qnorm_0_to_1, gain, sr);
+        band, _target_coeffs[band], freq, qnorm_0_to_1, gain, sr);
     } break;
     case bandtype::onepole_allpass: {
-      _eq.reset_coeffs_ext<onepole_allpass> (_target_coeffs[band], freq, sr);
+      _eq.reset_coeffs_ext<onepole_allpass> (
+        band, _target_coeffs[band], freq, sr);
     } break;
     default:
       jassert (false);

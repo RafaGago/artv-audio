@@ -20,4 +20,63 @@ The idea is to:
 The obvious caveat is that there is memory to manually manage.
 
 As all static objects here follow similar layouts, there is a helper class to
-assist in making the parts into classes.
+assist in making the parts into classes. It is more powerful because it e.g.
+allows placing all the coefficients of different unrelated classes together and
+to run bulk coefficient smoothing.
+
+The basic layout of a DSP part is:
+
+```
+struct part {
+    // number of smoothable coefficients
+    static constexpr uint n_coeffs;
+
+    // number of internal/integer/unsmoothable coefficients usually 0.
+    static constexpr uint n_coeffs_int;
+
+    // number of states for a given type
+    static constexpr uint n_states;
+
+    // function (or overloads) for resetting coefficients.
+    //
+    // V is one of the clang native vector types, e.g. for a SSE double
+    // double __attribute__ ((vector_size (16), __may_alias__))
+    // for single precission just use vectors of one element. There are wrappers
+    // on simd.hpp
+    //
+    // If this function belongs to a class where "n_coeffs_int" is 0, then the
+    // second parameter, co_int, is omitted.
+
+    template <class V>
+    static void reset_coeffs(
+        crange<V> co,      //coefficients, size >= "n_coeffs".
+        crange<V> co_int, // coefficients, size >= "n_coeffs_int". Optional.
+        ...               // other relevant parameters
+        );
+
+    // function to reset the states. Usually will just run memset to 0.
+
+    template <class V>
+    static void reset_states(
+        crange<V> st, //states, size >= "n_states".
+        ...           // other relevant parameters
+        );
+
+    // function to run the DSP process. Most of the time will process one sample
+    // and rely on compiler inlining and good judgement when combining blocks at
+    // a higher level. When it makes sense the function might process blocks.
+    //
+    // If this function belongs to a class where "n_coeffs_int" is 0, then the
+    // second parameter, co_int, is omitted.
+
+    template <class V>
+    static X<V> tick(
+        const crange<V> co,     // coeffs, size >= "n_coeffs".
+        const crange<V> co_int, // coeffs, size >= "n_coeffs_int". Optional.
+        crange<V>       st,     //states, size >= "n_states".
+        X<V>            in,     // input data, e.g V, vec_complex<V>, etc.
+        ...                     // other relevant parameters
+        );
+
+};
+```

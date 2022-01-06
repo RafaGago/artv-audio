@@ -52,6 +52,7 @@ struct ms20_base {
   // https://github.com/JoepVanlier/JSFX
   //----------------------------------------------------------------------------
   enum coeffs { hh, k, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { y1, y2, d1, d2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -685,6 +686,7 @@ struct steiner_base {
   // https://github.com/JoepVanlier/JSFX
   //----------------------------------------------------------------------------
   enum coeffs { h, k, kh, hsq, lp, bp, hp, normalizing_const, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { x, v1, v2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -987,6 +989,7 @@ struct moog_1 {
     frac,
     n_coeffs
   };
+  enum coeffs_int { n_coeffs_int };
   enum state {
     sf1,
     sf2,
@@ -1266,6 +1269,7 @@ struct moog_2 {
     frac,
     n_coeffs
   };
+  enum coeffs_int { n_coeffs_int };
   enum state { sf1, sf2, sg1, sg2, si1, si2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

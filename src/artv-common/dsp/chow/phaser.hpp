@@ -38,6 +38,7 @@ public:
   static constexpr uint order        = 1;
   //----------------------------------------------------------------------------
   enum coeffs { a1, b0, b1, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
   enum state { n_states = n_stages_max };
   //----------------------------------------------------------------------------
   static void calc_coefs (crange<value_type> c, float R, float fs)
@@ -120,6 +121,7 @@ public:
     n_own_coeffs,
     n_coeffs = n_own_coeffs + mystran_dc_blocker::n_coeffs
   };
+  enum coeffs_int { n_coeffs_int };
   enum state {
     z1,
     z2,
