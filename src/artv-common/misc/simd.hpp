@@ -207,6 +207,9 @@ static constexpr bool is_vec_of_float_type_v
   = is_vec_v<V> && std::is_floating_point_v<vec_value_type_t<V>>;
 // clang-format on
 
+using float_x1  = vec<float, 1>;
+using double_x1 = vec<double, 1>;
+
 // SSE or equivalent
 using float_x4  = vec<float, 4>;
 using double_x2 = vec<double, 2>;
@@ -459,6 +462,7 @@ static inline vec<T, N> vec_set (T v)
   vec_set (ret, v);
   return ret;
 }
+
 //------------------------------------------------------------------------------
 #if 0
 // Clang doesn't support "__builtin_shuffle".
