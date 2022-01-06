@@ -528,7 +528,7 @@ static void crange_memset (crange<T> range, int value = 0)
 }
 //------------------------------------------------------------------------------
 template <class T, class U>
-static uint contiguous_range_memcpy (crange<T> dst, crange<const U> src)
+static uint contiguous_range_memcpy (crange<T> dst, const crange<U> src)
 {
   uint size = std::min (dst.size() * sizeof (T), src.size() * sizeof (U));
   memcpy (dst.data(), src.data(), size);
@@ -536,7 +536,7 @@ static uint contiguous_range_memcpy (crange<T> dst, crange<const U> src)
 }
 
 template <class T, class U>
-static uint crange_memcpy (crange<T> dst, crange<const U> src)
+static uint crange_memcpy (crange<T> dst, const crange<U> src)
 {
   return contiguous_range_memcpy (dst, src);
 }
