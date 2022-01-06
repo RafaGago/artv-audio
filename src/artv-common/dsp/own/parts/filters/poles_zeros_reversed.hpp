@@ -538,7 +538,10 @@ public:
     co_ratio,
     n_coeffs,
   };
-  enum coeffs_int { n_coeffs_int };
+  enum coeffs_int {
+    co_conj,
+    n_coeffs_int,
+  };
   //----------------------------------------------------------------------------
   static constexpr uint get_n_states (uint n_stages)
   {
@@ -548,6 +551,7 @@ public:
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<V>      co,
+    crange<V>      co_int,
     vec_complex<V> pole1,
     vec_complex<V> pole2)
   {
@@ -567,8 +571,12 @@ public:
       }
 #endif
       // two real poles, assuming no different Q.
-      co[co_c1] = pole1.re;
-      co[co_c2] = pole2.re;
+      co[co_c1]       = pole1.re;
+      co[co_c2]       = pole2.re;
+      co[co_k1]       = (T) 1 / ((T) 1 - pole2.re / pole1.re);
+      co[co_k2]       = (T) 1 / ((T) 1 - pole1.re / pole2.re);
+      co[co_ratio]    = vec_set<V> ((T) 1.);
+      co_int[co_conj] = vec_set<V> ((T) 0.);
     }
     else {
 #ifndef NDEBUG
@@ -578,13 +586,11 @@ public:
       }
 #endif
       // complex conjugate
-      co[co_c1] = pole1.re;
-      co[co_c2] = pole1.im;
+      co[co_c1]       = pole1.re;
+      co[co_c2]       = pole1.im;
+      co[co_ratio]    = pole1.re / pole1.im;
+      co_int[co_conj] = vec_set<V> ((T) 1.);
     }
-    // these are always calculated for easier smoothing
-    co[co_ratio] = pole1.re / pole1.im;
-    co[co_k1]    = (T) 1 / ((T) 1 - pole2.re / pole1.re);
-    co[co_k2]    = (T) 1 / ((T) 1 - pole1.re / pole2.re);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -598,11 +604,11 @@ public:
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
     crange<const V> co,
+    crange<const V> co_int,
     crange<V>       st,
     V               in,
     uint            n_stages,
-    uint            sample_idx, // sample counter (external)
-    bool            is_real) // external, as for now parameters can be smoothed
+    uint            sample_idx) // sample counter (external)
   {
     using T = vec_value_type_t<V>;
 
@@ -610,7 +616,7 @@ public:
     assert (st.size() >= get_n_states (n_stages));
     assert (n_stages >= 1);
 
-    if (!is_real) {
+    if (co_int[co_conj][0] != (T) 0) {
       return tick_cc (co, st, in, n_stages, sample_idx);
     }
     else {
@@ -621,11 +627,11 @@ public:
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static crange<V> tick (
     crange<const V> co,
+    crange<const V> co_int,
     crange<V>       st,
     crange<V>       io, // ins on call, outs when returning
     uint            n_stages,
-    uint            sample_idx, // sample counter (external)
-    bool            is_real) // external, as for now parameters can be smoothed
+    uint            sample_idx) // sample counter (external)
   {
     using T = vec_value_type_t<V>;
 
@@ -633,7 +639,7 @@ public:
     assert (st.size() >= get_n_states (n_stages));
     assert (n_stages >= 1);
 
-    if (!is_real) {
+    if (co_int[co_conj][0] != (T) 0) {
       return tick_cc (co, st, io, n_stages, sample_idx);
     }
     else {
@@ -757,7 +763,7 @@ private:
   {
     using T = vec_value_type_t<V>;
 
-    auto c = vec_load<vec_complex<V>> (&co[co_c1]);
+    auto c = vec_load<vec_complex<V>> (&co[co_ratio]);
 
     auto z_ptr  = &st[0];
     uint z_size = 1;
@@ -774,14 +780,14 @@ private:
       auto z = vec_load<vec_complex<V>> (&z_ptr[pos + 0]);
       y      = detail::t_rev_pole_stage_op::run (c, y, z);
       vec_store<vec_complex<V>> (&z_ptr[pos + 0], z);
-      z_ptr[pos + 2] = z_ptr[pos];
+      z_ptr[pos + 2] = z_ptr[pos + 0];
 
       c *= c;
       z_ptr += z_size * n_lanes;
       z_size *= 2;
     }
 
-    auto ratio = co[co_ratio];
+    auto ratio = co[co_k1];
     return y.re + ratio * y.im;
   }
   //----------------------------------------------------------------------------
@@ -821,7 +827,7 @@ private:
           auto z  = vec_load<vec_complex<V>> (&z_ptr[pos + 0]);
           io_c[i] = detail::t_rev_pole_stage_op::run (c, io_c[i], z);
           vec_store<vec_complex<V>> (&z_ptr[pos + 0], z);
-          z_ptr[pos + 2] = z_ptr[pos];
+          z_ptr[pos + 2] = z_ptr[pos + 0];
         }
 
         z_ptr += z_size * n_lanes;

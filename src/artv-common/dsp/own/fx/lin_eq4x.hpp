@@ -53,7 +53,7 @@ public:
 
     smoother::reset_coeffs (
       make_crange (_smooth_coeff).cast (x1_t {}),
-      vec_set<x1_t> (1.5),
+      vec_set<x1_t> (1 / 0.001),
       pc.get_sample_rate());
   }
   //----------------------------------------------------------------------------
@@ -90,7 +90,6 @@ public:
           io[i][0] = src[0][i];
           io[i][1] = src[1][i];
         }
-#if 0
         // bulk smoothing (at blocksize rate)
         crange<double_x2> internal = _eq[b].get_all_coeffs();
         for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
@@ -101,12 +100,6 @@ public:
               _target_coeffs[b][j]);
           }
         }
-#else
-        crange<double_x2>       inter = _eq[b].get_all_coeffs();
-        crange<const double_x2> exter
-          = make_crange (_target_coeffs[b]).to_const();
-        crange_memcpy (inter, exter);
-#endif
 
         // backward zeros
         for (uint i = 0; i < blocksize; ++i) {
@@ -117,8 +110,7 @@ public:
         _eq[b].tick<bckwd_poles_idx> (
           make_crange (io.data(), blocksize),
           _n_stages[b][_quality],
-          _sample + offset,
-          _cfg[b].is_real);
+          _sample + offset);
         // forward
         for (uint i = 0; i < blocksize; ++i) {
           io[i] = _eq[b].tick<fwd_idx> (io[i]);
@@ -386,7 +378,6 @@ private:
     float    q                = 0.7f;
     float    gain_db          = 0.f;
     float    diff             = 0.f;
-    bool     is_real          = true;
     bool     has_changes      = false;
     bool     reset_band_state = false;
   };
@@ -438,7 +429,6 @@ private:
 
     std::array<vec_complex<double_x2>, 2> poles;
     biquad::get_poles<double_x2> (co_biquad, poles);
-    _cfg[band].is_real = std::abs (poles[0].im[0]) == 0.;
 
     _eq[band].reset_coeffs_ext<bckwd_poles_idx> (
       co_bwd_poles, poles[0], poles[1]);
