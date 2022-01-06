@@ -38,8 +38,7 @@ public:
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
-    using x1_t = vec<decltype (_smooth_coeff), 1>;
-
+    using x1_t   = vec<decltype (_smooth_coeff), 1>;
     _plugcontext = &pc;
     _cfg         = decltype (_cfg) {};
     smoother::reset_coeffs (
@@ -226,9 +225,8 @@ public:
   void set (param<band, paramtype::frequency>, float v)
   {
     static_assert (band < n_bands, "");
-    v = midi_note_to_hz (v);
-    _cfg[band].has_changes |= _cfg[band].freq != v;
-    _cfg[band].freq = v;
+    _cfg[band].has_changes |= _cfg[band].freq_note != v;
+    _cfg[band].freq_note = v;
   }
 
   template <uint band>
@@ -365,7 +363,7 @@ private:
   //----------------------------------------------------------------------------
   struct bandconfig {
     bandtype type             = bandtype::off;
-    float    freq             = 440.f;
+    float    freq_note        = constexpr_midi_note_to_hz (440.f);
     float    q                = 0.7f;
     float    gain_db          = 0.f;
     float    diff             = 0.f;
@@ -381,7 +379,7 @@ private:
     auto  bandtype_prev = b.type;
     auto  sr            = (float) _plugcontext->get_sample_rate();
 
-    auto freq = vec_set<double_x2> (b.freq);
+    auto freq = vec_set<double_x2> (midi_note_to_hz (b.freq_note));
     freq[1] *= exp2 (b.diff);
     auto q = vec_set<double_x2> (b.q);
     q[1] += q[1] * b.diff * 0.05;
