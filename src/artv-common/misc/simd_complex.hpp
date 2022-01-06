@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cassert>
+#include <complex>
 #include <cstring>
 
 #include "artv-common/misc/simd.hpp"
@@ -169,6 +170,12 @@ struct vec_complex {
   {
     *this /= vec_set<value_type> (v);
     return *this;
+  }
+  //----------------------------------------------------------------------------
+  std::complex<float_type> to_std (uint idx) const
+  {
+    assert (idx < vec_size);
+    return {re[idx], im[idx]};
   }
   //----------------------------------------------------------------------------
 };
