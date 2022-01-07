@@ -114,6 +114,7 @@ struct svf_multimode {
     = mp11::mp_contains<enabled_modes, highpass_tag>::value
     || mp11::mp_contains<enabled_modes, notch_tag>::value
     || mp11::mp_contains<enabled_modes, peak_tag>::value
+    || mp11::mp_contains<enabled_modes, bandpass_tag>::value
     || mp11::mp_contains<enabled_modes, allpass_tag>::value;
 
   static constexpr bool returns_array = mp11::mp_size<enabled_modes>::value > 1;
@@ -217,8 +218,11 @@ private:
       else if constexpr (std::is_same_v<tag, highpass_tag>) {
         ret[index.value] = v0 - k_v * tick_r.v1 - tick_r.v2;
       }
-      else if constexpr (std::is_same_v<tag, bandpass_tag>) {
+      else if constexpr (std::is_same_v<tag, bandpass_q_gain_tag>) {
         ret[index.value] = tick_r.v1;
+      }
+      else if constexpr (std::is_same_v<tag, bandpass_tag>) {
+        ret[index.value] = tick_r.v1 * k_v;
       }
       else if constexpr (std::is_same_v<tag, notch_tag>) {
         ret[index.value] = v0 - k_v * tick_r.v1;
@@ -292,6 +296,48 @@ struct svf {
     c[m0] = vec_set<V> ((T) 1.);
     c[m1] = -coeffs.k;
     c[m2] = vec_set<V> ((T) -1.);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<V>           c,
+    V                   freq,
+    V                   q,
+    vec_value_type_t<V> sr,
+    bandpass_tag)
+  {
+    using T     = vec_value_type_t<V>;
+    auto coeffs = detail::get_main_coeffs (freq, q, sr);
+
+    assert (c.size() >= n_coeffs);
+
+    c[a1] = coeffs.a1;
+    c[a2] = coeffs.a2;
+    c[a3] = coeffs.a3;
+    c[m0] = vec_set<V> ((T) 0.);
+    c[m1] = coeffs.k;
+    c[m2] = vec_set<V> ((T) 0.);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<V>           c,
+    V                   freq,
+    V                   q,
+    vec_value_type_t<V> sr,
+    bandpass_q_gain_tag)
+  {
+    using T     = vec_value_type_t<V>;
+    auto coeffs = detail::get_main_coeffs (freq, q, sr);
+
+    assert (c.size() >= n_coeffs);
+
+    c[a1] = coeffs.a1;
+    c[a2] = coeffs.a2;
+    c[a3] = coeffs.a3;
+    c[m0] = vec_set<V> ((T) 0.);
+    c[m1] = vec_set<V> ((T) 1.);
+    c[m2] = vec_set<V> ((T) 0.);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
