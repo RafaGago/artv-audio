@@ -14,6 +14,7 @@ struct notch_tag {};
 struct peak_tag {};
 struct allpass_tag {};
 struct bell_tag {}; // as in a parametric EQ
+struct bell_bandpass_tag {}; // bandpassed_bell + in = bell.
 struct lowshelf_tag {}; // as in a parametric EQ
 struct highshelf_tag {}; // as in a parametric EQ
 

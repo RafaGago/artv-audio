@@ -1,0 +1,173 @@
+slider1:freq=550<20,20000,1>freq (Hz)
+slider2:q=0.8<1.,3.5,0.01>Q
+slider3:gain_db=0<-20,20,0.1>gain (dB)
+
+@init
+function svf_lp(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 0;
+  this.m1 = 0;
+  this.m2 = 1;
+);
+
+function svf_hp(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = -k;
+  this.m2 = -1;
+);
+
+function svf_lshelf(freq, q, g_db, sr) local (k, g, A)(
+  A = pow (10, g_db * (1. / 40.));
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr) / sqrt(A);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = k * (A - 1);
+  this.m2 = A * A - 1;
+);
+
+function svf_hshelf(freq, q, g_db, sr) local (k, g, A)(
+  A = pow (10, g_db * (1. / 40.));
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr) * sqrt(A);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = A * A;
+  this.m1 = k * (1 - A) * A;
+  this.m2 = 1 - A * A;
+);
+
+
+function svf_ap(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = -2 * k;
+  this.m2 = 0;
+);
+
+function svf_bp_q(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 0;
+  this.m1 = 1;
+  this.m2 = 0;
+);
+
+function svf_bp(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 0;
+  this.m1 = k;
+  this.m2 = 0;
+);
+
+function svf_peak(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = -k;
+  this.m2 = -2;
+);
+
+function svf_bell(freq, q, g_db, sr) local (k, g, A)(
+  A = pow (10, g_db * (1. / 40.));
+  k = 1.0 / (q  * A);
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = k * (A * A - 1);
+  this.m2 = 0;
+);
+
+function svf_bell_bp(freq, q, g_db, sr) local (k, g, A)(
+  A = pow (10, g_db * (1. / 40.));
+  k = 1.0 / (q  * A);
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 0;
+  this.m1 = k * (A * A - 1);
+  this.m2 = 0;
+);
+
+function svf_clear(in) local (v1, v2, v3)(
+  this.ic1eq = 0;
+  this.ic2eq = 0;
+);
+
+function svf_tick(in) local (v1, v2, v3)(
+  v3 = in - this.ic2eq;
+  v1 = this.a1 * this.ic1eq + this.a2 * v3;
+  v2 = this.ic2eq + this.a2 * this.ic1eq + this.a3 * v3;
+  this.ic1eq = 2 * v1 - this.ic1eq;
+  this.ic2eq = 2 * v2 - this.ic2eq;
+
+  this.m0 * in + this.m1 * v1 + this.m2 * v2;
+);
+
+@slider
+
+gain_unnorm = pow (10, gain_db * 1/20);
+freq_c   = $pi * freq / srate;
+freq_dec = tan(freq_c) / sqrt(gain_unnorm);
+
+gain = pow (10, gain_db * 1/20) - 1;
+
+bp.svf_bp (freq, q * sqrt(gain_unnorm), srate);
+bell.svf_bell (freq, q, gain_db, srate);
+
+lp.svf_lp (freq, q * sqrt(), srate);
+lshelf.svf_lshelf (freq, q, gain_db, srate);
+
+@sample
+
+/*
+LP doesn't match a shelf in cutoff and
+spl0 = lshelf.svf_tick (spl0);
+spl1 = gain * lp.svf_tick (spl1) + spl1;
+*/
+
+// BP to Peak full success
+spl0 = bell.svf_tick (spl0);
+spl1 = gain * bp.svf_tick (spl1) + spl1;
+
+/*
+BP from peak no success.
+
+peak = r.svf_tick (spl1);
+apv = ap.svf_tick(spl1);
+in = spl1;
+lp = ((peak -(in)) * 0.5);
+
+spl1 = (lp - ap);
+z2 = z1;
+z1 = in;
+*/

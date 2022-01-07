@@ -25,6 +25,20 @@ struct biquad {
   enum states { z1, z2, n_states };
 
   using rev_zeros_tag = part_tick_tag<0>;
+
+  template <class T>
+  struct rbj_tag {};
+
+  using rbj_lowpass_tag   = rbj_tag<lowpass_tag>;
+  using rbj_highpass_tag  = rbj_tag<highpass_tag>;
+  using rbj_bandpass_tag  = rbj_tag<bandpass_tag>;
+  using rbj_notch_tag     = rbj_tag<notch_tag>;
+  using rbj_peak_tag      = rbj_tag<peak_tag>;
+  using rbj_allpass_tag   = rbj_tag<allpass_tag>;
+  using rbj_bell_tag      = rbj_tag<bell_tag>;
+  using rbj_lowshelf_tag  = rbj_tag<lowshelf_tag>;
+  using rbj_highshelf_tag = rbj_tag<highshelf_tag>;
+
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
@@ -32,7 +46,7 @@ struct biquad {
     V                   freq,
     V                   q,
     vec_value_type_t<V> sr,
-    lowpass_tag)
+    rbj_lowpass_tag)
   {
     using T = vec_value_type_t<V>;
 
@@ -57,7 +71,7 @@ struct biquad {
     V                   freq,
     V                   q,
     vec_value_type_t<V> sr,
-    highpass_tag)
+    rbj_highpass_tag)
   {
     using T = vec_value_type_t<V>;
 
@@ -82,7 +96,7 @@ struct biquad {
     V                   freq,
     V                   q,
     vec_value_type_t<V> sr,
-    bandpass_tag)
+    rbj_bandpass_tag)
   {
     using T = vec_value_type_t<V>;
 
@@ -110,6 +124,7 @@ struct biquad {
     vec_value_type_t<V> sr,
     notch_tag)
   {
+    // RBJ's
     using T = vec_value_type_t<V>;
 
     assert (co.size() >= n_coeffs);
@@ -134,6 +149,7 @@ struct biquad {
     vec_value_type_t<V> sr,
     allpass_tag)
   {
+    // RBJ's
     using T = vec_value_type_t<V>;
 
     assert (co.size() >= n_coeffs);
@@ -157,7 +173,7 @@ struct biquad {
     V                   q,
     V                   gain_db,
     vec_value_type_t<V> sr,
-    bell_tag)
+    rbj_bell_tag)
   {
     using T = vec_value_type_t<V>;
 
@@ -183,9 +199,26 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
+    vec_value_type_t<V> sr,
+    bell_tag)
+  {
+    // https://www.vicanek.de/articles/BiquadFits.pdf
+    using T = vec_value_type_t<V>;
+
+    assert (co.size() >= n_coeffs);
+
+    V w0 = (T) 2. * (T) M_PI * freq / sr;
+    get_impulse_invariance_poles (co[a1], co[a2], w0, q);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<V>           co,
+    V                   freq,
+    V                   q,
     V                   gain_db,
     vec_value_type_t<V> sr,
-    lowshelf_tag)
+    rbj_lowshelf_tag)
   {
     using T = vec_value_type_t<V>;
 
@@ -214,7 +247,7 @@ struct biquad {
     V                   q,
     V                   gain_db,
     vec_value_type_t<V> sr,
-    highshelf_tag)
+    rbj_highshelf_tag)
   {
     using T = vec_value_type_t<V>;
 
@@ -324,6 +357,35 @@ private:
         r1.re[i] = r1.re[i] + r1.im[i];
         r1.im[i] = r2.im[i] = (T) 0.;
       }
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class V>
+  static void get_impulse_invariance_poles (V& a1, V& a2, V w0, V q)
+  {
+    V exp_mq_w0 = vec_exp (-q * w0); // e^(-q w0)
+    a2          = exp_mq_w0 * exp_mq_w0; // e^(-2 q w0)
+    get_impulse_invariance_a1 (a1, w0, q, exp_mq_w0)
+  }
+  //----------------------------------------------------------------------------
+  template <class V>
+  static void get_impulse_invariance_a1 (V& a1, V w0, V q, V exp_mq_w0)
+  {
+    using T = vec_value_type_t<V>;
+
+    auto cmp = (q <= vec_set<V> ((T) 1));
+    if (vec_is_all_ones (cmp)) {
+      return (T) -2 * exp_mq_w0 * vec_cos (vec_sqrt ((T) 1 - q * q) * w0);
+    }
+    if (vec_is_all_zeros (cmp)) {
+      return (T) -2 * exp_mq_w0 * vec_cosh (vec_sqrt (q * q - (T) 1) * w0);
+    }
+    for (uint i = 0; i < vec_traits<V>().size; ++i) {
+      // do individually.
+      auto a1x1 = vec_set<1> (a1[i]);
+      get_impulse_invariance_a1 (
+        a1x1, vec_set<1> (w0[i]), vec_set<1> (q[i]), vec_set<1> (exp_mq_w0[i]));
+      a1[i] = a1x1[0];
     }
   }
 };

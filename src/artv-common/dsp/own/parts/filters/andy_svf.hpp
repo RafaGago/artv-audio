@@ -409,6 +409,27 @@ struct svf {
     V                   q,
     V                   db,
     vec_value_type_t<V> sr,
+    bell_bandpass_tag)
+  {
+    using T     = vec_value_type_t<V>;
+    auto coeffs = detail::get_main_coeffs (freq, q, db, sr, true);
+
+    assert (c.size() >= n_coeffs);
+    c[a1] = coeffs.a1;
+    c[a2] = coeffs.a2;
+    c[a3] = coeffs.a3;
+    c[m0] = vec_set<V> ((T) 0.);
+    c[m1] = coeffs.k * (coeffs.A * coeffs.A - (T) 1.);
+    c[m2] = vec_set<V> ((T) 0.);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<V>           c,
+    V                   freq,
+    V                   q,
+    V                   db,
+    vec_value_type_t<V> sr,
     lowshelf_tag)
   {
     using T     = vec_value_type_t<V>;
