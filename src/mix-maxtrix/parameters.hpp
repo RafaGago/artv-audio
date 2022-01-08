@@ -6418,7 +6418,7 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Exciter Sonic Enhancer",
   ":EQ RBJ 1073",
   ":EQ Luftikus",
-  ":EQ 4-band EQ",
+  ":EQ 4-band",
   ":Modulation: Chow Phaser",
   ":Modulation: ArtV Phaser",
   ":Modulation: Ripple Phaser",
@@ -6441,7 +6441,7 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Filter Crossover WTF",
   ":Filter Crossover Lin",
   ":Dynamics Transient Gate",
-  ":EQ 4-band lin-phase EQ");
+  ":EQ 4-band LinPh");
 
 #endif // #if TWEAK_BUILD
 
