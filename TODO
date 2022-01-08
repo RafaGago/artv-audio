@@ -2,7 +2,14 @@
 
 - Chore: Use vec_set<1> instead of vec_set<x1_type>.
 
+- Chore: Protect all choice variables against loading of presets from more
+  modern plugin versions (unlikely to happen to me, I will always be using the
+  last version).
+
 - Chore: For C conformance, substitute many pointer reads/writes by memcpy.
+
+- Feature: Add a build for AMD's Zen 3 (my DAW machine). (-mtune=znver3
+  -mcpu=znver3)
 
 - Feature: lin_eq4x: Spike protection on fast sweeps down. Especially on band1.
 
