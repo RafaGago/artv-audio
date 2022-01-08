@@ -45,8 +45,17 @@ struct svf_coeffs_ext : public svf_coeffs<T> {
   T A;
 };
 
+static constexpr uint bell_flag   = 1 << 0;
+static constexpr uint lshelf_flag = 1 << 1;
+static constexpr uint hshelf_flag = 1 << 2;
+
 template <class T, class U>
-static svf_coeffs_ext<T> get_main_coeffs (T freq, T q, T db, U sr, bool is_bell)
+static svf_coeffs_ext<T> get_main_coeffs (
+  T    freq,
+  T    q,
+  T    db,
+  U    sr,
+  uint flags = 0)
 {
   // "U" should always be a builtin type.
   static_assert (std::is_floating_point<U>::value, "");
@@ -62,8 +71,14 @@ static svf_coeffs_ext<T> get_main_coeffs (T freq, T q, T db, U sr, bool is_bell)
     ret.A = exp (db * (U) (1. / 40.) * (U) M_LN10);
     g     = tan (M_PI * freq / sr);
   }
-  if (is_bell) {
+  if ((flags & bell_flag)) {
     q *= ret.A;
+  }
+  if ((flags & lshelf_flag)) {
+    g /= vec_sqrt (ret.A);
+  }
+  if ((flags & hshelf_flag)) {
+    g *= vec_sqrt (ret.A);
   }
   ret.k  = (U) 1.0 / q;
   ret.a1 = (U) 1.0 / ((U) 1.0 + g * (g + ret.k));
@@ -391,7 +406,7 @@ struct svf {
     bell_tag)
   {
     using T     = vec_value_type_t<V>;
-    auto coeffs = detail::get_main_coeffs (freq, q, db, sr, true);
+    auto coeffs = detail::get_main_coeffs (freq, q, db, sr, detail::bell_flag);
 
     assert (c.size() >= n_coeffs);
     c[a1] = coeffs.a1;
@@ -412,7 +427,7 @@ struct svf {
     bell_bandpass_tag)
   {
     using T     = vec_value_type_t<V>;
-    auto coeffs = detail::get_main_coeffs (freq, q, db, sr, true);
+    auto coeffs = detail::get_main_coeffs (freq, q, db, sr, detail::bell_flag);
 
     assert (c.size() >= n_coeffs);
     c[a1] = coeffs.a1;
@@ -432,8 +447,9 @@ struct svf {
     vec_value_type_t<V> sr,
     lowshelf_tag)
   {
-    using T     = vec_value_type_t<V>;
-    auto coeffs = detail::get_main_coeffs (freq, q, db, sr, false);
+    using T = vec_value_type_t<V>;
+    auto coeffs
+      = detail::get_main_coeffs (freq, q, db, sr, detail::lshelf_flag);
 
     assert (c.size() >= n_coeffs);
     c[a1] = coeffs.a1;
@@ -453,8 +469,9 @@ struct svf {
     vec_value_type_t<V> sr,
     highshelf_tag)
   {
-    using T     = vec_value_type_t<V>;
-    auto coeffs = detail::get_main_coeffs (freq, q, db, sr, false);
+    using T = vec_value_type_t<V>;
+    auto coeffs
+      = detail::get_main_coeffs (freq, q, db, sr, detail::hshelf_flag);
 
     assert (c.size() >= n_coeffs);
     c[a1] = coeffs.a1;

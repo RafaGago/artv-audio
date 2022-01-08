@@ -1,5 +1,6 @@
 1.4.0
 - eq4x: Fix potential unnecessary state reset bug. It wasn't happening.
+- eq4x: Fix lowshelf and hishelf coefficient calculation.
 
 1.3.2
 - editor: Fix look and feel JUCE assertions.

@@ -413,11 +413,11 @@ private:
       _eq[band].reset_coeffs_ext<fwd_idx> (
         co_biquad, freq, q, gain, sr, lowshelf_tag {});
       break;
-    case bandtype::type_hshelf:
+    case bandtype::hshelf:
       _eq[band].reset_coeffs_ext<fwd_idx> (
         co_biquad, freq, q, gain, sr, highshelf_tag {});
       break;
-    case bandtype::type_lp:
+    case bandtype::lp:
       if (high_srate) {
         _eq[band].reset_coeffs_ext<fwd_idx> (
           co_biquad, freq, q, sr, lowpass_tag {});
@@ -427,7 +427,7 @@ private:
           co_biquad, freq, q, sr, biquad::mvic_lowpass_hq_tag {});
       }
       break;
-    case bandtype::type_hp:
+    case bandtype::hp:
       if (high_srate) {
         _eq[band].reset_coeffs_ext<fwd_idx> (
           co_biquad, freq, q, sr, highpass_tag {});
@@ -568,6 +568,7 @@ private:
   double                                                 _smooth_coeff;
   uint                                                   _quality;
   std::array<std::array<uint, n_quality_steps>, n_bands> _n_stages;
+  topology                                               _topology;
   uint                                                   _latency     = 0;
   plugin_context*                                        _plugcontext = nullptr;
 };
