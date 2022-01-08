@@ -184,6 +184,56 @@ static constexpr preset presets[] = {
     <gui_data bus1_text="Transient" bus2_text="Tonal" bus3_text="" bus4_text="" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
 </params>
     )END"},
+  {.name = "Mix: Mojo and Tails",
+   .xml = R"END(
+<?xml version="1.0" encoding="UTF-8"?>
+<params plugin_version="1004000">
+    <PARAM id="in_selection_01" value="1.0" />
+    <PARAM id="out_selection_01" value="0.0" />
+    <PARAM id="eq4x_band1_freq_01" value="41.90177917480469" />
+    <PARAM id="eq4x_band1_freq_03" value="110.6799926757812" />
+    <PARAM id="eq4x_band1_gain_01" value="2.25" />
+    <PARAM id="eq4x_band1_gain_02" value="0.0" />
+    <PARAM id="eq4x_band1_gain_03" value="9.0" />
+    <PARAM id="eq4x_band1_q_01" value="1.570600032806396" />
+    <PARAM id="eq4x_band1_q_02" value="0.4999999701976776" />
+    <PARAM id="eq4x_band1_q_03" value="0.100100003182888" />
+    <PARAM id="eq4x_band1_type_01" value="10.0" />
+    <PARAM id="eq4x_band1_type_02" value="0.0" />
+    <PARAM id="eq4x_band1_type_03" value="10.0" />
+    <PARAM id="eq4x_band2_freq_02" value="69.0" />
+    <PARAM id="fx_type_01" value="23.0" />
+    <PARAM id="fx_type_02" value="41.0" />
+    <PARAM id="fx_type_03" value="23.0" />
+    <PARAM id="fx_type_04" value="45.0" />
+    <PARAM id="in_selection_03" value="1.0" />
+    <PARAM id="in_selection_08" value="1.0" />
+    <PARAM id="mixer_sends" value="5.0" />
+    <PARAM id="out_selection_02" value="1.0" />
+    <PARAM id="out_selection_04" value="1.0" />
+    <PARAM id="out_selection_08" value="1.0" />
+    <PARAM id="wet_balance_02" value="-70.40000152587891" />
+    <PARAM id="wet_balance_04" value="60.0" />
+    <PARAM id="transient_gate_decay_04" value="61.40000152587891" />
+    <PARAM id="transient_gate_detect_channels_04" value="1.0" />
+    <PARAM id="transient_gate_detect_hipass_04" value="57.50381469726562" />
+    <PARAM id="transient_gate_detect_recovery_04" value="11.40000057220459" />
+    <PARAM id="transient_gate_detect_shape_04" value="2.0" />
+    <PARAM id="transient_gate_output_04" value="1.0" />
+    <PARAM id="waveshaper_drive_02" value="17.25" />
+    <PARAM id="waveshaper_drive_balance_02" value="-1.75" />
+    <PARAM id="waveshaper_envfollow_attack_02" value="9.960000038146973" />
+    <PARAM id="waveshaper_envfollow_mode_02" value="2.0" />
+    <PARAM id="waveshaper_envfollow_release_02" value="83.51999664306641" />
+    <PARAM id="waveshaper_envfollow_sensitivity_02" value="20.0" />
+    <PARAM id="waveshaper_envfollow_to_dc_02" value="55.19999694824219" />
+    <PARAM id="waveshaper_envfollow_to_drive_02" value="-70.40000152587891" />
+    <PARAM id="waveshaper_feedback_02" value="8.300003051757812" />
+    <PARAM id="waveshaper_mode_02" value="1.0" />
+    <PARAM id="waveshaper_type_02" value="2.0" />
+    <gui_data bus1_text="Lows" bus2_text="Low mojo" bus3_text="Highs" bus4_text="Extra tails" bus5_text="" bus6_text="" bus7_text="" bus8_text="Mute me!" />
+</params>
+     )END"},
   {.name = "FX: Phased Delay",
    .xml = R"END(
 <?xml version="1.0" encoding="UTF-8"?>
