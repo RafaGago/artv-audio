@@ -8,9 +8,6 @@
 
 - Chore: For C conformance, substitute many pointer reads/writes by memcpy.
 
-- Feature: Add a build for AMD's Zen 3 (my DAW machine). (-mtune=znver3
-  -mcpu=znver3)
-
 - Feature: Add single pole allpass on Phaser.
 
 - Feature: Check csound's ZDF filters(?).

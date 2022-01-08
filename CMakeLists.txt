@@ -7,6 +7,9 @@ include (ExternalProject)
 option (BUILD_VST3 "build VST3" ON)
 option (BUILD_LV2 "build LV2" OFF) # Requires lv2-dev
 option (LINK_TIME_OPTIMIZATION "Enable LTO" OFF) # To save build time turn off
+# TODO: this one should be taken from the command line, but it wasn't
+# trivial with clang-cl and the toolchain file.
+option (ZEN3_BUILD "Build for the developer's DAW machine" OFF)
 
 set (PLUGIN_FORMATS "")
 if (BUILD_LV2)
@@ -74,6 +77,16 @@ if ("${CMAKE_BUILD_TYPE}" MATCHES "Release")
     set (ARTV_DSP_COMPILE_OPTIONS_LIST -ffast-math -ftree-vectorize)
     set (ARTV_PLAIN_COMPILE_OPTIONS_LIST -Os)
     set (ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST -O2 -DNDEBUG -msse2)
+
+    if (ZEN3_BUILD)
+        # TODO: this one should be taken from the command line, but it wasn't
+        # trivial with clang-cl and the toolchain file.
+        set(ZEN3_FLAGS -mtune=znver2 -march=znver2) # Zen3 not available yet
+        set (ARTV_DSP_COMPILE_OPTIONS_LIST ${ARTV_DSP_COMPILE_OPTIONS_LIST} ${ZEN3_FLAGS})
+        set (ARTV_PLAIN_COMPILE_OPTIONS_LIST ${ARTV_PLAIN_COMPILE_OPTIONS_LIST} ${ZEN3_FLAGS})
+        set (ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST ${ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST} ${ZEN3_FLAGS})
+    endif()
+
 else()
     # Warnings on debug/dev builds
     set (ARTV_DSP_COMPILE_OPTIONS_LIST -ffast-math)

@@ -53,17 +53,23 @@ jobs:
       - name: Configure Windows
         # Not using ninja. I don't remember the reason but it wasn't really running parallel builds
         # ccache seems to not play well on this Windows build. Not using it unfortunately.
-        run: cmake -B ${{github.workspace}}/build-windows -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On  -DBUILD_LV2=Off -DCMAKE_TOOLCHAIN_FILE=build/clang-cl-xwin-x86_64.toolchain.cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
+        run: |
+          cmake -B ${{github.workspace}}/build-windows -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On  -DBUILD_LV2=Off -DCMAKE_TOOLCHAIN_FILE=build/clang-cl-xwin-x86_64.toolchain.cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
+          cmake -B ${{github.workspace}}/build-windows-zen3 -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On  -DBUILD_LV2=Off -DZEN3_BUILD=On -DCMAKE_TOOLCHAIN_FILE=build/clang-cl-xwin-x86_64.toolchain.cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
 
       - name: Build Windows
-        run: cmake --build ${{github.workspace}}/build-windows --config ${{env.BUILD_TYPE}} --parallel --target ${{env.VST3_TARGETS}}
+        run: |
+          cmake --build ${{github.workspace}}/build-windows --config ${{env.BUILD_TYPE}} --parallel --target ${{env.VST3_TARGETS}}
+          cmake --build ${{github.workspace}}/build-windows-zen3 --config ${{env.BUILD_TYPE}} --parallel --target ${{env.VST3_TARGETS}}
 
       - name: Configure Linux
         # Not using ninja. I don't remember the reason but it wasn't really running parallel builds
-        run: CC=/usr/bin/clang-14 CXX=/usr/bin/clang++-14 cmake -B ${{github.workspace}}/build-linux -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_LV2=On -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
+        run: |
+          CC=/usr/bin/clang-14 CXX=/usr/bin/clang++-14 cmake -B ${{github.workspace}}/build-linux -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_LV2=On -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
 
       - name: Build Linux
-        run: cmake --build ${{github.workspace}}/build-linux --config ${{env.BUILD_TYPE}} --parallel --target ${{env.VST3_TARGETS}} ${{env.LV2_TARGETS}}
+        run: |
+          cmake --build ${{github.workspace}}/build-linux --config ${{env.BUILD_TYPE}} --parallel --target ${{env.VST3_TARGETS}} ${{env.LV2_TARGETS}}
 
       - name: Strip Linux
         # TODO: strip LV2
@@ -79,17 +85,23 @@ jobs:
       # LV2 Linux
       - uses: actions/upload-artifact@v2
         with:
-          name: mix-maxtrix-linux-lv2-latest
+          name: mix-maxtrix-linux-${{github.sha}}-x64-lv2
           path: ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/LV2/MixMaxTrix*.lv2/**
 
       # VST3 Linux
       - uses: actions/upload-artifact@v2
         with:
-          name: mix-maxtrix-linux-vst3-latest
+          name: mix-maxtrix-linux-${{github.sha}}-x64-vst3
           path: ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
 
       # VST3 Windows
       - uses: actions/upload-artifact@v2
         with:
-          name: mix-maxtrix-windows-vst3-latest
+          name: mix-maxtrix-windows-${{github.sha}}-x64-vst3
           path: ${{github.workspace}}/build-windows/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
+
+      # VST3 Windows Zen3
+      - uses: actions/upload-artifact@v2
+        with:
+          name: mix-maxtrix-windows-${{github.sha}}-zen3-vst3
+          path: ${{github.workspace}}/build-windows-zen3/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
