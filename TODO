@@ -11,8 +11,6 @@
 - Feature: Add a build for AMD's Zen 3 (my DAW machine). (-mtune=znver3
   -mcpu=znver3)
 
-- Feature: lin_eq4x: Spike protection on fast sweeps down. Especially on band1.
-
 - Feature: Add single pole allpass on Phaser.
 
 - Feature: Check csound's ZDF filters(?).
@@ -20,8 +18,6 @@
 - Feature: Check csound's DC blocker (dcblock2).(?).
 
 - Feature: Oversampler: clicks when changing sample rate.
-
-- Feature: Linear phase EQ by using the truncated reverse IIR(?).
 
 - Feature: Try Chow exciter, Klon centaur and nonlinear Models. Port some?.
 
@@ -53,8 +49,8 @@
   of latencies are suitable again.
 
 - Feature: Now that there are crossovers more fx like e.g. Saike's multiband
-  ravager/NOTT becomes viable (As a single band, as the crossovers are already
-  in place).
+  ravager/NOTT becomes viable (As a single band/modular block, as the crossovers
+  are already in place).
 
 - Feature: Free Clip/Peak Eater (?). https://gitlab.com/JHVenn/Free-Clip
 
