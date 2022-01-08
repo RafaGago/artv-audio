@@ -291,7 +291,13 @@ public:
   }
   //----------------------------------------------------------------------------
   struct topology_tag {};
-  void set (topology_tag, int v) { _topology = (topology) v; }
+  void set (topology_tag, int v)
+  {
+    auto t = (topology) v;
+    if (t < topology::count) {
+      _topology = t;
+    }
+  }
 
   static constexpr auto get_parameter (topology_tag)
   {
@@ -344,31 +350,6 @@ public:
     topology_tag>;
   //----------------------------------------------------------------------------
 private:
-  //----------------------------------------------------------------------------
-  enum class bandtype {
-    off,
-    svf_bell,
-    svf_lshelf,
-    svf_hshelf,
-    svf_nodrive_last = svf_hshelf,
-    svf_allpass,
-    butterworth_lp,
-    butterworth_hp,
-    svf_tilt,
-    presence,
-    onepole_allpass,
-    size
-  };
-  //----------------------------------------------------------------------------
-  struct bandconfig {
-    bandtype type             = bandtype::off;
-    float    freq_note        = constexpr_midi_note_to_hz (440.f);
-    float    q                = 0.7f;
-    float    gain_db          = 0.f;
-    float    diff             = 0.f;
-    bool     has_changes      = false;
-    bool     reset_band_state = false;
-  };
   //----------------------------------------------------------------------------
   void reset_band (uint band)
   {
@@ -451,6 +432,31 @@ private:
   //----------------------------------------------------------------------------
   static constexpr uint max_butterworth_order = 6;
   //----------------------------------------------------------------------------
+  enum class bandtype {
+    off,
+    svf_bell,
+    svf_lshelf,
+    svf_hshelf,
+    svf_nodrive_last = svf_hshelf,
+    svf_allpass,
+    butterworth_lp,
+    butterworth_hp,
+    svf_tilt,
+    presence,
+    onepole_allpass,
+    size
+  };
+  //----------------------------------------------------------------------------
+  struct bandconfig {
+    bandtype type             = bandtype::off;
+    float    freq_note        = constexpr_midi_note_to_hz (440.f);
+    float    q                = 0.7f;
+    float    gain_db          = 0.f;
+    float    diff             = 0.f;
+    bool     has_changes      = false;
+    bool     reset_band_state = false;
+  };
+  //----------------------------------------------------------------------------
   using btw_lp = butterworth_any_order<lowpass_tag, max_butterworth_order>;
   using btw_hp = butterworth_any_order<highpass_tag, max_butterworth_order>;
 
@@ -467,7 +473,7 @@ private:
   //----------------------------------------------------------------------------
   using smoother = onepole_smoother;
   //----------------------------------------------------------------------------
-  enum class topology { stereo, l, r, lr_half };
+  enum class topology { stereo, l, r, lr_half, count };
   //----------------------------------------------------------------------------
   using coeff_array = std::array<eqs::value_type, eqs::n_coeffs>;
   std::array<bandconfig, n_bands> _cfg;
