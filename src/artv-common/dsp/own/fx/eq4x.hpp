@@ -97,6 +97,7 @@ public:
         case bandtype::svf_lshelf:
         case bandtype::svf_hshelf:
         case bandtype::svf_allpass:
+        case bandtype::svf_bell_bandpass:
           for (uint i = 0; i < blocksize; ++i) {
             io[i] = _eq.tick_on_idx<andy::svf> (b, io[i]);
           }
@@ -216,7 +217,8 @@ public:
         "Butterworth HP",
         "Tilt",
         "Presence HiShelf",
-        "Allpass OnePole"),
+        "Allpass 1-pole",
+        "Peak BP"),
       30);
   }
   //----------------------------------------------------------------------------
@@ -407,6 +409,11 @@ private:
       _eq.reset_coeffs_ext<onepole_allpass> (
         band, _target_coeffs[band], freq, sr);
     } break;
+    case bandtype::svf_bell_bandpass: {
+      _eq.reset_coeffs_ext<andy::svf> (
+        band, _target_coeffs[band], freq, q, gain, sr, bell_bandpass_tag {});
+      break;
+    } break;
     default:
       jassert (false);
     }
@@ -437,13 +444,13 @@ private:
     svf_bell,
     svf_lshelf,
     svf_hshelf,
-    svf_nodrive_last = svf_hshelf,
     svf_allpass,
     butterworth_lp,
     butterworth_hp,
     svf_tilt,
     presence,
     onepole_allpass,
+    svf_bell_bandpass,
     size
   };
   //----------------------------------------------------------------------------

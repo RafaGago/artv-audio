@@ -1,9 +1,14 @@
 1.4.0
-- eq4x: Fix potential unnecessary state reset bug. It wasn't happening.
-- eq4x: Fix lowshelf and hishelf coefficient calculation.
 - lin_eq4x: Add 4 band linear-phase EQ. It is based on the same (M.Vicanek's)
   algorithm than the linear-phase crossover. The peak, low-shelf and high-shelf
   are fully bit-transparent on its 0dB setting. The curves are decramped.
+- eq4x: Add a peak bandpass. This type of band is the difference between a peak
+  eq and its input. It can be used e.g. to add extra external (or internal)
+  processing to a single EQ band, similar to a crossover. This is the type of
+  band used on some comercial EQs to do transient/tonal processing on a band or
+  to implement a dynamic EQ.
+- eq4x: Fix potential unnecessary state reset bug. It wasn't happening.
+- eq4x: Fix lowshelf and hishelf coefficient calculation.
 
 1.3.2
 - editor: Fix look and feel JUCE assertions.
