@@ -7,7 +7,7 @@
   processing to a single EQ band, similar to a crossover. This is the type of
   band used on some comercial EQs to do transient/tonal processing on a band or
   to implement a dynamic EQ.
-- eq4x: Fix potential unnecessary state reset bug. It wasn't happening.
+- eq4x: Fix potential/theoretical unnecessary state reset bug.
 - eq4x: Fix lowshelf and hishelf coefficient calculation.
 - Add custom build for AMD Zen3 processors. Currently the compiler (clang14) has
   no tuning for Zen3, so Zen2 is used.
