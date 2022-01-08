@@ -66,7 +66,7 @@ public:
     uint n_enabled_bands = 0;
 
     std::array<bool, 2>       is_copied {false, false};
-    std::array<double_x2, 16> io;
+    std::array<double_x2, 32> io;
 
     for (uint b = 0; b < n_bands; ++b) {
       if (_cfg[b].has_changes) {
@@ -100,7 +100,6 @@ public:
               _target_coeffs[b][j]);
           }
         }
-
         // backward zeros
         for (uint i = 0; i < blocksize; ++i) {
           io[i]
@@ -165,7 +164,7 @@ public:
   void set (param<band, paramtype::band_type>, int v)
   {
     static_assert (band < n_bands, "");
-    if (v >= (int) bandtype::size || v < 0) {
+    if (v >= (int) bandtype::count || v < 0) {
       v = (int) bandtype::off;
     }
     if ((int) _cfg[band].type == (int) v) {
@@ -284,8 +283,7 @@ public:
   void set (quality_tag, int v)
   {
     // Can't happen while processing!
-    assert (v >= 0 && v < n_quality_steps);
-    if (_quality == v) {
+    if (_quality == v || v >= n_quality_steps) {
       return;
     }
     for (auto& band : _cfg) {
@@ -302,7 +300,13 @@ public:
   }
   //----------------------------------------------------------------------------
   struct topology_tag {};
-  void set (topology_tag, int v) { _topology = (topology) v; }
+  void set (topology_tag, int v)
+  {
+    auto t = (topology) v;
+    if (t < topology::count) {
+      _topology = t;
+    }
+  }
 
   static constexpr auto get_parameter (topology_tag)
   {
@@ -369,18 +373,6 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  enum class bandtype { off, svf_bell, svf_lshelf, svf_hshelf, size };
-  //----------------------------------------------------------------------------
-  struct bandconfig {
-    bandtype type             = bandtype::off;
-    float    freq_note        = constexpr_midi_note_to_hz (440.f);
-    uint     freq_spl         = 0;
-    float    q                = 0.7f;
-    float    gain_db          = 0.f;
-    float    diff             = 0.f;
-    bool     has_changes      = false;
-    bool     reset_band_state = false;
-  };
   //----------------------------------------------------------------------------
   void reset_band (uint band)
   {
@@ -402,24 +394,48 @@ private:
       = co.shrink_head (_eq[0].get_coeff_offset<bckwd_zeros_idx>());
 
     std::array<double_x2, biquad::n_coeffs> coeffs;
+    bool high_srate = _plugcontext->get_sample_rate() > 70000;
 
     switch (b.type) {
     case bandtype::off:
-      _eq[band].reset_states<fwd_idx>();
-      _eq[band].reset_states<bckwd_poles_idx> (_n_stages[band][_quality]);
-      _eq[band].reset_states<bckwd_zeros_idx>();
       break;
-    case bandtype::svf_bell:
-      _eq[band].reset_coeffs_ext<fwd_idx> (
-        co_biquad, freq, q, gain, sr, bell_tag {});
+    case bandtype::bell:
+      if (high_srate) {
+        _eq[band].reset_coeffs_ext<fwd_idx> (
+          co_biquad, freq, q, gain, sr, bell_tag {});
+      }
+      else {
+        _eq[band].reset_coeffs_ext<fwd_idx> (
+          co_biquad, freq, q, gain, sr, biquad::mvic_bell_hq_tag {});
+      }
       break;
-    case bandtype::svf_lshelf:
+    case bandtype::lshelf:
       _eq[band].reset_coeffs_ext<fwd_idx> (
         co_biquad, freq, q, gain, sr, lowshelf_tag {});
       break;
-    case bandtype::svf_hshelf:
+    case bandtype::type_hshelf:
       _eq[band].reset_coeffs_ext<fwd_idx> (
         co_biquad, freq, q, gain, sr, highshelf_tag {});
+      break;
+    case bandtype::type_lp:
+      if (high_srate) {
+        _eq[band].reset_coeffs_ext<fwd_idx> (
+          co_biquad, freq, q, sr, lowpass_tag {});
+      }
+      else {
+        _eq[band].reset_coeffs_ext<fwd_idx> (
+          co_biquad, freq, q, sr, biquad::mvic_lowpass_hq_tag {});
+      }
+      break;
+    case bandtype::type_hp:
+      if (high_srate) {
+        _eq[band].reset_coeffs_ext<fwd_idx> (
+          co_biquad, freq, q, sr, highpass_tag {});
+      }
+      else {
+        _eq[band].reset_coeffs_ext<fwd_idx> (
+          co_biquad, freq, q, sr, biquad::mvic_highpass_hq_tag {});
+      }
       break;
     default:
       jassert (false);
@@ -498,9 +514,30 @@ private:
     }
   }
   //----------------------------------------------------------------------------
+  enum class bandtype {
+    off,
+    bell,
+    lshelf,
+    hshelf,
+    lp,
+    hp,
+    count,
+  };
+  //----------------------------------------------------------------------------
+  struct bandconfig {
+    bandtype type             = bandtype::off;
+    float    freq_note        = constexpr_midi_note_to_hz (440.f);
+    uint     freq_spl         = 0;
+    float    q                = 0.7f;
+    float    gain_db          = 0.f;
+    float    diff             = 0.f;
+    bool     has_changes      = false;
+    bool     reset_band_state = false;
+  };
+  //----------------------------------------------------------------------------
   using smoother = onepole_smoother;
   //----------------------------------------------------------------------------
-  enum class topology { stereo, l, r };
+  enum class topology { stereo, l, r, count };
   //----------------------------------------------------------------------------
   // Big amount of preallocated memory to cope with high samplerates. This was
   // to use the convenience of "part_classes" at the expense of always
@@ -515,11 +552,9 @@ private:
 
   using eqs = part_classes<
     mp_list<
-      // make_max_stages_t_rev<t_rev_cpole_pair_czero_pair, max_n_stages>,
       make_max_stages_t_rev<t_rev_pole_pair, max_n_stages>,
       biquad,
       biquad>,
-
     double_x2,
     true>;
 
@@ -531,7 +566,6 @@ private:
   std::array<bandconfig, n_bands>                        _cfg;
   uint                                                   _sample;
   double                                                 _smooth_coeff;
-  topology                                               _topology;
   uint                                                   _quality;
   std::array<std::array<uint, n_quality_steps>, n_bands> _n_stages;
   uint                                                   _latency     = 0;
