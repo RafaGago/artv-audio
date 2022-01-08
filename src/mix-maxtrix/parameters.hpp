@@ -5617,16 +5617,6 @@ parameter_cpp_class_define (
   lin_eq4x::get_parameter (lin_eq4x::quality_tag {}),
   slider_ext);
 
-parameter_cpp_class_define (
-  lin_eq4x_topology,
-  n_stereo_busses,
-  param_common (
-    "Topology",
-    declptr<lin_eq4x>(),
-    declptr<lin_eq4x::topology_tag>()),
-  lin_eq4x::get_parameter (lin_eq4x::topology_tag {}),
-  slider_ext);
-
 using lin_eq4x_params = mp_list<
   lin_eq4x_band1_type,
   lin_eq4x_band1_gain,
@@ -5648,7 +5638,6 @@ using lin_eq4x_params = mp_list<
   lin_eq4x_band2_tolerance,
   lin_eq4x_band3_tolerance,
   lin_eq4x_band4_tolerance,
-  lin_eq4x_topology,
   lin_eq4x_quality>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
@@ -6396,7 +6385,8 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  transient_gate_params
+  transient_gate_params,
+  lin_eq4x_params
   >;
 // clang-format on
 //------------------------------------------------------------------------------
@@ -6450,7 +6440,8 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Filter Crossover LR",
   ":Filter Crossover WTF",
   ":Filter Crossover Lin",
-  ":Dynamics Transient Gate");
+  ":Dynamics Transient Gate",
+  ":EQ 4-band lin-phase EQ");
 
 #endif // #if TWEAK_BUILD
 

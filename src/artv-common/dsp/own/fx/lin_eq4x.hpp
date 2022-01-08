@@ -67,6 +67,7 @@ public:
 
     std::array<bool, 2>       is_copied {false, false};
     std::array<double_x2, 32> io;
+    std::array<double_x2, 32> in_cp;
 
     for (uint b = 0; b < n_bands; ++b) {
       if (_cfg[b].has_changes) {
@@ -77,6 +78,7 @@ public:
       }
 
       ++n_enabled_bands;
+      bool sums_with_in = sums_with_input (_cfg[b].type);
 
       for (uint offset = 0; offset < samples; offset += io.size()) {
         uint blocksize = std::min<uint> (io.size(), samples - offset);
@@ -89,6 +91,12 @@ public:
         for (uint i = 0; i < blocksize; ++i) {
           io[i][0] = src[0][i];
           io[i][1] = src[1][i];
+        }
+        // copy the already interleaved input before it is destroyed.
+        if (sums_with_in) {
+          for (uint i = 0; i < blocksize; ++i) {
+            in_cp[i] = io[i];
+          }
         }
         // bulk smoothing (at blocksize rate)
         crange<double_x2> internal = _eq[b].get_all_coeffs();
@@ -114,48 +122,24 @@ public:
         for (uint i = 0; i < blocksize; ++i) {
           io[i] = _eq[b].tick<fwd_idx> (io[i]);
         }
+        if (sums_with_in) {
+          // summing if required (bell, lowshelf, highshelf)
+          for (uint i = 0; i < blocksize; ++i) {
+            auto in = _delcomp[b].exchange (in_cp[i]);
+            io[i]   = in + io[i] * _cfg[b].slope_gain;
+          }
+        }
         // deinterleaving
-        switch (_topology) {
-        case topology::stereo:
-          for (uint i = 0; i < blocksize; ++i) {
-            outs[0][offset + i] = io[i][0];
-            outs[1][offset + i] = io[i][1];
-          }
-          break;
-        case topology::l:
-          for (uint i = 0; i < blocksize; ++i) {
-            outs[0][offset + i] = io[i][0];
-          }
-          break;
-        case topology::r:
-          for (uint i = 0; i < blocksize; ++i) {
-            outs[1][offset + i] = io[i][1];
-          }
-          break;
-        default:
-          assert (false);
-          break;
+        for (uint i = 0; i < blocksize; ++i) {
+          outs[0][offset + i] = io[i][0];
+          outs[1][offset + i] = io[i][1];
         }
       }
-
-      switch (_topology) {
-      case topology::stereo:
-        is_copied[0] = is_copied[1] = true;
-        break;
-      case topology::l:
-        is_copied[0] = true;
-        break;
-      case topology::r:
-        is_copied[1] = true;
-        break;
-      default:
-        break;
-      }
     }
-    for (uint c = 0; c < 2; ++c) {
-      if (unlikely (!is_copied[c])) {
-        memcpy (outs[c], ins[c], samples * sizeof outs[c][0]);
-      }
+
+    if (unlikely (!n_enabled_bands)) {
+      memcpy (outs[0], ins[0], samples * sizeof outs[0][0]);
+      memcpy (outs[1], ins[1], samples * sizeof outs[1][0]);
     }
     _sample += samples;
   }
@@ -179,7 +163,10 @@ public:
   static constexpr auto get_parameter (param<band, paramtype::band_type>)
   {
     return choice_param (
-      0, make_cstr_array ("Off", "Peak", "LowShelf", "HighShelf"), 16);
+      0,
+      make_cstr_array (
+        "Off", "Peak", "LowShelf", "HighShelf", "LowPass", "HighPass"),
+      16);
   }
   //----------------------------------------------------------------------------
   template <uint band>
@@ -250,7 +237,6 @@ public:
   void set (param<band, paramtype::gain>, float v)
   {
     static_assert (band < n_bands, "");
-    v *= 0.5; // cascaded response...
     _cfg[band].has_changes |= _cfg[band].gain_db != v;
     _cfg[band].gain_db = v;
   }
@@ -299,20 +285,6 @@ public:
       0, make_cstr_array ("Normal", "High", "Overspeced", "Snake oil"), 8);
   }
   //----------------------------------------------------------------------------
-  struct topology_tag {};
-  void set (topology_tag, int v)
-  {
-    auto t = (topology) v;
-    if (t < topology::count) {
-      _topology = t;
-    }
-  }
-
-  static constexpr auto get_parameter (topology_tag)
-  {
-    return choice_param (0, make_cstr_array ("Stereo", "L", "R"), 16);
-  }
-  //----------------------------------------------------------------------------
   using band1_type_tag = param<0, paramtype::band_type>;
   using band2_type_tag = param<1, paramtype::band_type>;
   using band3_type_tag = param<2, paramtype::band_type>;
@@ -355,24 +327,39 @@ public:
     band2_diff_tag,
     band3_diff_tag,
     band4_diff_tag,
-    quality_tag,
-    topology_tag>;
+    quality_tag>;
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  void try_reset_latency()
+  void reset_latency()
   {
-    uint new_latency = 0;
+    // compute
+    uint new_latency  = 0;
+    uint delcomp_size = 0;
+
     for (uint b = 0; b < n_bands; ++b) {
-      uint latency = (1 << _n_stages[b][_quality]) + 1;
-      new_latency += _cfg[b].type == bandtype::off ? 0 : latency;
+      uint latency    = (1 << _n_stages[b][_quality]) + 1;
+      latency         = (_cfg[b].type != bandtype::off) ? latency : 0;
+      _cfg[b].latency = latency;
+      new_latency += latency;
+      delcomp_size += sums_with_input (_cfg[b].type) ? latency : 0;
     }
-    if (_latency != new_latency) {
-      _latency = new_latency;
-      _plugcontext->set_delay_compensation (new_latency);
+    if (_latency == new_latency) {
+      return;
+    }
+    // adjust compensation and rebuild latency buffers
+    _latency = new_latency;
+    _plugcontext->set_delay_compensation (new_latency);
+    _mem.clear();
+    _mem.resize (delcomp_size);
+
+    auto ptr = _mem.data();
+    for (uint b = 0; b < n_bands; ++b) {
+      uint size = sums_with_input (_cfg[b].type) ? _cfg[b].latency : 0;
+      _delcomp[b].reset (make_crange (ptr, size), size);
+      ptr += size;
     }
   }
-  //----------------------------------------------------------------------------
   //----------------------------------------------------------------------------
   void reset_band (uint band)
   {
@@ -383,8 +370,11 @@ private:
     auto freq = vec_set<double_x2> (midi_note_to_hz (b.freq_note));
     freq[1] *= exp2 (b.diff);
     // not changing the Q, as we want both poles to either be real or conjugate
-    auto q    = vec_set<double_x2> (b.q);
-    auto gain = vec_set<double_x2> (b.gain_db);
+    auto q = vec_set<double_x2> (b.q);
+
+    auto gain = exp ((double) b.gain_db * (1. / 20.) * M_LN10);
+
+    b.slope_gain = gain - 1; // e.g 0dB = 1, so the multiplier is 0
 
     auto co        = make_crange (_target_coeffs[band]);
     auto co_biquad = co.shrink_head (_eq[0].get_coeff_offset<fwd_idx>());
@@ -400,23 +390,17 @@ private:
     case bandtype::off:
       break;
     case bandtype::bell:
+      q *= sqrt (gain);
       if (high_srate) {
         _eq[band].reset_coeffs_ext<fwd_idx> (
-          co_biquad, freq, q, gain, sr, bell_tag {});
+          co_biquad, freq, q, sr, bandpass_tag {});
       }
       else {
         _eq[band].reset_coeffs_ext<fwd_idx> (
-          co_biquad, freq, q, gain, sr, biquad::mvic_bell_hq_tag {});
+          co_biquad, freq, q, sr, biquad::mvic_bandpass_hq_tag {});
       }
       break;
     case bandtype::lshelf:
-      _eq[band].reset_coeffs_ext<fwd_idx> (
-        co_biquad, freq, q, gain, sr, lowshelf_tag {});
-      break;
-    case bandtype::hshelf:
-      _eq[band].reset_coeffs_ext<fwd_idx> (
-        co_biquad, freq, q, gain, sr, highshelf_tag {});
-      break;
     case bandtype::lp:
       if (high_srate) {
         _eq[band].reset_coeffs_ext<fwd_idx> (
@@ -427,6 +411,7 @@ private:
           co_biquad, freq, q, sr, biquad::mvic_lowpass_hq_tag {});
       }
       break;
+    case bandtype::hshelf:
     case bandtype::hp:
       if (high_srate) {
         _eq[band].reset_coeffs_ext<fwd_idx> (
@@ -455,7 +440,7 @@ private:
       _eq[band].reset_states<bckwd_zeros_idx>();
       _eq[band].reset_states<fwd_idx>();
       crange_copy<double_x2> (_eq[band].get_all_coeffs(), _target_coeffs[band]);
-      try_reset_latency();
+      reset_latency();
     }
     _cfg[band].has_changes      = false;
     _cfg[band].reset_band_state = false;
@@ -524,13 +509,19 @@ private:
     count,
   };
   //----------------------------------------------------------------------------
+  bool sums_with_input (bandtype t)
+  {
+    return t >= bandtype::bell && t <= bandtype::hshelf;
+  }
+  //----------------------------------------------------------------------------
   struct bandconfig {
+    double   slope_gain       = 0.;
     bandtype type             = bandtype::off;
     float    freq_note        = constexpr_midi_note_to_hz (440.f);
-    uint     freq_spl         = 0;
     float    q                = 0.7f;
     float    gain_db          = 0.f;
     float    diff             = 0.f;
+    uint     latency          = 0;
     bool     has_changes      = false;
     bool     reset_band_state = false;
   };
@@ -563,12 +554,14 @@ private:
   alignas (eqs::value_type) std::array<coeff_array, n_bands> _target_coeffs;
   std::array<eqs, n_bands> _eq;
 
+  std::array<delay_compensated_buffer<double_x2>, n_bands>            _delcomp;
+  std::vector<double_x2, overaligned_allocator<double_x2, sse_bytes>> _mem;
+
   std::array<bandconfig, n_bands>                        _cfg;
   uint                                                   _sample;
   double                                                 _smooth_coeff;
   uint                                                   _quality;
   std::array<std::array<uint, n_quality_steps>, n_bands> _n_stages;
-  topology                                               _topology;
   uint                                                   _latency     = 0;
   plugin_context*                                        _plugcontext = nullptr;
 };
