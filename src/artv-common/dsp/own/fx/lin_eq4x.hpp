@@ -163,7 +163,7 @@ public:
   static constexpr auto get_parameter (param<band, paramtype::band_type>)
   {
     return choice_param (
-      0,
+      1,
       make_cstr_array (
         "Off", "Peak", "LowShelf", "HighShelf", "LowPass", "HighPass"),
       16);

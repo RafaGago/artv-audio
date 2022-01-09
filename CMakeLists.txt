@@ -31,12 +31,14 @@ function (configure_memory_sanitizer target)
         -fsanitize=address -fno-omit-frame-pointer
         )
     target_link_options (${target} PUBLIC -fsanitize=address)
-    target_compile_options(
-        ${target}
-        PUBLIC
-        -fsanitize=address -fno-omit-frame-pointer
-        )
-    target_link_options(${target} PUBLIC -fsanitize=address)
+
+## TODO: lots of stuff coming from JUCE
+#    target_compile_options(
+#        ${target}
+#        PUBLIC
+#        -fsanitize=memory -fno-omit-frame-pointer -fsanitize-recover=all
+#        )
+#    target_link_options(${target} PUBLIC -fsanitize=memory -fsanitize-recover=all)
 endfunction()
 #-------------------------------------------------------------------------------
 # This version number is mostly unused now...

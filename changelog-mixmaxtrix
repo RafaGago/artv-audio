@@ -9,8 +9,9 @@
   to implement a dynamic EQ.
 - eq4x: Fix potential unnecessary state reset bug. It wasn't happening.
 - eq4x: Fix lowshelf and hishelf coefficient calculation.
-- Add custom build for AMD Zen2 processors. This is until the compiler has
-  tuning for Zen3.
+- Add custom build for AMD Zen3 processors. Currently the compiler (clang14) has
+  no tuning for Zen3, so Zen2 is used.
+- address-sanitizer: lin crossover: Fix memory leak.
 
 1.3.2
 - editor: Fix look and feel JUCE assertions.

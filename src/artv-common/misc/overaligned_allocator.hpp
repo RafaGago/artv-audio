@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <memory>
 #include <new>
 #include <type_traits>
 
@@ -101,5 +102,6 @@ inline bool operator!= (
 {
   return false;
 }
+
 //------------------------------------------------------------------------------
 } // namespace artv

@@ -7,7 +7,7 @@
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
 
-#if 0
+#if 1
 #include <cstdio>
 #define dbg(...) printf (__VA_ARGS__)
 #else

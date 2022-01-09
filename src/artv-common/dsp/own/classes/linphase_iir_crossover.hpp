@@ -27,7 +27,14 @@ public:
   void reset (float samplerate, std::array<uint, n_crossovers> n_stages)
   {
     _mem.clear();
-    memset (this, 0, sizeof *this); // YOLO, assuming std::vector can take it.
+
+    crange_memset (make_crange (_order), 0);
+    crange_memset (make_crange (_freq), 0);
+    crange_memset (make_crange (_coeffs), 0);
+    crange_memset (make_crange (_states), 0);
+    crange_memset (make_crange (_in_delcomp), 0);
+    crange_memset (make_crange (_out_delcomp), 0);
+
     _samplerate = samplerate;
     _n_stages   = n_stages;
 
@@ -279,6 +286,7 @@ private:
   std::array<crange<double_x2>, n_crossovers>                   _states;
   std::array<delay_compensated_buffer<double_x2>, n_crossovers> _in_delcomp;
   std::array<delay_compensated_buffer<double_x2>, n_crossovers> _out_delcomp;
+
   std::vector<double_x2, overaligned_allocator<double_x2, sse_bytes>> _mem;
   block_mem*                                                          _block;
 
