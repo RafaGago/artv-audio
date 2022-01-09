@@ -8,6 +8,8 @@
 
 - Chore: For C conformance, substitute many pointer reads/writes by memcpy.
 
+- Fix order and buffering tests and probably errors. Should they arise.
+
 - Feature: Add single pole allpass on Phaser.
 
 - Feature: Check csound's ZDF filters(?).
