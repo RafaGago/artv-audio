@@ -6333,10 +6333,11 @@ using all_fx_typelists = mp_list<
   wonky_crossv_params,
   lin_iir_crossv_params,
   lin_eq4x_params,
-  eq4x_params>;
+  eq4x_params,
+  tal_reverb2_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "EQlin", "EQ4x");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "EQlin", "EQ4x", "TAL");
 
 #else
 // clang-format off

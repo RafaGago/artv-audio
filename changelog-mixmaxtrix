@@ -12,6 +12,7 @@
 - Add custom build for AMD Zen3 processors. Currently the compiler (clang14) has
   no tuning for Zen3, so Zen2 is used.
 - address-sanitizer: lin crossover: Fix memory leak.
+- address-sanitizer: TAL Reverb 2. Fix memory leak.
 
 1.3.2
 - editor: Fix look and feel JUCE assertions.

@@ -364,7 +364,7 @@ set (DISTHRO_PORTS_REPO ${DISTHRO_PORTS_INCLUDE}/disthro-ports)
 ExternalProject_Add(
     dishthro_ports_fetch
     GIT_REPOSITORY https://github.com/RafaGago/DISTRHO-Ports.git
-    GIT_TAG        3231d01751e98beaeca0f0d5d357cec5d6f50503
+    GIT_TAG        6248eda3f490e30a0f4c13e6b0a04dfa120022cf
     SOURCE_DIR     "${DISTHRO_PORTS_REPO}"
     UPDATE_COMMAND    ""
     BUILD_ALWAYS   False

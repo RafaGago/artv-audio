@@ -32,9 +32,6 @@
 - Bug: Track XSIMD broken on fast math bug.
   https://github.com/xtensor-stack/xsimd/issues/547
 
-- Bug: Still unfixed memory leaks on original TAL Reverb 2's code (
-  mix-maxtrix-test catches them).
-
 - Feature: Add low latency (IIR) oversampling.
 
 - Feature:  Add HQ (FIR) oversampling.
