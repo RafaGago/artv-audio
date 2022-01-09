@@ -35,27 +35,7 @@ public:
   static constexpr bus_types bus_type  = bus_types::stereo;
   static constexpr uint      n_inputs  = 1;
   static constexpr uint      n_outputs = 1;
-  //----------------------------------------------------------------------------
-  void reset (plugin_context& pc)
-  {
-    for (auto& eq : _eq) {
-      eq.reset(); // realloc
-    }
-    using x1_t = vec<decltype (_smooth_coeff), 1>;
-    _sample    = 0;
-    _latency   = 0;
-    _quality   = 0;
 
-    _plugcontext = &pc;
-    _cfg         = decltype (_cfg) {};
-
-    reset_quality_settings (pc.get_sample_rate());
-
-    smoother::reset_coeffs (
-      make_crange (_smooth_coeff).cast (x1_t {}),
-      vec_set<x1_t> (1 / 0.001),
-      pc.get_sample_rate());
-  }
   //----------------------------------------------------------------------------
   template <class T>
   void process (crange<T*> outs, crange<T const*> ins, uint samples)
@@ -63,83 +43,101 @@ public:
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
 
-    uint n_enabled_bands = 0;
+    bool in_on_out = false;
 
     std::array<bool, 2>       is_copied {false, false};
     std::array<double_x2, 32> io;
     std::array<double_x2, 32> in_cp;
+    std::array<double_x2, 32> sum;
 
+    // recompute coefficients
     for (uint b = 0; b < n_bands; ++b) {
       if (_cfg[b].has_changes) {
         reset_band (b);
       }
-      if (_cfg[b].type == bandtype::off) {
-        continue;
-      }
-
-      ++n_enabled_bands;
-      bool sums_with_in = sums_with_input (_cfg[b].type);
-
+    }
+    // process serial bands
+    for (uint bi = 0; (bi < n_bands) && (_order_serial[bi] >= 0); ++bi) {
+      auto b = _order_serial[bi];
       for (uint offset = 0; offset < samples; offset += io.size()) {
         uint blocksize = std::min<uint> (io.size(), samples - offset);
-        // interleaving
 
+        // interleaving
         std::array<T const*, 2> src;
-        src[0] = is_copied[0] ? &outs[0][offset] : &ins[0][offset];
-        src[1] = is_copied[1] ? &outs[1][offset] : &ins[1][offset];
+        src[0] = in_on_out ? &outs[0][offset] : &ins[0][offset];
+        src[1] = in_on_out ? &outs[1][offset] : &ins[1][offset];
 
         for (uint i = 0; i < blocksize; ++i) {
           io[i][0] = src[0][i];
           io[i][1] = src[1][i];
         }
-        // copy the already interleaved input before it is destroyed.
-        if (sums_with_in) {
-          for (uint i = 0; i < blocksize; ++i) {
-            in_cp[i] = io[i];
-          }
-        }
-        // bulk smoothing (at blocksize rate)
-        crange<double_x2> internal = _eq[b].get_all_coeffs();
-        for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
-          for (uint i = 0; i < blocksize; ++i) {
-            internal[j] = smoother::tick (
-              make_crange (_smooth_coeff),
-              make_crange (internal[j]),
-              _target_coeffs[b][j]);
-          }
-        }
-        // backward zeros
-        for (uint i = 0; i < blocksize; ++i) {
-          io[i]
-            = _eq[b].tick<bckwd_zeros_idx> (io[i], biquad::rev_zeros_tag {});
-        }
-        // backward poles
-        _eq[b].tick<bckwd_poles_idx> (
-          make_crange (io.data(), blocksize),
-          _n_stages[b][_quality],
-          _sample + offset);
-        // forward
-        for (uint i = 0; i < blocksize; ++i) {
-          io[i] = _eq[b].tick<fwd_idx> (io[i]);
-        }
-        if (sums_with_in) {
-          // summing if required (bell, lowshelf, highshelf)
-          for (uint i = 0; i < blocksize; ++i) {
-            auto in = _delcomp[b].exchange (in_cp[i]);
-            io[i]   = in + io[i] * _cfg[b].slope_gain;
-          }
-        }
+        process_band (make_crange (io.data(), blocksize), b, _sample + offset);
         // deinterleaving
         for (uint i = 0; i < blocksize; ++i) {
           outs[0][offset + i] = io[i][0];
           outs[1][offset + i] = io[i][1];
         }
       }
+      in_on_out = true;
     }
+    // early exit if no parallel bands
+    if (_order_parallel[0] < 0) {
+      if (unlikely (!in_on_out)) {
+        memcpy (outs[0], ins[0], samples * sizeof outs[0][0]);
+        memcpy (outs[1], ins[1], samples * sizeof outs[1][0]);
+      }
+      _sample += samples;
+      return;
+    }
+    // process parallel bands
+    for (uint offset = 0; offset < samples; offset += io.size()) {
+      uint blocksize = std::min<uint> (io.size(), samples - offset);
 
-    if (unlikely (!n_enabled_bands)) {
-      memcpy (outs[0], ins[0], samples * sizeof outs[0][0]);
-      memcpy (outs[1], ins[1], samples * sizeof outs[1][0]);
+      std::array<T const*, 2> src;
+      src[0] = in_on_out ? &outs[0][offset] : &ins[0][offset];
+      src[1] = in_on_out ? &outs[1][offset] : &ins[1][offset];
+
+      // interleaving
+      for (uint i = 0; i < blocksize; ++i) {
+        in_cp[i][0] = src[0][i];
+        in_cp[i][1] = src[1][i];
+      }
+
+      // do a parallel sum of all the bands
+      for (uint bi = 0; (bi < n_bands) && (_order_parallel[bi] >= 0); ++bi) {
+        auto b = _order_parallel[bi];
+
+        auto buff = make_crange ((bi == 0) ? &sum[0] : &io[0], blocksize);
+        crange_memcpy (buff, make_crange (&in_cp[0], blocksize));
+        process_band (buff, b, _sample + offset);
+
+        // match latency with other bands
+        if (_bandcomp[b].delay() != 0) {
+          for (uint i = 0; i < blocksize; ++i) {
+            buff[i] = _bandcomp[b].exchange (buff[i]);
+          }
+        }
+        // scale
+        for (uint i = 0; i < blocksize; ++i) {
+          buff[i] *= _cfg[b].slope_gain;
+        }
+        // append results
+        if (bi != 0) {
+          for (uint i = 0; i < blocksize; ++i) {
+            sum[i] += buff[i];
+          }
+        }
+      }
+      // sum with input
+      for (uint i = 0; i < blocksize; ++i) {
+        in_cp[i] = _incomp.exchange (in_cp[i]);
+        in_cp[i] += sum[i];
+      }
+      // deinterleave
+      for (uint i = 0; i < blocksize; ++i) {
+        outs[0][offset + i] = in_cp[i][0];
+        outs[1][offset + i] = in_cp[i][1];
+      }
     }
     _sample += samples;
   }
@@ -163,7 +161,7 @@ public:
   static constexpr auto get_parameter (param<band, paramtype::band_type>)
   {
     return choice_param (
-      1,
+      0,
       make_cstr_array (
         "Off", "Peak", "LowShelf", "HighShelf", "LowPass", "HighPass"),
       16);
@@ -194,10 +192,10 @@ public:
       return frequency_parameter (200.0, 20000.0, 300.0);
     }
     else if constexpr (band == 2) {
-      return frequency_parameter (600.0, 20000.0, 1000.0);
+      return frequency_parameter (470.0, 20000.0, 1000.0);
     }
     else if constexpr (band == 3) {
-      return frequency_parameter (2000.0, 20000.0, 3000.0);
+      return frequency_parameter (800.0, 20000.0, 3000.0);
     }
     else {
       return frequency_parameter (20.0, 20000.0, 440.0);
@@ -217,19 +215,19 @@ public:
   static constexpr auto get_parameter (param<band, paramtype::q>)
   {
     if constexpr (band == 0) {
-      return float_param ("", 0.1f, 1.0f, 0.5f, 0.0001f, 0.9f);
+      return float_param ("", 0.1f, 1.0f, M_SQRT1_2, 0.0001f, 0.9f);
     }
     else if constexpr (band == 1) {
-      return float_param ("", 0.1f, 1.7f, 0.5f, 0.0001f, 0.8f);
+      return float_param ("", 0.1f, 2.5f, M_SQRT1_2, 0.0001f, 0.8f);
     }
     else if constexpr (band == 2) {
-      return float_param ("", 0.1f, 3.f, 0.5f, 0.0001f, 0.6f);
+      return float_param ("", 0.1f, 3.f, M_SQRT1_2, 0.0001f, 0.6f);
     }
     else if constexpr (band == 3) {
-      return float_param ("", 0.1f, 6.f, 0.5f, 0.0001f, 0.3f);
+      return float_param ("", 0.1f, 5.f, M_SQRT1_2, 0.0001f, 0.3f);
     }
     else {
-      return float_param ("", 0.1f, 2.f, 0.5f, 0.0001f, 0.3f);
+      return float_param ("", 0.1f, 2.f, M_SQRT1_2, 0.0001f, 0.3f);
     }
   }
   //----------------------------------------------------------------------------
@@ -262,7 +260,7 @@ public:
     return float_param ("%", -100.f, 100.f, 0.f, 0.05f);
   }
   //----------------------------------------------------------------------------
-  static constexpr uint n_quality_steps = 4;
+  static constexpr uint n_quality_steps = 3;
 
   struct quality_tag {};
 
@@ -282,7 +280,7 @@ public:
   static constexpr auto get_parameter (quality_tag)
   {
     return choice_param (
-      0, make_cstr_array ("Normal", "High", "Overspeced", "Snake oil"), 8);
+      0, make_cstr_array ("Normal", "Very-High", "Snake oil"), 8);
   }
   //----------------------------------------------------------------------------
   using band1_type_tag = param<0, paramtype::band_type>;
@@ -329,35 +327,122 @@ public:
     band4_diff_tag,
     quality_tag>;
   //----------------------------------------------------------------------------
+  void reset (plugin_context& pc)
+  {
+    for (auto& eq : _eq) {
+      eq.reset(); // realloc
+    }
+    clear_orders();
+
+    using x1_t = vec<decltype (_smooth_coeff), 1>;
+    _sample    = 0;
+    _latency   = 0;
+    _quality   = 0;
+
+    _plugcontext = &pc;
+    _cfg         = decltype (_cfg) {};
+
+    reset_quality_settings (pc.get_sample_rate());
+
+    smoother::reset_coeffs (
+      make_crange (_smooth_coeff).cast (x1_t {}),
+      vec_set<x1_t> (1 / 0.001),
+      pc.get_sample_rate());
+
+    mp11::mp_for_each<parameters> ([=] (auto param) {
+      set (param, get_parameter (param).defaultv);
+    });
+  }
+  //----------------------------------------------------------------------------
 private:
+  //----------------------------------------------------------------------------
+  void process_band (crange<double_x2> io, uint b, uint sample_idx)
+  {
+    // bulk smoothing (at blocksize rate)
+    crange<double_x2> internal = _eq[b].get_all_coeffs();
+    for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
+      for (uint i = 0; i < io.size(); ++i) {
+        internal[j] = smoother::tick (
+          make_crange (_smooth_coeff),
+          make_crange (internal[j]),
+          _target_coeffs[b][j]);
+      }
+    }
+    // backward zeros
+    for (uint i = 0; i < io.size(); ++i) {
+      io[i] = _eq[b].tick<bckwd_zeros_idx> (io[i], biquad::rev_zeros_tag {});
+    }
+    // backward poles
+    _eq[b].tick<bckwd_poles_idx> (io, _n_stages[b][_quality], sample_idx);
+    // forward
+    for (uint i = 0; i < io.size(); ++i) {
+      io[i] = _eq[b].tick<fwd_idx> (io[i]);
+    }
+  }
   //----------------------------------------------------------------------------
   void reset_latency()
   {
-    // compute
-    uint new_latency  = 0;
-    uint delcomp_size = 0;
-
+    // To minimize latency the EQ processes the shelves and peaks in parallel,
+    // as it is mostly equivalent. This is not so with low and highpasses, so
+    // the low and highpasses are processed first and they add to the latency
+    // amount.
+    clear_orders();
+    uint order_idx   = 0;
+    uint new_latency = 0;
+    // get per-band latencies and all the serial bands
     for (uint b = 0; b < n_bands; ++b) {
+      if (_cfg[b].type == bandtype::off) {
+        _cfg[b].latency = 0;
+        continue;
+      }
       uint latency    = (1 << _n_stages[b][_quality]) + 1;
-      latency         = (_cfg[b].type != bandtype::off) ? latency : 0;
       _cfg[b].latency = latency;
-      new_latency += latency;
-      delcomp_size += sums_with_input (_cfg[b].type) ? latency : 0;
+
+      if (!is_parallel (_cfg[b].type)) {
+        _order_serial[order_idx] = b;
+        ++order_idx;
+        new_latency += latency;
+      }
     }
-    if (_latency == new_latency) {
-      return;
+
+    order_idx             = 0;
+    uint n_parallel       = 0;
+    uint latency_parallel = 0;
+    uint mem_size         = 0;
+
+    // get the parallel bands
+    for (uint b = 0; b < n_bands; ++b) {
+      if (_cfg[b].type == bandtype::off) {
+        continue;
+      }
+      if (is_parallel (_cfg[b].type)) {
+        ++n_parallel;
+        latency_parallel = std::max (_cfg[b].latency, latency_parallel);
+        mem_size += (latency_parallel - _cfg[b].latency);
+        _order_parallel[order_idx] = b;
+        ++order_idx;
+      }
     }
+    mem_size += latency_parallel; // for the in buffer of the parallel section
+    new_latency += latency_parallel;
     // adjust compensation and rebuild latency buffers
     _latency = new_latency;
     _plugcontext->set_delay_compensation (new_latency);
     _mem.clear();
-    _mem.resize (delcomp_size);
+    _mem.resize (mem_size);
 
+    // assign the buffers to the parallel bands
     auto ptr = _mem.data();
+    _incomp.reset (make_crange (ptr, latency_parallel), latency_parallel);
+    ptr += latency_parallel;
+
     for (uint b = 0; b < n_bands; ++b) {
-      uint size = sums_with_input (_cfg[b].type) ? _cfg[b].latency : 0;
-      _delcomp[b].reset (make_crange (ptr, size), size);
-      ptr += size;
+      if (!is_parallel (_cfg[b].type) || _cfg[b].type == bandtype::off) {
+        continue; // series. no compensation required
+      }
+      uint comp = latency_parallel - _cfg[b].latency;
+      _bandcomp[b].reset (make_crange (ptr, comp), comp);
+      ptr += comp;
     }
   }
   //----------------------------------------------------------------------------
@@ -369,7 +454,8 @@ private:
 
     auto freq = vec_set<double_x2> (midi_note_to_hz (b.freq_note));
     freq[1] *= exp2 (b.diff);
-    // not changing the Q, as we want both poles to either be real or conjugate
+    // not changing the Q, as we want both poles to either be real or
+    // conjugate
     auto q = vec_set<double_x2> (b.q);
 
     auto gain = exp ((double) b.gain_db * (1. / 20.) * M_LN10);
@@ -452,18 +538,12 @@ private:
   static uint get_n_stages (
     double freq,
     double q,
-    double gain,
     double samplerate,
     double snr_db)
   {
     std::array<double_x1, biquad::n_coeffs> co;
     biquad::reset_coeffs<double_x1> (
-      co,
-      vec_set<1> (freq),
-      vec_set<1> (q),
-      vec_set<1> (gain),
-      samplerate,
-      bell_tag {});
+      co, vec_set<1> (freq), vec_set<1> (q), samplerate, bandpass_tag {});
     std::array<vec_complex<double_x1>, 2> poles;
     biquad::get_poles<double_x1> (co, poles);
     return get_reversed_pole_n_stages (poles[0].to_std (0), snr_db);
@@ -478,24 +558,34 @@ private:
 
       using freq_param = param<b, paramtype::frequency>;
       using q_param    = param<b, paramtype::q>;
-      using gain_param = param<b, paramtype::gain>;
 
       freq[b] = get_parameter (freq_param {}).min;
       freq[b] = midi_note_to_hz (freq[b]);
-      gain[b] = get_parameter (gain_param {}).max;
       q[b]    = get_parameter (q_param {}).max;
     });
 
     for (uint b = 0; b < n_bands; ++b) {
-      _n_stages[b][0] = get_n_stages (freq[b], q[b], gain[b], samplerate, 90.);
-      _n_stages[b][1] = get_n_stages (freq[b], q[b], gain[b], samplerate, 120.);
+      // Tuning was 11 stages on normal quality for the two first bands and 10
+      // stages for the other two, both at 48000KHz. The lowest quality has a
+      // truncation noise SNR of 90dB. The medium 180dB and the higher 360dB.
+      _n_stages[b][0] = get_n_stages (freq[b], q[b], samplerate, 90.);
+      _n_stages[b][1] = _n_stages[b][0] + 1;
       _n_stages[b][2] = _n_stages[b][1] + 1;
-      _n_stages[b][3] = _n_stages[b][1] + 2;
-      static_assert (n_quality_steps == 4, "Update this!");
+      static_assert (n_quality_steps == 3, "Update this!");
 
       for (auto& stages : _n_stages[b]) {
         stages = std::min (stages, max_n_stages);
       }
+    }
+  }
+  //----------------------------------------------------------------------------
+  void clear_orders()
+  {
+    for (auto& elem : _order_serial) {
+      elem = -1;
+    }
+    for (auto& elem : _order_parallel) {
+      elem = -1;
     }
   }
   //----------------------------------------------------------------------------
@@ -509,7 +599,7 @@ private:
     count,
   };
   //----------------------------------------------------------------------------
-  bool sums_with_input (bandtype t)
+  bool is_parallel (bandtype t)
   {
     return t >= bandtype::bell && t <= bandtype::hshelf;
   }
@@ -554,10 +644,13 @@ private:
   alignas (eqs::value_type) std::array<coeff_array, n_bands> _target_coeffs;
   std::array<eqs, n_bands> _eq;
 
-  std::array<delay_compensated_buffer<double_x2>, n_bands>            _delcomp;
+  std::array<delay_compensated_buffer<double_x2>, n_bands>            _bandcomp;
+  delay_compensated_buffer<double_x2>                                 _incomp;
   std::vector<double_x2, overaligned_allocator<double_x2, sse_bytes>> _mem;
 
   std::array<bandconfig, n_bands>                        _cfg;
+  std::array<int, n_bands>                               _order_serial;
+  std::array<int, n_bands>                               _order_parallel;
   uint                                                   _sample;
   double                                                 _smooth_coeff;
   uint                                                   _quality;
