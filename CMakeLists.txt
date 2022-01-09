@@ -23,22 +23,37 @@ if (BUILD_VST3)
     list (APPEND PLUGIN_FORMATS VST3)
 endif()
 #-------------------------------------------------------------------------------
-function (configure_memory_sanitizer target)
+function (configure_address_sanitizer target)
     # Linux only as of now.
+    set (
+        ASAN_FLAGS
+        -fsanitize-address-use-after-scope
+        -fsanitize-address-use-after-return=always
+        -fsanitize=address
+    )
     target_compile_options(
-        ${target}
-        PRIVATE
-        -fsanitize=address -fno-omit-frame-pointer
+        ${target} PRIVATE -fno-omit-frame-pointer ${ASAN_FLAGS}
         )
-    target_link_options (${target} PUBLIC -fsanitize=address)
+    target_link_options (${target} PUBLIC ${ASAN_FLAGS})
+endfunction()
 
-## TODO: lots of stuff coming from JUCE
-#    target_compile_options(
-#        ${target}
-#        PUBLIC
-#        -fsanitize=memory -fno-omit-frame-pointer -fsanitize-recover=all
-#        )
-#    target_link_options(${target} PUBLIC -fsanitize=memory -fsanitize-recover=all)
+function (configure_memory_sanitizer target)
+    # As of now there are so many JUCE relatesd errors. It is not practical
+    # to use.
+    set (
+        MEMSAN_FLAGS
+        -fsanitize=memory
+        -fsanitize-recover=all
+        #-fsanitize-address-use-after-return=always
+        -fsanitize-ignorelist=${CMAKE_SOURCE_DIR}/build/memory-sanitizer-ignorelist.txt
+    )
+    # Lots of positives on JUCE. Using ignorelist.
+    target_compile_options(
+        ${target} PUBLIC -fno-omit-frame-pointer ${MEMSAN_FLAGS}
+        )
+    target_link_options(
+        ${target} PUBLIC ${MEMSAN_FLAGS}
+        )
 endfunction()
 #-------------------------------------------------------------------------------
 # This version number is mostly unused now...
@@ -647,7 +662,7 @@ add_executable(
 target_link_libraries (mix-maxtrix-test PUBLIC test)
 if(NOT MSVC)
     # This is in fact a GCC detection, good enough for now
-    configure_memory_sanitizer (mix-maxtrix-test)
+    configure_address_sanitizer (mix-maxtrix-test)
 endif()
 
 add_executable(
@@ -657,7 +672,7 @@ add_executable(
 target_link_libraries (mix-maxtrix-smoke PUBLIC test MixMaxTrix)
 if(NOT MSVC)
     # This is in fact a GCC detection, good enough for now
-    configure_memory_sanitizer (mix-maxtrix-smoke)
+    configure_address_sanitizer (mix-maxtrix-smoke)
 endif()
 #-- Mix-maxtrix headless -------------------------------------------------------
 # Necessary?
