@@ -6325,7 +6325,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
@@ -6334,10 +6334,10 @@ using all_fx_typelists = mp_list<
   lin_iir_crossv_params,
   lin_eq4x_params,
   eq4x_params,
-  tal_reverb2_params>;
+  filter2x_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "EQlin", "EQ4x", "TAL");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "EQlin", "EQ4x", "Fil");
 
 #else
 // clang-format off

@@ -985,11 +985,10 @@ struct moog_1 {
     qg2,
     qg3,
     qg4,
-    choice,
     frac,
     n_coeffs
   };
-  enum coeffs_int { n_coeffs_int };
+  enum coeffs_int { choice, n_coeffs_int };
   enum state {
     sf1,
     sf2,
@@ -1009,46 +1008,50 @@ struct moog_1 {
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<V>           co,
+    crange<V>           co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> sr,
     lowpass_tag)
   {
-    reset_coeffs (co, freq, reso, 0, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 0, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<V>           co,
+    crange<V>           co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> sr,
     bandpass_tag)
   {
-    reset_coeffs (co, freq, reso, 1, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 1, vec_set<V> (0.), sr);
   }
 
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<V>           co,
+    crange<V>           co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> sr,
     highpass_tag)
   {
-    reset_coeffs (co, freq, reso, 2, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 2, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<V>           co,
+    crange<V>           co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> sr,
     notch_tag)
   {
-    reset_coeffs (co, freq, reso, 3, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 3, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -1062,10 +1065,7 @@ struct moog_1 {
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+  static V tick (crange<const V> co, crange<const V> co_int, crange<V> st, V in)
   {
     using T = vec_value_type_t<V>;
 
@@ -1136,7 +1136,7 @@ struct moog_1 {
     sg4_v = rg4_v * in + qg4_v * yf;
 
     V f1, f2;
-    switch ((uint) choice_v[0]) {
+    switch ((uint) co_int[choice][0]) {
     case 0:
       f1 = y * ((T) 1. + k_v);
       f2 = (T) vt2 * ((T) 2. * c - (T) 2. * b);
@@ -1184,6 +1184,7 @@ private:
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<V>           co,
+    crange<V>           co_int,
     V                   freq,
     V                   reso,
     uint                filter_type, // choice on the original code
@@ -1240,11 +1241,8 @@ private:
     acc *= tmp;
     co[qg4] = -1.0 * (kgn + acc);
 
-    // this integer shouldn't be part of a filter, it will delay when smoothing
-    // adding 0.5 so it can effectively reach its value when casted to uint.
-    auto cho   = vec_set<V> ((T) filter_type + (T) 0.5);
-    co[choice] = cho;
-    co[frac]   = fraction;
+    co[frac]       = fraction;
+    co_int[choice] = vec_set<V> ((T) filter_type);
   }
 };
 //##############################################################################
@@ -1255,65 +1253,56 @@ struct moog_2 {
   // SHA b1c1952c5f798d968ff15714bca6a5c694e06d82
   // https://github.com/JoepVanlier/JSFX
   //----------------------------------------------------------------------------
-  enum coeffs {
-    k,
-    q0s,
-    r1s,
-    k0s,
-    k0g,
-    rg1,
-    rg2,
-    qg1,
-    qg2,
-    choice,
-    frac,
-    n_coeffs
-  };
-  enum coeffs_int { n_coeffs_int };
+  enum coeffs { k, q0s, r1s, k0s, k0g, rg1, rg2, qg1, qg2, frac, n_coeffs };
+  enum coeffs_int { choice, n_coeffs_int };
   enum state { sf1, sf2, sg1, sg2, si1, si2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<V>           co,
+    crange<V>           co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> sr,
     lowpass_tag)
   {
-    reset_coeffs (co, freq, reso, 0, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 0, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<V>           co,
+    crange<V>           co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> sr,
     bandpass_tag)
   {
-    reset_coeffs (co, freq, reso, 1, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 1, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<V>           co,
+    crange<V>           co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> sr,
     highpass_tag)
   {
-    reset_coeffs (co, freq, reso, 2, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 2, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<V>           co,
+    crange<V>           co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> sr,
     notch_tag)
   {
-    reset_coeffs (co, freq, reso, 3, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 3, vec_set<V> (0.), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -1325,33 +1314,29 @@ struct moog_2 {
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+  static V tick (crange<const V> co, crange<const V> co_int, crange<V> st, V in)
   {
     using T = vec_value_type_t<V>;
 
     assert (st.size() >= n_states);
     assert (co.size() >= n_coeffs);
 
-    V k_v      = co[k];
-    V q0s_v    = co[q0s];
-    V r1s_v    = co[r1s];
-    V k0s_v    = co[k0s];
-    V k0g_v    = co[k0g];
-    V rg1_v    = co[rg1];
-    V rg2_v    = co[rg2];
-    V qg1_v    = co[qg1];
-    V qg2_v    = co[qg2];
-    V frac_v   = co[frac];
-    V choice_v = co[choice];
-    V sf1_v    = st[sf1];
-    V sf2_v    = st[sf2];
-    V sg1_v    = st[sg1];
-    V sg2_v    = st[sg2];
-    V si1_v    = st[si1];
-    V si2_v    = st[si2];
+    V k_v    = co[k];
+    V q0s_v  = co[q0s];
+    V r1s_v  = co[r1s];
+    V k0s_v  = co[k0s];
+    V k0g_v  = co[k0g];
+    V rg1_v  = co[rg1];
+    V rg2_v  = co[rg2];
+    V qg1_v  = co[qg1];
+    V qg2_v  = co[qg2];
+    V frac_v = co[frac];
+    V sf1_v  = st[sf1];
+    V sf2_v  = st[sf2];
+    V sg1_v  = st[sg1];
+    V sg2_v  = st[sg2];
+    V si1_v  = st[si1];
+    V si2_v  = st[si2];
 
     V yo  = vec_tanh_approx_vaneev (k0g_v * (in + sg1_v));
     V a   = yo;
@@ -1373,7 +1358,7 @@ struct moog_2 {
     sg2_v = rg2_v * in + qg2_v * yf;
 
     V f1, f2;
-    switch ((uint) choice_v[0]) {
+    switch ((uint) co_int[choice][0]) {
     case 0:
       f1 = y * ((T) 1. + k_v);
       f2 = (T) vt2 * ((T) 2. * b - (T) 2. * yo) * (T) 8.;
@@ -1416,6 +1401,7 @@ private:
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<V>           co,
+    crange<V>           co_int,
     V                   freq,
     V                   reso,
     uint                filter_type, // choice on the original code
@@ -1465,11 +1451,9 @@ private:
     co[rg2] = rg2_v;
     co[qg1] = qg1_v;
     co[qg2] = qg2_v;
-    // this integer shouldn't be part of a filter, it will delay when smoothing
-    // adding 0.5 so it can effectively reach its value when casted to uint.
-    auto cho   = vec_set<V> ((T) filter_type + (T) 0.5);
-    co[choice] = cho;
-    co[frac]   = fraction;
+
+    co[frac]       = fraction;
+    co_int[choice] = vec_set<V> ((T) filter_type);
   }
 };
 //------------------------------------------------------------------------------
