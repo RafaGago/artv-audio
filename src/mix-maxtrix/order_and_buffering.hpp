@@ -47,7 +47,7 @@ private
 };
 //------------------------------------------------------------------------------
 // N == channel count, Ext = externally managed inputs.
-template <size_t N, size_t N_receives = 0>
+template <size_t N, size_t N_receives = 3>
 class order_and_buffering {
 public:
   using bus_latency_arr              = std::array<u16, N>;
@@ -617,7 +617,7 @@ private:
         &post_fx_cummulative_dly[beg], &post_fx_cummulative_dly[end]);
 
       for (uint c = beg; c < end; ++c) {
-        if (chnl_io[c] != dead_channel) {
+        if ((chnl_io[c] & has_outs_bit) != 0) {
           this->pre_output_mix_latency[c]
             = max_group_latency - post_fx_cummulative_dly[c];
         }

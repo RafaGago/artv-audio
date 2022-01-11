@@ -491,6 +491,11 @@ TEST (order_and_buffering, latency_all_sends_enabled_series)
   // buses 1 to 4 connected in series. Only bus 1 inputs and bus 4 outputs
   ob.recompute (0x0001, 0x1000, 0, 0x7, 0, {}, 0, lat);
 
+  ASSERT_EQ (ob.fx_latency[0], 1);
+  ASSERT_EQ (ob.fx_latency[1], 2);
+  ASSERT_EQ (ob.fx_latency[2], 3);
+  ASSERT_EQ (ob.fx_latency[3], 4);
+
   ASSERT_EQ (ob.receives_latency[0], 0);
   ASSERT_EQ (ob.receives_latency[1], 0);
   ASSERT_EQ (ob.receives_latency[2], 0);
@@ -510,7 +515,12 @@ TEST (order_and_buffering, latency_no_sends_groups_enabled)
 {
   order_and_buffering<4>::bus_latency_arr lat = {1, 2, 3, 4};
   order_and_buffering<4>                  ob;
-  ob.recompute (0x1111, 0x1111, 0, 0, 1, {}, 0, lat);
+  ob.recompute (0x1111, 0x1111, 0, 0, 0, {}, 1, lat);
+
+  ASSERT_EQ (ob.fx_latency[0], 1);
+  ASSERT_EQ (ob.fx_latency[1], 2);
+  ASSERT_EQ (ob.fx_latency[2], 3);
+  ASSERT_EQ (ob.fx_latency[3], 4);
 
   ASSERT_EQ (ob.receives_latency[0], 0);
   ASSERT_EQ (ob.receives_latency[1], 0);
@@ -530,6 +540,11 @@ TEST (order_and_buffering, latency_all_sends_enabled_groups_enabled)
   order_and_buffering<4>::bus_latency_arr lat = {1, 2, 3, 4};
   order_and_buffering<4>                  ob;
   ob.recompute (0x1111, 0x1111, 0, 0x7, 0, {}, 1, lat);
+
+  ASSERT_EQ (ob.fx_latency[0], 1);
+  ASSERT_EQ (ob.fx_latency[1], 2);
+  ASSERT_EQ (ob.fx_latency[2], 3);
+  ASSERT_EQ (ob.fx_latency[3], 4);
 
   ASSERT_EQ (ob.receives_latency[0], 0);
   ASSERT_EQ (ob.receives_latency[1], 1);
