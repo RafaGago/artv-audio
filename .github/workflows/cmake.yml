@@ -71,11 +71,17 @@ jobs:
         run: |
           cmake --build ${{github.workspace}}/build-linux --config ${{env.BUILD_TYPE}} --parallel --target ${{env.VST3_TARGETS}} ${{env.LV2_TARGETS}}
 
-      - name: Strip Linux
-        # TODO: strip LV2
+      - name: Strip and create symbol files Linux
         run: |
-          strip --strip-unneeded build-linux/MixMaxTrix_artefacts/Release/VST3/MixMaxTrix.vst3/Contents/x86_64-linux/MixMaxTrix.so
-
+          cd build-linux/MixMaxTrix_artefacts/Release/VST3/MixMaxTrix.vst3/Contents/x86_64-linux/
+          objcopy --only-keep-debug MixMaxTrix.so MixMaxTrix.vst3.syms
+          strip --strip-debug --strip-unneeded MixMaxTrix.so
+          cd -
+          if cd "build-linux/MixMaxTrix_artefacts/Release/LV2/MixMaxTrix.lv2"; then
+            objcopy --only-keep-debug MixMaxTrix.so MixMaxTrix.lv2.syms
+            strip --strip-debug --strip-unneeded MixMaxTrix.so
+          fi
+          cd -
       - name: Test
         working-directory: ${{github.workspace}}/build-linux
         # Execute tests defined by the CMake configuration.
@@ -86,22 +92,58 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: mix-maxtrix-linux-${{github.sha}}-x64-lv2
-          path: ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/LV2/MixMaxTrix*.lv2/**
+          path: |
+            ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/LV2/MixMaxTrix*.lv2/**
+            !**/*.syms
+
+      # Symbols LV2 Linux
+      - uses: actions/upload-artifact@v2
+        with:
+          name: mix-maxtrix-linux-${{github.sha}}-x64-lv2-debug-symbols
+          path: |
+            ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/LV2/MixMaxTrix*.lv2/**/*.syms
 
       # VST3 Linux
       - uses: actions/upload-artifact@v2
         with:
           name: mix-maxtrix-linux-${{github.sha}}-x64-vst3
-          path: ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
+          path: |
+            ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
+            !**/*.syms
+
+      # Symbols VST3 Linux
+      - uses: actions/upload-artifact@v2
+        with:
+          name: mix-maxtrix-linux-${{github.sha}}-x64-vst3-debug-symbols
+          path: |
+            ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**/*.syms
 
       # VST3 Windows
       - uses: actions/upload-artifact@v2
         with:
           name: mix-maxtrix-windows-${{github.sha}}-x64-vst3
-          path: ${{github.workspace}}/build-windows/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
+          path: |
+            ${{github.workspace}}/build-windows/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
+            !**/*.pdb
+
+      # Symbols VST3 Windows
+      - uses: actions/upload-artifact@v2
+        with:
+          name: mix-maxtrix-windows-${{github.sha}}-x64-debug-symbols
+          path: |
+            ${{github.workspace}}/build-windows/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**/*.pdb
 
       # VST3 Windows Zen3
       - uses: actions/upload-artifact@v2
         with:
           name: mix-maxtrix-windows-${{github.sha}}-zen3-vst3
-          path: ${{github.workspace}}/build-windows-zen3/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
+          path: |
+            ${{github.workspace}}/build-windows-zen3/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
+            !**/*.pdb
+
+      # Symbols Windows Zen3
+      - uses: actions/upload-artifact@v2
+        with:
+          name: mix-maxtrix-windows-${{github.sha}}-zen3-debug-symbols
+          path: |
+            ${{github.workspace}}/build-windows-zen3/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**/*.pdb
