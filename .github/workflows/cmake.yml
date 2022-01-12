@@ -48,7 +48,7 @@ jobs:
 
       # Build Windows first. It has more likelyhood to fail.
       - name: Get Windows SDK
-        run: ./scripts/xwin.sh
+        run: ./build/xwin.sh
 
       - name: Configure Windows
         # Not using ninja. I don't remember the reason but it wasn't really running parallel builds
