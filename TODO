@@ -66,6 +66,9 @@
 - Feature: EQ:
   -Port analog reeq bands (?).
 
+- Support disabled buses through the JUCE API. It might save processing power.
+  The feature needs some thought.
+
 - Optimization: If worth, performance optimizations. Math operations on fast
   paths, suboptimal memory layouts as on Ripple phaser. Vectorizations, Use the
   FMA intrinsic on  XSIMD, etc. Optimized functions on KVR:

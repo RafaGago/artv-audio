@@ -171,25 +171,24 @@ public:
   {
     using namespace juce;
 
-    if (buses.inputBuses.size() > n_busses) {
+    if (buses.inputBuses.size() != n_busses) {
       return false;
     }
-    if (buses.outputBuses.size() > n_busses) {
+    if (buses.outputBuses.size() != n_busses) {
       return false;
     }
 
-    const AudioChannelSet stereo   = AudioChannelSet::stereo();
-    const AudioChannelSet disabled = AudioChannelSet::disabled();
+    const AudioChannelSet stereo = AudioChannelSet::stereo();
 
     for (int bus = 0; bus < n_busses; ++bus) {
-      // only stereo or disabled buses.
+      // only stereo buses.
       auto const& inbus  = buses.getChannelSet (true, bus);
       auto const& outbus = buses.getChannelSet (false, bus);
 
-      if (inbus != stereo && inbus != disabled) {
+      if (inbus != stereo) {
         return false;
       }
-      if (outbus != stereo && outbus != disabled) {
+      if (outbus != stereo) {
         return false;
       }
     }
