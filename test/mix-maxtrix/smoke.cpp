@@ -1,5 +1,9 @@
 #include <optional>
 
+#include <cerrno>
+#include <fstream>
+#include <streambuf>
+
 #include <gtest/gtest.h>
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -18,6 +22,16 @@ extern juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter();
 
 namespace artv {
 
+std::string get_file_contents (const char* filename)
+{
+  std::ifstream in (filename, std::ios::in | std::ios::binary);
+  if (!in) {
+    throw (errno);
+  }
+  return (std::string (
+    (std::istreambuf_iterator<char> (in)), std::istreambuf_iterator<char>()));
+}
+
 constexpr auto sample_rate = 44100;
 //------------------------------------------------------------------------------
 class test_playhead : public juce::AudioPlayHead {
@@ -27,9 +41,11 @@ public:
     pos_info.bpm                = 120;
     pos_info.timeSigNumerator   = 4;
     pos_info.timeSigDenominator = 4;
-    /** The current play position, in samples from the start of the timeline. */
+    /** The current play position, in samples from the start of the timeline.
+     */
     pos_info.timeInSamples = 0;
-    /** The current play position, in seconds from the start of the timeline. */
+    /** The current play position, in seconds from the start of the timeline.
+     */
     pos_info.timeInSeconds  = 0;
     pos_info.editOriginTime = 0;
     /** The current play position, in units of quarter-notes. */
@@ -127,7 +143,39 @@ public:
   test_playhead                                  playhead;
   white_noise_generator                          noise;
 };
+//------------------------------------------------------------------------------
+#if 0
+//------------------------------------------------------------------------------
+TEST_F (smoke_test, test_some_preset)
+{
+  // TODO: probably convert this in a CLI utility...
+  std::string patch = get_file_contents ("SOMEPRESET.vstpreset");
 
+  plugin->setStateInformation ((void const*) patch.c_str(), patch.size());
+
+  playhead.reset();
+
+  auto cycles = (sample_rate * 500) / audio.getNumSamples();
+
+  for (uint j = 0; j < cycles; ++j) {
+    fill_audio_buffers_with_noise (0.1f);
+    plugin->processBlock (audio, midi);
+
+    if ((j & 7) == 0) {
+      playhead.add_samples (audio.getNumSamples() / 2);
+    }
+    else {
+      playhead.add_samples (audio.getNumSamples());
+    }
+
+    auto l = audio.getWritePointer (0);
+    for (uint i = 0; i < audio.getNumSamples(); ++i, ++l) {
+      ASSERT_LT (*l, 10.); // spikes, feedback loops, etc.
+    }
+  }
+}
+#endif
+//------------------------------------------------------------------------------
 #define ENGINE_PROFILING 0
 #if ENGINE_PROFILING
 //------------------------------------------------------------------------------
@@ -147,7 +195,8 @@ TEST_F (smoke_test, with_no_fx_on_ch1)
 #else
 TEST_F (smoke_test, run_all_fx_on_ch1)
 {
-  // this is mostly to be compiled with a memory sanitizer to be able to verify
+  // this is mostly to be compiled with a memory sanitizer to be able to
+  // verify
   float interval = 1. / fx_type_param->getNumSteps();
   for (float v = 0.; v <= 1.; v += interval) {
     playhead.reset();
@@ -196,4 +245,5 @@ TEST_F (smoke_test, signal_not_blowing_up)
   }
 }
 #endif
+//------------------------------------------------------------------------------
 } // namespace artv
