@@ -5,14 +5,59 @@
 
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
+
+#include "artv-common/misc/interpolation.hpp"
 
 namespace artv {
 
 //------------------------------------------------------------------------------
-// just a single allocation multichannel delay line with random access. Capacity
-// is always rounded up to a power of two to avoid divisions when wrapping
-// around.
+template <class V>
+class pow2_circular_buffer {
+public:
+  //----------------------------------------------------------------------------
+  void reset (crange<V> mem)
+  {
+    assert (is_pow2 (mem.size()));
+    _pos  = 0;
+    _mem  = mem.data();
+    _mask = mem.size() - 1;
+  };
+  //----------------------------------------------------------------------------
+  V get (uint idx) const { return get_abs (_pos - idx); }
+  V operator[] (uint idx) const { return get (idx); }
+  //----------------------------------------------------------------------------
+  void push (const V& value)
+  {
+    _mem[_pos & _mask] = value;
+    ++_pos;
+  }
+  //----------------------------------------------------------------------------
+  uint size() const { return _mask + 1; }
+  //----------------------------------------------------------------------------
+  // For pitch shifters, getting a position that can have a factor multiplied
+  // and then accessed, so instead of returning "pos" from "0" to "size -1" it
+  // is returned from "size" to "(2 * size) -1"
+  uint abs_pos() const { return wrap_abs_pos (_pos) + 1 + _mask; }
+  //----------------------------------------------------------------------------
+  // For pitch shifters, accessing by the absolute position of the buffer.
+  // Normally accessing a position relative to the write head is what is
+  // desired, those are "get" and "operator[]".
+  V get_abs (uint abs_pos) const { return _mem[wrap_abs_pos (abs_pos)]; }
+  //----------------------------------------------------------------------------
+  // also for pitch shifters
+  uint wrap_abs_pos (uint abs_pos) const { return abs_pos & _mask; }
+  //----------------------------------------------------------------------------
+private:
+  V*   _mem;
+  uint _mask;
+  uint _pos;
+};
+//------------------------------------------------------------------------------
+// just a single allocation multichannel delay line with random access.
+// Capacity is always rounded up to a power of two to avoid divisions when
+// wrapping around.
 template <class T>
 class delay_line {
 public:
@@ -75,7 +120,106 @@ private:
   uint           _channels;
 };
 //------------------------------------------------------------------------------
-// untested, wasn't needed after all...
+// interpolated and modulated delay line, requires an stateless interpolator
+// that supports random access. The modulator is left external, so it can be
+// shared by different delay lines.
+template <
+  class V,
+  class Interp                       = linear_interp,
+  enable_if_vec_of_float_point_t<V>* = nullptr>
+class interp_mod_delay_line {
+public:
+  //----------------------------------------------------------------------------
+  void reset (crange<V> mem)
+  {
+    assert (mem.size() > interp_margin);
+    _mem.reset (mem);
+    _max_delay = (float) (_mem.size() - 1 - interp_margin);
+  }
+  //----------------------------------------------------------------------------
+  void set (float time, float mod_freq, float mod_depth, float samplerate)
+  {
+    set_time (time);
+    set_mod_depth (mod_depth);
+  }
+  //----------------------------------------------------------------------------
+  void set_time (float samples)
+  {
+    _delay = std::min ((float) _max_delay, samples);
+  }
+  //----------------------------------------------------------------------------
+  // the delay time will oscillate on an excursion of ± "samples" centered
+  // around the delay time.
+  void set_mod_depth (float samples) { _depth = samples; }
+  //----------------------------------------------------------------------------
+  V tick (V in, vec_value_type_t<V> mod_in = (vec_value_type_t<V>) 0)
+  {
+    assert (mod_in >= (vec_value_type_t<V>) -1);
+    assert (mod_in <= (vec_value_type_t<V>) 1);
+
+    using T = vec_value_type_t<V>;
+
+    float fpdel = _delay + mod_in * _depth;
+    fpdel       = std::clamp (fpdel, 0.f, _max_delay);
+    auto del    = (uint) fpdel;
+    auto frac   = fpdel - (float) del;
+
+    std::array<V, Interp::n_points> samples;
+    for (uint i = 0; i < samples.size(); ++i) {
+      samples[i] = _mem[del + i];
+    }
+    V ret = Interp::get (samples, vec_set<V> (frac));
+    _mem.push (in);
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+private:
+  static constexpr uint interp_margin = Interp::n_points - 1;
+
+  pow2_circular_buffer<V> _mem;
+  float                   _delay;
+  float                   _depth;
+  float                   _max_delay;
+};
+//------------------------------------------------------------------------------
+// Basic reverb building block. Strictly not a delay line.
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+class schroeder_allpass {
+public:
+  //----------------------------------------------------------------------------
+  void reset (crange<V> mem) { _mem.reset (mem); }
+  //----------------------------------------------------------------------------
+  void set (uint delay_samples, V gain)
+  {
+    set_time (delay_samples);
+    set_gain (gain);
+  }
+  //----------------------------------------------------------------------------
+  void set_time (uint samples)
+  {
+    assert (samples < _mem.size());
+    _delay = samples;
+  }
+  //----------------------------------------------------------------------------
+  void set_gain (V gain) { _gain = gain; }
+  //----------------------------------------------------------------------------
+  V tick (V in)
+  {
+    V y1 = _mem[_delay];
+    V y  = in + y1 * -_gain;
+    _mem.push (y);
+    return y * _gain + y1;
+  }
+  //----------------------------------------------------------------------------
+private:
+  pow2_circular_buffer<V> _mem;
+  uint                    _delay {};
+  V                       _gain {};
+  V                       _z1 {};
+};
+//------------------------------------------------------------------------------
+// A delay line that can be fractional but not modulated fast. Untested, wasn't
+// needed after all.
 template <class T>
 class allpass_interpolated_delay_line : public delay_line<T> {
 public:
@@ -114,7 +258,8 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  // magic from RS-MET's library.
+  // magic from RS-MET's library. Seems to be
+  // https://ccrma.stanford.edu/~jos/pasp/First_Order_Allpass_Interpolation.html
   double warped_allpass_interpolate (
     double           coeff,
     float&           prev,
@@ -127,5 +272,5 @@ private:
   //----------------------------------------------------------------------------
   T* _allpass_states;
 };
-
+//------------------------------------------------------------------------------
 } // namespace artv
