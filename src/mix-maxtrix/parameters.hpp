@@ -6333,10 +6333,10 @@ using all_fx_typelists = mp_list<
   wonky_crossv_params,
   lin_iir_crossv_params,
   fdnverb_params,
-  transience_params>;
+  sound_delay_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "FDN", "Tra");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "FDN", "delay");
 
 #else
 // clang-format off
