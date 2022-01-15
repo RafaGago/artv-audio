@@ -19,6 +19,7 @@ namespace artv {
 
 namespace detail {
 //------------------------------------------------------------------------------
+// reminder: co = coefficients, co_int = coefficients internal, st = states.
 template <
   class T_co,
   uint N_co,
@@ -93,6 +94,7 @@ private:
 };
 //------------------------------------------------------------------------------
 // vector-backed specialization, same types
+// reminder: co = coefficients, co_int = coefficients internal, st = states.
 template <
   class T,
   uint N_co,
@@ -154,6 +156,7 @@ private:
 // vector-backed specialization, different types, could be the only one used
 // instead of the same-type variant, which was done for the debugger's
 // convenience.
+// reminder: co = coefficients, co_int = coefficients internal, st = states.
 template <
   class T_co,
   uint N_co,
@@ -251,7 +254,7 @@ private:
 //------------------------------------------------------------------------------
 } // namespace detail
 //------------------------------------------------------------------------------
-// A DSP part to (optionally) an array of instances.
+// A DSP part to hold an array of instances of the same type.
 template <class Part, class Vect, uint Size = 1, bool dynamic_mem = false>
 struct part_class_array {
 public:
@@ -538,7 +541,8 @@ private:
 template <class PartList, class Vect, bool dynamic_mem = false>
 struct part_classes;
 
-// Different DSP parts stored on a single class and accessed by index.
+// Different DSP parts stored on a single class and accessed by compile-time
+// index.
 template <
   template <class...>
   class List,
