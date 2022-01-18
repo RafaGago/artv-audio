@@ -237,7 +237,7 @@ public:
       return;
     }
     _pre_shift = v;
-    _shift_sync.set (v);
+    _fb_shift.set_reader (_fb_shift_read, v);
   }
 
   static constexpr auto get_parameter (pre_shift_tag)
@@ -254,7 +254,7 @@ public:
       return;
     }
     _post_shift = v;
-    _shift_freerun.set (v);
+    _main_shift.set_reader (_main_shift_read, v);
   }
 
   static constexpr auto get_parameter (post_shift_tag)
@@ -309,15 +309,17 @@ public:
       for (auto& ap : _ap) {
         l = ap.tick (l);
       }
-      l         = _filters.tick_cascade (l);
-      _out_prev = _shift_sync.tick (l);
+      l = _filters.tick_cascade (l);
+      _fb_shift.push (l);
+      _out_prev = _fb_shift.read (_fb_shift_read);
       if (unlikely (_feedback >= 1.f)) {
         l = vec_set<1> (0.f);
       }
       r = _hhmatrix[0].tick (l);
       l = _hhmatrix[1].tick (l);
       vec<float, 2> out {l[0], r[0]};
-      out        = _shift_freerun.tick (out);
+      _main_shift.push (out);
+      out        = _main_shift.read (_main_shift_read);
       outs[0][i] = ins[0][i] * (1. - _mix) + out[0] * _dlevel * _mix;
       outs[1][i] = ins[1][i] * (1. - _mix) + out[1] * _dlevel * _mix;
     }
@@ -348,8 +350,8 @@ private:
       hh_matrix_size * 2;
 
     constexpr uint n_pitch_buffers = //
-      1 + //_shift_sync
-      2; // _shift_freerun
+      1 + //_fb_shift
+      2; // _main_shift
 
     if (reallocate) {
       _mem.clear();
@@ -375,10 +377,10 @@ private:
       ptr += delay_size * _hhmatrix[i].size;
     }
 
-    _shift_sync.reset (make_crange (ptr, pitch_size).cast (float_x1 {}));
+    _fb_shift.reset (make_crange (ptr, pitch_size).cast (float_x1 {}));
     ptr += pitch_size;
 
-    _shift_freerun.reset (
+    _main_shift.reset (
       make_crange (ptr, pitch_size * 2).cast (vec<float, 2> {}));
   }
   //----------------------------------------------------------------------------
@@ -419,8 +421,10 @@ private:
   std::array<schroeder_allpass<float_x1>, ap_size>            _ap;
   part_classes<filter_types, float_x1>                        _filters;
   std::array<householder_matrix<hh_matrix_size, float_x1>, 2> _hhmatrix;
-  pitch_shift_sin<float_x1, false>                            _shift_sync;
-  pitch_shift_sin<vec<float, 2>, true>                        _shift_freerun;
+  pitch_shift_sin<float_x1, false>                            _fb_shift;
+  decltype (_fb_shift)::reader                                _fb_shift_read;
+  pitch_shift_sin<vec<float, 2>, true>                        _main_shift;
+  decltype (_main_shift)::reader                              _main_shift_read;
 
   std::vector<float_x1> _mem;
 
