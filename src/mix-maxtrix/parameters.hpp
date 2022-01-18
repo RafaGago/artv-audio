@@ -77,6 +77,7 @@
 #include "artv-common/dsp/own/fx/filter2x.hpp"
 #include "artv-common/dsp/own/fx/lin_eq4x.hpp"
 #include "artv-common/dsp/own/fx/phaser.hpp"
+#include "artv-common/dsp/own/fx/pitch_shifter.hpp"
 #include "artv-common/dsp/own/fx/transient_gate.hpp"
 #include "artv-common/dsp/own/fx/waveshaper.hpp"
 
@@ -6257,6 +6258,74 @@ using transient_gate_params = mp_list<
   transient_gate_output,
   transient_gate_oversampling>;
 //------------------------------------------------------------------------------
+parameter_cpp_class_define (
+  naive_pitch_amt,
+  n_stereo_busses,
+  param_common (
+    "Semitones",
+    declptr<updownsampled<pitch_shifter>>(),
+    declptr<pitch_shifter::semitones_tag>()),
+  pitch_shifter::get_parameter (pitch_shifter::semitones_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  naive_pitch_count,
+  n_stereo_busses,
+  param_common (
+    "Count",
+    declptr<updownsampled<pitch_shifter>>(),
+    declptr<pitch_shifter::count_tag>()),
+  pitch_shifter::get_parameter (pitch_shifter::count_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  naive_pitch_detune,
+  n_stereo_busses,
+  param_common (
+    "Detune",
+    declptr<updownsampled<pitch_shifter>>(),
+    declptr<pitch_shifter::detune_tag>()),
+  pitch_shifter::get_parameter (pitch_shifter::detune_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  naive_pitch_width,
+  n_stereo_busses,
+  param_common (
+    "Width",
+    declptr<updownsampled<pitch_shifter>>(),
+    declptr<pitch_shifter::width_tag>()),
+  pitch_shifter::get_parameter (pitch_shifter::width_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  naive_pitch_mode,
+  n_stereo_busses,
+  param_common (
+    "Mode",
+    declptr<updownsampled<pitch_shifter>>(),
+    declptr<pitch_shifter::mode_tag>()),
+  pitch_shifter::get_parameter (pitch_shifter::mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  naive_pitch_oversample,
+  n_stereo_busses,
+  param_common (
+    "OverSmpl",
+    declptr<updownsampled<pitch_shifter>>(),
+    declptr<oversampled_amount_tag>()),
+  updownsampled<pitch_shifter>::get_parameter (oversampled_amount_tag {}),
+  slider_ext);
+
+using naive_pitch_params = mp_list<
+  naive_pitch_amt,
+  naive_pitch_count,
+  naive_pitch_detune,
+  naive_pitch_width,
+  naive_pitch_mode,
+  naive_pitch_oversample>;
+//------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
   polyphase_fir_test_gain,
@@ -6332,11 +6401,10 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  fdnverb_params,
-  sound_delay_params>;
+  naive_pitch_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "FDN", "delay");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "pitchsh");
 
 #else
 // clang-format off
