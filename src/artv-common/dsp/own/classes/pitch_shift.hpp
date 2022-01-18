@@ -23,58 +23,63 @@ template <
 class pitch_shift_sin {
 public:
   //----------------------------------------------------------------------------
+  struct reader {
+    float shift {};
+    float rfrac {};
+    uint  rint {};
+  };
+  //----------------------------------------------------------------------------
   void reset (crange<V> mem) // has a latency of "mem.size() / 2"
   {
     _mem.reset (mem);
     _size_recip = 1. / (float) mem.size();
-    _shift      = 0;
-    _rint       = 0;
-    _rfrac      = 0.;
   }
   //----------------------------------------------------------------------------
-  void set (float amt_semitones)
+  // many shift factors can be read from the same buffer.
+  void set_reader (reader& r, float amt_semitones, bool resync = true)
   {
-    _shift = exp (amt_semitones * (1. / 12.) * M_LN2);
-    _rint  = _mem.abs_pos();
-    _rfrac = 0.;
+    r.shift = exp (amt_semitones * (1. / 12.) * M_LN2);
+    if (resync) {
+      r.rint  = _mem.abs_pos();
+      r.rfrac = 0.;
+    }
   }
   //----------------------------------------------------------------------------
-  V tick (V in)
+  V read (reader& tk)
   {
     using T = vec_value_type_t<V>;
-    _mem.push (in);
+
     uint wpos = _mem.abs_pos();
 
-    T rpos = (Free_running) ? (T) _rint + _rfrac + _shift : (T) wpos * _shift;
-    _rint  = (uint) rpos;
-    _rfrac = rpos - (T) _rint;
-    // avoid accumulating precission loss by not letting "_rint" to become big,
-    // this is for the free running case.
-    _rint = _mem.wrap_abs_pos (_rint);
+    T rpos   = (Free_running) ? (T) tk.rint + tk.rfrac + tk.shift
+                              : (T) wpos * tk.shift;
+    tk.rint  = (uint) rpos;
+    tk.rfrac = rpos - (T) tk.rint;
+    // avoid accumulating precission loses by not letting "tk.rint" to become
+    // big, this is for the free running case.
+    tk.rint = _mem.wrap_abs_pos (tk.rint);
 
-    V p1  = _mem.get_abs (_rint);
-    V p2  = _mem.get_abs (_rint + 1);
-    V ps1 = linear_interp::get ({p1, p2}, vec_set<V> (_rfrac));
+    V p1  = _mem.get_abs (tk.rint);
+    V p2  = _mem.get_abs (tk.rint + 1);
+    V ps1 = linear_interp::get ({p1, p2}, vec_set<V> (tk.rfrac));
 
-    p1    = _mem.get_abs (_rint + _mem.size() / 2);
-    p2    = _mem.get_abs (_rint + 1 + _mem.size() / 2);
-    V ps2 = linear_interp::get ({p1, p2}, vec_set<V> (_rfrac));
+    p1    = _mem.get_abs (tk.rint + _mem.size() / 2);
+    p2    = _mem.get_abs (tk.rint + 1 + _mem.size() / 2);
+    V ps2 = linear_interp::get ({p1, p2}, vec_set<V> (tk.rfrac));
 
-    uint del       = _rint - wpos;
-    T    del1_norm = (T) _mem.wrap_abs_pos (del) * _size_recip;
+    // sin equal-power crossfade
+    uint del     = tk.rint - wpos;
+    T    crossf1 = (T) _mem.wrap_abs_pos (del) * _size_recip * M_PI;
     del += _mem.size() / 2;
-    T del2_norm = (T) _mem.wrap_abs_pos (del) * _size_recip;
-    // sin window
-    return vec_set<V> (sin (del1_norm * M_PI)) * ps1
-      + vec_set<V> (sin (del2_norm * M_PI)) * ps2;
+    T crossf2 = (T) _mem.wrap_abs_pos (del) * _size_recip * M_PI;
+    return sin (crossf1) * ps1 + sin (crossf2) * ps2;
   }
+  //----------------------------------------------------------------------------
+  void push (V in) { _mem.push (in); }
   //----------------------------------------------------------------------------
 private:
   pow2_circular_buffer<V> _mem;
-  float                   _shift;
   float                   _size_recip;
-  uint                    _rint;
-  float                   _rfrac;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

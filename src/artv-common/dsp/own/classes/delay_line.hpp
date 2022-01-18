@@ -154,12 +154,19 @@ public:
   //----------------------------------------------------------------------------
   V tick (V in, vec_value_type_t<V> mod_in = (vec_value_type_t<V>) 0)
   {
+    V ret = read (_delay, mod_in);
+    _mem.push (in);
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+  V read (float delay, vec_value_type_t<V> mod_in = (vec_value_type_t<V>) 0)
+  {
     assert (mod_in >= (vec_value_type_t<V>) -1);
     assert (mod_in <= (vec_value_type_t<V>) 1);
 
     using T = vec_value_type_t<V>;
 
-    float fpdel = _delay + mod_in * _depth;
+    float fpdel = delay + mod_in * _depth;
     fpdel       = std::clamp (fpdel, 0.f, _max_delay);
     auto del    = (uint) fpdel;
     auto frac   = fpdel - (float) del;
@@ -169,9 +176,10 @@ public:
       samples[i] = _mem[del + i];
     }
     V ret = Interp::get (samples, vec_set<V> (frac));
-    _mem.push (in);
     return ret;
   }
+  //----------------------------------------------------------------------------
+  void push (V in) { _mem.push (in); }
   //----------------------------------------------------------------------------
 private:
   static constexpr uint interp_margin = Interp::n_points - 1;
