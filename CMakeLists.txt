@@ -1,5 +1,5 @@
 # HINT for a recent version on Debian "pip3 install cmake"
-cmake_minimum_required (VERSION 3.12.0)
+cmake_minimum_required (VERSION 3.13.0)
 
 include (FetchContent)
 include (ExternalProject)
@@ -10,7 +10,11 @@ option (LINK_TIME_OPTIMIZATION "Enable LTO" OFF) # To save build time turn off
 # TODO: this one should be taken from the command line, but it wasn't
 # trivial with clang-cl and the toolchain file.
 option (ZEN3_BUILD "Build for the developer's DAW machine" OFF)
-
+#-------------------------------------------------------------------------------
+# Allow adding link flags to libries not built on this file. This is the new
+# default but it still needs this.
+set (CMAKE_POLICY_DEFAULT_CMP0079 NEW)
+#-------------------------------------------------------------------------------
 set (PLUGIN_FORMATS "")
 if (BUILD_LV2)
     if (UNIX AND NOT APPLE)
@@ -545,6 +549,42 @@ set_source_files_properties(
     COMPILE_FLAGS
     "${ARTV_PLAIN_COMPILE_OPTIONS}"
     )
+#-- Rubberband -----------------------------------------------------------------
+FetchContent_Declare(
+    rubberband_fetch
+    GIT_REPOSITORY https://github.com/breakfastquay/rubberband
+    GIT_TAG        41ba70fbb9dc5042da37395a9d7a28fd967036d0
+    )
+FetchContent_MakeAvailable (rubberband_fetch)
+set (RUBBERBAND_REPO ${rubberband_fetch_SOURCE_DIR})
+
+add_library (rubberband STATIC)
+target_include_directories (rubberband INTERFACE ${RUBBERBAND_REPO})
+target_sources(
+    rubberband
+    PRIVATE
+    ${RUBBERBAND_REPO}/single/RubberBandSingle.cpp
+   )
+target_compile_definitions (rubberband PRIVATE NO_THREADING=1)
+set_property (TARGET rubberband PROPERTY POSITION_INDEPENDENT_CODE ON)
+# Avoid some problems with ambiguous references to "byte" by setting the
+# standard to C++14.
+set_property (TARGET rubberband PROPERTY CXX_STANDARD 14)
+target_compile_definitions (rubberband PRIVATE NOMINMAX)
+target_link_libraries (rubberband PRIVATE dsp_target_compile_options)
+
+#-- Soundtouch -----------------------------------------------------------------
+set (SOUNDTOUCH_PATCH ${CMAKE_CURRENT_SOURCE_DIR}/patches/soundtouch/0001-Remove-problematic-flags.patch)
+FetchContent_Declare(
+    soundtouch_fetch
+    GIT_REPOSITORY https://codeberg.org/soundtouch/soundtouch.git
+    GIT_TAG        9fedba866e36edfca11e51c852d92b903f0735aa
+    PATCH_COMMAND  git apply --whitespace=fix ${SOUNDTOUCH_PATCH}
+    )
+FetchContent_MakeAvailable (soundtouch_fetch)
+set_property (TARGET SoundTouch PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_link_libraries (SoundTouch PRIVATE dsp_target_compile_options)
+
 #-- Common ---------------------------------------------------------------------
 add_library(common INTERFACE)
 target_include_directories (common INTERFACE src)
@@ -662,6 +702,8 @@ function (add_mix_maxtrix_plugin_target target channels)
         tal_reverb2
         luftikus
         ff_meters
+        rubberband
+        SoundTouch
         wdl
         )
     install(
