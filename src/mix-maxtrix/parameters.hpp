@@ -42,6 +42,8 @@
 
 #include "artv-common/dsp/ljkb/luftikus.hpp"
 
+#include "artv-common/dsp/rubberband/rubberband.hpp"
+
 #include "artv-common/dsp/saike/stereo_bub3.hpp"
 #if 0
 #include "artv-common/dsp/saike/tanh_aa.hpp"
@@ -56,6 +58,8 @@
 #if 0
 #include "artv-common/dsp/sonic_anomaly/vola2.hpp"
 #endif
+
+#include "artv-common/dsp/soundtouch/soundtouch.hpp"
 
 #include "artv-common/dsp/sstillwell/1175.hpp"
 #include "artv-common/dsp/sstillwell/4x4.hpp"
@@ -6262,7 +6266,7 @@ parameter_cpp_class_define (
   naive_pitch_amt,
   n_stereo_busses,
   param_common (
-    "Semitones",
+    "Amt",
     declptr<updownsampled<pitch_shifter>>(),
     declptr<pitch_shifter::semitones_tag>()),
   pitch_shifter::get_parameter (pitch_shifter::semitones_tag {}),
@@ -6325,6 +6329,82 @@ using naive_pitch_params = mp_list<
   naive_pitch_width,
   naive_pitch_mode,
   naive_pitch_oversample>;
+//------------------------------------------------------------------------------
+parameter_cpp_class_define (
+  rubberband_mode,
+  n_stereo_busses,
+  param_common ("Mode", declptr<rubberband>(), declptr<rubberband::mode_tag>()),
+  rubberband::get_parameter (rubberband::mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  rubberband_formant_mode,
+  n_stereo_busses,
+  param_common (
+    "Formant",
+    declptr<rubberband>(),
+    declptr<rubberband::formant_mode_tag>()),
+  rubberband::get_parameter (rubberband::formant_mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  rubberband_semitones,
+  n_stereo_busses,
+  param_common (
+    "Amt",
+    declptr<rubberband>(),
+    declptr<rubberband::semitones_tag>()),
+  rubberband::get_parameter (rubberband::semitones_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  rubberband_detune,
+  n_stereo_busses,
+  param_common (
+    "Detune",
+    declptr<rubberband>(),
+    declptr<rubberband::detune_tag>()),
+  rubberband::get_parameter (rubberband::detune_tag {}),
+  slider_ext);
+
+using rubberband_params = mp_list<
+  rubberband_semitones,
+  rubberband_detune,
+  rubberband_mode,
+  rubberband_formant_mode>;
+//------------------------------------------------------------------------------
+parameter_cpp_class_define (
+  soundtouch_semitones,
+  n_stereo_busses,
+  param_common (
+    "Amt",
+    declptr<soundtouch_fx>(),
+    declptr<soundtouch_fx::semitones_tag>()),
+  soundtouch_fx::get_parameter (soundtouch_fx::semitones_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  soundtouch_detune,
+  n_stereo_busses,
+  param_common (
+    "Detune",
+    declptr<soundtouch_fx>(),
+    declptr<soundtouch_fx::detune_tag>()),
+  soundtouch_fx::get_parameter (soundtouch_fx::detune_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  soundtouch_mode,
+  n_stereo_busses,
+  param_common (
+    "Mode",
+    declptr<soundtouch_fx>(),
+    declptr<soundtouch_fx::mode_tag>()),
+  soundtouch_fx::get_parameter (soundtouch_fx::mode_tag {}),
+  slider_ext);
+
+using soundtouch_params
+  = mp_list<soundtouch_semitones, soundtouch_detune, soundtouch_mode>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
@@ -6401,7 +6481,7 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  naive_pitch_params>;
+  soundtouch_params>;
 
 static constexpr auto fx_choices
   = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "pitchsh");
@@ -6454,8 +6534,10 @@ using all_fx_typelists = mp_list<
   wonky_crossv_params,
   lin_iir_crossv_params,
   transient_gate_params,
-  lin_eq4x_params
-  >;
+  lin_eq4x_params,
+  naive_pitch_params,
+  rubberband_params,
+  soundtouch_params>;
 // clang-format on
 //------------------------------------------------------------------------------
 // ordering between "fx_choices" and "all_fx_params_typelists" MUST match!
@@ -6509,7 +6591,10 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Filter Crossover WTF",
   ":Filter Crossover Lin",
   ":Dynamics Transient Gate",
-  ":EQ 4-band LinPh");
+  ":EQ 4-band LinPh",
+  ":Pitch Naive",
+  ":Pitch Rubberband",
+  ":Pitch Soundtouch");
 
 #endif // #if TWEAK_BUILD
 
@@ -6706,6 +6791,12 @@ static constexpr char const* about_text =
 "Using FF-meters:\n"
 "https://github.com/ffAudio/ff_meters\n"
 "\n"
+"Using the Rubberband library:\n"
+"https://breakfastquay.com/rubberband/\n"
+"\n"
+"Using the SoundTouch library:\n"
+"https://www.surina.net/soundtouch/\n"
+"\n"
 "Some code is ported from DISHTRO-ports instead of its original repos:\n"
 "https://github.com/DISTRHO/DISTRHO-Ports\n"
 "\n"
@@ -6736,6 +6827,9 @@ static constexpr char const* about_text =
 "-Z1202 (Vadim Zavalishin). Author of the also helpful \"The art of va filter\n"
 " design\" free book.\n"
 "\n"
+"A copy of all the licenses for all the third party used by this software can\n"
+"be found on:\n"
+"https://github.com/RafaGago/artv-audio/blob/master/3RD-PARTY-LICENSES\n"
 ;
 // clang-format on
 }} // namespace artv::parameters

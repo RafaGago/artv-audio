@@ -71,5 +71,49 @@ struct lagrange_interp_3_esi {
   }
 };
 //------------------------------------------------------------------------------
+// _esi: equally spaced on integer boundaries
+struct cubic_interp_esi {
+  static constexpr uint n_points = 4;
+
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V get (std::array<V, n_points> y, V x)
+  {
+    using T = vec_value_type_t<V>;
+
+    static constexpr T co[] = {
+      (T) -0.5,
+      (T) 1.0,
+      (T) -0.5,
+      (T) 0.0,
+      (T) 1.5,
+      (T) -2.5,
+      (T) 0.0,
+      (T) 1.0,
+      (T) -1.5,
+      (T) 2.0,
+      (T) 0.5,
+      (T) 0.0,
+      (T) 0.5,
+      (T) -0.5,
+      (T) 0.0,
+      (T) 0.0};
+
+    V x3 = vec_set<V> ((T) 1.);
+    V x2 = x;
+    V x1 = x2 * x2;
+    V x0 = x2 * x1;
+
+    // A modern optimizer sees if factoring or parallelizing is better. Kept
+    // naive.
+
+    V c0 = co[0] * x0 + co[1] * x1 + co[2] * x2 + co[3] * x3;
+    V c1 = co[4] * x0 + co[5] * x1 + co[6] * x2 + co[7] * x3;
+    V c2 = co[8] * x0 + co[9] * x1 + co[10] * x2 + co[11] * x3;
+    V c3 = co[12] * x0 + co[13] * x1 + co[14] * x2 + co[15] * x3;
+
+    return c0 * y[0] + c1 * y[1] + c2 * y[2] + c3 * y[3];
+  }
+};
+//------------------------------------------------------------------------------
 
 } // namespace artv

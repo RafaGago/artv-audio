@@ -1,0 +1,32 @@
+From 632666a400ab96cb912ee431b46489b6b3fa6e3e Mon Sep 17 00:00:00 2001
+From: Rafael Gago <rafael.gago@zenseact.com>
+Date: Wed, 19 Jan 2022 20:19:33 +0100
+Subject: [PATCH] Remove problematic flags.
+
+Somehow the CMakeLists.txt is setting compile options as target
+definitions and failing. We already set fast math so skipping.
+---
+ CMakeLists.txt | 7 -------
+ 1 file changed, 7 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 5090a90..0468898 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -3,13 +3,6 @@ project(SoundTouch VERSION 2.3.1 LANGUAGES CXX)
+ 
+ include(GNUInstallDirs)
+ 
+-if(MSVC)
+-  set(COMPILE_DEFINITIONS /O2 /fp:fast)
+-  set(COMPILE_OPTIONS )
+-else()
+-  set(COMPILE_OPTIONS -Ofast)
+-endif()
+-
+ #####################
+ # SoundTouch library
+ 
+-- 
+2.25.1
+
