@@ -70,10 +70,13 @@ public:
     return float_param ("Semitones", -24.0, 24.0, 0.0, 1.);
   }
   //----------------------------------------------------------------------------
+  static constexpr double detune_resolution = 0.001;
+
   struct detune_tag {};
 
   void set (detune_tag, float v)
   {
+    v = (v < detune_resolution && v > -detune_resolution) ? 0.f : v;
     if (v == _detune) {
       return;
     }
@@ -83,7 +86,7 @@ public:
 
   static constexpr auto get_parameter (detune_tag)
   {
-    return float_param ("Semitones", -12.0, 12.0, 0.0, 0.001);
+    return float_param ("Semitones", -12.0, 12.0, 0.0, detune_resolution);
   }
   //----------------------------------------------------------------------------
   struct count_tag {};

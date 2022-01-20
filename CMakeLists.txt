@@ -1,5 +1,5 @@
 # HINT for a recent version on Debian "pip3 install cmake"
-cmake_minimum_required (VERSION 3.13.0)
+cmake_minimum_required (VERSION 3.12.0)
 
 include (FetchContent)
 include (ExternalProject)
@@ -10,10 +10,6 @@ option (LINK_TIME_OPTIMIZATION "Enable LTO" OFF) # To save build time turn off
 # TODO: this one should be taken from the command line, but it wasn't
 # trivial with clang-cl and the toolchain file.
 option (ZEN3_BUILD "Build for the developer's DAW machine" OFF)
-#-------------------------------------------------------------------------------
-# Allow adding link flags to libries not built on this file. This is the new
-# default but it still needs this.
-set (CMAKE_POLICY_DEFAULT_CMP0079 NEW)
 #-------------------------------------------------------------------------------
 set (PLUGIN_FORMATS "")
 if (BUILD_LV2)
@@ -583,8 +579,14 @@ FetchContent_Declare(
     )
 FetchContent_MakeAvailable (soundtouch_fetch)
 set_property (TARGET SoundTouch PROPERTY POSITION_INDEPENDENT_CODE ON)
-target_link_libraries (SoundTouch PRIVATE dsp_target_compile_options)
 
+# This is not done by linking against the "dsp_target_compile_options" interface
+# library because that required bumping the CMAKE_REQUIRED_VERSION and to set
+# the CMP0069 policy. This was not a problem locally, but it failed on GitHub's
+# servers which are slow and painful to Debug (TODO if feeling veeeery bored).
+target_compile_options(
+    SoundTouch PRIVATE INTERFACE ${ARTV_DSP_COMPILE_OPTIONS_LIST}
+    )
 #-- Common ---------------------------------------------------------------------
 add_library(common INTERFACE)
 target_include_directories (common INTERFACE src)

@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "artv-common/dsp/own/classes/delay_line.hpp"
+#include "artv-common/misc/fixed_point.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
@@ -24,13 +25,14 @@ class pitch_shift_sin {
 public:
   //----------------------------------------------------------------------------
   struct reader {
-    float shift {};
-    float rfrac {};
-    uint  rint {};
+    fixed_point<20, 22, false> pos {}; // u64
+    fixed_point<10, 22, false> delta {}; // u32
   };
   //----------------------------------------------------------------------------
   void reset (crange<V> mem) // has a latency of "mem.size() / 2"
   {
+    assert (mem.size() <= (decltype (reader::pos)::int_max) + 1);
+
     _mem.reset (mem);
     _size_recip = 1. / (float) mem.size();
   }
@@ -38,10 +40,9 @@ public:
   // many shift factors can be read from the same buffer.
   void set_reader (reader& r, float amt_semitones, bool resync = true)
   {
-    r.shift = exp (amt_semitones * (1. / 12.) * M_LN2);
+    r.delta = exp (amt_semitones * (1. / 12.) * M_LN2);
     if (resync) {
-      r.rint  = _mem.abs_pos();
-      r.rfrac = 0.;
+      r.pos = _mem.abs_pos();
     }
   }
   //----------------------------------------------------------------------------
@@ -51,24 +52,27 @@ public:
 
     uint wpos = _mem.abs_pos();
 
-    T rpos   = (Free_running) ? (T) tk.rint + tk.rfrac + tk.shift
-                              : (T) wpos * tk.shift;
-    tk.rint  = (uint) rpos;
-    tk.rfrac = rpos - (T) tk.rint;
-    // avoid accumulating precission loses by not letting "tk.rint" to become
-    // big, this is for the free running case.
-    tk.rint = _mem.wrap_abs_pos (tk.rint);
+    if (Free_running) {
+      tk.pos += tk.delta;
+    }
+    else {
+      tk.pos = wpos;
+      tk.pos.mul (tk.delta);
+    }
 
-    V p1  = _mem.get_abs (tk.rint);
-    V p2  = _mem.get_abs (tk.rint + 1);
-    V ps1 = linear_interp::get ({p1, p2}, vec_set<V> (tk.rfrac));
+    auto rint  = tk.pos.integer();
+    auto rfrac = tk.pos.fraction();
 
-    p1    = _mem.get_abs (tk.rint + _mem.size() / 2);
-    p2    = _mem.get_abs (tk.rint + 1 + _mem.size() / 2);
-    V ps2 = linear_interp::get ({p1, p2}, vec_set<V> (tk.rfrac));
+    V p1  = _mem.get_abs (rint);
+    V p2  = _mem.get_abs (rint + 1);
+    V ps1 = linear_interp::get ({p1, p2}, vec_set<V> (rfrac));
+
+    p1    = _mem.get_abs (rint + _mem.size() / 2);
+    p2    = _mem.get_abs (rint + 1 + _mem.size() / 2);
+    V ps2 = linear_interp::get ({p1, p2}, vec_set<V> (rfrac));
 
     // sin equal-power crossfade
-    uint del     = tk.rint - wpos;
+    uint del     = rint - wpos;
     T    crossf1 = (T) _mem.wrap_abs_pos (del) * _size_recip * M_PI;
     del += _mem.size() / 2;
     T crossf2 = (T) _mem.wrap_abs_pos (del) * _size_recip * M_PI;
