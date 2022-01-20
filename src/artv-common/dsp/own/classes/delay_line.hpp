@@ -171,11 +171,18 @@ public:
     auto del    = (uint) fpdel;
     auto frac   = fpdel - (float) del;
 
+    return read (del, frac);
+  }
+  //----------------------------------------------------------------------------
+  V read (uint delay_int, float delay_frac)
+  {
+    assert (delay_frac >= 0.f && delay_frac < 1.f);
+
     std::array<V, Interp::n_points> samples;
     for (uint i = 0; i < samples.size(); ++i) {
-      samples[i] = _mem[del + i];
+      samples[i] = _mem[delay_int + i];
     }
-    V ret = Interp::get (samples, vec_set<V> (frac));
+    V ret = Interp::get (samples, vec_set<V> (delay_frac));
     return ret;
   }
   //----------------------------------------------------------------------------
