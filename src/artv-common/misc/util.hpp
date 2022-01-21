@@ -36,6 +36,15 @@ template <class... Ts>
 struct error_with_template_type;
 //------------------------------------------------------------------------------
 #define array_elems(x) sizeof (x) / sizeof (x[0])
+
+template <class T>
+struct is_std_array : public std::false_type {};
+
+template <class T, size_t N>
+struct is_std_array<std::array<T, N>> : public std::true_type {};
+
+template <class T>
+static constexpr bool is_std_array_v = is_std_array<T>::value;
 //------------------------------------------------------------------------------
 // mostly to be used on decltype statements.
 template <class T, class... args>
@@ -102,6 +111,48 @@ template <class... Ts>
 static constexpr auto make_cstr_array (Ts&&... args)
 {
   return make_array<char const*> (std::forward<Ts> (args)...);
+}
+//------------------------------------------------------------------------------
+namespace detail {
+
+template <uint Offset, class T, size_t N_dst, size_t... N>
+static constexpr void array_join (std::array<T, N_dst>& dst)
+{}
+
+template <uint Offset, class T, size_t N_dst, size_t N_src, size_t... N>
+static constexpr void array_join (
+  std::array<T, N_dst>&  dst,
+  std::array<T, N_src>&& src,
+  std::array<T, N>&&... arrs)
+{
+  for (uint i = 0; i < N_src; ++i) {
+    dst[Offset + i] = src[i];
+  }
+  array_join<Offset + N_src> (dst, std::forward<std::array<T, N>> (arrs)...);
+}
+
+}; // namespace detail
+
+template <class T, size_t... N>
+static constexpr auto array_join (std::array<T, N>&&... arrs)
+{
+  constexpr size_t size = (N + ...);
+
+  std::array<T, size> ret;
+  detail::array_join<0> (ret, std::forward<std::array<T, N>> (arrs)...);
+  return ret;
+}
+
+template <uint Start, uint Size, class T, size_t ArrSize>
+static constexpr auto array_slice (std::array<T, ArrSize> v)
+{
+  static_assert (Start + Size <= ArrSize);
+
+  std::array<T, Size> ret;
+  for (uint i = 0; i < Size; ++i) {
+    ret[i] = v[Start + i];
+  }
+  return ret;
 }
 //------------------------------------------------------------------------------
 template <class T>
