@@ -464,6 +464,35 @@ static inline vec<T, N> vec_set (T v)
 }
 
 //------------------------------------------------------------------------------
+// convenience functions. Created basically to deal with vectors of size 1
+// conversion, so they should result in no-ops after optimization.
+template <uint VecN, class T, size_t Size>
+static constexpr auto vec_array_wrap (std::array<T, Size> v)
+{
+  static_assert (Size % VecN == 0);
+
+  std::array<vec<T, VecN>, Size / VecN> ret;
+  for (uint i = 0; i < ret.size(); ++i) {
+    for (uint j = 0; j < VecN; ++j) {
+      ret[i][j] = v[i * VecN + j];
+    }
+  }
+  return ret;
+}
+
+template <uint VecN, class T, size_t Size>
+static constexpr auto vec_array_unwrap (std::array<vec<T, VecN>, Size> v)
+{
+  std::array<T, VecN * Size> ret;
+
+  for (uint i = 0; i < ret.size(); ++i) {
+    for (uint j = 0; j < VecN; ++j) {
+      ret[i * VecN + j] = v[i][j];
+    }
+  }
+  return ret;
+}
+//------------------------------------------------------------------------------
 #if 0
 // Clang doesn't support "__builtin_shuffle".
 template <class V, class IV>
