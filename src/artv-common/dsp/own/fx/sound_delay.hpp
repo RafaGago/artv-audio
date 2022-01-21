@@ -31,7 +31,14 @@ public:
   //----------------------------------------------------------------------------
   struct delay_ms_tag {};
 
-  void set (delay_ms_tag, float v) { _delay_ms = v; }
+  void set (delay_ms_tag, float v)
+  {
+    if (_delay_ms == v) {
+      return;
+    }
+    _delay_ms = v;
+    update_delay_times();
+  }
 
   static constexpr auto get_parameter (delay_ms_tag)
   {
@@ -40,7 +47,14 @@ public:
   //----------------------------------------------------------------------------
   struct delay_ms_l_offset_tag {};
 
-  void set (delay_ms_l_offset_tag, float v) { _delay_ms_l = v; }
+  void set (delay_ms_l_offset_tag, float v)
+  {
+    if (_delay_ms_l == v) {
+      return;
+    }
+    _delay_ms_l = v;
+    update_delay_times();
+  }
 
   static constexpr auto get_parameter (delay_ms_l_offset_tag)
   {
@@ -49,7 +63,14 @@ public:
   //----------------------------------------------------------------------------
   struct delay_ms_r_offset_tag {};
 
-  void set (delay_ms_r_offset_tag, float v) { _delay_ms_r = v; }
+  void set (delay_ms_r_offset_tag, float v)
+  {
+    if (_delay_ms_r == v) {
+      return;
+    }
+    _delay_ms_r = v;
+    update_delay_times();
+  }
 
   static constexpr auto get_parameter (delay_ms_r_offset_tag)
   {
@@ -58,7 +79,15 @@ public:
   //----------------------------------------------------------------------------
   struct delay_beats_l_tag {};
 
-  void set (delay_beats_l_tag, float v) { _delay_beats_l = v * (1. / 16.); }
+  void set (delay_beats_l_tag, float v)
+  {
+    v *= (1. / 16.);
+    if (_delay_beats_l == v) {
+      return;
+    }
+    _delay_beats_l = v;
+    update_delay_times();
+  }
 
   static constexpr auto get_parameter (delay_beats_l_tag)
   {
@@ -67,7 +96,15 @@ public:
   //----------------------------------------------------------------------------
   struct delay_beats_r_tag {};
 
-  void set (delay_beats_r_tag, float v) { _delay_beats_r = v * (1. / 16.); }
+  void set (delay_beats_r_tag, float v)
+  {
+    v *= (1. / 16.);
+    if (_delay_beats_r == v) {
+      return;
+    }
+    _delay_beats_r = v;
+    update_delay_times();
+  }
 
   static constexpr auto get_parameter (delay_beats_r_tag)
   {
@@ -76,7 +113,14 @@ public:
   //----------------------------------------------------------------------------
   struct delay_samples_tag {};
 
-  void set (delay_samples_tag, int v) { _delay_samples = v; }
+  void set (delay_samples_tag, int v)
+  {
+    if (_delay_samples == v) {
+      return;
+    }
+    _delay_samples = v;
+    update_delay_times();
+  }
 
   static constexpr auto get_parameter (delay_samples_tag)
   {
@@ -99,11 +143,10 @@ public:
     _plugcontext = &pc;
 
     uint _max_delay_samples = (uint) std::ceil (
-      ((float) pc.get_sample_rate()) * get_parameter (delay_ms_tag {}).max);
+      get_delay_samples (get_parameter (delay_ms_tag {}).max));
 
-    uint _max_tempo_delay = (uint) std::ceil (std::ceil (
-      pc.get_samples_per_beat() * get_parameter (delay_beats_l_tag {}).max
-      * (1. / 16.)));
+    uint _max_tempo_delay = (uint) std::ceil (get_synced_delay_samples (
+      get_parameter (delay_beats_l_tag {}).max * (1. / 16.)));
 
     _delay.reset (2, std::max (_max_delay_samples, _max_tempo_delay));
     _delay_times_samples[0] = _delay_times_samples[1] = 0.;
@@ -114,15 +157,13 @@ public:
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
-    update_delay_times();
 
     for (uint i = 0; i < block_samples; ++i) {
       auto t_samples = _delay_times_samples;
       auto in        = make_array (ins[0][i], ins[1][i]);
       _delay.push (in);
-
-      outs[0][i] = _delay.get (0, t_samples[0]);
-      outs[1][i] = _delay.get (1, t_samples[1]);
+      outs[0][i] = _delay.get (t_samples[0], 0);
+      outs[1][i] = _delay.get (t_samples[1], 1);
     }
   }
   //----------------------------------------------------------------------------
@@ -147,12 +188,12 @@ private:
     _delay_times_samples[0] += get_delay_samples (_delay_ms_l);
     _delay_times_samples[0] += get_synced_delay_samples (_delay_beats_l);
     _delay_times_samples[0]
-      = std::min (_delay_times_samples[0], (double) _delay.max_delay_samples());
+      = std::min (_delay_times_samples[0], (double) _delay.size());
 
     _delay_times_samples[1] += get_delay_samples (_delay_ms_r);
     _delay_times_samples[1] += get_synced_delay_samples (_delay_beats_r);
     _delay_times_samples[1]
-      = std::min (_delay_times_samples[1], (double) _delay.max_delay_samples());
+      = std::min (_delay_times_samples[1], (double) _delay.size());
   }
   //----------------------------------------------------------------------------
   float _delay_ms;
@@ -162,9 +203,9 @@ private:
   float _delay_beats_r;
   float _delay_samples;
 
-  std::array<double, 2> _delay_times_samples;
-  delay_line<float>     _delay;
-  plugin_context*       _plugcontext = nullptr;
+  std::array<double, 2>           _delay_times_samples;
+  dynamic_delay_line<float, true> _delay;
+  plugin_context*                 _plugcontext = nullptr;
 };
 //------------------------------------------------------------------------------
 }; // namespace artv

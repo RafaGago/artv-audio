@@ -13,6 +13,12 @@
 namespace artv {
 
 //------------------------------------------------------------------------------
+// - non-owned memory
+// - single channel
+// - random access.
+// - power of 2 capacity.
+// - not interleaved
+// - highest indexes = older samples
 template <class V>
 class pow2_circular_buffer {
 public:
@@ -20,11 +26,13 @@ public:
   void reset (crange<V> mem)
   {
     assert (is_pow2 (mem.size()));
+    crange_memset (mem, 0);
     _pos  = 0;
     _mem  = mem.data();
     _mask = mem.size() - 1;
   };
   //----------------------------------------------------------------------------
+  // idx from newest to oldest, so idx=0 -> z, idx=1 -> z-1, etc.
   V get (uint idx) const { return get_abs (_pos - idx); }
   V operator[] (uint idx) const { return get (idx); }
   //----------------------------------------------------------------------------
@@ -55,149 +63,293 @@ private:
   uint _pos;
 };
 //------------------------------------------------------------------------------
-// just a single allocation multichannel delay line with random access.
-// Capacity is always rounded up to a power of two to avoid divisions when
-// wrapping around.
+// - not managed memory
+// - multichannel
+// - random access.
+// - power of 2 capacity.
+// - channels might or not be interleaved
+// - same sized channels
+// - highest indexes = older samples
+//
+// Note: It doesn't reuse "pow2_circular_buffer" to be smaller, as "mask" and
+// "pos" is not required for each channel.
+//------------------------------------------------------------------------------
+
+namespace detail {
+//------------------------------------------------------------------------------
 template <class T>
-class delay_line {
+struct static_delay_line_base {
 public:
   //----------------------------------------------------------------------------
-  void reset (uint channels, uint max_delay)
-  {
-    reset_with_extra_tail_samples (channels, max_delay, 0);
-  }
+  using value_type = T;
   //----------------------------------------------------------------------------
-  void get (crange<T> channels_out, uint idx) // idx 0 is previously pushed
+  constexpr void reset (crange<T> mem, uint n_channels)
   {
-    assert (channels_out.size() >= _channels);
-    assert (idx < max_delay_samples());
+    uint size = mem.size() / n_channels;
+    assert ((mem.size() % n_channels) == 0);
+    assert (size != 0 && is_pow2 (size));
 
-    uint pos = ((_wpos + idx) & _capacity_mask) * _channels;
-    memcpy (channels_out.data(), &_samples[pos], sizeof (T) * _channels);
+    crange_memset (mem, 0);
+    _z          = mem.data();
+    _mask       = size - 1;
+    _pos        = 0;
+    _n_channels = n_channels;
   }
   //----------------------------------------------------------------------------
-  T get (uint channel, uint idx)
-  {
-    assert (channel < _channels);
-    assert (idx < max_delay_samples());
+  constexpr uint size() const { return _mask + 1; }
+  //----------------------------------------------------------------------------
+  constexpr uint n_channels() const { return _n_channels; }
+  //----------------------------------------------------------------------------
+  T*   _z;
+  uint _mask;
+  uint _pos;
+  uint _n_channels;
+};
+//------------------------------------------------------------------------------
+} // namespace detail
 
-    return _samples[(((_wpos + idx) & _capacity_mask) * _channels) + channel];
-  }
+template <class T, bool Interleaved>
+class static_delay_line;
+
+// interleaved overload
+template <class T>
+class static_delay_line<T, true> : private detail::static_delay_line_base<T> {
+private:
+  using base = detail::static_delay_line_base<T>;
+
+public:
   //----------------------------------------------------------------------------
-  void push (crange<const T> channels_in)
+  using base::n_channels;
+  using base::reset;
+  using base::size;
+  using value_type = typename base::value_type;
+  using time_type  = uint;
+  //----------------------------------------------------------------------------
+  constexpr value_type get (time_type sample, uint chnl) const
   {
-    assert (channels_in.size() >= _channels);
-    --_wpos;
-    uint pos = (_wpos & _capacity_mask) * _channels;
-    memcpy (&_samples[pos], channels_in.data(), sizeof (T) * _channels);
+    auto& t = *this;
+
+    assert (sample <= t._mask && "Unintended wraparound?");
+    assert (chnl < t._n_channels);
+
+    uint pos = (t._pos - sample) & t._mask;
+    return t._z[pos * t._n_channels + chnl];
   }
   //----------------------------------------------------------------------------
-  uint max_delay_samples() const { return _capacity_mask + 1; }
+  constexpr void push (const crange<value_type> row)
+  {
+    auto& t = *this;
+
+    assert (row.size() >= t._n_channels);
+    ++t._pos;
+    uint pos = t._pos & t._mask;
+    memcpy (&t._z[pos * t._n_channels], row.data(), sizeof (T) * t._n_channels);
+  }
   //----------------------------------------------------------------------------
-  uint n_channels() const { return _channels; }
+};
+
+// non-interleaved overload
+template <class T>
+class static_delay_line<T, false> : private detail::static_delay_line_base<T> {
+private:
+  using base = detail::static_delay_line_base<T>;
+
+public:
   //----------------------------------------------------------------------------
-protected:
+  using base::n_channels;
+  using base::reset;
+  using base::size;
+  using value_type = typename base::value_type;
+  using time_type  = uint;
   //----------------------------------------------------------------------------
-  T* reset_with_extra_tail_samples (
-    uint channels,
-    uint max_delay,
-    uint tail_samples)
+  constexpr T get (time_type sample, uint chnl) const
+  {
+    auto& t = *this;
+
+    assert (sample <= t._mask && "Unintended wraparound?");
+    assert (chnl < t._n_channels);
+
+    uint pos   = (t._pos - sample) & t._mask;
+    uint chmem = (t._mask + 1) * chnl;
+    return t._z[chmem + pos];
+  }
+  //----------------------------------------------------------------------------
+  constexpr void push (const crange<value_type> row)
+  {
+    auto& t = *this;
+
+    assert (row.size() >= t._n_channels);
+    ++t._pos;
+    uint pos = t._pos & t._mask;
+    for (uint i = 0, chmem = 0; i < t._n_channels; ++i, chmem += t._mask + 1) {
+      t._z[chmem + pos] = row[i];
+    }
+  }
+  //----------------------------------------------------------------------------
+};
+namespace detail {
+template <class Delay_line_base, class Interpolation>
+class interpolated_delay_line : private Delay_line_base {
+private:
+  using base = Delay_line_base;
+
+public:
+  //----------------------------------------------------------------------------
+  using base::n_channels;
+  using base::push;
+  using base::reset;
+  using base::size;
+  using value_type = typename base::value_type;
+  using interp     = Interpolation;
+  using time_type  = std::conditional_t<interp::n_points == 1, uint, float>;
+  //----------------------------------------------------------------------------
+  // integer index access
+  value_type get_raw (uint sample, uint channel)
+  {
+    return Delay_line_base::get (sample, channel);
+  }
+  //----------------------------------------------------------------------------
+  // interpolated overload
+  value_type get (time_type sample, uint channel)
+  {
+    if constexpr (interp::n_points == 1) {
+      return get_raw (sample, channel);
+    }
+    else {
+      std::array<value_type, interp::n_points> y;
+
+      auto sample_uint = (uint) sample;
+      auto frac        = sample - (time_type) sample_uint;
+
+      for (uint i = 0; i < interp::n_points; ++i) {
+        y[i] = get_raw (sample_uint + i, channel);
+      }
+      if constexpr (is_vec_v<value_type>) {
+        return interp::get (y, vec_set<value_type> (frac));
+      }
+      else {
+        return interp::get (y, frac);
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+};
+//------------------------------------------------------------------------------
+
+} // namespace detail
+
+//------------------------------------------------------------------------------
+// - not managed memory
+// - multichannel
+// - random access.
+// - power of 2 capacity.
+// - channels might or not be interleaved
+// - same sized channels
+// - highest indexes = older samples
+// - fractional delay line support
+//------------------------------------------------------------------------------
+template <class T, class Interp = linear_interp, bool Interleaved = false>
+using interpolated_delay_line
+  = detail::interpolated_delay_line<static_delay_line<T, Interleaved>, Interp>;
+
+//------------------------------------------------------------------------------
+// - not managed memory
+// - multichannel
+// - random access.
+// - power of 2 capacity.
+// - channels might or not be interleaved
+// - same sized channels
+// - highest indexes = older samples
+// - fractional delay line support
+// - convenience functions for taking modulation
+//------------------------------------------------------------------------------
+template <class T, class Interp = linear_interp, bool Interleaved = false>
+class modulable_delay_line
+  : private interpolated_delay_line<T, Interp, Interleaved> {
+private:
+  using base = interpolated_delay_line<T, Interp, Interleaved>;
+
+public:
+  //----------------------------------------------------------------------------
+  using base::get;
+  using base::get_raw;
+  using base::n_channels;
+  using base::push;
+  using base::size;
+  using time_type  = typename base::time_type;
+  using interp     = typename base::interp;
+  using value_type = typename base::value_type;
+  //----------------------------------------------------------------------------
+  template <class... Ts>
+  constexpr void reset (Ts&&... args)
+  {
+    base::reset (std::forward<Ts> (args)...);
+    _max_delay = size() - 1 - interp::n_points - 1;
+  }
+  //----------------------------------------------------------------------------
+  // interpolated overload with modulation, just for convenience
+  value_type get (time_type sample, float mod_amt, float max_mod, uint channel)
+  {
+    // in case we are using a non interpolated delay line, no-op otherwise
+    auto z = (float) sample;
+    z      = z + mod_amt * max_mod;
+    z      = std::clamp (z, 0.f, _max_delay);
+    return get ((time_type) z, channel);
+  }
+  //----------------------------------------------------------------------------
+private:
+  float _max_delay;
+};
+//------------------------------------------------------------------------------
+// - single dynamic allocation
+// - multichannel
+// - random access.
+// - power of 2 capacity.
+// - not interleaved
+// - same sized channels
+// - highest indexes = older samples
+template <class T, bool Interleaved>
+class dynamic_delay_line {
+public:
+  //----------------------------------------------------------------------------
+  using value_type = T;
+  using time_type  = uint;
+  //----------------------------------------------------------------------------
+  ~dynamic_delay_line() { do_delete(); }
+  //----------------------------------------------------------------------------
+  void reset (uint n_channels, time_type max_delay)
   {
     max_delay = pow2_round_ceil (max_delay);
-    _samples.clear();
-    _samples.resize ((max_delay + tail_samples) * channels); // 0 fill
-    _wpos          = 0;
-    _capacity_mask = max_delay - 1;
-    _channels      = channels;
-    return &_samples[_samples.size() - channels];
+    do_delete();
+    uint elems = max_delay * n_channels;
+    _mem       = new value_type[elems];
+    _z.reset (make_crange (_mem, elems), n_channels);
   }
+  //----------------------------------------------------------------------------
+  T get (time_type sample, uint channel) { return _z.get (sample, channel); }
+  //----------------------------------------------------------------------------
+  void push (const crange<T> x) { _z.push (x); }
+  //----------------------------------------------------------------------------
+  uint size() const { return _z.size(); }
+  //----------------------------------------------------------------------------
+  uint n_channels() const { return _z.n_channels(); }
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  std::vector<T> _samples;
-  uint           _wpos;
-  uint           _capacity_mask;
-  uint           _channels;
-};
-//------------------------------------------------------------------------------
-// interpolated and modulated delay line, requires an stateless interpolator
-// that supports random access. The modulator is left external, so it can be
-// shared by different delay lines.
-template <
-  class V,
-  class Interp                       = linear_interp,
-  enable_if_vec_of_float_point_t<V>* = nullptr>
-class interp_mod_delay_line {
-public:
-  //----------------------------------------------------------------------------
-  void reset (crange<V> mem)
+  void do_delete()
   {
-    assert (mem.size() > interp_margin);
-    _mem.reset (mem);
-    _max_delay = (float) (_mem.size() - 1 - interp_margin);
-  }
-  //----------------------------------------------------------------------------
-  void set (float time, float mod_freq, float mod_depth, float samplerate)
-  {
-    set_time (time);
-    set_mod_depth (mod_depth);
-  }
-  //----------------------------------------------------------------------------
-  void set_time (float samples)
-  {
-    _delay = std::min ((float) _max_delay, samples);
-  }
-  //----------------------------------------------------------------------------
-  // the delay time will oscillate on an excursion of ± "samples" centered
-  // around the delay time.
-  void set_mod_depth (float samples) { _depth = samples; }
-  //----------------------------------------------------------------------------
-  V tick (V in, vec_value_type_t<V> mod_in = (vec_value_type_t<V>) 0)
-  {
-    V ret = read (_delay, mod_in);
-    _mem.push (in);
-    return ret;
-  }
-  //----------------------------------------------------------------------------
-  V read (float delay, vec_value_type_t<V> mod_in = (vec_value_type_t<V>) 0)
-  {
-    assert (mod_in >= (vec_value_type_t<V>) -1);
-    assert (mod_in <= (vec_value_type_t<V>) 1);
-
-    using T = vec_value_type_t<V>;
-
-    float fpdel = delay + mod_in * _depth;
-    fpdel       = std::clamp (fpdel, 0.f, _max_delay);
-    auto del    = (uint) fpdel;
-    auto frac   = fpdel - (float) del;
-
-    return read (del, frac);
-  }
-  //----------------------------------------------------------------------------
-  V read (uint delay_int, float delay_frac)
-  {
-    assert (delay_frac >= 0.f && delay_frac < 1.f);
-
-    std::array<V, Interp::n_points> samples;
-    for (uint i = 0; i < samples.size(); ++i) {
-      samples[i] = _mem[delay_int + i];
+    if (_mem) {
+      delete[] _mem;
+      _mem = nullptr;
     }
-    V ret = Interp::get (samples, vec_set<V> (delay_frac));
-    return ret;
   }
   //----------------------------------------------------------------------------
-  void push (V in) { _mem.push (in); }
-  //----------------------------------------------------------------------------
-private:
-  static constexpr uint interp_margin = Interp::n_points - 1;
-
-  pow2_circular_buffer<V> _mem;
-  float                   _delay;
-  float                   _depth;
-  float                   _max_delay;
+  static_delay_line<T, Interleaved> _z;
+  T*                                _mem = nullptr;
 };
 //------------------------------------------------------------------------------
-// Basic reverb building block. Strictly not a delay line.
+// Basic reverb building block. Strictly not a delay line. Not sure if it
+// belongs here. It probably needs to be moved.
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 class schroeder_allpass {
 public:
@@ -232,60 +384,6 @@ private:
   V                       _gain {};
   V                       _z1 {};
 };
-//------------------------------------------------------------------------------
-// A delay line that can be fractional but not modulated fast. Untested, wasn't
-// needed after all.
-template <class T>
-class allpass_interpolated_delay_line : public delay_line<T> {
-public:
-  //----------------------------------------------------------------------------
-  // shadowing.
-  //----------------------------------------------------------------------------
-  void reset (uint channels, uint capacity_log2)
-  {
-    _allpass_states
-      = this->reset_with_extra_tail_samples (channels, capacity_log2, 1);
-  }
-  //----------------------------------------------------------------------------
-  T get (uint channel, float idx)
-  {
-    uint  i_idx = (float) idx;
-    float fract = idx - i_idx;
-    return get (channel, i_idx, get_fractional_coeff (fract));
-  }
-  //----------------------------------------------------------------------------
-  constexpr double get_fractional_coeff (double fraction) // 0 to 1
-  {
-    return (1.0 - fraction) / (1.0 + fraction);
-  }
-  //----------------------------------------------------------------------------
-  // just to be able to save divisions in cases the fraction is constant. See
-  // "get (uint channel, float idx)"
-  T get (uint channel, uint idx, double fractional_coeff)
-  {
-    assert (channel < this->n_channels());
-    assert (idx < (this->max_delay_samples() - 1));
 
-    std::array<T, 2> points = {get (channel, idx), get (channel, idx + 1)};
-    // this is built based on 1 push 1 retrieval
-    return warped_allpass_interpolate (
-      fractional_coeff, _allpass_states[channel], points);
-  }
-  //----------------------------------------------------------------------------
-private:
-  // magic from RS-MET's library. Seems to be
-  // https://ccrma.stanford.edu/~jos/pasp/First_Order_Allpass_Interpolation.html
-  double warped_allpass_interpolate (
-    double           coeff,
-    float&           prev,
-    std::array<T, 2> points)
-  {
-    double ret = points[0] + (coeff * points[1]) - (0.999 * coeff * prev);
-    prev       = ret;
-    return ret;
-  }
-  //----------------------------------------------------------------------------
-  T* _allpass_states;
-};
 //------------------------------------------------------------------------------
 } // namespace artv

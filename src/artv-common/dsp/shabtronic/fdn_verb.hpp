@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include "artv-common/dsp/own/classes/delay_line.hpp"
-#include "artv-common/dsp/own/classes/diffusion_matrix.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/pitch_shift.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
@@ -22,6 +21,59 @@
 
 namespace artv { namespace shabtronic {
 
+//------------------------------------------------------------------------------
+// this can probably be reused with another name
+template <class V, uint N>
+class fdn_verb_householder;
+
+//------------------------------------------------------------------------------
+template <class V>
+class fdn_verb_householder<V, 4> {
+public:
+  static constexpr uint size = 4;
+  //----------------------------------------------------------------------------
+  void reset (crange<V> mem) { _z.reset (mem, size); }
+  //----------------------------------------------------------------------------
+  void set (std::array<uint, size> t, V feedback)
+  {
+    set_times (t);
+    set_feedback (feedback);
+  }
+  //----------------------------------------------------------------------------
+  void set_times (std::array<uint, size> t)
+  {
+    for (uint v : t) {
+      assert (v < _z.size());
+    }
+    _t = t;
+  }
+  //----------------------------------------------------------------------------
+  void set_feedback (V feedback) { _fb = feedback; }
+  //----------------------------------------------------------------------------
+  V tick (V in)
+  {
+    using T = vec_value_type_t<V>;
+
+    std::array<V, size> x, y;
+    V                   factor = vec_set<V> ((T) 0);
+
+    for (uint i = 0; i < size; ++i) {
+      x[i] = _z.get (_t[i], i);
+      factor += x[i];
+    }
+    factor *= vec_set<V> ((T) 0.5);
+    for (uint i = 0; i < size; ++i) {
+      y[i] = in + (x[i] - factor) * _fb;
+    }
+    _z.push (y);
+    return factor;
+  }
+  //----------------------------------------------------------------------------
+private:
+  static_delay_line<V, true> _z;
+  std::array<uint, size>     _t {};
+  V                          _fb {};
+};
 //------------------------------------------------------------------------------
 class fdn_verb {
 public:
@@ -305,7 +357,9 @@ public:
         l = vec_set<1> (0.f);
       }
       l += (_out_prev * _feedback * 0.9f);
-      l = _mod.tick (l, _lfo.tick_sine());
+      auto old = l;
+      l = _mod.get (_mod_delay_spls, _lfo.tick_sine(), _mod_depth_spls, 0);
+      _mod.push (make_crange (old));
       for (auto& ap : _ap) {
         l = ap.tick (l);
       }
@@ -329,11 +383,10 @@ private:
   //----------------------------------------------------------------------------
   void reset_mod()
   {
-    float srate  = _plugcontext->get_sample_rate();
-    float modlen = srate * (1. / 75.);
-    _mod.set_time (modlen);
+    float srate      = _plugcontext->get_sample_rate();
+    _mod_delay_spls  = srate * (1. / 75.);
     float hz_correct = std::min (1.0 / (2.0 * _mod_hz), 1.);
-    _mod.set_mod_depth (hz_correct * _mod_depth * modlen * (0.5));
+    _mod_depth_spls  = hz_correct * _mod_depth * _mod_delay_spls * (0.5f);
     _lfo.set_freq (_mod_hz, srate);
   }
   //----------------------------------------------------------------------------
@@ -363,7 +416,7 @@ private:
 
     auto ptr = _mem.data();
 
-    _mod.reset (make_crange (ptr, delay_size).cast (float_x1 {}));
+    _mod.reset (make_crange (ptr, delay_size).cast (float_x1 {}), 1);
     ptr += delay_size;
 
     for (uint i = 0; i < _ap.size(); ++i) {
@@ -416,20 +469,25 @@ private:
   enum filter_type { filter_lp, filter_hp };
   using filter_types = mp_list<andy::svf_lowpass, andy::svf_highpass>;
 
-  lfo                                                         _lfo;
-  interp_mod_delay_line<float_x1>                             _mod;
-  std::array<schroeder_allpass<float_x1>, ap_size>            _ap;
-  part_classes<filter_types, float_x1>                        _filters;
-  std::array<householder_matrix<hh_matrix_size, float_x1>, 2> _hhmatrix;
-  pitch_shift_sin<float_x1, false>                            _fb_shift;
-  decltype (_fb_shift)::reader                                _fb_shift_read;
-  pitch_shift_sin<vec<float, 2>, true>                        _main_shift;
-  decltype (_main_shift)::reader                              _main_shift_read;
+  lfo                            _lfo;
+  modulable_delay_line<float_x1> _mod;
+
+  std::array<schroeder_allpass<float_x1>, ap_size>              _ap;
+  part_classes<filter_types, float_x1>                          _filters;
+  std::array<fdn_verb_householder<float_x1, hh_matrix_size>, 2> _hhmatrix;
+  pitch_shift_sin<float_x1, false>                              _fb_shift;
+  decltype (_fb_shift)::reader                                  _fb_shift_read;
+  pitch_shift_sin<vec<float, 2>, true>                          _main_shift;
+  decltype (_main_shift)::reader _main_shift_read;
 
   std::vector<float_x1> _mem;
 
   vec<float, 1> _out_prev;
 
+  float _mod_delay_spls;
+  float _mod_depth_spls;
+
+  // sliders
   float           _rtime; //      slider1
   float           _feedback; //   slider2
   float           _dlevel;
