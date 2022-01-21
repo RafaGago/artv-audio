@@ -27,7 +27,7 @@ public:
 
   float get_samples_per_beat() const
   {
-    return get_play_state().bpm * (1. / 60.) * ((float) get_sample_rate());
+    return (60. / get_play_state().bpm) * ((float) get_sample_rate());
   }
 };
 
