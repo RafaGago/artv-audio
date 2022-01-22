@@ -67,6 +67,11 @@
 - Support disabled buses through the JUCE API. It might save processing power.
   The feature needs some thought.
 
+- Optimization: lin_eq4x: it might be possible to run all 4 EQ bands from
+  interleaved delay lines, dramatically increasing the memory locality. My hunch
+  is that it would make runnung 1 band more expensive but to run 4 bands
+  dramatically cheaper.
+
 - Optimization: If worth, performance optimizations. Math operations on fast
   paths, suboptimal memory layouts as on Ripple phaser. Vectorizations, Use the
   FMA intrinsic on  XSIMD, etc. Optimized functions on KVR:
