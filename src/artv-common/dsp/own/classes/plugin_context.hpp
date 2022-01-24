@@ -6,7 +6,7 @@
 #include "artv-common/misc/short_ints.hpp"
 
 namespace artv {
-
+//------------------------------------------------------------------------------
 struct plugin_play_state {
   double bpm;
   u64    sample_position;
@@ -15,7 +15,7 @@ struct plugin_play_state {
   bool   is_playing;
   bool   is_valid;
 };
-
+//------------------------------------------------------------------------------
 class plugin_context {
 public:
   virtual ~plugin_context() {};
@@ -24,11 +24,12 @@ public:
   virtual uint              get_max_block_samples() const         = 0;
   virtual plugin_play_state get_play_state() const                = 0;
   virtual void              set_delay_compensation (uint samples) = 0;
-
+  //----------------------------------------------------------------------------
   float get_samples_per_beat() const
   {
     return (60. / get_play_state().bpm) * ((float) get_sample_rate());
   }
+  //------------------------------------------------------------------------------
 };
-
+//------------------------------------------------------------------------------
 } // namespace artv

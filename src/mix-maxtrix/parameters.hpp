@@ -82,6 +82,7 @@
 #include "artv-common/dsp/own/fx/lin_eq4x.hpp"
 #include "artv-common/dsp/own/fx/phaser.hpp"
 #include "artv-common/dsp/own/fx/pitch_shifter.hpp"
+#include "artv-common/dsp/own/fx/reverb.hpp"
 #include "artv-common/dsp/own/fx/transient_gate.hpp"
 #include "artv-common/dsp/own/fx/waveshaper.hpp"
 
@@ -6406,6 +6407,22 @@ parameter_cpp_class_define (
 using soundtouch_params
   = mp_list<soundtouch_semitones, soundtouch_detune, soundtouch_mode>;
 //------------------------------------------------------------------------------
+parameter_cpp_class_define (
+  reverb_time,
+  n_stereo_busses,
+  param_common ("Time", declptr<reverb>(), declptr<reverb::time_tag>()),
+  reverb::get_parameter (reverb::time_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  reverb_algo,
+  n_stereo_busses,
+  param_common ("Algo", declptr<reverb>(), declptr<reverb::algorithm_tag>()),
+  reverb::get_parameter (reverb::algorithm_tag {}),
+  slider_ext);
+
+using reverb_params = mp_list<reverb_algo, reverb_time>;
+//------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
   polyphase_fir_test_gain,
@@ -6481,10 +6498,11 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  fdnverb_params>;
+  reverb_params,
+  sound_delay_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "FX");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "FX", "del");
 
 #else
 // clang-format off
