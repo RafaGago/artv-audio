@@ -483,7 +483,7 @@ public:
     // this DC blocker at a very low frequency is critical for the sound of
     // the companded modes to be acceptable. Unfortunately it causes DC itself
     // when the sound is muted. I didn't find a solution.
-    _dc_block.reset_coeffs (make_vec_x1 (1.), pc.get_sample_rate());
+    _dc_block.reset_coeffs (make_vec (1.), pc.get_sample_rate());
 
     _p = params {};
 

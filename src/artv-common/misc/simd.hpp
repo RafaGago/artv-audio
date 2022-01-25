@@ -1,5 +1,8 @@
 #pragma once
 
+// A header to make a bit less painful to work with native GCC/clang vector
+// types
+
 // This was previously using xsimd direcly, but inteface-breaking changes
 // motivated this intermediate wrapping (unfortunately, boring). As this code is
 // only for Desktop PC and probably desktop ARM, Clang (and maybe GCC) will be
@@ -282,12 +285,21 @@ static constexpr auto vec_traits (V)
   return vec_traits<V>();
 }
 //------------------------------------------------------------------------------
-template <class T>
-vec<T, 1> make_vec_x1 (T v)
-{
-  return {v};
-}
+template <class T, class = void>
+struct make_vector;
 
+template <class T>
+struct make_vector<T, std::enable_if_t<std::is_arithmetic_v<T>>> {
+  using type = vec<T, 1>;
+};
+
+template <class T>
+struct make_vector<T, enable_if_vec_t<T>> {
+  using type = T;
+};
+
+template <class T>
+using make_vector_t = typename make_vector<T>::type;
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
 static inline auto vec_to_intrin (V simdvec)
@@ -462,7 +474,42 @@ static inline vec<T, N> vec_set (T v)
   vec_set (ret, v);
   return ret;
 }
+//------------------------------------------------------------------------------
+// Frequently when having builtin types it's desired to conditionally transform
+// to vec<x,1> for interfacting with functions that only take vectors. These
+// overloads are for helping. The idea is that:
+//
+// - make_vec(x): will let a vector type pass or make a vector of 1 element of
+//                from a builtin type.
+//
+// - make_vec<V>(x):
+//    - when "V" is a vector and "x" a builtin: returns a vector of N elements
+//      with the value in "x" broadcasted.
+//    - when "V" is a builtin and "x" is a builtin returns a vector of size 1.
+//    - when "V" is a vector and "x" is a vector it is passed through.
 
+template <class T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
+auto make_vec (T v)
+{
+  return vec_set<1> (v);
+}
+
+// casting overload, requires providing the type.
+template <
+  class Dst_vec,
+  class T,
+  std::enable_if_t<std::is_arithmetic_v<T> && is_vec_v<Dst_vec>>* = nullptr>
+auto make_vec (T v)
+{
+  return vec_set<Dst_vec> (static_cast<vec_value_type_t<Dst_vec>> (v));
+}
+
+// passthrough
+template <class V, enable_if_vec_t<V>* = nullptr>
+V make_vec (V v)
+{
+  return v;
+}
 //------------------------------------------------------------------------------
 // convenience functions. Created basically to deal with vectors of size 1
 // conversion, so they should result in no-ops after optimization.
@@ -611,7 +658,7 @@ static inline auto call_vec_function_impl (
     // "__may_alias__" attribute set.
     using T  = vec_value_type_t<V>;
     T result = scalarf ((*((T*) &args))...);
-    return make_vec_x1 (result);
+    return make_vec (result);
   }
 }
 // NOTE: The argument reversing on these three overloads below could be made
