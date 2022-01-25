@@ -3,12 +3,11 @@
 #include <cmath>
 
 #include "artv-common/dsp/own/classes/delay_line.hpp"
+#include "artv-common/dsp/own/parts/interpolation/stateless.hpp"
 #include "artv-common/misc/fixed_point.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
-
-#include "artv-common/misc/interpolation.hpp"
 
 namespace artv {
 
@@ -65,11 +64,11 @@ public:
 
     V p1  = _mem.get_abs (rint);
     V p2  = _mem.get_abs (rint + 1);
-    V ps1 = linear_interp::get ({p1, p2}, vec_set<V> (rfrac));
+    V ps1 = linear_interp::tick ({p1, p2}, vec_set<V> (rfrac));
 
     p1    = _mem.get_abs (rint + _mem.size() / 2);
     p2    = _mem.get_abs (rint + 1 + _mem.size() / 2);
-    V ps2 = linear_interp::get ({p1, p2}, vec_set<V> (rfrac));
+    V ps2 = linear_interp::tick ({p1, p2}, vec_set<V> (rfrac));
 
     // sin equal-power crossfade
     uint del     = rint - wpos;

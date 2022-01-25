@@ -349,7 +349,10 @@ public:
     assert (idx < size());
     return _start[idx];
   }
+  // TODO: these functions for shrink/cut/resize need a better name that makes
+  // obvious when they modify the object without looking at the "const"-
 
+  // returns a subrange without "count" elems on the head.
   constexpr contiguous_range<T> shrink_head (uint count) const
   {
     assert (count <= size());
@@ -358,12 +361,43 @@ public:
     r._size -= count;
     return r;
   }
-
+  // returns a subrange without "count" elems on the tail.
   constexpr contiguous_range<T> shrink_tail (uint count) const
   {
     assert (count <= size());
     contiguous_range<T> r {*this};
     r._size -= count;
+    return r;
+  }
+  // returns a subrange with "count" elems on the head.
+  constexpr contiguous_range<T> resize_head (uint count) const
+  {
+    assert (count <= size());
+    contiguous_range<T> r {*this};
+    r._size = count;
+    return r;
+  }
+  // returns a subrange with "count" elems on the tail.
+  constexpr contiguous_range<T> resize_tail (uint count) const
+  {
+    assert (count <= size());
+    contiguous_range<T> r {*this};
+    r._start += r._size - count;
+    r._size = count;
+    return r;
+  }
+  // drops "count" elems from the head and returns the cut subrange
+  constexpr contiguous_range<T> cut_head (uint count)
+  {
+    auto r = resize_head (count);
+    *this  = shrink_head (count);
+    return r;
+  }
+  // drops "count" elems from the tail and returns the cut subrange
+  constexpr contiguous_range<T> cut_tail (uint count)
+  {
+    auto r = resize_tail (count);
+    *this  = shrink_tail (count);
     return r;
   }
 

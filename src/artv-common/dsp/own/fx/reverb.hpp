@@ -163,7 +163,7 @@ public:
           _diff[df].push (io[i]);
           for (uint ch = 0; ch < n_channels; ++ch) {
             float t   = _diff_base_times[df][ch];
-            io[i][ch] = _diff[df].get (t, ch);
+            io[i][ch] = _diff[df].get<linear_interp> (t, ch);
           }
         }
 #if 1
@@ -462,8 +462,7 @@ private:
     _fb_base_gain = exp ((M_LN10 * -3. * _fb_base_time) / (_fb_rt60_sec * sr));
   }
   //----------------------------------------------------------------------------
-  using reverb_delay_line
-    = modulable_delay_line<float_x1, linear_interp, interleaved>;
+  using reverb_delay_line = modulable_delay_line<float_x1, interleaved>;
 
   std::array<reverb_delay_line, n_diffusors>             _diff;
   std::array<std::array<float, n_channels>, n_diffusors> _diff_base_times;
