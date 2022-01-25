@@ -14,7 +14,7 @@ in_pin:left input
 in_pin:right input
 out_pin:left output
 out_pin:right output
- 
+
 @init
 
 // a memory area guaranteed to be free, for passing data to functions requiring
@@ -155,13 +155,13 @@ function delay_line_get (pos, channel)(
     this.arr.ptr[this._delay_line_get_pos (pos, channel)];
 );
 
-function delay_line_get_linterp (pos, channel) local (a, b, pos_int, pos_frac )(
+function delay_line_get_linterp (pos, channel) local (a, b, pos_int, pos_frac)(
     pos = clamp (pos, 0, this.mask - 1);
     pos_int = floor (pos);
     pos_frac = pos - pos_int;
     a = this.delay_line_get (pos_int, channel);
     b = this.delay_line_get (pos_int + 1, channel);
-    a * (1 - pos_frac) + b * pos_frac;
+    a + pos_frac * (b - a);
 );
 
 function delay_line_get_linterp_all (dst_ptr, times_ptr) local (i)(
