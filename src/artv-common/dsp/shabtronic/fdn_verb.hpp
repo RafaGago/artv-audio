@@ -17,7 +17,6 @@
 #include "artv-common/misc/util.hpp"
 
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
-#include "artv-common/misc/interpolation.hpp"
 
 namespace artv { namespace shabtronic {
 
@@ -358,7 +357,9 @@ public:
       }
       l += (_out_prev * _feedback * 0.9f);
       auto old = l;
-      l = _mod.get (_mod_delay_spls, _lfo.tick_sine(), _mod_depth_spls, 0);
+
+      l = _mod.get<linear_interp> (
+        _mod_delay_spls, _lfo.tick_sine(), _mod_depth_spls, 0);
       _mod.push (make_crange (old));
       for (auto& ap : _ap) {
         l = ap.tick (l);

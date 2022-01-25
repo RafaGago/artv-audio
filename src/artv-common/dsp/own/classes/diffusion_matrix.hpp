@@ -3,12 +3,9 @@
 #include <array>
 #include <gcem.hpp>
 
-#include "artv-common/dsp/own/classes/delay_line.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
-
-#include "artv-common/misc/interpolation.hpp"
 
 namespace artv {
 

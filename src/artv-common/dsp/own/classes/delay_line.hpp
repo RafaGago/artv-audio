@@ -8,7 +8,8 @@
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
 
-#include "artv-common/misc/interpolation.hpp"
+#include "artv-common/dsp/own/parts/interpolation/stateful.hpp"
+#include "artv-common/dsp/own/parts/interpolation/stateless.hpp"
 
 namespace artv {
 
@@ -125,14 +126,14 @@ public:
   using value_type = typename base::value_type;
   using time_type  = uint;
   //----------------------------------------------------------------------------
-  constexpr value_type get (time_type sample, uint chnl) const
+  constexpr value_type get (time_type delay_spls, uint chnl) const
   {
     auto& t = *this;
 
-    assert (sample <= t._mask && "Unintended wraparound?");
+    assert (delay_spls <= t._mask && "Unintended wraparound?");
     assert (chnl < t._n_channels);
 
-    uint pos = (t._pos - sample) & t._mask;
+    uint pos = (t._pos - delay_spls) & t._mask;
     return t._z[pos * t._n_channels + chnl];
   }
   //----------------------------------------------------------------------------
@@ -162,14 +163,14 @@ public:
   using value_type = typename base::value_type;
   using time_type  = uint;
   //----------------------------------------------------------------------------
-  constexpr T get (time_type sample, uint chnl) const
+  constexpr T get (time_type delay_spls, uint chnl) const
   {
     auto& t = *this;
 
-    assert (sample <= t._mask && "Unintended wraparound?");
+    assert (delay_spls <= t._mask && "Unintended wraparound?");
     assert (chnl < t._n_channels);
 
-    uint pos   = (t._pos - sample) & t._mask;
+    uint pos   = (t._pos - delay_spls) & t._mask;
     uint chmem = (t._mask + 1) * chnl;
     return t._z[chmem + pos];
   }
@@ -188,7 +189,10 @@ public:
   //----------------------------------------------------------------------------
 };
 namespace detail {
-template <class Delay_line_base, class Interpolation>
+
+//------------------------------------------------------------------------------
+// "Delay_line_base" = the underlying buffer type, e.g. "static_delay_line".
+template <class Delay_line_base>
 class interpolated_delay_line : private Delay_line_base {
 private:
   using base = Delay_line_base;
@@ -200,62 +204,186 @@ public:
   using base::reset;
   using base::size;
   using value_type = typename base::value_type;
-  using interp     = Interpolation;
-  using time_type  = std::conditional_t<interp::n_points == 1, uint, float>;
   //----------------------------------------------------------------------------
   // integer index access
   value_type get_raw (uint sample, uint channel)
   {
-    return Delay_line_base::get (sample, channel);
+    return base::get (sample, channel);
   }
   //----------------------------------------------------------------------------
-  // interpolated overload
-  value_type get (time_type sample, uint channel)
+  template <uint N_interp_points, class InterpFunctor>
+  value_type get (float delay_spls, uint channel, InterpFunctor&& interp)
   {
-    if constexpr (interp::n_points == 1) {
-      return get_raw (sample, channel);
-    }
-    else {
-      std::array<value_type, interp::n_points> y;
+    std::array<value_type, N_interp_points> y;
 
-      auto sample_uint = (uint) sample;
-      auto frac        = sample - (time_type) sample_uint;
+    auto delay_spls_uint = (uint) delay_spls;
+    auto frac            = delay_spls - (float) delay_spls_uint;
 
-      for (uint i = 0; i < interp::n_points; ++i) {
-        y[i] = get_raw (sample_uint + i, channel);
-      }
-      if constexpr (is_vec_v<value_type>) {
-        return interp::get (y, vec_set<value_type> (frac));
-      }
-      else {
-        return interp::get (y, frac);
-      }
+    for (uint i = 0; i < y.size(); ++i) {
+      y[i] = get_raw (delay_spls_uint + i, channel);
     }
+    return interp (y, make_vec<value_type> (frac));
+  }
+  //----------------------------------------------------------------------------
+  // Stateless_interp = a class on
+  // "artv-common/dsp/own/parts/interpolation/stateless.hpp"
+  template <class Stateless_interp>
+  value_type get (float delay_spls, uint channel)
+  {
+    return get<Stateless_interp::n_points> (
+      delay_spls, channel, [] (auto y, auto x) {
+        return Stateless_interp::tick (y, x);
+      });
   }
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
+// "Delay_line_base" = the underlying buffer type, e.g. "static_delay_line".
+// "Interpolation" one of the classes on
+// "artv-common/dsp/own/parts/interpolation/stateful.hpp"
+template <class Delay_line_base, class Interpolation>
+class statefully_interpolated_delay_line
+  : private interpolated_delay_line<Delay_line_base> {
+private:
+  using base = interpolated_delay_line<Delay_line_base>;
 
+public:
+  //----------------------------------------------------------------------------
+  using base::get_raw;
+  using base::n_channels;
+  using base::push;
+  using base::size;
+  using value_type = typename base::value_type;
+  using interp     = Interpolation;
+  static constexpr uint n_interp_states
+    = interp::n_states + interp::n_coeffs + interp::n_coeffs_int;
+  //----------------------------------------------------------------------------
+  void reset (crange<value_type> mem, uint n_channels)
+  {
+    _interp     = mem.cut_head (n_interp_states * n_channels);
+    _delay_spls = mem.cut_head (1 * n_channels);
+    crange_memset (_delay_spls, 0);
+    base::reset (mem);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint interp_overhead_elems (uint n_channels)
+  {
+    // + 1 for the delays
+    return n_channels * (n_interp_states + 1);
+  }
+  //----------------------------------------------------------------------------
+  // Stateful interpolators need this function to be called once setup and:
+  // -for the "get" function to always have the same "delay_spls" value.
+  // -for the "get" function to be called once for each "push" call.
+  void reset_interpolator (float delay_spls, uint channel)
+  {
+    reset_interpolator (delay_spls, channel, true);
+  }
+  //----------------------------------------------------------------------------
+  value_type get (float delay_spls, uint channel)
+  {
+    assert (channel < n_channels());
+
+    using V = make_vector_t<value_type>;
+
+    return base::get<interp::n_points> (
+      get_delay_spls (channel), channel, [this] (auto y, auto x) {
+        return interp::tick (
+          this->get_interp_coeffs.cast (V {}),
+          this->get_interp_states.cast (V {}),
+          y,
+          x);
+      });
+  }
+  //----------------------------------------------------------------------------
+protected:
+  //----------------------------------------------------------------------------
+  void reset_interpolator (float delay_spls, uint channel, bool clear_state)
+  {
+    assert (channel < n_channels());
+    uint del_uint = (uint) delay_spls;
+    auto frac     = delay_spls - (float) del_uint;
+    auto co       = get_interp_coeffs (channel);
+    auto st       = get_interp_states (channel);
+
+    using V = make_vector_t<value_type>;
+
+    interp::reset_coeffs (co.cast (V {}), vec_set<V> (frac));
+    if (clear_state) {
+      interp::reset_states (st.cast (V {}));
+    }
+    if constexpr (is_vec_v<value_type>) {
+      _delay_spls[channel] = make_vec<V> (delay_spls);
+    }
+    else {
+      _delay_spls[channel] = delay_spls;
+    }
+  }
+  //----------------------------------------------------------------------------
+  crange<value_type> get_interp_coeffs (uint channel)
+  {
+    assert (channel < n_channels());
+    auto chptr = &_interp[channel * (interp::n_states + interp::n_coeffs)];
+    return {&chptr[0], interp::n_coeffs};
+  }
+  //----------------------------------------------------------------------------
+  crange<value_type> get_interp_states (uint channel)
+  {
+    assert (channel < n_channels());
+    auto chptr = &_interp[channel * (interp::n_states + interp::n_coeffs)];
+    return {&chptr[interp::n_coeffs], interp::n_states};
+  }
+  //----------------------------------------------------------------------------
+  float get_delay_spls (uint channel)
+  {
+    assert (channel < n_channels());
+    if constexpr (is_vec_v<value_type>) {
+      return (float) _delay_spls[channel][0];
+    }
+    else {
+      return (float) _delay_spls[channel];
+    }
+  }
+  //----------------------------------------------------------------------------
+private:
+  crange<value_type> _delay_spls;
+  crange<value_type> _interp;
+};
+//------------------------------------------------------------------------------
 } // namespace detail
 
 //------------------------------------------------------------------------------
 // - not managed memory
 // - multichannel
-// - random access.
+// - random access interpolator.
 // - power of 2 capacity.
 // - channels might or not be interleaved
 // - same sized channels
 // - highest indexes = older samples
 // - fractional delay line support
 //------------------------------------------------------------------------------
-template <class T, class Interp = linear_interp, bool Interleaved = false>
+template <class T, bool Interleaved = false>
 using interpolated_delay_line
-  = detail::interpolated_delay_line<static_delay_line<T, Interleaved>, Interp>;
+  = detail::interpolated_delay_line<static_delay_line<T, Interleaved>>;
 
 //------------------------------------------------------------------------------
 // - not managed memory
 // - multichannel
-// - random access.
+// - stateful interpolator.
+// - power of 2 capacity.
+// - channels might or not be interleaved
+// - same sized channels
+// - highest indexes = older samples
+// - fractional delay line support
+//------------------------------------------------------------------------------
+template <class T, class Interp = thyran_interp<1>, bool Interleaved = false>
+using statefully_interpolated_delay_line = detail::
+  statefully_interpolated_delay_line<static_delay_line<T, Interleaved>, Interp>;
+
+//------------------------------------------------------------------------------
+// - not managed memory
+// - multichannel
+// - random access interpolator.
 // - power of 2 capacity.
 // - channels might or not be interleaved
 // - same sized channels
@@ -263,11 +391,10 @@ using interpolated_delay_line
 // - fractional delay line support
 // - convenience functions for taking modulation
 //------------------------------------------------------------------------------
-template <class T, class Interp = linear_interp, bool Interleaved = false>
-class modulable_delay_line
-  : private interpolated_delay_line<T, Interp, Interleaved> {
+template <class T, bool Interleaved = false>
+class modulable_delay_line : private interpolated_delay_line<T, Interleaved> {
 private:
-  using base = interpolated_delay_line<T, Interp, Interleaved>;
+  using base = interpolated_delay_line<T, Interleaved>;
 
 public:
   //----------------------------------------------------------------------------
@@ -275,30 +402,136 @@ public:
   using base::get_raw;
   using base::n_channels;
   using base::push;
+  using base::reset;
   using base::size;
-  using time_type  = typename base::time_type;
-  using interp     = typename base::interp;
   using value_type = typename base::value_type;
   //----------------------------------------------------------------------------
-  template <class... Ts>
-  constexpr void reset (Ts&&... args)
-  {
-    base::reset (std::forward<Ts> (args)...);
-    _max_delay = size() - 1 - interp::n_points - 1;
-  }
-  //----------------------------------------------------------------------------
   // interpolated overload with modulation, just for convenience
-  value_type get (time_type sample, float mod_amt, float max_mod, uint channel)
+  // Stateless_interp = a class on
+  // "artv-common/dsp/own/parts/interpolation/stateless.hpp"
+  template <class Stateless_interp>
+  value_type get (float delay_spls, float mod_amt, float max_mod, uint channel)
   {
     // in case we are using a non interpolated delay line, no-op otherwise
-    auto z = (float) sample;
-    z      = z + mod_amt * max_mod;
-    z      = std::clamp (z, 0.f, _max_delay);
-    return get ((time_type) z, channel);
+    auto z         = (float) delay_spls;
+    auto max_delay = size() - 1 - Stateless_interp::n_points - 1;
+    z              = z + mod_amt * max_mod;
+    z              = std::clamp (z, 0.f, max_delay);
+    return get<Stateless_interp> ((float) z, channel);
+  }
+  //----------------------------------------------------------------------------
+};
+
+namespace detail {
+// Frankenstein to be able to implement "modulable_thyran_2"
+// It is a direct form 1 to be able to tweak the past outputs. It also doesn't
+// maintain its own delay line.
+struct thyran_interp_2_df1 {
+  //----------------------------------------------------------------------------
+  enum coeffs { n_coeffs = thyran_interp<2>::n_coeffs };
+  enum coeffs_int { n_coeffs_int };
+  enum state { y1, y2, n_states };
+  //----------------------------------------------------------------------------
+  static constexpr uint n_points = 3;
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (crange<V> co, V fractional)
+  {
+    thyran_interp<2>::reset_coeffs (co, fractional);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<V> st)
+  {
+    biquad::reset_states (st);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const V>         co,
+    crange<V>               st,
+    std::array<V, n_points> y_points,
+    V                       x [[maybe_unused]])
+  {
+    auto& z = y_points; // to avoid nomenclature clash
+    V y = co[biquad::b0] * z[0] + co[biquad::b1] * z[1] + co[biquad::b2] * z[2];
+    y -= co[biquad::a1] * st[y1] + co[biquad::a2] * st[y2];
+    st[y2] = st[y1];
+    st[y1] = y;
+    return y;
+  }
+  //----------------------------------------------------------------------------
+};
+}; // namespace detail
+
+//------------------------------------------------------------------------------
+// slowly modulable Thiran2-frankenstein
+template <class T, bool Interleaved = false>
+class modulable_thyran_2
+  : private statefully_interpolated_delay_line<
+      T,
+      detail::thyran_interp_2_df1,
+      Interleaved> {
+  using base = statefully_interpolated_delay_line<
+    T,
+    detail::thyran_interp_2_df1,
+    Interleaved>;
+
+public:
+  //----------------------------------------------------------------------------
+  using base::get_raw;
+  using base::interp_overhead_elems;
+  using base::n_channels;
+  using base::push;
+  using base::size;
+  using interp                          = typename base::interp;
+  using value_type                      = typename base::value_type;
+  static constexpr uint n_interp_states = base::n_interp_states;
+  //----------------------------------------------------------------------------
+  static constexpr uint interp_overhead_elems (uint n_channels)
+  {
+    return base::interp_overhead_elems (n_channels);
+  }
+  //----------------------------------------------------------------------------
+  void set_resync_delta_spls (float v) { _resync_delta_spls = v; }
+  //----------------------------------------------------------------------------
+  value_type get (float delay_spls, uint channel)
+  {
+    assert (channel < n_channels());
+
+    auto diff = abs (delay_spls - this->get_delay_spls (channel));
+
+    if (diff != 0) {
+      if (unlikely (diff >= _resync_delta_spls)) {
+        // resync: aproximate filter state reconstruction by linear interp.
+        uint       spls = (uint) delay_spls;
+        value_type frac;
+
+        if constexpr (is_vec_v<value_type>) {
+          using builtin = vec_value_type_t<value_type>;
+          frac
+            = vec_set<value_type> (((builtin) delay_spls) - ((builtin) spls));
+        }
+        else {
+          frac = ((value_type) delay_spls) - ((value_type) spls);
+        }
+
+        assert (spls <= size() - 3);
+        auto z0 = get (spls, channel);
+        auto z1 = get (spls + 1, channel);
+        auto z2 = get (spls + 2, channel);
+        auto st = this->get_interp_states (channel);
+
+        st[interp::y1] = linear_interp::tick (make_array (z0, z1), frac);
+        st[interp::y2] = linear_interp::tick (make_array (z1, z2), frac);
+      }
+      this->reset_interpolator (delay_spls, channel, false);
+    }
+    return base::get (delay_spls, channel);
   }
   //----------------------------------------------------------------------------
 private:
-  float _max_delay;
+  float _resync_delta_spls;
 };
 //------------------------------------------------------------------------------
 // - single dynamic allocation
@@ -384,6 +617,5 @@ private:
   V                       _gain {};
   V                       _z1 {};
 };
-
 //------------------------------------------------------------------------------
 } // namespace artv
