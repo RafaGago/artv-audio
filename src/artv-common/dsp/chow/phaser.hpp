@@ -171,7 +171,7 @@ public:
     // DC blockers, could be only done once...
     auto dc_coeffs = c.shrink_head (n_own_coeffs);
     mystran_dc_blocker::reset_coeffs<x1_vec> (
-      dc_coeffs.cast (x1_vec {}), make_vec_x1 (2.), fs);
+      dc_coeffs.cast (x1_vec {}), make_vec (2.), fs);
   }
   //----------------------------------------------------------------------------
   static void reset_states (crange<value_type> s)
@@ -199,18 +199,18 @@ public:
     double y      = s[z1] + x * c[b0];
     auto   ydrive = drive (y, d3);
 
-    ydrive = mystran_dc_blocker::tick (
-      dc_coeffs, dc_states, make_vec_x1 (ydrive))[0];
+    ydrive
+      = mystran_dc_blocker::tick (dc_coeffs, dc_states, make_vec (ydrive))[0];
 
     s[z1]     = drive (s[z2] + x * c[b1] - ydrive * c[a1], d1);
     dc_states = dc_states.shrink_head (mystran_dc_blocker::n_states);
     s[z1]
-      = mystran_dc_blocker::tick (dc_coeffs, dc_states, make_vec_x1 (s[z1]))[0];
+      = mystran_dc_blocker::tick (dc_coeffs, dc_states, make_vec (s[z1]))[0];
 
     s[z2]     = drive (x * c[b2] - ydrive * c[a2], d2);
     dc_states = dc_states.shrink_head (mystran_dc_blocker::n_states);
     s[z2]
-      = mystran_dc_blocker::tick (dc_coeffs, dc_states, make_vec_x1 (s[z2]))[0];
+      = mystran_dc_blocker::tick (dc_coeffs, dc_states, make_vec (s[z2]))[0];
     return y;
   }
   //----------------------------------------------------------------------------
