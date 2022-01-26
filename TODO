@@ -22,6 +22,17 @@
 
 - Feature: Tucan audio Lexikan 2 seems nice and has low parameter count.
 
+- Feature: Play with parallel eliptic downsampling IIR filters. scipy has
+  "signal.iirdesign" and "signal.residuez" to do the partial fraction expansion.
+  What is left would be how to sort out going from that into paralell second
+  order sections (eliptic filters will probably have poles very close together)
+  and to learn how (or if possible) to go to a polyphase implementation.
+
+  The hunch is that these will be result in more arithmetic operations than HIIR
+  but that they could be extremely parallelizable, which might be a win. But, if
+  this would be so why aren't popular? I'm sure someone has thought about this,
+  as this is DSP 101.
+
 - Feature: Mixmaxtrix: Add a (back) channel of communication for parameter
   values, so values can react to changes on other parameters. Probaby through
   plugin-context and using parameter IDs as the index on the parameter typelist.

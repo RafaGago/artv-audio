@@ -12,6 +12,7 @@ struct no_interp {
   static constexpr uint n_coeffs_int = 0;
   static constexpr uint n_states     = 0;
   static constexpr uint n_points     = 1;
+  static constexpr uint x_offset     = 0;
   //----------------------------------------------------------------------------
   template <class T>
   static void reset_coeffs (crange<T>)
@@ -41,6 +42,7 @@ struct linear_interp {
   static constexpr uint n_coeffs_int = 0;
   static constexpr uint n_states     = 0;
   static constexpr uint n_points     = 2;
+  static constexpr uint x_offset     = 0;
   //----------------------------------------------------------------------------
   template <class T>
   static void reset_coeffs (crange<T>)
@@ -75,6 +77,7 @@ struct lagrange_interp<2> {
   static constexpr uint n_coeffs_int = 0;
   static constexpr uint n_states     = 0;
   static constexpr uint n_points     = 3;
+  static constexpr uint x_offset     = 0;
   //----------------------------------------------------------------------------
   template <class T>
   static void reset_coeffs (crange<T>)
@@ -117,6 +120,7 @@ struct lagrange_interp<3> {
   static constexpr uint n_coeffs_int = 0;
   static constexpr uint n_states     = 0;
   static constexpr uint n_points     = 4;
+  static constexpr uint x_offset     = 0;
   //----------------------------------------------------------------------------
   template <class T>
   static void reset_coeffs (crange<T>)
@@ -153,12 +157,13 @@ struct lagrange_interp<3> {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-struct cubic_interp {
+struct catmull_rom_interp {
   //----------------------------------------------------------------------------
   static constexpr uint n_coeffs     = 0;
   static constexpr uint n_coeffs_int = 0;
   static constexpr uint n_states     = 0;
   static constexpr uint n_points     = 4;
+  static constexpr uint x_offset     = 1; // interpolates between y[1] and y[2]
   //----------------------------------------------------------------------------
   template <class T>
   static void reset_coeffs (crange<T>)
@@ -173,38 +178,15 @@ struct cubic_interp {
   {
     using T = vec_value_type_t<V>;
 
-    static constexpr T co[] = {
-      (T) -0.5,
-      (T) 1.0,
-      (T) -0.5,
-      (T) 0.0,
-      (T) 1.5,
-      (T) -2.5,
-      (T) 0.0,
-      (T) 1.0,
-      (T) -1.5,
-      (T) 2.0,
-      (T) 0.5,
-      (T) 0.0,
-      (T) 0.5,
-      (T) -0.5,
-      (T) 0.0,
-      (T) 0.0};
+    V x2 = x * x;
+    V x3 = x2 * x;
 
-    V x3 = vec_set<V> ((T) 1.);
-    V x2 = x;
-    V x1 = x2 * x2;
-    V x0 = x2 * x1;
+    V r = x3 * (-y[0] + (T) 3 * y[1] - (T) 3 * y[2] + y[3]) * (T) 0.5;
+    r += x2 * ((T) 2 * y[0] - (T) 5 * y[1] + (T) 4 * y[2] - y[3]) * (T) 0.5;
+    r += x * (-y[0] + y[2]) * (T) 0.5;
+    r += y[1];
 
-    // A modern optimizer sees if factoring or parallelizing is better. Kept
-    // naive.
-
-    V c0 = co[0] * x0 + co[1] * x1 + co[2] * x2 + co[3] * x3;
-    V c1 = co[4] * x0 + co[5] * x1 + co[6] * x2 + co[7] * x3;
-    V c2 = co[8] * x0 + co[9] * x1 + co[10] * x2 + co[11] * x3;
-    V c3 = co[12] * x0 + co[13] * x1 + co[14] * x2 + co[15] * x3;
-
-    return c0 * y[0] + c1 * y[1] + c2 * y[2] + c3 * y[3];
+    return r;
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
