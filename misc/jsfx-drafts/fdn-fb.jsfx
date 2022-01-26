@@ -1,0 +1,872 @@
+desc:fdn diffusor with er_feedback  draft
+slider1:rt60_msec=     300 <10 ,12000 ,0.1> RT60 (msec)
+slider2:meters1=       3 <0.1, 70, 0.01>    Size1 (m)
+slider3:meters2=       4 <0.1, 70, 0.01>    Size2 (m)
+slider4:er_mix=        0.3 <0, 1, 0.01>     ER(%)
+slider5:er_2_late=     0.3 <0, 1, 0.01>     ER to late(%)
+slider6:late_mix=      0.3 <0, 1, 0.01>     late(%)
+slider7:fb_lfo_freq=   0.3 <0,140, 0.001>   FB LFO Freq(Hz)
+slider8:fb_lfo_depth=  0.3 <0, 1, 0.001>    FB LFO Amt
+slider9:emph_amt=      0 <-1, 1, 0.001>     Emphasis AMT
+slider10:emph_freq=    80 <300, 6000,0.1>   Emphasis Freq(Hz)
+slider11:hf_absortion= 0.5 <0, 1, 0.001>    HF absotion
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+
+// a memory area guaranteed to be free, for passing data to functions requiring
+SCRATCH_MEM_AREA_SIZE = 32;
+
+// memory helper can't be called from functions --------------------------------
+function mem_reserve (size) local (ret) global (free_ptr) (
+    ret = free_ptr;
+    // memset (memfree_ptr, 0, size); // unnecessary probably...
+    free_ptr += size;
+    ret;
+);
+
+function mem_swap(ptr, idx1, idx2) local (tmp) (
+    tmp = ptr[idx1];
+    ptr[idx1] = ptr[idx2];
+    ptr[idx2] = tmp;
+);
+
+// misc ------------------------------------------------------------------------
+function round_next_pow2 (x)(
+    ceil (pow (2, ceil (log (x) / log (2))));
+);
+
+function clamp (x, minv, maxv)(
+    max (min (x, maxv), minv);
+);
+
+
+function interp_catmull_rom (y0, y1, y2, y3, x) local (r, x2, x3)(
+  x2 = x * x;
+  x3 = x2 * x;
+
+  r = x3 * (-y0 + 3 * y1 - 3 * y2 + y3) * 0.5;
+  r += x2 * (2 * y0 - 5 * y1 + 4 * y2 - y3) * 0.5;
+  r += x * (-y0 + y2) * 0.5;
+  r += y1;
+);
+
+// array -----------------------------------------------------------------------
+function array_init (size) global (free_ptr) (
+    this.ptr = mem_reserve (size);
+    this.size = size;
+);
+
+function array_alias (other*) (
+    this.ptr = other.ptr;
+    this.size = other.size;
+);
+
+// memory areas for free usage -------------------------------------------------
+scratch1.array_init (SCRATCH_MEM_AREA_SIZE);
+scratch2.array_init (SCRATCH_MEM_AREA_SIZE);
+scratch3.array_init (SCRATCH_MEM_AREA_SIZE);
+scratch4.array_init (SCRATCH_MEM_AREA_SIZE);
+
+// array 2d --------------------------------------------------------------------
+function array2d_init (size_a, size_b) global (free_ptr) (
+    this.ptr = mem_reserve (size_a * size_b);
+    this.size_a = size_a;
+    this.size_b = size_b;
+);
+
+function array2d_ptr (pos_a) (
+    this.ptr + pos_a * this.size_b;
+);
+
+function array2d_get (pos_a, posb) (
+    this.ptr[pos_a * this.size_b + pos_b];
+);
+
+function array2d_set (pos_a, pos_b, val) (
+    this.ptr[pos_a * this.size_b + pos_b] = val;
+);
+
+// mem functions ---------------------------------------------------------------
+function range_get_max (dst_ptr, size) local (maxv, i)(
+    maxv = dst_ptr[0];
+    i = 1;
+    loop (size - 1,
+        maxv = maxv > dst_ptr[i] ? maxv : dst_ptr[i];
+        i += 1;
+    );
+    maxv;
+);
+
+function range_get_sum (dst_ptr, size) local (sum, i)(
+    sum = i = 0;
+    loop(size,
+        sum += dst_ptr[i];
+        i += 1;
+    );
+    sum;
+);
+
+function range_clamp (dst_ptr, size, minv, maxv) local (i)(
+    i = 0;
+    loop(size,
+        dst_ptr[i] = clamp (dst_ptr[i], minv, maxv);
+        i += 1;
+    );
+);
+
+function range_mul (dst_ptr, src_ptr, size) local (i)(
+    i = 0;
+    loop(size,
+        dst_ptr[i] *= src_ptr[i];
+        i += 1;
+    );
+    sum;
+);
+
+function range_mul_k (dst_ptr, src_ptr, k, size) local (i)(
+    i = 0;
+    loop(size,
+        dst_ptr[i] = src_ptr[i] * k;
+        i += 1;
+    );
+);
+
+function range_add (dst_ptr, src_ptr, size) local (i)(
+    i = 0;
+    loop(size,
+        dst_ptr[i] += src_ptr[i];
+        i += 1;
+    );
+);
+
+// delay line ------------------------------------------------------------------
+function delay_line_init (size, er_chnls) (
+    this.arr.array_init (size * er_chnls);
+    this.N_ER_CHNLS = N_ER_CHNLS;
+    this.mask = size - 1;
+    this.pos = mask;
+);
+
+function _delay_line_get_pos (pos, channel) local (offset)(
+    offset = channel * (this.mask + 1);
+    offset + ((this.pos + pos) & this.mask);
+);
+
+function delay_line_set (value, pos, channel) (
+    this.arr.ptr[this._delay_line_get_pos (pos, channel)] = value;
+);
+
+function delay_line_set_all (ptr, pos) local (i)(
+    i = 0;
+    loop(this.N_ER_CHNLS,
+        this.delay_line_set (ptr[i], pos, i);
+        i += 1;
+    );
+);
+
+function delay_line_get (pos, channel)(
+    this.arr.ptr[this._delay_line_get_pos (pos, channel)];
+);
+
+function delay_line_get_all (dst_ptr, times_ptr) local (i)(
+    i = 0;
+    loop(this.N_ER_CHNLS,
+        dst_ptr[i] = this.delay_line_get (times_ptr[i], i);
+        i += 1;
+    );
+);
+
+function delay_line_get_linterp (pos, channel) local (a, b, pos_int, pos_frac)(
+    pos = clamp (pos, 0, this.mask - 1);
+    pos_int = floor (pos);
+    pos_frac = pos - pos_int;
+    a = this.delay_line_get (pos_int, channel);
+    b = this.delay_line_get (pos_int + 1, channel);
+    a + pos_frac * (b - a);
+);
+
+function delay_line_get_linterp_all (dst_ptr, times_ptr) local (i)(
+    i = 0;
+    loop(this.N_ER_CHNLS,
+        dst_ptr[i] = this.delay_line_get_linterp (times_ptr[i], i);
+        i += 1;
+    );
+);
+
+function delay_line_get_catmull_rom_interp (pos, channel)
+    local (a, b, pos_int, pos_frac)(
+
+    pos = clamp (pos, 0, this.mask - 3);
+    pos_int = floor (pos);
+    pos_frac = pos - pos_int;
+    a = this.delay_line_get (pos_int, channel);
+    b = this.delay_line_get (pos_int + 1, channel);
+    c = this.delay_line_get (pos_int + 2, channel);
+    d = this.delay_line_get (pos_int + 3, channel);
+    interp_catmull_rom (a, b, c, d, pos_frac);
+);
+
+function delay_line_get_catmull_rom_interp_all (dst_ptr, times_ptr) local (i)(
+    i = 0;
+    loop(this.N_ER_CHNLS,
+        dst_ptr[i] = this.delay_line_get_catmull_rom_interp (times_ptr[i], i);
+        i += 1;
+    );
+);
+
+function delay_line_advance()(
+    this.pos -= 1;
+    this.pos < 0 ? (this.pos = this.mask);
+);
+//------------------------------------------------------------------------------
+// thiran order 2 interpolation addon/inheritance/monkey patching to a
+//  "delay_line". Will blow up on er_feedback loops.
+
+// call from a namespace that already had "delay_line_init" called
+function delay_line_thiran2_add (delta_sync)(
+    // each dynamic thiran array uses these indexes.
+    // 0 = a1,
+    // 1 = a2,
+    // 2 = y1,
+    // 3 = y2,
+    // 4 = time_spls
+    // 5 = n_coeffs/size
+    this.thiran.array_init (this.N_ER_CHNLS * 5);
+    this.thiran.delta_sync = delta_sync;
+);
+
+function delay_line_thiran2_get (pos, channel)
+    local (z0, z1, z2, pos_int, pos_frac, diff, thy_ptr, delta, y)(
+    // each dynamic thiran array uses these indexes.
+    // 0 = a1,
+    // 1 = a2,
+    // 2 = y1,
+    // 3 = y2,
+    // 4 = time_spls
+    // 5 = n_coeffs/size
+    thy_ptr = this.thiran.ptr + channel * 5;
+
+    pos = clamp (pos, 0, this.mask - 2);
+    pos_int = floor (pos);
+    pos_frac = pos - pos_int;
+
+    z0 = this.delay_line_get (pos_int, channel);
+    z1 = this.delay_line_get (pos_int + 1, channel);
+    z2 = this.delay_line_get (pos_int + 2, channel);
+
+    // delay
+    diff = abs (pos - thy_ptr[4]); // time_spls
+    (diff != 0) ? (
+        (diff > this.delta_sync) ? (
+            // resync. Try to approximate to the current state by lerp, it could
+            // also be done by running some stages on the delay line
+            thy_ptr[2] = z0 + pos_frac * (z1 - z0); // y1
+            thy_ptr[3] = z1 + pos_frac * (z2 - z1); // y2
+        );
+        // biquad recalc
+        delta = max (pos_frac + 2, 2.001);
+        thy_ptr[0] = -2 * (delta - 2) / (delta + 1); // a1
+        thy_ptr[1] = (delta - 2) * (delta - 1); // a2
+        thy_ptr[1] /= (delta + 1) * (delta + 2); // a2
+        // b0 = a2
+        // b1 = a1
+        // b2 = 1
+        thy_ptr[4] = pos; // time_spls
+    );
+
+    // Direct form1, otherwise tweaking the state as done above would be harder.
+    y = z0 * thy_ptr[1]; // a2(==b0) * z0
+    y += z1 * thy_ptr[0]; // a1(==b1) * z0
+    y += z2; // b2 == 1
+    y -= thy_ptr[2] * thy_ptr[0]; // y1 * a1
+    y -= thy_ptr[3] * thy_ptr[1]; // y2 * a2
+    clamp (y, -5, 5);
+);
+
+function delay_line_thiran2_get_all (dst_ptr, times_ptr) local (i)(
+    i = 0;
+    loop(this.N_ER_CHNLS,
+        dst_ptr[i] = this.delay_line_thiran2_get (times_ptr[i], i);
+        i += 1;
+    );
+);
+
+// Andy's TPT State Variable Filter --------------------------------------------
+function svf_lp(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 0;
+  this.m1 = 0;
+  this.m2 = 1;
+);
+
+function svf_hp(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = -k;
+  this.m2 = -1;
+);
+
+function svf_ap(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = -2 * k;
+  this.m2 = 0;
+);
+
+function svf_bell(freq, q, g_db, sr) local (k, g, A)(
+  A = pow (10, g_db * (1. / 40.));
+  k = 1.0 / (q  * A);
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = k * (A * A - 1);
+  this.m2 = 0;
+);
+
+function svf_lshelf(freq, q, g_db, sr) local (k, g, A)(
+  A = pow (10, g_db * (1. / 40.));
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr) / sqrt(A);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = k * (A - 1);
+  this.m2 = A * A - 1;
+);
+
+function svf_hshelf(freq, q, g_db, sr) local (k, g, A)(
+  A = pow (10, g_db * (1. / 40.));
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr) * sqrt(A);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = A * A;
+  this.m1 = k * (1 - A) * A;
+  this.m2 = 1 - A * A;
+);
+
+function svf_reset_state()(
+  this.ic1eq = this.ic2eq = 0;
+);
+
+function svf_tick(in) local (v1, v2, v3)(
+  v3 = in - this.ic2eq;
+  v1 = this.a1 * this.ic1eq + this.a2 * v3;
+  v2 = this.ic2eq + this.a2 * this.ic1eq + this.a3 * v3;
+  this.ic1eq = 2 * v1 - this.ic1eq;
+  this.ic2eq = 2 * v2 - this.ic2eq;
+
+  this.in = in;
+  this.v3 = v3;
+  this.v1 = v1;
+  this.v2 = v2;
+
+  this.m0 * in + this.m1 * v1 + this.m2 * v2;
+);
+
+// LFO -------------------------------------------------------------------------
+// "phase" normalized from 0 to 1
+function tri_lfo_init (ptr, freq_hz, phase) (
+    // 0 phase delta, 1 = current phase
+    ptr[0] = (2 / srate) * freq_h;
+    // constructed from a SAW, start phase at 270 degrees.
+    ptr[1] = 0.5 + 2 * phase;
+);
+
+function tri_lfo_tick (ptr) local (ret) (
+    // ptr[0] = phase delta, ptr[1] = current phase
+    ret = ptr[1];
+    ptr[1] += ptr[0];
+    ptr[1] > 1 ? ptr[1] -= 2;
+    // saw to triangle
+    ret = abs (ret); // 1 to 0
+    (ret - 0.5) * 2; // -1 to 1
+);
+
+// LFO -------------------------------------------------------------------------
+function tri_lfo_bank_init (N_ER_CHNLS, n_stages)(
+    this.N_ER_CHNLS = N_ER_CHNLS;
+    this.n_stages = n_stages;
+    this.lfo_sizeof = 2;
+    this.ptr = mem_reserve (N_ER_CHNLS * n_stages * this.lfo_sizeof);
+);
+
+function tri_lfo_bank_reset_phase (stage_idx) local (ptr, step, ph)(
+    // ptr[0] = phase delta, ptr[1] = current phase
+    ptr = this.ptr + stage_idx * this.N_ER_CHNLS * this.lfo_sizeof;
+    step = 2 / this.N_ER_CHNLS;
+    ph = -1;
+    loop (this.N_ER_CHNLS,
+        ptr[1] = ph;
+        ph += step;
+        ptr += this.lfo_sizeof;
+    );
+);
+
+function tri_lfo_bank_reset_freq (stage_idx, channel_idx, freq_hz)(
+    // ptr[0] = phase delta, ptr[1] = current phase
+    ptr = this.ptr + stage_idx * this.N_ER_CHNLS * this.lfo_sizeof;
+    ptr += channel_idx * this.lfo_sizeof;
+    ptr[0] = 2 / (freq_hz * srate);
+);
+
+function tri_lfo_bank_reset_freq (stage_idx, freq_hz) local (ptr, f)(
+    // ptr[0] = phase delta, ptr[1] = current phase
+    ptr = this.ptr + stage_idx * this.N_ER_CHNLS * this.lfo_sizeof;
+    f = 2 / (freq_hz * srate);
+    loop (this.N_ER_CHNLS,
+        ptr[0] = f;
+        ptr += this.lfo_sizeof;
+    );
+);
+
+// gets "this.N_ER_CHNLS" phases from -1 to 1 written on ptr.
+function tri_lfo_bank_tick (dst_ptr, stage_idx) local (ptr, i)(
+    // 2 is the numb
+    ptr = this.ptr + stage_idx * this.N_ER_CHNLS * this.lfo_sizeof;
+    i = 0;
+    loop (this.N_ER_CHNLS,
+        dst_ptr[i] = tri_lfo_tick (ptr);
+        ptr += this.lfo_sizeof;
+        i += 1;
+    );
+);
+
+
+// reverb stuff ----------------------------------------------------------------
+
+// returns 8 values on the "dst_ptr" array. "src_ptr" has to contain 8 values.
+function hadamard_8 (dst_ptr, src_ptr)
+    local (x01, x23, x45, x67, x0123, x4567, i)(
+    // y0 + + + + + + + +
+    // y4 + + + + - - - -
+    // y2 + + - - + + - -
+    // y6 + + - - - - + +
+
+    x01 = src_ptr[0] + src_ptr[1];
+    x23 = src_ptr[2] + src_ptr[3];
+    x45 = src_ptr[4] + src_ptr[5];
+    x67 = src_ptr[6] + src_ptr[7];
+
+    x0123 = x01 + x23;
+    x4567 = x45 + x67;
+    dst_ptr[0] = x0123 + x4567;
+    dst_ptr[4] = x0123 - x4567;
+    x0123 = x01-x23;
+    x4567 = x45-x67;
+    dst_ptr[2] = x0123 + x4567;
+    dst_ptr[6] = x0123 - x4567;
+
+    // y1 + - + - + - + -
+    // y5 + - + - - + - +
+    // y3 + - - + + - - +
+    // y7 + - - + - + + -
+
+    x01 = src_ptr[0] - src_ptr[1];
+    x23 = src_ptr[2] - src_ptr[3];
+    x45 = src_ptr[4] - src_ptr[5];
+    x67 = src_ptr[6] - src_ptr[7];
+
+    x0123 = x01 + x23;
+    x4567 = x45 + x67;
+    dst_ptr[1] = x0123 + x4567;
+    dst_ptr[5] = x0123 - x4567;
+    x0123 = x01 - x23;
+    x4567 = x45 - x67;
+    dst_ptr[3] = x0123 + x4567;
+    dst_ptr[7] = x0123 - x4567;
+
+    i = 0;
+    loop(8,
+        dst_ptr[i] *= 0.35355339059327373; // 1/sqrt(8)
+        i += 1;
+    );
+);
+
+
+function hadamard_4 (dst_ptr, src_ptr) local (x01, x23)(
+    x01 = (src_ptr[0] + src_ptr[1]) * 0.5;
+    x23 = (src_ptr[2] + src_ptr[3]) * 0.5;
+    dst_ptr[0] = x01 + x23;
+    dst_ptr[2] = x01 - x23;
+    x01 -= src_ptr[1];
+    x23 -= src_ptr[3];
+    dst_ptr[1] = x01 + x23;
+    dst_ptr[3] = x01 - x23;
+);
+
+// returns "size "values on the "dst_ptr" array. "src_ptr" array has to contain
+// "size" values. "size" has to be a power of 2.
+function householder (dst_ptr, src_ptr, size) local (i, factor) (
+    factor = range_get_sum (src_ptr, size) * 2 / size;
+    i = 0;
+    loop(size,
+        dst_ptr[i] = src_ptr[i] - factor;
+        i += 1;
+    );
+);
+
+function get_rt60_gain (rt60sec, fb_delay_samples) local (rate)(
+    rate = srate / fb_delay_samples;
+    pow (10, (-60/20) * (1 / (rate * rt60sec)));
+    //pow (10, (-3 * fb_delay_samples) / (rt60sec * srate));
+   // TODO: has JSFX M_LN_10 ?
+);
+
+// Small table of prime numbers ------------------------------------------------
+primes.array_init (16);
+primes.ptr[0] = 2;
+primes.ptr[1] = 3;
+primes.ptr[2] = 5;
+primes.ptr[3] = 7;
+primes.ptr[4] = 11;
+primes.ptr[5] = 13;
+primes.ptr[6] = 17;
+primes.ptr[7] = 19;
+primes.ptr[8] = 23;
+primes.ptr[9] = 29;
+primes.ptr[10] = 31;
+primes.ptr[11] = 37;
+primes.ptr[12] = 41;
+primes.ptr[13] = 43;
+primes.ptr[14] = 47;
+primes.ptr[15] = 53;
+
+// https://ccrma.stanford.edu/~jos/pasp/Prime_Power_Delay_Line.html
+// lifted from Faust.
+// TODO: check bounds
+function get_delay_length_samples (dst_ptr, n_delays, pathmin, pathmax)
+  local (dmin, dmax, i, v)(
+
+    dmin = srate * pathmin * (1 / 343); // 343 = C = soundspeed
+    dmax = srate * pathmax * (1 / 343);
+    i = 0;
+    loop (n_delays,
+        v = dmin * pow (dmax / dmin, i / (n_delays - 1));
+        v = log (v) / log (primes.ptr[i]); // best prime power
+        dst_ptr[i] = pow (primes.ptr[i], v);
+        i += 1;
+    );
+);
+
+// table of predictable random numbers from 0 to 1 -----------------------------
+rnd_table.array_init (40);
+rnd_table.ptr[0] = 0.9171434810105141;
+rnd_table.ptr[1] = 0.8569858412166442;
+rnd_table.ptr[2] = 0.5178699413011407;
+rnd_table.ptr[3] = 0.8658419727056448;
+rnd_table.ptr[4] = 0.09615608560228828;
+rnd_table.ptr[5] = 0.8657091878698523;
+rnd_table.ptr[6] = 0.8569333970393207;
+rnd_table.ptr[7] = 0.3780605117952399;
+rnd_table.ptr[8] = 0.26031208092491054;
+rnd_table.ptr[9] = 0.5635124119976632;
+rnd_table.ptr[10] = 0.9790658438505838;
+rnd_table.ptr[11] = 0.8562823856318246;
+rnd_table.ptr[12] = 0.21556298702180277;
+rnd_table.ptr[13] = 0.8600632971753791;
+rnd_table.ptr[14] = 0.662714633786504;
+rnd_table.ptr[15] = 0.2225621933588111;
+rnd_table.ptr[16] = 0.6457530747930535;
+rnd_table.ptr[17] = 0.7827105700278855;
+rnd_table.ptr[18] = 0.6705869303441022;
+rnd_table.ptr[19] = 0.5154710337106151;
+rnd_table.ptr[20] = 0.815454332575039;
+rnd_table.ptr[21] = 0.6179902227520485;
+rnd_table.ptr[22] = 0.7115313466684177;
+rnd_table.ptr[23] = 0.9378033055153567;
+rnd_table.ptr[24] = 0.21433529585823752;
+rnd_table.ptr[25] = 0.8701474992411431;
+rnd_table.ptr[26] = 0.7086038807361402;
+rnd_table.ptr[27] = 0.30052303721084295;
+rnd_table.ptr[28] = 0.28393219786694557;
+rnd_table.ptr[29] = 0.5983530311667046;
+rnd_table.ptr[30] = 0.20020536916058207;
+rnd_table.ptr[31] = 0.6392286472751323;
+rnd_table.ptr[32] = 0.37143886775293566;
+rnd_table.ptr[33] = 0.6898805855917455;
+rnd_table.ptr[34] = 0.1884387811019529;
+rnd_table.ptr[35] = 0.5686068227042015;
+rnd_table.ptr[36] = 0.9620012698662417;
+rnd_table.ptr[37] = 0.4707056753390745;
+rnd_table.ptr[38] = 0.5257648252025556;
+rnd_table.ptr[39] = 0.6742146878570825;
+
+//------------------------------------------------------------------------------
+// non-reuseable stuff specific to this JSFX
+//------------------------------------------------------------------------------
+// distribute "N_ER_CHNLS" values on a range from "time_ms_min" to "time_ms_max"
+// with a bit of randomization
+function reset_delay_time_range(
+    ptr, N_ER_CHNLS, time_ms_min, time_ms_min, rnd_idx_start, rnd_factor)
+    local (i, step, v) (
+
+    step = (time_ms_max - time_ms_min) / N_ER_CHNLS;
+    i = 0;
+
+    loop(N_ER_CHNLS,
+        v = time_ms_min + (step * i);
+        v += rnd_table.ptr[rnd_idx_start + i] * step * rnd_factor;
+        v *= srate * 0.001;
+        ptr[i] = v;
+        i += 1;
+      );
+);
+
+function run_lfo_mod (dst_ptr, lfo_bank*, n_spls_ptr, mod_n_spls_ptr, lfo_idx)(
+    // spls + depth_spls * lfo
+    lfo_bank.tri_lfo_bank_tick (dst_ptr, lfo_idx);
+    range_mul (dst_ptr, mod_n_spls_ptr, lfo_bank.N_ER_CHNLS);
+    range_add (dst_ptr, n_spls_ptr, lfo_bank.N_ER_CHNLS);
+);
+
+function get_rt60_all (dst_ptr, delays_spls_ptr, sec, rnd_factor, n_channels)
+    local (i, rnd_max, rnd) (
+
+    rnd_max = sec * rnd_factor;
+    i = 0;
+    // subs
+    loop (n_channels,
+        rnd = rnd_table.ptr[10 + i] - 0.5; //-0.5 because the range is 0 to 1
+        dst_ptr[i] = get_rt60_gain (sec + rnd * rnd_max, delays_spls_ptr[i] );
+        i += 1;
+    );
+);
+
+// -----------------------------------------------------------------------------
+// Resource initialization
+// -----------------------------------------------------------------------------
+
+N_ER_CHNLS = 16;
+N_LATE_CHNLS = 8;
+N_LATE_STAGES = 1;
+
+
+// parameter/setting ideas:
+// ER pan/width
+
+// per algorithm params (Future)
+ER_DECAY_SEC = 0.5;
+ER_SIZE_MIN = 3.5;
+ER_SIZE_MAX = 69;
+
+// ER
+er_chnls.array_init (N_ER_CHNLS);
+er_feedback.array_init (N_ER_CHNLS);
+er_rt60_att.array_init (N_ER_CHNLS);
+er_delay_spls.array_init (N_ER_CHNLS);
+
+get_delay_length_samples(
+    er_delay_spls.ptr, N_ER_CHNLS, ER_SIZE_MIN, ER_SIZE_MAX
+    );
+
+max_er_delay_spl = range_get_max (er_delay_spls.ptr, N_ER_CHNLS);
+er_delay.delay_line_init (round_next_pow2 (max_er_delay_spl), N_ER_CHNLS);
+
+get_rt60_all(
+    er_rt60_att.ptr, er_delay_spls.ptr, ER_DECAY_SEC, 0.3, N_ER_CHNLS
+    );
+
+// Late
+chnls.array_init (N_LATE_CHNLS);
+feedback.array_init (N_LATE_CHNLS);
+rt60_att.array_init (N_LATE_CHNLS);
+delay_spls.array_init (N_LATE_CHNLS);
+mod_spls.array_init (N_LATE_CHNLS);
+
+lfos.tri_lfo_bank_init (N_LATE_CHNLS, N_LATE_STAGES);
+lfos.tri_lfo_bank_reset_phase (0);
+// 1 sec max. It will have to be computed from the maximum sizes on the final
+// impl.
+delay.delay_line_init (round_next_pow2 (srate), N_CHANNELS);
+
+ap_2pole_1.svf_ap (primes.ptr[2] * 100, 0.107, srate);
+ap_2pole_2.svf_ap (primes.ptr[3] * 100, 0.107, srate);
+ap_2pole_3.svf_ap (primes.ptr[4] * 200, 0.107, srate);
+ap_2pole_4.svf_ap (primes.ptr[5] * 200, 0.107, srate);
+ap_2pole_5.svf_ap (primes.ptr[6] * 300, 0.107, srate);
+ap_2pole_6.svf_ap (primes.ptr[7] * 300, 0.107, srate);
+ap_2pole_7.svf_ap (primes.ptr[8] * 400, 0.107, srate);
+ap_2pole_8.svf_ap (primes.ptr[9] * 400, 0.107, srate);
+
+@slider //----------------------------------------------------------------------
+
+get_delay_length_samples(
+    delay_spls.ptr,
+    delay_spls.size,
+    min (meters1, meters2),
+    max (meters1, meters2)
+    );
+range_clamp (delay_spls.ptr, delay_spls.size, 0, delay.mask);
+mem_swap (delay_spls.ptr, 1, 4);
+mem_swap (delay_spls.ptr, 3, 7);
+
+get_rt60_all(
+    rt60_att.ptr, delay_spls.ptr, rt60_msec * 0.001, 0.4, N_LATE_CHNLS
+    );
+range_mul_k (mod_spls.ptr, delay_spls.ptr, fb_lfo_depth * fb_lfo_depth * 0.25, N_LATE_CHNLS);
+
+i = 0;
+loop (N_LATE_CHNLS,
+    lfos.tri_lfo_bank_reset_freq (0, i, fb_lfo_freq + fb_lfo_freq * i * 0.0001);
+    i += 1;
+);
+
+emph_q = 0.1 + abs (emph_amt) * 0.1;
+emph_amt_pre = 25 * emph_amt;
+emph_amt_post = -emph_amt_pre;
+
+emph_pre.svf_bell (emph_freq, emph_q, emph_amt_pre, srate);
+emph_postl.svf_bell (emph_freq, emph_q, emph_amt_post, srate);
+emph_postr.svf_bell (emph_freq * 1.03, emph_q, emph_amt_post, srate);
+
+hshelf_db = -4.22 * hf_absortion;
+hshelf1.svf_hshelf (3300., 0.707, hshelf_db, srate);
+hshelf2.svf_hshelf (5300., 0.707, hshelf_db, srate);
+hshelf3.svf_hshelf (3400., 0.707, hshelf_db, srate);
+hshelf4.svf_hshelf (7500., 0.707, hshelf_db, srate);
+hshelf5.svf_hshelf (5800., 0.707, hshelf_db, srate);
+hshelf6.svf_hshelf (7400., 0.707, hshelf_db, srate);
+hshelf7.svf_hshelf (5400., 0.707, hshelf_db, srate);
+hshelf8.svf_hshelf (4000., 0.707, hshelf_db, srate);
+
+@block //-----------------------------------------------------------------------
+
+@sample //----------------------------------------------------------------------
+
+// autogenerate a periodic impulse.
+imp += 0.000006;
+imp >= 1 ? (
+//    spl0 = spl1 = 1.;
+   imp = 0;
+);
+
+l = spl0;
+r = spl1;
+m = (l + r) * 0.5;
+s = (l - r) * 8; // deliberate gain on the stereo signal
+
+// ER ------------------------
+er_chnls.ptr[0] =  -l;
+er_chnls.ptr[1] =   r;
+er_chnls.ptr[2] =  -m;
+er_chnls.ptr[3] =   s;
+er_chnls.ptr[4] =   l;
+er_chnls.ptr[5] =  -r;
+er_chnls.ptr[6] =   m;
+er_chnls.ptr[7] =  -s;
+er_chnls.ptr[8] =  -l;
+er_chnls.ptr[9] =   r;
+er_chnls.ptr[10] = -m;
+er_chnls.ptr[11] =  s;
+er_chnls.ptr[12] =  l;
+er_chnls.ptr[13] = -r;
+er_chnls.ptr[14] =  m;
+er_chnls.ptr[15] = -s;
+
+range_add (er_chnls.ptr, er_feedback.ptr, N_ER_CHNLS);
+
+er_delay.delay_line_advance();
+er_delay.delay_line_set_all (er_chnls.ptr, 0);
+er_delay.delay_line_get_all (er_chnls.ptr, er_delay_spls.ptr);
+
+// mix the faster channels, leave the ones with longer delays more separate.
+hadamard_4 (er_feedback.ptr, er_chnls.ptr);
+hadamard_4 (er_feedback.ptr + 4, er_chnls.ptr + 4);
+memcpy (scratch1.ptr, er_feedback.ptr, N_ER_CHNLS);
+householder (er_feedback.ptr, scratch1.ptr, N_ER_CHNLS);
+range_mul (er_feedback.ptr, er_rt60_att.ptr, N_ER_CHNLS);
+
+er_sig_l = er_chnls.ptr[0] + er_chnls.ptr[5] + er_chnls.ptr[9]  + er_chnls.ptr[12];
+er_sig_r = er_chnls.ptr[1] + er_chnls.ptr[4] + er_chnls.ptr[8]  + er_chnls.ptr[13];
+er_sig_l *= (1 / 4);
+er_sig_r *= (1 / 4);
+
+er_l = er_sig_l * er_mix;
+er_r = er_sig_r * er_mix;
+
+er_tail = (er_sig_l + er_sig_r) * 0.5 * er_2_late;
+
+m = emph_pre.svf_tick (m);
+// Tail ------------------------
+chnls.ptr[0] =  -m;
+chnls.ptr[1] =  -s;
+chnls.ptr[2] =  0;
+chnls.ptr[3] =  0;
+chnls.ptr[4] =  er_tail;
+chnls.ptr[5] =  0;
+chnls.ptr[6] =  0;
+chnls.ptr[7] =  0;
+
+lfoed_delay_spls.array_alias (scratch4);
+run_lfo_mod (lfoed_delay_spls.ptr, lfos, delay_spls.ptr, mod_spls.ptr, 0);
+
+range_add (chnls.ptr, feedback.ptr, N_LATE_CHNLS);
+delay.delay_line_advance();
+delay.delay_line_set_all (chnls.ptr, 0);
+delay.delay_line_get_catmull_rom_interp_all (chnls.ptr, lfoed_delay_spls.ptr);
+
+// HP + AP
+k1 = 0.;
+k2 = 1 - k1;
+loop (0, // MODULATE or keep removed. use first order sections
+  chnls.ptr[0] = chnls.ptr[0] * k1 +  ap_2pole_1.svf_tick (chnls.ptr[0]) * k2;
+  chnls.ptr[1] = chnls.ptr[1] * k1 +  ap_2pole_2.svf_tick (chnls.ptr[1]) * k2;
+  chnls.ptr[2] = chnls.ptr[2] * k1 +  ap_2pole_3.svf_tick (chnls.ptr[2]) * k2;
+  chnls.ptr[3] = chnls.ptr[3] * k1 +  ap_2pole_4.svf_tick (chnls.ptr[3]) * k2;
+  chnls.ptr[4] = chnls.ptr[4] * k1 +  ap_2pole_5.svf_tick (chnls.ptr[4]) * k2;
+  chnls.ptr[5] = chnls.ptr[5] * k1 +  ap_2pole_6.svf_tick (chnls.ptr[5]) * k2;
+  chnls.ptr[6] = chnls.ptr[6] * k1 +  ap_2pole_7.svf_tick (chnls.ptr[6]) * k2;
+  chnls.ptr[7] = chnls.ptr[7] * k1 +  ap_2pole_8.svf_tick (chnls.ptr[7]) * k2;
+);
+
+//memcpy (scratch1.ptr, chnls.ptr, N_LATE_CHNLS);
+hadamard_8 (scratch1.ptr, chnls.ptr);
+householder (scratch2.ptr, scratch1.ptr, 4);
+memcpy (chnls.ptr, scratch2.ptr, 4);
+memcpy (chnls.ptr + 4, scratch1.ptr + 4, N_LATE_CHNLS - 4);
+
+chnls.ptr[0] = hshelf1.svf_tick (chnls.ptr[0]);
+chnls.ptr[1] = hshelf2.svf_tick (chnls.ptr[1]);
+chnls.ptr[2] = hshelf3.svf_tick (chnls.ptr[2]);
+chnls.ptr[3] = hshelf4.svf_tick (chnls.ptr[3]);
+chnls.ptr[4] = hshelf5.svf_tick (chnls.ptr[4]);
+chnls.ptr[5] = hshelf6.svf_tick (chnls.ptr[5]);
+chnls.ptr[6] = hshelf7.svf_tick (chnls.ptr[6]);
+chnls.ptr[7] = hshelf8.svf_tick (chnls.ptr[7]);
+
+memcpy (feedback.ptr, chnls.ptr, N_LATE_CHNLS);
+range_mul (feedback.ptr, rt60_att.ptr, N_LATE_CHNLS);
+
+late_l = chnls.ptr[2];
+late_r = chnls.ptr[7];
+
+late_l = emph_postl.svf_tick (late_l);
+late_r = emph_postr.svf_tick (late_r);
+
+late_l *= late_mix;
+late_r *= late_mix;
+
+spl0 = er_l + late_l;
+spl1 = er_r + late_r;
