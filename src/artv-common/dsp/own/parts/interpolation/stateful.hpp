@@ -26,6 +26,7 @@ struct thyran_interp<1> {
   enum coeffs_int { n_coeffs_int };
   enum state { y1, n_states };
   static constexpr uint n_points = 1;
+  static constexpr uint x_offset = 0;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> co, V fractional)
@@ -69,6 +70,7 @@ struct thyran_interp<2> {
   enum coeffs_int { n_coeffs_int };
   enum state { n_states = biquad::n_states };
   static constexpr uint n_points = 1;
+  static constexpr uint x_offset = 0;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> co, V fractional)

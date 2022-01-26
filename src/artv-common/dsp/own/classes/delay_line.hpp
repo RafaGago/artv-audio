@@ -211,16 +211,22 @@ public:
     return base::get (sample, channel);
   }
   //----------------------------------------------------------------------------
-  template <uint N_interp_points, class InterpFunctor>
+  template <uint N_points, uint X_offset, class InterpFunctor>
   value_type get (float delay_spls, uint channel, InterpFunctor&& interp)
   {
-    std::array<value_type, N_interp_points> y;
+    std::array<value_type, N_points> y;
+    // probably not making it an assert but a clamp, let's see?
+    assert (
+      std::clamp<float> (delay_spls, X_offset, size() - N_points + X_offset)
+      == delay_spls);
 
-    auto delay_spls_uint = (uint) delay_spls;
-    auto frac            = delay_spls - (float) delay_spls_uint;
+    auto spls = (uint) delay_spls;
+    auto frac = delay_spls - (float) spls;
+    // e.g. Catmull-Rom interpolates between the 2 central points of 4.
+    spls -= X_offset;
 
     for (uint i = 0; i < y.size(); ++i) {
-      y[i] = get_raw (delay_spls_uint + i, channel);
+      y[i] = get_raw (spls + i, channel);
     }
     return interp (y, make_vec<value_type> (frac));
   }
@@ -230,10 +236,10 @@ public:
   template <class Stateless_interp>
   value_type get (float delay_spls, uint channel)
   {
-    return get<Stateless_interp::n_points> (
-      delay_spls, channel, [] (auto y, auto x) {
-        return Stateless_interp::tick (y, x);
-      });
+    using interp = Stateless_interp;
+
+    return get<interp::n_points, interp::x_offset> (
+      delay_spls, channel, [] (auto y, auto x) { return interp::tick (y, x); });
   }
   //----------------------------------------------------------------------------
 };
@@ -286,7 +292,7 @@ public:
 
     using V = make_vector_t<value_type>;
 
-    return base::get<interp::n_points> (
+    return base::get<interp::n_points, interp::x_offset> (
       get_delay_spls (channel), channel, [this] (auto y, auto x) {
         return interp::tick (
           this->get_interp_coeffs.cast (V {}),
@@ -465,7 +471,7 @@ struct thyran_interp_2_df1 {
 }; // namespace detail
 
 //------------------------------------------------------------------------------
-// slowly modulable Thiran2-frankenstein
+// Slowly modulable Thiran2-frankenstein. Will blow up on feedback loops.
 template <class T, bool Interleaved = false>
 class modulable_thyran_2
   : private statefully_interpolated_delay_line<
