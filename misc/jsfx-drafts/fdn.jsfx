@@ -42,6 +42,18 @@ function round_next_pow2 (x)(
 function clamp (x, minv, maxv)(
     max (min (x, maxv), minv);
 );
+
+
+function interp_catmull_rom (y0, y1, y2, y3, x) local (r, x2, x3)(
+  x2 = x * x;
+  x3 = x2 * x;
+
+  r = x3 * (-y0 + 3 * y1 - 3 * y2 + y3) * 0.5;
+  r += x2 * (2 * y0 - 5 * y1 + 4 * y2 - y3) * 0.5;
+  r += x * (-y0 + y2) * 0.5;
+  r += y1;
+);
+
 // array -----------------------------------------------------------------------
 function array_init (size) global (free_ptr) (
     this.ptr = mem_reserve (size);
@@ -172,9 +184,102 @@ function delay_line_get_linterp_all (dst_ptr, times_ptr) local (i)(
     );
 );
 
+function delay_line_get_catmull_rom_interp (pos, channel)
+    local (a, b, pos_int, pos_frac)(
+
+    pos = clamp (pos, 0, this.mask - 3);
+    pos_int = floor (pos);
+    pos_frac = pos - pos_int;
+    a = this.delay_line_get (pos_int, channel);
+    b = this.delay_line_get (pos_int + 1, channel);
+    c = this.delay_line_get (pos_int + 2, channel);
+    d = this.delay_line_get (pos_int + 3, channel);
+    interp_catmull_rom (a, b, c, d, pos_frac);
+);
+
+function delay_line_get_catmull_rom_interp_all (dst_ptr, times_ptr) local (i)(
+    i = 0;
+    loop(this.n_channels,
+        dst_ptr[i] = this.delay_line_get_catmull_rom_interp (times_ptr[i], i);
+        i += 1;
+    );
+);
+
 function delay_line_advance()(
     this.pos -= 1;
     this.pos < 0 ? (this.pos = this.mask);
+);
+//------------------------------------------------------------------------------
+// thiran order 2 interpolation addon/inheritance/monkey patching to a
+//  "delay_line". Will blow up on feedback loops.
+
+// call from a namespace that already had "delay_line_init" called
+function delay_line_thiran2_add (delta_sync)(
+    // each dynamic thiran array uses these indexes.
+    // 0 = a1,
+    // 1 = a2,
+    // 2 = y1,
+    // 3 = y2,
+    // 4 = time_spls
+    // 5 = n_coeffs/size
+    this.thiran.array_init (this.n_channels * 5);
+    this.thiran.delta_sync = delta_sync;
+);
+
+function delay_line_thiran2_get (pos, channel)
+    local (z0, z1, z2, pos_int, pos_frac, diff, thy_ptr, delta, y)(
+    // each dynamic thiran array uses these indexes.
+    // 0 = a1,
+    // 1 = a2,
+    // 2 = y1,
+    // 3 = y2,
+    // 4 = time_spls
+    // 5 = n_coeffs/size
+    thy_ptr = this.thiran.ptr + channel * 5;
+
+    pos = clamp (pos, 0, this.mask - 2);
+    pos_int = floor (pos);
+    pos_frac = pos - pos_int;
+
+    z0 = this.delay_line_get (pos_int, channel);
+    z1 = this.delay_line_get (pos_int + 1, channel);
+    z2 = this.delay_line_get (pos_int + 2, channel);
+
+    // delay
+    diff = abs (pos - thy_ptr[4]); // time_spls
+    (diff != 0) ? (
+        (diff > this.delta_sync) ? (
+            // resync. Try to approximate to the current state by lerp, it could
+            // also be done by running some stages on the delay line
+            thy_ptr[2] = z0 + pos_frac * (z1 - z0); // y1
+            thy_ptr[3] = z1 + pos_frac * (z2 - z1); // y2
+        );
+        // biquad recalc
+        delta = max (pos_frac + 2, 2.001);
+        thy_ptr[0] = -2 * (delta - 2) / (delta + 1); // a1
+        thy_ptr[1] = (delta - 2) * (delta - 1); // a2
+        thy_ptr[1] /= (delta + 1) * (delta + 2); // a2
+        // b0 = a2
+        // b1 = a1
+        // b2 = 1
+        thy_ptr[4] = pos; // time_spls
+    );
+
+    // Direct form1, otherwise tweaking the state as done above would be harder.
+    y = z0 * thy_ptr[1]; // a2(==b0) * z0
+    y += z1 * thy_ptr[0]; // a1(==b1) * z0
+    y += z2; // b2 == 1
+    y -= thy_ptr[2] * thy_ptr[0]; // y1 * a1
+    y -= thy_ptr[3] * thy_ptr[1]; // y2 * a2
+    clamp (y, -5, 5);
+);
+
+function delay_line_thiran2_get_all (dst_ptr, times_ptr) local (i)(
+    i = 0;
+    loop(this.n_channels,
+        dst_ptr[i] = this.delay_line_thiran2_get (times_ptr[i], i);
+        i += 1;
+    );
 );
 
 // Andy's TPT State Variable Filter --------------------------------------------
@@ -351,8 +456,10 @@ function householder (dst_ptr, src_ptr, size) local (i, factor) (
     );
 );
 
-function get_rt60_gain (rt60sec, fb_delay_samples)(
-    pow (10, (-3 * fb_delay_samples) / (rt60sec * srate));
+function get_rt60_gain (rt60sec, fb_delay_samples) local (rate)(
+    rate = srate / fb_delay_samples;
+    pow (10, (-60/20) * (1 / (rate * rt60sec)));
+    //pow (10, (-3 * fb_delay_samples) / (rt60sec * srate));
    // TODO: has JSFX M_LN_10 ?
 );
 
@@ -460,7 +567,7 @@ function run_diffusor (io_ptr, delay*, delay_times_ptr, n_channels)(
     // delay line
     delay.delay_line_advance();
     delay.delay_line_set_all (channels.ptr, 0);
-    delay.delay_line_get_linterp_all (io_ptr, delay_times_ptr);
+    delay.delay_line_get_catmull_rom_interp_all (io_ptr, delay_times_ptr);
 
     // swaps
     mem_swap (io_ptr, 0 , 4);
@@ -551,7 +658,7 @@ diff_delay3.delay_line_init (max_diff_delay_spls.ptr[2], N_CHANNELS);
 diff_delay4.delay_line_init (max_diff_delay_spls.ptr[3], N_CHANNELS);
 diff_delay5.delay_line_init (max_diff_delay_spls.ptr[4], N_CHANNELS);
 fb_delay.delay_line_init (round_next_pow2 (srate), N_CHANNELS); // 1 sec max
-
+//fb_delay.delay_line_thiran2_add (3.5);
 @slider //----------------------------------------------------------------------
 get_delay_length_samples(
     fb_delay_spls.ptr,
@@ -653,7 +760,7 @@ range_add (channels.ptr, feedback.ptr, N_CHANNELS);
 fb_delay.delay_line_advance();
 fb_delay.delay_line_set_all (channels.ptr, 0);
 run_lfo_mod (scratch1.ptr, fb_lfos, fb_delay_spls.ptr, fb_mod_spls.ptr, 0);
-fb_delay.delay_line_get_linterp_all (channels.ptr, scratch1.ptr);
+fb_delay.delay_line_get_catmull_rom_interp_all (channels.ptr, scratch1.ptr);
 range_mul (channels.ptr, rt60_att.ptr, N_CHANNELS);
 householder (feedback.ptr, channels.ptr, 8);
 
