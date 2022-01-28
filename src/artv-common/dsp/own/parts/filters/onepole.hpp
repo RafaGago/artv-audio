@@ -260,6 +260,35 @@ struct onepole_tdf2 {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<V> co,
+    V         d, // 0 to 1
+    thiran_tag)
+  {
+    using T = vec_value_type_t<V>;
+
+    // according to this. Table 3.2:
+    // http://users.spa.aalto.fi/vpv/publications/vesan_vaitos/ch3_pt3_allpass.pdf
+    // The point minimizing the average error for D0 (D0 < D < D0 +1) is 0.418
+    // but it broke when modulating.
+
+    d += (T) 1; // d = delta
+    d      = vec_max ((T) 1.001, d); // finite precision correction
+    co[a1] = ((T) 1 - d) / ((T) 1 + d);
+    co[b0] = co[a1];
+    co[b1] = vec_set<V> ((T) 0);
+  }
+
+  function interpolate_allpass_init (d)
+    instance (a, x1, y1) (a = (1 - d) / (1 + d); a = min (max (a, 0), 1);
+                          x1 = y1 = 0;);
+
+  function interpolate_allpass (in)
+    instance (out, x1, y1, a) (out = a * in + x1 - a * y1; x1 = in; y1 = out;
+                               out;);
+
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<V> st)
   {
     assert (st.size() >= n_states);

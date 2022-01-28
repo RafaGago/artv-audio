@@ -13,10 +13,10 @@ namespace artv {
 // https://ccrma.stanford.edu/~jos/pasp/Thiran_Allpass_Interpolators.html
 
 template <uint N> // order
-struct thyran_interp;
+struct thiran_interp;
 
 template <>
-struct thyran_interp<1> {
+struct thiran_interp<1> {
   //----------------------------------------------------------------------------
 #ifdef NDEBUG
   enum coeffs {a1, n_coeffs};
@@ -60,7 +60,7 @@ struct thyran_interp<1> {
 };
 
 template <>
-struct thyran_interp<2> {
+struct thiran_interp<2> {
   //----------------------------------------------------------------------------
 #ifdef NDEBUG
   enum coeffs {n_coeffs = biquad::n_coeffs};
@@ -75,14 +75,7 @@ struct thyran_interp<2> {
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> co, V fractional)
   {
-    using T = vec_value_type_t<V>;
-    V delta = vec_max (fractional + (T) 2, vec_set<V> ((T) 2.000001));
-
-    co[biquad::a1] = -2 * (delta - 2) / (delta + 1);
-    co[biquad::a2] = (delta - 2) * (delta - 1) / (delta + 1) * (delta + 2);
-    co[biquad::b0] = co[biquad::a2];
-    co[biquad::b1] = co[biquad::a1];
-    co[biquad::b2] = 1;
+    biquad::reset_coeffs (co, fractional, thiran_tag {});
 #ifndef NDEBUG
     co[frac] = fractional;
 #endif
