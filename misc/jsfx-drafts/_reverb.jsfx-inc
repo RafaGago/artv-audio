@@ -1,0 +1,221 @@
+import _core.jsfx-inc
+
+@init
+
+// returns 8 values on the "dst_ptr" array. "src_ptr" has to contain 8 values.
+function hadamard_8 (dst_ptr, src_ptr)
+    local (x01, x23, x45, x67, x0123, x4567, i)(
+    // y0 + + + + + + + +
+    // y4 + + + + - - - -
+    // y2 + + - - + + - -
+    // y6 + + - - - - + +
+
+    x01 = src_ptr[0] + src_ptr[1];
+    x23 = src_ptr[2] + src_ptr[3];
+    x45 = src_ptr[4] + src_ptr[5];
+    x67 = src_ptr[6] + src_ptr[7];
+
+    x0123 = x01 + x23;
+    x4567 = x45 + x67;
+    dst_ptr[0] = x0123 + x4567;
+    dst_ptr[4] = x0123 - x4567;
+    x0123 = x01-x23;
+    x4567 = x45-x67;
+    dst_ptr[2] = x0123 + x4567;
+    dst_ptr[6] = x0123 - x4567;
+
+    // y1 + - + - + - + -
+    // y5 + - + - - + - +
+    // y3 + - - + + - - +
+    // y7 + - - + - + + -
+
+    x01 = src_ptr[0] - src_ptr[1];
+    x23 = src_ptr[2] - src_ptr[3];
+    x45 = src_ptr[4] - src_ptr[5];
+    x67 = src_ptr[6] - src_ptr[7];
+
+    x0123 = x01 + x23;
+    x4567 = x45 + x67;
+    dst_ptr[1] = x0123 + x4567;
+    dst_ptr[5] = x0123 - x4567;
+    x0123 = x01 - x23;
+    x4567 = x45 - x67;
+    dst_ptr[3] = x0123 + x4567;
+    dst_ptr[7] = x0123 - x4567;
+
+    i = 0;
+    loop(8,
+        dst_ptr[i] *= 0.35355339059327373; // 1/sqrt(8)
+        i += 1;
+    );
+);
+
+
+function hadamard_4 (dst_ptr, src_ptr) local (x01, x23)(
+    x01 = (src_ptr[0] + src_ptr[1]) * 0.5;
+    x23 = (src_ptr[2] + src_ptr[3]) * 0.5;
+    dst_ptr[0] = x01 + x23;
+    dst_ptr[2] = x01 - x23;
+    x01 -= src_ptr[1];
+    x23 -= src_ptr[3];
+    dst_ptr[1] = x01 + x23;
+    dst_ptr[3] = x01 - x23;
+);
+
+// returns "size "values on the "dst_ptr" array. "src_ptr" array has to contain
+// "size" values. "size" has to be a power of 2.
+function householder (dst_ptr, src_ptr, size) local (i, factor) (
+    factor = range_get_sum (src_ptr, size) * 2 / size;
+    i = 0;
+    loop(size,
+        dst_ptr[i] = src_ptr[i] - factor;
+        i += 1;
+    );
+);
+
+function rochebois_4 (dst_ptr, src_ptr) local (i)(
+    dst_ptr[0] = src_ptr[1] + src_ptr[2] + src_ptr[3];
+    dst_ptr[1] = src_ptr[0] + src_ptr[2] - src_ptr[3];
+    dst_ptr[2] = src_ptr[0] - src_ptr[1] + src_ptr[3];
+    dst_ptr[3] = src_ptr[0] + src_ptr[1] - src_ptr[2];
+
+    i = 0;
+    loop (4,
+        dst_ptr[i] *= 0.3779644730092272; // 1 / sqrt(3)
+        i += 1;
+    );
+);
+
+function rochebois_8 (dst_ptr, src_ptr) local (t, t2, i)(
+    t = src_ptr[3] + src_ptr[4] + src_ptr[5] + src_ptr[6] + src_ptr[7];
+
+    dst_ptr[0] = t - (src_ptr[4] * 2) + src_ptr[2] - src_ptr[1];
+    dst_ptr[1] = t - (src_ptr[5] * 2) + src_ptr[0] - src_ptr[2];
+    dst_ptr[2] = t - (src_ptr[6] * 2) + src_ptr[1] - src_ptr[0];
+
+    t2 = -src_ptr[0] - src_ptr[1] - src_ptr[2] - src_ptr[3];
+    dst_ptr[3] = (t - (src_ptr[7] * 2) + t2);
+
+    dst_ptr[4] = t2 + (src_ptr[0] * 2) + src_ptr[5] - src_ptr[6] + src_ptr[7];
+    dst_ptr[5] = t2 + (src_ptr[1] * 2) - src_ptr[4] + src_ptr[6] + src_ptr[7];
+    dst_ptr[6] = t2 + (src_ptr[2] * 2) + src_ptr[4] - src_ptr[5] + src_ptr[7];
+    dst_ptr[7] = t2 + (src_ptr[3] * 2) - src_ptr[4] - src_ptr[5] - src_ptr[6];
+
+    i = 0;
+    loop (8,
+        dst_ptr[i] *= 0.3779644730092272; // 1 / sqrt(7)
+        i += 1;
+    );
+);
+
+function get_rt60_gain (rt60sec, delays_spls) local (rate)(
+    rate = srate / delays_spls;
+    pow (10, (-60/20) * (1 / (rate * rt60sec)));
+    //pow (10, (-3 * fb_delay_samples) / (rt60sec * srate));
+   // TODO: has JSFX M_LN_10 ?
+);
+
+function get_rt60_gain(
+  dst_ptr, delays_spls_ptr, rt60sec, rnd_factor, n_channels
+  )
+  local (i, rnd_max, rnd) (
+
+    rnd_max = rt60sec * rnd_factor;
+    i = 0;
+    // subs
+    loop (n_channels,
+        rnd = rnd_table.ptr[10 + i] - 0.5; //-0.5 because the range is 0 to 1
+        dst_ptr[i] = get_rt60_gain(
+            rt60sec + rnd * rnd_max, delays_spls_ptr[i]
+            );
+        i += 1;
+    );
+);
+
+
+// https://ccrma.stanford.edu/~jos/pasp/Prime_Power_Delay_Line.html
+// This has "fact" to allow a more loose rounding (not coprime). This is to
+// avoid big parts of the range not changing.
+//
+// Notice that another strategy would be to find all the coprimes of "dmax" and
+// select
+function get_delay_length_samples (dst_ptr, n_delays, pathmin, pathmax, fact)
+  local (dmin, dmax, i, v)(
+
+    dmin = srate * pathmin * (1 / 343); // 343 = C = soundspeed
+    dmax = srate * pathmax * (1 / 343);
+    i = 0;
+    loop (n_delays,
+       v = dmin * pow (dmax / dmin, i / (n_delays - 1));
+       v = ((log (v) / log (primes.ptr[i]) * fact) + 0.5) | 0;
+       v /= fact;
+       dst_ptr[i] = pow (primes.ptr[i], v);
+       i += 1;
+    );
+);
+
+function get_delay_length_samples (dst_ptr, n_delays, pathmin, pathmax)(
+   get_delay_length_samples(dst_ptr, n_delays, pathmin, pathmax, 1);
+);
+
+/*
+TODO: Very broken!
+//------------------------------------------------------------------------------
+function get_delay_length_samples (dst_ptr, n_delays, pathmin, pathmax)
+  local (
+    dmin,
+    dmax,
+    ratio,
+    ratio_min,
+    ratio_max,
+    ratio_curr,
+    notfound,
+    i,
+    prime_offset,
+    scale
+    )(
+
+    dmin = srate * pathmin * (1 / 343); // 343 = C = soundspeed
+    dmax = srate * pathmax * (1 / 343);
+
+    ratio = dmax / dmin;
+    ratio_min = ratio * 0.90;
+    ratio_max = ratio * 1.10;
+
+
+    notfound = 1;
+    i = n_delays - 1;
+    // scan for prime numbers which having a similar ratio
+    while (i < primes.size && notfound) (
+        ratio_curr = primes[i] / primes[i - n_delays - 1];
+        notfound = ratio_curr >= ratio_min && ratio_curr <= ratio_max ? 0 : 1;
+        i += 1;
+    );
+
+    (i != primes.size) ? (
+        prime_offset = i - n_delays - 1;
+    ) : (
+        // this will we mostly wrong for n_delays = 2, as the maximum ratio is
+        // 3/2, but the range increases for regular delay line widths, like e.g
+        // for 8 the maximum range is more acceptable.
+
+        // the ratio was too small, setting to the biggest ratio available: the
+        // first prime numbers.
+        prime_offset = ratio > ratio_curr ? 0 : i - n_delays - 1;
+    );
+
+    // DEBUG
+    _rat = ratio;
+    _ratc = ratio_curr;
+
+    // setting the smallest value as reference, could be the biggest...
+    scale = dmin / primes[i];
+
+    i = 0;
+    loop (n_delays,
+       dst_ptr[i] = primes.ptr[prime_offset + i] * scale;
+       i += 1;
+    );
+);
+//------------------------------------------------------------------------------
+*/
