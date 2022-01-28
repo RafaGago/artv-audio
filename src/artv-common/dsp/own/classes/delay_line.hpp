@@ -382,7 +382,7 @@ using interpolated_delay_line
 // - highest indexes = older samples
 // - fractional delay line support
 //------------------------------------------------------------------------------
-template <class T, class Interp = thyran_interp<1>, bool Interleaved = false>
+template <class T, class Interp = thiran_interp<1>, bool Interleaved = false>
 using statefully_interpolated_delay_line = detail::
   statefully_interpolated_delay_line<static_delay_line<T, Interleaved>, Interp>;
 
@@ -429,12 +429,12 @@ public:
 };
 
 namespace detail {
-// Frankenstein to be able to implement "modulable_thyran_2"
+// Frankenstein to be able to implement "modulable_thiran_2"
 // It is a direct form 1 to be able to tweak the past outputs. It also doesn't
 // maintain its own delay line.
-struct thyran_interp_2_df1 {
+struct thiran_interp_2_df1 {
   //----------------------------------------------------------------------------
-  enum coeffs { n_coeffs = thyran_interp<2>::n_coeffs };
+  enum coeffs { n_coeffs = thiran_interp<2>::n_coeffs };
   enum coeffs_int { n_coeffs_int };
   enum state { y1, y2, n_states };
   //----------------------------------------------------------------------------
@@ -443,7 +443,7 @@ struct thyran_interp_2_df1 {
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> co, V fractional)
   {
-    thyran_interp<2>::reset_coeffs (co, fractional);
+    thiran_interp<2>::reset_coeffs (co, fractional);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -471,16 +471,16 @@ struct thyran_interp_2_df1 {
 }; // namespace detail
 
 //------------------------------------------------------------------------------
-// Slowly modulable Thiran2-frankenstein. Will blow up on feedback loops.
+// Slowly modulable Thiran2-frankenstein.
 template <class T, bool Interleaved = false>
-class modulable_thyran_2
+class modulable_thiran_2
   : private statefully_interpolated_delay_line<
       T,
-      detail::thyran_interp_2_df1,
+      detail::thiran_interp_2_df1,
       Interleaved> {
   using base = statefully_interpolated_delay_line<
     T,
-    detail::thyran_interp_2_df1,
+    detail::thiran_interp_2_df1,
     Interleaved>;
 
 public:

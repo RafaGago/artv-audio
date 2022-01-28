@@ -157,6 +157,41 @@ struct lagrange_interp<3> {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
+struct hermite_interp {
+  //----------------------------------------------------------------------------
+  static constexpr uint n_coeffs     = 0;
+  static constexpr uint n_coeffs_int = 0;
+  static constexpr uint n_states     = 0;
+  static constexpr uint n_points     = 4;
+  static constexpr uint x_offset     = 1;
+  //----------------------------------------------------------------------------
+  template <class T>
+  static void reset_coeffs (crange<T>)
+  {}
+  //----------------------------------------------------------------------------
+  template <class T>
+  static void reset_states (crange<T>)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (std::array<V, n_points> y, V x)
+  {
+    using T = vec_value_type_t<V>;
+
+    V a = (((T) 3 * (y[1] - y[2])) - y[0] + y[3]) * (T) 0.5;
+    V b = y[2] + y[2] + y[0] - ((T) 5 * y[1] + y[3]) * (T) 0.5;
+    V c = (y[2] - y[0]) * (T) 0.5;
+    return ((a * x + b) * x + c) * x + y[1];
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (crange<const V>, crange<V>, std::array<V, n_points> y, V x)
+  {
+    return tick (y, x);
+  }
+  //----------------------------------------------------------------------------
+};
+//------------------------------------------------------------------------------
 struct catmull_rom_interp {
   //----------------------------------------------------------------------------
   static constexpr uint n_coeffs     = 0;
