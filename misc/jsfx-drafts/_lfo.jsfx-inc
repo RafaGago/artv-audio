@@ -1,0 +1,90 @@
+import _core.jsfx-inc
+
+@init
+// LFO -------------------------------------------------------------------------
+// "phase" as unipolar normalized (from 0 to 1)
+function lfo_init (ptr, freq_hz, phase) (
+    // 0 phase delta, 1 = current phase
+    ptr[0] = (2 / srate) * freq_hz;
+    // constructed from a SAW, start phase at 270 degrees.
+    ptr[1] = 0.5 + 2 * phase;
+);
+
+function lfo_tick_tri (ptr) local (x) (
+    // ptr[0] = phase delta, ptr[1] = current phase
+    x = ptr[1];
+    ptr[1] += ptr[0];
+    ptr[1] > 1 ? ptr[1] -= 2;
+    // saw to triangle
+    x = abs (x); // 1 to 0
+    (x - 0.5) * 2; // -1 to 1
+);
+
+function lfo_tick_sin (ptr) local (x) (
+    // Low precision, but enough for an LFO.
+    // https://web.archive.org/web/20180919204945/http://lab.polygonal.de/2007/07/18/fast-and-accurate-sinecosine-approximation/
+    x = ptr[1] * $pi;
+    ptr[1] += ptr[0];
+    ptr[1] > 1 ? ptr[1] -= 2;
+    1.27323954 * x - sign (x) * .405284735 * x * x;
+);
+// LFO -------------------------------------------------------------------------
+function lfo_bank_init (n_channels, n_stages)(
+    this.n_channels = n_channels;
+    this.n_stages = n_stages;
+    this.lfo_sizeof = 2;
+    this.ptr = mem_reserve (n_channels * n_stages * this.lfo_sizeof);
+);
+
+function lfo_bank_reset_phase (stage_idx) local (ptr, step, ph)(
+    // ptr[0] = phase delta, ptr[1] = current phase
+    ptr = this.ptr + stage_idx * this.n_channels * this.lfo_sizeof;
+    step = 2 / this.n_channels;
+    ph = -1;
+    loop (this.n_channels,
+        ptr[1] = ph;
+        ph += step;
+        ptr += this.lfo_sizeof;
+    );
+);
+
+function lfo_bank_reset_freq (stage_idx, channel_idx, freq_hz)(
+    // ptr[0] = phase delta, ptr[1] = current phase
+    ptr = this.ptr + stage_idx * this.n_channels * this.lfo_sizeof;
+    ptr += channel_idx * this.lfo_sizeof;
+    ptr[0] = (2 / srate) * freq_hz;
+);
+
+function lfo_bank_reset_freq (stage_idx, freq_hz) local (ptr, f)(
+    // ptr[0] = phase delta, ptr[1] = current phase
+    ptr = this.ptr + stage_idx * this.n_channels * this.lfo_sizeof;
+    f = (2 / srate) * freq_hz;
+    loop (this.n_channels,
+        ptr[0] = f;
+        ptr += this.lfo_sizeof;
+    );
+);
+
+// gets "this.n_channels" normalized bipolar (-1 to 1) outs written on ptr.
+function lfo_bank_tick_tri (dst_ptr, stage_idx) local (ptr, i)(
+    // 2 is the numb
+    ptr = this.ptr + stage_idx * this.n_channels * this.lfo_sizeof;
+    i = 0;
+    loop (this.n_channels,
+        dst_ptr[i] = lfo_tick_tri (ptr);
+        ptr += this.lfo_sizeof;
+        i += 1;
+    );
+);
+
+// gets "this.n_channels" normalized bipolar (-1 to 1) outs written on ptr.
+function lfo_bank_tick_sin (dst_ptr, stage_idx) local (ptr, i)(
+    // 2 is the numb
+    ptr = this.ptr + stage_idx * this.n_channels * this.lfo_sizeof;
+    i = 0;
+    loop (this.n_channels,
+        dst_ptr[i] = lfo_tick_sin (ptr);
+        ptr += this.lfo_sizeof;
+        i += 1;
+    );
+);

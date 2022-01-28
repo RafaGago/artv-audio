@@ -1,0 +1,249 @@
+@init
+
+// Andy's TPT State Variable Filter --------------------------------------------
+function svf_lp(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 0;
+  this.m1 = 0;
+  this.m2 = 1;
+);
+
+function svf_hp(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = -k;
+  this.m2 = -1;
+);
+
+function svf_ap(freq, q, sr) local (k, g)(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = -2 * k;
+  this.m2 = 0;
+);
+
+function svf_bell(freq, q, g_db, sr) local (k, g, A)(
+  A = pow (10, g_db * (1. / 40.));
+  k = 1.0 / (q  * A);
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = k * (A * A - 1);
+  this.m2 = 0;
+);
+
+// ready to be added back to the main signal
+function svf_bell_bp(freq, q, g_db, sr) local (k, g, A)(
+  A = pow (10, g_db * (1. / 40.));
+  k = 1.0 / (q  * A);
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 0;
+  this.m1 = k * (A * A - 1);
+  this.m2 = 0;
+);
+
+function svf_lshelf(freq, q, g_db, sr) local (k, g, A)(
+  A = pow (10, g_db * (1. / 40.));
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr) / sqrt(A);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = k * (A - 1);
+  this.m2 = A * A - 1;
+);
+
+function svf_hshelf(freq, q, g_db, sr) local (k, g, A)(
+  A = pow (10, g_db * (1. / 40.));
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr) * sqrt(A);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = A * A;
+  this.m1 = k * (1 - A) * A;
+  this.m2 = 1 - A * A;
+);
+
+function svf_reset_state()(
+  this.ic1eq = this.ic2eq = 0;
+);
+
+function svf_tick(in) local (v1, v2, v3)(
+  v3 = in - this.ic2eq;
+  v1 = this.a1 * this.ic1eq + this.a2 * v3;
+  v2 = this.ic2eq + this.a2 * this.ic1eq + this.a3 * v3;
+  this.ic1eq = 2 * v1 - this.ic1eq;
+  this.ic2eq = 2 * v2 - this.ic2eq;
+  this.m0 * in + this.m1 * v1 + this.m2 * v2;
+);
+
+// -----------------------------------------------------------------------------
+// Chapter 3.10 THE ART OF VA FILTER DESIGN
+//
+// Vadim Zavalishin
+// https://www.native-instruments.com/fileadmin/ni_media/downloads/pdf/VAFilterDesign_2.1.0.pdf
+
+function tpt_1p_reset (freq, samplerate) local(inv_sr_d2, wd, wa)(
+    inv_sr_d2 = 0.5 / samplerate;
+    wd = 2 * $pi * freq;
+    wa = 2 * samplerate * tan (wd * inv_sr_d2);
+    this.g = wa * inv_sr_d2;
+    this.g = this.g / (1 + this.g);
+);
+
+
+function tpt_1p_tick_lp (in) local(v, lp)(
+    v      = (in - this.s) * this.g;
+    lp     = v + this.s;
+    this.s = lp + v;
+    lp;
+);
+
+function tpt_1p_tick_hp (in)(
+    in - this.tpt_1p_tick_lp (in);
+);
+
+function tpt_1p_tick_ap (in) local(lp, hp)(
+    lp = this.tpt_1p_tick_lp (in);
+    lp - (in - lp);
+);
+// -----------------------------------------------------------------------------
+function set_rbj_peak_filter_coeffs (freq, gain, q)
+  local(A, w0, cosw0, alpha, alpha_div_a, a0i) (
+  A = (10^(gain/40));
+  w0 = 2 * $pi * freq / srate;
+  cosw0 = cos(w0);
+  alpha = sin(w0) / (2 * q);
+  alpha_div_a = alpha / A;
+
+  a0i = 1 / (1 + alpha_div_a);
+
+  this.b0 = (1 + alpha * A) * a0i;
+  this.b1 = (-2 * cosw0) * a0i;
+  this.b2 = (1 - alpha * A) * a0i;
+  this.a1 = this.b1;
+  this.a2 = (1 - alpha_div_a) * a0i;
+);
+
+function peak_tdf2_biquad_init(freq, gain, q)(
+  this.set_rbj_peak_filter_coeffs (freq, gain, q);
+  this.z1 = 0;
+  this.z2 = 0;
+);
+
+function peak_df1_biquad_init(freq, gain, q)(
+  this.peak_tdf2_biquad_init(freq, gain, q);
+  this.y1 = 0;
+  this.y2 = 0;
+);
+
+function biquad_df1_tick(x) local(out)(
+  out  = x * this.b0 + this.z1 * this.b1 + this.b2 * this.z2;
+  out += -this.a1 * this.y1 - this.a2 * this.y2;
+  this.z2 = this.z1;
+  this.z1 = x;
+  this.y2 = this.y1;
+  this.y1 = out;
+  out;
+);
+
+function biquad_tdf2_tick(x) local(out)(
+  out     = (x * this.b0 + this.z1);
+  this.z1 = x * this.b1 + this.z2 - this.a1 * out;
+  this.z2 = x * this.b2 - this.a2 * out;
+  out;
+);
+
+function get_quadratic_roots (a, b, c)
+(
+  this.re0 = -b / (2 * a);
+  this.im0 = (b * b) - 4 * a * c;
+  this.im0 < 0 ? (
+    this.im0 = sqrt (-this.im0) / (2 * a);
+    this.im1 = -this.im0;
+    this.re1 = this.re0;
+  ) : ( //else
+    this.im0 = sqrt (this.im0) / (2 * a);
+    this.re1 = this.re0 - this.im0;
+    this.re0 += this.im0;
+    this.im0 = 0;
+    this.im1 = 0;
+  );
+);
+
+function two_rpoles_init (re1, re2)(
+  // partial fraction expansion on two real poles
+  this.p1 = re1;
+  this.p2 = re2;
+  this.kp1  = 1 / (1 - re2 / re1);
+  this.kp2  = 1 / (1 - re1 / re2);
+  this.yp1  = 0;
+  this.yp2  = 0;
+);
+
+function two_rpoles_tick (x)(
+  this.yp1 = this.p1 * this.yp1 + x;
+  this.yp2 = this.p2 * this.yp2 + x;
+  this.yp1 * this.kp1 + this.yp2 * this.kp2;
+);
+
+function cpole_init (re, im)(
+  this.re = re;
+  this.im = im;
+  this.y_re = 0;
+  this.y_im = 0;
+);
+
+function cpole_tick (x_re, x_im) local (re)(
+  // in complex: (pole * y) + x
+
+  // complex mul
+  re        = this.re * this.y_re - this.im * this.y_im;
+  this.y_im = this.re * this.y_im + this.im * this.y_re;
+  this.y_re = re;
+  // complex add
+  this.y_re = x_re + this.y_re;
+  this.y_im = x_im + this.y_im;
+);
+
+function czero_init (re, im)(
+  this.re = re;
+  this.im = im;
+  this.z_re = 0;
+  this.z_im = 0;
+  this.y_re = 0; // last results stored here, two values can't be returned
+  this.y_im = 0; // last results stored here, two values can't be returned
+);
+
+function czero_tick (x_re, x_im) local (re)(
+  // in complex: x - (zero * z)
+
+  // complex mul
+  re        = this.re * this.z_re - this.im * this.z_im;
+  this.y_im = this.re * this.z_im + this.im * this.z_re;
+  this.y_re = re;
+  // complex sub
+  this.y_re = x_re - this.y_re;
+  this.y_im = x_im - this.y_im;
+  this.z_re = x_re;
+  this.z_im = x_im;
+);

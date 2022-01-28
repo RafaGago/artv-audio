@@ -21,6 +21,33 @@
 
 namespace artv {
 
+// this may not belong here:
+
+//------------------------------------------------------------------------------
+static constexpr uint gcd (uint a, uint b)
+{
+  while (a != 0) {
+    int b_prev = b;
+    b          = a;
+    a          = b_prev % a;
+  }
+  return b;
+}
+//------------------------------------------------------------------------------
+static constexpr uint eulers_totient (uint x)
+{
+  uint y = x;
+
+  for (uint p = 2; p * p <= x; ++p) {
+    if (x % p == 0) {
+      do {
+        x /= p;
+      } while (x % p == 0);
+      y -= y / p;
+    }
+  }
+  return (x > 1) ? (y - y / x) : y;
+}
 //------------------------------------------------------------------------------
 class reverb {
 public:
@@ -459,7 +486,7 @@ private:
   void compute_feedback_gain()
   {
     // TODO: this will need to happen for each delay line
-    float rate = (float) _plugcontext->get_sample_rate() / _fb_base_time;
+    float rate    = (float) _plugcontext->get_sample_rate() / _fb_base_time;
     _fb_base_gain = exp ((M_LN10 * -60./20. * 1. / (_fb_rt60_sec * rate));
   }
   //----------------------------------------------------------------------------

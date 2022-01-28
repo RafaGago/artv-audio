@@ -1,0 +1,176 @@
+import _core.jsfx-inc
+
+@init
+
+// this might belong somewhere else
+function interp_catmull_rom (y0, y1, y2, y3, x) local (r, x2, x3)(
+  x2 = x * x;
+  x3 = x2 * x;
+
+  r = x3 * (-y0 + 3 * y1 - 3 * y2 + y3) * 0.5;
+  r += x2 * (2 * y0 - 5 * y1 + 4 * y2 - y3) * 0.5;
+  r += x * (-y0 + y2) * 0.5;
+  r += y1;
+);
+
+
+function delay_line_init (size, n_channels) (
+    this.arr.array_init (size * n_channels);
+    this.n_channels = n_channels;
+    this.mask = size - 1;
+    this.pos = mask;
+);
+
+function _delay_line_get_pos (pos, channel) local (offset)(
+    offset = channel * (this.mask + 1);
+    offset + ((this.pos + pos) & this.mask);
+);
+
+function delay_line_set (value, pos, channel) (
+    this.arr.ptr[this._delay_line_get_pos (pos, channel)] = value;
+);
+
+function delay_line_set_all (ptr, pos) local (i)(
+    i = 0;
+    loop (this.n_channels,
+        this.delay_line_set (ptr[i], pos, i);
+        i += 1;
+    );
+);
+
+function delay_line_get (pos, channel)(
+    this.arr.ptr[this._delay_line_get_pos (pos, channel)];
+);
+
+function delay_line_get_all (dst_ptr, times_ptr) local (i)(
+    i = 0;
+    loop (this.n_channels,
+        dst_ptr[i] = this.delay_line_get (times_ptr[i], i);
+        i += 1;
+    );
+);
+
+function delay_line_get_linterp (pos, channel) local (a, b, pos_int, pos_frac)(
+    pos = clamp (pos, 0, this.mask - 1);
+    pos_int = floor (pos);
+    pos_frac = pos - pos_int;
+    a = this.delay_line_get (pos_int, channel);
+    b = this.delay_line_get (pos_int + 1, channel);
+    a + pos_frac * (b - a);
+);
+
+function delay_line_get_linterp_all (dst_ptr, times_ptr) local (i)(
+    i = 0;
+    loop(this.n_channels,
+        dst_ptr[i] = this.delay_line_get_linterp (times_ptr[i], i);
+        i += 1;
+    );
+);
+
+function delay_line_get_catmull_rom_interp (pos, channel)
+    local (a, b, pos_int, pos_frac)(
+
+    pos = clamp (pos, 0, this.mask - 3);
+    pos_int = floor (pos);
+    pos_frac = pos - pos_int;
+    a = this.delay_line_get (pos_int, channel);
+    b = this.delay_line_get (pos_int + 1, channel);
+    c = this.delay_line_get (pos_int + 2, channel);
+    d = this.delay_line_get (pos_int + 3, channel);
+    interp_catmull_rom (a, b, c, d, pos_frac);
+);
+
+function delay_line_get_catmull_rom_interp_all (dst_ptr, times_ptr) local (i)(
+    i = 0;
+    loop(this.n_channels,
+        dst_ptr[i] = this.delay_line_get_catmull_rom_interp (times_ptr[i], i);
+        i += 1;
+    );
+);
+
+function delay_line_advance()(
+    this.pos -= 1;
+    this.pos < 0 ? (this.pos = this.mask);
+);
+//------------------------------------------------------------------------------
+// thiran order 2 interpolation addon/inheritance/monkey patching to a
+//  "delay_line". Will blow up on feedback loops.
+
+// call from a namespace that already had "delay_line_init" called
+function delay_line_thiran2_add (delta_sync)(
+    // each dynamic thiran array uses these indexes.
+    // 0 = a1,
+    // 1 = a2,
+    // 2 = y1,
+    // 3 = y2,
+    // 4 = time_spls
+    // 5 = n_coeffs/size
+    this.thiran.array_init (this.n_channels * 5);
+    this.thiran.delta_sync = delta_sync;
+);
+
+function delay_line_thiran2_get (pos, channel)
+    local (z0, z1, z2, pos_int, pos_frac, diff, thy_ptr, dlt, y)(
+    // each dynamic thiran array uses these indexes.
+    // 0 = a1,
+    // 1 = a2,
+    // 2 = y1,
+    // 3 = y2,
+    // 4 = time_spls
+    // 5 = n_coeffs/size
+    thy_ptr = this.thiran.ptr + channel * 5;
+
+    pos = clamp (pos, 0, this.mask - 2);
+    pos_int = floor (pos);
+    pos_frac = pos - pos_int;
+
+    z0 = this.delay_line_get (pos_int, channel);
+    z1 = this.delay_line_get (pos_int + 1, channel);
+    z2 = this.delay_line_get (pos_int + 2, channel);
+
+    // delay
+    diff = abs (pos - thy_ptr[4]); // time_spls
+    (diff != 0) ? (
+        (diff > this.delta_sync) ? (
+            // resync. Try to approximate to the current state by lerp, it could
+            // also be done by running some stages on the delay line
+            //
+            // it seems that as in this context z1 and z2 are always correct the
+            // filter behaves nicely most of the time.
+            thy_ptr[2] = z0 + pos_frac * (z1 - z0); // y1
+            thy_ptr[3] = z1 + pos_frac * (z2 - z1); // y2
+        );
+        // biquad recalc
+        // according to this. Table 3.2:
+        // http://users.spa.aalto.fi/vpv/publications/vesan_vaitos/ch3_pt3_allpass.pdf
+        // The point minimizing the avg error for D0 (D0 < D < D0 +1) is 1.403
+
+        d = pos_frac + 2;
+        d = max (pos_frac, 2.0001); // d = delta
+        thy_ptr[0] = -2 * (d - 2) / (d + 1); // a1
+        thy_ptr[1] = ((d - 1) * (d - 2)) / ((d + 1)*(d + 2)); // a2
+        // b0 = a2
+        // b1 = a1
+        // b2 = 1
+        thy_ptr[4] = pos; // time_spls
+    );
+
+    // Direct form1, otherwise it wouldn't take the past states (z's), which
+    // might be more stable for delay line modulation.
+    y = z0 * thy_ptr[1]; // a2(==b0) * z0
+    y += z1 * thy_ptr[0]; // a1(==b1) * z0
+    y += z2; // b2 == 1
+    y -= thy_ptr[2] * thy_ptr[0]; // y1 * a1
+    y -= thy_ptr[3] * thy_ptr[1]; // y2 * a2
+    thy_ptr[3] = thy_ptr[2]; // y2 = y1
+    thy_ptr[2] = y; // y1 = y
+    clamp (y, -5, 5);
+);
+
+function delay_line_thiran2_get_all (dst_ptr, times_ptr) local (i)(
+    i = 0;
+    loop(this.n_channels,
+        dst_ptr[i] = this.delay_line_thiran2_get (times_ptr[i], i);
+        i += 1;
+    );
+);
