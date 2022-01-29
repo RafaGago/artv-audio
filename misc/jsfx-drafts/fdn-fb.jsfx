@@ -6,7 +6,7 @@ slider4:size_m=         3 <0.1, 70, 0.01>    Size1 (m)
 slider5:er_mix=         0.3 <0, 1, 0.01>     ER(%)
 slider6:er_2_late=      0.3 <0, 1, 0.01>     ER to late(%)
 slider7:late_mix=       0.3 <0, 1, 0.01>     late(%)
-slider8:fb_lfo_freq=    0.3 <0, 4, 0.001>   FB LFO Freq(Hz)
+slider8:fb_lfo_freq=    0.3 <0, 1.5, 0.001>   FB LFO Freq(Hz)
 slider9:fb_lfo_depth=   0.3 <0, 1, 0.001>    Chorus Depth
 slider10:chorus_amt=    0   <-1, 1, 0.001>   Chorus Amt
 slider11:hf_absortion=  0.5 <0.0, 1, 0.001> Damping
@@ -34,7 +34,7 @@ To try:
 -Depending on the algo, the range of the LFO AMT might change.
 -Independent lfos for the filter frequencies.
 -Diferent algos can have diferent matrices.
--rs-met kroncker matrices.
+-rs-met kronecker matrices.
  https://www.kvraudio.com/forum/viewtopic.php?t=123095&start=45
 -Matrix rotation.
 -Very small amplitude modulations. (likely not to work).
@@ -96,7 +96,7 @@ ER_DECAY_SEC = 0.5;
 ER_SIZE_MIN = 3.5;
 ER_SIZE_MAX = 69;
 
-LFO_DEPTH_MAX = 0.7;
+LFO_DEPTH_MAX = 0.08;
 LATE_FIRST_GOLDEN_RATIO_IDX = 11;
 
 LATEDIFF_DELAY_SPLS_L = (1 / srate) * golden_ratio[2] * 0.001;
@@ -316,8 +316,8 @@ klp1 = 0.01;
 klp1 = 0.;
 klp2 = 1 - klp1;
 
-loop (0, // just to be able to comment out fast...
-  // TODO: this need their own LFO freq
+loop (1, // just to be able to comment out fast...
+  // TODO: this need their own random LFO freq
   mod_ap_freq.array_alias (scratch2);
   ((counter & 63) == 0) ? (
     i = 0;
@@ -383,18 +383,18 @@ range_mul (feedback.ptr, chnls.ptr, rt60_att.ptr, chnls.size);
 
 // Reminder: Chorus outside of the feedback loop, unpredictable signal level doesn't
 // play well with decaytimes. Just feeding back a very tiny amount.
-range_mul_k (scratch1.ptr, chorus.ptr, 0.05, chorus.size);
+range_mul_k (scratch1.ptr, chorus.ptr, 0.06, chorus.size);
 range_add (feedback.ptr, feedback.ptr, scratch1.ptr, chorus.size);
 
 chorus_l = chorus.ptr[0] + chorus.ptr[1] + chorus.ptr[2] + chorus.ptr[3];
 chorus_r = chorus.ptr[4] + chorus.ptr[5] + chorus.ptr[6] + chorus.ptr[7];
 
-chorus_fact =  (0.25 * 1.15) * chorus_amt * chorus_amt;
+chorus_fact = chorus_amt * chorus_amt;
 
-late_l = chnls.ptr[2] + chorus_l * chorus_fact;
-late_r = chnls.ptr[6] + chorus_r * chorus_fact;
+late_l = chnls.ptr[2] + (chorus_l * chorus_fact * (5 - chorus_fact * 4) * 1 / 5);
+late_r = chnls.ptr[6] + (chorus_r * chorus_fact * (5 - chorus_fact * 4) * 1 / 5);
 
-loop (1,
+loop (0,
   late_l = late_diff_l.schroeder_allpass_tick (late_l, LATEDIFF_DELAY_SPLS_L);
   late_r = late_diff_r.schroeder_allpass_tick (late_r, LATEDIFF_DELAY_SPLS_R);
 );
