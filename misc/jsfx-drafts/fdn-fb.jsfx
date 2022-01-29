@@ -1,16 +1,15 @@
 desc:fdn diffusor with er_feedback  draft
-slider1:enable_impulse= 300 <0 ,2, 1{Off,Impulse,White noise}> Test
-slider2:rt60_msec=      300 <10 ,12000 ,0.1> RT60 (msec)
-slider3:size_m=         3 <0.1, 70, 0.01>    Size1 (m)
-//slider4:meters2=        4 <0.1, 70, 0.01>    Size2 (m)
+slider1:enable_impulse= 0 <0 ,2, 1{Off,Impulse,White noise}> Test
+slider2:mute=           0 <0, 1{Off,On}>     Reverb mute
+slider3:rt60_msec=      300 <10 ,12000 ,0.1> RT60 (msec)
+slider4:size_m=         3 <0.1, 70, 0.01>    Size1 (m)
 slider5:er_mix=         0.3 <0, 1, 0.01>     ER(%)
 slider6:er_2_late=      0.3 <0, 1, 0.01>     ER to late(%)
 slider7:late_mix=       0.3 <0, 1, 0.01>     late(%)
-slider8:fb_lfo_freq=    0.3 <0, 15, 0.001>   FB LFO Freq(Hz)
-slider9:fb_lfo_depth=   0.3 <0, 1, 0.001>    FB LFO Amt
-//slider10:emph_amt=       0 <-1, 1, 0.001>    Emphasis AMT
-//slider11:emph_freq=     80 <300, 6000,0.1>   Emphasis Freq(Hz)
-slider12:hf_absortion=  0.5 <0.0, 1, 0.001> Damping
+slider8:fb_lfo_freq=    0.3 <0, 4, 0.001>   FB LFO Freq(Hz)
+slider9:fb_lfo_depth=   0.3 <0, 1, 0.001>    Chorus Depth
+slider10:chorus_amt=    0   <-1, 1, 0.001>   Chorus Amt
+slider11:hf_absortion=  0.5 <0.0, 1, 0.001> Damping
 
 in_pin:left input
 in_pin:right input
@@ -27,23 +26,31 @@ import _lfo.jsfx-inc
 To try:
 
 -Notch EQ on the feedback loop (modulation?).
+-Nested FDN
 -Time reversed allpasses
--Random instead of sine oscs
+-Random instead of sine oscs (if no chorus)
 -Crossfading between mixing matrices
 -Fix now-broken ER. Add constants.
 -Depending on the algo, the range of the LFO AMT might change.
 -Independent lfos for the filter frequencies.
 -Diferent algos can have diferent matrices.
+-rs-met kroncker matrices.
+ https://www.kvraudio.com/forum/viewtopic.php?t=123095&start=45
+-Matrix rotation.
+-Very small amplitude modulations. (likely not to work).
+-With the size parameter, make some channels lose weight and others to win.
+-Multiband reverb (Allows lower frequencies at lower sr).
+-Input crossover (remove more LF).
+-Chorus.
+-Schroeder allpasses in series increase decrease density.
+-Difussors in series.
+-Bigger matrices.
 
 Reminder:
 
 The gain coefficient for a 1st order all pass can be computed to correspond to
 the frequency that is phase shifted by 90°:
 
-wh = pi * hz / srate;
-gain = tan (wh);
-gain = (1 - gain) / (1 + gain);
-gain = clamp(gain, 0 ,1);
 */
 @init
 
@@ -79,6 +86,8 @@ N_ER_CHNLS = 16;
 N_LATE_CHNLS = 8;
 N_LATE_STAGES = 1;
 
+DC_BLOCKER_FREQ = 4;
+
 // parameter/setting ideas:
 // ER pan/width
 
@@ -87,58 +96,49 @@ ER_DECAY_SEC = 0.5;
 ER_SIZE_MIN = 3.5;
 ER_SIZE_MAX = 69;
 
-LFO_DEPTH_MAX = 0.5;
+LFO_DEPTH_MAX = 0.7;
 LATE_FIRST_GOLDEN_RATIO_IDX = 11;
+
+LATEDIFF_DELAY_SPLS_L = (1 / srate) * golden_ratio[2] * 0.001;
+LATEDIFF_DELAY_SPLS_R = (1 / srate) * golden_ratio[14] * 0.001;
+
+LATEDIFF_FREQ_L = 83;
+LATEDIFF_FREQ_R = 13;
 
 // ER
 er_chnls.array_init (N_ER_CHNLS);
-er_feedback.array_init (N_ER_CHNLS);
-er_rt60_att.array_init (N_ER_CHNLS);
-er_delay_spls.array_init (N_ER_CHNLS);
+er_feedback.array_init (er_chnls.size);
+er_rt60_att.array_init (er_chnls.size);
+er_delay_spls.array_init (er_chnls.size);
 
 get_delay_length_samples(
-    er_delay_spls.ptr, N_ER_CHNLS, ER_SIZE_MIN, ER_SIZE_MAX
+    er_delay_spls.ptr, er_chnls.size, ER_SIZE_MIN, ER_SIZE_MAX
     );
 
-max_er_delay_spl = range_get_max (er_delay_spls.ptr, N_ER_CHNLS);
-er_delay.delay_line_init (round_next_pow2 (max_er_delay_spl), N_ER_CHNLS);
+max_er_delay_spl = range_get_max (er_delay_spls.ptr, er_chnls.size);
+er_delay.delay_line_init (round_next_pow2 (max_er_delay_spl), er_chnls.size);
 
 get_rt60_gain(
-    er_rt60_att.ptr, er_delay_spls.ptr, ER_DECAY_SEC, 0.3, N_ER_CHNLS
+    er_rt60_att.ptr, er_delay_spls.ptr, ER_DECAY_SEC, 0.3, er_chnls.size
     );
 
 // Late
 chnls.array_init (N_LATE_CHNLS);
-feedback.array_init (N_LATE_CHNLS);
-rt60_att.array_init (N_LATE_CHNLS);
-delay_spls.array_init (N_LATE_CHNLS);
-mod_spls.array_init (N_LATE_CHNLS);
+chorus.array_init (chnls.size);
+feedback.array_init (chnls.size);
+rt60_att.array_init (chnls.size);
+delay_spls.array_init (chnls.size);
+mod_spls.array_init (chnls.size);
 
-lfos.lfo_bank_init (N_LATE_CHNLS, N_LATE_STAGES);
+lfos.lfo_bank_init (chnls.size, chnls.size);
 lfos.lfo_bank_reset_phase (0);
 // 1 sec max. It will have to be computed from the maximum sizes on the final
 // impl.
-delay.delay_line_init (round_next_pow2 (srate), N_LATE_CHNLS);
+delay.delay_line_init (round_next_pow2 (srate), chnls.size);
 delay.delay_line_thiran2_add (srate); // disable thyran resync
 
-loop(0,
-  // SOUNDS BAD
-  feedback_delay.delay_line_init (16, N_LATE_CHNLS);
-  feedback_delay_spls.array_init (N_ER_CHNLS);
-
-  min_delay = srate / 44100;
-
-  feedback_delay_spls.ptr[0] = min_delay * 2;
-  feedback_delay_spls.ptr[1] = min_delay * 4;
-  feedback_delay_spls.ptr[2] = min_delay * 3;
-  feedback_delay_spls.ptr[3] = min_delay * 6;
-  feedback_delay_spls.ptr[4] = min_delay * 7;
-  feedback_delay_spls.ptr[5] = min_delay * 9;
-  feedback_delay_spls.ptr[6] = min_delay * 6;
-  feedback_delay_spls.ptr[7] = min_delay * 6;
-);
-
-ap_freq.array_init (N_LATE_CHNLS);
+// 1P allpasses
+ap_freq.array_init (chnls.size);
 ap_freq.ptr[0] = 200;
 ap_freq.ptr[1] = 300;
 ap_freq.ptr[2] = 502;
@@ -156,6 +156,25 @@ ap_6.tpt_1p_reset (ap_freq.ptr[5], srate);
 ap_7.tpt_1p_reset (ap_freq.ptr[6], srate);
 ap_8.tpt_1p_reset (ap_freq.ptr[7], srate);
 
+dc1.dc_blocker_init (DC_BLOCKER_FREQ, srate);
+dc2.dc_blocker_init (DC_BLOCKER_FREQ, srate);
+dc3.dc_blocker_init (DC_BLOCKER_FREQ, srate);
+dc4.dc_blocker_init (DC_BLOCKER_FREQ, srate);
+dc5.dc_blocker_init (DC_BLOCKER_FREQ, srate);
+dc6.dc_blocker_init (DC_BLOCKER_FREQ, srate);
+dc7.dc_blocker_init (DC_BLOCKER_FREQ, srate);
+dc8.dc_blocker_init (DC_BLOCKER_FREQ, srate);
+
+
+late_diff_l.schroeder_allpass (LATEDIFF_DELAY_SPLS_L);
+late_diff_l.schroeder_allpass_set_coeff(
+  freq_to_schroeder_coeff (LATEDIFF_FREQ_L, srate)
+  );
+late_diff_r.schroeder_allpass (LATEDIFF_DELAY_SPLS_R);
+late_diff_r.schroeder_allpass_set_coeff(
+  freq_to_schroeder_coeff (LATEDIFF_FREQ_R, srate)
+  );
+
 // trigger signals
 test_next = counter + 1;
 
@@ -171,22 +190,21 @@ range_clamp (delay_spls.ptr, delay_spls.size, 0, delay.mask);
 
 // YOLO linear empirical/perceptual correction. The 1.55 is because there are
 // already fixed lossy elements in the feedback loop
-rt60_corr = (rt60_msec * 0.001) * (1.55 + (hf_absortion * 0.55));
+rt60_corr = (rt60_msec * 0.001) * (1. + (hf_absortion * 0.55));
 get_rt60_gain(
-  rt60_att.ptr, delay_spls.ptr, rt60_corr, 0.4, N_LATE_CHNLS
+  rt60_att.ptr, delay_spls.ptr, rt60_corr, 0.4, chnls.size
   );
-
 range_mul_k(
-  mod_spls.ptr, delay_spls.ptr, fb_lfo_depth * LFO_DEPTH_MAX, N_LATE_CHNLS
+  mod_spls.ptr, delay_spls.ptr, fb_lfo_depth * LFO_DEPTH_MAX, chnls.size
   );
 
 i = 0;
-loop (N_LATE_CHNLS,
+loop (chnls.size,
     lfos.lfo_bank_reset_freq (0, i, fb_lfo_freq + fb_lfo_freq * i * 0.0001);
     i += 1;
 );
 
-
+// Hiself decays
 hshelf_db = -6.22 * hf_absortion;
 hshelf_q = 0.707;
 hshelf1.svf_hshelf (3300, hshelf_q, hshelf_db, srate);
@@ -213,7 +231,7 @@ counter >= test_next ? (
 );
 
 (on_noise != 0) ? (
-  slp0 = spl1 = (rand (2) - 1) * 0.1;
+  spl0 = spl1 = (rand (2) - 1) * 0.1;
   on_noise = (counter < test_off) ? 1 : 0;
 );
 
@@ -241,7 +259,7 @@ er_chnls.ptr[13] = -r;
 er_chnls.ptr[14] =  m;
 er_chnls.ptr[15] = -s * 8;
 
-range_add (er_chnls.ptr, er_chnls.ptr, er_feedback.ptr, N_ER_CHNLS);
+range_add (er_chnls.ptr, er_chnls.ptr, er_feedback.ptr, er_chnls.size);
 
 er_delay.delay_line_advance();
 er_delay.delay_line_set_all (er_chnls.ptr, 0);
@@ -250,9 +268,9 @@ er_delay.delay_line_get_all (er_chnls.ptr, er_delay_spls.ptr);
 // mix the faster channels, leave the ones with longer delays more separate.
 hadamard_4 (er_feedback.ptr, er_chnls.ptr);
 hadamard_4 (er_feedback.ptr + 4, er_chnls.ptr + 4);
-memcpy (scratch1.ptr, er_feedback.ptr, N_ER_CHNLS);
-householder (er_feedback.ptr, scratch1.ptr, N_ER_CHNLS);
-range_mul (er_feedback.ptr, er_feedback.ptr, er_rt60_att.ptr, N_ER_CHNLS);
+memcpy (scratch1.ptr, er_feedback.ptr, er_chnls.size);
+householder (er_feedback.ptr, scratch1.ptr, er_chnls.size);
+range_mul (er_feedback.ptr, er_feedback.ptr, er_rt60_att.ptr, er_chnls.size);
 
 er_sig_l = er_chnls.ptr[0] + er_chnls.ptr[5] + er_chnls.ptr[9]  + er_chnls.ptr[12];
 er_sig_r = er_chnls.ptr[1] + er_chnls.ptr[4] + er_chnls.ptr[8]  + er_chnls.ptr[13];
@@ -265,7 +283,6 @@ er_r = er_sig_r * er_mix;
 er_tail = (er_sig_l + er_sig_r) * 0.5 * er_2_late;
 
 // Tail ------------------------
-
 chnls.ptr[0] =  -m;
 chnls.ptr[1] =  s;
 chnls.ptr[2] =  er_tail;
@@ -275,20 +292,20 @@ chnls.ptr[5] =  -s;
 chnls.ptr[6] =  er_tail;
 chnls.ptr[7] =  0;
 
-range_add (chnls.ptr, chnls.ptr, feedback.ptr, N_LATE_CHNLS);
+range_add (chnls.ptr, chnls.ptr, feedback.ptr, chnls.size);
 
 // LFO
 mod_delay_spls.array_alias (scratch4);
 lfo_out.array_alias (scratch3);
 
-// LFO to delay time
+// Delay line + chorus
 lfos.lfo_bank_tick_sin (lfo_out.ptr, 0);
-range_mul (mod_delay_spls.ptr, lfo_out.ptr, mod_spls.ptr, N_LATE_CHNLS);
-range_add (mod_delay_spls.ptr, mod_delay_spls.ptr, delay_spls.ptr, N_LATE_CHNLS);
+range_mul (mod_delay_spls.ptr, lfo_out.ptr, mod_spls.ptr, chnls.size);
+range_add (mod_delay_spls.ptr, mod_delay_spls.ptr, delay_spls.ptr, chnls.size);
 delay.delay_line_advance();
 delay.delay_line_set_all (chnls.ptr, 0);
-delay.delay_line_thiran2_get_all (chnls.ptr, mod_delay_spls.ptr);
-//delay.delay_line_get_catmull_rom_interp_all (chnls.ptr, mod_delay_spls.ptr);
+delay.delay_line_thiran2_get_all (chorus.ptr, mod_delay_spls.ptr);
+delay.delay_line_thiran2_get_all  (chnls.ptr, delay_spls.ptr);
 
 // HP/LP + AP
 khp1 = 0.001;
@@ -299,12 +316,12 @@ klp1 = 0.01;
 klp1 = 0.;
 klp2 = 1 - klp1;
 
-loop (1, // just to be able to comment out fast...
+loop (0, // just to be able to comment out fast...
   // TODO: this need their own LFO freq
   mod_ap_freq.array_alias (scratch2);
   ((counter & 63) == 0) ? (
     i = 0;
-    loop (N_LATE_CHNLS,
+    loop (chnls.size,
       mod_ap_freq.ptr[i] = pow (2, lfo_out.ptr[i] * 2) * ap_freq.ptr[i];
       i += 1;
     );
@@ -351,39 +368,42 @@ loop(1, // just to be able to comment fast...
   chnls.ptr[7] = hshelf8.svf_tick (chnls.ptr[7]);
 );
 
-range_mul (feedback.ptr, chnls.ptr, rt60_att.ptr, N_LATE_CHNLS);
-/*
-feedback.ptr[0] *= 1.0;
-feedback.ptr[1] *= 1.07;
-feedback.ptr[2] *= 1.06;
-feedback.ptr[3] *= 1.07;
-feedback.ptr[4] *= 1.0;
-feedback.ptr[5] *= 0.99;
-feedback.ptr[6] *= 0.96;
-feedback.ptr[7] *= 0.96;
-*/
-
-loop(0,
-  //sounds awful
-  // allpasses by feedback + feedforward
-  feedback_delay.delay_line_advance();
-  feedback_delay.delay_line_set_all (feedback.ptr, 0);
-  feedback_delay.delay_line_get_all(
-    scratch1.ptr, feedback_delay_spls.ptr
-    );
-  range_mul_k (scratch1.ptr, scratch1.ptr, 0.85, N_LATE_CHNLS);
-  range_add (feedback.ptr, feedback.ptr, scratch1.ptr, N_LATE_CHNLS);
-  range_mul_k (feedback.ptr, feedback.ptr, 0.5, N_LATE_CHNLS);
+loop(1,
+  chnls.ptr[0] = dc1.dc_blocker_tick (chnls.ptr[0]);
+  chnls.ptr[1] = dc2.dc_blocker_tick (chnls.ptr[1]);
+  chnls.ptr[2] = dc3.dc_blocker_tick (chnls.ptr[2]);
+  chnls.ptr[3] = dc4.dc_blocker_tick (chnls.ptr[3]);
+  chnls.ptr[4] = dc5.dc_blocker_tick (chnls.ptr[4]);
+  chnls.ptr[5] = dc6.dc_blocker_tick (chnls.ptr[5]);
+  chnls.ptr[6] = dc7.dc_blocker_tick (chnls.ptr[6]);
+  chnls.ptr[7] = dc8.dc_blocker_tick (chnls.ptr[7]);
 );
 
+range_mul (feedback.ptr, chnls.ptr, rt60_att.ptr, chnls.size);
 
-late_l = chnls.ptr[2];
-late_r = chnls.ptr[6];
+// Reminder: Chorus outside of the feedback loop, unpredictable signal level doesn't
+// play well with decaytimes. Just feeding back a very tiny amount.
+range_mul_k (scratch1.ptr, chorus.ptr, 0.05, chorus.size);
+range_add (feedback.ptr, feedback.ptr, scratch1.ptr, chorus.size);
+
+chorus_l = chorus.ptr[0] + chorus.ptr[1] + chorus.ptr[2] + chorus.ptr[3];
+chorus_r = chorus.ptr[4] + chorus.ptr[5] + chorus.ptr[6] + chorus.ptr[7];
+
+chorus_fact =  (0.25 * 1.15) * chorus_amt * chorus_amt;
+
+late_l = chnls.ptr[2] + chorus_l * chorus_fact;
+late_r = chnls.ptr[6] + chorus_r * chorus_fact;
+
+loop (1,
+  late_l = late_diff_l.schroeder_allpass_tick (late_l, LATEDIFF_DELAY_SPLS_L);
+  late_r = late_diff_r.schroeder_allpass_tick (late_r, LATEDIFF_DELAY_SPLS_R);
+);
 
 late_l *= late_mix;
 late_r *= late_mix;
 
-spl0 = er_l + late_l;
-spl1 = er_r + late_r;
-
+(mute == 0) ?(
+  spl0 = er_l + late_l;
+  spl1 = er_r + late_r;
+);
 counter += 1;

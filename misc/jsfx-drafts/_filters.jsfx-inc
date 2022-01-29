@@ -247,3 +247,14 @@ function czero_tick (x_re, x_im) local (re)(
   this.z_re = x_re;
   this.z_im = x_im;
 );
+
+function dc_blocker_init (freq, samplerate) (
+    this.b1 = exp (-2 * $pi  * freq / samplerate);
+    this.a0 = 1 - this.b1;
+);
+
+function dc_blocker_tick (in) local (y1) (
+    y1 = this.y1;
+    this.y1 = in * this.a0 + this.y1 * this.b1; // regular 1P, 0Z smoother
+    in - y1;
+);

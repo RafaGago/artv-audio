@@ -44,6 +44,12 @@ function array_alias (other*) (
     this.ptr = other.ptr;
     this.size = other.size;
 );
+// -----------------------------------------------------------------------------
+// Some reserved library space e.g. for converting from pointer based interfaces
+// to value based ones. For some reason trying to increment it breaks 
+// everything.
+
+_libmem.array_init (8);
 
 // array 2d --------------------------------------------------------------------
 function array2d_init (size_a, size_b) (
