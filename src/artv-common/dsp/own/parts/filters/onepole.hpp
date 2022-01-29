@@ -15,7 +15,7 @@ struct onepole_smoother {
   //----------------------------------------------------------------------------
   enum coeffs { b1, n_coeffs };
   enum coeffs_int { n_coeffs_int };
-  enum state { z1, n_states };
+  enum state { y1, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> srate)
@@ -36,7 +36,7 @@ struct onepole_smoother {
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
     crange<const vec_value_type_t<V>> c, // coeffs (1 set)
-    crange<V>                         z, // states (interleaved, SIMD aligned)
+    crange<V>                         st, // states (interleaved, SIMD aligned)
     V                                 in)
   {
     using T = vec_value_type_t<V>;
@@ -47,21 +47,21 @@ struct onepole_smoother {
     V a0_v = vec_set<V> (((T) 1.) - c[b1]);
     V b1_v = vec_set<V> (c[b1]);
 
-    z[z1] = (in * a0_v) + (z[z1] * b1_v);
-    return z[z1];
+    st[y1] = (in * a0_v) + (st[y1] * b1_v);
+    return st[y1];
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
     crange<const V> c, // coeffs (interleaved, SIMD aligned)
-    crange<V>       z, // states (interleaved, SIMD aligned)
+    crange<V>       st, // states (interleaved, SIMD aligned)
     V               in)
   {
     assert (z.size() >= n_states);
     assert (c.size() >= n_coeffs);
 
-    z[z1] = (in * (1. - c[b1])) + (z[z1] * c[b1]);
-    return z[z1];
+    st[y1] = (in * (1. - c[b1])) + (st[y1] * c[b1]);
+    return st[y1];
   }
   //----------------------------------------------------------------------------
 };
