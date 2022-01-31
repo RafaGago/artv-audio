@@ -130,6 +130,22 @@ function range_add_k (dst_ptr, src_ptr, k, size) local (i)(
     );
 );
 
+function range_sub (dst_ptr, src1_ptr, src2_ptr, size) local (i)(
+    i = 0;
+    loop (size,
+        dst_ptr[i] = src1_ptr[i] - src2_ptr[i];
+        i += 1;
+    );
+);
+
+function range_sub_k (dst_ptr, src_ptr, k, size) local (i)(
+    i = 0;
+    loop (size,
+        dst_ptr[i] = src_ptr[i] - k;
+        i += 1;
+    );
+);
+
 // Small table of prime numbers ------------------------------------------------
 // On C++ it can be stored as unsigned chars
 primes.array_init (54);
