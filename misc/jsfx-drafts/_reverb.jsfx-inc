@@ -134,28 +134,25 @@ function get_rt60_gain(
 
 
 // https://ccrma.stanford.edu/~jos/pasp/Prime_Power_Delay_Line.html
-// This has "fact" to allow a more loose rounding (not coprime). This is to
-// avoid big parts of the range not changing.
-//
-// Notice that another strategy would be to find all the coprimes of "dmax" and
-// select
-function get_delay_length_samples (dst_ptr, n_delays, pathmin, pathmax, fact)
+// This has prime_idx to get an offset to the primes list and a rounding 
+// factor to allow imperfections.
+function get_delay_length_samples(
+  dst_ptr, n_delays, pathmin, pathmax, prime_idx, rounding_factor
+  )
   local (dmin, dmax, i, v)(
 
     dmin = srate * pathmin * (1 / 343); // 343 = C = soundspeed
     dmax = srate * pathmax * (1 / 343);
+    primes_offs = 12;
     i = 0;
-    loop (n_delays,
+    loop (n_delays, 
        v = dmin * pow (dmax / dmin, i / (n_delays - 1));
-       v = ((log (v) / log (primes.ptr[i]) * fact) + 0.5) | 0;
-       v /= fact;
-       dst_ptr[i] = pow (primes.ptr[i], v);
+       v = (log (v) / log (primes.ptr[prime_idx + i]) * rounding_factor) + 0.5;
+       v |= 0; // to integer
+       v /= rounding_factor;
+       dst_ptr[i] = pow (primes.ptr[prime_idx + i], v);
        i += 1;
     );
-);
-
-function get_delay_length_samples (dst_ptr, n_delays, pathmin, pathmax)(
-   get_delay_length_samples(dst_ptr, n_delays, pathmin, pathmax, 1);
 );
 
 /*
