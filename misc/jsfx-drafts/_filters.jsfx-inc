@@ -126,6 +126,17 @@ function tpt_1p_tick_ap (in) local(lp, hp)(
     lp = this.tpt_1p_tick_lp (in);
     lp - (in - lp);
 );
+//------------------------------------------------------------------------------
+// 1 pole no zero LP for smoothing
+function smooth_lp_1p_0z (freq, samplerate) (
+    this.b1 = exp (-2 * $pi  * freq / samplerate);
+    this.a0 = 1 - this.b1;
+);
+
+function smooth_lp_1p_0z_tick (in) (
+    this.y1 = in * this.a0 + this.y1 * this.b1;
+    this.y1;
+);
 // -----------------------------------------------------------------------------
 function set_rbj_peak_filter_coeffs (freq, gain, q)
   local(A, w0, cosw0, alpha, alpha_div_a, a0i) (
@@ -247,14 +258,13 @@ function czero_tick (x_re, x_im) local (re)(
   this.z_re = x_re;
   this.z_im = x_im;
 );
-
+//------------------------------------------------------------------------------
 function dc_blocker_init (freq, samplerate) (
-    this.b1 = exp (-2 * $pi  * freq / samplerate);
-    this.a0 = 1 - this.b1;
+    this.lp = smooth_lp_1p_0z (freq, samplerate);
 );
 
 function dc_blocker_tick (in) local (y1) (
-    y1 = this.y1;
-    this.y1 = in * this.a0 + this.y1 * this.b1; // regular 1P, 0Z smoother
+    y1 = this.lp.y1;
+    this.lp.smooth_lp_1p_0z_tick (in);
     in - y1;
 );

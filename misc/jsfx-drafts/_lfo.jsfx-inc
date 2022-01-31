@@ -1,4 +1,5 @@
 import _core.jsfx-inc
+import _filters.jsfx-inc
 
 @init
 // LFO -------------------------------------------------------------------------
@@ -10,11 +11,26 @@ function lfo_init (ptr, freq_hz, phase) (
     ptr[1] = 0.5 + 2 * phase;
 );
 
-function lfo_tick_tri (ptr) local (x) (
+function lfo_size () (
+    2;
+);
+
+function lfo_get_phase (ptr) (
+    // ptr[0] = phase delta, ptr[1] = current phase
+    ptr[1];
+);
+
+function lfo_tick_saw (ptr) local (x) (
     // ptr[0] = phase delta, ptr[1] = current phase
     x = ptr[1];
     ptr[1] += ptr[0];
     ptr[1] > 1 ? ptr[1] -= 2;
+    x;
+);
+
+function lfo_tick_tri (ptr) local (x) (
+    // ptr[0] = phase delta, ptr[1] = current phase
+    x = lfo_tick_saw (ptr);
     // saw to triangle
     x = abs (x); // 1 to 0
     (x - 0.5) * 2; // -1 to 1
@@ -28,11 +44,12 @@ function lfo_tick_sin (ptr) local (x) (
     ptr[1] > 1 ? ptr[1] -= 2;
     1.27323954 * x - sign (x) * .405284735 * x * x;
 );
-// LFO -------------------------------------------------------------------------
+
+// LFO bank --------------------------------------------------------------------
 function lfo_bank_init (n_channels, n_stages)(
     this.n_channels = n_channels;
     this.n_stages = n_stages;
-    this.lfo_sizeof = 2;
+    this.lfo_sizeof = lfo_size();
     this.ptr = mem_reserve (n_channels * n_stages * this.lfo_sizeof);
 );
 
@@ -88,3 +105,20 @@ function lfo_bank_tick_sin (dst_ptr, stage_idx) local (ptr, i)(
         i += 1;
     );
 );
+
+// Filtered noise LFO ----------------------------------------------------------
+function lfo_filt_noise_init (freq, samplerate) (
+    this.lp       = smooth_lp_1p_0z (freq, samplerate);
+    this.lfo_ptr  = mem_reserve (lfo_size);
+    lfo_init (lfo_ptr, freq, samplerate);
+    this.noise = rand (2) - 1;
+);
+
+function lfo_filt_noise_tick () local (old_phase) (
+    old_phase = lfo_tick_saw (this.lfo_ptr);
+    (old_phase > lfo_get_phase (this.lfo_ptr)) ? ( // new LFO cycle change
+        this.noise = rand (2) - 1;
+    );
+    smooth_lp_1p_0z_tick (this.noise);
+);
+
