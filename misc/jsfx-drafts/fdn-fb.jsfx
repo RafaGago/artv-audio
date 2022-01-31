@@ -2,7 +2,7 @@ desc:fdn diffusor with er_feedback  draft
 slider1:enable_impulse= 0 <0 ,2, 1{Off,Impulse,White noise}> Test
 slider2:mute=           0 <0, 1{Off,On}>     Reverb mute
 slider3:rt60_msec=      300 <10 ,12000 ,0.1> RT60 (msec)
-slider4:size_m=         3 <0.1, 70, 0.01>    Size1 (m)
+slider4:size_m=         3 <0.1, 70, 0.001>   Size1 (m)
 slider5:er_mix=         0.3 <0, 1, 0.01>     ER(%)
 slider6:er_2_late=      0.3 <0, 1, 0.01>     ER to late(%)
 slider7:late_mix=       0.3 <0, 1, 0.01>     late(%)
@@ -54,22 +54,7 @@ the frequency that is phase shifted by 90°:
 */
 @init
 
-//------------------------------------------------------------------------------
-function reset_delay_length_samples_gr (ptr, n_chnls, meters, golden_ratio_idx)
-    local (i, d, factor) (
-
-    d = srate * meters * (1 / 343); // 343 = C = soundspeed
-    factor = d / golden_ratio[golden_ratio_idx + (n_chnls / 2)];
-    i = 0;
-    loop (n_chnls,
-        ptr[i] = golden_ratio[golden_ratio_idx + i] * factor;
-        i += 1;
-    );
-    loop (n_chnls / 2,
-        mem_swap (ptr, i, i + n_chnls / 2);
-        i += 1;
-    );
-);
+GOLDEN_RATIO = (1 + sqrt(5)) / 2;
 
 // memory areas for free usage -------------------------------------------------
 SCRATCH_MEM_AREA_SIZE = 32;
@@ -95,12 +80,17 @@ DC_BLOCKER_FREQ = 4;
 ER_DECAY_SEC = 0.5;
 ER_SIZE_MIN = 3.5;
 ER_SIZE_MAX = 69;
+ER_DELAY_PRIME_IDX = 0;
+ER_DELAY_ROUNDING_FACTOR = 1;
 
 LFO_DEPTH_MAX = 0.08;
-LATE_FIRST_GOLDEN_RATIO_IDX = 11;
 
-LATEDIFF_DELAY_SPLS_L = (1 / srate) * golden_ratio[2] * 0.001;
-LATEDIFF_DELAY_SPLS_R = (1 / srate) * golden_ratio[14] * 0.001;
+LATE_DELAY_RATIO = 1.8;
+LATE_DELAY_PRIME_IDX = 23;
+LATE_DELAY_ROUNDING_FACTOR = 100;
+
+LATEDIFF_DELAY_SPLS_L = (1 / srate) * 17 * 0.001;
+LATEDIFF_DELAY_SPLS_R = (1 / srate) * 16 * 0.001;
 
 LATEDIFF_FREQ_L = 83;
 LATEDIFF_FREQ_R = 13;
@@ -112,7 +102,12 @@ er_rt60_att.array_init (er_chnls.size);
 er_delay_spls.array_init (er_chnls.size);
 
 get_delay_length_samples(
-    er_delay_spls.ptr, er_chnls.size, ER_SIZE_MIN, ER_SIZE_MAX
+    er_delay_spls.ptr,
+    er_chnls.size,
+    ER_SIZE_MIN,
+    ER_SIZE_MAX,
+    ER_DELAY_PRIME_IDX,
+    ER_DELAY_ROUNDING_FACTOR
     );
 
 max_er_delay_spl = range_get_max (er_delay_spls.ptr, er_chnls.size);
@@ -139,7 +134,7 @@ delay.delay_line_thiran2_add (srate); // disable thyran resync
 
 // 1P allpasses
 ap_freq.array_init (chnls.size);
-ap_freq.ptr[0] = 200;
+ap_freq.ptr[0] = 100;
 ap_freq.ptr[1] = 300;
 ap_freq.ptr[2] = 502;
 ap_freq.ptr[3] = 740;
@@ -165,7 +160,6 @@ dc6.dc_blocker_init (DC_BLOCKER_FREQ, srate);
 dc7.dc_blocker_init (DC_BLOCKER_FREQ, srate);
 dc8.dc_blocker_init (DC_BLOCKER_FREQ, srate);
 
-
 late_diff_l.schroeder_allpass (LATEDIFF_DELAY_SPLS_L);
 late_diff_l.schroeder_allpass_set_coeff(
   freq_to_schroeder_coeff (LATEDIFF_FREQ_L, srate)
@@ -181,10 +175,36 @@ test_next = counter + 1;
 freembuf (_memtop_ptr); // tell the Host how much memory we need.
 
 @slider //----------------------------------------------------------------------
+loop(1,
+  get_delay_length_samples(
+    delay_spls.ptr,
+    delay_spls.size,
+    size_m,
+    size_m * LATE_DELAY_RATIO,
+    LATE_DELAY_PRIME_IDX,
+    LATE_DELAY_ROUNDING_FACTOR
+    );
+);
 
-reset_delay_length_samples_gr(
-  delay_spls.ptr, delay_spls.size, size_m, LATE_FIRST_GOLDEN_RATIO_IDX
-  );
+A = delay_spls.ptr[0];
+
+i = 0;
+loop (delay_spls.size / 2,
+    mem_swap (delay_spls.ptr, i, i + (delay_spls.size / 2));
+    i += 1;
+);
+
+loop(0,
+  MUL = 1.6;
+  delay_spls.ptr[0] = srate * 0.0185 * MUL;
+  delay_spls.ptr[1] = srate * 0.0333 * MUL;
+  delay_spls.ptr[2] = srate * 0.0421 * MUL;
+  delay_spls.ptr[3] = srate * 0.0707 * MUL;
+  delay_spls.ptr[4] = srate * 0.0247 * MUL;
+  delay_spls.ptr[5] = srate * 0.0677 * MUL;
+  delay_spls.ptr[6] = srate * 0.0104 * MUL;
+  delay_spls.ptr[7] = srate * 0.0377 * MUL;
+);
 
 range_clamp (delay_spls.ptr, delay_spls.size, 0, delay.mask);
 
@@ -283,12 +303,12 @@ er_r = er_sig_r * er_mix;
 er_tail = (er_sig_l + er_sig_r) * 0.5 * er_2_late;
 
 // Tail ------------------------
-chnls.ptr[0] =  -m;
+chnls.ptr[0] =  m;
 chnls.ptr[1] =  s;
-chnls.ptr[2] =  er_tail;
+chnls.ptr[2] =  0;
 chnls.ptr[3] =  0;
-chnls.ptr[4] =  m;
-chnls.ptr[5] =  -s;
+chnls.ptr[4] =  0;
+chnls.ptr[5] =  0;
 chnls.ptr[6] =  er_tail;
 chnls.ptr[7] =  0;
 
@@ -308,7 +328,7 @@ delay.delay_line_thiran2_get_all (chorus.ptr, mod_delay_spls.ptr);
 delay.delay_line_thiran2_get_all  (chnls.ptr, delay_spls.ptr);
 
 // HP/LP + AP
-khp1 = 0.001;
+khp1 = 0.01;
 khp1 = 0.;
 khp2 = 1 - khp1;
 
@@ -353,7 +373,7 @@ loop (1, // just to be able to comment out fast...
     ap_8.tpt_1p_tick_ap (chnls.ptr[7]) * klp2;
 );
 
-rochebois_8 (scratch2.ptr, chnls.ptr);
+hadamard_8 (scratch2.ptr, chnls.ptr);
 memcpy (chnls.ptr, scratch2.ptr, 8);
 
 loop(1, // just to be able to comment fast...
@@ -383,7 +403,7 @@ range_mul (feedback.ptr, chnls.ptr, rt60_att.ptr, chnls.size);
 
 // Reminder: Chorus outside of the feedback loop, unpredictable signal level doesn't
 // play well with decaytimes. Just feeding back a very tiny amount.
-range_mul_k (scratch1.ptr, chorus.ptr, 0.06, chorus.size);
+range_mul_k (scratch1.ptr, chorus.ptr, 0.04, chorus.size);
 range_add (feedback.ptr, feedback.ptr, scratch1.ptr, chorus.size);
 
 chorus_l = chorus.ptr[0] + chorus.ptr[1] + chorus.ptr[2] + chorus.ptr[3];
@@ -392,7 +412,7 @@ chorus_r = chorus.ptr[4] + chorus.ptr[5] + chorus.ptr[6] + chorus.ptr[7];
 chorus_fact = chorus_amt * chorus_amt;
 
 late_l = chnls.ptr[2] + (chorus_l * chorus_fact * (5 - chorus_fact * 4) * 1 / 5);
-late_r = chnls.ptr[6] + (chorus_r * chorus_fact * (5 - chorus_fact * 4) * 1 / 5);
+late_r = chnls.ptr[3] + (chorus_r * chorus_fact * (5 - chorus_fact * 4) * 1 / 5);
 
 loop (0,
   late_l = late_diff_l.schroeder_allpass_tick (late_l, LATEDIFF_DELAY_SPLS_L);
