@@ -10,7 +10,8 @@ slider8:chorus_freq=    0.3 <0, 5, 0.001>    Chorus Freq(Hz)
 slider9:chorus_depth=   0.3 <0, 1, 0.001>    Chorus Depth
 slider10:chorus_mix=    0   <-1, 1, 0.001>   Chorus Amt
 slider11:hf_absortion=  0.5 <0.0, 1, 0.001>  Damping
-slider12:n_density=     0. <0, 4, 1>        Density
+slider12:n_density=     0. <0, 4, 1>         Density Inc
+slider13:n_diffusers=   0. <0, 8, 1>        Diffusors
 
 in_pin:left input
 in_pin:right input
@@ -45,6 +46,7 @@ To try:
 -Bigger matrices.
 -Chrous interpolation, catmull-ROM will sound different at another SR.
 -Tilt/EQ controls.
+-Wow factor stereo.
 
 Reminder:
 
@@ -91,6 +93,11 @@ LATE_DENSITY_2_RATIO = 1 / 7;
 LATE_DENSITY_3_RATIO = 1 / 5;
 LATE_DENSITY_4_RATIO = 1 / 11;
 
+LATE_N_DIFFUSERS = 8;
+LATE_DIFFUSERS_TO_MAIN_RATIO = 1 / 100;
+LATE_DIFFUSERS_START_FREQ = 2460;
+LATE_DIFFUSERS_FREQ_FACTOR = pow (2, 0.02/12);
+
 // every 64 samples att 44100
 CONTROL_RATE_MASK = (((srate / 44100) | 0) * 64) - 1;
 
@@ -100,7 +107,7 @@ LATE_DELAY_ROUNDING_FACTOR = 100;
 
 LATE_RND_LFO_FREQ = .6 * ((CONTROL_RATE_MASK + 1) * 2);
 
-LATE_CHORUS_TO_FB = 0;
+LATE_CHORUS_TO_FB = 1;
 
 LATE_HSHELF1_FREQ = 1200;
 LATE_HSHELF2_FREQ = 1400;
@@ -119,12 +126,6 @@ LATE_HSHELF5_Q = 0.507;
 LATE_HSHELF6_Q = 0.6;
 LATE_HSHELF7_Q = 0.5;
 LATE_HSHELF8_Q = 0.4;
-
-LATEDIFF_DELAY_SPLS_L = (1 / srate) * 17 * 0.001;
-LATEDIFF_DELAY_SPLS_R = (1 / srate) * 16 * 0.001;
-
-LATEDIFF_FREQ_L = 83;
-LATEDIFF_FREQ_R = 13;
 
 // ER
 er_chnls.array_init (N_ER_CHNLS);
@@ -155,8 +156,10 @@ feedback.array_init (chnls.size);
 rt60_att.array_init (chnls.size);
 delay_spls.array_init (chnls.size);
 density_spls.array2d_init (N_CHNLS_LATE_DENSITY, N_DENSITY_STAGES);
+diffusor_spls.array_init (LATE_N_DIFFUSERS);
 mod_spls.array_init (chnls.size);
 hself_freq.array_init (chnls.size);
+
 
 lfos.lfo_bank_init (chnls.size, chnls.size);
 lfos.lfo_bank_reset_phase (0);
@@ -164,6 +167,12 @@ lfos.lfo_bank_reset_phase (0);
 // impl.
 delay.delay_line_init (round_next_pow2 (srate), chnls.size);
 delay.delay_line_thiran2_add (srate); // disable thiran resync
+
+diffusor_l.delay_line_init (round_next_pow2 (srate), diffusor_spls.size);
+diffusor_l.delay_line_schroeder_ap_add();
+
+diffusor_r.delay_line_init (round_next_pow2 (srate), diffusor_spls.size);
+diffusor_r.delay_line_schroeder_ap_add();
 
 density1.delay_line_init (
   round_next_pow2 (srate * LATE_DENSITY_1_RATIO), N_CHNLS_LATE_DENSITY
@@ -226,15 +235,6 @@ dc14.dc_blocker_init (DC_BLOCKER_FREQ, srate);
 dc15.dc_blocker_init (DC_BLOCKER_FREQ, srate);
 dc16.dc_blocker_init (DC_BLOCKER_FREQ, srate);
 
-late_diff_l.schroeder_allpass (LATEDIFF_DELAY_SPLS_L);
-late_diff_l.schroeder_allpass_set_coeff(
-  freq_to_schroeder_coeff (LATEDIFF_FREQ_L, srate)
-  );
-late_diff_r.schroeder_allpass (LATEDIFF_DELAY_SPLS_R);
-late_diff_r.schroeder_allpass_set_coeff(
-  freq_to_schroeder_coeff (LATEDIFF_FREQ_R, srate)
-  );
-
 hshelf_freq.ptr[0] = LATE_HSHELF1_FREQ;
 hshelf_freq.ptr[1] = LATE_HSHELF2_FREQ;
 hshelf_freq.ptr[2] = LATE_HSHELF3_FREQ;
@@ -277,7 +277,7 @@ get_delay_length_samples(
   LATE_DELAY_PRIME_IDX,
   LATE_DELAY_ROUNDING_FACTOR
   );
- 
+
 get_delay_length_samples(
   density_spls.array2d_ptr(2),
   density_spls.size_a,
@@ -306,6 +306,25 @@ mem_swap (density_spls.array2d_ptr(0), 1, 2);
 mem_swap (density_spls.array2d_ptr(1), 1, 2);
 mem_swap (density_spls.array2d_ptr(2), 1, 2);
 mem_swap (density_spls.array2d_ptr(3), 1, 2);
+
+get_delay_length_samples(
+  diffusor_spls.ptr,
+  diffusor_spls.size,
+  size_m * LATE_DIFFUSERS_TO_MAIN_RATIO,
+  size_m * LATE_DELAY_RATIO * LATE_DIFFUSERS_TO_MAIN_RATIO,
+  0,
+  LATE_DELAY_ROUNDING_FACTOR * 1000000
+  );
+
+i = 0;
+f = LATE_DIFFUSERS_START_FREQ;
+loop (diffusor_spls.size,
+    coeff = freq_to_schroeder_coeff (f, srate);
+    diffusor_l.delay_line_schroeder_set_coeff (coeff, i);
+    diffusor_r.delay_line_schroeder_set_coeff (coeff * 0.9, i);
+    f *= LATE_DIFFUSERS_FREQ_FACTOR;
+    i += 1;
+);
 
 // readjust total size
 
@@ -419,8 +438,17 @@ er_r = er_sig_r * er_mix;
 er_tail = (er_sig_l + er_sig_r) * 0.5 * er_2_late;
 
 // Tail ------------------------
-chnls.ptr[0] =  m;
-chnls.ptr[1] =  s;
+m_s = m + s;
+
+m_s = diffusor_l.delay_line_schroeder_tick_tapped_cascade(
+  m_s, n_diffusers, diffusor_spls.ptr
+  );
+er_tail = diffusor_r.delay_line_schroeder_tick_tapped_cascade(
+  er_tail, n_diffusers, diffusor_spls.ptr
+  );
+
+chnls.ptr[0] =  m_s;
+chnls.ptr[1] =  0;
 chnls.ptr[2] =  0;
 chnls.ptr[3] =  0;
 chnls.ptr[4] =  0;
@@ -583,11 +611,6 @@ late_r = chnls.ptr[3];
 late_l += (chorus_l * chorus_fact * (5 - chorus_fact * 4) * 1 / 5);
 late_r += (chorus_r * chorus_fact * (5 - chorus_fact * 4) * 1 / 5);
 
-loop (0,
-  late_l = late_diff_l.schroeder_allpass_tick (late_l, LATEDIFF_DELAY_SPLS_L);
-  late_r = late_diff_r.schroeder_allpass_tick (late_r, LATEDIFF_DELAY_SPLS_R);
-);
-
 late_l *= late_mix;
 late_r *= late_mix;
 
@@ -595,4 +618,5 @@ late_r *= late_mix;
   spl0 = er_l + late_l;
   spl1 = er_r + late_r;
 );
+
 counter += 1;

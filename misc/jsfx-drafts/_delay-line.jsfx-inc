@@ -3,7 +3,8 @@ import _core.jsfx-inc
 @init
 
 // this might belong somewhere else
-function interp_catmull_rom (y0, y1, y2, y3, x) local (r, x2, x3)(
+function interp_catmull_rom (y0, y1, y2, y3, x) 
+  local (r, x2, x3) global()(
   x2 = x * x;
   x3 = x2 * x;
 
@@ -13,14 +14,16 @@ function interp_catmull_rom (y0, y1, y2, y3, x) local (r, x2, x3)(
   r += y1;
 );
 
-function delay_line_init (size, n_channels) (
+function delay_line_init (size, n_channels) global() (
+    size |= 0;
     this.arr.array_init (size * n_channels);
     this.n_channels = n_channels;
     this.mask = size - 1;
-    this.pos = mask;
+    this.pos = this.mask;
 );
 
-function _delay_line_get_pos (pos, channel) local (offset)(
+function _delay_line_get_pos (pos, channel) 
+    local (offset) global()(
     offset = channel * (this.mask + 1);
     offset + ((this.pos + pos) & this.mask);
 );
@@ -29,7 +32,7 @@ function delay_line_set (value, pos, channel) (
     this.arr.ptr[this._delay_line_get_pos (pos, channel)] = value;
 );
 
-function delay_line_set_all (ptr, pos) local (i)(
+function delay_line_set_all (ptr, pos) local (i) global()(
     i = 0;
     loop (this.n_channels,
         this.delay_line_set (ptr[i], pos, i);
@@ -37,11 +40,12 @@ function delay_line_set_all (ptr, pos) local (i)(
     );
 );
 
-function delay_line_get (pos, channel)(
+function delay_line_get (pos, channel) global()(
     this.arr.ptr[this._delay_line_get_pos (pos, channel)];
 );
 
-function delay_line_get_all (dst_ptr, times_ptr) local (i)(
+function delay_line_get_all (dst_ptr, times_ptr) 
+    local (i) global()(
     i = 0;
     loop (this.n_channels,
         dst_ptr[i] = this.delay_line_get (times_ptr[i], i);
@@ -49,7 +53,8 @@ function delay_line_get_all (dst_ptr, times_ptr) local (i)(
     );
 );
 
-function delay_line_get_linterp (pos, channel) local (a, b, pos_int, pos_frac)(
+function delay_line_get_linterp (pos, channel) 
+    local (a, b, pos_int, pos_frac) global()(
     pos = clamp (pos, 0, this.mask - 1);
     pos_int = floor (pos);
     pos_frac = pos - pos_int;
@@ -58,7 +63,8 @@ function delay_line_get_linterp (pos, channel) local (a, b, pos_int, pos_frac)(
     a + pos_frac * (b - a);
 );
 
-function delay_line_get_linterp_all (dst_ptr, times_ptr) local (i)(
+function delay_line_get_linterp_all (dst_ptr, times_ptr) 
+    local (i) global()(
     i = 0;
     loop(this.n_channels,
         dst_ptr[i] = this.delay_line_get_linterp (times_ptr[i], i);
@@ -67,7 +73,7 @@ function delay_line_get_linterp_all (dst_ptr, times_ptr) local (i)(
 );
 
 function delay_line_get_catmull_rom_interp (pos, channel)
-    local (a, b, pos_int, pos_frac)(
+    local (a, b, c, d, pos_int, pos_frac) global()(
 
     pos = clamp (pos, 0, this.mask - 3);
     pos_int = floor (pos);
@@ -79,7 +85,8 @@ function delay_line_get_catmull_rom_interp (pos, channel)
     interp_catmull_rom (a, b, c, d, pos_frac);
 );
 
-function delay_line_get_catmull_rom_interp_all (dst_ptr, times_ptr) local (i)(
+function delay_line_get_catmull_rom_interp_all (dst_ptr, times_ptr) 
+  local (i) global()(
     i = 0;
     loop(this.n_channels,
         dst_ptr[i] = this.delay_line_get_catmull_rom_interp (times_ptr[i], i);
@@ -87,7 +94,7 @@ function delay_line_get_catmull_rom_interp_all (dst_ptr, times_ptr) local (i)(
     );
 );
 
-function delay_line_advance()(
+function delay_line_advance() global()(
     this.pos -= 1;
     this.pos < 0 ? (this.pos = this.mask);
 );
@@ -101,7 +108,7 @@ function delay_line_advance()(
 // "delta_sync" number of samples distane between consecutive calls that will
 // make the previous states of the thiran biquad to be recalculated. In practice
 // as the Z states are always correct the filter doesn't really blow up.
-function delay_line_thiran2_add (delta_sync)(
+function delay_line_thiran2_add (delta_sync) global()(
     // each dynamic thiran array uses these indexes.
     // 0 = a1,
     // 1 = a2,
@@ -114,7 +121,8 @@ function delay_line_thiran2_add (delta_sync)(
 );
 
 function delay_line_thiran2_get (pos, channel)
-    local (z0, z1, z2, pos_int, pos_frac, diff, thy_ptr, dlt, y)(
+    local (z0, z1, z2, pos_int, pos_frac, diff, thy_ptr, dlt, y, d)
+    global()(
     // each dynamic thiran array uses these indexes.
     // 0 = a1,
     // 1 = a2,
@@ -176,7 +184,8 @@ function delay_line_thiran2_get (pos, channel)
     clamp (y, -5, 5);
 );
 
-function delay_line_thiran2_get_all (dst_ptr, times_ptr) local (i)(
+function delay_line_thiran2_get_all (dst_ptr, times_ptr) 
+    global() local (i)(
     i = 0;
     loop(this.n_channels,
         dst_ptr[i] = this.delay_line_thiran2_get (times_ptr[i], i);
@@ -190,21 +199,14 @@ function delay_line_thiran2_get_all (dst_ptr, times_ptr) local (i)(
 // make the previous states of the thiran biquad to be recalculated. In practice
 // as the Z states are always correct the filter doesn't really blow up.
 //
-function delay_line_schroeder_ap_add ()(
-    // each dynamic schroeder AP array uses these indexes.
-    // 0 = y1,
-    // 1 = g,
-    // 2 = n_coeffs/size
-    this.ap.array_init (this.n_channels * 2);
+function delay_line_schroeder_ap_add ()
+    global()(
+    this.g.array_init (this.n_channels);
 );
 
-function delay_line_schroeder_set_coeff (coeff, channel) local (ap_ptr)(
-    // each dynamic schroeder AP array uses these indexes.
-    // 0 = y1,
-    // 1 = g,
-    // 2 = n_coeffs/size
-    ap_ptr    = this.ap.ptr + channel * 2;
-    ap.ptr[1] = coeff;
+function delay_line_schroeder_set_coeff (coeff, channel) 
+   global()(
+   this.g.ptr[channel] = coeff;
 );
 
 function delay_line_schroeder_set_coeff_all (src_ptr) local (i)(
@@ -215,8 +217,8 @@ function delay_line_schroeder_set_coeff_all (src_ptr) local (i)(
     );
 );
 
-function freq_to_schroeder_coeff (freq, samplerate)
-    local (coeff)(
+function freq_to_schroeder_coeff (freq, samplerate) 
+    local (coeff) global()(
     coeff = tan ($pi * freq / samplerate);
     coeff = (1 - coeff) / (1 + coeff);
     coeff = clamp (coeff, 0, 1);
@@ -226,35 +228,78 @@ function freq_to_schroeder_coeff (freq, samplerate)
 // no interpolation
 // dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
 function delay_line_schroeder_tick (dst_ptr, in_ptr, delay_spls_ptr)
-    local (i, ap_ptr, g, x0, y1)(
-    // each dynamic schroeder AP array uses these indexes.
-    // 0 = y1,
-    // 1 = g,
-    // 2 = n_coeffs/size
+    local (i, g, y, y1) global()(
 
     this.delay_line_advance();
-
     i = 0;
-    ap_ptr = this.ap.ptr;
     loop (this.n_channels,
-        y1  = ap_ptr[0];
-        g   = ap_ptr[1];
-
-        x0 = in_ptr[i] + (y1 * g); // feedback (1 sample delay)
-        this.delay_line_set (x0, 0, i);
+        g  = this.g.ptr[i];
         y1 = this.delay_line_get (delay_spls_ptr[i], i);
-        y1 += x0 * -g; // feedforward (no delay)
-        ap_ptr[0]  = y1;
-        dst_ptr[i] = y1;
-
-        ap_ptr += this.n_channels * 2;
+        y  = in_ptr[i] - y1 * g;
+        this.delay_line_set (y, 0, i);
+        dst_ptr[i] = y * g + y1;
         i += 1;
     );
 );
+
+// no interpolation
+// dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
+function delay_line_schroeder_tick_cascade (in, count, delay_spls_ptr)
+    local (i, g, y, y1, out) global() (
+
+    this.delay_line_advance();
+    i = 0;
+    out = in;
+    loop (count,
+        g  = this.g.ptr[i];
+        y1 = this.delay_line_get (delay_spls_ptr[i], i);
+        y  = out - y1 * g;
+        this.delay_line_set (y, 0, i);
+        out = y * g + y1;
+        i += 1;
+    );
+    loop (this.n_channels - count,
+        g  = this.g.ptr[i];
+        y1 = this.delay_line_get (delay_spls_ptr[i], i);
+        y  = - y1 * g;
+        this.delay_line_set (y, 0, i);
+        i += 1;
+    );
+    out;
+);
+
+// no interpolation
+// dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
+function delay_line_schroeder_tick_tapped_cascade (in, count, delay_spls_ptr)
+    local (i, g, y, y1, next, out) global() (
+
+    this.delay_line_advance();
+    i = 0;
+    next = in;
+    out = in;
+    loop (count,
+        g  = this.g.ptr[i];
+        y1 = this.delay_line_get (delay_spls_ptr[i], i);
+        y  = next - y1 * g;
+        this.delay_line_set (y, 0, i);
+        next = y * g + y1;
+        out += next;
+        i += 1;
+    );
+    loop (this.n_channels - count,
+        g  = this.g.ptr[i];
+        y1 = this.delay_line_get (delay_spls_ptr[i], i);
+        y  = - y1 * g;
+        this.delay_line_set (y, 0, i);
+        i += 1;
+    );
+    out / (count + 1);
+);
+
 //------------------------------------------------------------------------------
 // object version of the Schroeder above
 function schroeder_allpass (max_delay_spls)(
-    this.delay_line_init (max_delay_spls, 1);
+    this.delay_line_init (round_next_pow2 (max_delay_spls), 1);
     this.delay_line_schroeder_ap_add();
 );
 
@@ -262,11 +307,10 @@ function schroeder_allpass_set_coeff (coeff)(
     this.delay_line_schroeder_set_coeff (coeff, 0);
 );
 
-function schroeder_allpass_tick (in, delay_spls) global (_libmem)(
-    _libmem[1] = in;
-    _libmem[2] = delay_spls;
-    this.delay_line_schroeder_tick (_libmem + 0, _libmem + 1, _libmem + 2);
-    _libmem[0];
+function schroeder_allpass_tick (in, delay_spls) global (_libmem*) (
+    _libmem.ptr[0] = delay_spls;
+    _libmem.ptr[1] = 0;
+    this.delay_line_schroeder_tick_cascade (in, 1, _libmem.ptr);
 );
 
 //------------------------------------------------------------------------------

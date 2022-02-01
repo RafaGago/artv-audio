@@ -612,7 +612,7 @@ public:
   V tick (V in)
   {
     V y1 = _mem[_delay];
-    V y  = in + y1 * -_gain;
+    V y  = in - y1 * _gain;
     _mem.push (y);
     return y * _gain + y1;
   }
