@@ -3,8 +3,8 @@ import _core.jsfx-inc
 @init
 
 // returns 8 values on the "dst_ptr" array. "src_ptr" has to contain 8 values.
-function hadamard_8 (dst_ptr, src_ptr)
-    local (x01, x23, x45, x67, x0123, x4567, i)(
+function hadamard_8 (dst_ptr, src_ptr) 
+    local (x01, x23, x45, x67, x0123, x4567, i) global()(
     // y0 + + + + + + + +
     // y4 + + + + - - - -
     // y2 + + - - + + - -
@@ -51,7 +51,7 @@ function hadamard_8 (dst_ptr, src_ptr)
 );
 
 
-function hadamard_4 (dst_ptr, src_ptr) local (x01, x23)(
+function hadamard_4 (dst_ptr, src_ptr) local (x01, x23) global()(
     x01 = (src_ptr[0] + src_ptr[1]) * 0.5;
     x23 = (src_ptr[2] + src_ptr[3]) * 0.5;
     dst_ptr[0] = x01 + x23;
@@ -64,7 +64,7 @@ function hadamard_4 (dst_ptr, src_ptr) local (x01, x23)(
 
 // returns "size "values on the "dst_ptr" array. "src_ptr" array has to contain
 // "size" values. "size" has to be a power of 2.
-function householder (dst_ptr, src_ptr, size) local (i, factor) (
+function householder (dst_ptr, src_ptr, size) local (i, factor) global() (
     factor = range_get_sum (src_ptr, size) * 2 / size;
     i = 0;
     loop(size,
@@ -73,7 +73,7 @@ function householder (dst_ptr, src_ptr, size) local (i, factor) (
     );
 );
 
-function rochebois_4 (dst_ptr, src_ptr) local (i)(
+function rochebois_4 (dst_ptr, src_ptr) local (i) global()(
     dst_ptr[0] = src_ptr[1] + src_ptr[2] + src_ptr[3];
     dst_ptr[1] = src_ptr[0] + src_ptr[2] - src_ptr[3];
     dst_ptr[2] = src_ptr[0] - src_ptr[1] + src_ptr[3];
@@ -86,7 +86,7 @@ function rochebois_4 (dst_ptr, src_ptr) local (i)(
     );
 );
 
-function rochebois_8 (dst_ptr, src_ptr) local (t, t2, i)(
+function rochebois_8 (dst_ptr, src_ptr) local (t, t2, i) global()(
     t = src_ptr[3] + src_ptr[4] + src_ptr[5] + src_ptr[6] + src_ptr[7];
 
     dst_ptr[0] = t - (src_ptr[4] * 2) + src_ptr[2] - src_ptr[1];
@@ -108,7 +108,7 @@ function rochebois_8 (dst_ptr, src_ptr) local (t, t2, i)(
     );
 );
 
-function get_rt60_gain (rt60sec, delays_spls) local (rate)(
+function get_rt60_gain (rt60sec, delays_spls) local (rate) global (srate)(
     rate = srate / delays_spls;
     pow (10, (-60/20) * (1 / (rate * rt60sec)));
     //pow (10, (-3 * fb_delay_samples) / (rt60sec * srate));
@@ -139,7 +139,7 @@ function get_rt60_gain(
 function get_delay_length_samples(
   dst_ptr, n_delays, pathmin, pathmax, prime_idx, rounding_factor
   )
-  local (dmin, dmax, i, v)(
+  local (dmin, dmax, i, v, primes_offs) global (srate, primes*)(
 
     dmin = srate * pathmin * (1 / 343); // 343 = C = soundspeed
     dmax = srate * pathmax * (1 / 343);

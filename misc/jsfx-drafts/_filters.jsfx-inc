@@ -1,7 +1,7 @@
 @init
 
 // Andy's TPT State Variable Filter --------------------------------------------
-function svf_lp(freq, q, sr) local (k, g)(
+function svf_lp(freq, q, sr) local (k, g) global()(
   k = 1.0 / q;
   g = tan ($pi * freq / sr);
   this.a1 = 1.0 / (1.0 + g * (g + k));
@@ -12,7 +12,7 @@ function svf_lp(freq, q, sr) local (k, g)(
   this.m2 = 1;
 );
 
-function svf_hp(freq, q, sr) local (k, g)(
+function svf_hp(freq, q, sr) local (k, g) global()(
   k = 1.0 / q;
   g = tan ($pi * freq / sr);
   this.a1 = 1.0 / (1.0 + g * (g + k));
@@ -23,7 +23,7 @@ function svf_hp(freq, q, sr) local (k, g)(
   this.m2 = -1;
 );
 
-function svf_ap(freq, q, sr) local (k, g)(
+function svf_ap(freq, q, sr) local (k, g) global()(
   k = 1.0 / q;
   g = tan ($pi * freq / sr);
   this.a1 = 1.0 / (1.0 + g * (g + k));
@@ -34,7 +34,7 @@ function svf_ap(freq, q, sr) local (k, g)(
   this.m2 = 0;
 );
 
-function svf_bell(freq, q, g_db, sr) local (k, g, A)(
+function svf_bell(freq, q, g_db, sr) local (k, g, A) global()(
   A = pow (10, g_db * (1. / 40.));
   k = 1.0 / (q  * A);
   g = tan ($pi * freq / sr);
@@ -47,7 +47,7 @@ function svf_bell(freq, q, g_db, sr) local (k, g, A)(
 );
 
 // ready to be added back to the main signal
-function svf_bell_bp(freq, q, g_db, sr) local (k, g, A)(
+function svf_bell_bp(freq, q, g_db, sr) local (k, g, A) global()(
   A = pow (10, g_db * (1. / 40.));
   k = 1.0 / (q  * A);
   g = tan ($pi * freq / sr);
@@ -59,7 +59,7 @@ function svf_bell_bp(freq, q, g_db, sr) local (k, g, A)(
   this.m2 = 0;
 );
 
-function svf_lshelf(freq, q, g_db, sr) local (k, g, A)(
+function svf_lshelf(freq, q, g_db, sr) local (k, g, A) global()(
   A = pow (10, g_db * (1. / 40.));
   k = 1.0 / q;
   g = tan ($pi * freq / sr) / sqrt(A);
@@ -71,7 +71,7 @@ function svf_lshelf(freq, q, g_db, sr) local (k, g, A)(
   this.m2 = A * A - 1;
 );
 
-function svf_hshelf(freq, q, g_db, sr) local (k, g, A)(
+function svf_hshelf(freq, q, g_db, sr) local (k, g, A) global()(
   A = pow (10, g_db * (1. / 40.));
   k = 1.0 / q;
   g = tan ($pi * freq / sr) * sqrt(A);
@@ -83,11 +83,11 @@ function svf_hshelf(freq, q, g_db, sr) local (k, g, A)(
   this.m2 = 1 - A * A;
 );
 
-function svf_reset_state()(
+function svf_reset_state() global()(
   this.ic1eq = this.ic2eq = 0;
 );
 
-function svf_tick(in) local (v1, v2, v3)(
+function svf_tick(in) local (v1, v2, v3) global()(
   v3 = in - this.ic2eq;
   v1 = this.a1 * this.ic1eq + this.a2 * v3;
   v2 = this.ic2eq + this.a2 * this.ic1eq + this.a3 * v3;
@@ -102,7 +102,7 @@ function svf_tick(in) local (v1, v2, v3)(
 // Vadim Zavalishin
 // https://www.native-instruments.com/fileadmin/ni_media/downloads/pdf/VAFilterDesign_2.1.0.pdf
 
-function tpt_1p_reset (freq, samplerate) local(inv_sr_d2, wd, wa)(
+function tpt_1p_reset (freq, samplerate) local(inv_sr_d2, wd, wa) global()(
     inv_sr_d2 = 0.5 / samplerate;
     wd = 2 * $pi * freq;
     wa = 2 * samplerate * tan (wd * inv_sr_d2);
@@ -111,7 +111,7 @@ function tpt_1p_reset (freq, samplerate) local(inv_sr_d2, wd, wa)(
 );
 
 
-function tpt_1p_tick_lp (in) local(v, lp)(
+function tpt_1p_tick_lp (in) local(v, lp) global()(
     v      = (in - this.s) * this.g;
     lp     = v + this.s;
     this.s = lp + v;
@@ -128,19 +128,19 @@ function tpt_1p_tick_ap (in) local(lp, hp)(
 );
 //------------------------------------------------------------------------------
 // 1 pole no zero LP for smoothing
-function smooth_lp_1p_0z (freq, samplerate) (
+function smooth_lp_1p_0z (freq, samplerate)  global()(
     this.b1 = exp (-2 * $pi  * freq / samplerate);
     this.a0 = 1 - this.b1;
 );
 
-function smooth_lp_1p_0z_tick (in) (
+function smooth_lp_1p_0z_tick (in)  global()(
     this.y1 = in * this.a0 + this.y1 * this.b1;
     this.y1;
 );
 // -----------------------------------------------------------------------------
 function set_rbj_peak_filter_coeffs (freq, gain, q)
-  local(A, w0, cosw0, alpha, alpha_div_a, a0i) (
-  A = (10^(gain/40));
+  local(A, w0, cosw0, alpha, alpha_div_a, a0i) global (srate) (
+  A = (10 ^ (gain/40));
   w0 = 2 * $pi * freq / srate;
   cosw0 = cos(w0);
   alpha = sin(w0) / (2 * q);
@@ -155,19 +155,19 @@ function set_rbj_peak_filter_coeffs (freq, gain, q)
   this.a2 = (1 - alpha_div_a) * a0i;
 );
 
-function peak_tdf2_biquad_init(freq, gain, q)(
+function peak_tdf2_biquad_init(freq, gain, q) global()(
   this.set_rbj_peak_filter_coeffs (freq, gain, q);
   this.z1 = 0;
   this.z2 = 0;
 );
 
-function peak_df1_biquad_init(freq, gain, q)(
+function peak_df1_biquad_init(freq, gain, q) global()(
   this.peak_tdf2_biquad_init(freq, gain, q);
   this.y1 = 0;
   this.y2 = 0;
 );
 
-function biquad_df1_tick(x) local(out)(
+function biquad_df1_tick(x) local(out) global()(
   out  = x * this.b0 + this.z1 * this.b1 + this.b2 * this.z2;
   out += -this.a1 * this.y1 - this.a2 * this.y2;
   this.z2 = this.z1;
@@ -177,14 +177,14 @@ function biquad_df1_tick(x) local(out)(
   out;
 );
 
-function biquad_tdf2_tick(x) local(out)(
+function biquad_tdf2_tick(x) local(out) global()(
   out     = (x * this.b0 + this.z1);
   this.z1 = x * this.b1 + this.z2 - this.a1 * out;
   this.z2 = x * this.b2 - this.a2 * out;
   out;
 );
 
-function get_quadratic_roots (a, b, c)
+function get_quadratic_roots (a, b, c) global()
 (
   this.re0 = -b / (2 * a);
   this.im0 = (b * b) - 4 * a * c;
@@ -201,7 +201,7 @@ function get_quadratic_roots (a, b, c)
   );
 );
 
-function two_rpoles_init (re1, re2)(
+function two_rpoles_init (re1, re2) global()(
   // partial fraction expansion on two real poles
   this.p1 = re1;
   this.p2 = re2;
@@ -211,20 +211,20 @@ function two_rpoles_init (re1, re2)(
   this.yp2  = 0;
 );
 
-function two_rpoles_tick (x)(
+function two_rpoles_tick (x) global()(
   this.yp1 = this.p1 * this.yp1 + x;
   this.yp2 = this.p2 * this.yp2 + x;
   this.yp1 * this.kp1 + this.yp2 * this.kp2;
 );
 
-function cpole_init (re, im)(
+function cpole_init (re, im) global()(
   this.re = re;
   this.im = im;
   this.y_re = 0;
   this.y_im = 0;
 );
 
-function cpole_tick (x_re, x_im) local (re)(
+function cpole_tick (x_re, x_im) local (re) global()(
   // in complex: (pole * y) + x
 
   // complex mul
@@ -236,7 +236,7 @@ function cpole_tick (x_re, x_im) local (re)(
   this.y_im = x_im + this.y_im;
 );
 
-function czero_init (re, im)(
+function czero_init (re, im) global()(
   this.re = re;
   this.im = im;
   this.z_re = 0;
@@ -245,7 +245,7 @@ function czero_init (re, im)(
   this.y_im = 0; // last results stored here, two values can't be returned
 );
 
-function czero_tick (x_re, x_im) local (re)(
+function czero_tick (x_re, x_im) local (re) global()(
   // in complex: x - (zero * z)
 
   // complex mul
@@ -259,11 +259,11 @@ function czero_tick (x_re, x_im) local (re)(
   this.z_im = x_im;
 );
 //------------------------------------------------------------------------------
-function dc_blocker_init (freq, samplerate) (
+function dc_blocker_init (freq, samplerate)  global()(
     this.lp = smooth_lp_1p_0z (freq, samplerate);
 );
 
-function dc_blocker_tick (in) local (y1) (
+function dc_blocker_tick (in) local (y1)  global()(
     y1 = this.lp.y1;
     this.lp.smooth_lp_1p_0z_tick (in);
     in - y1;

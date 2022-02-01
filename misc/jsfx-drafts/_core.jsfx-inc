@@ -10,7 +10,7 @@ function mem_reserve (size) local (ret) global (_memtop_ptr) (
 );
 
 // misc ------------------------------------------------------------------------
-function mem_swap(ptr, idx1, idx2) local (tmp) (
+function mem_swap(ptr, idx1, idx2) local (tmp) global()(
     tmp = ptr[idx1];
     ptr[idx1] = ptr[idx2];
     ptr[idx2] = tmp;
@@ -35,12 +35,12 @@ function interp_catmull_rom (y0, y1, y2, y3, x) local (r, x2, x3)(
 );
 
 // array -----------------------------------------------------------------------
-function array_init (size)(
+function array_init (size) global()(
     this.ptr = mem_reserve (size);
     this.size = size;
 );
 
-function array_alias (other*) (
+function array_alias (other*) global()(
     this.ptr = other.ptr;
     this.size = other.size;
 );
@@ -52,26 +52,26 @@ function array_alias (other*) (
 _libmem.array_init (8);
 
 // array 2d --------------------------------------------------------------------
-function array2d_init (size_a, size_b) (
+function array2d_init (size_a, size_b)global()(
     this.ptr = mem_reserve (size_a * size_b);
     this.size_a = size_a;
     this.size_b = size_b;
 );
 
-function array2d_ptr (pos_a) (
+function array2d_ptr (pos_a) global()(
     this.ptr + pos_a * this.size_b;
 );
 
-function array2d_get (pos_a, posb) (
+function array2d_get (pos_a, pos_b) global()(
     this.ptr[pos_a * this.size_b + pos_b];
 );
 
-function array2d_set (pos_a, pos_b, val) (
+function array2d_set (pos_a, pos_b, val) global()(
     this.ptr[pos_a * this.size_b + pos_b] = val;
 );
 
 // mem functions ---------------------------------------------------------------
-function range_get_max (src_ptr, size) local (maxv, i)(
+function range_get_max (src_ptr, size) local (maxv, i) global()(
     maxv = src_ptr[0];
     i = 1;
     loop (size - 1,
@@ -81,7 +81,7 @@ function range_get_max (src_ptr, size) local (maxv, i)(
     maxv;
 );
 
-function range_get_sum (src_ptr, size) local (sum, i)(
+function range_get_sum (src_ptr, size) local (sum, i) global()(
     sum = i = 0;
     loop (size,
         sum += src_ptr[i];
@@ -90,7 +90,7 @@ function range_get_sum (src_ptr, size) local (sum, i)(
     sum;
 );
 
-function range_clamp (dst_src_ptr, size, minv, maxv) local (i)(
+function range_clamp (dst_src_ptr, size, minv, maxv) local (i) global()(
     i = 0;
     loop (size,
         dst_src_ptr[i] = clamp (dst_src_ptr[i], minv, maxv);
@@ -98,7 +98,7 @@ function range_clamp (dst_src_ptr, size, minv, maxv) local (i)(
     );
 );
 
-function range_mul (dst_ptr, src1_ptr, src2_ptr, size) local (i)(
+function range_mul (dst_ptr, src1_ptr, src2_ptr, size) local (i) global()(
     i = 0;
     loop (size,
         dst_ptr[i] = src1_ptr[i] * src2_ptr[i];
@@ -106,7 +106,7 @@ function range_mul (dst_ptr, src1_ptr, src2_ptr, size) local (i)(
     );
 );
 
-function range_mul_k (dst_ptr, src_ptr, k, size) local (i)(
+function range_mul_k (dst_ptr, src_ptr, k, size) local (i) global()(
     i = 0;
     loop (size,
         dst_ptr[i] = src_ptr[i] * k;
@@ -114,7 +114,7 @@ function range_mul_k (dst_ptr, src_ptr, k, size) local (i)(
     );
 );
 
-function range_add (dst_ptr, src1_ptr, src2_ptr, size) local (i)(
+function range_add (dst_ptr, src1_ptr, src2_ptr, size) local (i) global()(
     i = 0;
     loop (size,
         dst_ptr[i] = src1_ptr[i] + src2_ptr[i];
@@ -122,7 +122,7 @@ function range_add (dst_ptr, src1_ptr, src2_ptr, size) local (i)(
     );
 );
 
-function range_add_k (dst_ptr, src_ptr, k, size) local (i)(
+function range_add_k (dst_ptr, src_ptr, k, size) local (i) global()(
     i = 0;
     loop (size,
         dst_ptr[i] = src_ptr[i] + k;
@@ -130,7 +130,7 @@ function range_add_k (dst_ptr, src_ptr, k, size) local (i)(
     );
 );
 
-function range_sub (dst_ptr, src1_ptr, src2_ptr, size) local (i)(
+function range_sub (dst_ptr, src1_ptr, src2_ptr, size) local (i) global()(
     i = 0;
     loop (size,
         dst_ptr[i] = src1_ptr[i] - src2_ptr[i];
@@ -138,7 +138,7 @@ function range_sub (dst_ptr, src1_ptr, src2_ptr, size) local (i)(
     );
 );
 
-function range_sub_k (dst_ptr, src_ptr, k, size) local (i)(
+function range_sub_k (dst_ptr, src_ptr, k, size) local (i) global()(
     i = 0;
     loop (size,
         dst_ptr[i] = src_ptr[i] - k;
