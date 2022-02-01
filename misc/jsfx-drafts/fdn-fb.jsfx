@@ -119,13 +119,22 @@ LATE_HSHELF7_FREQ = 4698;
 LATE_HSHELF8_FREQ = 8000;
 
 LATE_HSHELF1_Q = 0.4;
-LATE_HSHELF2_Q = 0.3;
-LATE_HSHELF3_Q = 0.607;
-LATE_HSHELF4_Q = 0.507;
-LATE_HSHELF5_Q = 0.507;
+LATE_HSHELF2_Q = 0.4;
+LATE_HSHELF3_Q = 0.5;
+LATE_HSHELF4_Q = 0.5;
+LATE_HSHELF5_Q = 0.6;
 LATE_HSHELF6_Q = 0.6;
-LATE_HSHELF7_Q = 0.5;
-LATE_HSHELF8_Q = 0.4;
+LATE_HSHELF7_Q = 0.7;
+LATE_HSHELF8_Q = 0.8;
+
+LATE_HSHELF1_GAIN_FACT = 0.1;
+LATE_HSHELF2_GAIN_FACT = 0.14;
+LATE_HSHELF3_GAIN_FACT = 0.35;
+LATE_HSHELF4_GAIN_FACT = 0.5;
+LATE_HSHELF5_GAIN_FACT = 0.7;
+LATE_HSHELF6_GAIN_FACT = 0.8;
+LATE_HSHELF7_GAIN_FACT = 0.85;
+LATE_HSHELF8_GAIN_FACT = 1;
 
 // ER
 er_chnls.array_init (N_ER_CHNLS);
@@ -158,7 +167,6 @@ delay_spls.array_init (chnls.size);
 density_spls.array2d_init (N_CHNLS_LATE_DENSITY, N_DENSITY_STAGES);
 diffusor_spls.array_init (LATE_N_DIFFUSERS);
 mod_spls.array_init (chnls.size);
-hself_freq.array_init (chnls.size);
 
 
 lfos.lfo_bank_init (chnls.size, chnls.size);
@@ -226,15 +234,8 @@ dc6.dc_blocker_init (DC_BLOCKER_FREQ, srate);
 dc7.dc_blocker_init (DC_BLOCKER_FREQ, srate);
 dc8.dc_blocker_init (DC_BLOCKER_FREQ, srate);
 
-dc9.dc_blocker_init (DC_BLOCKER_FREQ, srate);
-dc10.dc_blocker_init (DC_BLOCKER_FREQ, srate);
-dc11.dc_blocker_init (DC_BLOCKER_FREQ, srate);
-dc12.dc_blocker_init (DC_BLOCKER_FREQ, srate);
-dc13.dc_blocker_init (DC_BLOCKER_FREQ, srate);
-dc14.dc_blocker_init (DC_BLOCKER_FREQ, srate);
-dc15.dc_blocker_init (DC_BLOCKER_FREQ, srate);
-dc16.dc_blocker_init (DC_BLOCKER_FREQ, srate);
-
+hshelf_freq.array_init (chnls.size);
+hshelf_db.array_init (chnls.size);
 hshelf_freq.ptr[0] = LATE_HSHELF1_FREQ;
 hshelf_freq.ptr[1] = LATE_HSHELF2_FREQ;
 hshelf_freq.ptr[2] = LATE_HSHELF3_FREQ;
@@ -243,6 +244,15 @@ hshelf_freq.ptr[4] = LATE_HSHELF5_FREQ;
 hshelf_freq.ptr[5] = LATE_HSHELF6_FREQ;
 hshelf_freq.ptr[6] = LATE_HSHELF7_FREQ;
 hshelf_freq.ptr[7] = LATE_HSHELF8_FREQ;
+
+hshelf1.svf_hshelf (200, 1, 0, srate);
+hshelf2.svf_hshelf (200, 1, 0, srate);
+hshelf3.svf_hshelf (200, 1, 0, srate);
+hshelf4.svf_hshelf (200, 1, 0, srate);
+hshelf5.svf_hshelf (200, 1, 0, srate);
+hshelf6.svf_hshelf (200, 1, 0, srate);
+hshelf7.svf_hshelf (200, 1, 0, srate);
+hshelf8.svf_hshelf (200, 1, 0, srate);
 
 // trigger signals
 test_next = counter + 1;
@@ -357,17 +367,16 @@ loop (chnls.size,
 );
 
 // Hiself decays
-hshelf_db = -5.22 * hf_absortion;
-hshelf_q = 0.707;
+hshelf_db_raw = -7 * hf_absortion;
 
-hshelf1.svf_hshelf (hshelf_freq.ptr[0], LATE_HSHELF1_Q, hshelf_db, srate);
-hshelf2.svf_hshelf (hshelf_freq.ptr[1], LATE_HSHELF2_Q, hshelf_db, srate);
-hshelf3.svf_hshelf (hshelf_freq.ptr[2], LATE_HSHELF3_Q, hshelf_db, srate);
-hshelf4.svf_hshelf (hshelf_freq.ptr[3], LATE_HSHELF4_Q, hshelf_db, srate);
-hshelf5.svf_hshelf (hshelf_freq.ptr[4], LATE_HSHELF5_Q, hshelf_db, srate);
-hshelf6.svf_hshelf (hshelf_freq.ptr[5], LATE_HSHELF6_Q, hshelf_db, srate);
-hshelf7.svf_hshelf (hshelf_freq.ptr[6], LATE_HSHELF7_Q, hshelf_db, srate);
-hshelf8.svf_hshelf (hshelf_freq.ptr[7], LATE_HSHELF8_Q, hshelf_db, srate);
+hshelf_db.ptr[0] = LATE_HSHELF1_GAIN_FACT * hshelf_db_raw;
+hshelf_db.ptr[1] = LATE_HSHELF2_GAIN_FACT * hshelf_db_raw;
+hshelf_db.ptr[2] = LATE_HSHELF3_GAIN_FACT * hshelf_db_raw;
+hshelf_db.ptr[3] = LATE_HSHELF4_GAIN_FACT * hshelf_db_raw;
+hshelf_db.ptr[4] = LATE_HSHELF5_GAIN_FACT * hshelf_db_raw;
+hshelf_db.ptr[5] = LATE_HSHELF6_GAIN_FACT * hshelf_db_raw;
+hshelf_db.ptr[6] = LATE_HSHELF7_GAIN_FACT * hshelf_db_raw;
+hshelf_db.ptr[7] = LATE_HSHELF8_GAIN_FACT * hshelf_db_raw;
 
 chorus_fact = chorus_mix * chorus_mix * sign (chorus_mix);
 
@@ -571,17 +580,33 @@ loop(1, // just to be able to comment fast...
     loop (chnls.size,
       lfoval = i & 1 ?
         rnd_lfo_1.lfo_filt_noise_tick() : rnd_lfo_2.lfo_filt_noise_tick();
-      mod_lshf_freq.ptr[i] = pow (2, lfoval * 8) * hshelf_freq.ptr[i];
+      mod_lshf_freq.ptr[i] = pow (2, lfoval * 2) * hshelf_freq.ptr[i];
       i += 1;
     );
-    hshelf1.svf_hshelf (mod_lshf_freq.ptr[0], LATE_HSHELF1_Q, hshelf_db, srate);
-    hshelf2.svf_hshelf (mod_lshf_freq.ptr[1], LATE_HSHELF2_Q, hshelf_db, srate);
-    hshelf3.svf_hshelf (mod_lshf_freq.ptr[2], LATE_HSHELF3_Q, hshelf_db, srate);
-    hshelf4.svf_hshelf (mod_lshf_freq.ptr[3], LATE_HSHELF4_Q, hshelf_db, srate);
-    hshelf5.svf_hshelf (mod_lshf_freq.ptr[4], LATE_HSHELF5_Q, hshelf_db, srate);
-    hshelf6.svf_hshelf (mod_lshf_freq.ptr[5], LATE_HSHELF6_Q, hshelf_db, srate);
-    hshelf7.svf_hshelf (mod_lshf_freq.ptr[6], LATE_HSHELF7_Q, hshelf_db, srate);
-    hshelf8.svf_hshelf (mod_lshf_freq.ptr[7], LATE_HSHELF8_Q, hshelf_db, srate);
+    hshelf1.svf_hshelf(
+      mod_lshf_freq.ptr[0], LATE_HSHELF1_Q, hshelf_db.ptr[0], srate
+      );
+    hshelf2.svf_hshelf(
+      mod_lshf_freq.ptr[1], LATE_HSHELF2_Q, hshelf_db.ptr[1], srate
+      );
+    hshelf3.svf_hshelf(
+      mod_lshf_freq.ptr[2], LATE_HSHELF3_Q, hshelf_db.ptr[2], srate
+      );
+    hshelf4.svf_hshelf(
+      mod_lshf_freq.ptr[3], LATE_HSHELF4_Q, hshelf_db.ptr[3], srate
+      );
+    hshelf5.svf_hshelf(
+      mod_lshf_freq.ptr[4], LATE_HSHELF5_Q, hshelf_db.ptr[4], srate
+      );
+    hshelf6.svf_hshelf(
+      mod_lshf_freq.ptr[5], LATE_HSHELF6_Q, hshelf_db.ptr[5], srate
+      );
+    hshelf7.svf_hshelf(
+      mod_lshf_freq.ptr[6], LATE_HSHELF7_Q, hshelf_db.ptr[6], srate
+      );
+    hshelf8.svf_hshelf(
+      mod_lshf_freq.ptr[7], LATE_HSHELF8_Q, hshelf_db.ptr[7], srate
+      );
   );
 
   chnls.ptr[0] = hshelf1.svf_tick (chnls.ptr[0]);
