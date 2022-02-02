@@ -168,7 +168,7 @@ using onepole_lowpass  = onepole<lowpass_tag>;
 using onepole_highpass = onepole<highpass_tag>;
 using onepole_allpass  = onepole<allpass_tag>;
 //------------------------------------------------------------------------------
-// Kept for reference only. The TPT variant has only 1 coeff and 1 state.
+// When possible prfer the TPT variant, it only has 1 coeff and 1 state.
 struct onepole_tdf2 {
   //----------------------------------------------------------------------------
   enum coeffs { b0, b1, a1, n_coeffs };
@@ -278,15 +278,14 @@ struct onepole_tdf2 {
     co[b0] = co[a1];
     co[b1] = vec_set<V> ((T) 0);
   }
-
-  function interpolate_allpass_init (d)
-    instance (a, x1, y1) (a = (1 - d) / (1 + d); a = min (max (a, 0), 1);
-                          x1 = y1 = 0;);
-
-  function interpolate_allpass (in)
-    instance (out, x1, y1, a) (out = a * in + x1 - a * y1; x1 = in; y1 = out;
-                               out;);
-
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (crange<V> co, V a1v, V b0v, V b1v, raw_tag)
+  {
+    co[a1] = a1v;
+    co[b0] = b0v;
+    co[b1] = b1v;
+  }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<V> st)
@@ -312,7 +311,7 @@ struct onepole_tdf2 {
     V a1v = vec_set<V> (co[a1]);
 
     auto out = in * b0v + st[s1];
-    +st[s1]  = in * b1v - out * a1v;
+    st[s1]   = in * b1v - out * a1v;
     return out;
   }
   //----------------------------------------------------------------------------
