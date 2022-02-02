@@ -26,6 +26,7 @@ using bell_bandpass_tag   = tag<filter_type_tag, 8>; // x + in = bell.
 using lowshelf_tag        = tag<filter_type_tag, 9>;
 using highshelf_tag       = tag<filter_type_tag, 10>;
 using thiran_tag          = tag<filter_type_tag, 11>;
+using raw_tag             = tag<filter_type_tag, 12>;
 
 // Random tags used elsewhere.
 template <uint n>
