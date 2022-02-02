@@ -3,7 +3,7 @@ import _core.jsfx-inc
 @init
 
 // returns 8 values on the "dst_ptr" array. "src_ptr" has to contain 8 values.
-function hadamard_8 (dst_ptr, src_ptr) 
+function hadamard_8 (dst_ptr, src_ptr)
     local (x01, x23, x45, x67, x0123, x4567, i) global()(
     // y0 + + + + + + + +
     // y4 + + + + - - - -
@@ -52,6 +52,10 @@ function hadamard_8 (dst_ptr, src_ptr)
 
 
 function hadamard_4 (dst_ptr, src_ptr) local (x01, x23) global()(
+    // ++++
+    // +-+-
+    // ++--
+    // +--+
     x01 = (src_ptr[0] + src_ptr[1]) * 0.5;
     x23 = (src_ptr[2] + src_ptr[3]) * 0.5;
     dst_ptr[0] = x01 + x23;
@@ -108,6 +112,109 @@ function rochebois_8 (dst_ptr, src_ptr) local (t, t2, i) global()(
     );
 );
 
+
+// TODO: different angles for each butterfly?
+function unitary_matrix_4 (y_ptr, x_ptr, cos_phi, sin_phi)
+  local(y1, y2, y3, y4) global()(
+
+  y1 = cos_phi * x_ptr[0] - sin_phi * x_ptr[1];
+  y2 = sin_phi * x_ptr[0] + cos_phi * x_ptr[1];
+
+  y3 = cos_phi * x_ptr[2] - sin_phi * x_ptr[3];
+  y4 = sin_phi * x_ptr[2] + cos_phi * x_ptr[3];
+
+  y_ptr[0] = cos_phi * y1 - sin_phi * y3;
+  y_ptr[1] = sin_phi * y1 + cos_phi * y3;
+
+  y_ptr[2] = cos_phi * y2 - sin_phi * y4;
+  y_ptr[3] = sin_phi * y2 + cos_phi * y4;
+);
+
+// TODO: different angles for each butterfly?
+function unitary_matrix_8 (y_ptr, x_ptr, cos_phi, sin_phi)
+  local(y1, y2, y3, y4, y5, y6, y7, y8) global()(
+
+  unitary_matrix_4 (y_ptr, x_ptr, cos_phi, sin_phi);
+  unitary_matrix_4 (y_ptr + 4, x_ptr + 4, cos_phi, sin_phi);
+
+  y1 = y_ptr[0];
+  y2 = y_ptr[1];
+  y3 = y_ptr[2];
+  y4 = y_ptr[3];
+  y5 = y_ptr[4];
+  y6 = y_ptr[5];
+  y7 = y_ptr[6];
+  y8 = y_ptr[7];
+
+  y_ptr[0] = cos_phi * y1 - sin_phi * y5;
+  y_ptr[1] = sin_phi * y1 + cos_phi * y5;
+  y_ptr[2] = cos_phi * y2 - sin_phi * y6;
+  y_ptr[3] = sin_phi * y2 + cos_phi * y6;
+  y_ptr[4] = cos_phi * y3 - sin_phi * y7;
+  y_ptr[5] = sin_phi * y3 + cos_phi * y7;
+  y_ptr[6] = cos_phi * y4 - sin_phi * y8;
+  y_ptr[7] = sin_phi * y4 + cos_phi * y8;
+);
+
+// TODO: different angles for each butterfly?
+function unitary_matrix_16 (y_ptr, x_ptr, cos_phi, sin_phi)
+  local(
+    y1,
+    y2,
+    y3,
+    y4,
+    y5,
+    y6,
+    y7,
+    y8,
+    y9,
+    y10,
+    y11,
+    y12,
+    y13,
+    y14,
+    y15,
+    y16)
+  global()(
+
+  unitary_matrix_8 (y_ptr, x_ptr, cos_phi, sin_phi);
+  unitary_matrix_8 (y_ptr + 8, x_ptr + 8, cos_phi, sin_phi);
+
+  y1 = y_ptr[0];
+  y2 = y_ptr[1];
+  y3 = y_ptr[2];
+  y4 = y_ptr[3];
+  y5 = y_ptr[4];
+  y6 = y_ptr[5];
+  y7 = y_ptr[6];
+  y8 = y_ptr[7];
+  y9 = y_ptr[8];
+  y10 = y_ptr[9];
+  y11 = y_ptr[10];
+  y12 = y_ptr[11];
+  y13 = y_ptr[12];
+  y14 = y_ptr[13];
+  y15 = y_ptr[14];
+  y16 = y_ptr[15];
+
+  y_ptr[0] = cos_phi * y1 - sin_phi * y9;
+  y_ptr[1] = sin_phi * y1 + cos_phi * y9;
+  y_ptr[2] = cos_phi * y2 - sin_phi * y10;
+  y_ptr[3] = sin_phi * y2 + cos_phi * y10;
+  y_ptr[4] = cos_phi * y3 - sin_phi * y11;
+  y_ptr[5] = sin_phi * y3 + cos_phi * y11;
+  y_ptr[6] = cos_phi * y4 - sin_phi * y12;
+  y_ptr[7] = sin_phi * y4 + cos_phi * y12;
+  y_ptr[8] = cos_phi * y5 - sin_phi * y13;
+  y_ptr[9] = sin_phi * y5 + cos_phi * y13;
+  y_ptr[10] = cos_phi * y6 - sin_phi * y14;
+  y_ptr[11] = sin_phi * y6 + cos_phi * y14;
+  y_ptr[12] = cos_phi * y7 - sin_phi * y15;
+  y_ptr[13] = sin_phi * y7 + cos_phi * y15;
+  y_ptr[14] = cos_phi * y8 - sin_phi * y16;
+  y_ptr[15] = sin_phi * y8 + cos_phi * y16;
+);
+
 function get_rt60_gain (rt60sec, delays_spls) local (rate) global (srate)(
     rate = srate / delays_spls;
     pow (10, (-60/20) * (1 / (rate * rt60sec)));
@@ -134,7 +241,7 @@ function get_rt60_gain(
 
 
 // https://ccrma.stanford.edu/~jos/pasp/Prime_Power_Delay_Line.html
-// This has prime_idx to get an offset to the primes list and a rounding 
+// This has prime_idx to get an offset to the primes list and a rounding
 // factor to allow imperfections.
 function get_delay_length_samples(
   dst_ptr, n_delays, pathmin, pathmax, prime_idx, rounding_factor
@@ -145,7 +252,7 @@ function get_delay_length_samples(
     dmax = srate * pathmax * (1 / 343);
     primes_offs = 12;
     i = 0;
-    loop (n_delays, 
+    loop (n_delays,
        v = dmin * pow (dmax / dmin, i / (n_delays - 1));
        v = (log (v) / log (primes.ptr[prime_idx + i]) * rounding_factor) + 0.5;
        v |= 0; // to integer
