@@ -12,7 +12,7 @@ slider10:chorus_mix=    0   <-1, 1, 0.001>   Chorus Amt
 slider11:hf_absortion=  0.5 <0.0, 1, 0.001>  Damping
 slider12:n_density=     0. <0, 4, 1>         Density Inc
 slider13:n_diffusers=   0. <0, 8, 1>         Diffusors
-slider14:tilt=          0. <-1, 1, 0.01>     Tilt
+slider14:tilt=          0. <-0.5, 0.5, 0.01> Tilt
 slider15:base_angle=    0. <0, 0.7853981633974483, 0.00000001> Angle
 
 in_pin:left input
@@ -24,6 +24,7 @@ import _core.jsfx-inc
 import _delay-line.jsfx-inc
 import _filters.jsfx-inc
 import _reverb.jsfx-inc
+import _dynamics.jsfx-inc
 import _lfo.jsfx-inc
 
 /*
@@ -45,7 +46,7 @@ To try:
 -Wow factor stereo.
 -Tweak the schroeder allpasses in series increase decrease density.
 -Fix now-broken ER. Add constants.
- 
+
 */
 @init
 
@@ -87,15 +88,29 @@ LATE_DENSITY_3_RATIO = 1 / 5;
 LATE_DENSITY_4_RATIO = 1 / 11;
 
 LATE_N_DIFFUSERS = 8;
-LATE_DIFFUSERS_TO_MAIN_RATIO = 1 / 100;
-LATE_DIFFUSERS_START_FREQ = 2460;
-LATE_DIFFUSERS_FREQ_FACTOR = pow (2, 0.02/12);
+LATE_DIFFUSOR_1_SAMPLES_48KHZ = 17;
+LATE_DIFFUSOR_2_SAMPLES_48KHZ = 41;
+LATE_DIFFUSOR_3_SAMPLES_48KHZ = 97;
+LATE_DIFFUSOR_4_SAMPLES_48KHZ = 179;
+LATE_DIFFUSOR_5_SAMPLES_48KHZ = 227;
+LATE_DIFFUSOR_6_SAMPLES_48KHZ = 337;
+LATE_DIFFUSOR_7_SAMPLES_48KHZ = 397;
+LATE_DIFFUSOR_8_SAMPLES_48KHZ = 463;
 
-// every 64 samples att 44100
-CONTROL_RATE_MASK = (((srate / 44100) | 0) * 64) - 1;
+LATE_DIFFUSOR_1_G = 0.84;
+LATE_DIFFUSOR_2_G = 0.69;
+LATE_DIFFUSOR_3_G = 0.63;
+LATE_DIFFUSOR_4_G = 0.73;
+LATE_DIFFUSOR_5_G = 0.23;
+LATE_DIFFUSOR_6_G = 0.73;
+LATE_DIFFUSOR_7_G = 0.53;
+LATE_DIFFUSOR_8_G = 0.53;
+
+// every 32 samples att 44100
+CONTROL_RATE_MASK = (((srate / 44100) | 0) * 32) - 1;
 CONTROL_RATE_FACT = (CONTROL_RATE_MASK  + 1);
 
-LATE_DELAY_RATIO = 1.8;
+LATE_DELAY_RATIO = GOLDEN_RATIO * 1;
 LATE_DELAY_PRIME_IDX = 23;
 LATE_DELAY_ROUNDING_FACTOR = 100;
 
@@ -104,8 +119,8 @@ LATE_RND_LFO_FREQ = 5;
 LATE_MATRIX_LFO_FREQ = 0.11;
 LATE_MATRIX_LFO_DEPTH = 0.02;
 
-LATE_SUB_MATRIX_LFO_FREQ = 0.1;
-LATE_SUB_MATRIX_LFO_DEPTH = 0.03;
+LATE_SUBMATRIX_LFO_FREQ = 0.1;
+LATE_SUBMATRIX_LFO_DEPTH = 0.03;
 
 LATE_CHORUS_TO_FB = 1;
 loop(1,
@@ -287,8 +302,19 @@ loop(0,
 tilt1.sptilt_init (LATE_TILT_ORDER);
 tilt2.sptilt_init (LATE_TILT_ORDER);
 
+transient.transient_gate_reset(
+  DEFAULT_TGATE_K, 0.2, 0.2, 50, 2, srate
+  );
+
 // trigger signals
 test_next = counter + 1;
+
+posteq1l.svf_bell (924, 13, -5.5, srate);
+posteq1r.svf_bell (924, 13, -5.5, srate);
+posteq2l.svf_bell (1285, 7.2, -8.5, srate);
+posteq2r.svf_bell (1285, 7.2, -8.5, srate);
+posteq3l.svf_bell (5256, 7.2, -6.8, srate);
+posteq3r.svf_bell (5256, 7.2, -6.8, srate);
 
 freembuf (_memtop_ptr); // tell the Host how much memory we need.
 
@@ -350,24 +376,40 @@ mem_swap (density_spls.array2d_ptr(1), 1, 2);
 mem_swap (density_spls.array2d_ptr(2), 1, 2);
 mem_swap (density_spls.array2d_ptr(3), 1, 2);
 
-get_delay_length_samples(
-  diffusor_spls.ptr,
-  diffusor_spls.size,
-  size_m * LATE_DIFFUSERS_TO_MAIN_RATIO,
-  size_m * LATE_DELAY_RATIO * LATE_DIFFUSERS_TO_MAIN_RATIO,
-  0,
-  LATE_DELAY_ROUNDING_FACTOR * 1000000
-  );
 
-i = 0;
-f = LATE_DIFFUSERS_START_FREQ;
-loop (diffusor_spls.size,
-    coeff = freq_to_schroeder_coeff (f, srate);
-    diffusor_l.delay_line_schroeder_set_coeff (coeff, i);
-    diffusor_r.delay_line_schroeder_set_coeff (coeff * 0.9, i);
-    f *= LATE_DIFFUSERS_FREQ_FACTOR;
-    i += 1;
-);
+sr_ratio = srate / 48000;
+
+diffusor_spls.ptr[0] = LATE_DIFFUSOR_1_SAMPLES_48KHZ;
+diffusor_l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_1_G * sr_ratio, 0);
+diffusor_r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_1_G * sr_ratio, 0);
+
+diffusor_spls.ptr[1] = LATE_DIFFUSOR_2_SAMPLES_48KHZ;
+diffusor_l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_2_G * sr_ratio, 1);
+diffusor_r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_2_G * sr_ratio, 1);
+
+diffusor_spls.ptr[2] = LATE_DIFFUSOR_3_SAMPLES_48KHZ;
+diffusor_l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_3_G * sr_ratio, 2);
+diffusor_r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_3_G * sr_ratio, 2);
+
+diffusor_spls.ptr[3] = LATE_DIFFUSOR_4_SAMPLES_48KHZ;
+diffusor_l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_4_G * sr_ratio, 3);
+diffusor_r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_4_G * sr_ratio, 3);
+
+diffusor_spls.ptr[4] = LATE_DIFFUSOR_5_SAMPLES_48KHZ;
+diffusor_l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_5_G * sr_ratio, 4);
+diffusor_r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_5_G * sr_ratio, 4);
+
+diffusor_spls.ptr[5] = LATE_DIFFUSOR_6_SAMPLES_48KHZ;
+diffusor_l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_6_G * sr_ratio, 5);
+diffusor_r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_6_G * sr_ratio, 5);
+
+diffusor_spls.ptr[6] = LATE_DIFFUSOR_7_SAMPLES_48KHZ;
+diffusor_l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_7_G * sr_ratio, 6);
+diffusor_r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_7_G * sr_ratio, 6);
+
+diffusor_spls.ptr[7] = LATE_DIFFUSOR_8_SAMPLES_48KHZ;
+diffusor_l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_8_G * sr_ratio, 7);
+diffusor_r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_8_G * sr_ratio, 7);
 
 // readjust total size
 
@@ -506,18 +548,27 @@ er_r = er_sig_r * er_mix;
 er_tail = (er_sig_l + er_sig_r) * 0.5 * er_2_late;
 
 // Tail ------------------------
-m_s = m + s;
-
-m_s = diffusor_l.delay_line_schroeder_tick_tapped_cascade(
-  m_s, n_diffusers, diffusor_spls.ptr
-  );
-er_tail = diffusor_r.delay_line_schroeder_tick_tapped_cascade(
-  er_tail, n_diffusers, diffusor_spls.ptr
+diffusor_l.delay_line_advance();
+m = diffusor_l.delay_line_schroeder_tick_tapped_all(
+  m, n_diffusers, diffusor_spls.ptr
   );
 
-m_s = tilt1.sptilt_tick (m_s);
-er_tail = tilt2.sptilt_tick (er_tail);
+diffusor_r.delay_line_advance();
+n_tail = n_diffusers / 2;
+n_s = n_diffusers - n_tail;
 
+i = 0;
+loop (n_tail,
+  er_tail = diffusor_r.delay_line_schroeder_tick (er_tail, i, diffusor_spls.ptr[i]);
+  i += 1;
+);
+loop (n_s,
+  s = diffusor_r.delay_line_schroeder_tick (s, i, diffusor_spls.ptr[i]);
+  i += 1;
+);
+
+m = tilt1.sptilt_tick (m);
+s = tilt2.sptilt_tick (s);
 
 chnls.ptr[0] =  0;
 chnls.ptr[1] =  0;
@@ -534,10 +585,11 @@ density_l = 0;
 density_r = 0;
 
 smlfo_val = matrix_lfo.lfo_filt_noise_tick();
-((counter & CONTROL_RATE_MASK) == 0) ? ( 
+((counter & CONTROL_RATE_MASK) == 0) ? (
   sangle = base_angle * (1 + smlfo_val * LATE_SUBMATRIX_LFO_DEPTH);
-  smatrix_cos_phi = cos (angle);
-  smatrix_sin_phi = sin (angle);
+  sangle -= transients;
+  smatrix_cos_phi = cos (sangle);
+  smatrix_sin_phi = sin (sangle);
 );
 
 // Density stages
@@ -588,12 +640,13 @@ range_add (mod_delay_spls.ptr, mod_delay_spls.ptr, delay_spls.ptr, chnls.size);
 delay.delay_line_advance();
 delay.delay_line_set_all (chnls.ptr, 0);
 
-//delay.delay_line_thiran2_get_all (chorus.ptr, mod_delay_spls.ptr);
-delay.delay_line_get_catmull_rom_interp_all (chorus.ptr, mod_delay_spls.ptr);
+delay.delay_line_thiran2_get_all (chorus.ptr, mod_delay_spls.ptr);
+//delay.delay_line_get_catmull_rom_interp_all (chorus.ptr, mod_delay_spls.ptr);
 
-mlfo_val = matrix_lfo.lfo_filt_noise_tick();
-((counter & CONTROL_RATE_MASK) == 0) ? ( 
+mlfo_val  = matrix_lfo.lfo_filt_noise_tick();
+((counter & CONTROL_RATE_MASK) == 0) ? (
   angle = base_angle * (1 + mlfo_val * LATE_MATRIX_LFO_DEPTH);
+  angle -= transients;
   matrix_cos_phi = cos (angle);
   matrix_sin_phi = sin (angle);
 );
@@ -630,7 +683,7 @@ loop (1, // just to be able to comment out fast...
     loop (chnls.size,
       lfoval = i & 1 ?
         rnd_lfo_1.lfo_filt_noise_tick() : rnd_lfo_2.lfo_filt_noise_tick();
-      mod_ap_freq.ptr[i] = exp (lfoval * 0.001) * ap_freq.ptr[i];
+      mod_ap_freq.ptr[i] = exp ((lfoval * 0.001)) * ap_freq.ptr[i];
       i += 1;
     );
     ap_1.tpt_1p_reset (mod_ap_freq.ptr[0], srate);
@@ -653,7 +706,7 @@ loop (1, // just to be able to comment out fast...
   chnls.ptr[7] = ap_8.tpt_1p_tick_ap (chnls.ptr[7]);
 
   loop (0,
-    // AM at constant power. This ads an echoy tremolo and resonances, 
+    // AM at constant power. This ads an echoy tremolo and resonances,
     // probably needs its own lfo.
     left = exp (lfoval  *  0.005);
     right = exp (lfoval * -0.005);
@@ -675,7 +728,7 @@ loop(1, // just to be able to comment fast...
     loop (chnls.size,
       lfoval = i & 1 ?
         rnd_lfo_1.lfo_filt_noise_tick() : rnd_lfo_2.lfo_filt_noise_tick();
-      mod_lshf_freq.ptr[i] = exp (lfoval * 0.01) * hshelf_freq.ptr[i];
+      mod_lshf_freq.ptr[i] = exp ((lfoval + transients) * 0.01) * hshelf_freq.ptr[i];
       i += 1;
     );
     hshelf1.svf_hshelf(
@@ -758,7 +811,6 @@ loop(0,
   late_l = posteq1l.svf_tick (posteq2l.svf_tick (posteq3l.svf_tick (late_l)));
   late_r = posteq1r.svf_tick (posteq2r.svf_tick (posteq3r.svf_tick (late_r)));
 );
-
 
 (mute == 0) ?(
   spl0 = er_l + late_l;

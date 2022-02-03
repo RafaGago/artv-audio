@@ -239,6 +239,61 @@ function get_rt60_gain(
     );
 );
 
+function make_primes_table (dst*, minv, maxv)
+  local (i, v, prime, n, n_guess)
+  global() (
+  // not winning a competition with these, but easy code for the intended range.
+
+  // guesstimate of how many primes can happen. totally unnecessary as this is
+  // single threaded and the memory pool is already preallocated, but still done
+  // for when ported.
+  minv |= 0;
+  maxv |= 0;
+  n_guess = maxv - minv;
+  n_guess = ceil (n_guess / 2); // even numbers
+  n_guess = ceil (n_guess * 2 / 3); // divisible by three
+  dst.array_init (n_guess);
+  n = 0;
+  v = minv;
+  while (v < maxv) (
+    prime = 1;
+    i = 2;
+    while (i <= (v / 2) && (prime == 1))(
+      prime = (v % i) != 0;
+      i += 1;
+    );
+    (prime == 1) ? (
+      dst.ptr[n] = v;
+      n += 1;
+    );
+    v += 1;
+  );
+  // return back unused memory, report correct size
+  dst.array_shrink (n);
+);
+
+function get_delay_length_samples(
+  dst_ptr, n_delays, splsmin, splsmax
+  )
+  global ()
+  local (dist, i, ok) global (srate, primes*)(
+
+  make_primes_table (this.tmp_primes, splsmin, splsmax);
+  
+  ok = this.tmp_primes.size >= n_delays;
+  ok ? ( 
+    dist = (this.tmp_primes.size / (n_delays - 1)) | 0; 
+    i = 0;
+    loop(n_delays,
+      dst_ptr[i] = this.tmp_primes.ptr[i * dist];
+      i += 1;
+    );
+  ); 
+  // free the memory. 
+  this.tmp_primes.array_shrink (0);
+  ok;
+);
+
 
 // https://ccrma.stanford.edu/~jos/pasp/Prime_Power_Delay_Line.html
 // This has prime_idx to get an offset to the primes list and a rounding
@@ -246,21 +301,28 @@ function get_rt60_gain(
 function get_delay_length_samples(
   dst_ptr, n_delays, pathmin, pathmax, prime_idx, rounding_factor
   )
-  local (dmin, dmax, i, v, primes_offs) global (srate, primes*)(
+  local (dmin, dmax, i, v, primes_offs, ok, ln_ratio) 
+  global (srate, primes*)(
 
-    dmin = srate * pathmin * (1 / 343); // 343 = C = soundspeed
-    dmax = srate * pathmax * (1 / 343);
+  dmin = srate * pathmin * (1 / 343); // 343 = C = soundspeed
+  dmax = srate * pathmax * (1 / 343);
+  
+  ok = get_delay_length_samples (dst_ptr, n_delays, dmin, dmax);
+  (ok == 0) ? (
     primes_offs = 12;
     i = 0;
+    ln_ratio = log (dmax / dmin);
     loop (n_delays,
-       v = dmin * pow (dmax / dmin, i / (n_delays - 1));
-       v = (log (v) / log (primes.ptr[prime_idx + i]) * rounding_factor) + 0.5;
-       v |= 0; // to integer
-       v /= rounding_factor;
-       dst_ptr[i] = pow (primes.ptr[prime_idx + i], v);
-       i += 1;
+      v = dmin * exp ((i / (n_delays - 1)) * ln_ratio);
+      v = (log (v) / log (primes.ptr[prime_idx + i]) * rounding_factor) + 0.5;
+      v |= 0; // to integer
+      v /= rounding_factor;
+      dst_ptr[i] = pow (primes.ptr[prime_idx + i], v);
+      i += 1;
     );
+  );
 );
+
 
 /*
 TODO: Very broken!

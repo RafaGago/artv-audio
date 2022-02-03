@@ -1,0 +1,17 @@
+desc:Rafa random test
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+import _core.jsfx-inc
+import _filters.jsfx-inc
+import _reverb.jsfx-inc
+
+@init
+
+make_primes_table (prm, 255, 477);
+PRM0 = prm.ptr[36];
+
+@sample
