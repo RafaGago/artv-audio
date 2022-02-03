@@ -35,9 +35,25 @@ function interp_catmull_rom (y0, y1, y2, y3, x) local (r, x2, x3)(
 );
 
 // array -----------------------------------------------------------------------
-function array_init (size) global()(
+function array_init (size) (
     this.ptr = mem_reserve (size);
     this.size = size;
+);
+
+function array_shrink (newsize)
+  local (shrink) global (_memtop_ptr, A, B, C, D)(
+
+  shrink = this.size - newsize;
+
+  shrink > 0 ? (
+    (this.ptr + this.size) == _memtop_ptr ? (
+      // try to recover memory
+      _memtop_ptr -= shrink;
+      memset (_memtop_ptr, 0, shrink);
+    );
+    this.size -= shrink;
+  );
+  shrink;
 );
 
 function array_alias (other*) global()(
@@ -46,7 +62,7 @@ function array_alias (other*) global()(
 );
 // -----------------------------------------------------------------------------
 // Some reserved library space e.g. for converting from pointer based interfaces
-// to value based ones. For some reason trying to increment it breaks 
+// to value based ones. For some reason trying to increment it breaks
 // everything.
 
 _libmem.array_init (8);
@@ -246,4 +262,3 @@ rnd_table.ptr[36] = 0.9620012698662417;
 rnd_table.ptr[37] = 0.4707056753390745;
 rnd_table.ptr[38] = 0.5257648252025556;
 rnd_table.ptr[39] = 0.6742146878570825;
-

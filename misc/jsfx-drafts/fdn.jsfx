@@ -15,8 +15,10 @@ in_pin:right input
 out_pin:left output
 out_pin:right output
 
-@init
+import _delay-line.jsfx-inc
 
+@init
+ 
 // a memory area guaranteed to be free, for passing data to functions requiring
 SCRATCH_MEM_AREA_SIZE = 32;
 

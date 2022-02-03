@@ -1,0 +1,67 @@
+import _filters.jsfx-inc
+
+@init
+
+//------------------------------------------------------------------------------
+function slew_limiter_init (attack_sec, release_sec, srate) global() (
+    this.attack = (attack_sec != 0) ? exp (-1 / (attack_sec * srate)) : 0;
+    this.release = (release_sec != 0) ? exp (-1 / (release_sec * srate)) : 0;
+);
+
+function slew_limiter_tick (in)
+    local (timek) global() (
+
+    timek = this.y1 < in ? this.attack : this.release;
+    this.y1 = in + timek * (this.y1 - in);
+    this.y1;
+);
+
+//------------------------------------------------------------------------------
+DEFAULT_TGATE_K.min_decay = log (1. / 1000.);
+DEFAULT_TGATE_K.max_decay = log (2.5) - DEFAULT_TGATE_K.min_decay;
+DEFAULT_TGATE_K.min_recovery = log (1. / 10.);
+DEFAULT_TGATE_K.max_recovery = log (1.) - DEFAULT_TGATE_K.min_recovery;
+DEFAULT_TGATE_K.slow_attack_sec = 1 / 200;
+DEFAULT_TGATE_K.fast_attack_sec  = DEFAULT_TGATE_K.slow_attack_sec * 0.1;
+DEFAULT_TGATE_K.gate_attack_sec  = DEFAULT_TGATE_K.fast_attack_sec * 0.1;
+
+// normally transient_gate_reset(DEFAULT_TGATE_K, ...)
+// "recovery "and "curve_decay" are a 0 to 1 factor. "hf_freq" and "srate" Hz.
+function transient_gate_reset(
+  const*, recovery, curve_decay, hf_freq, lf_freq, srate
+  )
+  local (recovery_sec, gate_release_sec)
+  global() (
+
+  recovery_sec = exp (const.max_recovery * recovery + const.min_recovery);
+
+  this.fast_env.slew_limiter_init (const.FAST_ATTACK_SEC, recovery_sec, srate);
+  this.slow_env.slew_limiter_init (const.slow_attack_sec, recovery_sec, srate);
+
+  gate_release_sec = exp (const.max_decay * curve_decay + const.min_decay);
+
+  this.gate_env.slew_limiter_init(
+    const.gate_attack_sec, gate_release_sec, srate
+    );
+  this.gate_hp.tpt_1p_reset (hf_freq, srate);
+  this.gate_lp.smooth_lp_1p_0z_init (lf_freq, srate);
+);
+
+function transient_gate_tick (spl0, spl1)
+  local (det, fast, slow, gate) global() (
+
+  det  = 0.5 * (abs (spl0) + abs (spl1));
+  det *= det * det;
+  det  = log (det + 0.000000000000000001);
+  fast = exp (this.fast_env.slew_limiter_tick (det));
+  slow = exp (this.slow_env.slew_limiter_tick (det));
+
+  gate = (fast - slow) / fast; // 0 to 1
+  gate = this.gate_env.slew_limiter_tick (gate);
+  gate = this.gate_hp.tpt_1p_tick_hp (gate);
+  gate = this.gate_lp.smooth_lp_1p_0z_tick (gate);
+
+  gate = abs (gate);
+);
+
+//------------------------------------------------------------------------------
