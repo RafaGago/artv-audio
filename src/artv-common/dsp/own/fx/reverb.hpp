@@ -487,7 +487,7 @@ private:
   {
     // TODO: this will need to happen for each delay line
     float rate    = (float) _plugcontext->get_sample_rate() / _fb_base_time;
-    _fb_base_gain = exp ((M_LN10 * -60./20. * 1. / (_fb_rt60_sec * rate));
+    _fb_base_gain = exp (M_LN10 * -60. / 20. * 1. / (_fb_rt60_sec * rate));
   }
   //----------------------------------------------------------------------------
   using reverb_delay_line = modulable_delay_line<float_x1, interleaved>;

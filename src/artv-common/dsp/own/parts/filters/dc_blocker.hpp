@@ -92,7 +92,7 @@ struct mystran_dc_blocker {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
 
-    auto prev_lp_out = s[onepole_smoother::z1];
+    auto prev_lp_out = s[onepole_smoother::y1];
     onepole_smoother::tick (c, s, x);
     return x - prev_lp_out;
   }
@@ -106,7 +106,7 @@ struct mystran_dc_blocker {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
 
-    auto prev_lp_out = s[onepole_smoother::z1];
+    auto prev_lp_out = s[onepole_smoother::y1];
     onepole_smoother::tick (c, s, x);
     return x - prev_lp_out;
   }

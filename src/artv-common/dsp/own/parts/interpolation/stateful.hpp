@@ -34,7 +34,9 @@ struct thiran_interp<1> {
     using T     = vec_value_type_t<V>;
     V corrected = vec_max (fractional, vec_set<V> ((T) 0.000001));
     co[a1]      = (1 - corrected) / (1 + corrected);
-    co[frac]    = fractional;
+#ifndef NDEBUG
+    co[frac] = fractional;
+#endif
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
