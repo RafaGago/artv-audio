@@ -108,34 +108,34 @@ LATE_SUB_MATRIX_LFO_FREQ = 0.1;
 LATE_SUB_MATRIX_LFO_DEPTH = 0.03;
 
 LATE_CHORUS_TO_FB = 1;
+loop(1,
+  LATE_HSHELF1_FREQ = 1200;
+  LATE_HSHELF2_FREQ = 1400;
+  LATE_HSHELF3_FREQ = 1800;
+  LATE_HSHELF4_FREQ = 2100;
+  LATE_HSHELF5_FREQ = 2500;
+  LATE_HSHELF6_FREQ = 3134;
+  LATE_HSHELF7_FREQ = 4698;
+  LATE_HSHELF8_FREQ = 8000;
 
-LATE_HSHELF1_FREQ = 1200;
-LATE_HSHELF2_FREQ = 1400;
-LATE_HSHELF3_FREQ = 1800;
-LATE_HSHELF4_FREQ = 2100;
-LATE_HSHELF5_FREQ = 2500;
-LATE_HSHELF6_FREQ = 3134;
-LATE_HSHELF7_FREQ = 4698;
-LATE_HSHELF8_FREQ = 8000;
+  LATE_HSHELF1_Q = 0.4;
+  LATE_HSHELF2_Q = 0.4;
+  LATE_HSHELF3_Q = 0.5;
+  LATE_HSHELF4_Q = 0.5;
+  LATE_HSHELF5_Q = 0.6;
+  LATE_HSHELF6_Q = 0.6;
+  LATE_HSHELF7_Q = 0.7;
+  LATE_HSHELF8_Q = 0.8;
 
-LATE_HSHELF1_Q = 0.4;
-LATE_HSHELF2_Q = 0.4;
-LATE_HSHELF3_Q = 0.5;
-LATE_HSHELF4_Q = 0.5;
-LATE_HSHELF5_Q = 0.6;
-LATE_HSHELF6_Q = 0.6;
-LATE_HSHELF7_Q = 0.7;
-LATE_HSHELF8_Q = 0.8;
-
-LATE_HSHELF1_GAIN_FACT = 0.1;
-LATE_HSHELF2_GAIN_FACT = 0.14;
-LATE_HSHELF3_GAIN_FACT = 0.35;
-LATE_HSHELF4_GAIN_FACT = 0.5;
-LATE_HSHELF5_GAIN_FACT = 0.7;
-LATE_HSHELF6_GAIN_FACT = 0.8;
-LATE_HSHELF7_GAIN_FACT = 0.85;
-LATE_HSHELF8_GAIN_FACT = 1;
-
+  LATE_HSHELF1_GAIN_FACT = 0.1;
+  LATE_HSHELF2_GAIN_FACT = 0.14;
+  LATE_HSHELF3_GAIN_FACT = 0.35;
+  LATE_HSHELF4_GAIN_FACT = 0.5;
+  LATE_HSHELF5_GAIN_FACT = 0.7;
+  LATE_HSHELF6_GAIN_FACT = 0.8;
+  LATE_HSHELF7_GAIN_FACT = 0.85;
+  LATE_HSHELF8_GAIN_FACT = 1;
+);
 LATE_TILT_FREQ = 400;
 LATE_TILT_BW = 6;
 LATE_TILT_ORDER = 8;
@@ -254,25 +254,35 @@ dc14.dc_blocker_init (DC_BLOCKER_FREQ, srate);
 dc15.dc_blocker_init (DC_BLOCKER_FREQ, srate);
 dc16.dc_blocker_init (DC_BLOCKER_FREQ, srate);
 
-hshelf_freq.array_init (chnls.size);
-hshelf_db.array_init (chnls.size);
-hshelf_freq.ptr[0] = LATE_HSHELF1_FREQ;
-hshelf_freq.ptr[1] = LATE_HSHELF2_FREQ;
-hshelf_freq.ptr[2] = LATE_HSHELF3_FREQ;
-hshelf_freq.ptr[3] = LATE_HSHELF4_FREQ;
-hshelf_freq.ptr[4] = LATE_HSHELF5_FREQ;
-hshelf_freq.ptr[5] = LATE_HSHELF6_FREQ;
-hshelf_freq.ptr[6] = LATE_HSHELF7_FREQ;
-hshelf_freq.ptr[7] = LATE_HSHELF8_FREQ;
+loop(1,
+  hshelf_freq.array_init (chnls.size);
+  hshelf_db.array_init (chnls.size);
+  hshelf_freq.ptr[0] = LATE_HSHELF1_FREQ;
+  hshelf_freq.ptr[1] = LATE_HSHELF2_FREQ;
+  hshelf_freq.ptr[2] = LATE_HSHELF3_FREQ;
+  hshelf_freq.ptr[3] = LATE_HSHELF4_FREQ;
+  hshelf_freq.ptr[4] = LATE_HSHELF5_FREQ;
+  hshelf_freq.ptr[5] = LATE_HSHELF6_FREQ;
+  hshelf_freq.ptr[6] = LATE_HSHELF7_FREQ;
+  hshelf_freq.ptr[7] = LATE_HSHELF8_FREQ;
 
-hshelf1.svf_hshelf (200, 1, 0, srate);
-hshelf2.svf_hshelf (200, 1, 0, srate);
-hshelf3.svf_hshelf (200, 1, 0, srate);
-hshelf4.svf_hshelf (200, 1, 0, srate);
-hshelf5.svf_hshelf (200, 1, 0, srate);
-hshelf6.svf_hshelf (200, 1, 0, srate);
-hshelf7.svf_hshelf (200, 1, 0, srate);
-hshelf8.svf_hshelf (200, 1, 0, srate);
+  hshelf1.svf_hshelf (200, 1, 0, srate);
+  hshelf2.svf_hshelf (200, 1, 0, srate);
+  hshelf3.svf_hshelf (200, 1, 0, srate);
+  hshelf4.svf_hshelf (200, 1, 0, srate);
+  hshelf5.svf_hshelf (200, 1, 0, srate);
+  hshelf6.svf_hshelf (200, 1, 0, srate);
+  hshelf7.svf_hshelf (200, 1, 0, srate);
+  hshelf8.svf_hshelf (200, 1, 0, srate);
+);
+loop(0,
+  LATE_DAMP_ORDER = 4;
+  damp1a.sptilt_init (LATE_DAMP_ORDER);
+  damp2a.sptilt_init (LATE_DAMP_ORDER);
+  damp1b.sptilt_init (LATE_DAMP_ORDER);
+  damp2b.sptilt_init (LATE_DAMP_ORDER);
+);
+
 
 tilt1.sptilt_init (LATE_TILT_ORDER);
 tilt2.sptilt_init (LATE_TILT_ORDER);
@@ -374,7 +384,7 @@ loop (n_density,
 range_clamp (delay_spls.ptr, delay_spls.size, 0, delay.mask);
 
 // YOLO linear empirical/perceptual correction. TODO: adjust channel-wise
-rt60_corr = (rt60_msec * 0.001) * (1 + (hf_absortion * 0.65));
+rt60_corr = (rt60_msec * 0.001) * (1 + (hf_absortion * 0.85));
 
 get_rt60_gain(
   rt60_att.ptr, delay_spls.ptr, rt60_corr, 0.1, chnls.size
@@ -392,17 +402,31 @@ loop (chnls.size,
     i += 1;
 );
 
-// Hiself decays
-hshelf_db_raw = -7 * hf_absortion;
+loop(1,
+  // Hiself decays
+  hshelf_db_raw = -5 * hf_absortion;
 
-hshelf_db.ptr[0] = LATE_HSHELF1_GAIN_FACT * hshelf_db_raw;
-hshelf_db.ptr[1] = LATE_HSHELF2_GAIN_FACT * hshelf_db_raw;
-hshelf_db.ptr[2] = LATE_HSHELF3_GAIN_FACT * hshelf_db_raw;
-hshelf_db.ptr[3] = LATE_HSHELF4_GAIN_FACT * hshelf_db_raw;
-hshelf_db.ptr[4] = LATE_HSHELF5_GAIN_FACT * hshelf_db_raw;
-hshelf_db.ptr[5] = LATE_HSHELF6_GAIN_FACT * hshelf_db_raw;
-hshelf_db.ptr[6] = LATE_HSHELF7_GAIN_FACT * hshelf_db_raw;
-hshelf_db.ptr[7] = LATE_HSHELF8_GAIN_FACT * hshelf_db_raw;
+  hshelf_db.ptr[0] = LATE_HSHELF1_GAIN_FACT * hshelf_db_raw;
+  hshelf_db.ptr[1] = LATE_HSHELF2_GAIN_FACT * hshelf_db_raw;
+  hshelf_db.ptr[2] = LATE_HSHELF3_GAIN_FACT * hshelf_db_raw;
+  hshelf_db.ptr[3] = LATE_HSHELF4_GAIN_FACT * hshelf_db_raw;
+  hshelf_db.ptr[4] = LATE_HSHELF5_GAIN_FACT * hshelf_db_raw;
+  hshelf_db.ptr[5] = LATE_HSHELF6_GAIN_FACT * hshelf_db_raw;
+  hshelf_db.ptr[6] = LATE_HSHELF7_GAIN_FACT * hshelf_db_raw;
+  hshelf_db.ptr[7] = LATE_HSHELF8_GAIN_FACT * hshelf_db_raw;
+);
+loop(0,
+  LATE_DAMP1_FREQ = 20;
+  LATE_DAMP1_BW = 7.82;
+  LATE_DAMP2_FREQ = 300;
+  LATE_DAMP2_BW = 4.33;
+
+  damp1a.sptilt_reset (LATE_DAMP1_FREQ, LATE_DAMP1_BW, -hf_absortion * 0.05, srate);
+  damp1b.sptilt_reset (LATE_DAMP1_FREQ, LATE_DAMP1_BW, -hf_absortion * 0.05, srate);
+  damp2a.sptilt_reset (LATE_DAMP2_FREQ, LATE_DAMP2_BW, -hf_absortion * 0.05, srate);
+  damp2b.sptilt_reset (LATE_DAMP2_FREQ, LATE_DAMP2_BW, -hf_absortion * 0.05, srate);
+);
+
 
 chorus_fact = chorus_mix * chorus_mix * sign (chorus_mix);
 
@@ -437,6 +461,8 @@ l = spl0;
 r = spl1;
 m = (l + r) * 0.5;
 s = (l - r) * 0.5;
+
+transients = transient.transient_gate_tick (spl0, spl1) * 0.05;
 
 // ER ------------------------
 er_chnls.ptr[0] =  -l;
@@ -492,14 +518,15 @@ er_tail = diffusor_r.delay_line_schroeder_tick_tapped_cascade(
 m_s = tilt1.sptilt_tick (m_s);
 er_tail = tilt2.sptilt_tick (er_tail);
 
-chnls.ptr[0] =  m_s;
-chnls.ptr[1] =  s * 0.2;
-chnls.ptr[2] =  0;
-chnls.ptr[3] =  0;
-chnls.ptr[4] =  0;
+
+chnls.ptr[0] =  0;
+chnls.ptr[1] =  0;
+chnls.ptr[2] =  m * 0.5;
+chnls.ptr[3] =  m * 0.5;
+chnls.ptr[4] =  s;
 chnls.ptr[5] =  0;
-chnls.ptr[6] =  er_tail;
-chnls.ptr[7] =  0;
+chnls.ptr[6] =  er_tail * 0.5;
+chnls.ptr[7] =  er_tail * 0.5;
 
 range_add (chnls.ptr, chnls.ptr, feedback.ptr, chnls.size);
 
@@ -571,7 +598,8 @@ mlfo_val = matrix_lfo.lfo_filt_noise_tick();
   matrix_sin_phi = sin (angle);
 );
 
-unitary_matrix_8 (scratch2.ptr, chorus.ptr, matrix_cos_phi, matrix_sin_phi);
+//unitary_matrix_8 (scratch2.ptr, chorus.ptr, matrix_cos_phi, matrix_sin_phi);
+rochebois_8 (scratch2.ptr, chorus.ptr);
 memcpy (chorus.ptr, scratch2.ptr, chnls.size);
 
 loop(1,
@@ -589,7 +617,7 @@ LATE_CHORUS_TO_FB ? (
   memcpy (chnls.ptr, chorus.ptr, chnls.size);
 ) : (
   delay.delay_line_thiran2_get_all  (chnls.ptr, delay_spls.ptr);
-  hadamard_8 (scratch2.ptr, chnls.ptr);
+  rochebois_8 (scratch2.ptr, chnls.ptr);
   memcpy (chnls.ptr, scratch2.ptr, chnls.size);
 );
 
@@ -685,6 +713,13 @@ loop(1, // just to be able to comment fast...
   chnls.ptr[6] = hshelf7.svf_tick (chnls.ptr[6]);
   chnls.ptr[7] = hshelf8.svf_tick (chnls.ptr[7]);
 );
+loop(0,
+  chnls.ptr[2] = damp1a.sptilt_tick (chnls.ptr[2]);
+  chnls.ptr[3] = damp1b.sptilt_tick (chnls.ptr[3]);
+
+  chnls.ptr[0] = damp2a.sptilt_tick (chnls.ptr[0]);
+  chnls.ptr[1] = damp2b.sptilt_tick (chnls.ptr[1]);
+);
 
 loop(0,
   chnls.ptr[0] = dc9.dc_blocker_tick (chnls.ptr[0]);
@@ -717,6 +752,13 @@ late_r += chorus_r * cho_comp;
 
 late_l *= late_mix;
 late_r *= late_mix;
+
+loop(0,
+  // Cheat by removing some nasty resonances. TODO: where do they come from?
+  late_l = posteq1l.svf_tick (posteq2l.svf_tick (posteq3l.svf_tick (late_l)));
+  late_r = posteq1r.svf_tick (posteq2r.svf_tick (posteq3r.svf_tick (late_r)));
+);
+
 
 (mute == 0) ?(
   spl0 = er_l + late_l;

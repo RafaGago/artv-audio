@@ -14,14 +14,14 @@ import _filters.jsfx-inc
 @init
 
 //------------------------------------------------------------------------------
-ORDER = 46;
+ORDER = 4;
 l.sptilt_init (ORDER);
 r.sptilt_init (ORDER);
 
 @slider
 
-l.sptilt_reset_as_tilt_eq (freq, bw, alpha, srate);
-r.sptilt_reset_as_tilt_eq (freq, bw, alpha, srate);
+l.sptilt_reset (freq, bw, alpha, srate);
+r.sptilt_reset (freq, bw, alpha, srate);
 
 @sample
 

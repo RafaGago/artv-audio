@@ -422,7 +422,7 @@ public:
     auto z         = (float) delay_spls;
     auto max_delay = size() - 1 - Stateless_interp::n_points - 1;
     z              = z + mod_amt * max_mod;
-    z              = std::clamp (z, 0.f, max_delay);
+    z              = std::clamp<float> (z, 0.f, max_delay);
     return get<Stateless_interp> ((float) z, channel);
   }
   //----------------------------------------------------------------------------
