@@ -1,4 +1,4 @@
-desc:fdn diffusor with er_feedback  draft
+  <desc:fdn diffusor with er_feedback  draft
 slider1:enable_impulse= 0   <0 ,2, 1{Off,Impulse,White noise}> Test
 slider2:mute=           0   <0, 1{Off,On}>    Reverb mute
 slider3:rt60_msec=     3300 <10 ,12000 ,0.1>  RT60 (msec)
@@ -53,8 +53,7 @@ Good sizes (48KHz):
 -21.12
 -21.14
 
-TODO: broken at high SR.
-
+TODO: broken at high SR. The reverb has to be downsampled on the final FX.
 */
 @init
 
@@ -203,11 +202,11 @@ function late_extra_density_tick (density*, sig*, n_active, angle, transients)
   );
  // Density stages
   n_active >= 1 ? (
-    memcpy (this.io.ptr, sig.ptr + 0, density.spls.size_a);
+    memcpy (this.io.ptr, sig.ptr + 0, density.n_spls.size_a);
     density.a.delay_line_advance();
     density.a.delay_line_set_all (this.io.ptr, 0);
     density.a.delay_line_thiran2_get_all(
-      this.io.ptr, density.spls.array2d_ptr(0)
+      this.io.ptr, density.n_spls.array2d_ptr(0)
       );
     unitary_matrix_4(
       sig.ptr + 0, this.io.ptr, density.cos_phi, density.sin_phi
@@ -215,11 +214,11 @@ function late_extra_density_tick (density*, sig*, n_active, angle, transients)
   );
 
   n_active >= 2 ? (
-    memcpy (this.io.ptr, sig.ptr + 1, density.spls.size_a);
+    memcpy (this.io.ptr, sig.ptr + 1, density.n_spls.size_a);
     density.b.delay_line_advance();
     density.b.delay_line_set_all (this.io.ptr, 0);
     density.b.delay_line_thiran2_get_all(
-      this.io.ptr, density.spls.array2d_ptr(1)
+      this.io.ptr, density.n_spls.array2d_ptr(1)
       );
   //  hadamard_4 (sig.ptr + 1, this.io.ptr);
     unitary_matrix_4(
@@ -228,11 +227,11 @@ function late_extra_density_tick (density*, sig*, n_active, angle, transients)
   );
 
   n_active >= 3 ? (
-    memcpy (this.io.ptr, sig.ptr + 0, density.spls.size_a);
+    memcpy (this.io.ptr, sig.ptr + 0, density.n_spls.size_a);
     density.c.delay_line_advance();
     density.c.delay_line_set_all (this.io.ptr, 0);
     density.c.delay_line_thiran2_get_all(
-      this.io.ptr, density.spls.array2d_ptr(2)
+      this.io.ptr, density.n_spls.array2d_ptr(2)
       );
     unitary_matrix_4(
       sig.ptr + 0, this.io.ptr, density.cos_phi, density.sin_phi
@@ -240,11 +239,11 @@ function late_extra_density_tick (density*, sig*, n_active, angle, transients)
   );
 
   n_active >= 4 ? (
-    memcpy (this.io.ptr, sig.ptr + 3, density.spls.size_a);
+    memcpy (this.io.ptr, sig.ptr + 3, density.n_spls.size_a);
     density.d.delay_line_advance();
     density.d.delay_line_set_all (this.io.ptr, 0);
     density.d.delay_line_thiran2_get_all(
-      this.io.ptr, density.spls.array2d_ptr(3)
+      this.io.ptr, density.n_spls.array2d_ptr(3)
       );
   //  hadamard_4 (sig.ptr + 3, this.io.ptr);
     unitary_matrix_4(
@@ -253,6 +252,41 @@ function late_extra_density_tick (density*, sig*, n_active, angle, transients)
   );
 
   this.io.array_shrink (0);
+);
+//------------------------------------------------------------------------------
+function late_main_block_tick (main*, sig*, chorus*, dc*)
+  global (LATE_CHORUS_TO_FB)(
+
+  this.n_spls.array_init (sig.size);
+  this.lfoval.array_init (sig.size);
+  this.copy.array_init (sig.size);
+
+  main.lfos.lfo_bank_tick_sin (this.lfoval.ptr, 0);
+  range_mul (this.n_spls.ptr, this.lfoval.ptr, main.mod_n_spls.ptr, sig.size);
+  range_add (this.n_spls.ptr, this.n_spls.ptr, main.n_spls.ptr, sig.size);
+
+  main.delay.delay_line_advance();
+  main.delay.delay_line_set_all (sig.ptr, 0);
+
+  main.delay.delay_line_thiran2_get_all (chorus.ptr, this.n_spls.ptr);
+  //main.delay.delay_line_get_catmull_rom_interp_all (chorus.ptr, this.n_spls.ptr);
+
+  //unitary_matrix_8 (scratch2.ptr, chorus.ptr, density.cos_phi, density.sin_phi);
+  rochebois_8 (this.copy.ptr, chorus.ptr);
+  memcpy (chorus.ptr, this.copy.ptr, sig.size);
+  late_dc_blockers_tick (dc, chorus);
+
+  LATE_CHORUS_TO_FB ? (
+    memcpy (sig.ptr, chorus.ptr, sig.size);
+  ) : (
+    main.delay.delay_line_thiran2_get_all  (sig.ptr, main.n_spls.ptr);
+    rochebois_8 (this.copy.ptr, sig.ptr);
+    memcpy (sig.ptr, this.copy.ptr, sig.size);
+  );
+
+  this.copy.array_shrink (0);
+  this.lfoval.array_shrink (0);
+  this.n_spls.array_shrink (0);
 );
 //------------------------------------------------------------------------------
 
@@ -397,16 +431,16 @@ chnls.array_init (N_LATE_CHNLS);
 chorus.array_init (chnls.size);
 feedback.array_init (chnls.size);
 rt60_att.array_init (chnls.size);
-delay_spls.array_init (chnls.size);
+main.n_spls.array_init (chnls.size);
 diffusor_spls.array_init (LATE_N_DIFFUSERS);
-mod_spls.array_init (chnls.size);
+main.mod_n_spls.array_init (chnls.size);
 
-lfos.lfo_bank_init (chnls.size, chnls.size);
-lfos.lfo_bank_reset_phase (0);
+main.lfos.lfo_bank_init (chnls.size, chnls.size);
+main.lfos.lfo_bank_reset_phase (0);
 // 1 sec max. It will have to be computed from the maximum sizes on the final
 // impl.
-delay.delay_line_init (round_next_pow2 (srate), chnls.size);
-delay.delay_line_thiran2_add (srate); // disable thiran resync
+main.delay.delay_line_init (round_next_pow2 (srate), chnls.size);
+main.delay.delay_line_thiran2_add (srate); // disable thiran resync
 
 diffussor.l.delay_line_init (round_next_pow2 (srate), diffusor_spls.size);
 diffussor.l.delay_line_schroeder_ap_add();
@@ -414,7 +448,7 @@ diffussor.l.delay_line_schroeder_ap_add();
 diffussor.r.delay_line_init (round_next_pow2 (srate), diffusor_spls.size);
 diffussor.r.delay_line_schroeder_ap_add();
 
-density.spls.array2d_init (N_CHNLS_LATE_DENSITY, N_DENSITY_STAGES);
+density.n_spls.array2d_init (N_CHNLS_LATE_DENSITY, N_DENSITY_STAGES);
 density.a.delay_line_init (
   round_next_pow2 (srate * LATE_DENSITY_1_RATIO), N_CHNLS_LATE_DENSITY
   );
@@ -500,8 +534,8 @@ freembuf (_memtop_ptr); // tell the Host how much memory we need.
 @slider //----------------------------------------------------------------------
 
 get_delay_length_samples(
-  delay_spls.ptr,
-  delay_spls.size,
+  main.n_spls.ptr,
+  main.n_spls.size,
   size_m,
   size_m * LATE_DELAY_RATIO,
   LATE_DELAY_PRIME_IDX,
@@ -509,8 +543,8 @@ get_delay_length_samples(
   );
 
 get_delay_length_samples(
-  density.spls.array2d_ptr(0),
-  density.spls.size_a,
+  density.n_spls.array2d_ptr(0),
+  density.n_spls.size_a,
   size_m * LATE_DENSITY_1_RATIO,
   size_m * LATE_DELAY_RATIO * LATE_DENSITY_1_RATIO,
   LATE_DELAY_PRIME_IDX,
@@ -518,8 +552,8 @@ get_delay_length_samples(
   );
 
 get_delay_length_samples(
-  density.spls.array2d_ptr(1),
-  density.spls.size_a,
+  density.n_spls.array2d_ptr(1),
+  density.n_spls.size_a,
   size_m * LATE_DENSITY_2_RATIO,
   size_m * LATE_DELAY_RATIO * LATE_DENSITY_2_RATIO,
   LATE_DELAY_PRIME_IDX,
@@ -527,8 +561,8 @@ get_delay_length_samples(
   );
 
 get_delay_length_samples(
-  density.spls.array2d_ptr(2),
-  density.spls.size_a,
+  density.n_spls.array2d_ptr(2),
+  density.n_spls.size_a,
   size_m * LATE_DENSITY_3_RATIO,
   size_m * LATE_DELAY_RATIO * LATE_DENSITY_1_RATIO,
   LATE_DELAY_PRIME_IDX,
@@ -536,8 +570,8 @@ get_delay_length_samples(
   );
 
 get_delay_length_samples(
-  density.spls.array2d_ptr(3),
-  density.spls.size_a,
+  density.n_spls.array2d_ptr(3),
+  density.n_spls.size_a,
   size_m * LATE_DENSITY_4_RATIO,
   size_m * LATE_DELAY_RATIO * LATE_DENSITY_2_RATIO,
   LATE_DELAY_PRIME_IDX,
@@ -545,15 +579,15 @@ get_delay_length_samples(
   );
 
 i = 0;
-loop (delay_spls.size / 2,
-    mem_swap (delay_spls.ptr, i, i + (delay_spls.size / 2));
+loop (main.n_spls.size / 2,
+    mem_swap (main.n_spls.ptr, i, i + (main.n_spls.size / 2));
     i += 1;
 );
 
-mem_swap (density.spls.array2d_ptr(0), 1, 2);
-mem_swap (density.spls.array2d_ptr(1), 1, 2);
-mem_swap (density.spls.array2d_ptr(2), 1, 2);
-mem_swap (density.spls.array2d_ptr(3), 1, 2);
+mem_swap (density.n_spls.array2d_ptr(0), 1, 2);
+mem_swap (density.n_spls.array2d_ptr(1), 1, 2);
+mem_swap (density.n_spls.array2d_ptr(2), 1, 2);
+mem_swap (density.n_spls.array2d_ptr(3), 1, 2);
 
 sr_ratio = srate / 48000;
 
@@ -593,32 +627,32 @@ diffussor.r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_8_G * sr_ratio, 7);
 
 i = 0;
 loop (n_density,
-    dst_ptr = delay_spls.ptr + 4 * (i & 1);
+    dst_ptr = main.n_spls.ptr + 4 * (i & 1);
     range_sub(
-      dst_ptr, dst_ptr, density.spls.array2d_ptr (i), density.spls.size_a
+      dst_ptr, dst_ptr, density.n_spls.array2d_ptr (i), density.n_spls.size_a
       );
     i += 1;
 );
 
 
-range_clamp (delay_spls.ptr, delay_spls.size, 0, delay.mask);
+range_clamp (main.n_spls.ptr, main.n_spls.size, 0, main.delay.mask);
 
 // YOLO linear empirical/perceptual correction. TODO: adjust channel-wise
 rt60_corr = (rt60_msec * 0.001) * (1 + (hf_absortion * 0.85));
 
 get_rt60_gain(
-  rt60_att.ptr, delay_spls.ptr, rt60_corr, 0.1, chnls.size
+  rt60_att.ptr, main.n_spls.ptr, rt60_corr, 0.1, chnls.size
   );
 range_mul_k(
-  mod_spls.ptr,
-  delay_spls.ptr,
+  main.mod_n_spls.ptr,
+  main.n_spls.ptr,
   chorus_depth * chorus_depth * LFO_DEPTH_MAX,
   chnls.size
   );
 
 i = 0;
 loop (chnls.size,
-    lfos.lfo_bank_reset_freq (0, i, chorus_freq + chorus_freq * i * 0.0001);
+    main.lfos.lfo_bank_reset_freq (0, i, chorus_freq + chorus_freq * i * 0.0001);
     i += 1;
 );
 
@@ -732,41 +766,10 @@ chnls.ptr[6] =  er_tail * 0.5;
 chnls.ptr[7] =  er_tail * 0.5;
 
 range_add (chnls.ptr, chnls.ptr, feedback.ptr, chnls.size);
-
-late_signal_modulation_tick (ap, chnls);
 late_extra_density_tick (density, chnls, n_density, base_angle, transients);
-
-// LFO
-mod_delay_spls.array_alias (scratch4);
-lfo_out.array_alias (scratch3);
-
-// Delay line + chorus
-lfos.lfo_bank_tick_sin (lfo_out.ptr, 0);
-range_mul (mod_delay_spls.ptr, lfo_out.ptr, mod_spls.ptr, chnls.size);
-range_add (mod_delay_spls.ptr, mod_delay_spls.ptr, delay_spls.ptr, chnls.size);
-delay.delay_line_advance();
-delay.delay_line_set_all (chnls.ptr, 0);
-
-delay.delay_line_thiran2_get_all (chorus.ptr, mod_delay_spls.ptr);
-//delay.delay_line_get_catmull_rom_interp_all (chorus.ptr, mod_delay_spls.ptr);
-
-//unitary_matrix_8 (scratch2.ptr, chorus.ptr, density.cos_phi, density.sin_phi);
-rochebois_8 (scratch2.ptr, chorus.ptr);
-memcpy (chorus.ptr, scratch2.ptr, chnls.size);
-late_dc_blockers_tick (dc, chorus);
-
-LATE_CHORUS_TO_FB ? (
-  memcpy (chnls.ptr, chorus.ptr, chnls.size);
-) : (
-  delay.delay_line_thiran2_get_all  (chnls.ptr, delay_spls.ptr);
-  rochebois_8 (scratch2.ptr, chnls.ptr);
-  memcpy (chnls.ptr, scratch2.ptr, chnls.size);
-);
-
+late_signal_modulation_tick (ap, chnls);
 late_damp_tick (damp, chnls, transients);
-
-// make it sound more or less likely att all samplerates. Alternatively
-// downsampling to 22050 could be an alternative.
+late_main_block_tick (main, chnls, chorus, dc);
 range_mul (feedback.ptr, chnls.ptr, rt60_att.ptr, chnls.size);
 
 chorus_l = chorus.ptr[0] - chorus.ptr[3] + chorus.ptr[4] - chorus.ptr[6];
