@@ -1,0 +1,301 @@
+import _core.jsfx-inc
+
+@init
+
+// Ported from liquid DSP
+// https://github.com/jgaeddert/liquid-dsp
+
+// float sincf(float _x) {
+//     // _x ~ 0 approximation
+//     //if (fabsf(_x) < 0.01f)
+//     //    return expf(-lngammaf(1+_x) - lngammaf(1-_x));
+//
+//     // _x ~ 0 approximation
+//     // from : http://mathworld.wolfram.com/SincFunction.html
+//     // sinc(z) = \prod_{k=1}^{\infty} { cos(\pi z / 2^k) }
+//     if (fabsf(_x) < 0.01f)
+//         return cosf(M_PI*_x/2.0f)*cosf(M_PI*_x/4.0f)*cosf(M_PI*_x/8.0f);
+//
+//     return sinf(M_PI*_x)/(M_PI*_x);
+// }
+//------------------------------------------------------------------------------
+function sinc_function (x) (
+    // I guess that with double precision the regular sin form is enough..
+    abs (x) < 0.01 ?
+        cos ($pi * x / 2) * cos ($pi * x / 4) * cos ($pi * x /8) :
+        sin ($pi * x) / ($pi * x)
+        ;
+);
+
+// Ported from liquid DSP
+// https://github.com/jgaeddert/liquid-dsp
+
+// float liquid_lngammaf(float _z)
+// {
+//     float g;
+//     if (_z < 0) {
+//         fprintf(stderr,"error: liquid_lngammaf(), undefined for z <= 0\n");
+//         exit(1);
+//     } else if (_z < 10.0f) {
+//         // Use recursive formula:
+//         //    gamma(z+1) = z * gamma(z)
+//         // therefore:
+//         //    log(Gamma(z)) = log(gamma(z+1)) - ln(z)
+//         return liquid_lngammaf(_z + 1.0f) - logf(_z);
+//     } else {
+//         // high value approximation
+//         g = 0.5*( logf(2*M_PI)-log(_z) );
+//         g += _z*( logf(_z+(1/(12.0f*_z-0.1f/_z)))-1);
+//     }
+//     return g;
+// }
+//------------------------------------------------------------------------------
+// JSFX doesn't suppor recursion, the non recursive version seems nicer too.
+function log_gamma_function (z) global() local (z_cp, correction, g) (
+  // z has to be GT 0
+  g = -1; // error
+
+  (z > 0) ? (
+    correction = 0;
+    z_cp = z;
+
+    while (z_cp < 10) (
+      correction += log (z_cp);
+      z_cp += 1;
+    );
+
+    g = 0.5 * (log (2 * $PI) - log (z));
+    g += z * (log (z + (1 / (12 * z - 0.1 / z))) - 1);
+    g -= correction;
+  );
+  g;
+);
+//------------------------------------------------------------------------------
+// Ported from liquid DSP
+// https://github.com/jgaeddert/liquid-dsp
+
+// float liquid_besseli0f(float _z)
+// {
+//     // TODO : use better low-signal approximation
+//     if (_z == 0.0f)
+//         return 1.0f;
+//
+//     unsigned int k;
+//     float t, y=0.0f;
+//     for (k=0; k<NUM_BESSELI0_ITERATIONS; k++) {
+// #if 0
+//         t = powf(_z/2, (float)k) / tgamma((float)k+1);
+//         y += t*t;
+// #else
+//         t = k * logf(0.5f*_z) - liquid_lngammaf((float)k + 1.0f);
+//         y += expf(2*t);
+// #endif
+//     }
+//     return y;
+// }
+
+function bessel_i0_function (z) global() local (y, t, k, NUM_BESSELI0_ITERATIONS) (
+  // original was float32 and 32, just in case. TODO: check/learn what this is
+  NUM_BESSELI0_ITERATIONS = 64;
+  y = 1;
+  z != 0 ? (
+      k = 0;
+      y = 0;
+      loop (NUM_BESSELI0_ITERATIONS,
+        t = k * log (0.5 * z) - log_gamma_function (k + 1);
+        y += exp (2 * t);
+        k += 1;
+      );
+  );
+  y;
+);
+//------------------------------------------------------------------------------
+// Ported from liquid DSP
+// https://github.com/jgaeddert/liquid-dsp
+
+// Kaiser window [Kaiser:1980]
+//  _n      :   sample index
+//  _N      :   window length (samples)
+//  _beta   :   window taper parameter
+//  _mu     :   fractional sample offset
+
+// float kaiser(unsigned int _n,
+//              unsigned int _N,
+//              float _beta,
+//              float _mu)
+// {
+//     // validate input
+//     if (_n > _N) {
+//         fprintf(stderr,"error: kaiser(), sample index must not exceed window length\n");
+//         exit(1);
+//     } else if (_beta < 0) {
+//         fprintf(stderr,"error: kaiser(), beta must be greater than or equal to zero\n");
+//         exit(1);
+//     } else if (_mu < -0.5 || _mu > 0.5) {
+//         fprintf(stderr,"error: kaiser(), fractional sample offset must be in [-0.5,0.5]\n");
+//         exit(1);
+//     }
+//
+//     float t = (float)_n - (float)(_N-1)/2 + _mu;
+//     float r = 2.0f*t/(float)(_N);
+//     float a = liquid_besseli0f(_beta*sqrtf(1-r*r));
+//     float b = liquid_besseli0f(_beta);
+//     return a / b;
+// }
+
+function kaiser (n, n_count, beta, mu)
+  global()
+  local (t, r, a, b) (
+
+  t = n - (n_count - 1) / 2 + mu;
+  r = 2 * t / n_count;
+  a = bessel_i0_function (beta * sqrt (1 - r * r));
+  b = bessel_i0_function (beta);
+  a / b;
+);
+//------------------------------------------------------------------------------
+// Ported from liquid DSP
+// https://github.com/jgaeddert/liquid-dsp
+
+
+// // returns the Kaiser window beta factor give the filter's target
+// // stop-band attenuation (As) [Vaidyanathan:1993]
+// //  _As     :   target filter's stop-band attenuation [dB], _As > 0
+// float kaiser_beta_As(float _As)
+// {
+//     _As = fabsf(_As);
+//     float beta;
+//     if (_As > 50.0f)
+//         beta = 0.1102f*(_As - 8.7f);
+//     else if (_As > 21.0f)
+//         beta = 0.5842*powf(_As - 21, 0.4f) + 0.07886f*(_As - 21);
+//     else
+//         beta = 0.0f;
+//
+//     return beta;
+// }
+
+function kaiser_beta_estimate (att)
+  global()
+  local (beta) (
+
+  att = abs (att);
+
+  beta = 0;
+  (att > 50) ? (
+      beta = 0.1102 * (att - 8.7);
+  ) : (att > 21) ? (
+      beta = 0.5842 * pow (att - 21, 0.4) + 0.07886 * (att - 21);
+  );
+  beta;
+);
+//------------------------------------------------------------------------------
+function apply_kaiser_window (dst*, beta, mu)
+  global() local (i) (
+
+  i = 0;
+  loop (dst.size,
+    dst.ptr[i] *= kaiser (i, dst.size, beta, mu);
+    i += 1;
+  );
+);
+//------------------------------------------------------------------------------
+// normalized 0 to 1 sinc. mu is a fractional delay
+function get_sinc_lowpass (dst*, freq, srate, taps, mu)
+  global()
+  local (fc, halfsize, t, n)(
+
+  dst.array_init (taps);
+  fc = 2.0 * freq / srate;
+  halfsize = (dst.size / 2);
+
+  n = 0;
+  loop (dst.size,
+    t = n - (taps - 1) / 2 + mu;
+    dst.ptr[n] = sinc_function (fc * t);
+    n += 1;
+  );
+//  dst.ptr[halfsize | 0] = 1;
+);
+//------------------------------------------------------------------------------
+function fir_kernel_normalize (dst*) local (g, i) global ()(
+  g = 0;
+  i = 0;
+  loop (dst.size,
+    g += dst.ptr[i];
+    i += 1;
+  );
+  i = 0;
+  g = abs (1 / g);
+  loop (dst.size,
+    dst.ptr[i] *= g;
+    i += 1;
+  );
+);
+//------------------------------------------------------------------------------
+function blackman (x)(
+  0.42 - 0.5 * cos (2 * $pi * x) + 0.08 * cos (4 * $pi * x);
+);
+//------------------------------------------------------------------------------
+function apply_blackman_window (dst*)
+  global() local(i) (
+
+  i = 0;
+  loop (dst.size,
+    dst.ptr[i] *= blackman (i);
+    i += 1;
+  );
+);
+//------------------------------------------------------------------------------
+function get_kaiser_lp_kernel_2 (dst*, freq, srate, taps, beta)
+  global()
+  local (frac)(
+
+  frac = taps & 1 ? 0 : 0.5;
+  get_sinc_lowpass (dst, freq, srate, taps, frac);
+  apply_kaiser_window (dst, beta, 0);
+  fir_kernel_normalize (dst);
+);
+//------------------------------------------------------------------------------
+function get_kaiser_lp_kernel (dst*, freq, srate, taps, att)
+  global()(
+  get_kaiser_lp_kernel_2 (dst, freq, srate, taps, kaiser_beta_estimate (att));
+);
+//------------------------------------------------------------------------------
+function fir_2ch_init_lowpass (freq, srate, taps, att)
+  global() (
+
+  get_kaiser_lp_kernel (this.kernel, freq, srate, taps, att);
+  // delay lines of double the length, inserting is two writes but the
+  // multiply-add is contiguous.
+//  memset (this.kernel.ptr, 0.5, this.kernel.size);
+  this.z.array_init (2 * taps * 2);
+  memset (this.z.ptr, 0, this.z.size);
+  this.head = 0;
+);
+//------------------------------------------------------------------------------
+function fir_2ch_tick (outs_ptr, in1, in2)
+  local (ch1_head, ch2_head, i)
+  global(kv, A) (
+
+  this.head = this.head == 0 ? this.kernel.size : this.head;
+  this.head -= 1;
+
+  ch1_head = this.head + (0 * this.kernel.size * 2);
+  ch2_head = this.head + (1 * this.kernel.size * 2);
+
+  this.z.ptr[ch1_head] = in1;
+  this.z.ptr[ch2_head] = in2;
+
+  i = 0;
+  outs_ptr[0] = outs_ptr[1] = 0;
+  loop (this.kernel.size,
+    outs_ptr[0] += this.z.ptr[ch1_head + i] * this.kernel.ptr[i];
+    outs_ptr[1] += this.z.ptr[ch2_head + i] * this.kernel.ptr[i];
+    i += 1;
+  );
+  // inserting the bottom samples now that the cache line might be warm
+  this.z.ptr[ch1_head + this.kernel.size] = in1;
+  this.z.ptr[ch2_head + this.kernel.size] = in2;
+);
+//------------------------------------------------------------------------------

@@ -1,0 +1,26 @@
+desc:FIR test
+
+slider1:freq=10000<5000,20000,1>Freq
+slider2:taps=129<32,257,1>taps
+slider3:att=-90<0,-180,1>Att
+
+import _core.jsfx-inc
+import _fir.jsfx-inc
+
+@init
+
+outs.array_init (2);
+
+@slider
+
+// hack to not consume extra memory
+lp.z.array_shrink (0);
+lp.kernel.array_shrink (0);
+
+lp.fir_2ch_init_lowpass (freq, srate, taps, att);
+
+@sample
+
+lp.fir_2ch_tick (outs.ptr, spl0, spl1);
+spl0 = outs.ptr[0];
+spl1 = outs.ptr[1];
