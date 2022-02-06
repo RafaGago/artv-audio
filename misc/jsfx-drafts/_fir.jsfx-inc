@@ -189,6 +189,7 @@ function kaiser_beta_estimate (att)
   );
   beta;
 );
+// "dst" is an array defined with "array_init"
 //------------------------------------------------------------------------------
 function apply_kaiser_window (dst*, beta, mu)
   global() local (i) (
@@ -201,6 +202,8 @@ function apply_kaiser_window (dst*, beta, mu)
 );
 //------------------------------------------------------------------------------
 // normalized 0 to 1 sinc. mu is a fractional delay
+// "dst" is an array defined with "array_init"
+// "mu" is a fractional delay in samples, from -0.5 to 0.5
 function get_sinc_lowpass (dst*, freq, srate, taps, mu)
   global()
   local (fc, halfsize, t, n)(
@@ -218,6 +221,7 @@ function get_sinc_lowpass (dst*, freq, srate, taps, mu)
 //  dst.ptr[halfsize | 0] = 1;
 );
 //------------------------------------------------------------------------------
+// "dst" is an array defined with "array_init"
 function fir_kernel_normalize (dst*) local (g, i) global ()(
   g = 0;
   i = 0;
@@ -237,6 +241,7 @@ function blackman (x)(
   0.42 - 0.5 * cos (2 * $pi * x) + 0.08 * cos (4 * $pi * x);
 );
 //------------------------------------------------------------------------------
+// "dst" is an array defined with "array_init"
 function apply_blackman_window (dst*)
   global() local(i) (
 
@@ -247,29 +252,32 @@ function apply_blackman_window (dst*)
   );
 );
 //------------------------------------------------------------------------------
-function get_kaiser_lp_kernel_2 (dst*, freq, srate, taps, beta)
+// "dst" is an array defined with "array_init"
+function get_kaiser_lp_kernel_2 (dst*, freq, srate, taps, beta, mu)
   global()
   local (frac)(
 
-  frac = taps & 1 ? 0 : 0.5;
-  get_sinc_lowpass (dst, freq, srate, taps, frac);
+  get_sinc_lowpass (dst, freq, srate, taps, mu);
   apply_kaiser_window (dst, beta, 0);
   fir_kernel_normalize (dst);
 );
 //------------------------------------------------------------------------------
-function get_kaiser_lp_kernel (dst*, freq, srate, taps, att)
+// "dst" is an array defined with "array_init"
+function get_kaiser_lp_kernel (dst*, freq, srate, taps, att, mu)
   global()(
-  get_kaiser_lp_kernel_2 (dst, freq, srate, taps, kaiser_beta_estimate (att));
+  get_kaiser_lp_kernel_2(
+    dst, freq, srate, taps, kaiser_beta_estimate (att), mu
+    );
 );
 //------------------------------------------------------------------------------
-function fir_2ch_init_lowpass (freq, srate, taps, att)
+// "kernel" is an array containing the kernel
+function fir_2ch_init (kernel*)
   global() (
 
-  get_kaiser_lp_kernel (this.kernel, freq, srate, taps, att);
-  // delay lines of double the length, inserting is two writes but the
-  // multiply-add is contiguous.
-//  memset (this.kernel.ptr, 0.5, this.kernel.size);
-  this.z.array_init (2 * taps * 2);
+  this.kernel.array_alias (kernel);
+  // mantaining two contiguous delay lines and switching between them. It is
+  // simple and cache-friendly.
+  this.z.array_init (2 * kernel.size * 2);
   memset (this.z.ptr, 0, this.z.size);
   this.head = 0;
 );
@@ -294,8 +302,138 @@ function fir_2ch_tick (outs_ptr, in1, in2)
     outs_ptr[1] += this.z.ptr[ch2_head + i] * this.kernel.ptr[i];
     i += 1;
   );
-  // inserting the bottom samples now that the cache line might be warm
+  // inserting the bottom samples for the second delay line now that just the
+  //previous position has been touched
   this.z.ptr[ch1_head + this.kernel.size] = in1;
   this.z.ptr[ch2_head + this.kernel.size] = in2;
+);
+//------------------------------------------------------------------------------
+// Polyphase FIR interpolator. "kernel" is an array containing the kernel,
+// "ratio" is an integer ratio.
+function fir_2ch_interpolator_init (kernel*, ratio)
+  local (ksize, subksize, subk, src, dst, offset)
+  global() (
+
+  // To make it polyphase, we ensure that the coefficients are multiples of
+  // "ratio" the unused parts of the kernel will have zeros that don't
+  // contribute to the response.
+
+  this.ratio    = ratio;
+  this.subksize = ceil (kernel.size / ratio);
+  ksize         = this.subksize * ratio;
+
+  this.kernel.array_init (ksize);
+  memset (this.kernel.ptr, 0, this.kernel.size);
+
+  // interleave the kernel coefficients
+  subk = 0;
+  offset = 0;
+  loop (ratio,
+    src = subk;
+    dst = 0;
+    while (src < kernel.size)(
+      this.kernel.ptr[offset + dst] = kernel.ptr[src];
+      this.kernel.ptr[offset + dst] *= ratio; // energy loss compensation
+      dst += 1;
+      src += ratio;
+    );
+    subk += 1;
+    offset += this.subksize;
+  );
+
+  // sharing delay lines between subfilters
+  this.z.array_init (2 * subksize * 2);
+  memset (this.z.ptr, 0, this.z.size);
+  this.head = 0;
+);
+//------------------------------------------------------------------------------
+// outputs 2 * "ratio" samples: two contiguous sets of "ratio" samples. One for
+// each channel
+function fir_2ch_interpolator_tick (outs_ptr, in1, in2)
+  global()
+  local (ch1_head, ch2_head, i, s, offset) (
+
+  this.head = this.head == 0 ? this.subksize : this.head;
+  this.head -= 1;
+
+  ch1_head = this.head + (0 * this.subksize * 2);
+  ch2_head = this.head + (1 * this.subksize * 2);
+
+  this.z.ptr[ch1_head] = in1;
+  this.z.ptr[ch2_head] = in2;
+
+  memset (outs_ptr, 0, 2 * this.ratio);
+
+  s = 0;
+  offset = 0;
+  loop (this.ratio,
+    i = 0;
+    loop (this.subksize,
+      outs_ptr[s] += this.kernel.ptr[offset + i] * this.z.ptr[ch1_head + i];
+      outs_ptr[s + this.ratio]
+        += this.kernel.ptr[offset + i] * this.z.ptr[ch2_head + i];
+      i += 1;
+    );
+    offset += this.subksize;
+    s += 1;
+  );
+  // inserting the bottom samples for the second delay line now that just the
+  //previous position has been touched
+  this.z.ptr[ch1_head + this.subksize] = in1;
+  this.z.ptr[ch2_head + this.subksize] = in2;
+);
+//------------------------------------------------------------------------------
+// Polyphase FIR decimator. "kernel" is an array containing the kernel, "ratio"
+// is an integer ratio.
+function fir_2ch_decimator_init (kernel*, ratio)
+  local (ksize, offset)
+  global() (
+
+  // To make it polyphase, we ensure that the coefficients are multiples of
+  // "ratio" the unused parts of the kernel will have zeros that don't
+  // contribute to the response.
+
+  this.ratio    = ratio;
+  ksize         = ceil (kernel.size / ratio) * ratio;
+  this.kernel.array_init (ksize);
+  // On the decimator the zero coefficients only added for the filter to be
+  // polyphase decomposable have to be at the front.
+  offset = this.kernel.size - kernel.size;
+  memset (this.kernel.ptr, 0, offset);
+  memcpy (this.kernel.ptr + offset, kernel.ptr, kernel.size);
+
+  this.z.array_init (2 * this.kernel.size * 2);
+  memset (this.z.ptr, 0, this.z.size);
+  this.head = 0;
+);
+//------------------------------------------------------------------------------
+// outputs 2 samples, one for each channel. Takes a contiguous stream of "ratio"
+// samples for each channel.
+function fir_2ch_decimator_tick (outs_ptr, ins_ptr)
+  global()
+  local (ch1_head, ch2_head, i, s, in1, in2) (
+
+  s = 0;
+  loop (this.ratio,
+    this.head = this.head == 0 ? this.kernel.size : this.head;
+    this.head -= 1;
+    ch1_head = this.head + (0 * this.kernel.size * 2);
+    ch2_head = this.head + (1 * this.kernel.size * 2);
+    in1 = ins_ptr[s];
+    in2 = ins_ptr[s + this.ratio];
+    this.z.ptr[ch1_head] = in1;
+    this.z.ptr[ch2_head] = in2;
+    this.z.ptr[ch1_head + this.kernel.size] = in1;
+    this.z.ptr[ch2_head + this.kernel.size] = in2;
+    s += 1;
+  );
+
+  i = 0;
+  outs_ptr[0] = outs_ptr[1] = 0;
+  loop (this.kernel.size,
+    outs_ptr[0] += this.z.ptr[ch1_head + i] * this.kernel.ptr[i];
+    outs_ptr[1] += this.z.ptr[ch2_head + i] * this.kernel.ptr[i];
+    i += 1;
+  );
 );
 //------------------------------------------------------------------------------

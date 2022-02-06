@@ -1,7 +1,7 @@
 desc:FIR test
 
 slider1:freq=10000<5000,20000,1>Freq
-slider2:taps=129<32,257,1>taps
+slider2:taps=129<32,1024,1>taps
 slider3:att=-90<0,-180,1>Att
 
 import _core.jsfx-inc
@@ -9,18 +9,43 @@ import _fir.jsfx-inc
 
 @init
 
+OVERSAMPLE_RATIO = 4;
+
 outs.array_init (2);
+tmp.array_init (OVERSAMPLE_RATIO * 2);
 
 @slider
 
-// hack to not consume extra memory
-lp.z.array_shrink (0);
-lp.kernel.array_shrink (0);
+// hack to not consume extra memory, normally these filters have fixed
+// parameters
 
-lp.fir_2ch_init_lowpass (freq, srate, taps, att);
+interpolator.z.array_shrink (0);
+interpolator.kernel.array_shrink (0);
+
+decimator.z.array_shrink (0);
+decimator.kernel.array_shrink (0);
+
+os_kernel.array_shrink (0);
+
+lp.z.array_shrink (0);
+kernel.array_shrink (0);
+
+// actual reset
+
+frac = taps % 2 == 0 ? 0.5 : 0.;
+get_kaiser_lp_kernel (kernel, freq, srate, taps, att, frac);
+lp.fir_2ch_init (kernel);
+
+
+frac = taps % 2 == 0 ? 1 / pow (2, OVERSAMPLE_RATIO * 2) : 0.;
+get_kaiser_lp_kernel (os_kernel, freq, srate * OVERSAMPLE_RATIO, taps, att, frac);
+decimator.fir_2ch_decimator_init (os_kernel, OVERSAMPLE_RATIO);
+interpolator.fir_2ch_interpolator_init (os_kernel, OVERSAMPLE_RATIO );
 
 @sample
 
-lp.fir_2ch_tick (outs.ptr, spl0, spl1);
+//lp.fir_2ch_tick (outs.ptr, spl0, spl1);
+interpolator.fir_2ch_interpolator_tick (tmp.ptr, spl0, spl1);
+decimator.fir_2ch_decimator_tick (outs.ptr, tmp.ptr);
 spl0 = outs.ptr[0];
 spl1 = outs.ptr[1];
