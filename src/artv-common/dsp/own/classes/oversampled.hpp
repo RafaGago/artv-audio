@@ -3,8 +3,8 @@
 #include "artv-common/dsp/own/classes/delay_line.hpp"
 #include "artv-common/dsp/own/classes/fir.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
-#include "artv-common/dsp/own/classes/oversampled_coeffs.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/windowed_sync.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/delay_compensation_buffers.hpp"
@@ -54,6 +54,7 @@ template <class T = float>
 class oversampled_common {
 public:
   static constexpr uint max_oversampling = 16;
+  static constexpr uint max_tap_ratio    = 32;
   static constexpr uint n_channels       = 2;
 
   using decimator_type    = fir_decimator<T, 2>;
@@ -98,6 +99,7 @@ public:
       _work_buffers[i].reset (
         {&_work_buffers_mem[i * bfsz], bfsz}, max_oversampling);
     }
+    _tmp_kernel.reserve (max_tap_ratio * max_oversampling);
     fx_reset_fn (_pc);
   }
   //----------------------------------------------------------------------------
@@ -183,14 +185,42 @@ private:
     return get_total_delay();
   }
   //----------------------------------------------------------------------------
-  template <uint ratio>
-  void reset_oversamplers (interpolator_type& up, decimator_type* down)
+  void reset_oversamplers (
+    interpolator_type& up,
+    decimator_type*    down,
+    uint               ratio)
   {
-    _oversample_delay = linear_phase_fir_coeffs<ratio>::latency();
-    up.reset (linear_phase_fir_coeffs<ratio>::data(), ratio, false);
+    constexpr uint tap_ratio = 32;
+    constexpr auto db_att    = (T) 90;
+
+    auto sr        = _pc.get_sample_rate();
+    auto base_rate = sr / ratio;
+    auto fc = vec_set<1> ((T) (0.85 * 0.5)); // 20400 at 48KHz, 18742.5 at 44KHz
+    fc /= (T) ratio;
+
+    _oversample_delay = (tap_ratio - 1) / 2;
+
+    // found empirically: TODO why?
+    auto frac = down ? vec_set<1> ((T) 1 / (T) exp (M_LN2 * (T) (ratio * 8)))
+                     : vec_set<1> ((T) -0.5);
+
+    _tmp_kernel.clear();
+    _tmp_kernel.resize (tap_ratio * _pc.get_oversampling());
+
+    kaiser_lp_kernel (
+      make_crange (_tmp_kernel), fc, vec_set<1> ((T) db_att), frac);
+    auto kernel = make_crange (_tmp_kernel).cast (T {});
+
+    up.reset (kernel, ratio, false);
     if (down) {
       _oversample_delay *= 2; // Up and downsampler, 2 times the latency
-      down->reset (linear_phase_fir_coeffs<ratio>::data(), ratio);
+      down->reset (kernel, ratio);
+    }
+    else {
+      // when only upsampling it is assumed that all the samples except the
+      // first will be discarded. This setting, found empirically, makes the
+      // first sample to have linear phase.
+      _oversample_delay += 1;
     }
   }
   //----------------------------------------------------------------------------
@@ -198,7 +228,7 @@ private:
   {
     _n_samples_fractional = 0;
     uint next_int_delay   = round_ceil (_module_delay, _pc.get_oversampling());
-    // making the resulting latency an integer by adding util we reach a full
+    // making the resulting latency an integer by adding until we reach a full
     // sample at the base sample rate
     _n_samples_fractional = next_int_delay - _module_delay;
   }
@@ -210,17 +240,16 @@ private:
       _oversample_delay = 0;
       break;
     case 1:
-      // TODO: halfband optimization
-      reset_oversamplers<2> (up, down);
+      reset_oversamplers (up, down, 2);
       break;
     case 2:
-      reset_oversamplers<4> (up, down);
+      reset_oversamplers (up, down, 4);
       break;
     case 3:
-      reset_oversamplers<8> (up, down);
+      reset_oversamplers (up, down, 8);
       break;
     case 4:
-      reset_oversamplers<16> (up, down);
+      reset_oversamplers (up, down, 16);
       break;
     default:
       break;
@@ -240,6 +269,7 @@ private:
   uint                                               _oversample_delay;
   std::array<delay_compensated_block<T>, n_channels> _work_buffers;
   std::vector<T>                                     _work_buffers_mem;
+  std::vector<vec<T, 1>>                             _tmp_kernel;
 };
 //------------------------------------------------------------------------------
 // an external adaptor class to oversample a DSP module.
@@ -257,8 +287,6 @@ public:
   static constexpr uint n_inputs        = fx::n_inputs;
   static constexpr uint n_outputs       = fx::n_outputs;
   static_assert (n_inputs == 1 && n_outputs == 1, "Unsuported configuitation");
-  //----------------------------------------------------------------------------
-
   //----------------------------------------------------------------------------
   void set (oversampled_amount_tag, int v)
   {

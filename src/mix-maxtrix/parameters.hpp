@@ -6499,10 +6499,19 @@ using all_fx_typelists = mp_list<
   wonky_crossv_params,
   lin_iir_crossv_params,
   reverb_params,
-  sound_delay_params>;
+  sound_delay_params,
+  _1175_params,
+  eq4x_params>;
 
-static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "FX", "del");
+static constexpr auto fx_choices = make_cstr_array (
+  "none",
+  "LR",
+  "Wonky",
+  "lin IIR",
+  "FX",
+  "del",
+  "1175",
+  "EQ");
 
 #else
 // clang-format off
@@ -6834,6 +6843,9 @@ static constexpr char const* about_text =
 "\n"
 "ADAA by Jatin Chowdhury (CHOW):\n"
 "https://github.com/jatinchowdhury18/ADAA\n"
+"\n"
+"Liquid DSP:\n"
+"https://github.com/jgaeddert/liquid-dsp\n"
 "\n"
 "Special thanks to the folks on the KVR DSP forum. From the top of my head,\n"
 "(not everyone might be mentioned, but I aim to):\n"
