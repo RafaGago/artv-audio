@@ -1,8 +1,8 @@
 desc:FIR test
 
 slider1:freq=10000<5000,20000,1>Freq
-slider2:taps=129<32,1024,1>taps
-slider3:att=-90<0,-180,1>Att
+slider2:taps=129<4,1024,1>taps
+slider3:att=-90<0,300,1>Att
 
 import _core.jsfx-inc
 import _fir.jsfx-inc
@@ -36,8 +36,8 @@ frac = taps % 2 == 0 ? 0.5 : 0.;
 get_kaiser_lp_kernel (kernel, freq, srate, taps, att, frac);
 lp.fir_2ch_init (kernel);
 
-
-frac = taps % 2 == 0 ? 1 / pow (2, OVERSAMPLE_RATIO * 2) : 0.;
+frac = taps % 2 == 0 ? 1 / pow (2, OVERSAMPLE_RATIO * 4) : 0.;
+//frac = taps % 2 == 0 ? -0.5 : 0.;
 get_kaiser_lp_kernel (os_kernel, freq, srate * OVERSAMPLE_RATIO, taps, att, frac);
 decimator.fir_2ch_decimator_init (os_kernel, OVERSAMPLE_RATIO);
 interpolator.fir_2ch_interpolator_init (os_kernel, OVERSAMPLE_RATIO );

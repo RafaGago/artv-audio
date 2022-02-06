@@ -64,8 +64,8 @@ function log_gamma_function (z) global() local (z_cp, correction, g) (
       z_cp += 1;
     );
 
-    g = 0.5 * (log (2 * $PI) - log (z));
-    g += z * (log (z + (1 / (12 * z - 0.1 / z))) - 1);
+    g = 0.5 * (log (2 * $PI) - log (z_cp));
+    g += z_cp * (log (z_cp + (1 / (12 * z_cp - 0.1 / z_cp))) - 1);
     g -= correction;
   );
   g;
@@ -218,7 +218,6 @@ function get_sinc_lowpass (dst*, freq, srate, taps, mu)
     dst.ptr[n] = sinc_function (fc * t);
     n += 1;
   );
-//  dst.ptr[halfsize | 0] = 1;
 );
 //------------------------------------------------------------------------------
 // "dst" is an array defined with "array_init"
@@ -258,7 +257,7 @@ function get_kaiser_lp_kernel_2 (dst*, freq, srate, taps, beta, mu)
   local (frac)(
 
   get_sinc_lowpass (dst, freq, srate, taps, mu);
-  apply_kaiser_window (dst, beta, 0);
+  apply_kaiser_window (dst, beta, mu);
   fir_kernel_normalize (dst);
 );
 //------------------------------------------------------------------------------

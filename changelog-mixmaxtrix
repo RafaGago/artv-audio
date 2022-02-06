@@ -4,6 +4,10 @@
 - Add naîve but cheap pitch shifter, mostly for weird FX.
 - Add a pitch shifter wrapping the Rubberband library.
 - Add a pitch shifter wrapping the SoundTouch library.
+- upsampler/downsampler: Lower cutoff frequency at base quality settings.
+  Don't use Lth-band optimization.
+- upsampler/downsampler: user power of 2 kernel sizes and compensate the
+  fractional delay on the FIR kernel.
 
 1.4.0
 - lin_eq4x: Add 4 band linear-phase EQ. It is based on the same (M.Vicanek's)
