@@ -41,7 +41,7 @@ function array_init (size) (
 );
 
 function array_shrink (newsize)
-  local (shrink) global (_memtop_ptr, A, B, C, D)(
+  local (shrink) global (_memtop_ptr)(
 
   shrink = this.size - newsize;
 
@@ -54,6 +54,21 @@ function array_shrink (newsize)
     this.size -= shrink;
   );
   shrink;
+);
+
+function array_try_expand (newsize)
+  local (expand) global (_memtop_ptr, A, B, C, D)(
+
+  expand = newsize - this.size;
+
+  ((this.ptr + this.size) == _memtop_ptr) && (expand > 0) ? (
+    _memtop_ptr += expand;
+    memset (this.ptr + this.size, 0, expand);
+    this.size = newsize;
+  ) : (
+    expand = 0;
+  );
+  expand;
 );
 
 function array_alias (other*) global()(
