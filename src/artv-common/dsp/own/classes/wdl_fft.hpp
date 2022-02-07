@@ -21,11 +21,11 @@ class initialized_ffts;
 
 // thread safety: None
 template <>
-class initialized_ffts<float> {
+class initialized_ffts<double> {
 public:
-  static_assert (std::is_same<float, WDL_FFT_REAL>::value, "");
+  static_assert (std::is_same<double, WDL_FFT_REAL>::value, "");
 
-  using value_type                    = float;
+  using value_type                    = double;
   static constexpr uint min_blocksize = 16;
   static constexpr uint max_blocksize = 32768;
 
@@ -40,7 +40,7 @@ public:
   void forward_transform (value_type* out, const value_type* in, uint blocksize)
   {
     bsz_assert (blocksize);
-    memcpy (out, in, blocksize * sizeof *out * 2);
+    memcpy (out, in, blocksize * sizeof *out * 2 * (out != in));
     WDL_fft (((WDL_FFT_COMPLEX*) ((void*) out)), blocksize, false);
   }
 
@@ -72,7 +72,7 @@ public:
     uint              blocksize)
   {
     bsz_assert (blocksize);
-    memcpy (out, in, blocksize * sizeof *out * 2);
+    memcpy (out, in, blocksize * sizeof *out * 2 * (out != in));
     WDL_fft (((WDL_FFT_COMPLEX*) ((void*) out)), blocksize, true);
   }
 

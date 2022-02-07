@@ -91,6 +91,7 @@ out_i_15 = in[31];
 namespace artv {
 
 //------------------------------------------------------------------------------
+template <class T, class FFT>
 class fft_test : public ::testing::Test {
 public:
   fft_test() {}
@@ -110,14 +111,14 @@ public:
     double increment = (8. * pi) / (block_size - 1);
 
     for (uint i = 0; i < block_size; ++i) {
-      in[i * 2]     = (float) (sin (double (i) * increment));
+      in[i * 2]     = (T) (sin (double (i) * increment));
       in[i * 2 + 1] = 0.f;
     }
   }
   //----------------------------------------------------------------------------
   void TearDown() {}
   //----------------------------------------------------------------------------
-  static void match_fft_buffers (float* a, float* b)
+  static void match_fft_buffers (T* a, T* b)
   {
     for (uint i = 0; i < block_size; ++i) {
       ASSERT_NEAR (a[i * 2], b[i * 2], 0.000001);
@@ -125,7 +126,7 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  void scale_buffer (float* b)
+  void scale_buffer (T* b)
   {
     float scale = 1. / ((double) block_size);
     for (uint i = 0; i < block_size * 2; ++i) {
@@ -133,40 +134,42 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  artv::wdl::initialized_ffts<float>       wdl_p {};
-  artv::mufft::initialized_ffts<float, 16> mufft_p {};
+  FFT fft_impl;
 
-  using simdwrapper = simd_mem<float, 32 / sizeof (float), 32>; // 8x4 = 32
+  using simdwrapper = simd_mem<T, 32 / sizeof (T), 32>;
 
   std::vector<simdwrapper> in_mem {};
   std::vector<simdwrapper> out_mem {};
 
-  float* in  = nullptr;
-  float* out = nullptr;
+  T* in  = nullptr;
+  T* out = nullptr;
 };
 //------------------------------------------------------------------------------
-TEST_F (fft_test, wdl_matches_in)
+using mufft_test  = fft_test<float, artv::mufft::initialized_ffts<float, 16>>;
+using wdlfft_test = fft_test<double, artv::wdl::initialized_ffts<double>>;
+//------------------------------------------------------------------------------
+TEST_F (wdlfft_test, wdl_matches_in)
 {
-  wdl_p.forward_transform (out, in, block_size);
-  wdl_p.backward_transform (out, block_size);
+  fft_impl.forward_transform (out, in, block_size);
+  fft_impl.backward_transform (out, block_size);
   scale_buffer (out);
   match_fft_buffers (out, in);
 }
 //------------------------------------------------------------------------------
-TEST_F (fft_test, permuted_wdl_matches_in)
+TEST_F (wdlfft_test, permuted_wdl_matches_in)
 {
-  wdl_p.forward_transform (out, in, block_size);
-  wdl_p.forward_permute (out, block_size);
-  wdl_p.backward_permute (out, block_size);
-  wdl_p.backward_transform (out, block_size);
+  fft_impl.forward_transform (out, in, block_size);
+  fft_impl.forward_permute (out, block_size);
+  fft_impl.backward_permute (out, block_size);
+  fft_impl.backward_transform (out, block_size);
   scale_buffer (out);
   match_fft_buffers (out, in);
 }
 //------------------------------------------------------------------------------
-TEST_F (fft_test, mufft_matches_in)
+TEST_F (mufft_test, mufft_matches_in)
 {
-  mufft_p.forward_transform (out, in, block_size);
-  mufft_p.backward_transform (out, block_size);
+  fft_impl.forward_transform (out, in, block_size);
+  fft_impl.backward_transform (out, block_size);
   scale_buffer (out);
   match_fft_buffers (out, in);
 }
