@@ -214,12 +214,8 @@ private:
       _oversample_delay *= 2; // Up and downsampler, 2 times the latency
       down->reset (kernel, ratio);
     }
-    else {
-      // when only upsampling it is assumed that all the samples except the
-      // first will be discarded. This setting, found empirically, makes the
-      // first sample to have linear phase.
-      _oversample_delay += 1;
-    }
+    // TODO: what causes this ?
+    _oversample_delay += 1;
   }
   //----------------------------------------------------------------------------
   void reset_predelay()
