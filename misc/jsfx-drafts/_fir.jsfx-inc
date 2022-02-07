@@ -113,6 +113,43 @@ function bessel_i0_function (z) global() local (y, t, k, NUM_BESSELI0_ITERATIONS
 // Ported from liquid DSP
 // https://github.com/jgaeddert/liquid-dsp
 
+
+// // returns the Kaiser window beta factor give the filter's target
+// // stop-band attenuation (As) [Vaidyanathan:1993]
+// //  _As     :   target filter's stop-band attenuation [dB], _As > 0
+// float kaiser_beta_As(float _As)
+// {
+//     _As = fabsf(_As);
+//     float beta;
+//     if (_As > 50.0f)
+//         beta = 0.1102f*(_As - 8.7f);
+//     else if (_As > 21.0f)
+//         beta = 0.5842*powf(_As - 21, 0.4f) + 0.07886f*(_As - 21);
+//     else
+//         beta = 0.0f;
+//
+//     return beta;
+// }
+
+function kaiser_beta_estimate (att)
+  global()
+  local (beta) (
+
+  att = abs (att);
+
+  beta = 0;
+  (att > 50) ? (
+      beta = 0.1102 * (att - 8.7);
+  ) : (att > 21) ? (
+      beta = 0.5842 * pow (att - 21, 0.4) + 0.07886 * (att - 21);
+  );
+  beta;
+);
+// "dst" is an array defined with "array_init"
+//------------------------------------------------------------------------------
+// Ported from liquid DSP
+// https://github.com/jgaeddert/liquid-dsp
+
 // Kaiser window [Kaiser:1980]
 //  _n      :   sample index
 //  _N      :   window length (samples)
@@ -154,49 +191,27 @@ function kaiser (n, n_count, beta, mu)
   a / b;
 );
 //------------------------------------------------------------------------------
-// Ported from liquid DSP
-// https://github.com/jgaeddert/liquid-dsp
-
-
-// // returns the Kaiser window beta factor give the filter's target
-// // stop-band attenuation (As) [Vaidyanathan:1993]
-// //  _As     :   target filter's stop-band attenuation [dB], _As > 0
-// float kaiser_beta_As(float _As)
-// {
-//     _As = fabsf(_As);
-//     float beta;
-//     if (_As > 50.0f)
-//         beta = 0.1102f*(_As - 8.7f);
-//     else if (_As > 21.0f)
-//         beta = 0.5842*powf(_As - 21, 0.4f) + 0.07886f*(_As - 21);
-//     else
-//         beta = 0.0f;
-//
-//     return beta;
-// }
-
-function kaiser_beta_estimate (att)
-  global()
-  local (beta) (
-
-  att = abs (att);
-
-  beta = 0;
-  (att > 50) ? (
-      beta = 0.1102 * (att - 8.7);
-  ) : (att > 21) ? (
-      beta = 0.5842 * pow (att - 21, 0.4) + 0.07886 * (att - 21);
-  );
-  beta;
-);
-// "dst" is an array defined with "array_init"
-//------------------------------------------------------------------------------
 function apply_kaiser_window (dst*, beta, mu)
   global() local (i) (
 
   i = 0;
   loop (dst.size,
     dst.ptr[i] *= kaiser (i, dst.size, beta, mu);
+    i += 1;
+  );
+);
+//------------------------------------------------------------------------------
+function blackman (x)(
+  0.42 - 0.5 * cos (2 * $pi * x) + 0.08 * cos (4 * $pi * x);
+);
+//------------------------------------------------------------------------------
+// "dst" is an array defined with "array_init"
+function apply_blackman_window (dst*)
+  global() local(i) (
+
+  i = 0;
+  loop (dst.size,
+    dst.ptr[i] *= blackman (i);
     i += 1;
   );
 );
@@ -236,36 +251,125 @@ function fir_kernel_normalize (dst*) local (g, i) global ()(
   );
 );
 //------------------------------------------------------------------------------
-function blackman (x)(
-  0.42 - 0.5 * cos (2 * $pi * x) + 0.08 * cos (4 * $pi * x);
-);
-//------------------------------------------------------------------------------
-// "dst" is an array defined with "array_init"
-function apply_blackman_window (dst*)
-  global() local(i) (
+function fir_kernel_to_minphase (kernel*)
+  local (FFT_SIZE, mag, exp_a, b, i)
+  global (_fftmem_1*)(
+
+  // log cepstrum method (Mystran's post):
+  // https://www.kvraudio.com/forum/viewtopic.php?f=33&t=556692&start=45
+
+  FFT_SIZE = 32 * 1024;
+
+  _fftmem_1.array_clear();
+
+  // regular fft of the impulse
+  i = 0;
+  loop (kernel.size,
+    _fftmem_1.ptr[i * 2] = kernel.ptr[i];
+    i += 1;
+  );
+  fft (_fftmem_1.ptr, FFT_SIZE);
+
+  // replace real part by log of magnitude, leave imaginary part to 0.
+  i = 0;
+  loop (FFT_SIZE * 2,
+    mag = _fftmem_1.ptr[i] * _fftmem_1.ptr[i];
+    mag += _fftmem_1.ptr[i + 1] * _fftmem_1.ptr[i + 1];
+    mag = sqrt (mag);
+    mag = log (max (mag, 0.0000000000000000000000000001));
+    _fftmem_1.ptr[i] = mag;
+    _fftmem_1.ptr[i + 1] = 0;
+    i += 2;
+  );
+
+  // from log spectrum to log cepstrum
+  ifft (_fftmem_1.ptr, FFT_SIZE);
+  ifft_rescale (_fftmem_1.ptr, FFT_SIZE);
+
+  //  multiply elements in range [1, N/2-1] by 2 and zero the elements in range
+  // [N/2+1, N-1], bins 0 and N/2 are left "as-is", then FFT again.
+  i = 2;
+  loop ((FFT_SIZE / 2) - 1,
+    _fftmem_1.ptr[i] *= 2;
+    _fftmem_1.ptr[i + 1] = 0; // should be real already...
+    i += 2;
+  );
+  memset (_fftmem_1.ptr + FFT_SIZE + 2, 0, FFT_SIZE - 1);
+  fft (_fftmem_1.ptr, FFT_SIZE);
+
+  // complex "exp" of each bin, IFFT and truncate.
+  i = 0;
+  loop (FFT_SIZE * 2,
+    // x ^ (a + i b) = (x ^ a)(cos (b * ln (x)) + i sin (b * ln (x)));
+    // or
+    // e ^ (a + i b) = (e ^ a)(cos (b) + i sin (b));
+    exp_a = exp (_fftmem_1.ptr[i]);
+    b = _fftmem_1.ptr[i + 1];
+    _fftmem_1.ptr[i]     = exp_a * cos (b);
+    _fftmem_1.ptr[i + 1] = exp_a * sin (b);
+    i += 2;
+  );
+
+  ifft (_fftmem_1.ptr, FFT_SIZE);
+  ifft_rescale (_fftmem_1.ptr, FFT_SIZE);
 
   i = 0;
-  loop (dst.size,
-    dst.ptr[i] *= blackman (i);
+  loop (kernel.size,
+    kernel.ptr[i] = _fftmem_1.ptr[i * 2];
     i += 1;
   );
 );
 //------------------------------------------------------------------------------
+// https://www.dsprelated.com/freebooks/filters/Numerical_Computation_Group_Delay.html
+// fc norm freq from 0 to 0.5
+function get_group_delay (kernel*, fc)
+  local (FFT_SIZE, b, br, bucket, i)
+  global (_fftmem_1*, _fftmem_2*)(
+
+  FFT_SIZE = 32 * 1024;
+
+  bucket = (2 * fc * (FFT_SIZE - 1));
+  bucket = (bucket + 0.5) | 0;
+
+  this.b.array_alias (_fftmem_1.ptr, _fftmem_1.size);
+  this.br.array_alias (_fftmem_2.ptr, _fftmem_2.size);
+
+  this.b.array_clear();
+  this.br.array_clear();
+
+  i = 0;
+  loop (kernel.size,
+    this.b.ptr[i * 2] = kernel.ptr[i];
+    this.br.ptr[i * 2] = kernel.ptr[i] * i; // ramped polynomial
+    i += 1;
+  );
+
+  fft (this.b.ptr, FFT_SIZE);
+  fft (this.br.ptr, FFT_SIZE);
+  fft_permute (this.b.ptr, FFT_SIZE);
+  fft_permute (this.br.ptr, FFT_SIZE);
+
+  this.br.ptr[bucket] / this.b.ptr[bucket];
+);
+//------------------------------------------------------------------------------
 // "dst" is an array defined with "array_init"
-function get_kaiser_lp_kernel_2 (dst*, freq, srate, taps, beta, mu)
+function get_kaiser_lp_kernel_2 (dst*, freq, srate, taps, beta, mu, minphase)
   global()
   local (frac)(
 
   get_sinc_lowpass (dst, freq, srate, taps, mu);
   apply_kaiser_window (dst, beta, mu);
+  (minphase != 0) ? (
+    fir_kernel_to_minphase (dst);
+  );
   fir_kernel_normalize (dst);
 );
 //------------------------------------------------------------------------------
 // "dst" is an array defined with "array_init"
-function get_kaiser_lp_kernel (dst*, freq, srate, taps, att, mu)
+function get_kaiser_lp_kernel (dst*, freq, srate, taps, att, mu, minphase)
   global()(
   get_kaiser_lp_kernel_2(
-    dst, freq, srate, taps, kaiser_beta_estimate (att), mu
+    dst, freq, srate, taps, kaiser_beta_estimate (att), mu, minphase
     );
 );
 //------------------------------------------------------------------------------

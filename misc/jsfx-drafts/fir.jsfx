@@ -1,8 +1,9 @@
 desc:FIR test
 
-slider1:freq=10000<5000,20000,1>Freq
+slider1:freq=10000<5000,24000,1>Freq
 slider2:taps=129<4,1024,1>taps
 slider3:att=-90<0,300,1>Att
+slider4:minphase=0<0,1,1{Off,On}>Minphase
 
 import _core.jsfx-inc
 import _fir.jsfx-inc
@@ -12,7 +13,7 @@ import _fir.jsfx-inc
 OVERSAMPLE_RATIO = 4;
 
 outs.array_init (2);
-tmp.array_init (OVERSAMPLE_RATIO * 2);
+tmp.array_init (OVERSAMPLE_RATIO * 8);
 
 @slider
 
@@ -33,14 +34,23 @@ kernel.array_shrink (0);
 // actual reset
 
 frac = taps % 2 == 0 ? 0.5 : 0.;
-get_kaiser_lp_kernel (kernel, freq, srate, taps, att, frac);
+get_kaiser_lp_kernel (kernel, freq, srate, taps, att, frac, minphase);
 lp.fir_2ch_init (kernel);
+
+group_delay_base = get_group_delay (kernel, 700 / srate);
+group_delay_base_corr = group_delay_base | 0;
 
 frac = taps % 2 == 0 ? 1 / pow (2, OVERSAMPLE_RATIO * 4) : 0.;
 //frac = taps % 2 == 0 ? -0.5 : 0.;
-get_kaiser_lp_kernel (os_kernel, freq, srate * OVERSAMPLE_RATIO, taps, att, frac);
+get_kaiser_lp_kernel(
+    os_kernel, freq, srate * OVERSAMPLE_RATIO, taps, att, frac, minphase
+    );
+
+group_delay_os = get_group_delay (kernel, 700 / srate);
+group_delay_os_corr = ((group_delay_os * 2) / OVERSAMPLE_RATIO) | 0;
+
 decimator.fir_2ch_decimator_init (os_kernel, OVERSAMPLE_RATIO);
-interpolator.fir_2ch_interpolator_init (os_kernel, OVERSAMPLE_RATIO );
+interpolator.fir_2ch_interpolator_init (os_kernel, OVERSAMPLE_RATIO);
 
 @sample
 

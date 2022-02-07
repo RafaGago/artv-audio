@@ -36,8 +36,12 @@ function interp_catmull_rom (y0, y1, y2, y3, x) local (r, x2, x3)(
 
 // array -----------------------------------------------------------------------
 function array_init (size) (
-    this.ptr = mem_reserve (size);
-    this.size = size;
+  this.ptr = mem_reserve (size);
+  this.size = size;
+);
+
+function array_clear() (
+  memset (this.ptr, 0, this.size);
 );
 
 function array_shrink (newsize)
@@ -75,12 +79,13 @@ function array_alias (other*) global()(
     this.ptr = other.ptr;
     this.size = other.size;
 );
-// -----------------------------------------------------------------------------
-// Some reserved library space e.g. for converting from pointer based interfaces
-// to value based ones. For some reason trying to increment it breaks
-// everything.
 
-_libmem.array_init (8);
+// sometimes inside functions some globals are inaccessible, so this overload is
+// provided for such cases. prefer the overload taking a namespace when possible.
+function array_alias (other_ptr, other_size) global()(
+    this.ptr = other_ptr;
+    this.size = other_size;
+);
 
 // array 2d --------------------------------------------------------------------
 function array2d_init (size_a, size_b)global()(
@@ -106,10 +111,48 @@ function range_get_max (src_ptr, size) local (maxv, i) global()(
     maxv = src_ptr[0];
     i = 1;
     loop (size - 1,
-        maxv = maxv > src_ptr[i] ? maxv : src_ptr[i];
+        maxv = max (maxv, src_ptr[i]);
         i += 1;
     );
     maxv;
+);
+
+function range_get_min (src_ptr, size) local (minv, i) global()(
+    minv = src_ptr[0];
+    i = 1;
+    loop (size - 1,
+        minv = max (minv, src_ptr[i]);
+        i += 1;
+    );
+    minv;
+);
+
+function range_get_max_pos (src_ptr, size) local (maxv, ret, i) global()(
+    maxv = src_ptr[0];
+    ret  = 0;
+    i = 1;
+    loop (size - 1,
+        (src_ptr[i] > maxv) ? (
+            maxv = src_ptr[i];
+            ret = i;
+        );
+        i += 1;
+    );
+    ret;
+);
+
+function range_get_min_pos (src_ptr, size) local (minv, ret, i) global()(
+    minv = src_ptr[0];
+    ret  = 0;
+    i = 1;
+    loop (size - 1,
+        (src_ptr[i] < minv) ? (
+            minv = src_ptr[i];
+            ret = i;
+        );
+        i += 1;
+    );
+    ret;
 );
 
 function range_get_sum (src_ptr, size) local (sum, i) global()(
@@ -176,6 +219,21 @@ function range_sub_k (dst_ptr, src_ptr, k, size) local (i) global()(
         i += 1;
     );
 );
+
+function ifft_rescale (fft_ptr, fft_size) global() local (i, f, a, b)(
+    range_mul_k (fft_ptr, fft_ptr, 1 / fft_size, fft_size * 2);
+);
+
+// -----------------------------------------------------------------------------
+// Array for doing FFT ops that dosn't cross 64K element boundaries, as
+// instructed on the JSFX manual.
+_fftmem_1.array_init (64 * 1024);
+_fftmem_2.array_init (64 * 1024);
+
+// Some reserved library space e.g. for converting from pointer based interfaces
+// to value based ones. For some reason at some point trying to increment it broke
+// things. It might have been an own bug though.
+_libmem.array_init (8);
 
 // Small table of prime numbers ------------------------------------------------
 // On C++ it can be stored as unsigned chars
