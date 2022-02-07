@@ -195,21 +195,19 @@ private:
 
     auto sr        = _pc.get_sample_rate();
     auto base_rate = sr / ratio;
-    auto fc = vec_set<1> ((T) (0.85 * 0.5)); // 20400 at 48KHz, 18742.5 at 44KHz
+    auto fc        = (T) (0.85 * 0.5); // 20400 at 48KHz, 18742.5 at 44KHz
     fc /= (T) ratio;
 
     _oversample_delay = (tap_ratio - 1) / 2;
 
     // found empirically: TODO why?
-    auto frac = down ? vec_set<1> ((T) 1 / (T) exp (M_LN2 * (T) (ratio * 8)))
-                     : vec_set<1> ((T) -0.5);
+    auto frac = down ? (T) 1 / (T) exp (M_LN2 * (T) (ratio * 8)) : (T) -0.5;
 
     _tmp_kernel.clear();
     _tmp_kernel.resize (tap_ratio * _pc.get_oversampling());
+    auto kernel = make_crange (_tmp_kernel);
 
-    kaiser_lp_kernel (
-      make_crange (_tmp_kernel), fc, vec_set<1> ((T) db_att), frac);
-    auto kernel = make_crange (_tmp_kernel).cast (T {});
+    kaiser_lp_kernel (kernel, fc, db_att, frac);
 
     up.reset (kernel, ratio, false);
     if (down) {
@@ -269,7 +267,7 @@ private:
   uint                                               _oversample_delay;
   std::array<delay_compensated_block<T>, n_channels> _work_buffers;
   std::vector<T>                                     _work_buffers_mem;
-  std::vector<vec<T, 1>>                             _tmp_kernel;
+  std::vector<T>                                     _tmp_kernel;
 };
 //------------------------------------------------------------------------------
 // an external adaptor class to oversample a DSP module.

@@ -41,7 +41,7 @@ struct onepole_smoother {
   {
     using T = vec_value_type_t<V>;
 
-    assert (z.size() >= n_states);
+    assert (st.size() >= n_states);
     assert (c.size() >= n_coeffs);
 
     V a0_v = vec_set<V> (((T) 1.) - c[b1]);
@@ -57,7 +57,7 @@ struct onepole_smoother {
     crange<V>       st, // states (interleaved, SIMD aligned)
     V               in)
   {
-    assert (z.size() >= n_states);
+    assert (st.size() >= n_states);
     assert (c.size() >= n_coeffs);
 
     st[y1] = (in * (1. - c[b1])) + (st[y1] * c[b1]);
