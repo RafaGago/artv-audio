@@ -225,7 +225,6 @@ function get_sinc_lowpass (dst*, freq, srate, taps, mu)
 
   dst.array_init (taps);
   fc = 2.0 * freq / srate;
-  halfsize = (dst.size / 2);
 
   n = 0;
   loop (dst.size,
