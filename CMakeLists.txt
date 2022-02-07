@@ -241,7 +241,7 @@ target_include_directories (wdl-fft PRIVATE ${WDL_REPO}/WDL)
 target_compile_definitions(
     wdl-fft
     PUBLIC
-    WDL_FFT_REALSIZE=4
+    WDL_FFT_REALSIZE=8
     )
 #-- Own Utilities library (C) --------------------------------------------------
 
