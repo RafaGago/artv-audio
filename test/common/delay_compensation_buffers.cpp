@@ -5,9 +5,9 @@
 
 namespace artv {
 //------------------------------------------------------------------------------
-TEST (delay_compensation_buffers, bigger_input)
+TEST (block_delay_compensation, bigger_input)
 {
-  delay_compensation_buffers<uint, 1> dly;
+  block_delay_compensation<uint, 1> dly;
 
   using in_arr = std::array<uint, 4>;
   std::array<uint, 1> latencies {2};
@@ -39,9 +39,9 @@ TEST (delay_compensation_buffers, bigger_input)
   ASSERT_EQ (in[3], 10);
 }
 //------------------------------------------------------------------------------
-TEST (delay_compensation_buffers, bigger_delay)
+TEST (block_delay_compensation, bigger_delay)
 {
-  delay_compensation_buffers<uint, 1> dly;
+  block_delay_compensation<uint, 1> dly;
 
   using in_arr = std::array<uint, 2>;
   std::array<uint, 1> latencies {4};
