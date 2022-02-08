@@ -49,8 +49,40 @@ public:
     --_head;
 
     mp_foreach_idx<n_channels> ([&] (auto chnl) {
-      T* chnl_head = _z + _head + (chnl * _size * 2);
-      *chnl_head = *(chnl_head + _size) = v[chnl];
+      T* chnl_head1 = _z + _head + (chnl * _size * 2);
+      T* chnl_head2 = chnl_head1 + _size;
+      *chnl_head1 = *chnl_head2 = v[chnl];
+    });
+  }
+  //---------------------------------------------------------------------------
+  // instead of "push" "push_leading" and "copy_trailing" can be used. This is
+  // for probable cache-friendliness, so the tail is written near the last
+  // touched memory location.
+  void push_leading (std::array<T, n_channels> v)
+  {
+    _head = _head == 0 ? _size : _head;
+    --_head;
+
+    mp_foreach_idx<n_channels> ([&] (auto chnl) {
+      T* chnl_head1 = _z + _head + (chnl * _size * 2);
+      *chnl_head1   = v[chnl];
+    });
+  }
+
+  void prepare_trailing()
+  {
+    mp_foreach_idx<n_channels> ([&] (auto chnl) {
+      T* chnl_head1 = _z + _head + (chnl * _size * 2);
+      T* chnl_head2 = chnl_head1 + _size;
+      *chnl_head2   = *chnl_head1;
+    });
+  }
+
+  void prepare_trailing (std::array<T, n_channels> v)
+  {
+    mp_foreach_idx<n_channels> ([&] (auto chnl) {
+      T* chnl_head2 = _z + _head + (chnl * _size * 2) + _size;
+      *chnl_head2   = v[chnl];
     });
   }
   //----------------------------------------------------------------------------

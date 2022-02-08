@@ -10,7 +10,7 @@ import _fir.jsfx-inc
 
 @init
 
-OVERSAMPLE_RATIO = 4;
+OVERSAMPLE_RATIO = 2;
 
 outs.array_init (2);
 tmp.array_init (OVERSAMPLE_RATIO * 8);
