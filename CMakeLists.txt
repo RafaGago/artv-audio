@@ -214,7 +214,7 @@ FetchContent_Declare(
     juce
     GIT_REPOSITORY https://github.com/lv2-porting-project/JUCE
     GIT_TAG        f00a420bc348d79c4688b33b2b905b8ca0f25a3a
-    PATCH_COMMAND  git apply --whitespace=fix ${JUCE_PATCH}
+    PATCH_COMMAND  git reset --hard f00a420bc348d79c4688b33b2b905b8ca0f25a3a && git apply --whitespace=fix ${JUCE_PATCH}
     )
 FetchContent_MakeAvailable (juce)
 set (JUCE_REPO ${juce_SOURCE_DIR})
@@ -575,7 +575,7 @@ FetchContent_Declare(
     soundtouch_fetch
     GIT_REPOSITORY https://codeberg.org/soundtouch/soundtouch.git
     GIT_TAG        9fedba866e36edfca11e51c852d92b903f0735aa
-    PATCH_COMMAND  git apply --whitespace=fix ${SOUNDTOUCH_PATCH}
+    PATCH_COMMAND  git reset --hard 9fedba866e36edfca11e51c852d92b903f0735aa && git apply --whitespace=fix ${SOUNDTOUCH_PATCH}
     )
 FetchContent_MakeAvailable (soundtouch_fetch)
 set_property (TARGET SoundTouch PROPERTY POSITION_INDEPENDENT_CODE ON)
