@@ -8,6 +8,8 @@
   Don't use Lth-band optimization.
 - upsampler/downsampler: user power of 2 kernel sizes and compensate the
   fractional delay on the FIR kernel.
+- upsampler/downsampler: Add low latency variants of the filters.
+- upsampler/downsampler: Add steeper variants of the filters.
 
 1.4.0
 - lin_eq4x: Add 4 band linear-phase EQ. It is based on the same (M.Vicanek's)

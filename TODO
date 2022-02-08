@@ -45,9 +45,8 @@
 - Bug: Track XSIMD broken on fast math bug.
   https://github.com/xtensor-stack/xsimd/issues/547
 
-- Feature: Add low latency (IIR) oversampling.
-
-- Feature:  Add HQ (FIR) oversampling.
+- Optimization: Is it worth to go with FFT convolution for 128 taps per branch
+  on the oversampler?
 
 - Feature: SVF:
   - Add the version with better precission which uses "sin" for coeff

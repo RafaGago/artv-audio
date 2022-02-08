@@ -65,15 +65,20 @@ public:
   //----------------------------------------------------------------------------
   void set_oversampling (
     uint                                  order,
+    bool                                  steep,
     bool                                  minphase,
     std::function<void (plugin_context&)> fx_reset_fn,
     interpolator_type&                    interpolator,
     decimator_type*                       decimator)
   {
-    if (_pc.oversampling_order != order || minphase != _minphase) {
+    if (
+      _pc.oversampling_order != order || minphase != _minphase
+      || steep != _steep) {
+
       uint delay_prev        = get_total_delay();
       _pc.oversampling_order = order;
       _minphase              = minphase;
+      _steep                 = steep;
       fx_reset_fn (_pc);
       reset_predelay();
       reset_resamplers (interpolator, decimator);
@@ -93,6 +98,7 @@ public:
       = [=] (uint samples) { return delay_compensation_changing (samples); };
     _pc.oversampling_order = 0;
     _minphase              = false;
+    _steep                 = false;
     _n_samples_fractional  = 0;
     _module_delay          = 0;
     _oversample_delay      = 0;
@@ -198,18 +204,30 @@ private:
   void reset_oversamplers (
     interpolator_type& up,
     decimator_type*    down,
-    uint               ratio,
-    bool               minphase)
+    uint               ratio)
   {
-    constexpr uint  tap_ratio          = 32;
-    constexpr auto  att_db             = (T) 90;
-    constexpr float minphase_comp_freq = 700.f;
-
     auto sr        = _pc.get_sample_rate();
     auto base_rate = sr / ratio;
-    // 18742Hz at 44KHz
-    // 19680Hz at 48Khz (with higher aliasing rejection)
-    auto fc = (base_rate == 44100) ? (T) (0.85 * 0.5) : (T) (0.82 * 0.5);
+
+    uint tap_ratio;
+    T    att_db;
+    T    fc;
+
+    if (_steep) {
+      // 19404Hz at 44KHz
+      // 20880Hz at 48Khz
+      tap_ratio = 128;
+      att_db    = (T) 140;
+      fc        = (base_rate == 44100) ? (T) (0.87 * 0.5) : (T) (0.89 * 0.5);
+    }
+    else {
+      // 18742Hz at 44KHz
+      // 19680Hz at 48Khz
+      tap_ratio = 32;
+      att_db    = (T) 100;
+      fc        = (base_rate == 44100) ? (T) (0.85 * 0.5) : (T) (0.82 * 0.5);
+    }
+
     fc /= (T) ratio;
 
     // found empirically: TODO why?
@@ -222,17 +240,29 @@ private:
     get_sinc_lowpass (kernel, fc, frac);
     apply_kaiser_window (kernel, kaiser_beta_estimate (att_db), frac);
 
-    if (!minphase) {
-      _oversample_delay = (tap_ratio - 1) / 2;
-      _oversample_delay *= down ? 2 : 1;
-      _oversample_delay += 1; // TODO: what causes this ?
-    }
-    else {
+    if (_minphase) {
       auto wb = make_crange (&_fft_buff[0], _fft_buff.size() / 2);
       fir_kernel_to_minphase (kernel, _fft, wb);
       // there is the "fir_kernel_group_delay" function implemented but I can't
-      // make sense of it. Setting to the value that sounds better.
-      _oversample_delay = 2 * (down ? 2 : 1);
+      // make sense of it. Setting to the perceptually-found value that causes
+      // less combing when added back to the main signal on a drum loop with
+      // cymbals.
+      if (down) {
+        if (_steep) {
+          _oversample_delay = (ratio == 2) ? 6 : 7;
+        }
+        else {
+          _oversample_delay = (ratio == 2) ? 4 : 5;
+        }
+      }
+      else {
+        _oversample_delay = 3;
+      }
+    }
+    else {
+      _oversample_delay = (tap_ratio - 1) / 2;
+      _oversample_delay *= down ? 2 : 1;
+      _oversample_delay += 1; // TODO: what causes this?
     }
     fir_kernel_normalize (kernel);
 
@@ -258,16 +288,16 @@ private:
       _oversample_delay = 0;
       break;
     case 1:
-      reset_oversamplers (up, down, 2, _minphase);
+      reset_oversamplers (up, down, 2);
       break;
     case 2:
-      reset_oversamplers (up, down, 4, _minphase);
+      reset_oversamplers (up, down, 4);
       break;
     case 3:
-      reset_oversamplers (up, down, 8, _minphase);
+      reset_oversamplers (up, down, 8);
       break;
     case 4:
-      reset_oversamplers (up, down, 16, _minphase);
+      reset_oversamplers (up, down, 16);
       break;
     default:
       break;
@@ -291,6 +321,7 @@ private:
   std::vector<double>                                _fft_buff;
   wdl::initialized_ffts<double>                      _fft;
   bool                                               _minphase;
+  bool                                               _steep;
 };
 //------------------------------------------------------------------------------
 // an external adaptor class to oversample a DSP module.
@@ -317,16 +348,25 @@ public:
     // the unwritten responsibility to reset all the parameters the effects
     // after a sample rate change when using this convenience class.
     auto fx_reset = [=] (plugin_context& pc) { _fx.reset (pc); };
-    bool minphase = v > 4;
-    auto order    = minphase ? v - 4 : v;
+
+    bool minphase = false;
+    bool steep    = false;
+    auto order    = 0;
+
+    if (v) {
+      v -= 1;
+      order    = (v & 3) + 1;
+      steep    = (v & (1 << 2)) != 0;
+      minphase = (v & (1 << 3)) != 0;
+    }
 
     if constexpr (downsample) {
       _common.set_oversampling (
-        order, minphase, fx_reset, _interpolator, &_decimator);
+        order, steep, minphase, fx_reset, _interpolator, &_decimator);
     }
     else {
       _common.set_oversampling (
-        order, minphase, fx_reset, _interpolator, nullptr);
+        order, steep, minphase, fx_reset, _interpolator, nullptr);
     }
   }
 
@@ -336,14 +376,22 @@ public:
       0,
       make_cstr_array (
         "Off",
-        "2x Linear Phase",
-        "4x Linear Phase",
-        "8x Linear Phase",
-        "16x Linear Phase",
-        "2x Mininum Phase",
-        "4x Mininum Phase",
-        "8x Mininum Phase",
-        "16x MininumPhase"),
+        "2x",
+        "4x",
+        "8x",
+        "16x",
+        "2x HQ",
+        "4x HQ",
+        "8x HQ",
+        "16x HQ",
+        "2x Low Lat",
+        "4x Low Lat",
+        "8x Low Lat",
+        "16x Low Lat",
+        "2x HQ Low Lat",
+        "4x HQ Low Lat",
+        "8x HQ Low Lat",
+        "16x HQ Low Lat"),
       30);
   }
   //----------------------------------------------------------------------------
