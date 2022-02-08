@@ -4,7 +4,7 @@ import _filters.jsfx-inc
 @init
 // LFO -------------------------------------------------------------------------
 // "phase" as unipolar normalized (from 0 to 1)
-function lfo_init (ptr, freq_hz, phase) global (srate) (
+function lfo_init (ptr, freq_hz, phase, srate) global() (
     // 0 phase delta, 1 = current phase
     ptr[0] = (2 / srate) * freq_hz;
     // constructed from a SAW, start phase at 270 degrees.
@@ -65,15 +65,16 @@ function lfo_bank_reset_phase (stage_idx) local (ptr, step, ph) global()(
     );
 );
 
-function lfo_bank_reset_freq (stage_idx, channel_idx, freq_hz) 
-    local (ptr) global (srate)(
+function lfo_bank_reset_freq (stage_idx, channel_idx, freq_hz, srate)
+    local (ptr) global ()(
     // ptr[0] = phase delta, ptr[1] = current phase
     ptr = this.ptr + stage_idx * this.n_channels * this.lfo_sizeof;
     ptr += channel_idx * this.lfo_sizeof;
     ptr[0] = (2 / srate) * freq_hz;
 );
 
-function lfo_bank_reset_freq (stage_idx, freq_hz) local (ptr, f) global (srate)(
+function lfo_bank_reset_freq (stage_idx, freq_hz, srate) local (ptr, f)
+    global ()(
     // ptr[0] = phase delta, ptr[1] = current phase
     ptr = this.ptr + stage_idx * this.n_channels * this.lfo_sizeof;
     f = (2 / srate) * freq_hz;
@@ -111,7 +112,7 @@ function lfo_bank_tick_sin (dst_ptr, stage_idx) local (ptr, i) global()(
 function lfo_filt_noise_init (freq, samplerate) global()(
     this.lp.smooth_lp_1p_0z_init (freq, samplerate);
     this.lfo_ptr  = mem_reserve (lfo_size());
-    lfo_init (this.lfo_ptr, freq, samplerate);
+    lfo_init (this.lfo_ptr, freq, 0, samplerate);
     this.noise = rand (2) - 1;
 );
 
@@ -122,4 +123,3 @@ function lfo_filt_noise_tick () local (old_phase) global() (
     );
     this.lp.smooth_lp_1p_0z_tick (this.noise);
 );
-
