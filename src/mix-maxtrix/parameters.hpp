@@ -6491,7 +6491,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
@@ -6500,7 +6500,7 @@ using all_fx_typelists = mp_list<
   lin_iir_crossv_params,
   reverb_params,
   sound_delay_params,
-  _1175_params,
+  event_horizon_2_params,
   eq4x_params>;
 
 static constexpr auto fx_choices = make_cstr_array (
@@ -6510,7 +6510,7 @@ static constexpr auto fx_choices = make_cstr_array (
   "lin IIR",
   "FX",
   "del",
-  "1175",
+  "Evhoriz",
   "EQ");
 
 #else

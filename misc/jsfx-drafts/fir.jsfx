@@ -47,7 +47,12 @@ get_kaiser_lp_kernel(
     );
 
 group_delay_os = get_group_delay (kernel, 700 / srate);
-group_delay_os_corr = ((group_delay_os * 2) / OVERSAMPLE_RATIO) | 0;
+group_delay_os_corr = (group_delay_os + 0.5) | 0;
+
+pdc_bot_ch = 0;
+pdc_top_ch = 2;
+
+//pdc_delay = group_delay_os_corr;
 
 decimator.fir_2ch_decimator_init (os_kernel, OVERSAMPLE_RATIO);
 interpolator.fir_2ch_interpolator_init (os_kernel, OVERSAMPLE_RATIO);

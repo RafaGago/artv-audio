@@ -293,7 +293,7 @@ function fir_kernel_to_minphase (kernel*)
     _fftmem_1.ptr[i + 1] = 0; // should be real already...
     i += 2;
   );
-  memset (_fftmem_1.ptr + FFT_SIZE + 2, 0, FFT_SIZE - 1);
+  memset (_fftmem_1.ptr + FFT_SIZE + 2, 0, FFT_SIZE - 2);
   fft (_fftmem_1.ptr, FFT_SIZE);
 
   // complex "exp" of each bin, IFFT and truncate.
@@ -322,13 +322,16 @@ function fir_kernel_to_minphase (kernel*)
 // https://www.dsprelated.com/freebooks/filters/Numerical_Computation_Group_Delay.html
 // fc norm freq from 0 to 0.5
 function get_group_delay (kernel*, fc)
-  local (FFT_SIZE, b, br, bucket, i)
-  global (_fftmem_1*, _fftmem_2*)(
+  local (FFT_SIZE, b, br, br_re, br_im, b_re, b_im, bucket, i)
+  global (_fftmem_1*, _fftmem_2* ,A, AA)(
 
   FFT_SIZE = 32 * 1024;
 
-  bucket = (2 * fc * (FFT_SIZE - 1));
+  bucket = (2 * fc * 2 * (FFT_SIZE - 1));
   bucket = (bucket + 0.5) | 0;
+  
+  A = bucket;
+  AA = fc;
 
   this.b.array_alias (_fftmem_1.ptr, _fftmem_1.size);
   this.br.array_alias (_fftmem_2.ptr, _fftmem_2.size);
@@ -345,10 +348,17 @@ function get_group_delay (kernel*, fc)
 
   fft (this.b.ptr, FFT_SIZE);
   fft (this.br.ptr, FFT_SIZE);
+
   fft_permute (this.b.ptr, FFT_SIZE);
   fft_permute (this.br.ptr, FFT_SIZE);
 
-  this.br.ptr[bucket] / this.b.ptr[bucket];
+  // real part of complex division
+  br_re = this.br.ptr[bucket];
+  br_im = this.br.ptr[bucket + 1];
+  b_re  = this.b.ptr[bucket];
+  b_im  = this.b.ptr[bucket + 1];
+
+  (br_re * b_re + br_im * b_im) / (b_re * b_re + b_im * b_im);
 );
 //------------------------------------------------------------------------------
 // "dst" is an array defined with "array_init"
