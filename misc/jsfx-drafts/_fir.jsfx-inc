@@ -329,7 +329,7 @@ function get_group_delay (kernel*, fc)
 
   bucket = (2 * fc * 2 * (FFT_SIZE - 1));
   bucket = (bucket + 0.5) | 0;
-  
+
   A = bucket;
   AA = fc;
 
@@ -454,12 +454,12 @@ function fir_2ch_interpolator_init (kernel*, ratio)
   );
 
   // sharing delay lines between subfilters
-  this.z.array_init (2 * subksize * 2);
+  this.z.array_init (2 * this.subksize * 2);
   memset (this.z.ptr, 0, this.z.size);
   this.head = 0;
 );
 //------------------------------------------------------------------------------
-// outputs 2 * "ratio" samples: two contiguous sets of "ratio" samples. One for
+// outputs an interleaved set of ratio sample pairs.
 // each channel
 function fir_2ch_interpolator_tick (outs_ptr, in1, in2)
   global()
@@ -482,12 +482,12 @@ function fir_2ch_interpolator_tick (outs_ptr, in1, in2)
     i = 0;
     loop (this.subksize,
       outs_ptr[s] += this.kernel.ptr[offset + i] * this.z.ptr[ch1_head + i];
-      outs_ptr[s + this.ratio]
+      outs_ptr[s + 1]
         += this.kernel.ptr[offset + i] * this.z.ptr[ch2_head + i];
       i += 1;
     );
     offset += this.subksize;
-    s += 1;
+    s += 2;
   );
   // inserting the bottom samples for the second delay line now that just the
   //previous position has been touched
@@ -519,8 +519,8 @@ function fir_2ch_decimator_init (kernel*, ratio)
   this.head = 0;
 );
 //------------------------------------------------------------------------------
-// outputs 2 samples, one for each channel. Takes a contiguous stream of "ratio"
-// samples for each channel.
+// outputs 2 samples, one for each channel. Takes a contiguous stream of
+// interleaved samples for each channel, where N sample pairs = ratio.
 function fir_2ch_decimator_tick (outs_ptr, ins_ptr)
   global()
   local (ch1_head, ch2_head, i, s, in1, in2) (
@@ -532,12 +532,12 @@ function fir_2ch_decimator_tick (outs_ptr, ins_ptr)
     ch1_head = this.head + (0 * this.kernel.size * 2);
     ch2_head = this.head + (1 * this.kernel.size * 2);
     in1 = ins_ptr[s];
-    in2 = ins_ptr[s + this.ratio];
+    in2 = ins_ptr[s + 1];
     this.z.ptr[ch1_head] = in1;
     this.z.ptr[ch2_head] = in2;
     this.z.ptr[ch1_head + this.kernel.size] = in1;
     this.z.ptr[ch2_head + this.kernel.size] = in2;
-    s += 1;
+    s += 2;
   );
 
   i = 0;

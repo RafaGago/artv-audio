@@ -215,7 +215,7 @@ function unitary_matrix_16 (y_ptr, x_ptr, cos_phi, sin_phi)
   y_ptr[15] = sin_phi * y8 + cos_phi * y16;
 );
 
-function get_rt60_gain (rt60sec, delays_spls) local (rate) global (srate)(
+function get_rt60_gain (rt60sec, delays_spls, srate) local (rate) global ()(
     rate = srate / delays_spls;
     pow (10, (-60/20) * (1 / (rate * rt60sec)));
     //pow (10, (-3 * fb_delay_samples) / (rt60sec * srate));
@@ -223,7 +223,7 @@ function get_rt60_gain (rt60sec, delays_spls) local (rate) global (srate)(
 );
 
 function get_rt60_gain(
-  dst_ptr, delays_spls_ptr, rt60sec, rnd_factor, n_channels
+  dst_ptr, delays_spls_ptr, rt60sec, rnd_factor, n_channels, srate
   )
   local (i, rnd_max, rnd) (
 
@@ -233,7 +233,7 @@ function get_rt60_gain(
     loop (n_channels,
         rnd = rnd_table.ptr[10 + i] - 0.5; //-0.5 because the range is 0 to 1
         dst_ptr[i] = get_rt60_gain(
-            rt60sec + rnd * rnd_max, delays_spls_ptr[i]
+            rt60sec + rnd * rnd_max, delays_spls_ptr[i], srate
             );
         i += 1;
     );
@@ -272,24 +272,22 @@ function make_primes_table (dst*, minv, maxv)
   dst.array_shrink (n);
 );
 
-function get_delay_length_samples(
-  dst_ptr, n_delays, splsmin, splsmax
-  )
+function get_delay_length_samples (dst_ptr, n_delays, splsmin, splsmax)
   global ()
-  local (dist, i, ok) global (srate, primes*)(
+  local (dist, i, ok) global (primes*)(
 
   make_primes_table (this.tmp_primes, splsmin, splsmax);
-  
+
   ok = this.tmp_primes.size >= n_delays;
-  ok ? ( 
-    dist = (this.tmp_primes.size / (n_delays - 1)) | 0; 
+  ok ? (
+    dist = (this.tmp_primes.size / (n_delays - 1)) | 0;
     i = 0;
     loop(n_delays,
       dst_ptr[i] = this.tmp_primes.ptr[i * dist];
       i += 1;
     );
-  ); 
-  // free the memory. 
+  );
+  // free the memory.
   this.tmp_primes.array_shrink (0);
   ok;
 );
@@ -299,14 +297,14 @@ function get_delay_length_samples(
 // This has prime_idx to get an offset to the primes list and a rounding
 // factor to allow imperfections.
 function get_delay_length_samples(
-  dst_ptr, n_delays, pathmin, pathmax, prime_idx, rounding_factor
+  dst_ptr, n_delays, pathmin, pathmax, prime_idx, rounding_factor, srate
   )
-  local (dmin, dmax, i, v, primes_offs, ok, ln_ratio) 
-  global (srate, primes*)(
+  local (dmin, dmax, i, v, primes_offs, ok, ln_ratio)
+  global (primes*)(
 
   dmin = srate * pathmin * (1 / 343); // 343 = C = soundspeed
   dmax = srate * pathmax * (1 / 343);
-  
+
   ok = get_delay_length_samples (dst_ptr, n_delays, dmin, dmax);
   (ok == 0) ? (
     primes_offs = 12;

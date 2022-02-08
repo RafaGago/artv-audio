@@ -138,8 +138,8 @@ function smooth_lp_1p_0z_tick (in)  global()(
     this.y1;
 );
 // -----------------------------------------------------------------------------
-function set_rbj_peak_filter_coeffs (freq, gain, q)
-  local(A, w0, cosw0, alpha, alpha_div_a, a0i) global (srate) (
+function set_rbj_peak_filter_coeffs (freq, gain, q, srate)
+  local(A, w0, cosw0, alpha, alpha_div_a, a0i) global() (
   A = (10 ^ (gain/40));
   w0 = 2 * $pi * freq / srate;
   cosw0 = cos(w0);
@@ -155,14 +155,14 @@ function set_rbj_peak_filter_coeffs (freq, gain, q)
   this.a2 = (1 - alpha_div_a) * a0i;
 );
 
-function peak_tdf2_biquad_init(freq, gain, q) global()(
-  this.set_rbj_peak_filter_coeffs (freq, gain, q);
+function peak_tdf2_biquad_init(freq, gain, q, srate) global()(
+  this.set_rbj_peak_filter_coeffs (freq, gain, q, srate);
   this.z1 = 0;
   this.z2 = 0;
 );
 
-function peak_df1_biquad_init(freq, gain, q) global()(
-  this.peak_tdf2_biquad_init(freq, gain, q);
+function peak_df1_biquad_init(freq, gain, q, srate) global()(
+  this.peak_tdf2_biquad_init(freq, gain, q, srate);
   this.y1 = 0;
   this.y2 = 0;
 );
