@@ -1,9 +1,12 @@
 #pragma once
 
+#include <algorithm>
+
 #include "artv-common/dsp/own/classes/delay_line.hpp"
 #include "artv-common/dsp/own/classes/fir.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/wdl_fft.hpp"
 #include "artv-common/dsp/own/classes/windowed_sync.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_types.hpp"
@@ -60,15 +63,17 @@ public:
   using decimator_type    = fir_decimator<T, 2>;
   using interpolator_type = fir_interpolator<T, 2>;
   //----------------------------------------------------------------------------
-  void set_oversampling_order (
+  void set_oversampling (
     uint                                  order,
+    bool                                  minphase,
     std::function<void (plugin_context&)> fx_reset_fn,
     interpolator_type&                    interpolator,
     decimator_type*                       decimator)
   {
-    if (_pc.oversampling_order != order) {
+    if (_pc.oversampling_order != order || minphase != _minphase) {
       uint delay_prev        = get_total_delay();
       _pc.oversampling_order = order;
+      _minphase              = minphase;
       fx_reset_fn (_pc);
       reset_predelay();
       reset_resamplers (interpolator, decimator);
@@ -87,6 +92,7 @@ public:
     _pc.on_set_delay_compensation
       = [=] (uint samples) { return delay_compensation_changing (samples); };
     _pc.oversampling_order = 0;
+    _minphase              = false;
     _n_samples_fractional  = 0;
     _module_delay          = 0;
     _oversample_delay      = 0;
@@ -100,6 +106,10 @@ public:
         {&_work_buffers_mem[i * bfsz], bfsz}, max_oversampling);
     }
     _tmp_kernel.reserve (max_tap_ratio * max_oversampling);
+
+    _fft_buff.clear();
+    _fft_buff.resize (std::min<uint> (_fft.max_blocksize * 2, 128 * 1024));
+
     fx_reset_fn (_pc);
   }
   //----------------------------------------------------------------------------
@@ -188,17 +198,19 @@ private:
   void reset_oversamplers (
     interpolator_type& up,
     decimator_type*    down,
-    uint               ratio)
+    uint               ratio,
+    bool               minphase)
   {
-    constexpr uint tap_ratio = 32;
-    constexpr auto db_att    = (T) 90;
+    constexpr uint  tap_ratio          = 32;
+    constexpr auto  att_db             = (T) 90;
+    constexpr float minphase_comp_freq = 700.f;
 
     auto sr        = _pc.get_sample_rate();
     auto base_rate = sr / ratio;
-    auto fc        = (T) (0.85 * 0.5); // 20400 at 48KHz, 18742.5 at 44KHz
+    // 18742Hz at 44KHz
+    // 19680Hz at 48Khz (with higher aliasing rejection)
+    auto fc = (base_rate == 44100) ? (T) (0.85 * 0.5) : (T) (0.82 * 0.5);
     fc /= (T) ratio;
-
-    _oversample_delay = (tap_ratio - 1) / 2;
 
     // found empirically: TODO why?
     auto frac = down ? (T) 1 / (T) exp (M_LN2 * (T) (ratio * 8)) : (T) -0.5;
@@ -207,15 +219,27 @@ private:
     _tmp_kernel.resize (tap_ratio * _pc.get_oversampling());
     auto kernel = make_crange (_tmp_kernel);
 
-    kaiser_lp_kernel (kernel, fc, db_att, frac);
+    get_sinc_lowpass (kernel, fc, frac);
+    apply_kaiser_window (kernel, kaiser_beta_estimate (att_db), frac);
+
+    if (!minphase) {
+      _oversample_delay = (tap_ratio - 1) / 2;
+      _oversample_delay *= down ? 2 : 1;
+      _oversample_delay += 1; // TODO: what causes this ?
+    }
+    else {
+      auto wb = make_crange (&_fft_buff[0], _fft_buff.size() / 2);
+      fir_kernel_to_minphase (kernel, _fft, wb);
+      // there is the "fir_kernel_group_delay" function implemented but I can't
+      // make sense of it. Setting to the value that sounds better.
+      _oversample_delay = 2 * (down ? 2 : 1);
+    }
+    fir_kernel_normalize (kernel);
 
     up.reset (kernel, ratio, false);
     if (down) {
-      _oversample_delay *= 2; // Up and downsampler, 2 times the latency
       down->reset (kernel, ratio);
     }
-    // TODO: what causes this ?
-    _oversample_delay += 1;
   }
   //----------------------------------------------------------------------------
   void reset_predelay()
@@ -234,16 +258,16 @@ private:
       _oversample_delay = 0;
       break;
     case 1:
-      reset_oversamplers (up, down, 2);
+      reset_oversamplers (up, down, 2, _minphase);
       break;
     case 2:
-      reset_oversamplers (up, down, 4);
+      reset_oversamplers (up, down, 4, _minphase);
       break;
     case 3:
-      reset_oversamplers (up, down, 8);
+      reset_oversamplers (up, down, 8, _minphase);
       break;
     case 4:
-      reset_oversamplers (up, down, 16);
+      reset_oversamplers (up, down, 16, _minphase);
       break;
     default:
       break;
@@ -264,6 +288,9 @@ private:
   std::array<delay_compensated_block<T>, n_channels> _work_buffers;
   std::vector<T>                                     _work_buffers_mem;
   std::vector<T>                                     _tmp_kernel;
+  std::vector<double>                                _fft_buff;
+  wdl::initialized_ffts<double>                      _fft;
+  bool                                               _minphase;
 };
 //------------------------------------------------------------------------------
 // an external adaptor class to oversample a DSP module.
@@ -284,24 +311,40 @@ public:
   //----------------------------------------------------------------------------
   void set (oversampled_amount_tag, int v)
   {
-    // design flaw(ish), changing the sample rate requires a module reset, which
-    // leaves the parameters on its default value. The modules have getters but
-    // not setters for the parameters. The controlling class has the unwritten
-    // responsibility to reset all the parameters the effects after a sample
-    // rate change when using this convenience class.
+    // design flaw(ish), changing the sample rate requires a module reset,
+    // which leaves the parameters on its default value. The modules have
+    // getters but not setters for the parameters. The controlling class has
+    // the unwritten responsibility to reset all the parameters the effects
+    // after a sample rate change when using this convenience class.
     auto fx_reset = [=] (plugin_context& pc) { _fx.reset (pc); };
+    bool minphase = v > 4;
+    auto order    = minphase ? v - 4 : v;
+
     if constexpr (downsample) {
-      _common.set_oversampling_order (v, fx_reset, _interpolator, &_decimator);
+      _common.set_oversampling (
+        order, minphase, fx_reset, _interpolator, &_decimator);
     }
     else {
-      _common.set_oversampling_order (v, fx_reset, _interpolator, nullptr);
+      _common.set_oversampling (
+        order, minphase, fx_reset, _interpolator, nullptr);
     }
   }
 
   static constexpr auto get_parameter (oversampled_amount_tag)
   {
     return choice_param (
-      0, make_cstr_array ("1x", "2x", "4x", "8x", "16x"), 30);
+      0,
+      make_cstr_array (
+        "Off",
+        "2x Linear Phase",
+        "4x Linear Phase",
+        "8x Linear Phase",
+        "16x Linear Phase",
+        "2x Mininum Phase",
+        "4x Mininum Phase",
+        "8x Mininum Phase",
+        "16x MininumPhase"),
+      30);
   }
   //----------------------------------------------------------------------------
   using parameters

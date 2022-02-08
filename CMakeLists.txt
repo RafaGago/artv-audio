@@ -698,7 +698,6 @@ function (add_mix_maxtrix_plugin_target target channels)
         PUBLIC
         common
         juce::juce_audio_utils
-        hiir
         mufft-all
         dragonfly
         tal_reverb2
@@ -707,6 +706,7 @@ function (add_mix_maxtrix_plugin_target target channels)
         rubberband
         SoundTouch
         wdl
+        wdl-fft
         )
     install(
         TARGETS ${target}
