@@ -220,10 +220,42 @@ function range_sub_k (dst_ptr, src_ptr, k, size) local (i) global()(
     );
 );
 
+function range_to_int (dst_ptr, src_ptr, size) local (i) global()(
+    i = 0;
+    loop (size,
+        dst_ptr[i] = src_ptr[i] | 0;
+        i += 1;
+    );
+);
+
 function ifft_rescale (fft_ptr, fft_size) global() local (i, f, a, b)(
     range_mul_k (fft_ptr, fft_ptr, 1 / fft_size, fft_size * 2);
 );
 
+// -----------------------------------------------------------------------------
+// creates 16 variables with the contents of memory. For debugging. The name is
+// Ax so they appear on top of the JSFX screen.
+function debug_16 (ptr)
+  local()
+  global (A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, AA, AB, AC, AD, AE, AF)(
+
+  A0 = ptr[0];
+  A1 = ptr[1];
+  A2 = ptr[2];
+  A3 = ptr[3];
+  A4 = ptr[4];
+  A5 = ptr[5];
+  A6 = ptr[6];
+  A7 = ptr[7];
+  A8 = ptr[8];
+  A9 = ptr[9];
+  AA = ptr[10];
+  AB = ptr[11];
+  AC = ptr[12];
+  AD = ptr[13];
+  AE = ptr[14];
+  AF = ptr[15];
+);
 // -----------------------------------------------------------------------------
 // Array for doing FFT ops that dosn't cross 64K element boundaries, as
 // instructed on the JSFX manual.

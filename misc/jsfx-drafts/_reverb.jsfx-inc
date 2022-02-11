@@ -3,139 +3,180 @@ import _core.jsfx-inc
 @init
 
 // returns 8 values on the "dst_ptr" array. "src_ptr" has to contain 8 values.
-function hadamard_8 (dst_ptr, src_ptr)
+function hadamard_8 (y_ptr, x_ptr)
     local (x01, x23, x45, x67, x0123, x4567, i) global()(
     // y0 + + + + + + + +
     // y4 + + + + - - - -
     // y2 + + - - + + - -
     // y6 + + - - - - + +
 
-    x01 = src_ptr[0] + src_ptr[1];
-    x23 = src_ptr[2] + src_ptr[3];
-    x45 = src_ptr[4] + src_ptr[5];
-    x67 = src_ptr[6] + src_ptr[7];
+    x01 = x_ptr[0] + x_ptr[1];
+    x23 = x_ptr[2] + x_ptr[3];
+    x45 = x_ptr[4] + x_ptr[5];
+    x67 = x_ptr[6] + x_ptr[7];
 
     x0123 = x01 + x23;
     x4567 = x45 + x67;
-    dst_ptr[0] = x0123 + x4567;
-    dst_ptr[4] = x0123 - x4567;
-    x0123 = x01-x23;
-    x4567 = x45-x67;
-    dst_ptr[2] = x0123 + x4567;
-    dst_ptr[6] = x0123 - x4567;
+    y_ptr[0] = x0123 + x4567;
+    y_ptr[4] = x0123 - x4567;
+    x0123 = x01 - x23;
+    x4567 = x45 - x67;
+    y_ptr[2] = x0123 + x4567;
+    y_ptr[6] = x0123 - x4567;
 
     // y1 + - + - + - + -
     // y5 + - + - - + - +
     // y3 + - - + + - - +
     // y7 + - - + - + + -
 
-    x01 = src_ptr[0] - src_ptr[1];
-    x23 = src_ptr[2] - src_ptr[3];
-    x45 = src_ptr[4] - src_ptr[5];
-    x67 = src_ptr[6] - src_ptr[7];
+    x01 = x_ptr[0] - x_ptr[1];
+    x23 = x_ptr[2] - x_ptr[3];
+    x45 = x_ptr[4] - x_ptr[5];
+    x67 = x_ptr[6] - x_ptr[7];
 
     x0123 = x01 + x23;
     x4567 = x45 + x67;
-    dst_ptr[1] = x0123 + x4567;
-    dst_ptr[5] = x0123 - x4567;
+    y_ptr[1] = x0123 + x4567;
+    y_ptr[5] = x0123 - x4567;
     x0123 = x01 - x23;
     x4567 = x45 - x67;
-    dst_ptr[3] = x0123 + x4567;
-    dst_ptr[7] = x0123 - x4567;
+    y_ptr[3] = x0123 + x4567;
+    y_ptr[7] = x0123 - x4567;
 
     i = 0;
     loop(8,
-        dst_ptr[i] *= 0.35355339059327373; // 1/sqrt(8)
+        y_ptr[i] *= 0.35355339059327373; // 1/sqrt(8)
         i += 1;
     );
 );
 
 
-function hadamard_4 (dst_ptr, src_ptr) local (x01, x23) global()(
+function hadamard_4 (y_ptr, x_ptr) local (x01, x23) global()(
     // ++++
     // +-+-
     // ++--
     // +--+
-    x01 = (src_ptr[0] + src_ptr[1]) * 0.5;
-    x23 = (src_ptr[2] + src_ptr[3]) * 0.5;
-    dst_ptr[0] = x01 + x23;
-    dst_ptr[2] = x01 - x23;
-    x01 -= src_ptr[1];
-    x23 -= src_ptr[3];
-    dst_ptr[1] = x01 + x23;
-    dst_ptr[3] = x01 - x23;
+    x01 = (x_ptr[0] + x_ptr[1]) * 0.5;
+    x23 = (x_ptr[2] + x_ptr[3]) * 0.5;
+    y_ptr[0] = x01 + x23;
+    y_ptr[2] = x01 - x23;
+    x01 -= x_ptr[1];
+    x23 -= x_ptr[3];
+    y_ptr[1] = x01 + x23;
+    y_ptr[3] = x01 - x23;
 );
 
-// returns "size "values on the "dst_ptr" array. "src_ptr" array has to contain
+// returns "size "values on the "y_ptr" array. "x_ptr" array has to contain
 // "size" values. "size" has to be a power of 2.
-function householder (dst_ptr, src_ptr, size) local (i, factor) global() (
-    factor = range_get_sum (src_ptr, size) * 2 / size;
+function householder (y_ptr, x_ptr, size) local (i, factor) global() (
+    factor = range_get_sum (x_ptr, size) * 2 / size;
     i = 0;
     loop(size,
-        dst_ptr[i] = src_ptr[i] - factor;
+        y_ptr[i] = x_ptr[i] - factor;
         i += 1;
     );
 );
 
-function rochebois_4 (dst_ptr, src_ptr) local (i) global()(
-    dst_ptr[0] = src_ptr[1] + src_ptr[2] + src_ptr[3];
-    dst_ptr[1] = src_ptr[0] + src_ptr[2] - src_ptr[3];
-    dst_ptr[2] = src_ptr[0] - src_ptr[1] + src_ptr[3];
-    dst_ptr[3] = src_ptr[0] + src_ptr[1] - src_ptr[2];
+// conference matrix by t.Rochebois
+function rochebois_4 (y_ptr, x_ptr) local (i) global()(
+    y_ptr[0] = x_ptr[1] + x_ptr[2] + x_ptr[3];
+    y_ptr[1] = x_ptr[0] + x_ptr[2] - x_ptr[3];
+    y_ptr[2] = x_ptr[0] - x_ptr[1] + x_ptr[3];
+    y_ptr[3] = x_ptr[0] + x_ptr[1] - x_ptr[2];
 
     i = 0;
     loop (4,
-        dst_ptr[i] *= 0.3779644730092272; // 1 / sqrt(3)
+        y_ptr[i] *= 0.5773502691896258; // 1 / sqrt(3)
         i += 1;
     );
 );
 
-function rochebois_8 (dst_ptr, src_ptr) local (t, t2, i) global()(
-    t = src_ptr[3] + src_ptr[4] + src_ptr[5] + src_ptr[6] + src_ptr[7];
+// conference matrix by t.Rochebois
+function rochebois_8 (y_ptr, x_ptr) local (t, t2, i) global()(
+    t = x_ptr[3] + x_ptr[4] + x_ptr[5] + x_ptr[6] + x_ptr[7];
 
-    dst_ptr[0] = t - (src_ptr[4] * 2) + src_ptr[2] - src_ptr[1];
-    dst_ptr[1] = t - (src_ptr[5] * 2) + src_ptr[0] - src_ptr[2];
-    dst_ptr[2] = t - (src_ptr[6] * 2) + src_ptr[1] - src_ptr[0];
+    y_ptr[0] = t - (x_ptr[4] * 2) + x_ptr[2] - x_ptr[1];
+    y_ptr[1] = t - (x_ptr[5] * 2) + x_ptr[0] - x_ptr[2];
+    y_ptr[2] = t - (x_ptr[6] * 2) + x_ptr[1] - x_ptr[0];
 
-    t2 = -src_ptr[0] - src_ptr[1] - src_ptr[2] - src_ptr[3];
-    dst_ptr[3] = (t - (src_ptr[7] * 2) + t2);
+    t2 = -x_ptr[0] - x_ptr[1] - x_ptr[2] - x_ptr[3];
+    y_ptr[3] = (t - (x_ptr[7] * 2) + t2);
 
-    dst_ptr[4] = t2 + (src_ptr[0] * 2) + src_ptr[5] - src_ptr[6] + src_ptr[7];
-    dst_ptr[5] = t2 + (src_ptr[1] * 2) - src_ptr[4] + src_ptr[6] + src_ptr[7];
-    dst_ptr[6] = t2 + (src_ptr[2] * 2) + src_ptr[4] - src_ptr[5] + src_ptr[7];
-    dst_ptr[7] = t2 + (src_ptr[3] * 2) - src_ptr[4] - src_ptr[5] - src_ptr[6];
+    y_ptr[4] = t2 + (x_ptr[0] * 2) + x_ptr[5] - x_ptr[6] + x_ptr[7];
+    y_ptr[5] = t2 + (x_ptr[1] * 2) - x_ptr[4] + x_ptr[6] + x_ptr[7];
+    y_ptr[6] = t2 + (x_ptr[2] * 2) + x_ptr[4] - x_ptr[5] + x_ptr[7];
+    y_ptr[7] = t2 + (x_ptr[3] * 2) - x_ptr[4] - x_ptr[5] - x_ptr[6];
 
     i = 0;
     loop (8,
-        dst_ptr[i] *= 0.3779644730092272; // 1 / sqrt(7)
+        y_ptr[i] *= 0.3779644730092272; // 1 / sqrt(7)
         i += 1;
     );
 );
 
-
 // TODO: different angles for each butterfly?
-function unitary_matrix_4 (y_ptr, x_ptr, cos_phi, sin_phi)
+// w1 (weight1) is usually cos(angle)
+// w2 (weight1) is usually sin(angle)
+// The weights can be anything, but "w1^2 + w2^2 = 1" has to hold.
+
+function rot_matrix_4 (y_ptr, x_ptr, w1, w2)
   local(y1, y2, y3, y4) global()(
 
-  y1 = cos_phi * x_ptr[0] - sin_phi * x_ptr[1];
-  y2 = sin_phi * x_ptr[0] + cos_phi * x_ptr[1];
+  //     1 2 3 4
+  // ------------
+  // 1 | + - - +
+  // 2 | + - + -
+  // 3 | + + - -
+  // 4 | + + + +
 
-  y3 = cos_phi * x_ptr[2] - sin_phi * x_ptr[3];
-  y4 = sin_phi * x_ptr[2] + cos_phi * x_ptr[3];
+  y1 = w1 * x_ptr[0] - w2 * x_ptr[1];
+  y2 = w2 * x_ptr[0] + w1 * x_ptr[1];
 
-  y_ptr[0] = cos_phi * y1 - sin_phi * y3;
-  y_ptr[1] = sin_phi * y1 + cos_phi * y3;
+  y3 = w1 * x_ptr[2] - w2 * x_ptr[3];
+  y4 = w2 * x_ptr[2] + w1 * x_ptr[3];
 
-  y_ptr[2] = cos_phi * y2 - sin_phi * y4;
-  y_ptr[3] = sin_phi * y2 + cos_phi * y4;
+  y_ptr[0] = w1 * y1 - w2 * y3;
+  y_ptr[1] = w2 * y1 + w1 * y3;
+
+  y_ptr[2] = w1 * y2 - w2 * y4;
+  y_ptr[3] = w2 * y2 + w1 * y4;
 );
 
 // TODO: different angles for each butterfly?
-function unitary_matrix_8 (y_ptr, x_ptr, cos_phi, sin_phi)
+// w1 (weight1) is usually cos(angle)
+// w2 (weight1) is usually sin(angle)
+// The weights can be anything, but "w1^2 + w2^2 = 1" has to hold.
+
+function rot_matrix_8 (y_ptr, x_ptr, w1, w2)
   local(y1, y2, y3, y4, y5, y6, y7, y8) global()(
 
-  unitary_matrix_4 (y_ptr, x_ptr, cos_phi, sin_phi);
-  unitary_matrix_4 (y_ptr + 4, x_ptr + 4, cos_phi, sin_phi);
+  rot_matrix_4 (y_ptr, x_ptr, w1, w2);
+  rot_matrix_4 (y_ptr + 4, x_ptr + 4, w1, w2);
+
+  //    1 2 3 4
+  // ------------
+  // 1 | + - - +
+  // 2 | + - + -
+  // 3 | + + - -
+  // 4 | + + + +
+
+  //     5 6 7 8
+  // ------------
+  // 5 | + - - +
+  // 6 | + - + -
+  // 7 | + + - -
+  // 8 | + + + +
+
+  //     1 2 3 4 5 6 7 8
+  // ---------------------
+  // 1 | + - - + - + + -
+  // 2 | + - - + + - - +
+  // 3 | + - + - - + - +
+  // 4 | + - + - + - + -
+  // 5 | + + - - - - + +
+  // 6 | + + - - + + - -
+  // 7 | + + + + - - - -
+  // 8 | + + + + + + + +
 
   y1 = y_ptr[0];
   y2 = y_ptr[1];
@@ -146,39 +187,68 @@ function unitary_matrix_8 (y_ptr, x_ptr, cos_phi, sin_phi)
   y7 = y_ptr[6];
   y8 = y_ptr[7];
 
-  y_ptr[0] = cos_phi * y1 - sin_phi * y5;
-  y_ptr[1] = sin_phi * y1 + cos_phi * y5;
-  y_ptr[2] = cos_phi * y2 - sin_phi * y6;
-  y_ptr[3] = sin_phi * y2 + cos_phi * y6;
-  y_ptr[4] = cos_phi * y3 - sin_phi * y7;
-  y_ptr[5] = sin_phi * y3 + cos_phi * y7;
-  y_ptr[6] = cos_phi * y4 - sin_phi * y8;
-  y_ptr[7] = sin_phi * y4 + cos_phi * y8;
+  y_ptr[0] = w1 * y1 - w2 * y5;
+  y_ptr[1] = w2 * y1 + w1 * y5;
+  y_ptr[2] = w1 * y2 - w2 * y6;
+  y_ptr[3] = w2 * y2 + w1 * y6;
+  y_ptr[4] = w1 * y3 - w2 * y7;
+  y_ptr[5] = w2 * y3 + w1 * y7;
+  y_ptr[6] = w1 * y4 - w2 * y8;
+  y_ptr[7] = w2 * y4 + w1 * y8;
 );
 
-// TODO: different angles for each butterfly?
-function unitary_matrix_16 (y_ptr, x_ptr, cos_phi, sin_phi)
+
+// w1 (weight1) is usually cos(angle)
+// w2 (weight1) is usually sin(angle)
+// The weights can be anything, but "w1^2 + w2^2 = 1" has to hold.
+function rot_matrix_16 (y_ptr, x_ptr, w1a, w2a, w1b, w2b, w1c, w2c, w1d, w2d)
   local(
-    y1,
-    y2,
-    y3,
-    y4,
-    y5,
-    y6,
-    y7,
-    y8,
-    y9,
-    y10,
-    y11,
-    y12,
-    y13,
-    y14,
-    y15,
-    y16)
+    y1, y2, y3, y4, y5, y6, y7, y8, y9, ya, yb, yc, yd, ye, yf, yg)
   global()(
 
-  unitary_matrix_8 (y_ptr, x_ptr, cos_phi, sin_phi);
-  unitary_matrix_8 (y_ptr + 8, x_ptr + 8, cos_phi, sin_phi);
+  rot_matrix_8 (y_ptr, x_ptr, w1a, w2a);
+  rot_matrix_8 (y_ptr + 8, x_ptr + 8, w1b, w2b);
+
+  //     1 2 3 4 5 6 7 8
+  // ---------------------
+  // 1 | + - - + - + + -
+  // 2 | + - - + + - - +
+  // 3 | + - + - - + - +
+  // 4 | + - + - + - + -
+  // 5 | + + - - - - + +
+  // 6 | + + - - + + - -
+  // 7 | + + + + - - - -
+  // 8 | + + + + + + + +
+
+  //      9 0 1 2 3 4 5 6
+  // ---------------------
+  // 9  | + - - + - + + -
+  // 10 | + - - + + - - +
+  // 11 | + - + - - + - +
+  // 12 | + - + - + - + -
+  // 13 | + + - - - - + +
+  // 14 | + + - - + + - -
+  // 15 | + + + + - - - -
+  // 16 | + + + + + + + +
+
+  //      1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6
+  //    ---------------------------------
+  //  1 | + - - + - + + - - + + - + - - +
+  //  2 | + - - + - + + - + - - + - + + -
+  //  3 | + - - + + - - + - + + - - + + -
+  //  4 | + - - + + - - + + - - + + - - +
+  //  5 | + - + - - + - + - + - + + - + -
+  //  6 | + - + - - + - + + - + - - + - +
+  //  7 | + - + - + - + - - + - + - + - +
+  //  8 | + - + - + - + - + - + - + - + -
+  //  9 | + + - - - - + + - - + + + + - -
+  // 10 | + + - - - - + + + + - - - - + +
+  // 11 | + + - - + + - - - - + + - - + +
+  // 12 | + + - - + + - - + + - - + + - -
+  // 13 | + + + + - - - - - - - - + + + +
+  // 14 | + + + + - - - - + + + + - - - -
+  // 15 | + + + + + + + + - - - - - - - -
+  // 16 | + + + + + + + + + + + + + + + +
 
   y1 = y_ptr[0];
   y2 = y_ptr[1];
@@ -189,31 +259,611 @@ function unitary_matrix_16 (y_ptr, x_ptr, cos_phi, sin_phi)
   y7 = y_ptr[6];
   y8 = y_ptr[7];
   y9 = y_ptr[8];
-  y10 = y_ptr[9];
-  y11 = y_ptr[10];
-  y12 = y_ptr[11];
-  y13 = y_ptr[12];
-  y14 = y_ptr[13];
-  y15 = y_ptr[14];
-  y16 = y_ptr[15];
+  ya = y_ptr[9];
+  yb = y_ptr[10];
+  yc = y_ptr[11];
+  yd = y_ptr[12];
+  ye = y_ptr[13];
+  yf = y_ptr[14];
+  yg = y_ptr[15];
 
-  y_ptr[0] = cos_phi * y1 - sin_phi * y9;
-  y_ptr[1] = sin_phi * y1 + cos_phi * y9;
-  y_ptr[2] = cos_phi * y2 - sin_phi * y10;
-  y_ptr[3] = sin_phi * y2 + cos_phi * y10;
-  y_ptr[4] = cos_phi * y3 - sin_phi * y11;
-  y_ptr[5] = sin_phi * y3 + cos_phi * y11;
-  y_ptr[6] = cos_phi * y4 - sin_phi * y12;
-  y_ptr[7] = sin_phi * y4 + cos_phi * y12;
-  y_ptr[8] = cos_phi * y5 - sin_phi * y13;
-  y_ptr[9] = sin_phi * y5 + cos_phi * y13;
-  y_ptr[10] = cos_phi * y6 - sin_phi * y14;
-  y_ptr[11] = sin_phi * y6 + cos_phi * y14;
-  y_ptr[12] = cos_phi * y7 - sin_phi * y15;
-  y_ptr[13] = sin_phi * y7 + cos_phi * y15;
-  y_ptr[14] = cos_phi * y8 - sin_phi * y16;
-  y_ptr[15] = sin_phi * y8 + cos_phi * y16;
+  y_ptr[0]  = w1c * y1 - w2c * y9;
+  y_ptr[1]  = w2c * y1 + w1c * y9;
+  y_ptr[2]  = w1c * y2 - w2c * ya;
+  y_ptr[3]  = w2c * y2 + w1c * ya;
+  y_ptr[4]  = w1c * y3 - w2c * yb;
+  y_ptr[5]  = w2c * y3 + w1c * yb;
+  y_ptr[6]  = w1c * y4 - w2c * yc;
+  y_ptr[7]  = w2c * y4 + w1c * yc;
+  y_ptr[8]  = w1d * y5 - w2d * yd;
+  y_ptr[9]  = w2d * y5 + w1d * yd;
+  y_ptr[10] = w1d * y6 - w2d * ye;
+  y_ptr[11] = w2d * y6 + w1d * ye;
+  y_ptr[12] = w1d * y7 - w2d * yf;
+  y_ptr[13] = w2d * y7 + w1d * yf;
+  y_ptr[14] = w1d * y8 - w2d * yg;
+  y_ptr[15] = w2d * y8 + w1d * yg;
 );
+
+function rot_matrix_16 (y_ptr, x_ptr, w1, w2)(
+  rot_matrix_16 (y_ptr, x_ptr, w1, w2, w1, w2, w1, w2, w1, w2);
+);
+
+function skew_hadamard_4 (y_ptr, x_ptr)
+  local(x1, x2, x3, x4, i)
+  global() (
+  // https://www.rangevoting.org/SkewHad.html
+  //     1 2 3 4
+  // ------------
+  // 1 | + + + +
+  // 2 | - + + -
+  // 3 | - - + +
+  // 4 | - + - +
+
+  x1 = x_ptr[0];
+  x2 = x_ptr[1];
+  x3 = x_ptr[2];
+  x4 = x_ptr[3];
+
+  y_ptr[0] = +x1 +x2 +x3 +x4;
+  y_ptr[1] = -x1 +x2 +x3 -x4;
+  y_ptr[2] = -x1 -x2 +x3 +x4;
+  y_ptr[3] = -x1 +x2 -x3 +x4;
+
+  i = 0;
+  loop(4,
+      y_ptr[i] *= 0.5; // 1/sqrt(4)
+      i += 1;
+  );
+);
+
+function skew_hadamard_8 (y_ptr, x_ptr)
+  local(x1, x2, x3, x4, x5, x6, x7, x8, i)
+  global() (
+  // https://www.rangevoting.org/SkewHad.html
+  //     1 2 3 4 5 6 7 8
+  // ---------------------
+  // 1 | + + + + + + + +
+  // 2 | - + + + - + - -
+  // 3 | - - + + + - + -
+  // 4 | - - - + + + - +
+  // 5 | - + - - + + + -
+  // 6 | - - + - - + + +
+  // 7 | - + - + - - + +
+  // 8 | - + + - + - - +
+
+  x1 = x_ptr[0];
+  x2 = x_ptr[1];
+  x3 = x_ptr[2];
+  x4 = x_ptr[3];
+  x5 = x_ptr[4];
+  x6 = x_ptr[5];
+  x7 = x_ptr[6];
+  x8 = x_ptr[7];
+
+  y_ptr[0] = +x1 +x2 +x3 +x4 +x5 +x6 +x7 +x8;
+  y_ptr[1] = -x1 +x2 +x3 +x4 -x5 +x6 -x7 -x8;
+  y_ptr[2] = -x1 -x2 +x3 +x4 +x5 -x6 +x7 -x8;
+  y_ptr[3] = -x1 -x2 -x3 +x4 +x5 +x6 -x7 +x8;
+  y_ptr[4] = -x1 +x2 -x3 -x4 +x5 +x6 +x7 -x8;
+  y_ptr[5] = -x1 -x2 +x3 -x4 -x5 +x6 +x7 +x8;
+  y_ptr[6] = -x1 +x2 -x3 +x4 -x5 -x6 +x7 +x8;
+  y_ptr[7] = -x1 +x2 +x3 -x4 +x5 -x6 -x7 +x8;
+
+  i = 0;
+  loop(8,
+      y_ptr[i] *= 0.35355339059327373; // 1/sqrt(8)
+      i += 1;
+  );
+);
+
+function skew_hadamard_12 (y_ptr, x_ptr)
+  local(x1, x2, x3, x4, x5, x6, x7, x8, x9, xa, xb, xc, i)
+  global() (
+
+  // By using "misc/python/sym_skew_hadamard.py"
+  // method on: https://www.rangevoting.org/SkewHad.html
+  //      1 2 3 4 5 6 7 8 9 0 1 2
+  //    -------------------------
+  //  1 | + + + + + + + + + + + +
+  //  2 | - + + - + + + - - - + -
+  //  3 | - - + + - + + + - - - +
+  //  4 | - + - + + - + + + - - -
+  //  5 | - - + - + + - + + + - -
+  //  6 | - - - + - + + - + + + -
+  //  7 | - - - - + - + + - + + +
+  //  8 | - + - - - + - + + - + +
+  //  9 | - + + - - - + - + + - +
+  // 10 | - + + + - - - + - + + -
+  // 11 | - - + + + - - - + - + +
+  // 12 | - + - + + + - - - + - +
+
+  x1 = x_ptr[0];
+  x2 = x_ptr[1];
+  x3 = x_ptr[2];
+  x4 = x_ptr[3];
+  x5 = x_ptr[4];
+  x6 = x_ptr[5];
+  x7 = x_ptr[6];
+  x8 = x_ptr[7];
+  x9 = x_ptr[8];
+  xa = x_ptr[9];
+  xb = x_ptr[10];
+  xc = x_ptr[11];
+
+  y_ptr[0]  = +x1 +x2 +x3 +x4 +x5 +x6 +x7 +x8 +x9 +xa +xb +xc;
+  y_ptr[1]  = -x1 +x2 +x3 -x4 +x5 +x6 +x7 -x8 -x9 -xa +xb -xc;
+  y_ptr[2]  = -x1 -x2 +x3 +x4 -x5 +x6 +x7 +x8 -x9 -xa -xb +xc;
+  y_ptr[3]  = -x1 +x2 -x3 +x4 +x5 -x6 +x7 +x8 +x9 -xa -xb -xc;
+  y_ptr[4]  = -x1 -x2 +x3 -x4 +x5 +x6 -x7 +x8 +x9 +xa -xb -xc;
+  y_ptr[5]  = -x1 -x2 -x3 +x4 -x5 +x6 +x7 -x8 +x9 +xa +xb -xc;
+  y_ptr[6]  = -x1 -x2 -x3 -x4 +x5 -x6 +x7 +x8 -x9 +xa +xb +xc;
+  y_ptr[7]  = -x1 +x2 -x3 -x4 -x5 +x6 -x7 +x8 +x9 -xa +xb +xc;
+  y_ptr[8]  = -x1 +x2 +x3 -x4 -x5 -x6 +x7 -x8 +x9 +xa -xb +xc;
+  y_ptr[9]  = -x1 +x2 +x3 +x4 -x5 -x6 -x7 +x8 -x9 +xa +xb -xc;
+  y_ptr[10] = -x1 -x2 +x3 +x4 +x5 -x6 -x7 -x8 +x9 -xa +xb +xc;
+  y_ptr[11] = -x1 +x2 -x3 +x4 +x5 +x6 -x7 -x8 -x9 +xa -xb +xc;
+
+  i = 0;
+  loop(12,
+      y_ptr[i] *= 0.2886751345948129; // 1/sqrt(12)
+      i += 1;
+  );
+);
+
+// Broken? has weird feedback behavior
+function skew_hadamard_16 (y_ptr, x_ptr)
+  local (x1, x2, x3, x4, x5, x6, x7, x8, x9, xa, xb, xc, xd, xe, xf, xg, i)
+  global() (
+
+  // https://www.rangevoting.org/SkewHad.html
+  //      1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6
+  //    ---------------------------------
+  //  1 | + + + + + + + + + + + + + + + + // 0 -
+  //  2 | - + + + - + - - + - - + - + + + // 7 -
+  //  3 | - - + + + - + - + - + - + + + - // 7 -
+  //  4 | - - - + + + - + + + - + + + - - // 7 -
+  //  5 | - + - - + + + - + - + + + - - + // 7 -
+  //  6 | - - + - - + + + + + + + - - + - // 7 -
+  //  7 | - + - + - - + + + + + - - + - + // 7 -
+  //  8 | - + + - + - - + + + - - + - + + // 7 -
+  //  9 | - - - - - - - - + + + + + + + + // 8 -
+  // 10 | - + + - + - - - - + + + - + - - // 9 -
+  // 11 | - + - + - - - + - - + + + - + - // 9 -
+  // 12 | - - + - - - + + - - - + + + - + // 9 -
+  // 13 | - + - - - + + - - + - - + + + - // 9 -
+  // 14 | - - - - + + - + - - + - - + + + // 9 -
+  // 15 | - - - + + - + - - + - + - - + + // 9 -
+  // 16 | - - + + - + - - - + + - + - - + // 9 -
+
+  x1 = x_ptr[0];
+  x2 = x_ptr[1];
+  x3 = x_ptr[2];
+  x4 = x_ptr[3];
+  x5 = x_ptr[4];
+  x6 = x_ptr[5];
+  x7 = x_ptr[6];
+  x8 = x_ptr[7];
+  x9 = x_ptr[8];
+  xa = x_ptr[9];
+  xb = x_ptr[10];
+  xc = x_ptr[11];
+  xd = x_ptr[12];
+  xe = x_ptr[13];
+  xf = x_ptr[14];
+  xg = x_ptr[15];
+
+  y_ptr[0]  = +x1 +x2 +x3 +x4 +x5 +x6 +x7 +x8 +x9 +xa +xb +xc +xd +xe +xf +xg;
+  y_ptr[1]  = -x1 +x2 +x3 +x4 -x5 +x6 -x7 -x8 +x9 -xa -xb +xc -xd +xe +xf +xg;
+  y_ptr[2]  = -x1 -x2 +x3 +x4 +x5 -x6 +x7 -x8 +x9 -xa +xb -xc +xd +xe +xf -xg;
+  y_ptr[3]  = -x1 -x2 -x3 +x4 +x5 +x6 -x7 +x8 +x9 +xa -xb +xc +xd +xe -xf -xg;
+  y_ptr[4]  = -x1 +x2 -x3 -x4 +x5 +x6 +x7 -x8 +x9 -xa +xb +xc +xd -xe -xf +xg;
+  y_ptr[5]  = -x1 -x2 +x3 -x4 -x5 +x6 +x7 +x8 +x9 +xa +xb +xc -xd -xe +xf -xg;
+  y_ptr[6]  = -x1 +x2 -x3 +x4 -x5 -x6 +x7 +x8 +x9 +xa +xb -xc -xd +xe -xf +xg;
+  y_ptr[7]  = -x1 +x2 +x3 -x4 +x5 -x6 -x7 +x8 +x9 +xa -xb -xc +xd -xe +xf +xg;
+  y_ptr[8]  = -x1 -x2 -x3 -x4 -x5 -x6 -x7 -x8 +x9 +xa +xb +xc +xd +xe +xf +xg;
+  y_ptr[9]  = -x1 +x2 +x3 -x4 +x5 -x6 -x7 -x8 -x9 +xa +xb +xc -xd +xe -xf -xg;
+  y_ptr[10] = -x1 +x2 -x3 +x4 -x5 -x6 -x7 +x8 -x9 -xa +xb +xc +xd -xe +xf -xg;
+  y_ptr[11] = -x1 -x2 +x3 -x4 -x5 -x6 +x7 +x8 -x9 -xa -xb +xc +xd +xe -xf +xg;
+  y_ptr[12] = -x1 +x2 -x3 -x4 -x5 +x6 +x7 -x8 -x9 +xa -xb -xc +xd +xe +xf -xg;
+  y_ptr[13] = -x1 -x2 -x3 -x4 +x5 +x6 -x7 +x8 -x9 -xa +xb -xc -xd +xe +xf +xg;
+  y_ptr[14] = -x1 -x2 -x3 +x4 +x5 -x6 +x7 -x8 -x9 +xa -xb +xc -xd -xe +xf +xg;
+  y_ptr[15] = -x1 -x2 +x3 +x4 -x5 +x6 -x7 -x8 -x9 +xa +xb -xc +xd -xe -xf +xg;
+
+  i = 0;
+  loop(16,
+      y_ptr[i] *= 0.25; // 1/sqrt(16)
+      i += 1;
+  );
+);
+
+function skew_hadamard_20 (y_ptr, x_ptr)
+  local(
+    x1,
+    x2,
+    x3,
+    x4,
+    x5,
+    x6,
+    x7,
+    x8,
+    x9,
+    xa,
+    xb,
+    xc,
+    xd,
+    xe,
+    xf,
+    xg,
+    xh,
+    xi,
+    xj,
+    xk,
+    i
+  )
+  global() (
+
+  // By using "misc/python/sym_skew_hadamard.py"
+  // method on: https://www.rangevoting.org/SkewHad.html
+  //      1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0
+  //    ------------------------------------------
+  //  1 | + + + + + + + + + + + + + + + + + + + +
+  //  2 | - + + - - + + + + - + - + - - - - + + -
+  //  3 | - - + + - - + + + + - + - + - - - - + +
+  //  4 | - + - + + - - + + + + - + - + - - - - +
+  //  5 | - + + - + + - - + + + + - + - + - - - -
+  //  6 | - - + + - + + - - + + + + - + - + - - -
+  //  7 | - - - + + - + + - - + + + + - + - + - -
+  //  8 | - - - - + + - + + - - + + + + - + - + -
+  //  9 | - - - - - + + - + + - - + + + + - + - +
+  // 10 | - + - - - - + + - + + - - + + + + - + -
+  // 11 | - - + - - - - + + - + + - - + + + + - +
+  // 12 | - + - + - - - - + + - + + - - + + + + -
+  // 13 | - - + - + - - - - + + - + + - - + + + +
+  // 14 | - + - + - + - - - - + + - + + - - + + +
+  // 15 | - + + - + - + - - - - + + - + + - - + +
+  // 16 | - + + + - + - + - - - - + + - + + - - +
+  // 17 | - + + + + - + - + - - - - + + - + + - -
+  // 18 | - - + + + + - + - + - - - - + + - + + -
+  // 19 | - - - + + + + - + - + - - - - + + - + +
+  // 20 | - + - - + + + + - + - + - - - - + + - +
+
+  x1 = x_ptr[0];
+  x2 = x_ptr[1];
+  x3 = x_ptr[2];
+  x4 = x_ptr[3];
+  x5 = x_ptr[4];
+  x6 = x_ptr[5];
+  x7 = x_ptr[6];
+  x8 = x_ptr[7];
+  x9 = x_ptr[8];
+  xa = x_ptr[9];
+  xb = x_ptr[10];
+  xc = x_ptr[11];
+  xd = x_ptr[12];
+  xe = x_ptr[13];
+  xf = x_ptr[14];
+  xg = x_ptr[15];
+  xh = x_ptr[16];
+  xi = x_ptr[17];
+  xj = x_ptr[18];
+  xk = x_ptr[19];
+
+  y_ptr[0]  = +x1 +x2 +x3 +x4 +x5 +x6 +x7 +x8 +x9 +xa +xb +xc +xd +xe +xf +xg +xh +xi +xj +xk;
+  y_ptr[1]  = -x1 +x2 +x3 -x4 -x5 +x6 +x7 +x8 +x9 -xa +xb -xc +xd -xe -xf -xg -xh +xi +xj -xk;
+  y_ptr[2]  = -x1 -x2 +x3 +x4 -x5 -x6 +x7 +x8 +x9 +xa -xb +xc -xd +xe -xf -xg -xh -xi +xj +xk;
+  y_ptr[3]  = -x1 +x2 -x3 +x4 +x5 -x6 -x7 +x8 +x9 +xa +xb -xc +xd -xe +xf -xg -xh -xi -xj +xk;
+  y_ptr[4]  = -x1 +x2 +x3 -x4 +x5 +x6 -x7 -x8 +x9 +xa +xb +xc -xd +xe -xf +xg -xh -xi -xj -xk;
+  y_ptr[5]  = -x1 -x2 +x3 +x4 -x5 +x6 +x7 -x8 -x9 +xa +xb +xc +xd -xe +xf -xg +xh -xi -xj -xk;
+  y_ptr[6]  = -x1 -x2 -x3 +x4 +x5 -x6 +x7 +x8 -x9 -xa +xb +xc +xd +xe -xf +xg -xh +xi -xj -xk;
+  y_ptr[7]  = -x1 -x2 -x3 -x4 +x5 +x6 -x7 +x8 +x9 -xa -xb +xc +xd +xe +xf -xg +xh -xi +xj -xk;
+  y_ptr[8]  = -x1 -x2 -x3 -x4 -x5 +x6 +x7 -x8 +x9 +xa -xb -xc +xd +xe +xf +xg -xh +xi -xj +xk;
+  y_ptr[9]  = -x1 +x2 -x3 -x4 -x5 -x6 +x7 +x8 -x9 +xa +xb -xc -xd +xe +xf +xg +xh -xi +xj -xk;
+  y_ptr[10] = -x1 -x2 +x3 -x4 -x5 -x6 -x7 +x8 +x9 -xa +xb +xc -xd -xe +xf +xg +xh +xi -xj +xk;
+  y_ptr[11] = -x1 +x2 -x3 +x4 -x5 -x6 -x7 -x8 +x9 +xa -xb +xc +xd -xe -xf +xg +xh +xi +xj -xk;
+  y_ptr[12] = -x1 -x2 +x3 -x4 +x5 -x6 -x7 -x8 -x9 +xa +xb -xc +xd +xe -xf -xg +xh +xi +xj +xk;
+  y_ptr[13] = -x1 +x2 -x3 +x4 -x5 +x6 -x7 -x8 -x9 -xa +xb +xc -xd +xe +xf -xg -xh +xi +xj +xk;
+  y_ptr[14] = -x1 +x2 +x3 -x4 +x5 -x6 +x7 -x8 -x9 -xa -xb +xc +xd -xe +xf +xg -xh -xi +xj +xk;
+  y_ptr[15] = -x1 +x2 +x3 +x4 -x5 +x6 -x7 +x8 -x9 -xa -xb -xc +xd +xe -xf +xg +xh -xi -xj +xk;
+  y_ptr[16] = -x1 +x2 +x3 +x4 +x5 -x6 +x7 -x8 +x9 -xa -xb -xc -xd +xe +xf -xg +xh +xi -xj -xk;
+  y_ptr[17] = -x1 -x2 +x3 +x4 +x5 +x6 -x7 +x8 -x9 +xa -xb -xc -xd -xe +xf +xg -xh +xi +xj -xk;
+  y_ptr[18] = -x1 -x2 -x3 +x4 +x5 +x6 +x7 -x8 +x9 -xa +xb -xc -xd -xe -xf +xg +xh -xi +xj +xk;
+  y_ptr[19] = -x1 +x2 -x3 -x4 +x5 +x6 +x7 +x8 -x9 +xa -xb +xc -xd -xe -xf -xg +xh +xi -xj +xk;
+
+  i = 0;
+  loop(20,
+      y_ptr[i] *= 0.22360679774997896; // 1/sqrt(20)
+      i += 1;
+  );
+);
+
+function conference_4 (y_ptr, x_ptr)
+  local(x1, x2, x3, x4, i)
+  global() (
+  // taking the skew hadamard and zeroing the diagonal (identity).
+  //     1 2 3 4
+  // ------------
+  // 1 | 0 + + +
+  // 2 | - 0 + -
+  // 3 | - - 0 +
+  // 4 | - + - 0
+
+  x1 = x_ptr[0];
+  x2 = x_ptr[1];
+  x3 = x_ptr[2];
+  x4 = x_ptr[3];
+
+  y_ptr[0] = +x2 +x3 +x4;
+  y_ptr[1] = -x1 +x3 -x4;
+  y_ptr[2] = -x1 -x2 +x4;
+  y_ptr[3] = -x1 +x2 -x3;
+
+  i = 0;
+  loop(4,
+      y_ptr[i] *= 0.5773502691896258; // 1/sqrt(3)
+      i += 1;
+  );
+);
+
+function conference_8 (y_ptr, x_ptr)
+  local(x1, x2, x3, x4, x5, x6, x7, x8, i)
+  global() (
+
+  // taking the skew hadamard and zeroing the diagonal (identity).
+  //     1 2 3 4 5 6 7 8
+  // ---------------------
+  // 1 | 0 + + + + + + +
+  // 2 | - 0 + + - + - -
+  // 3 | - - 0 + + - + -
+  // 4 | - - - 0 + + - +
+  // 5 | - + - - 0 + + -
+  // 6 | - - + - - 0 + +
+  // 7 | - + - + - - 0 +
+  // 8 | - + + - + - - 0
+
+  x1 = x_ptr[0];
+  x2 = x_ptr[1];
+  x3 = x_ptr[2];
+  x4 = x_ptr[3];
+  x5 = x_ptr[4];
+  x6 = x_ptr[5];
+  x7 = x_ptr[6];
+  x8 = x_ptr[7];
+
+  y_ptr[0] = +x2 +x3 +x4 +x5 +x6 +x7 +x8;
+  y_ptr[1] = -x1 +x3 +x4 -x5 +x6 -x7 -x8;
+  y_ptr[2] = -x1 -x2 +x4 +x5 -x6 +x7 -x8;
+  y_ptr[3] = -x1 -x2 -x3 +x5 +x6 -x7 +x8;
+  y_ptr[4] = -x1 +x2 -x3 -x4 +x6 +x7 -x8;
+  y_ptr[5] = -x1 -x2 +x3 -x4 -x5 +x7 +x8;
+  y_ptr[6] = -x1 +x2 -x3 +x4 -x5 -x6 +x8;
+  y_ptr[7] = -x1 +x2 +x3 -x4 +x5 -x6 -x7;
+
+  i = 0;
+  loop (8,
+    y_ptr[i] *= 0.3779644730092272; // 1 / sqrt(7)
+    i += 1;
+  );
+);
+
+function conference_12 (y_ptr, x_ptr)
+  local(x1, x2, x3, x4, x5, x6, x7, x8, x9, xa, xb, xc, i)
+  global() (
+
+  // taking the skew hadamard and zeroing the diagonal (identity).
+  //      1 2 3 4 5 6 7 8 9 0 1 2
+  //    -------------------------
+  //  1 | 0 + + + + + + + + + + +
+  //  2 | - 0 + - + + + - - - + -
+  //  3 | - - 0 + - + + + - - - +
+  //  4 | - + - 0 + - + + + - - -
+  //  5 | - - + - 0 + - + + + - -
+  //  6 | - - - + - 0 + - + + + -
+  //  7 | - - - - + - 0 + - + + +
+  //  8 | - + - - - + - 0 + - + +
+  //  9 | - + + - - - + - 0 + - +
+  // 10 | - + + + - - - + - 0 + -
+  // 11 | - - + + + - - - + - 0 +
+  // 12 | - + - + + + - - - + - 0
+
+  x1 = x_ptr[0];
+  x2 = x_ptr[1];
+  x3 = x_ptr[2];
+  x4 = x_ptr[3];
+  x5 = x_ptr[4];
+  x6 = x_ptr[5];
+  x7 = x_ptr[6];
+  x8 = x_ptr[7];
+  x9 = x_ptr[8];
+  xa = x_ptr[9];
+  xb = x_ptr[10];
+  xc = x_ptr[11];
+
+  y_ptr[0]  = +x2 +x3 +x4 +x5 +x6 +x7 +x8 +x9 +xa +xb +xc;
+  y_ptr[1]  = -x1 +x3 -x4 +x5 +x6 +x7 -x8 -x9 -xa +xb -xc;
+  y_ptr[2]  = -x1 -x2 +x4 -x5 +x6 +x7 +x8 -x9 -xa -xb +xc;
+  y_ptr[3]  = -x1 +x2 -x3 +x5 -x6 +x7 +x8 +x9 -xa -xb -xc;
+  y_ptr[4]  = -x1 -x2 +x3 -x4 +x6 -x7 +x8 +x9 +xa -xb -xc;
+  y_ptr[5]  = -x1 -x2 -x3 +x4 -x5 +x7 -x8 +x9 +xa +xb -xc;
+  y_ptr[6]  = -x1 -x2 -x3 -x4 +x5 -x6 +x8 -x9 +xa +xb +xc;
+  y_ptr[7]  = -x1 +x2 -x3 -x4 -x5 +x6 -x7 +x9 -xa +xb +xc;
+  y_ptr[8]  = -x1 +x2 +x3 -x4 -x5 -x6 +x7 -x8 +xa -xb +xc;
+  y_ptr[9]  = -x1 +x2 +x3 +x4 -x5 -x6 -x7 +x8 -x9 +xb -xc;
+  y_ptr[10] = -x1 -x2 +x3 +x4 +x5 -x6 -x7 -x8 +x9 -xa +xc;
+  y_ptr[11] = -x1 +x2 -x3 +x4 +x5 +x6 -x7 -x8 -x9 +xa -xb;
+
+  i = 0;
+  loop(12,
+      y_ptr[i] *= 0.30151134457776363; // 1/sqrt(11)
+      i += 1;
+  );
+);
+
+// Broken? has weird feedback behavior
+function conference_16 (y_ptr, x_ptr)
+  local (x1, x2, x3, x4, x5, x6, x7, x8, x9, xa, xb, xc, xd, xe, xf, xg, i)
+  global() (
+
+  // taking the skew hadamard and zeroing the diagonal (identity).
+  //      1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6
+  //    ---------------------------------
+  //  1 | 0 + + + + + + + + + + + + + + +
+  //  2 | - 0 + + - + - - + - - + - + + +
+  //  3 | - - 0 + + - + - + - + - + + + -
+  //  4 | - - - 0 + + - + + + - + + + - -
+  //  5 | - + - - 0 + + - + - + + + - - +
+  //  6 | - - + - - 0 + + + + + + - - + -
+  //  7 | - + - + - - 0 + + + + - - + - +
+  //  8 | - + + - + - - 0 + + - - + - + +
+  //  9 | - - - - - - - - 0 + + + + + + +
+  // 10 | - + + - + - - - - 0 + + - + - -
+  // 11 | - + - + - - - + - - 0 + + - + -
+  // 12 | - - + - - - + + - - - 0 + + - +
+  // 13 | - + - - - + + - - + - - 0 + + -
+  // 14 | - - - - + + - + - - + - - 0 + +
+  // 15 | - - - + + - + - - + - + - - 0 +
+  // 16 | - - + + - + - - - + + - + - - 0
+
+  x1 = x_ptr[0];
+  x2 = x_ptr[1];
+  x3 = x_ptr[2];
+  x4 = x_ptr[3];
+  x5 = x_ptr[4];
+  x6 = x_ptr[5];
+  x7 = x_ptr[6];
+  x8 = x_ptr[7];
+  x9 = x_ptr[8];
+  xa = x_ptr[9];
+  xb = x_ptr[10];
+  xc = x_ptr[11];
+  xd = x_ptr[12];
+  xe = x_ptr[13];
+  xf = x_ptr[14];
+  xg = x_ptr[15];
+
+  y_ptr[0]  = +x2 +x3 +x4 +x5 +x6 +x7 +x8 +x9 +xa +xb +xc +xd +xe +xf +xg;
+  y_ptr[1]  = -x1 +x3 +x4 -x5 +x6 -x7 -x8 +x9 -xa -xb +xc -xd +xe +xf +xg;
+  y_ptr[2]  = -x1 -x2 +x4 +x5 -x6 +x7 -x8 +x9 -xa +xb -xc +xd +xe +xf -xg;
+  y_ptr[3]  = -x1 -x2 -x3 +x5 +x6 -x7 +x8 +x9 +xa -xb +xc +xd +xe -xf -xg;
+  y_ptr[4]  = -x1 +x2 -x3 -x4 +x6 +x7 -x8 +x9 -xa +xb +xc +xd -xe -xf +xg;
+  y_ptr[5]  = -x1 -x2 +x3 -x4 -x5 +x7 +x8 +x9 +xa +xb +xc -xd -xe +xf -xg;
+  y_ptr[6]  = -x1 +x2 -x3 +x4 -x5 -x6 +x8 +x9 +xa +xb -xc -xd +xe -xf +xg;
+  y_ptr[7]  = -x1 +x2 +x3 -x4 +x5 -x6 -x7 +x9 +xa -xb -xc +xd -xe +xf +xg;
+  y_ptr[8]  = -x1 -x2 -x3 -x4 -x5 -x6 -x7 -x8 +xa +xb +xc +xd +xe +xf +xg;
+  y_ptr[9]  = -x1 +x2 +x3 -x4 +x5 -x6 -x7 -x8 -x9 +xb +xc -xd +xe -xf -xg;
+  y_ptr[10] = -x1 +x2 -x3 +x4 -x5 -x6 -x7 +x8 -x9 -xa +xc +xd -xe +xf -xg;
+  y_ptr[11] = -x1 -x2 +x3 -x4 -x5 -x6 +x7 +x8 -x9 -xa -xb +xd +xe -xf +xg;
+  y_ptr[12] = -x1 +x2 -x3 -x4 -x5 +x6 +x7 -x8 -x9 +xa -xb -xc +xe +xf -xg;
+  y_ptr[13] = -x1 -x2 -x3 -x4 +x5 +x6 -x7 +x8 -x9 -xa +xb -xc -xd +xf +xg;
+  y_ptr[14] = -x1 -x2 -x3 +x4 +x5 -x6 +x7 -x8 -x9 +xa -xb +xc -xd -xe +xg;
+  y_ptr[15] = -x1 -x2 +x3 +x4 -x5 +x6 -x7 -x8 -x9 +xa +xb -xc +xd -xe -xf;
+
+  i = 0;
+  loop (16,
+      y_ptr[i] *= 0.2581988897471611; // 1/sqrt(15)
+      i += 1;
+  );
+);
+
+function conference_20 (y_ptr, x_ptr)
+    local(
+    x1,
+    x2,
+    x3,
+    x4,
+    x5,
+    x6,
+    x7,
+    x8,
+    x9,
+    xa,
+    xb,
+    xc,
+    xd,
+    xe,
+    xf,
+    xg,
+    xh,
+    xi,
+    xj,
+    xk,
+    i
+  )
+  global() (
+
+  // taking the skew hadamard and zeroing the diagonal (identity).
+  //      1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0
+  //    ------------------------------------------
+  //  1 | 0 + + + + + + + + + + + + + + + + + + +
+  //  2 | - 0 + - - + + + + - + - + - - - - + + -
+  //  3 | - - 0 + - - + + + + - + - + - - - - + +
+  //  4 | - + - 0 + - - + + + + - + - + - - - - +
+  //  5 | - + + - 0 + - - + + + + - + - + - - - -
+  //  6 | - - + + - 0 + - - + + + + - + - + - - -
+  //  7 | - - - + + - 0 + - - + + + + - + - + - -
+  //  8 | - - - - + + - 0 + - - + + + + - + - + -
+  //  9 | - - - - - + + - 0 + - - + + + + - + - +
+  // 10 | - + - - - - + + - 0 + - - + + + + - + -
+  // 11 | - - + - - - - + + - 0 + - - + + + + - +
+  // 12 | - + - + - - - - + + - 0 + - - + + + + -
+  // 13 | - - + - + - - - - + + - 0 + - - + + + +
+  // 14 | - + - + - + - - - - + + - 0 + - - + + +
+  // 15 | - + + - + - + - - - - + + - 0 + - - + +
+  // 16 | - + + + - + - + - - - - + + - 0 + - - +
+  // 17 | - + + + + - + - + - - - - + + - 0 + - -
+  // 18 | - - + + + + - + - + - - - - + + - 0 + -
+  // 19 | - - - + + + + - + - + - - - - + + - 0 +
+  // 20 | - + - - + + + + - + - + - - - - + + - 0
+
+  x1 = x_ptr[0];
+  x2 = x_ptr[1];
+  x3 = x_ptr[2];
+  x4 = x_ptr[3];
+  x5 = x_ptr[4];
+  x6 = x_ptr[5];
+  x7 = x_ptr[6];
+  x8 = x_ptr[7];
+  x9 = x_ptr[8];
+  xa = x_ptr[9];
+  xb = x_ptr[10];
+  xc = x_ptr[11];
+  xd = x_ptr[12];
+  xe = x_ptr[13];
+  xf = x_ptr[14];
+  xg = x_ptr[15];
+  xh = x_ptr[16];
+  xi = x_ptr[17];
+  xj = x_ptr[18];
+  xk = x_ptr[19];
+
+  y_ptr[0]  = +x2 +x3 +x4 +x5 +x6 +x7 +x8 +x9 +xa +xb +xc +xd +xe +xf +xg +xh +xi +xj +xk;
+  y_ptr[1]  = -x1 +x3 -x4 -x5 +x6 +x7 +x8 +x9 -xa +xb -xc +xd -xe -xf -xg -xh +xi +xj -xk;
+  y_ptr[2]  = -x1 -x2 +x4 -x5 -x6 +x7 +x8 +x9 +xa -xb +xc -xd +xe -xf -xg -xh -xi +xj +xk;
+  y_ptr[3]  = -x1 +x2 -x3 +x5 -x6 -x7 +x8 +x9 +xa +xb -xc +xd -xe +xf -xg -xh -xi -xj +xk;
+  y_ptr[4]  = -x1 +x2 +x3 -x4 +x6 -x7 -x8 +x9 +xa +xb +xc -xd +xe -xf +xg -xh -xi -xj -xk;
+  y_ptr[5]  = -x1 -x2 +x3 +x4 -x5 +x7 -x8 -x9 +xa +xb +xc +xd -xe +xf -xg +xh -xi -xj -xk;
+  y_ptr[6]  = -x1 -x2 -x3 +x4 +x5 -x6 +x8 -x9 -xa +xb +xc +xd +xe -xf +xg -xh +xi -xj -xk;
+  y_ptr[7]  = -x1 -x2 -x3 -x4 +x5 +x6 -x7 +x9 -xa -xb +xc +xd +xe +xf -xg +xh -xi +xj -xk;
+  y_ptr[8]  = -x1 -x2 -x3 -x4 -x5 +x6 +x7 -x8 +xa -xb -xc +xd +xe +xf +xg -xh +xi -xj +xk;
+  y_ptr[9]  = -x1 +x2 -x3 -x4 -x5 -x6 +x7 +x8 -x9 +xb -xc -xd +xe +xf +xg +xh -xi +xj -xk;
+  y_ptr[10] = -x1 -x2 +x3 -x4 -x5 -x6 -x7 +x8 +x9 -xa +xc -xd -xe +xf +xg +xh +xi -xj +xk;
+  y_ptr[11] = -x1 +x2 -x3 +x4 -x5 -x6 -x7 -x8 +x9 +xa -xb +xd -xe -xf +xg +xh +xi +xj -xk;
+  y_ptr[12] = -x1 -x2 +x3 -x4 +x5 -x6 -x7 -x8 -x9 +xa +xb -xc +xe -xf -xg +xh +xi +xj +xk;
+  y_ptr[13] = -x1 +x2 -x3 +x4 -x5 +x6 -x7 -x8 -x9 -xa +xb +xc -xd +xf -xg -xh +xi +xj +xk;
+  y_ptr[14] = -x1 +x2 +x3 -x4 +x5 -x6 +x7 -x8 -x9 -xa -xb +xc +xd -xe +xg -xh -xi +xj +xk;
+  y_ptr[15] = -x1 +x2 +x3 +x4 -x5 +x6 -x7 +x8 -x9 -xa -xb -xc +xd +xe -xf +xh -xi -xj +xk;
+  y_ptr[16] = -x1 +x2 +x3 +x4 +x5 -x6 +x7 -x8 +x9 -xa -xb -xc -xd +xe +xf -xg +xi -xj -xk;
+  y_ptr[17] = -x1 -x2 +x3 +x4 +x5 +x6 -x7 +x8 -x9 +xa -xb -xc -xd -xe +xf +xg -xh +xj -xk;
+  y_ptr[18] = -x1 -x2 -x3 +x4 +x5 +x6 +x7 -x8 +x9 -xa +xb -xc -xd -xe -xf +xg +xh -xi +xk;
+  y_ptr[19] = -x1 +x2 -x3 -x4 +x5 +x6 +x7 +x8 -x9 +xa -xb +xc -xd -xe -xf -xg +xh +xi -xj;
+
+  i = 0;
+  loop(20,
+      y_ptr[i] *= 0.22941573387056174; // 1/sqrt(19)
+      i += 1;
+  );
+);
+
 
 function get_rt60_gain (rt60sec, delays_spls, srate) local (rate) global ()(
     rate = srate / delays_spls;
