@@ -200,6 +200,45 @@ function apply_kaiser_window (dst*, beta, mu)
     i += 1;
   );
 );
+////------------------------------------------------------------------------------
+// cosh not on JSFX.
+//function cosh_w (n, n_count, alpha, mu)
+//  global()
+//  local (t, r, n, d) (
+//
+//  t = n - (n_count - 1) / 2 + mu;
+//  r = 2 * t / n_count;
+//  cosh (alpha * sqrt (1 - r * r)) / cosh (alpha);
+//);
+////------------------------------------------------------------------------------
+//function apply_cosh_window (dst*, alpha, mu)
+//  global() local (i) (
+//
+//  i = 0;
+//  loop (dst.size,
+//    dst.ptr[i] *= cosh_w (i, dst.size, alpha, mu);
+//    i += 1;
+//  );
+//);
+////------------------------------------------------------------------------------
+function exp_w (n, n_count, alpha, mu)
+  global()
+  local (t, r, n, d) (
+
+  t = n - (n_count - 1) / 2 + mu;
+  r = 2 * t / n_count;
+  exp (alpha * sqrt (1 - r * r)) / exp (alpha);
+);
+//------------------------------------------------------------------------------
+function apply_exp_window (dst*, alpha, mu)
+  global() local (i) (
+
+  i = 0;
+  loop (dst.size,
+    dst.ptr[i] *= exp_w (i, dst.size, alpha, mu);
+    i += 1;
+  );
+);
 //------------------------------------------------------------------------------
 function blackman (x)(
   0.42 - 0.5 * cos (2 * $pi * x) + 0.08 * cos (4 * $pi * x);
@@ -215,6 +254,7 @@ function apply_blackman_window (dst*)
     i += 1;
   );
 );
+
 //------------------------------------------------------------------------------
 // normalized 0 to 1 sinc. mu is a fractional delay
 // "dst" is an array defined with "array_init"
