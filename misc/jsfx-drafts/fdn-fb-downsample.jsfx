@@ -1,4 +1,4 @@
-df  <desc:Downsampled FDN draft
+ df  <desc:Downsampled FDN draft
 //slider1:enable_impulse= 0   <0 ,2, 1{Off,Impulse,White noise}> Test
 //slider2:mute=           0   <0, 1{Off,On}>    Reverb mute
 slider3:rt60_msec=     3300 <10 ,12000 ,0.1>  RT60 (msec)
@@ -30,6 +30,7 @@ import _reverb.jsfx-inc
 import _dynamics.jsfx-inc
 import _lfo.jsfx-inc
 import _fir.jsfx-inc
+import _resampler.jsfx-inc
 
 @init
 
@@ -60,6 +61,21 @@ get_kaiser_lp_kernel(
 
 src.down.fir_2ch_decimator_init (src.kernel, src.ratio);
 src.up.fir_2ch_interpolator_init (src.kernel, src.ratio);
+
+src.frac_down.sinc_resampler_2c_init(
+  22050, srate, 128, (k.src.cutoff / srate) * 0.5, 0.87
+  );
+src.frac_up.sinc_resampler_2c_init (srate, 22050, 128, 0.95 * 0.5, 0.87);
+
+// * 2 (channels) * 2 because we start with N zero samples for irregular rate
+// compensation.
+src.out_q.deque_init(
+  src.frac_up.sinc_resampler_2c_max_n_out_samples() * 2 * 2
+  );
+
+loop (src.frac_up.sinc_resampler_2c_max_n_out_samples() * 2, // "*2"  L and R
+  src.out_q.deque_push (0);
+);
 
 src.ins.array_init (src.ratio * 2); // interleaved ins
 src.outs.array_init (src.ratio * 2); // interleaved outs
@@ -138,7 +154,7 @@ get_delay_length_samples(
   src.srate
   );
 
-(1) ? ( 
+(1) ? (
 // using a preset
 memcpy (late.delay_spls.ptr, late.k.delay_preset.array2d_ptr(0), k.late.n_channels);
 );
@@ -186,6 +202,74 @@ function dc_blockers_x16_tick (dc*, sig*)
   sig.ptr[15] = dc.p.dc_blocker_tick (sig.ptr[15]);
 );
 
+n_spls_down = src.frac_down.sinc_resampler_2c_tick (src.spls.ptr, spl0, spl1);
+
+spl0 = src.out_q.deque_pop();
+spl1 = src.out_q.deque_pop();
+
+(n_spls_down) ? (
+  // time to generate outs at operating SR, we know that "src.frac_down" is a
+  // downsampler, so "n_spls" will always be 1
+  in.l = src.spls.ptr[0];
+  in.r = src.spls.ptr[1];
+
+  in.m = (in.l + in.r) * 0.5;
+  in.s = (in.l - in.r) * 0.5;
+
+  late.signal.array_clear();
+  late.signal.ptr[3]  = in.m * 0.5;
+  late.signal.ptr[4]  = in.m * 0.5;
+  late.signal.ptr[2]  = ins.s;
+
+  range_add(
+    late.signal.ptr, late.signal.ptr, late.feedback.ptr, late.signal.size
+    );
+
+  tmp.sig_cp.array_init (late.signal.size);
+  memcpy (tmp.sig_cp.ptr, late.signal.ptr, late.signal.size);
+  rot_matrix_16(
+    late.signal.ptr,
+    tmp.sig_cp.ptr,
+    late.mtx.w1_a,
+    late.mtx.w2_a,
+    late.mtx.w1_b,
+    late.mtx.w2_b,
+    late.mtx.w1_c,
+    late.mtx.w2_c,
+    late.mtx.w1_d,
+    late.mtx.w2_d
+    );
+  tmp.sig_cp.array_shrink(0); // return memory (used as a stack).
+
+  memcpy (late.feedback.ptr, late.signal.ptr, late.signal.size);
+
+  late.delay.delay_line_advance();
+  late.delay.delay_line_set_all (late.feedback.ptr, 0);
+  late.delay.delay_line_get_all (late.feedback.ptr, late.delay_spls.ptr);
+  dc_blockers_x16_tick (dc, late.feedback.ptr);
+  range_mul(
+    late.feedback.ptr, late.feedback.ptr, late.rt60_att.ptr, late.feedback.size
+  );
+
+  debug_16 (late.delay_spls.ptr);
+
+  late.r = late.signal.ptr[6];
+  late.l = late.signal.ptr[7];
+
+  out.l = late.l;
+  out.r = late.r;
+
+  spl.op_rate_counter += 1; // operating rate counter
+
+  n_spls_up = src.frac_up.sinc_resampler_2c_tick (src.outs.ptr, out.l, out.r);
+  i = 0;
+  loop (n_spls_up * 2, // *2 : two channels
+    src.out_q.deque_push (src.outs.ptr[i]);
+    i += 1;
+  );
+);
+
+/*
 src.pos = spl.counter & src.ratio_mask;
 
 src.offset = src.pos * 2;
@@ -200,6 +284,8 @@ spl1 = src.outs.ptr[src.offset + 1];
 src.pos == src.ratio_mask ? (
 
   src.down.fir_2ch_decimator_tick (src.spls.ptr, src.ins.ptr);
+//  src.n_spls_A = src.frac_down.sinc_resampler_2c_tick (src.spls.ptr, src.ins.ptr[0], src.ins.ptr[1]);
+//  src.n_spls_B = src.frac_down.sinc_resampler_2c_tick (src.spls.ptr, src.ins.ptr[2], src.ins.ptr[3]);
 
   in.l = src.spls.ptr[0];
   in.r = src.spls.ptr[1];
@@ -251,6 +337,8 @@ src.pos == src.ratio_mask ? (
   out.r = late.r;
 
   src.up.fir_2ch_interpolator_tick (src.outs.ptr, out.l, out.r);
+//  src.n_spls_C = src.frac_up.sinc_resampler_2c_tick (src.outs.ptr, out.l, out.r);
   spl.op_rate_counter += 1; // operating rate counter
 );
 spl.counter += 1; // plugin rate counter
+*/

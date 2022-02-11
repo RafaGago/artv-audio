@@ -274,20 +274,24 @@ function get_sinc_lowpass (dst*, freq, srate, taps, mu)
   );
 );
 //------------------------------------------------------------------------------
-// "dst" is an array defined with "array_init"
-function fir_kernel_normalize (dst*) local (g, i) global ()(
+function fir_kernel_normalize (k_ptr, k_size) local (g, i) global ()(
   g = 0;
   i = 0;
-  loop (dst.size,
-    g += dst.ptr[i];
+  loop (k_size,
+    g += k_ptr[i];
     i += 1;
   );
   i = 0;
   g = abs (1 / g);
-  loop (dst.size,
-    dst.ptr[i] *= g;
+  loop (k_size,
+    k_ptr[i] *= g;
     i += 1;
   );
+);
+
+// "dst" is an array defined with "array_init"
+function fir_kernel_normalize (dst*) global ()(
+  fir_kernel_normalize (dst.ptr, dst.size);
 );
 //------------------------------------------------------------------------------
 function fir_kernel_to_minphase (kernel*)

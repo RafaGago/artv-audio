@@ -84,14 +84,14 @@ interpolator.fir_2ch_interpolator_init (os_kernel, OVERSAMPLE_RATIO);
 (0) ? (
   lp.fir_2ch_tick (outs.ptr, spl0, spl1);
 );
-(0) ? (
+(1) ? (
   interpolator.fir_2ch_interpolator_tick (tmp.ptr, spl0, spl1);
   decimator.fir_2ch_decimator_tick (outs.ptr, tmp.ptr);
   spl0 = outs.ptr[0];
   spl1 = outs.ptr[1];
 );
 
-(1) ? (
+(0) ? (
   src.pos = spl_counter & src.ratio_mask;
   
   src.ins.ptr[src.pos * 2] = spl0;

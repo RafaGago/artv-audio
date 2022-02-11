@@ -1,0 +1,104 @@
+import _core.jsfx-inc
+import _fir.jsfx-inc
+import _delay-line.jsfx-inc
+
+@init
+
+//------------------------------------------------------------------------------
+// fc: 0 - 0,5. beta = kaiser beta.
+function sinc_resampler_2c_init (tgt_srate, src_srate, taps, fc, beta)
+  local (gcd_v, i, k, half_kern, pwr, kaiser_num, kaiser_den_recip, t, r)
+  global () (
+
+  gcd_v = gcd (tgt_srate, src_srate);
+
+  this.tgt_rate = tgt_srate / gcd_v;
+  this.src_rate = src_srate / gcd_v;
+
+  this.kernels.array_init (taps * this.tgt_rate);
+  this.z.array_init (taps * 2 * 2); // 2ch 2x size (easier code)
+
+  i = 0;
+  k = 0;
+
+  fc /= max (this.tgt_rate, this.src_rate);
+  this.fc = fc;
+
+  half_kern  = (this.kernels.size - 1) / 2;
+  kaiser_den_recip = 1 / bessel_i0_function (beta);
+ 
+  // precompute table for all iterations.
+  loop (this.kernels.size, 
+    t = k - half_kern;
+    this.kernels.ptr[i] = sinc_function (2 * fc * t); // pi is embedded
+    // kaiser 
+
+    r = 2 * t / this.kernels.size;
+    kaiser_num = bessel_i0_function (beta * sqrt (1 - r * r));
+    this.kernels.ptr[i] *= kaiser_num * kaiser_den_recip;
+  
+    k += this.tgt_rate;
+
+    k >= this.kernels.size ? (
+      // wrap around and start the table for the next sample's frac pos
+      k -= this.kernels.size + 1;
+      fir_kernel_normalize (this.kernels.ptr + i - taps, taps);
+    );
+    i += 1;
+  );
+
+  this.taps    = taps;
+  this.ph      = 0;
+  this.spl_idx = 0;
+  this.ratio   = this.tgt_rate / this.src_rate;
+);
+//------------------------------------------------------------------------------
+function sinc_resampler_2c_max_n_out_samples() global() (
+  ceil (this.ratio);
+);
+//------------------------------------------------------------------------------
+function sinc_resampler_2c_tick (out_ptr, in_l, in_r)
+  local (ph, n_spls, spl, i, l, r, kpos)
+  global () (
+
+  this.z.pos = this.z.pos == 0 ? this.taps : this.z.pos;
+  this.z.pos -= 1;
+
+  this.z.ptr[this.z.pos * 2] = in_l;
+  this.z.ptr[this.z.pos * 2 + 1] = in_r;
+
+  ph       = this.ph;
+  this.ph += this.ratio;
+  n_spls = (this.ph | 0) - (ph | 0);
+
+  spl = 0;
+  loop (n_spls,
+    i    = 0;
+    l    = 0;
+    r    = 0;
+    kpos = this.spl_idx * this.taps;
+
+    loop (this.taps,
+      l += this.kernels.ptr[kpos + i] * this.z.ptr[(this.z.pos + i) * 2];
+      r += this.kernels.ptr[kpos + i] * this.z.ptr[(this.z.pos + i) * 2 + 1];
+      i += 1;
+    );
+    out_ptr[spl] = l;
+    spl += 1;
+    out_ptr[spl] = r;
+    spl += 1;
+
+    this.spl_idx += 1;
+    this.spl_idx == this.tgt_rate ? (
+      // resync
+      this.spl_idx = 0;
+      this.ph = 0;
+    );
+  );
+
+  this.z.ptr[(this.z.pos + this.taps) * 2] = in_l;
+  this.z.ptr[(this.z.pos + this.taps) * 2 + 1] = in_r;
+
+  n_spls;
+);
+//------------------------------------------------------------------------------
