@@ -227,11 +227,69 @@ function range_to_int (dst_ptr, src_ptr, size) local (i) global()(
         i += 1;
     );
 );
-
+// -----------------------------------------------------------------------------
 function ifft_rescale (fft_ptr, fft_size) global() local (i, f, a, b)(
     range_mul_k (fft_ptr, fft_ptr, 1 / fft_size, fft_size * 2);
 );
+// -----------------------------------------------------------------------------
+function deque_init (max_size)
+  global() (
 
+  this.array_init (round_next_pow2 (max_size));
+  this.mask = this.size - 1;
+  this.r = 0;
+  this.w = 0;
+  this.push_bug_last_r = -1;
+  this.push_bug_last_w = -1;
+  this.pop_bug_r = -1;
+  this.pop_bug_w = -1;
+);
+
+function deque_size() global() local (diff) (
+  diff = this.w - this.r;
+  diff == 0 ? (
+    this.r = 0; // resync so it can run forever
+    this.w = 0;
+  );
+  diff;
+);
+
+function deque_push (v) global(A) local (sz) (
+  sz = this.deque_size();
+  (sz < this.size) ? (
+    this.ptr[this.w & this.mask] = v;
+    this.w += 1;
+  ) : (
+    this.push_bug_last_r = this.r;
+    this.push_bug_last_w = this.w;
+  );
+);
+
+function deque_pop() global() local (sz, ret) (
+  sz = this.deque_size();
+  (sz > 0) ? (
+    ret     = this.ptr[this.r & this.mask];
+    this.r += 1;
+  ) : (
+    this.pop_bug_r = this.r;
+    this.pop_bug_w = this.w;
+    ret = -1234567891234567;
+  );
+  ret;
+);
+
+// -----------------------------------------------------------------------------
+function gcd (v1, v2) local (a, b, c) global() (
+  c = 0;
+  a = v1 | 0;
+  b = v2 | 0;
+  while (b > 0) (
+    c = a % b;
+    a = b;
+    b = c;
+  );
+  a;
+);
 // -----------------------------------------------------------------------------
 // creates 16 variables with the contents of memory. For debugging. The name is
 // Ax so they appear on top of the JSFX screen.

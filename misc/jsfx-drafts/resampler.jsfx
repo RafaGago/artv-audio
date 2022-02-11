@@ -1,0 +1,110 @@
+desc:Resampler test
+
+slider1:ratio=0.5<0.25,0.75,0.25>Ratio
+slider2:taps=64<4,1024,1>Taps
+slider3:att=0.<0,300,1>Att
+slider4:cutoff=0.8<0.8,1,0.01>Cutoff
+
+import _core.jsfx-inc
+import _resampler.jsfx-inc
+
+@init
+
+@slider
+
+// hack to not consume extra memory, normally these filters have fixed
+// parameters and are intialized on @init (setting)
+
+_memtop_ptr = 0;
+
+// actual reset
+
+down_cutoff = ratio * cutoff * 0.5;
+downsrate = srate * ratio;
+
+// cutoff at the target rate when downsampling
+down.sinc_resampler_2c_init(
+  downsrate, 
+  srate, 
+  taps, 
+//  down_cutoff, 
+  0.45,
+  kaiser_beta_estimate (att)
+  );
+// cutoff near nyquist when upsampling
+up.sinc_resampler_2c_init(
+  srate, 
+  downsrate, 
+  taps, 
+//
+  0.45,
+  kaiser_beta_estimate (att)
+  );
+
+// * 2 (channels) * 2 because we start with N zero samples, as fractional rates
+// may have a 1 sample jitter on the count of number of samples returned.
+
+outs.deque_init (up.sinc_resampler_2c_max_n_out_samples() * 2 * 2);
+loop (up.sinc_resampler_2c_max_n_out_samples() * 2, // "*2"  L and R
+  outs.deque_push (0);
+);
+
+// 2: N channels
+iobuff.array_init (up.sinc_resampler_2c_max_n_out_samples() * 2);
+
+(1 && ratio == 0.5) ? (
+  oversmpl = 2;
+
+  frac = taps % 2 == 0 ? 1 / pow (2, oversmpl  * 4) : 0.;
+  //frac = taps % 2 == 0 ? -0.5 : 0.;
+  get_kaiser_lp_kernel(
+    os_kernel, srate * down_cutoff, srate * oversmpl, taps, 90, frac, 0
+    );
+  fir_down.fir_2ch_decimator_init (os_kernel, oversmpl);
+  fir_up.fir_2ch_interpolator_init (os_kernel, oversmpl);
+  fir_down_in.array_init (2 * 2);
+);
+
+tmp.array_init(2 * 2);
+
+@sample
+
+(1 && ratio == 0.5) ? (
+  // debug FIR
+  ((spl_count & 1) == 0) ? (
+    fir_down_in.ptr[0] = spl0;
+    fir_down_in.ptr[1] = spl1;
+    n_spls_down = 0;
+  ) : (
+    fir_down_in.ptr[2] = spl0;
+    fir_down_in.ptr[3] = spl1;
+    fir_down.fir_2ch_decimator_tick (iobuff.ptr, fir_down_in.ptr);
+    n_spls_down = 1;
+  );
+) : (
+  n_spls_down = down.sinc_resampler_2c_tick (iobuff.ptr, spl0, spl1);
+);
+
+spl0 = outs.deque_pop();
+spl1 = outs.deque_pop();
+
+(n_spls_down) ? (
+  // here some processing would be done at the target rate.
+
+  (0 && ratio == 0.5) ? (
+    // debug FIR
+    fir_up.fir_2ch_interpolator_tick (iobuff.ptr, iobuff.ptr[0], iobuff.ptr[1]);
+    n_spls_up = 2;
+  ) : ( 
+    n_spls_up = up.sinc_resampler_2c_tick(
+        iobuff.ptr, iobuff.ptr[0], iobuff.ptr[1]
+        ); 
+  );
+  i = 0;
+  loop (n_spls_up * 2, // *2 : two channels
+    outs.deque_push (iobuff.ptr[i]);
+    i += 1;
+  );
+);
+
+spl_count += 1;
