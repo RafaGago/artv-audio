@@ -227,6 +227,41 @@ function range_to_int (dst_ptr, src_ptr, size) local (i) global()(
         i += 1;
     );
 );
+
+function range_reverse_order (src_dst_ptr, size) local (i, hsz) global()(
+    hsz = (size / 2) | 0;
+    i = 1;
+    loop (hsz,
+        mem_swap (src_dst_ptr, i - 1, size - i);
+        i += 1;
+    );
+);
+
+function range_swap (src_dst_1_ptr, src_dst_2_ptr, size) 
+    local (i, tmp) 
+    global()(
+    
+    i = 0;
+    loop (size,
+        tmp = src_dst_1_ptr[i];
+        src_dst_1_ptr[i] = src_dst_2_ptr[i];
+        src_dst_2_ptr[i] = tmp;
+        i += 1;
+    );
+);
+
+function range_shift_down (src_dst_ptr, size, count) 
+    local (i, tmp) 
+    global()(
+    
+    // not reinventing memmove, naive...
+    this.tmp.array_init (size);
+    memcpy (this.tmp.ptr, src_dst_ptr, size);
+    memcpy (src_dst_ptr + count, this.tmp.ptr, size - count);
+    memcpy (src_dst_ptr, this.tmp.ptr + size - count, count);
+    this.tmp.array_shrink (0);
+);
+
 // -----------------------------------------------------------------------------
 function ifft_rescale (fft_ptr, fft_size) global() local (i, f, a, b)(
     range_mul_k (fft_ptr, fft_ptr, 1 / fft_size, fft_size * 2);
