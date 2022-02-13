@@ -191,14 +191,21 @@ function kaiser (n, n_count, beta, mu)
   a / b;
 );
 //------------------------------------------------------------------------------
-function apply_kaiser_window (dst*, beta, mu)
+function apply_kaiser_window (dst_ptr, dst_size, beta, mu)
   global() local (i) (
 
   i = 0;
-  loop (dst.size,
-    dst.ptr[i] *= kaiser (i, dst.size, beta, mu);
+  loop (dst_size,
+    dst_ptr[i] *= kaiser (i, dst_size, beta, mu);
     i += 1;
   );
+);
+
+
+function apply_kaiser_window (dst*, beta, mu)
+  global() (
+
+  apply_kaiser_window (dst.ptr, dst.size, beta, mu);
 );
 ////------------------------------------------------------------------------------
 // cosh not on JSFX.
@@ -256,6 +263,18 @@ function apply_blackman_window (dst*)
 );
 
 //------------------------------------------------------------------------------
+function apply_sinc_lowpass (dst_ptr, dst_size, fc, mu)
+  global()
+  local (t, n)(
+
+  n = 0;
+  loop (dst_size,
+    t = n - (dst_size - 1) / 2 + mu;
+    dst_ptr[n] = sinc_function (fc * t);
+    n += 1;
+  );
+);
+
 // normalized 0 to 1 sinc. mu is a fractional delay
 // "dst" is an array defined with "array_init"
 // "mu" is a fractional delay in samples, from -0.5 to 0.5
@@ -264,14 +283,7 @@ function get_sinc_lowpass (dst*, freq, srate, taps, mu)
   local (fc, halfsize, t, n)(
 
   dst.array_init (taps);
-  fc = 2.0 * freq / srate;
-
-  n = 0;
-  loop (dst.size,
-    t = n - (taps - 1) / 2 + mu;
-    dst.ptr[n] = sinc_function (fc * t);
-    n += 1;
-  );
+  apply_sinc_lowpass (dst.ptr, dst.size, 2.0 * freq / srate, mu);
 );
 //------------------------------------------------------------------------------
 function fir_kernel_normalize (k_ptr, k_size) local (g, i) global ()(
@@ -294,7 +306,7 @@ function fir_kernel_normalize (dst*) global ()(
   fir_kernel_normalize (dst.ptr, dst.size);
 );
 //------------------------------------------------------------------------------
-function fir_kernel_to_minphase (kernel*)
+function fir_kernel_to_minphase (kernel_ptr, kernel_size)
   local (FFT_SIZE, mag, exp_a, b, i)
   global (_fftmem_1*)(
 
@@ -307,8 +319,8 @@ function fir_kernel_to_minphase (kernel*)
 
   // regular fft of the impulse
   i = 0;
-  loop (kernel.size,
-    _fftmem_1.ptr[i * 2] = kernel.ptr[i];
+  loop (kernel_size,
+    _fftmem_1.ptr[i * 2] = kernel_ptr[i];
     i += 1;
   );
   fft (_fftmem_1.ptr, FFT_SIZE);
@@ -357,10 +369,14 @@ function fir_kernel_to_minphase (kernel*)
   ifft_rescale (_fftmem_1.ptr, FFT_SIZE);
 
   i = 0;
-  loop (kernel.size,
-    kernel.ptr[i] = _fftmem_1.ptr[i * 2];
+  loop (kernel_size,
+    kernel_ptr[i] = _fftmem_1.ptr[i * 2];
     i += 1;
   );
+);
+
+function fir_kernel_to_minphase (kernel*)(
+  fir_kernel_to_minphase (kernel.ptr, kernel.size);
 );
 //------------------------------------------------------------------------------
 // https://www.dsprelated.com/freebooks/filters/Numerical_Computation_Group_Delay.html

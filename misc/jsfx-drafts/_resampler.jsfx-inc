@@ -4,53 +4,65 @@ import _delay-line.jsfx-inc
 
 @init
 
-//------------------------------------------------------------------------------
-// fc: 0 - 0,5. beta = kaiser beta.
 function sinc_resampler_2c_init (tgt_srate, src_srate, taps, fc, beta)
-  local (gcd_v, i, k, half_kern, pwr, kaiser_num, kaiser_den_recip, t, r)
+  local (gcd_v, i, k_ptr, mu, mu_inc, ts, spls)
   global () (
 
   gcd_v = gcd (tgt_srate, src_srate);
 
-  this.tgt_rate = tgt_srate / gcd_v;
-  this.src_rate = src_srate / gcd_v;
+  this.rate_tgt = tgt_srate / gcd_v;
+  this.rate_src = src_srate / gcd_v;
+  this.ratio    = this.rate_tgt / this.rate_src;
+  this.taps     = taps;
 
-  this.kernels.array_init (taps * this.tgt_rate);
+  this.kernels.array_init (taps * this.rate_tgt);
   this.z.array_init (taps * 2 * 2); // 2ch 2x size (easier code)
+  this.n_spls.array_init (this.rate_src);
+
+  // Precompute n out samples for input sample for each iteration, start at
+  // a non-zero perfect crossing.
+  ts = this.rate_src * this.rate_tgt;
+  i = 0;
+  loop (this.rate_src,
+    spls = floor (ts * this.ratio);
+    spls -= floor ((ts - 1) * this.ratio);
+    this.n_spls.ptr[i] = spls;
+    i += 1;
+    ts += 1;
+  );
+
+  this.bug ? range_get_sum (this.n_spls.ptr, this.n_spls.size) != this.rate_tgt;
+
+  this.ratio < 1 ? (
+    this.fc = 2 * fc * this.ratio;
+    // when downsampling the phase progression goes backwards by at most 1 step.
+    mu_inc = -1 / this.rate_tgt;
+    mu = 0;
+  ) : (
+    this.fc = 2 * fc;
+    // when upsampling the phase progression goes forwards and the first input
+    // sample may generate more than one output sample, hence the initial phase
+    // may require backwards phase shifting for the synchronization point to
+    // start at 0 shift.
+    mu_inc = 1 / this.rate_tgt;
+    mu = -(this.n_spls.ptr[0] - 1) * mu_inc;
+ );
 
   i = 0;
-  k = 0;
-
-  fc /= max (this.tgt_rate, this.src_rate);
-  this.fc = fc;
-
-  half_kern  = (this.kernels.size - 1) / 2;
-  kaiser_den_recip = 1 / bessel_i0_function (beta);
- 
-  // precompute table for all iterations.
-  loop (this.kernels.size, 
-    t = k - half_kern;
-    this.kernels.ptr[i] = sinc_function (2 * fc * t); // pi is embedded
-    // kaiser 
-
-    r = 2 * t / this.kernels.size;
-    kaiser_num = bessel_i0_function (beta * sqrt (1 - r * r));
-    this.kernels.ptr[i] *= kaiser_num * kaiser_den_recip;
-  
-    k += this.tgt_rate;
-
-    k >= this.kernels.size ? (
-      // wrap around and start the table for the next sample's frac pos
-      k -= this.kernels.size + 1;
-      fir_kernel_normalize (this.kernels.ptr + i - taps, taps);
-    );
+  loop (this.rate_tgt,
+    mu -= mu >= 1 ? 1 : 0;
+    mu += mu < 0 ? 1 : 0;
+    k_ptr = this.kernels.ptr + (i * taps);
+    apply_sinc_lowpass (k_ptr, taps, this.fc, mu);
+    apply_kaiser_window (k_ptr, taps, beta, mu);
+    fir_kernel_normalize (k_ptr, taps);
+    range_reverse_order (k_ptr, taps); // the delay line is reversed
+    mu += mu_inc;
     i += 1;
   );
 
-  this.taps    = taps;
-  this.ph      = 0;
-  this.spl_idx = 0;
-  this.ratio   = this.tgt_rate / this.src_rate;
+  this.n_spls_out = 0;
+  this.n_spls_in  = 0;
 );
 //------------------------------------------------------------------------------
 function sinc_resampler_2c_max_n_out_samples() global() (
@@ -67,17 +79,14 @@ function sinc_resampler_2c_tick (out_ptr, in_l, in_r)
   this.z.ptr[this.z.pos * 2] = in_l;
   this.z.ptr[this.z.pos * 2 + 1] = in_r;
 
-  ph       = this.ph;
-  this.ph += this.ratio;
-  n_spls = (this.ph | 0) - (ph | 0);
+  n_spls = this.n_spls.ptr[this.n_spls_in];
 
-  spl = 0;
+  spl    = 0;
   loop (n_spls,
+    kpos = this.n_spls_out * this.taps;
     i    = 0;
     l    = 0;
     r    = 0;
-    kpos = this.spl_idx * this.taps;
-
     loop (this.taps,
       l += this.kernels.ptr[kpos + i] * this.z.ptr[(this.z.pos + i) * 2];
       r += this.kernels.ptr[kpos + i] * this.z.ptr[(this.z.pos + i) * 2 + 1];
@@ -88,16 +97,20 @@ function sinc_resampler_2c_tick (out_ptr, in_l, in_r)
     out_ptr[spl] = r;
     spl += 1;
 
-    this.spl_idx += 1;
-    this.spl_idx == this.tgt_rate ? (
-      // resync
-      this.spl_idx = 0;
-      this.ph = 0;
-    );
+    this.n_spls_out += 1;
   );
 
+  // storing at the tail to avoid wrapping, done after probably having touched
+  // the surrounding memory.
   this.z.ptr[(this.z.pos + this.taps) * 2] = in_l;
   this.z.ptr[(this.z.pos + this.taps) * 2 + 1] = in_r;
+
+  this.n_spls_in += 1;
+  this.n_spls_in >= this.n_spls.size ? (
+    // resync
+    this.n_spls_in = 0;
+    this.n_spls_out = 0;
+  );
 
   n_spls;
 );
