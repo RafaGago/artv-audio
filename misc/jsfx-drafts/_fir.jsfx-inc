@@ -180,27 +180,31 @@ function kaiser_beta_estimate (att)
 //     return a / b;
 // }
 
-function kaiser (n, n_count, beta, mu)
-  global()
-  local (t, r, a, b) (
+function _kaiser (n, n_count, beta, mu, den_as_factor)
+  global() local (t, r, a, b) (
 
   t = n - (n_count - 1) / 2 + mu;
   r = 2 * t / n_count;
   a = bessel_i0_function (beta * sqrt (1 - r * r));
-  b = bessel_i0_function (beta);
-  a / b;
+  a * den_as_factor;
+);
+
+function kaiser (n, n_count, beta, mu)  global() local () (
+
+  _kaiser  (n, n_count, beta, mu, 1 / bessel_i0_function (beta));
 );
 //------------------------------------------------------------------------------
 function apply_kaiser_window (dst_ptr, dst_size, beta, mu)
-  global() local (i) (
+  global() local (i, b) (
 
   i = 0;
+  b = 1 / bessel_i0_function (beta);
+
   loop (dst_size,
-    dst_ptr[i] *= kaiser (i, dst_size, beta, mu);
+    dst_ptr[i] *= _kaiser (i, dst_size, beta, mu, b);
     i += 1;
   );
 );
-
 
 function apply_kaiser_window (dst*, beta, mu)
   global() (
@@ -439,7 +443,7 @@ function get_kaiser_lp_kernel (dst*, freq, srate, taps, att, mu, minphase)
     );
 );
 //------------------------------------------------------------------------------
-// "kernel" is an array containing the kernel
+// Regular FIR filter, "kernel" is an array containing the kernel
 function fir_2ch_init (kernel*)
   global() (
 
@@ -450,7 +454,7 @@ function fir_2ch_init (kernel*)
   memset (this.z.ptr, 0, this.z.size);
   this.head = 0;
 );
-//------------------------------------------------------------------------------
+
 function fir_2ch_tick (outs_ptr, in1, in2)
   local (ch1_head, ch2_head, i)
   global(kv, A) (
@@ -515,7 +519,7 @@ function fir_2ch_interpolator_init (kernel*, ratio)
   memset (this.z.ptr, 0, this.z.size);
   this.head = 0;
 );
-//------------------------------------------------------------------------------
+
 // outputs an interleaved set of ratio sample pairs.
 // each channel
 function fir_2ch_interpolator_tick (outs_ptr, in1, in2)
@@ -575,7 +579,7 @@ function fir_2ch_decimator_init (kernel*, ratio)
   memset (this.z.ptr, 0, this.z.size);
   this.head = 0;
 );
-//------------------------------------------------------------------------------
+
 // outputs 2 samples, one for each channel. Takes a contiguous stream of
 // interleaved samples for each channel, where N sample pairs = ratio.
 function fir_2ch_decimator_tick (outs_ptr, ins_ptr)
@@ -604,5 +608,134 @@ function fir_2ch_decimator_tick (outs_ptr, ins_ptr)
     outs_ptr[1] += this.z.ptr[ch2_head + i] * this.kernel.ptr[i];
     i += 1;
   );
+);
+//------------------------------------------------------------------------------
+// Naive sinc interpolator. Useful for integer rates with lowish
+// perodicity (e.g 44 to 48KHz), as it stores the tables in memory without
+// interpolation.
+function sinc_resampler_2c_init (tgt_srate, src_srate, taps, fc, beta)
+  local (gcd_v, i, j, k t1, t2, n1, n2, t_in_spl, k_ptr)
+  global () (
+
+  gcd_v = gcd (tgt_srate, src_srate);
+
+  this.rate_tgt = tgt_srate / gcd_v;
+  this.rate_src = src_srate / gcd_v;
+  this.ratio    = this.rate_tgt / this.rate_src;
+  this.taps     = taps;
+
+  this.kernels.array_init (taps * this.rate_tgt);
+  this.z.array_init (taps * 2 * 2); // 2ch 2x size (easier code)
+  this.n_spls.array_init (this.rate_src);
+
+  this.ratio < 1 ? (
+    this.fc = 2 * fc * this.ratio;
+  ) : (
+    this.fc = 2 * fc;
+  );
+
+  // Precompute the number of output samples for each sample and the phases. The
+  // phases are just a temporary for easier debugging on JSFX (no debugger). The
+  // kernels could be initialized in place.
+
+  this.mu.array_init (this.rate_tgt); // mu = phase
+
+  // t1 = time of output sample
+  // t2 = time of previous output sample
+  // n1 = number of input samples at t1
+  // n2 = number of input samples at t2
+
+  i = 0;
+  j = 0;
+  t1 = this.rate_src * this.rate_tgt;
+  t2 = t1 - this.rate_tgt;
+  n2 = floor (t2 / this.rate_src);
+
+  loop (this.rate_src,
+    n1 = floor (t1 / this.rate_src);
+    k = 1;
+    this.n_spls.ptr[i] = n1 - n2;
+
+    loop (this.n_spls.ptr[i],
+      t_in_spl = (n2 + k) * this.rate_src;
+      this.mu.ptr[j] = (t1 - t_in_spl) / this.rate_tgt;
+      // Kernels could be initialized here without using the table.
+      j += 1;
+      k += 1;
+    );
+
+    n2 = n1;
+    t1 += this.rate_tgt;
+    i += 1;
+  );
+
+  this.bug ? range_get_sum (this.n_spls.ptr, this.n_spls.size) != this.rate_tgt;
+
+  i = 0;
+  loop (this.rate_tgt,
+    k_ptr = this.kernels.ptr + (i * taps);
+    apply_sinc_lowpass (k_ptr, taps, this.fc, this.mu.ptr[i]);
+    apply_kaiser_window (k_ptr, taps, beta, this.mu.ptr[i]);
+    fir_kernel_normalize (k_ptr, taps);
+    range_reverse_order (k_ptr, taps); // the delay line is reversed
+    i += 1;
+  );
+
+  this.mu.array_shrink (0); // deallocate, it was only created for debugging.
+
+  this.n_spls_out = 0;
+  this.n_spls_in  = 0;
+);
+//------------------------------------------------------------------------------
+function sinc_resampler_2c_max_n_out_samples() global() (
+  ceil (this.ratio);
+);
+//------------------------------------------------------------------------------
+function sinc_resampler_2c_tick (out_ptr, in_l, in_r)
+  local (ph, n_spls, spl, i, l, r, kpos)
+  global () (
+
+  this.z.pos = this.z.pos == 0 ? this.taps : this.z.pos;
+  this.z.pos -= 1;
+
+  this.z.ptr[this.z.pos * 2] = in_l;
+  this.z.ptr[this.z.pos * 2 + 1] = in_r;
+
+  n_spls = this.n_spls.ptr[this.n_spls_in];
+
+  spl    = 0;
+  loop (n_spls,
+    kpos = this.n_spls_out * this.taps;
+    i    = 0;
+    l    = 0;
+    r    = 0;
+
+    loop (this.taps,
+      l += this.kernels.ptr[kpos + i] * this.z.ptr[(this.z.pos + i) * 2];
+      r += this.kernels.ptr[kpos + i] * this.z.ptr[(this.z.pos + i) * 2 + 1];
+      i += 1;
+    );
+
+    out_ptr[spl] = l;
+    spl += 1;
+    out_ptr[spl] = r;
+    spl += 1;
+
+    this.n_spls_out += 1;
+  );
+
+  // storing at the tail to avoid wrapping, done after probably having touched
+  // the surrounding memory.
+  this.z.ptr[(this.z.pos + this.taps) * 2] = in_l;
+  this.z.ptr[(this.z.pos + this.taps) * 2 + 1] = in_r;
+
+  this.n_spls_in += 1;
+  this.n_spls_in >= this.n_spls.size ? (
+    // resync
+    this.n_spls_in = 0;
+    this.n_spls_out = 0;
+  );
+
+  n_spls;
 );
 //------------------------------------------------------------------------------

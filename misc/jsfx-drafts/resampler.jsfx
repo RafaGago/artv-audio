@@ -6,7 +6,7 @@ slider3:att=100.<0,300,1>Att
 slider4:cutoff=0.95<0.8,1,0.01>Cutoff
 
 import _core.jsfx-inc
-import _resampler.jsfx-inc
+import _fir.jsfx-inc
 
 @init
 
@@ -104,7 +104,6 @@ loop (n_spls_1,
   n_spls_2 = 0;
   spl_idx += 2;
 );
-
 
 spl0 = outs.deque_pop();
 spl1 = outs.deque_pop();
