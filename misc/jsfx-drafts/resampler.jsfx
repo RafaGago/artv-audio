@@ -18,11 +18,11 @@ import _resampler.jsfx-inc
 _memtop_ptr = 0;
 
 norm_cutoff = cutoff * 0.5;
-downsrate = srate * ratio;
+tgt_process_rate = srate * ratio;
 
 // cutoff at the target rate when downsampling
 stage1.sinc_resampler_2c_init(
-  downsrate,
+  tgt_process_rate,
   srate,
   taps,
   norm_cutoff,
@@ -31,7 +31,7 @@ stage1.sinc_resampler_2c_init(
 // cutoff near nyquist when upsampling
 stage2.sinc_resampler_2c_init(
   srate,
-  downsrate,
+  tgt_process_rate,
   taps,
   norm_cutoff,
   kaiser_beta_estimate (att)
@@ -43,7 +43,7 @@ max_spls_stage_2 = stage2.sinc_resampler_2c_max_n_out_samples() * 2;
 
 //  2 because we start with N zero samples, as fractional rates
 // may have a 1 sample jitter on the count of number of samples returned.
-outs.deque_init (max_spls_stage_2 * 2);
+outs.deque_init (max (max_spls_stage_2, max_spls_stage_1) * 2);
 //loop (max (max_spls_stage_1, max_spls_stage_2),
 //  outs.deque_push (0);
 //);
@@ -88,7 +88,6 @@ stage2_buff.array_init (max_spls_stage_2);
 ) : (
   stage1_buff.array_clear();
   n_spls_1 = stage1.sinc_resampler_2c_tick (stage1_buff.ptr, spl0, spl1);
-  n_spls_1 != 0 ? AA = n_spls_1;
 );
 
 spl_idx = 0;

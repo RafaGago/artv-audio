@@ -237,10 +237,10 @@ function range_reverse_order (src_dst_ptr, size) local (i, hsz) global()(
     );
 );
 
-function range_swap (src_dst_1_ptr, src_dst_2_ptr, size) 
-    local (i, tmp) 
+function range_swap (src_dst_1_ptr, src_dst_2_ptr, size)
+    local (i, tmp)
     global()(
-    
+
     i = 0;
     loop (size,
         tmp = src_dst_1_ptr[i];
@@ -250,10 +250,10 @@ function range_swap (src_dst_1_ptr, src_dst_2_ptr, size)
     );
 );
 
-function range_shift_down (src_dst_ptr, size, count) 
-    local (i, tmp) 
+function range_shift_down (src_dst_ptr, size, count)
+    local (i, tmp)
     global()(
-    
+
     // not reinventing memmove, naive...
     this.tmp.array_init (size);
     memcpy (this.tmp.ptr, src_dst_ptr, size);
@@ -326,29 +326,105 @@ function gcd (v1, v2) local (a, b, c) global() (
   a;
 );
 // -----------------------------------------------------------------------------
-// creates 16 variables with the contents of memory. For debugging. The name is
-// Ax so they appear on top of the JSFX screen.
-function debug_16 (ptr)
+// creates max 4 variables with the contents of memory or zero otherwise.
+function debug_4 (ptr, n)
   local()
-  global (A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, AA, AB, AC, AD, AE, AF)(
+  global ()(
 
-  A0 = ptr[0];
-  A1 = ptr[1];
-  A2 = ptr[2];
-  A3 = ptr[3];
-  A4 = ptr[4];
-  A5 = ptr[5];
-  A6 = ptr[6];
-  A7 = ptr[7];
-  A8 = ptr[8];
-  A9 = ptr[9];
-  AA = ptr[10];
-  AB = ptr[11];
-  AC = ptr[12];
-  AD = ptr[13];
-  AE = ptr[14];
-  AF = ptr[15];
+  this.n = n;
+  this.v00 = n >= 1 ? ptr[0] : 0;
+  this.v01 = n >= 2 ? ptr[1] : 0;
+  this.v02 = n >= 3 ? ptr[2] : 0;
+  this.v03 = n >= 4 ? ptr[3] : 0;
 );
+
+function debug_4 (arr*) (this.debug_4 (arr.ptr, arr.size));
+// -----------------------------------------------------------------------------
+// creates max 8 variables with the contents of memory or zero otherwise.
+function debug_8 (ptr, n)
+  local()
+  global ()(
+
+  this.n = n;
+  this.v00 = n >= 1 ? ptr[0] : 0;
+  this.v01 = n >= 2 ? ptr[1] : 0;
+  this.v02 = n >= 3 ? ptr[2] : 0;
+  this.v03 = n >= 4 ? ptr[3] : 0;
+  this.v04 = n >= 5 ? ptr[4] : 0;
+  this.v05 = n >= 6 ? ptr[5] : 0;
+  this.v06 = n >= 7 ? ptr[6] : 0;
+  this.v07 = n >= 8 ? ptr[7] : 0;
+);
+
+function debug_8 (arr*) (this.debug_8 (arr.ptr, arr.size));
+// -----------------------------------------------------------------------------
+// creates max 16 variables with the contents of memory or zero otherwise.
+function debug_16 (ptr, n)
+  local()
+  global ()(
+
+  this.n = n;
+  this.v00 = n >= 1 ? ptr[0] : 0;
+  this.v01 = n >= 2 ? ptr[1] : 0;
+  this.v02 = n >= 3 ? ptr[2] : 0;
+  this.v03 = n >= 4 ? ptr[3] : 0;
+  this.v04 = n >= 5 ? ptr[4] : 0;
+  this.v05 = n >= 6 ? ptr[5] : 0;
+  this.v06 = n >= 7 ? ptr[6] : 0;
+  this.v07 = n >= 8 ? ptr[7] : 0;
+  this.v08 = n >= 9 ? ptr[8] : 0;
+  this.v09 = n >= 10 ? ptr[9] : 0;
+  this.v10 = n >= 11 ? ptr[10] : 0;
+  this.v11 = n >= 12 ? ptr[11] : 0;
+  this.v12 = n >= 13 ? ptr[12] : 0;
+  this.v13 = n >= 14 ? ptr[13] : 0;
+  this.v14 = n >= 15 ? ptr[14] : 0;
+  this.v15 = n >= 16 ? ptr[15] : 0;
+);
+
+function debug_16 (arr*) (this.debug_16 (arr.ptr, arr.size));
+// -----------------------------------------------------------------------------
+// creates max 32 variables with the contents of memory or zero otherwise.
+function debug_32 (ptr, n)
+  local()
+  global ()(
+
+  this.n = n;
+  this.v00 = n >= 1 ? ptr[0] : 0;
+  this.v01 = n >= 2 ? ptr[1] : 0;
+  this.v02 = n >= 3 ? ptr[2] : 0;
+  this.v03 = n >= 4 ? ptr[3] : 0;
+  this.v04 = n >= 5 ? ptr[4] : 0;
+  this.v05 = n >= 6 ? ptr[5] : 0;
+  this.v06 = n >= 7 ? ptr[6] : 0;
+  this.v07 = n >= 8 ? ptr[7] : 0;
+  this.v08 = n >= 9 ? ptr[8] : 0;
+  this.v09 = n >= 10 ? ptr[9] : 0;
+  this.v10 = n >= 11 ? ptr[10] : 0;
+  this.v11 = n >= 12 ? ptr[11] : 0;
+  this.v12 = n >= 13 ? ptr[12] : 0;
+  this.v13 = n >= 14 ? ptr[13] : 0;
+  this.v14 = n >= 15 ? ptr[14] : 0;
+  this.v15 = n >= 16 ? ptr[15] : 0;
+  this.v16 = n >= 17 ? ptr[16] : 0;
+  this.v17 = n >= 18 ? ptr[17] : 0;
+  this.v18 = n >= 19 ? ptr[18] : 0;
+  this.v19 = n >= 20 ? ptr[19] : 0;
+  this.v20 = n >= 21 ? ptr[20] : 0;
+  this.v21 = n >= 22 ? ptr[21] : 0;
+  this.v22 = n >= 23 ? ptr[22] : 0;
+  this.v23 = n >= 24 ? ptr[23] : 0;
+  this.v24 = n >= 25 ? ptr[24] : 0;
+  this.v25 = n >= 26 ? ptr[25] : 0;
+  this.v26 = n >= 27 ? ptr[26] : 0;
+  this.v27 = n >= 28 ? ptr[27] : 0;
+  this.v28 = n >= 29 ? ptr[28] : 0;
+  this.v29 = n >= 30 ? ptr[29] : 0;
+  this.v30 = n >= 31 ? ptr[30] : 0;
+  this.v31 = n >= 32 ? ptr[31] : 0;
+);
+
+function debug_32 (arr*) (this.debug_32 (arr.ptr, arr.size));
 // -----------------------------------------------------------------------------
 // Array for doing FFT ops that dosn't cross 64K element boundaries, as
 // instructed on the JSFX manual.

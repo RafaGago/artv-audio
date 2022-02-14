@@ -383,15 +383,12 @@ function fir_kernel_to_minphase (kernel*)(
 // fc norm freq from 0 to 0.5
 function get_group_delay (kernel*, fc)
   local (FFT_SIZE, b, br, br_re, br_im, b_re, b_im, bucket, i)
-  global (_fftmem_1*, _fftmem_2* ,A, AA)(
+  global (_fftmem_1*, _fftmem_2*)(
 
   FFT_SIZE = 32 * 1024;
 
   bucket = (2 * fc * 2 * (FFT_SIZE - 1));
   bucket = (bucket + 0.5) | 0;
-
-  A = bucket;
-  AA = fc;
 
   this.b.array_alias (_fftmem_1.ptr, _fftmem_1.size);
   this.br.array_alias (_fftmem_2.ptr, _fftmem_2.size);

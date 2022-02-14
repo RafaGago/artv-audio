@@ -5,7 +5,7 @@ import _delay-line.jsfx-inc
 @init
 
 function sinc_resampler_2c_init (tgt_srate, src_srate, taps, fc, beta)
-  local (gcd_v, i, k_ptr, mu, mu_inc, ts, spls)
+  local (gcd_v, i, j, k t1, t2, n1, n2, t_in_spl, k_ptr)
   global () (
 
   gcd_v = gcd (tgt_srate, src_srate);
@@ -18,48 +18,59 @@ function sinc_resampler_2c_init (tgt_srate, src_srate, taps, fc, beta)
   this.kernels.array_init (taps * this.rate_tgt);
   this.z.array_init (taps * 2 * 2); // 2ch 2x size (easier code)
   this.n_spls.array_init (this.rate_src);
+  
+  this.ratio < 1 ? (
+    this.fc = 2 * fc * this.ratio;
+  ) : (
+    this.fc = 2 * fc;
+  );
+  
+  // Precompute the number of output samples for each sample and the phases. The
+  // phases are just a temporary for easier debugging on JSFX (no debugger). The 
+  // kernels could be initialized in place.
 
-  // Precompute n out samples for input sample for each iteration, start at
-  // a non-zero perfect crossing.
-  ts = this.rate_src * this.rate_tgt;
+  this.mu.array_init (this.rate_tgt); // mu = phase
+
+  // t1 = time of output sample
+  // t2 = time of previous output sample
+  // n1 = number of input samples at t1
+  // n2 = number of input samples at t2
+
   i = 0;
+  j = 0;
+  t1 = this.rate_src * this.rate_tgt;
+  t2 = t1 - this.rate_tgt;
+  n2 = floor (t2 / this.rate_src);
+
   loop (this.rate_src,
-    spls = floor (ts * this.ratio);
-    spls -= floor ((ts - 1) * this.ratio);
-    this.n_spls.ptr[i] = spls;
+    n1 = floor (t1 / this.rate_src);
+    k = 1;
+    this.n_spls.ptr[i] = n1 - n2;
+    loop (this.n_spls.ptr[i],
+      t_in_spl = (n2 + k) * this.rate_src;
+      this.mu.ptr[j] = (t1 - t_in_spl) / this.rate_tgt;
+      j += 1;
+      k += 1;
+    );
+
+    n2 = n1;
+    t1 += this.rate_tgt;
     i += 1;
-    ts += 1;
   );
 
   this.bug ? range_get_sum (this.n_spls.ptr, this.n_spls.size) != this.rate_tgt;
 
-  this.ratio < 1 ? (
-    this.fc = 2 * fc * this.ratio;
-    // when downsampling the phase progression goes backwards by at most 1 step.
-    mu_inc = -1 / this.rate_tgt;
-    mu = 0;
-  ) : (
-    this.fc = 2 * fc;
-    // when upsampling the phase progression goes forwards and the first input
-    // sample may generate more than one output sample, hence the initial phase
-    // may require backwards phase shifting for the synchronization point to
-    // start at 0 shift.
-    mu_inc = 1 / this.rate_tgt;
-    mu = -(this.n_spls.ptr[0] - 1) * mu_inc;
- );
-
   i = 0;
   loop (this.rate_tgt,
-    mu -= mu >= 1 ? 1 : 0;
-    mu += mu < 0 ? 1 : 0;
     k_ptr = this.kernels.ptr + (i * taps);
-    apply_sinc_lowpass (k_ptr, taps, this.fc, mu);
-    apply_kaiser_window (k_ptr, taps, beta, mu);
+    apply_sinc_lowpass (k_ptr, taps, this.fc, this.mu.ptr[i]);
+    apply_kaiser_window (k_ptr, taps, beta, this.mu.ptr[i]);
     fir_kernel_normalize (k_ptr, taps);
     range_reverse_order (k_ptr, taps); // the delay line is reversed
-    mu += mu_inc;
     i += 1;
   );
+
+  this.mu.array_shrink (0); // deallocate, it was only created for debugging.
 
   this.n_spls_out = 0;
   this.n_spls_in  = 0;
@@ -87,11 +98,13 @@ function sinc_resampler_2c_tick (out_ptr, in_l, in_r)
     i    = 0;
     l    = 0;
     r    = 0;
+
     loop (this.taps,
       l += this.kernels.ptr[kpos + i] * this.z.ptr[(this.z.pos + i) * 2];
       r += this.kernels.ptr[kpos + i] * this.z.ptr[(this.z.pos + i) * 2 + 1];
       i += 1;
     );
+
     out_ptr[spl] = l;
     spl += 1;
     out_ptr[spl] = r;
