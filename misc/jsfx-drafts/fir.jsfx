@@ -43,21 +43,14 @@ src.ins.array_clear();
 src.outs.array_clear();
 src.spls.array_clear();
 
+// hack to not consume extra memory, normally these filters have fixed
+// parameters and are intialized on @init (setting)
+
+realloc_memtop = _memtop_ptr;
+
 @slider
 
-// hack to not consume extra memory, normally these filters have fixed
-// parameters
-
-interpolator.z.array_shrink (0);
-interpolator.kernel.array_shrink (0);
-
-decimator.z.array_shrink (0);
-decimator.kernel.array_shrink (0);
-
-os_kernel.array_shrink (0);
-
-lp.z.array_shrink (0);
-kernel.array_shrink (0);
+_memtop_ptr = realloc_memtop;
 
 // actual reset
 
