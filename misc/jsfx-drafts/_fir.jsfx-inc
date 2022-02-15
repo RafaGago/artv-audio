@@ -423,11 +423,11 @@ function get_group_delay (kernel*, fc)
 );
 //------------------------------------------------------------------------------
 // "dst" is an array defined with "array_init"
-function get_kaiser_lp_kernel_2 (dst*, freq, srate, taps, beta, mu, minphase)
+function get_kaiser_lp_kernel_2 (dst*, cutoff_hz, srate, taps, beta, mu, minphase)
   global()
   local (frac)(
 
-  get_sinc_lowpass (dst, freq, srate, taps, mu);
+  get_sinc_lowpass (dst, cutoff_hz, srate, taps, mu);
   apply_kaiser_window (dst, beta, mu);
   (minphase != 0) ? (
     fir_kernel_to_minphase (dst);
@@ -436,10 +436,10 @@ function get_kaiser_lp_kernel_2 (dst*, freq, srate, taps, beta, mu, minphase)
 );
 //------------------------------------------------------------------------------
 // "dst" is an array defined with "array_init"
-function get_kaiser_lp_kernel (dst*, freq, srate, taps, att, mu, minphase)
+function get_kaiser_lp_kernel (dst*, cutoff_hz, srate, taps, att, mu, minphase)
   global()(
   get_kaiser_lp_kernel_2(
-    dst, freq, srate, taps, kaiser_beta_estimate (att), mu, minphase
+    dst, cutoff_hz, srate, taps, kaiser_beta_estimate (att), mu, minphase
     );
 );
 //------------------------------------------------------------------------------
@@ -624,7 +624,7 @@ function fir_2ch_decimator_tick (outs_ptr, ins_ptr)
 // perodicity (e.g 44 to 48KHz), as it stores the tables in memory without
 // interpolation. It does allocate memory, so it only can be used once  from
 // "init".
-function sinc_resampler_2c_init (tgt_srate, src_srate, taps, fc, beta)
+function sinc_resampler_2c_init (tgt_srate, src_srate, taps, cutoff_hz, beta)
   local (gcd_v, i, j, k t1, t2, n1, n2, t_in_spl, k_ptr, mu_c)
   global () (
 
@@ -645,10 +645,11 @@ function sinc_resampler_2c_init (tgt_srate, src_srate, taps, fc, beta)
   this.z_r.array_init (taps * 2); // 2x size (easier code)
   this.n_spls.array_init (this.rate_src);
 
-  this.ratio < 1 ? (
-    this.fc = 2 * fc * this.ratio;
+  (cutoff_hz * 2) < tgt_srate ? (
+    this.fc = 2 * cutoff_hz / tgt_srate;
+    this.ratio < 1 ? this.fc *= this.ratio;
   ) : (
-    this.fc = 2 * fc;
+    this.bug_fc = 1;
   );
 
   // Precompute the number of output samples for each sample and the phases. The
@@ -686,7 +687,8 @@ function sinc_resampler_2c_init (tgt_srate, src_srate, taps, fc, beta)
     i += 1;
   );
 
-  this.bug ? range_get_sum (this.n_spls.ptr, this.n_spls.size) != this.rate_tgt;
+  this.bug_tbl =
+    range_get_sum (this.n_spls.ptr, this.n_spls.size) != this.rate_tgt;
 
 /* TODO:
   taps % 2 == 0 ? (
@@ -766,5 +768,89 @@ function sinc_resampler_2c_tick (out_ptr, in_l, in_r)
   );
 
   n_spls;
+);
+
+//------------------------------------------------------------------------------
+// Polyphase FIR + sinc interpolator combined. The regular FIR handles the
+// big chunk of the resampling job and the sinc interpolator the fractional part
+function resampler_2c_init (tgt_srate, src_srate, taps, fc, beta)
+  local (ratio, frac_rate, i)
+  global () (
+
+  LN2_R = 1 / log(2);
+
+  ratio = tgt_srate / src_srate;
+  ratio < 1 ? (
+    // downsampler
+    n = log (src_srate) * LN2_R  - log (tgt_srate) * LN2_R;
+    n = floor (n);
+
+    frac_rate = src_rate;
+    while (n && frac_rate % 2 == 0) (
+      frac_rate /= 2;
+      n -= 1;
+    );
+
+    this.polyphase_ratio = src_rate / frac_rate;
+
+    ((this.polyphase_ratio | 0) != 1) ? (
+      // TODO more params out
+      this.kernel.array_init ((this.polyphase_ratio | 0) * taps);
+      this.pkernel.get_kaiser_lp_kernel(
+        this.kernel,
+        src_rate * polyphase_ratio * 0.46,
+        src_rate,
+        taps,
+        -120,
+        0,
+        0);
+      this.polyphase.fir_2ch_decimator_init(
+        this.kernel, this.polyphase_ratio | 0
+        );
+    );
+
+    this.has_fracional = frac_rate != tgt_srate;
+    // TODO: fc in hertz on the resampler (?)
+    (this.has_fractional) ? (
+      this.frac.sinc_resampler_2c_init (tgt_srate, frac_rate, taps, fc, beta);
+    );
+
+  ) : (
+   // upsampler (Order is backwards... TODO)
+    n = log (tgt_srate) * LN2_R  - log (src_srate) * LN2_R;
+    n = floor (n);
+
+    frac_rate = tgt_srate;
+    while (n && frac_rate % 2 == 0) (
+      frac_rate /= 2;
+      n -= 1;
+    );
+
+    this.polyphase_ratio = tgt_srate / frac_rate;
+
+      ((this.polyphase_ratio | 0) != 1) ? (
+      // TODO more params out
+      this.kernel.array_init ((this.polyphase_ratio | 0) * taps);
+      this.pkernel.get_kaiser_lp_kernel(
+        this.kernel,
+        src_rate * polyphase_ratio * 0.46,
+        src_rate,
+        taps,
+        -120,
+        0,
+        0);
+      this.polyphase.fir_2ch_interpolator_init(
+        this.kernel, this.polyphase_ratio | 0
+        );
+    );
+
+    this.has_fracional = frac_rate != tgt_srate;
+    // TODO: fc in hertz on the resampler (?)
+    (this.has_fractional) ? (
+      this.frac.sinc_resampler_2c_init (tgt_srate, frac_rate, taps, fc, beta);
+    );
+
+
+  );
 );
 //------------------------------------------------------------------------------

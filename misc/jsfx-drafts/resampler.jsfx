@@ -19,7 +19,6 @@ realloc_memtop = _memtop_ptr;
 
 _memtop_ptr = realloc_memtop;
 
-norm_cutoff = cutoff * 0.5;
 tgt_process_rate = srate * ratio;
 
 // cutoff at the target rate when downsampling
@@ -27,7 +26,7 @@ stage1.sinc_resampler_2c_init(
   tgt_process_rate,
   srate,
   taps,
-  norm_cutoff,
+  tgt_process_rate * 0.5 * cutoff,
   kaiser_beta_estimate (att)
   );
 // cutoff near nyquist when upsampling
@@ -35,7 +34,7 @@ stage2.sinc_resampler_2c_init(
   srate,
   tgt_process_rate,
   taps,
-  norm_cutoff,
+  srate * 0.5 * cutoff,
   kaiser_beta_estimate (att)
   );
 
@@ -46,9 +45,9 @@ max_spls_stage_2 = stage2.sinc_resampler_2c_max_n_out_samples() * 2;
 //  2 because we start with N zero samples, as fractional rates
 // may have a 1 sample jitter on the count of number of samples returned.
 outs.deque_init (max (max_spls_stage_2, max_spls_stage_1) * 2);
-//loop (max (max_spls_stage_1, max_spls_stage_2),
-//  outs.deque_push (0);
-//);
+loop (max (max_spls_stage_1, max_spls_stage_2),
+  outs.deque_push (0);
+);
 
 // 2: N channels
 stage1_buff.array_init (max_spls_stage_1);

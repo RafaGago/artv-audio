@@ -41,6 +41,18 @@ GOLDEN_RATIO = (1 + sqrt(5)) / 2;
 
 // Sample rate conversion ------------------------------------------------------
 
+// 44100 is 2^2 * 3^2 * 5^2 * 7^2
+// 48000 is 2^7 * 3^1 * 5^3
+//
+// So the common factors are 2^2 * 3^1 * 5^2 = 300.
+//
+// Choosing a target samplerate multiple of 300 will minimize the memory
+// requirements for the fractional resampler on both. 30000 seems a good
+// candidate samplerate for a reverb, 15KHz BW should be enough for a reverb.
+//
+// 36000 is more friendly to 44100 multiples though. 27000 seems good too, but
+// 13.5K might start being dark.
+
 k.src.kaiser_att_db = 120;
 k.src.taps_branch = 64;
 k.src.cutoff = 9000;
