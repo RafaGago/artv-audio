@@ -423,7 +423,9 @@ function get_group_delay (kernel*, fc)
 );
 //------------------------------------------------------------------------------
 // "dst" is an array defined with "array_init"
-function get_kaiser_lp_kernel_2 (dst*, cutoff_hz, srate, taps, beta, mu, minphase)
+function get_kaiser_lp_kernel_2(
+  dst*, cutoff_hz, srate, taps, beta, mu, minphase
+  )
   global()
   local (frac)(
 
@@ -451,36 +453,37 @@ function fir_2ch_init (kernel*)
   this.kernel.array_alias (kernel);
   // mantaining two contiguous delay lines and switching between them. It is
   // simple and cache-friendly.
-  this.z.array_shrink (0);
-  this.z.array_init (2 * kernel.size * 2);
-  memset (this.z.ptr, 0, this.z.size);
+  this.z_l.array_init (kernel.size * 2);
+  this.z_r.array_init (kernel.size * 2);
+  this.z_l.array_clear();
+  this.z_r.array_clear();
   this.head = 0;
 );
 
 function fir_2ch_tick (outs_ptr, in1, in2)
-  local (ch1_head, ch2_head, i)
+  local (l_ptr, r_ptr, i)
   global(kv, A) (
 
   this.head = this.head == 0 ? this.kernel.size : this.head;
   this.head -= 1;
 
-  ch1_head = this.head + (0 * this.kernel.size * 2);
-  ch2_head = this.head + (1 * this.kernel.size * 2);
+  l_ptr = this.z_l.ptr + this.head;
+  r_ptr = this.z_r.ptr + this.head;
 
-  this.z.ptr[ch1_head] = in1;
-  this.z.ptr[ch2_head] = in2;
+  l_ptr[0] = in1;
+  r_ptr[0] = in2;
 
   i = 0;
   outs_ptr[0] = outs_ptr[1] = 0;
   loop (this.kernel.size,
-    outs_ptr[0] += this.z.ptr[ch1_head + i] * this.kernel.ptr[i];
-    outs_ptr[1] += this.z.ptr[ch2_head + i] * this.kernel.ptr[i];
+    outs_ptr[0] += l_ptr[i] * this.kernel.ptr[i];
+    outs_ptr[1] += r_ptr[i] * this.kernel.ptr[i];
     i += 1;
   );
   // inserting the bottom samples for the second delay line now that just the
   //previous position has been touched
-  this.z.ptr[ch1_head + this.kernel.size] = in1;
-  this.z.ptr[ch2_head + this.kernel.size] = in2;
+  l_ptr[this.kernel.size] = in1;
+  r_ptr[this.kernel.size] = in2;
 );
 //------------------------------------------------------------------------------
 // Polyphase FIR interpolator. "kernel" is an array containing the kernel,
@@ -493,9 +496,6 @@ function fir_2ch_interpolator_init (kernel*, ratio)
   // To make it polyphase, we ensure that the coefficients are multiples of
   // "ratio" the unused parts of the kernel will have zeros that don't
   // contribute to the response.
-
-  this.z.array_shrink (0);
-  this.kernel.array_shrink (0);
 
   this.ratio    = ratio;
   this.subksize = ceil (kernel.size / ratio);
@@ -521,8 +521,10 @@ function fir_2ch_interpolator_init (kernel*, ratio)
   );
 
   // sharing delay lines between subfilters
-  this.z.array_init (2 * this.subksize * 2);
-  memset (this.z.ptr, 0, this.z.size);
+  this.z_l.array_init (this.subksize * 2);
+  this.z_r.array_init (this.subksize * 2);
+  this.z_l.array_clear();
+  this.z_r.array_clear();
   this.head = 0;
 );
 
@@ -530,16 +532,16 @@ function fir_2ch_interpolator_init (kernel*, ratio)
 // each channel
 function fir_2ch_interpolator_tick (outs_ptr, in1, in2)
   global()
-  local (ch1_head, ch2_head, i, s, offset) (
+  local (l_ptr, r_ptr, i, s, offset) (
 
   this.head = this.head == 0 ? this.subksize : this.head;
   this.head -= 1;
 
-  ch1_head = this.head + (0 * this.subksize * 2);
-  ch2_head = this.head + (1 * this.subksize * 2);
+  l_ptr = this.z_l.ptr + this.head;
+  r_ptr = this.z_r.ptr + this.head;
 
-  this.z.ptr[ch1_head] = in1;
-  this.z.ptr[ch2_head] = in2;
+  l_ptr[0] = in1;
+  r_ptr[0] = in2;
 
   memset (outs_ptr, 0, 2 * this.ratio);
 
@@ -548,9 +550,8 @@ function fir_2ch_interpolator_tick (outs_ptr, in1, in2)
   loop (this.ratio,
     i = 0;
     loop (this.subksize,
-      outs_ptr[s] += this.kernel.ptr[offset + i] * this.z.ptr[ch1_head + i];
-      outs_ptr[s + 1]
-        += this.kernel.ptr[offset + i] * this.z.ptr[ch2_head + i];
+      outs_ptr[s] += this.kernel.ptr[offset + i] * l_ptr[i];
+      outs_ptr[s + 1] += this.kernel.ptr[offset + i] * r_ptr[i];
       i += 1;
     );
     offset += this.subksize;
@@ -558,8 +559,8 @@ function fir_2ch_interpolator_tick (outs_ptr, in1, in2)
   );
   // inserting the bottom samples for the second delay line now that just the
   //previous position has been touched
-  this.z.ptr[ch1_head + this.subksize] = in1;
-  this.z.ptr[ch2_head + this.subksize] = in2;
+  l_ptr[this.subksize] = in1;
+  r_ptr[this.subksize] = in2;
 );
 //------------------------------------------------------------------------------
 // Polyphase FIR decimator. "kernel" is an array containing the kernel, "ratio"
@@ -568,9 +569,6 @@ function fir_2ch_interpolator_tick (outs_ptr, in1, in2)
 function fir_2ch_decimator_init (kernel*, ratio)
   local (ksize, offset)
   global() (
-
-  this.z.array_shrink (0);
-  this.kernel.array_shrink (0);
 
   // To make it polyphase, we ensure that the coefficients are multiples of
   // "ratio" the unused parts of the kernel will have zeros that don't
@@ -585,8 +583,10 @@ function fir_2ch_decimator_init (kernel*, ratio)
   memset (this.kernel.ptr, 0, offset);
   memcpy (this.kernel.ptr + offset, kernel.ptr, kernel.size);
 
-  this.z.array_init (2 * this.kernel.size * 2);
-  memset (this.z.ptr, 0, this.z.size);
+  this.z_l.array_init (kernel.size * 2);
+  this.z_r.array_init (kernel.size * 2);
+  this.z_l.array_clear();
+  this.z_r.array_clear();
   this.head = 0;
 );
 
@@ -594,28 +594,28 @@ function fir_2ch_decimator_init (kernel*, ratio)
 // interleaved samples for each channel, where N sample pairs = ratio.
 function fir_2ch_decimator_tick (outs_ptr, ins_ptr)
   global()
-  local (ch1_head, ch2_head, i, s, in1, in2) (
+  local (l_ptr, r_ptr, i, s, in1, in2) (
 
   s = 0;
   loop (this.ratio,
     this.head = this.head == 0 ? this.kernel.size : this.head;
     this.head -= 1;
-    ch1_head = this.head + (0 * this.kernel.size * 2);
-    ch2_head = this.head + (1 * this.kernel.size * 2);
+    l_ptr = this.z_l.ptr + this.head;
+    r_ptr = this.z_r.ptr + this.head;
     in1 = ins_ptr[s];
     in2 = ins_ptr[s + 1];
-    this.z.ptr[ch1_head] = in1;
-    this.z.ptr[ch2_head] = in2;
-    this.z.ptr[ch1_head + this.kernel.size] = in1;
-    this.z.ptr[ch2_head + this.kernel.size] = in2;
+    l_ptr[0] = in1;
+    r_ptr[0] = in2;
+    l_ptr[this.kernel.size] = in1;
+    r_ptr[this.kernel.size] = in2;
     s += 2;
   );
 
   i = 0;
   outs_ptr[0] = outs_ptr[1] = 0;
   loop (this.kernel.size,
-    outs_ptr[0] += this.z.ptr[ch1_head + i] * this.kernel.ptr[i];
-    outs_ptr[1] += this.z.ptr[ch2_head + i] * this.kernel.ptr[i];
+    outs_ptr[0] += l_ptr[i] * this.kernel.ptr[i];
+    outs_ptr[1] += r_ptr[i] * this.kernel.ptr[i];
     i += 1;
   );
 );
@@ -624,7 +624,7 @@ function fir_2ch_decimator_tick (outs_ptr, ins_ptr)
 // perodicity (e.g 44 to 48KHz), as it stores the tables in memory without
 // interpolation. It does allocate memory, so it only can be used once  from
 // "init".
-function sinc_resampler_2c_init (tgt_srate, src_srate, taps, cutoff_hz, beta)
+function sinc_resampler_2c_init_2 (tgt_srate, src_srate, taps, cutoff_hz, beta)
   local (gcd_v, i, j, k t1, t2, n1, n2, t_in_spl, k_ptr, mu_c)
   global () (
 
@@ -645,7 +645,7 @@ function sinc_resampler_2c_init (tgt_srate, src_srate, taps, cutoff_hz, beta)
   this.z_r.array_init (taps * 2); // 2x size (easier code)
   this.n_spls.array_init (this.rate_src);
 
-  (cutoff_hz * 2) < tgt_srate ? (
+  (cutoff_hz * 2) <= tgt_srate ? (
     this.fc = 2 * cutoff_hz / tgt_srate;
     this.ratio < 1 ? this.fc *= this.ratio;
   ) : (
@@ -690,7 +690,9 @@ function sinc_resampler_2c_init (tgt_srate, src_srate, taps, cutoff_hz, beta)
   this.bug_tbl =
     range_get_sum (this.n_spls.ptr, this.n_spls.size) != this.rate_tgt;
 
-/* TODO:
+/* TODO, fractional delay compensation, have to figure out how to compute
+   the latency. This below worked for 2x downsampling ratios.
+
   taps % 2 == 0 ? (
     mu_c = this.ratio > 1 ? -1/2 : 1/2;
   ) : (
@@ -701,8 +703,8 @@ function sinc_resampler_2c_init (tgt_srate, src_srate, taps, cutoff_hz, beta)
   loop (this.rate_tgt,
     k_ptr = this.kernels.ptr + (i * taps);
     // -mu because the delay line is reversed
-    apply_sinc_lowpass (k_ptr, taps, this.fc, -this.mu.ptr[i] - mu_c);
-    apply_kaiser_window (k_ptr, taps, beta, -this.mu.ptr[i] - mu_c);
+    apply_sinc_lowpass (k_ptr, taps, this.fc, -this.mu.ptr[i]);
+    apply_kaiser_window (k_ptr, taps, beta, -this.mu.ptr[i]);
     fir_kernel_normalize (k_ptr, taps);
     i += 1;
   );
@@ -711,6 +713,14 @@ function sinc_resampler_2c_init (tgt_srate, src_srate, taps, cutoff_hz, beta)
 
   this.n_spls_out = 0;
   this.n_spls_in  = 0;
+);
+
+function sinc_resampler_2c_init (tgt_srate, src_srate, taps, cutoff_hz, att)
+  global() local() (
+
+  this.sinc_resampler_2c_init_2(
+    tgt_srate, src_srate, taps, cutoff_hz, kaiser_beta_estimate (att)
+    );
 );
 //------------------------------------------------------------------------------
 function sinc_resampler_2c_max_n_out_samples() global() (
@@ -769,88 +779,211 @@ function sinc_resampler_2c_tick (out_ptr, in_l, in_r)
 
   n_spls;
 );
+//------------------------------------------------------------------------------
+// may belong somewhere else
+function get_nearest_pow2_int_ratio (rate1, rate2)
+  local (LN2_RECIP, rem_log2, rate_rem, ret, big_rate, small_rate)
+  global () (
 
+  LN2_RECIP = 1 / log (2);
+
+  big_rate   = max (rate1, rate2);
+  small_rate = min (rate1, rate2);
+
+  rem_log2 = log (big_rate) * LN2_RECIP  - log (small_rate) * LN2_RECIP;
+  rem_log2 = floor (rem_log2);
+
+  rate_rem = big_rate;
+  ret      = 1;
+
+  while (rem_log2 && rate_rem % 2 == 0) (
+    rate_rem *= 0.5;
+    rem_log2 -= 1;
+    ret      *= 2;
+  );
+
+  ret;
+);
 //------------------------------------------------------------------------------
 // Polyphase FIR + sinc interpolator combined. The regular FIR handles the
 // big chunk of the resampling job and the sinc interpolator the fractional part
-function resampler_2c_init (tgt_srate, src_srate, taps, fc, beta)
-  local (ratio, frac_rate, i)
+//
+// As of now "minphase" only affects the integer resamplers.
+function resampler_2c_init_2(
+  tgt_srate, src_srate, taps, taps_frac, cutoff_hz, beta, minphase
+  )
+  local (integ_ratio, integ_mask, frac_srate, beta, fracb_spls, intb_spls)
   global () (
 
-  LN2_R = 1 / log(2);
+  intb_spls = 1;
+  fracb_spls = 1;
 
-  ratio = tgt_srate / src_srate;
-  ratio < 1 ? (
-    // downsampler
-    n = log (src_srate) * LN2_R  - log (tgt_srate) * LN2_R;
-    n = floor (n);
+ this.integ_ratio = get_nearest_pow2_int_ratio (tgt_srate, src_srate);
+  this.is_downsampler = tgt_srate <= src_srate;
 
-    frac_rate = src_rate;
-    while (n && frac_rate % 2 == 0) (
-      frac_rate /= 2;
-      n -= 1;
+  this.is_downsampler ? (
+    frac_srate = src_srate;
+
+    (this.integ_ratio != 1) ? (
+      frac_srate /= this.integ_ratio;
+      intb_spls = this.integ_ratio;
+
+      // TODO: correct fractional delay?
+      get_kaiser_lp_kernel_2(
+        this.kernel,
+        cutoff_hz,
+        src_srate,
+        taps * this.integ_ratio,
+        beta,
+        0, //taps % 2 == 0 ? 1 / pow (2, this.integ_rati  * 4) : 0,
+        minphase);
+      this.integ.fir_2ch_decimator_init (this.kernel, this.integ_ratio);
     );
 
-    this.polyphase_ratio = src_rate / frac_rate;
+    this.has_fractional = tgt_srate != frac_srate;
 
-    ((this.polyphase_ratio | 0) != 1) ? (
-      // TODO more params out
-      this.kernel.array_init ((this.polyphase_ratio | 0) * taps);
-      this.pkernel.get_kaiser_lp_kernel(
-        this.kernel,
-        src_rate * polyphase_ratio * 0.46,
-        src_rate,
-        taps,
-        -120,
-        0,
-        0);
-      this.polyphase.fir_2ch_decimator_init(
-        this.kernel, this.polyphase_ratio | 0
+    (this.has_fractional) ? (
+      this.frac.sinc_resampler_2c_init_2(
+        tgt_srate, frac_srate, taps_frac, cutoff_hz, beta
         );
     );
-
-    this.has_fracional = frac_rate != tgt_srate;
-    // TODO: fc in hertz on the resampler (?)
-    (this.has_fractional) ? (
-      this.frac.sinc_resampler_2c_init (tgt_srate, frac_rate, taps, fc, beta);
-    );
-
   ) : (
-   // upsampler (Order is backwards... TODO)
-    n = log (tgt_srate) * LN2_R  - log (src_srate) * LN2_R;
-    n = floor (n);
+    frac_srate = tgt_srate;
 
-    frac_rate = tgt_srate;
-    while (n && frac_rate % 2 == 0) (
-      frac_rate /= 2;
-      n -= 1;
-    );
+    (this.integ_ratio != 1) ? (
+      frac_srate /= this.integ_ratio;
+      intb_spls = this.integ_ratio;
 
-    this.polyphase_ratio = tgt_srate / frac_rate;
-
-      ((this.polyphase_ratio | 0) != 1) ? (
-      // TODO more params out
-      this.kernel.array_init ((this.polyphase_ratio | 0) * taps);
-      this.pkernel.get_kaiser_lp_kernel(
+      // TODO: correct fractional delay?
+      get_kaiser_lp_kernel_2(
         this.kernel,
-        src_rate * polyphase_ratio * 0.46,
-        src_rate,
-        taps,
-        -120,
+        cutoff_hz,
+        tgt_srate,
+        taps * this.integ_ratio,
+        beta,
         0,
-        0);
-      this.polyphase.fir_2ch_interpolator_init(
-        this.kernel, this.polyphase_ratio | 0
+        minphase);
+      this.integ.fir_2ch_interpolator_init (this.kernel, this.integ_ratio);
+    );
+
+    this.has_fractional = src_srate != frac_srate;
+
+    this.has_fractional ? (
+      this.frac.sinc_resampler_2c_init_2(
+        frac_srate, src_srate, taps_frac, cutoff_hz, beta
         );
+      fracb_spls = this.frac.sinc_resampler_2c_max_n_out_samples();
     );
-
-    this.has_fracional = frac_rate != tgt_srate;
-    // TODO: fc in hertz on the resampler (?)
-    (this.has_fractional) ? (
-      this.frac.sinc_resampler_2c_init (tgt_srate, frac_rate, taps, fc, beta);
-    );
-
-
   );
+
+  this.intb.array_init (intb_spls * 2);
+  this.fracb.array_init (fracb_spls * 2);
+  this.spl_idx = 0;
+);
+
+// Alternate initialization specifying the Kaiser Window att.
+function resampler_2c_init(
+  tgt_srate, src_srate, taps, taps_frac, cutoff_hz, att_db, minphase
+  )
+  global() local () (
+
+  this.resampler_2c_init_2(
+    tgt_srate,
+    src_srate,
+    taps,
+    taps_frac,
+    cutoff_hz,
+    kaiser_beta_estimate (att_db),
+    minphase
+    );
+);
+
+function resampler_2c_max_n_out_samples()(
+  this.is_downsampler ? 1 : (this.intb.size * this.fracb.size) / 2;
+);
+
+// TODO: latency; have to figure out the latency of the sinc_resampler.
+
+// processing function when it is know that "resampler_2c_init" was called as a
+// downsampler.
+function resampler_2c_tick_downsampler (dst_ptr, in_l, in_r)
+  local (n_spls, spl_idx)
+  global () (
+
+  n_spls = 1;
+  this.fracb.ptr[0] = in_l; // this handles the no-change case.
+  this.fracb.ptr[1] = in_r;
+
+  this.integ_ratio > 1 ? (
+    n_spls  = 0;
+    spl_idx = this.spl_idx & this.integ_ratio - 1;
+    this.intb.ptr[spl_idx * 2] = in_l;
+    this.intb.ptr[spl_idx * 2 + 1] = in_r;
+
+    spl_idx == (this.integ_ratio - 1) ? (
+      this.integ.fir_2ch_decimator_tick (this.fracb.ptr, this.intb.ptr);
+      n_spls = 1;
+    );
+  );
+
+  this.has_fractional && n_spls != 0 ? (
+    // a downsampler will have at most 1 out.
+    n_spls = this.frac.sinc_resampler_2c_tick(
+      this.fracb.ptr, this.fracb.ptr[0], this.fracb.ptr[1]
+      );
+  );
+
+  n_spls != 0 ? (
+    memcpy (dst_ptr, this.fracb.ptr, 2);
+  );
+
+  this.spl_idx += 1;
+  n_spls;
+);
+
+// processing function when it is know that "resampler_2c_init" was called as an
+// upsampler.
+function resampler_2c_tick_upsampler (dst_ptr, in_l, in_r)
+  local (n_spls, i)
+  global () (
+
+  n_spls = 1;
+  this.fracb.ptr[0] = in_l;
+  this.fracb.ptr[1] = in_r;
+
+  this.has_fractional ? (
+    // 1 or 2 outs.
+    n_spls = this.frac.sinc_resampler_2c_tick(
+      this.fracb.ptr, this.fracb.ptr[0], this.fracb.ptr[1]
+      );
+  );
+
+  this.integ_ratio > 1 ? (
+    i = 0;
+    loop (n_spls,
+      this.integ.fir_2ch_interpolator_tick(
+        this.intb.ptr, this.fracb.ptr[i * 2], this.fracb.ptr[i * 2 + 1]
+        );
+      memcpy (dst_ptr + i * this.intb.size, this.intb.ptr, this.intb.size);
+      i += 1;
+    );
+    n_spls *= this.integ_ratio;
+  ) : (
+    memcpy (dst_ptr, this.fracb.ptr, n_spls * 2);
+  );
+  n_spls;
+);
+
+// processing function when it is unknow if a given resampler is an up or
+// downsampler.
+function resampler_2c_tick (dst_ptr, in_l, in_r)
+  local (n_spls) global () (
+
+  this.is_downsampler ? (
+    n_spls = this.resampler_2c_tick_downsampler (dst_ptr, in_l, in_r);
+  ) : (
+    n_spls = this.resampler_2c_tick_upsampler (dst_ptr, in_l, in_r);
+  );
+  n_spls;
 );
 //------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-desc:Resampler test
+desc:Sinc Resampler test
 
 slider1:ratio=0.5<0.25,2.,0.25>Ratio
 slider2:taps=32<4,1024,1>Taps
@@ -22,29 +22,21 @@ _memtop_ptr = realloc_memtop;
 tgt_process_rate = srate * ratio;
 
 // cutoff at the target rate when downsampling
-stage1.resampler_2c_init(
-  tgt_process_rate,
-  srate,
-  taps,
-  taps / 2,
-  tgt_process_rate * 0.5 * cutoff,
-  att,
-  0
+stage1.sinc_resampler_2c_init(
+  tgt_process_rate, srate, taps, tgt_process_rate * 0.5 * cutoff, att
   );
 // cutoff near nyquist when upsampling
-stage2.resampler_2c_init(
-  srate,
-  tgt_process_rate,
-  taps,
-  taps / 2,
-  min (tgt_process_rate, srate) * 0.5 * cutoff,
-  att,
-  0
+stage2.sinc_resampler_2c_init(
+  srate, 
+  tgt_process_rate, 
+  taps, 
+  max (tgt_process_rate, srate) * 0.5 * cutoff, 
+  att
   );
 
 // N * 2 (channels)
-max_spls_stage_1 = stage1.resampler_2c_max_n_out_samples() * 2;
-max_spls_stage_2 = stage2.resampler_2c_max_n_out_samples() * 2;
+max_spls_stage_1 = stage1.sinc_resampler_2c_max_n_out_samples() * 2;
+max_spls_stage_2 = stage2.sinc_resampler_2c_max_n_out_samples() * 2;
 
 //  2 because we start with N zero samples, as fractional rates
 // may have a 1 sample jitter on the count of number of samples returned.
@@ -60,15 +52,15 @@ stage2_buff.array_init (max_spls_stage_2);
 @sample
 
 stage1_buff.array_clear();
-n_spls_1 = stage1.resampler_2c_tick (stage1_buff.ptr, spl0, spl1);
+n_spls_1 = stage1.sinc_resampler_2c_tick (stage1_buff.ptr, spl0, spl1);
 
 spl_idx = 0;
 loop (n_spls_1,
 
-  // Some DSP here
+  // Do some DSP here
 
   stage2_buff.array_clear();
-  n_spls_2 = stage2.resampler_2c_tick(
+  n_spls_2 = stage2.sinc_resampler_2c_tick(
     stage2_buff.ptr, stage1_buff.ptr[spl_idx], stage1_buff.ptr[spl_idx + 1]
     );
   i = 0;

@@ -1,4 +1,4 @@
- df  <desc:Downsampled FDN draft
+ desc:Downsampled FDN draft
 //slider1:enable_impulse= 0   <0 ,2, 1{Off,Impulse,White noise}> Test
 //slider2:mute=           0   <0, 1{Off,On}>    Reverb mute
 slider3:rt60_msec=     3300 <10 ,12000 ,0.1>  RT60 (msec)

@@ -15,7 +15,7 @@ OVERSAMPLE_RATIO = 2;
 outs.array_init (2);
 tmp.array_init (OVERSAMPLE_RATIO * 8);
 
-SRC_TAPS_BRANCH = 64;
+SRC_TAPS_BRANCH = 32;
 SRC_CUTOFF = 7600;
 SRC_KAISER_ATT_DB = 140;
 
@@ -26,12 +26,12 @@ get_kaiser_lp_kernel(
   src.kernel,
   SRC_CUTOFF,
   srate,
-  src.ratio * SRC_TAPS_BRANCH,
+  src.ratio * taps,
   SRC_KAISER_ATT_DB,
   0,
   1
   );
-
+  
 src.down.fir_2ch_decimator_init (src.kernel, src.ratio);
 src.up.fir_2ch_interpolator_init (src.kernel, src.ratio);
 
@@ -77,14 +77,14 @@ interpolator.fir_2ch_interpolator_init (os_kernel, OVERSAMPLE_RATIO);
 (0) ? (
   lp.fir_2ch_tick (outs.ptr, spl0, spl1);
 );
-(1) ? (
+(0) ? (
   interpolator.fir_2ch_interpolator_tick (tmp.ptr, spl0, spl1);
   decimator.fir_2ch_decimator_tick (outs.ptr, tmp.ptr);
   spl0 = outs.ptr[0];
   spl1 = outs.ptr[1];
 );
 
-(0) ? (
+(1) ? (
   src.pos = spl_counter & src.ratio_mask;
   
   src.ins.ptr[src.pos * 2] = spl0;
