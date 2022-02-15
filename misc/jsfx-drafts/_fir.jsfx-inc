@@ -870,7 +870,11 @@ function resampler_2c_init_2(
 
     this.has_fractional ? (
       this.frac.sinc_resampler_2c_init_2(
-        frac_srate, src_srate, taps_frac, cutoff_hz, beta
+        frac_srate,
+        src_srate,
+        taps_frac,
+        cutoff_hz * (frac_srate / src_srate),
+        beta
         );
       fracb_spls = this.frac.sinc_resampler_2c_max_n_out_samples();
     );

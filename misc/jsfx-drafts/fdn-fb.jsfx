@@ -209,7 +209,7 @@ function late_extra_density_tick (density*, sig*, n_active, angle, transients)
     density.a.delay_line_thiran2_get_all(
       this.io.ptr, density.n_spls.array2d_ptr(0)
       );
-    unitary_matrix_4(
+    rot_matrix_4(
       sig.ptr + 0, this.io.ptr, density.cos_phi, density.sin_phi
       );
   );
@@ -222,7 +222,7 @@ function late_extra_density_tick (density*, sig*, n_active, angle, transients)
       this.io.ptr, density.n_spls.array2d_ptr(1)
       );
   //  hadamard_4 (sig.ptr + 1, this.io.ptr);
-    unitary_matrix_4(
+    rot_matrix_4(
       sig.ptr + 1, this.io.ptr, density.cos_phi, density.sin_phi
       );
   );
@@ -234,7 +234,7 @@ function late_extra_density_tick (density*, sig*, n_active, angle, transients)
     density.c.delay_line_thiran2_get_all(
       this.io.ptr, density.n_spls.array2d_ptr(2)
       );
-    unitary_matrix_4(
+    rot_matrix_4(
       sig.ptr + 0, this.io.ptr, density.cos_phi, density.sin_phi
       );
   );
@@ -247,7 +247,7 @@ function late_extra_density_tick (density*, sig*, n_active, angle, transients)
       this.io.ptr, density.n_spls.array2d_ptr(3)
       );
   //  hadamard_4 (sig.ptr + 3, this.io.ptr);
-    unitary_matrix_4(
+    rot_matrix_4(
       sig.ptr + 3, this.io.ptr, density.cos_phi, density.sin_phi
       );
   );

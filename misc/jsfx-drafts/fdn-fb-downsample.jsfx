@@ -30,7 +30,6 @@ import _reverb.jsfx-inc
 import _dynamics.jsfx-inc
 import _lfo.jsfx-inc
 import _fir.jsfx-inc
-import _resampler.jsfx-inc
 
 @init
 
@@ -41,61 +40,52 @@ GOLDEN_RATIO = (1 + sqrt(5)) / 2;
 
 // Sample rate conversion ------------------------------------------------------
 
-// 44100 is 2^2 * 3^2 * 5^2 * 7^2
-// 48000 is 2^7 * 3^1 * 5^3
-//
-// So the common factors are 2^2 * 3^1 * 5^2 = 300.
-//
-// Choosing a target samplerate multiple of 300 will minimize the memory
-// requirements for the fractional resampler on both. 30000 seems a good
-// candidate samplerate for a reverb, 15KHz BW should be enough for a reverb.
+// gcd of 44100 and 48000 is 300. Choosing a target samplerate multiple of 300
+// will minimize the memory requirements for the fractional resampler on both.
+// 30000 seems a good candidate samplerate for a reverb, 15KHz BW should be
+// enough for a reverb.
 //
 // 36000 is more friendly to 44100 multiples though. 27000 seems good too, but
 // 13.5K might start being dark.
 
-k.src.kaiser_att_db = 120;
-k.src.taps_branch = 64;
-k.src.cutoff = 9000;
-src.ratio = (srate / 44100) | 0;
-src.ratio *= 2;
-src.ratio_mask = src.ratio - 1;
-src.srate = srate / src.ratio;
+k.src.kaiser_att_db = 210;
+k.src.taps_branch = 32;
+k.src.taps_branch_frac = 16;
+k.src.cutoff = 7000;
+k.src.srate = 27000;
 
-get_kaiser_lp_kernel(
-  src.kernel,
-  k.src.cutoff,
+src.down.resampler_2c_init(
+  k.src.srate,
   srate,
-  src.ratio * k.src.taps_branch,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
   k.src.kaiser_att_db,
-  0,
   1
   );
 
-src.down.fir_2ch_decimator_init (src.kernel, src.ratio);
-src.up.fir_2ch_interpolator_init (src.kernel, src.ratio);
-
-src.frac_down.sinc_resampler_2c_init(
-  22050, srate, 128, (k.src.cutoff / srate) * 0.5, 0.87
+src.up.resampler_2c_init(
+  srate,
+  k.src.srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
   );
-src.frac_up.sinc_resampler_2c_init (srate, 22050, 128, 0.95 * 0.5, 0.87);
 
-// * 2 (channels) * 2 because we start with N zero samples for irregular rate
-// compensation.
 src.out_q.deque_init(
-  src.frac_up.sinc_resampler_2c_max_n_out_samples() * 2 * 2
+  src.up.resampler_2c_max_n_out_samples() * 2
   );
 
-loop (src.frac_up.sinc_resampler_2c_max_n_out_samples() * 2, // "*2"  L and R
-  src.out_q.deque_push (0);
-);
+src.out_q.deque_push(0);
+src.out_q.deque_push(0);
 
-src.ins.array_init (src.ratio * 2); // interleaved ins
-src.outs.array_init (src.ratio * 2); // interleaved outs
-src.spls.array_init (2);
+src.ins.array_init (src.down.resampler_2c_max_n_out_samples() * 2);
+src.outs.array_init (src.up.resampler_2c_max_n_out_samples() * 2);
 
 src.ins.array_clear();
 src.outs.array_clear();
-src.spls.array_clear();
 
 // Late feedback ---------------------------------------------------------------
 k.late.n_channels = 16;
@@ -109,9 +99,9 @@ late.signal.array_init (k.late.n_channels);
 late.feedback.array_init (k.late.n_channels);
 
 late.delay.delay_line_init(
-  round_next_pow2 (src.srate), late.signal.size
+  round_next_pow2 (k.src.srate), k.late.n_channels
   );
-late.delay.delay_line_thiran2_add (src.srate); // disable thiran resync
+late.delay.delay_line_thiran2_add (k.src.srate); // disable thiran resync
 
 late.k.delay_preset.array2d_init (1, k.late.n_channels);
 
@@ -132,7 +122,8 @@ late.k.delay_preset.array2d_ptr(0)[13] = 2381;
 late.k.delay_preset.array2d_ptr(0)[14] = 2521;
 late.k.delay_preset.array2d_ptr(0)[15] = 2659;
 
-freembuf (_memtop_ptr); // tell the Host how much memory we need.
+// tell the Host how much memory we need (TODO: there are scratch buffers).
+//freembuf (_memtop_ptr);
 
 // DC blockers -----------------------------------------------------------------
 k.dc.cutoff_freq = 5;
@@ -177,7 +168,7 @@ get_rt60_gain(
   rt60_msec * 0.001,
   0 ,
   k.late.n_channels,
-  src.srate
+  k.src.srate
   );
 
 late.mtx.w1_a = cos (2 * angle1 * $pi * 0.25);
@@ -214,16 +205,14 @@ function dc_blockers_x16_tick (dc*, sig*)
   sig.ptr[15] = dc.p.dc_blocker_tick (sig.ptr[15]);
 );
 
-n_spls_down = src.frac_down.sinc_resampler_2c_tick (src.spls.ptr, spl0, spl1);
-
-spl0 = src.out_q.deque_pop();
-spl1 = src.out_q.deque_pop();
+n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
 (n_spls_down) ? (
-  // time to generate outs at operating SR, we know that "src.frac_down" is a
-  // downsampler, so "n_spls" will always be 1
-  in.l = src.spls.ptr[0];
-  in.r = src.spls.ptr[1];
+  // time to run DSP at operating SR, we know that "src.frac_down" is a
+  // downsampler, so "n_spls_down" will always be 0 or 1
+
+  in.l = src.ins.ptr[0];
+  in.r = src.ins.ptr[1];
 
   in.m = (in.l + in.r) * 0.5;
   in.s = (in.l - in.r) * 0.5;
@@ -236,9 +225,9 @@ spl1 = src.out_q.deque_pop();
   range_add(
     late.signal.ptr, late.signal.ptr, late.feedback.ptr, late.signal.size
     );
-
   tmp.sig_cp.array_init (late.signal.size);
   memcpy (tmp.sig_cp.ptr, late.signal.ptr, late.signal.size);
+
   rot_matrix_16(
     late.signal.ptr,
     tmp.sig_cp.ptr,
@@ -251,6 +240,7 @@ spl1 = src.out_q.deque_pop();
     late.mtx.w1_d,
     late.mtx.w2_d
     );
+
   tmp.sig_cp.array_shrink(0); // return memory (used as a stack).
 
   memcpy (late.feedback.ptr, late.signal.ptr, late.signal.size);
@@ -263,17 +253,15 @@ spl1 = src.out_q.deque_pop();
     late.feedback.ptr, late.feedback.ptr, late.rt60_att.ptr, late.feedback.size
   );
 
-  debug_16 (late.delay_spls.ptr);
-
   late.r = late.signal.ptr[6];
   late.l = late.signal.ptr[7];
 
   out.l = late.l;
   out.r = late.r;
 
-  spl.op_rate_counter += 1; // operating rate counter
+  spl_op_rate_counter += 1; // operating rate counter
 
-  n_spls_up = src.frac_up.sinc_resampler_2c_tick (src.outs.ptr, out.l, out.r);
+  n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, out.l, out.r);
   i = 0;
   loop (n_spls_up * 2, // *2 : two channels
     src.out_q.deque_push (src.outs.ptr[i]);
@@ -281,76 +269,5 @@ spl1 = src.out_q.deque_pop();
   );
 );
 
-/*
-src.pos = spl.counter & src.ratio_mask;
-
-src.offset = src.pos * 2;
-
-src.ins.ptr[src.offset] = spl0;
-src.ins.ptr[src.offset + 1] = spl1;
-
-spl0 = src.outs.ptr[src.offset];
-spl1 = src.outs.ptr[src.offset + 1];
-
-// enough samples to proceed downsampling and running an iteration
-src.pos == src.ratio_mask ? (
-
-  src.down.fir_2ch_decimator_tick (src.spls.ptr, src.ins.ptr);
-//  src.n_spls_A = src.frac_down.sinc_resampler_2c_tick (src.spls.ptr, src.ins.ptr[0], src.ins.ptr[1]);
-//  src.n_spls_B = src.frac_down.sinc_resampler_2c_tick (src.spls.ptr, src.ins.ptr[2], src.ins.ptr[3]);
-
-  in.l = src.spls.ptr[0];
-  in.r = src.spls.ptr[1];
-
-  in.m = (in.l + in.r) * 0.5;
-  in.s = (in.l - in.r) * 0.5;
-
-  late.signal.array_clear();
-  late.signal.ptr[3]  = in.m * 0.5;
-  late.signal.ptr[4]  = in.m * 0.5;
-  late.signal.ptr[2]  = ins.s;
-
-  range_add(
-    late.signal.ptr, late.signal.ptr, late.feedback.ptr, late.signal.size
-    );
-
-  tmp.sig_cp.array_init (late.signal.size);
-  memcpy (tmp.sig_cp.ptr, late.signal.ptr, late.signal.size);
-  rot_matrix_16(
-    late.signal.ptr,
-    tmp.sig_cp.ptr,
-    late.mtx.w1_a,
-    late.mtx.w2_a,
-    late.mtx.w1_b,
-    late.mtx.w2_b,
-    late.mtx.w1_c,
-    late.mtx.w2_c,
-    late.mtx.w1_d,
-    late.mtx.w2_d
-    );
-  tmp.sig_cp.array_shrink(0); // return memory (used as a stack).
-
-  memcpy (late.feedback.ptr, late.signal.ptr, late.signal.size);
-
-  late.delay.delay_line_advance();
-  late.delay.delay_line_set_all (late.feedback.ptr, 0);
-  late.delay.delay_line_get_all (late.feedback.ptr, late.delay_spls.ptr);
-  dc_blockers_x16_tick (dc, late.feedback.ptr);
-  range_mul(
-    late.feedback.ptr, late.feedback.ptr, late.rt60_att.ptr, late.feedback.size
-  );
-
-  debug_16 (late.delay_spls.ptr);
-
-  late.r = late.signal.ptr[6];
-  late.l = late.signal.ptr[7];
-
-  out.l = late.l;
-  out.r = late.r;
-
-  src.up.fir_2ch_interpolator_tick (src.outs.ptr, out.l, out.r);
-//  src.n_spls_C = src.frac_up.sinc_resampler_2c_tick (src.outs.ptr, out.l, out.r);
-  spl.op_rate_counter += 1; // operating rate counter
-);
-spl.counter += 1; // plugin rate counter
-*/
+spl0 = src.out_q.deque_pop();
+spl1 = src.out_q.deque_pop();
