@@ -29,9 +29,9 @@ get_kaiser_lp_kernel(
   src.ratio * taps,
   SRC_KAISER_ATT_DB,
   0,
-  1
+  minphase
   );
-  
+
 src.down.fir_2ch_decimator_init (src.kernel, src.ratio);
 src.up.fir_2ch_interpolator_init (src.kernel, src.ratio);
 
@@ -86,15 +86,15 @@ interpolator.fir_2ch_interpolator_init (os_kernel, OVERSAMPLE_RATIO);
 
 (1) ? (
   src.pos = spl_counter & src.ratio_mask;
-  
+
   src.ins.ptr[src.pos * 2] = spl0;
   src.ins.ptr[src.pos * 2 + 1] = spl1;
-  
+
   spl0 = src.outs.ptr[src.pos * 2];
   spl1 = src.outs.ptr[src.pos * 2 + 1];
-  
+
   src.pos == src.ratio_mask ? ( // enough samples to proceed downsampling and running an iteration
-  
+
     src.down.fir_2ch_decimator_tick (src.spls.ptr, src.ins.ptr);
     l = src.spls.ptr[0];
     r = src.spls.ptr[1];

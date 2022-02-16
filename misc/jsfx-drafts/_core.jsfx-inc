@@ -34,30 +34,62 @@ function interp_catmull_rom (y0, y1, y2, y3, x) local (r, x2, x3)(
   r += y1;
 );
 
-// array -----------------------------------------------------------------------
-function array_init (size) (
-  this.ptr = mem_reserve (size);
+// array ------------------------------------------------------------------------
+function array_init (size)
+  local() global()(
+
+  this.ptr_raw = mem_reserve (size);
+  this.ptr = this.ptr_raw;
   this.size = size;
 );
 
-function array_clear() (
+// align has to be a power of 2
+function array_init_align (size, align)
+  local (mask) global (_memtop_ptr)(
+
+  mask = align - 1;
+  this.ptr_raw = _memtop_ptr;
+  // self reminder "~" is EXOR on JSFX, so to negate the mask an EXOR with
+  // all ones is done.
+  this.ptr     = _memtop_ptr & (mask ~ 0xffffffff);
+  this.ptr    += this.ptr != this.ptr_raw ? align : 0;
+  this.size    = size;
+  mem_reserve (this.size + this.ptr - this.ptr_raw);
+);
+
+function array_clear()
+  local() global()(
   memset (this.ptr, 0, this.size);
 );
 
-function array_shrink (newsize)
-  local (shrink) global (_memtop_ptr)(
+function array_drop_to_size (newsize)
+  local (dropped) global (_memtop_ptr)(
 
-  shrink = this.size - newsize;
+  newsize = newsize < 0 ? this.size : newsize;
+  newsize = min (newsize, this.size);
 
-  shrink > 0 ? (
+  dropped = this.size - newsize;
+
+  dropped > 0 ? (
     (this.ptr + this.size) == _memtop_ptr ? (
-      // try to recover memory
-      _memtop_ptr -= shrink;
-      memset (_memtop_ptr, 0, shrink);
+      // try to recover the array memory
+      _memtop_ptr -= dropped;
+      memset (_memtop_ptr, 0, dropped);
     );
-    this.size -= shrink;
+    this.size -= dropped;
+
+    // try to recover the alignment memory
+    this.ptr_raw != this.ptr && _memtop_ptr == this.ptr ? (
+      // if "_memtop_ptr == this.ptr" then "this.size" is already 0
+      memset (this.ptr_raw, 0, this.ptr - this.ptr_raw);
+      _memtop_ptr = this.ptr_raw;
+    );
+
+    this.size == 0 ? (
+      this.ptr_raw = this.ptr = -1;
+    );
   );
-  shrink;
+  dropped;
 );
 
 function array_try_expand (newsize)
@@ -259,7 +291,7 @@ function range_shift_down (src_dst_ptr, size, count)
     memcpy (this.tmp.ptr, src_dst_ptr, size);
     memcpy (src_dst_ptr + count, this.tmp.ptr, size - count);
     memcpy (src_dst_ptr, this.tmp.ptr + size - count, count);
-    this.tmp.array_shrink (0);
+    this.tmp.array_drop_to_size (0);
 );
 
 // -----------------------------------------------------------------------------
@@ -426,14 +458,14 @@ function debug_32 (ptr, n)
 
 function debug_32 (arr*) (this.debug_32 (arr.ptr, arr.size));
 // -----------------------------------------------------------------------------
-// Array for doing FFT ops that dosn't cross 64K element boundaries, as
+// Arrays that doesn't cross 64K element boundaries for doing FFT ops, as
 // instructed on the JSFX manual.
 _fftmem_1.array_init (64 * 1024);
 _fftmem_2.array_init (64 * 1024);
-
+// -----------------------------------------------------------------------------
 // Some reserved library space e.g. for converting from pointer based interfaces
-// to value based ones. For some reason at some point trying to increment it broke
-// things. It might have been an own bug though.
+// to value based ones. For some reason at some point trying to increment it
+// broke things. It might have been an own bug though.
 _libmem.array_init (8);
 
 // Small table of prime numbers ------------------------------------------------

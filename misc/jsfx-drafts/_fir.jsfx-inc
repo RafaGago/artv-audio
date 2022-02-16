@@ -1,5 +1,7 @@
 import _core.jsfx-inc
 import _complex.jsfx-inc
+import _fft.jsfx-inc
+import _fft-big.jsfx-inc
 
 @init
 
@@ -268,7 +270,7 @@ function apply_blackman_window (dst*)
 );
 
 //------------------------------------------------------------------------------
-function apply_sinc_lowpass (dst_ptr, dst_size, fc, mu)
+function set_sinc_lowpass (dst_ptr, dst_size, fc, mu)
   global()
   local (t, n)(
 
@@ -280,15 +282,21 @@ function apply_sinc_lowpass (dst_ptr, dst_size, fc, mu)
   );
 );
 
+function set_sinc_lowpass (dst_arr*, fc, mu)
+  global() local ()(
+
+  set_sinc_lowpass (dst_arr.ptr, dst_arr.size, fc, mu);
+);
+//------------------------------------------------------------------------------
 // normalized 0 to 1 sinc. mu is a fractional delay
 // "dst" is an array defined with "array_init"
-// "mu" is a fractional delay in samples, from -0.5 to 0.5
+// "mu" is a fractional delay in samples
 function get_sinc_lowpass (dst*, freq, srate, taps, mu)
   global()
   local (fc, halfsize, t, n)(
 
   dst.array_init (taps);
-  apply_sinc_lowpass (dst.ptr, dst.size, 2.0 * freq / srate, mu);
+  set_sinc_lowpass (dst, 2.0 * freq / srate, mu);
 );
 //------------------------------------------------------------------------------
 function fir_kernel_normalize (k_ptr, k_size) local (g, i) global ()(
@@ -311,67 +319,75 @@ function fir_kernel_normalize (dst*) global ()(
   fir_kernel_normalize (dst.ptr, dst.size);
 );
 //------------------------------------------------------------------------------
+// mu is a phase shift in samples. Ideally from 0 to 1. Note that it uses FFT
+// circular rotation, so it needs as many zero samples on the tail as the
+// rotation.
 function fir_kernel_to_minphase (kernel_ptr, kernel_size)
-  local (FFT_SIZE, mag, exp_a, b, i)
+  local (fft_size, i, n)
   global (_fftmem_1*)(
 
   // log cepstrum method (Mystran's post):
   // https://www.kvraudio.com/forum/viewtopic.php?f=33&t=556692&start=45
 
-  FFT_SIZE = 32 * 1024;
+  fft_size = max (kernel_size * 32, 32 * 1024);
+  this.buff.array_init_align (fft_size * 2, 64 * 1024);
 
-  _fftmem_1.array_clear();
+  this.buff.array_clear();
+  this.work.array_alias (_fftmem_1.ptr, _fftmem_1.size);
+  this.work.array_clear();
 
-  // regular fft of the impulse
+ // regular fft of the impulse
   i = 0;
   loop (kernel_size,
-    _fftmem_1.ptr[i * 2] = kernel_ptr[i];
+    this.buff.ptr[i * 2] = kernel_ptr[i];
     i += 1;
   );
-  fft (_fftmem_1.ptr, FFT_SIZE);
+  fft_big (this.buff.ptr, fft_size, this.work.ptr);
 
   // replace real part by log of magnitude, leave imaginary part to 0.
   i = 0;
-  loop (FFT_SIZE * 2,
-    this.bucket.complex_load (_fftmem_1.ptr + i);
+  loop (fft_size * 2,
+    this.bucket.complex_load (this.buff.ptr + i);
     this.bucket.re = log (max (this.bucket.complex_abs(), 1e-12));
     this.bucket.im = 0;
-    this.bucket.complex_store (_fftmem_1.ptr + i);
+    this.bucket.complex_store (this.buff.ptr + i);
     i += 2;
   );
 
   // from log spectrum to log cepstrum
-  ifft (_fftmem_1.ptr, FFT_SIZE);
-  ifft_rescale (_fftmem_1.ptr, FFT_SIZE);
+  ifft_big (this.buff.ptr, fft_size, this.work.ptr);
+  ifft_rescale (this.buff.ptr, fft_size);
 
   //  multiply elements in range [1, N/2-1] by 2 and zero the elements in range
   // [N/2+1, N-1], bins 0 and N/2 are left "as-is", then FFT again.
   i = 2;
-  loop ((FFT_SIZE / 2) - 1,
-    _fftmem_1.ptr[i] *= 2;
-    _fftmem_1.ptr[i + 1] = 0; // should be real already...
+  loop ((fft_size / 2) - 1,
+    this.buff.ptr[i] *= 2;
+    this.buff.ptr[i + 1] = 0; // should be real already...
     i += 2;
   );
-  memset (_fftmem_1.ptr + FFT_SIZE + 2, 0, FFT_SIZE - 2);
-  fft (_fftmem_1.ptr, FFT_SIZE);
+  memset (this.buff.ptr + fft_size + 2, 0, fft_size - 2);
+  fft_big (this.buff.ptr, fft_size, this.work.ptr);
 
   // complex "exp" of each bin, IFFT and truncate.
   i = 0;
-  loop (FFT_SIZE * 2,
-    this.bucket.complex_load (_fftmem_1.ptr + i);
+  loop (fft_size * 2,
+    this.bucket.complex_load (this.buff.ptr + i);
     this.bucket.complex_exp (this.bucket);
-    this.bucket.complex_store (_fftmem_1.ptr + i);
+    this.bucket.complex_store (this.buff.ptr + i);
     i += 2;
   );
 
-  ifft (_fftmem_1.ptr, FFT_SIZE);
-  ifft_rescale (_fftmem_1.ptr, FFT_SIZE);
+  ifft_big (this.buff.ptr, fft_size, this.work.ptr);
+  ifft_rescale (this.buff.ptr, fft_size);
 
   i = 0;
   loop (kernel_size,
-    kernel_ptr[i] = _fftmem_1.ptr[i * 2];
+    kernel_ptr[i] = this.buff.ptr[i * 2];
     i += 1;
   );
+
+  this.buff.array_drop_to_size (0);
 );
 
 function fir_kernel_to_minphase (kernel*)(
@@ -427,6 +443,7 @@ function get_kaiser_lp_kernel_2(
   get_sinc_lowpass (dst, cutoff_hz, srate, taps, mu);
   apply_kaiser_window (dst, beta, mu);
   (minphase != 0) ? (
+    // as of now mu is ignored on minphase kernels.
     fir_kernel_to_minphase (dst);
   );
   fir_kernel_normalize (dst);
@@ -619,8 +636,10 @@ function fir_2ch_decimator_tick (outs_ptr, ins_ptr)
 // perodicity (e.g 44 to 48KHz), as it stores the tables in memory without
 // interpolation. It does allocate memory, so it only can be used once  from
 // "init".
-function sinc_resampler_2c_init_2 (tgt_srate, src_srate, taps, cutoff_hz, beta)
-  local (gcd_v, i, j, k t1, t2, n1, n2, t_in_spl, k_ptr, mu_c)
+function sinc_resampler_2c_init_2(
+  tgt_srate, src_srate, taps, cutoff_hz, beta, minphase
+  )
+  local (gcd_v, i, j, k, t1, t2, n1, n2, t_in_spl, k_ptr, mu_c, k_oversz)
   global () (
 
   gcd_v = gcd (tgt_srate, src_srate);
@@ -629,11 +648,6 @@ function sinc_resampler_2c_init_2 (tgt_srate, src_srate, taps, cutoff_hz, beta)
   this.rate_src = src_srate / gcd_v;
   this.ratio    = this.rate_tgt / this.rate_src;
   this.taps     = taps;
-
-  this.n_spls.array_shrink (0);
-  this.z_r.array_shrink (0);
-  this.z_l.array_shrink (0);
-  this.kernel.array_shrink (0);
 
   this.kernels.array_init (taps * this.rate_tgt);
   this.z_l.array_init (taps * 2); // 2x size (easier code)
@@ -671,7 +685,8 @@ function sinc_resampler_2c_init_2 (tgt_srate, src_srate, taps, cutoff_hz, beta)
 
     loop (this.n_spls.ptr[i],
       t_in_spl = (n2 + k) * this.rate_src;
-      this.mu.ptr[j] = (t1 - t_in_spl) / this.rate_tgt;
+//      this.mu.ptr[j] = (t1 - t_in_spl) / this.rate_tgt;
+      this.mu.ptr[j] = (t1 - t_in_spl);
       // Kernels could be initialized here without using the table.
       j += 1;
       k += 1;
@@ -685,36 +700,56 @@ function sinc_resampler_2c_init_2 (tgt_srate, src_srate, taps, cutoff_hz, beta)
   this.bug_tbl =
     range_get_sum (this.n_spls.ptr, this.n_spls.size) != this.rate_tgt;
 
-/* TODO, fractional delay compensation, have to figure out how to compute
-   the latency. This below worked for 2x downsampling ratios.
 
-  taps % 2 == 0 ? (
-    mu_c = this.ratio > 1 ? -1/2 : 1/2;
-  ) : (
-    mu_c = 0;
+  // TODO, fractional delay compensation on the sinc, have to figure out how 
+  // to compute the latency first. This below worked for 2x downsampling 
+  // ratios.
+
+  // taps % 2 == 0 ? (
+  //   mu_c = this.ratio > 1 ? -1/2 : 1/2;
+  // ) : (
+  //   mu_c = 0;
+  // );
+  
+  // unfortunately the log cepstrum conversion was not friendly to timing 
+  // information. An oversized sinc is created instead and then interleaved 
+  // to each branch.
+
+  this.bigkernel.array_init (this.kernels.size);
+  set_sinc_lowpass (this.bigkernel, this.fc / this.rate_tgt, this.rate_tgt);
+  apply_kaiser_window (this.bigkernel, beta, this.rate_tgt);
+  minphase ? (
+    fir_kernel_to_minphase (this.bigkernel);
   );
-*/
+
   i = 0;
   loop (this.rate_tgt,
     k_ptr = this.kernels.ptr + (i * taps);
-    // -mu because the delay line is reversed
-    apply_sinc_lowpass (k_ptr, taps, this.fc, -this.mu.ptr[i]);
-    apply_kaiser_window (k_ptr, taps, beta, -this.mu.ptr[i]);
+    j = this.rate_tgt - this.mu.ptr[i] - 1;
+    k = 0;
+    loop (taps,
+      k_ptr[k] = this.bigkernel.ptr[j];
+      k += 1;
+      j += this.rate_tgt;
+    ); 
     fir_kernel_normalize (k_ptr, taps);
     i += 1;
   );
 
-  this.mu.array_shrink (0); // deallocate, it was only created for debugging.
+  this.bigkernel.array_drop_to_size (0);
+  this.mu.array_drop_to_size (0); // deallocate, it was only created for debugging.
 
   this.n_spls_out = 0;
   this.n_spls_in  = 0;
 );
 
-function sinc_resampler_2c_init (tgt_srate, src_srate, taps, cutoff_hz, att)
+function sinc_resampler_2c_init(
+  tgt_srate, src_srate, taps, cutoff_hz, att, minphase
+  )
   global() local() (
 
   this.sinc_resampler_2c_init_2(
-    tgt_srate, src_srate, taps, cutoff_hz, kaiser_beta_estimate (att)
+    tgt_srate, src_srate, taps, cutoff_hz, kaiser_beta_estimate (att), minphase
     );
 );
 //------------------------------------------------------------------------------
@@ -839,7 +874,7 @@ function resampler_2c_init_2(
 
     (this.has_fractional) ? (
       this.frac.sinc_resampler_2c_init_2(
-        tgt_srate, frac_srate, taps_frac, cutoff_hz, beta
+        tgt_srate, frac_srate, taps_frac, cutoff_hz, beta, minphase
         );
     );
   ) : (
@@ -869,7 +904,8 @@ function resampler_2c_init_2(
         src_srate,
         taps_frac,
         cutoff_hz * (frac_srate / src_srate),
-        beta
+        beta,
+        minphase
         );
       fracb_spls = this.frac.sinc_resampler_2c_max_n_out_samples();
     );

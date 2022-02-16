@@ -1,0 +1,47 @@
+import _core.jsfx-inc
+import _complex.jsfx-inc
+
+@init
+
+//------------------------------------------------------------------------------
+// https://dsp.stackexchange.com/questions/10250/how-to-circularly-shift-a-signal-by-a-fraction-of-a-sample
+// https://dsp.stackexchange.com/questions/60476/how-to-do-fft-fractional-time-delay-solved
+//
+// can be used as an interpolator. The size of "arr" has to be a power of 2.
+function fft_circ_shift (arr*, fft_size, n_shift_spls)
+  local (i, n) global (_fftmem_1*) (
+  // TODO set this bug if not a power of two less than the JSFX size
+  // TODO use fft_real ?
+
+  _fftmem_1.array_clear();
+
+  i = 0;
+  loop (arr.size,
+    _fftmem_1.ptr[i * 2] = arr.ptr[i];
+    i += 1;
+  );
+
+  fft_real (_fftmem_1.ptr, fft_size);
+  fft_permute (_fftmem_1.ptr, fft_size);
+
+  i = 0;
+  loop (fft_size,
+    n = (i >= fft_size / 2) ? -fft_size + i : i;
+    this.delay.complex_exp_im (-2 * $pi * n_shift_spls * n / fft_size);
+    this.bucket.complex_load (_fftmem_1.ptr + i * 2);
+    this.bucket.complex_mul (this.delay);
+    this.bucket.complex_store (_fftmem_1.ptr + i * 2);
+    i += 1;
+  );
+
+  fft_ipermute (_fftmem_1.ptr, fft_size);
+  ifft (_fftmem_1.ptr, fft_size);
+  ifft_rescale (_fftmem_1.ptr, fft_size);
+
+  i = 0;
+  loop (arr.size,
+    arr.ptr[i] = _fftmem_1.ptr[i * 2];
+    i += 1;
+  );
+);
+//------------------------------------------------------------------------------

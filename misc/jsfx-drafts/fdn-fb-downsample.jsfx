@@ -78,8 +78,11 @@ src.out_q.deque_init(
   src.up.resampler_2c_max_n_out_samples() * 2
   );
 
-src.out_q.deque_push(0);
-src.out_q.deque_push(0);
+// TODO how many?
+loop(floor (srate / 44100) * 2,
+  src.out_q.deque_push(0);
+  src.out_q.deque_push(0);
+);
 
 src.ins.array_init (src.down.resampler_2c_max_n_out_samples() * 2);
 src.outs.array_init (src.up.resampler_2c_max_n_out_samples() * 2);
@@ -241,7 +244,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
     late.mtx.w2_d
     );
 
-  tmp.sig_cp.array_shrink(0); // return memory (used as a stack).
+  tmp.sig_cp.array_drop_to_size(0); // return memory (used as a stack).
 
   memcpy (late.feedback.ptr, late.signal.ptr, late.signal.size);
 

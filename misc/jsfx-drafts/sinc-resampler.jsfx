@@ -1,16 +1,17 @@
 desc:Sinc Resampler test
 
 slider1:ratio=0.5<0.25,2.,0.25>Ratio
-slider2:taps=32<4,1024,1>Taps
+slider2:taps=32<4,256,1>Taps
 slider3:att=100.<0,300,1>Att
 slider4:cutoff=0.95<0.8,1,0.01>Cutoff
+slider5:minphase=0<0,1,1{Off,On}>Minphase
 
 import _core.jsfx-inc
 import _fir.jsfx-inc
 
 @init
 
-// hack to not consume extra memory, normally these filters have fixed
+// hack to not csonsume extra memory, normally these filters have fixed
 // parameters and are intialized on @init (setting)
 
 realloc_memtop = _memtop_ptr;
@@ -23,15 +24,22 @@ tgt_process_rate = srate * ratio;
 
 // cutoff at the target rate when downsampling
 stage1.sinc_resampler_2c_init(
-  tgt_process_rate, srate, taps, tgt_process_rate * 0.5 * cutoff, att
+  tgt_process_rate,
+  srate,
+  taps,
+  tgt_process_rate * 0.5 * cutoff,
+  att,
+  minphase
   );
 // cutoff near nyquist when upsampling
 stage2.sinc_resampler_2c_init(
-  srate, 
-  tgt_process_rate, 
-  taps, 
-  max (tgt_process_rate, srate) * 0.5 * cutoff, 
-  att
+  srate,
+  tgt_process_rate,
+  taps,
+  max (tgt_process_rate, srate) * 0.5 * cutoff,
+//  srate * 0.5,
+  att,
+  minphase
   );
 
 // N * 2 (channels)
@@ -58,7 +66,6 @@ spl_idx = 0;
 loop (n_spls_1,
 
   // Do some DSP here
-
   stage2_buff.array_clear();
   n_spls_2 = stage2.sinc_resampler_2c_tick(
     stage2_buff.ptr, stage1_buff.ptr[spl_idx], stage1_buff.ptr[spl_idx + 1]

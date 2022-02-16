@@ -116,8 +116,8 @@ function late_signal_modulation_tick (ap*, sig*)
     sig.ptr[7] *= left;
   );
 
-  this.lfoval.array_shrink (0); // return back memory.
-  this.freq.array_shrink (0); // return back memory.
+  this.lfoval.array_drop_to_size (0); // return back memory.
+  this.freq.array_drop_to_size (0); // return back memory.
 );
 //------------------------------------------------------------------------------
 function late_dc_blockers_init (dc*)
@@ -184,8 +184,8 @@ function late_damp_tick (damp*, sig*, transients)
   sig.ptr[6] = damp.g.svf_tick (sig.ptr[6]);
   sig.ptr[7] = damp.h.svf_tick (sig.ptr[7]);
 
-  this.lfoval.array_shrink (0);
-  this.freq.array_shrink (0);
+  this.lfoval.array_drop_to_size (0);
+  this.freq.array_drop_to_size (0);
 );
 //------------------------------------------------------------------------------
 function late_extra_density_tick (density*, sig*, n_active, angle, transients)
@@ -252,7 +252,7 @@ function late_extra_density_tick (density*, sig*, n_active, angle, transients)
       );
   );
 
-  this.io.array_shrink (0);
+  this.io.array_drop_to_size (0);
 );
 //------------------------------------------------------------------------------
 function late_main_block_tick (main*, sig*, chorus*, dc*)
@@ -285,9 +285,9 @@ function late_main_block_tick (main*, sig*, chorus*, dc*)
     memcpy (sig.ptr, this.copy.ptr, sig.size);
   );
 
-  this.copy.array_shrink (0);
-  this.lfoval.array_shrink (0);
-  this.n_spls.array_shrink (0);
+  this.copy.array_drop_to_size (0);
+  this.lfoval.array_drop_to_size (0);
+  this.n_spls.array_drop_to_size (0);
 );
 //------------------------------------------------------------------------------
 

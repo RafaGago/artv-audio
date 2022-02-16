@@ -1,0 +1,249 @@
+// from https://github.com/geraintluff/jsfx-fft-big/commit/8d204de0d0a61cf7a13e735a06162d276d091de4
+
+@init
+
+// working_space must be 2*sizeB big
+function fft_ab(block, sizeA, sizeB, working_space)
+		local(N, i, j, twiddle_amount, twiddle_r, twiddle_i, Nbits, shiftleftbits, shiftrightbits, bitmask, index1, source_index, target_index, bitmask, tmp_r, tmp_i)
+		(
+	N = sizeA*sizeB;
+	i = 0;
+	// Perform the stepwise FFTss
+	while (i < sizeA) (
+		j = 0;
+		// Copy to working area
+		while (j < sizeB) (
+			working_space[j*2] = block[(i + j*sizeA)*2];
+			working_space[j*2 + 1] = block[(i + j*sizeA)*2 + 1];
+			j += 1;
+		);
+		fft(working_space, sizeB);
+		fft_permute(working_space, sizeB);
+		// Copy back, with twiddle factors
+		j = 0;
+		while (j < sizeB) (
+			twiddle_amount = -i*j/N;
+			twiddle_r = cos(twiddle_amount*2*$pi);
+			twiddle_i = sin(twiddle_amount*2*$pi);
+
+			block[(i + j*sizeA)*2] = working_space[j*2]*twiddle_r - working_space[j*2 + 1]*twiddle_i;
+			block[(i + j*sizeA)*2 + 1] = working_space[j*2]*twiddle_i + working_space[j*2 + 1]*twiddle_r;
+			j += 1;
+		);
+
+		i += 1;
+	);
+
+	// Perform the in-place FFTs
+	j = 0;
+	while (j < sizeB) (
+		fft(block + j*sizeA*2, sizeA);
+		fft_permute(block + j*sizeA*2, sizeA);
+		j += 1;
+	);
+
+	// Permute
+	Nbits = 1;
+	while ((1<<Nbits) < N) (
+		Nbits += 1;
+	);
+	shiftleftbits = 1; // This is the shift required to find the source index for a given target
+	bitmask = N - 1;
+	while ((1<<shiftleftbits) < sizeA) (
+		shiftleftbits += 1;
+	);
+	shiftrightbits = Nbits - shiftleftbits;
+
+	index1 = 1; // Source index
+	while (index1 < N) (
+		target_index = index1;
+		while (
+			target_index = ((target_index<<shiftleftbits)&bitmask) + (target_index>>shiftrightbits);
+			target_index > index1;
+		);
+		target_index == index1 ? ( // This index is the shortest in its permutation group
+			tmp_r = block[target_index*2];
+			tmp_i = block[target_index*2 + 1];
+			source_index = ((target_index<<shiftleftbits)&bitmask) + (target_index>>shiftrightbits);
+			while (source_index != index1) (
+				block[target_index*2] = block[source_index*2];
+				block[target_index*2 + 1] = block[source_index*2 + 1];
+				target_index = source_index;
+				source_index = ((target_index<<shiftleftbits)&bitmask) + (target_index>>shiftrightbits);
+			);
+			block[target_index*2] = tmp_r;
+			block[target_index*2 + 1] = tmp_i;
+		);
+		index1 += 1;
+	);
+);
+
+// working_space needs to be 256 big (128 complex numbers), unless you're doing FFTs of more than 4194304 (2^22)
+function fft_big(block, N, working_space) local(sizeB) (
+	N > 32768 ? (
+		sizeB = 1<<7;
+		(N/sizeB) > 32768 ? sizeB = 1<<11;
+		(N/sizeB) > 32768 ? sizeB = 1<<13;
+		fft_ab(block, N/sizeB, sizeB, working_space);
+	) : (
+		fft(block, N);
+		fft_permute(block, N);
+	);
+);
+
+// working_space must be 2*sizeB big
+function ifft_ab(block, sizeA, sizeB, working_space)
+		local(N, i, j, twiddle_amount, twiddle_r, twiddle_i, Nbits, shiftleftbits, shiftrightbits, bitmask, index1, source_index, target_index, bitmask, tmp_r, tmp_i)
+		(
+	N = sizeA*sizeB;
+
+	// Permute
+	Nbits = 1;
+	while ((1<<Nbits) < N) (
+		Nbits += 1;
+	);
+	shiftleftbits = 1; // This is the shift required to find the source index for a given target
+	bitmask = N - 1;
+	while ((1<<shiftleftbits) < sizeB) ( // NOTE: the FFT uses sizeA, the IFFT uses sizeB (inverse shift)
+		shiftleftbits += 1;
+	);
+	shiftrightbits = Nbits - shiftleftbits;
+
+	index1 = 1; // Source index
+	while (index1 < N) (
+		target_index = index1;
+		while (
+			target_index = ((target_index<<shiftleftbits)&bitmask) + (target_index>>shiftrightbits);
+			target_index > index1;
+		);
+		target_index == index1 ? ( // This index is the shortest in its permutation group
+			tmp_r = block[target_index*2];
+			tmp_i = block[target_index*2 + 1];
+			source_index = ((target_index<<shiftleftbits)&bitmask) + (target_index>>shiftrightbits);
+			while (source_index != index1) (
+				block[target_index*2] = block[source_index*2];
+				block[target_index*2 + 1] = block[source_index*2 + 1];
+				target_index = source_index;
+				source_index = ((target_index<<shiftleftbits)&bitmask) + (target_index>>shiftrightbits);
+			);
+			block[target_index*2] = tmp_r;
+			block[target_index*2 + 1] = tmp_i;
+		);
+		index1 += 1;
+	);
+
+	// Perform the in-place IFFTs
+	j = 0;
+	while (j < sizeB) (
+		fft_ipermute(block + j*sizeA*2, sizeA);
+		ifft(block + j*sizeA*2, sizeA);
+		j += 1;
+	);
+
+	i = 0;
+	// Perform the stepwise IFFTs
+	while (i < sizeA) (
+		j = 0;
+		// Copy to working area, with anti-twiddle factors
+		while (j < sizeB) (
+			twiddle_amount = i*j/N;
+			twiddle_r = cos(twiddle_amount*2*$pi);
+			twiddle_i = sin(twiddle_amount*2*$pi);
+
+			working_space[j*2] = block[(i + j*sizeA)*2]*twiddle_r - block[(i + j*sizeA)*2 + 1]*twiddle_i;
+			working_space[j*2 + 1] = block[(i + j*sizeA)*2]*twiddle_i + block[(i + j*sizeA)*2 + 1]*twiddle_r;
+			j += 1;
+		);
+		fft_ipermute(working_space, sizeB);
+		ifft(working_space, sizeB);
+		j = 0;
+		while (j < sizeB) (
+			block[(i + j*sizeA)*2] = working_space[j*2];
+			block[(i + j*sizeA)*2 + 1] = working_space[j*2 + 1];
+			j += 1;
+		);
+
+		i += 1;
+	);
+);
+
+function ifft_big(block, N, working_space) local(sizeB) (
+	N > 32768 ? (
+		sizeB = 1<<7;
+		(N/sizeB) > 32768 ? sizeB = 1<<11;
+		(N/sizeB) > 32768 ? sizeB = 1<<13;
+		ifft_ab(block, N/sizeB, sizeB, working_space);
+	) : (
+		fft_ipermute(block, N);
+		ifft(block, N);
+	);
+);
+
+//// Test/development code
+//
+//yscale = 1;
+//
+//@block
+//
+//original_block = 0;
+//fft_block = 65536;
+//native_block = 65536*2;
+//working_space = 65536*3;
+//
+//i = 0;
+//while (i < 65536) (
+//     t = (i>>1)/512;
+//     c = i%2;
+//     value = c ? 0 : cos(t*2*$pi);
+//     value = (i == 3) ? 512 : 0;
+//     //value = cos(10*cos(t*2*$pi));
+//     value = rand()*2 - 1;
+//     original_block[i] = fft_block[i] = native_block[i] = value;
+//     i += 1;
+//);
+//
+//fft(native_block, 512);
+//fft_permute(native_block, 512);
+//
+//fft_ab(fft_block, 16, 32, working_space);
+//
+//fft0_native2 = native_block[2];
+//fft0_ab2 = fft_block[2];
+//
+//fft_ipermute(native_block, 512);
+//ifft(native_block, 512);
+//
+//ifft_ab(fft_block, 16, 32, working_space);
+//
+//diff0 = fft_block[0] - native_block[0];
+//diff1 = fft_block[1] - native_block[1];
+//diff2 = fft_block[2] - native_block[2];
+//diff3 = fft_block[3] - native_block[3];
+//
+//diff512 = fft_block[512] - native_block[512];
+//diff513 = fft_block[513] - native_block[513];
+//
+//diff13 = fft_block[13] - native_block[13];
+//diff80 = fft_block[80] - native_block[80];
+//diff290 = fft_block[290] - native_block[290];
+//diff511_2 = fft_block[511*2] - native_block[511*2];
+//
+//@gfx
+//
+//gfx_clear = 0;
+//gfx_r = gfx_g = gfx_b = 1;
+//
+//gfx_x = 0;
+//gfx_y = gfx_h/2;
+//
+//yscale += (max(maxabs*2, 0.0000001) - yscale)*0.01;
+//maxabs = 0;
+//yscale = 1024;
+//while (gfx_x < gfx_w) (
+//     index = floor(gfx_x/gfx_w*512*2);
+//
+//     gvalue = fft_block[index];
+//
+//     maxabs = max(abs(gvalue), maxabs);
+//     gfx_lineto(gfx_x + 1, gfx_h*(0.5 - 0.5*gvalue/yscale));
+//);
