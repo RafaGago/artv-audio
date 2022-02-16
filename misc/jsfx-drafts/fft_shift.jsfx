@@ -34,12 +34,10 @@ fft (inbuff.ptr, FFT_SIZE);
 fft_permute (inbuff.ptr, FFT_SIZE);
 i = 0;
 loop (FFT_SIZE,
-    im_fac = (-$pi * 2 * DELAY_SPLS * n.ptr[i] / FFT_SIZE);
-    complex_exp_im (time_corr, im_fac);
-    bucket.complex_init (inbuff.ptr[i * 2], inbuff.ptr[i * 2 + 1]);
-    complex_mul (bucket, bucket, time_corr);
-    inbuff.ptr[i * 2] = bucket.re;
-    inbuff.ptr[i * 2 + 1] = bucket.im;
+    time_corr.complex_exp_im (-$pi * 2 * DELAY_SPLS * n.ptr[i] / FFT_SIZE);
+    bucket.complex_load (inbuff.ptr + i * 2);
+    bucket.complex_mul (time_corr);
+    bucket.complex_store (inbuff.ptr + i * 2);
     i += 1;
 );
 fft_ipermute (inbuff.ptr, FFT_SIZE);

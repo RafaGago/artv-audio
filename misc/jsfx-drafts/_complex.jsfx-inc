@@ -8,64 +8,101 @@ function complex_init (re, im) local() global() (
   this.re = re;
   this.im = im;
 );
-//------------------------------------------------------------------------------
-function complex_add (complex_ret*, complex_a*, complex_b*)
-  local () global() (
 
-  complex_ret.re = complex_a.re + complex_b.re;
-  complex_ret.im = complex_a.im + complex_b.im;
+function complex_load (ptr) local() global() (
+  this.re = ptr[0];
+  this.im = ptr[1];
+);
+
+function complex_store (ptr) local() global() (
+  ptr[0] = this.re;
+  ptr[1] = this.im;
 );
 //------------------------------------------------------------------------------
-function complex_mul (complex_ret*, complex_a*, complex_b*)
+// this = a + b
+function complex_add (complex_a*, complex_b*)
+  local () global() (
+
+  this.re = complex_a.re + complex_b.re;
+  this.im = complex_a.im + complex_b.im;
+);
+
+// this += b
+function complex_add (complex_b*)
+  local () global() (
+
+  this.re += complex_b.re;
+  this.im += complex_b.im;
+);
+//------------------------------------------------------------------------------
+// this = a * b
+function complex_mul (complex_a*, complex_b*)
   local (a_im, a_re, b_im, b_re) global() (
 
-  // "ret" can point to "a" or "b"
+  //  "a" or/and "b" can point to this
   a_re = complex_a.re;
-  a_im = complex_a.im;
   b_re = complex_b.re;
-  b_im = complex_b.im;
 
-  complex_ret.re = a_re * b_re - a_im * b_im;
-  complex_ret.im = a_re * b_im + b_re * a_im;
+  this.re = a_re * b_re - complex_a.im * complex_b.im;
+  this.im = a_re * complex_b.im + b_re * complex_a.im;
+);
+
+// this *= b
+function complex_mul (complex_b*)
+  local (re) global() (
+
+  this.complex_mul (this, complex_b);
 );
 //------------------------------------------------------------------------------
 // e ^ (a + i b) = (e ^ a)(cos (b) + i sin (b));
-function complex_exp_im (complex_ret*, im)
+
+// this = exp (i * im)
+function complex_exp_im (im)
   local () global() (
 
-  complex_ret.re = cos (im);
-  complex_ret.im = sin (im);
+  this.re = cos (im);
+  this.im = sin (im);
 );
 
-function complex_exp (complex_ret*, complex_a*)
-  local (a_im, a_re, fac) global() (
+// this = exp (re + i * im)
+function complex_exp (complex_a*)
+  local (fac) global() (
 
-  // "ret" can point to "a"
-  a_re = complex_a.re;
-  a_im = complex_a.im;
-
-  complex_exp_im (complex_ret, a_im);
-  fac = exp (a_re);
-  complex_ret.re *= fac;
-  complex_ret.im *= fac;
+  fac = exp (complex_a.re);
+  this.complex_exp_im (complex_a.im);
+  this.re *= fac;
+  this.im *= fac;
 );
+
 //------------------------------------------------------------------------------
 // x ^ (a + i b) = (x ^ a)(cos (b * ln (x)) + i sin (b * ln (x)));
-function complex_pow_re_base_im (complex_ret*, re_base, im)
+
+// this = x ** (i * im)
+function complex_pow_re_base_im (x, im)
   local () global() (
 
-  complex_exp_im (complex_ret, im * log (re_base));
+  this.complex_exp_im (im * log (x));
 );
 
-function complex_pow_re_base (complex_ret*, re_base, complex_a*)
-  local (a_im, a_re, fac) global() (
-  // "ret" can point to "a"
-  a_re = complex_a.re;
-  a_im = complex_a.im;
+// this = x ** (re + i * im)
+function complex_pow_re_base (x, complex_a*)
+  local (fac) global() (
 
-  complex_pow_re_base_im (complex_ret, re_base, a_im);
-  fac = pow (re_base, a_re);
-  complex_ret.re *= fac;
-  complex_ret.im *= fac;
+  fac = pow (x, complex_a.re);
+  this.complex_pow_re_base_im (x, complex_a.im);
+  this.re *= fac;
+  this.im *= fac;
+);
+//------------------------------------------------------------------------------
+function complex_abs (complex_v*)
+  local () global() (
+
+  sqrt (complex_v.re * complex_v.re + complex_v.im * complex_v.im);
+);
+
+function complex_abs()
+  local () global() (
+
+  complex_abs (this);
 );
 //------------------------------------------------------------------------------
