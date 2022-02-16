@@ -1,0 +1,71 @@
+// Some complex functions to add as needed. Not written for performance, so
+// maybe they won't have to be used in tight loops.
+//
+// To be added on an as-needed basis.
+@init
+//------------------------------------------------------------------------------
+function complex_init (re, im) local() global() (
+  this.re = re;
+  this.im = im;
+);
+//------------------------------------------------------------------------------
+function complex_add (complex_ret*, complex_a*, complex_b*)
+  local () global() (
+
+  complex_ret.re = complex_a.re + complex_b.re;
+  complex_ret.im = complex_a.im + complex_b.im;
+);
+//------------------------------------------------------------------------------
+function complex_mul (complex_ret*, complex_a*, complex_b*)
+  local (a_im, a_re, b_im, b_re) global() (
+
+  // "ret" can point to "a" or "b"
+  a_re = complex_a.re;
+  a_im = complex_a.im;
+  b_re = complex_b.re;
+  b_im = complex_b.im;
+
+  complex_ret.re = a_re * b_re - a_im * b_im;
+  complex_ret.im = a_re * b_im + b_re * a_im;
+);
+//------------------------------------------------------------------------------
+// e ^ (a + i b) = (e ^ a)(cos (b) + i sin (b));
+function complex_exp_im (complex_ret*, im)
+  local () global() (
+
+  complex_ret.re = cos (im);
+  complex_ret.im = sin (im);
+);
+
+function complex_exp (complex_ret*, complex_a*)
+  local (a_im, a_re, fac) global() (
+
+  // "ret" can point to "a"
+  a_re = complex_a.re;
+  a_im = complex_a.im;
+
+  complex_exp_im (complex_ret, a_im);
+  fac = exp (a_re);
+  complex_ret.re *= fac;
+  complex_ret.im *= fac;
+);
+//------------------------------------------------------------------------------
+// x ^ (a + i b) = (x ^ a)(cos (b * ln (x)) + i sin (b * ln (x)));
+function complex_pow_re_base_im (complex_ret*, re_base, im)
+  local () global() (
+
+  complex_exp_im (complex_ret, im * log (re_base));
+);
+
+function complex_pow_re_base (complex_ret*, re_base, complex_a*)
+  local (a_im, a_re, fac) global() (
+  // "ret" can point to "a"
+  a_re = complex_a.re;
+  a_im = complex_a.im;
+
+  complex_pow_re_base_im (complex_ret, re_base, a_im);
+  fac = pow (re_base, a_re);
+  complex_ret.re *= fac;
+  complex_ret.im *= fac;
+);
+//------------------------------------------------------------------------------
