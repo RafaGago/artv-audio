@@ -9,39 +9,41 @@ import _complex.jsfx-inc
 //
 // can be used as an interpolator. The size of "arr" has to be a power of 2.
 function fft_circ_shift (arr*, fft_size, n_shift_spls)
-  local (i, n) global (_fftmem_1*) (
+  local (i, n) global(FFT_ALIGNMENT) (
   // TODO set this bug if not a power of two less than the JSFX size
   // TODO use fft_real ?
 
-  _fftmem_1.array_clear();
+  this.mem.array_init_fft (fft_size * 2);
+  this.mem.array_clear();
 
   i = 0;
   loop (arr.size,
-    _fftmem_1.ptr[i * 2] = arr.ptr[i];
+    this.mem.ptr[i * 2] = arr.ptr[i];
     i += 1;
   );
 
-  fft_real (_fftmem_1.ptr, fft_size);
-  fft_permute (_fftmem_1.ptr, fft_size);
+  fft_real (this.mem.ptr, fft_size);
+  fft_permute (this.mem.ptr, fft_size);
 
   i = 0;
   loop (fft_size,
     n = (i >= fft_size / 2) ? -fft_size + i : i;
     this.delay.complex_exp_im (-2 * $pi * n_shift_spls * n / fft_size);
-    this.bucket.complex_load (_fftmem_1.ptr + i * 2);
+    this.bucket.complex_load (this.mem.ptr + i * 2);
     this.bucket.complex_mul (this.delay);
-    this.bucket.complex_store (_fftmem_1.ptr + i * 2);
+    this.bucket.complex_store (this.mem.ptr + i * 2);
     i += 1;
   );
 
-  fft_ipermute (_fftmem_1.ptr, fft_size);
-  ifft (_fftmem_1.ptr, fft_size);
-  ifft_rescale (_fftmem_1.ptr, fft_size);
+  fft_ipermute (this.mem.ptr, fft_size);
+  ifft (this.mem.ptr, fft_size);
+  ifft_rescale (this.mem.ptr, fft_size);
 
   i = 0;
   loop (arr.size,
-    arr.ptr[i] = _fftmem_1.ptr[i * 2];
+    arr.ptr[i] = this.mem.ptr[i * 2];
     i += 1;
   );
+  this.mem.array_size_drop_to (0);
 );
 //------------------------------------------------------------------------------

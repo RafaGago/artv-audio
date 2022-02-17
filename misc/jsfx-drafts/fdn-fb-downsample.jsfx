@@ -244,7 +244,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
     late.mtx.w2_d
     );
 
-  tmp.sig_cp.array_drop_to_size(0); // return memory (used as a stack).
+  tmp.sig_cp.array_size_drop_to(0); // return memory (used as a stack).
 
   memcpy (late.feedback.ptr, late.signal.ptr, late.signal.size);
 

@@ -919,7 +919,7 @@ function make_primes_table (dst*, minv, maxv)
     v += 1;
   );
   // return back unused memory, report correct size
-  dst.array_drop_to_size (n);
+  dst.array_size_drop_to (n);
 );
 
 function get_delay_length_samples (dst_ptr, n_delays, splsmin, splsmax)
@@ -938,7 +938,7 @@ function get_delay_length_samples (dst_ptr, n_delays, splsmin, splsmax)
     );
   );
   // free the memory.
-  this.tmp_primes.array_drop_to_size (0);
+  this.tmp_primes.array_size_drop_to (0);
   ok;
 );
 

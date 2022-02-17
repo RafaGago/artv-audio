@@ -34,7 +34,8 @@ function interp_catmull_rom (y0, y1, y2, y3, x) local (r, x2, x3)(
   r += y1;
 );
 
-// array ------------------------------------------------------------------------
+// array -----------------------------------------------------------------------
+// Allocate an array from the JSFX memory pool
 function array_init (size)
   local() global()(
 
@@ -43,6 +44,7 @@ function array_init (size)
   this.size = size;
 );
 
+// Allocate an aligned array (e.g. for the FFT) from the JSFX memory pool
 // align has to be a power of 2
 function array_init_align (size, align)
   local (mask) global (_memtop_ptr)(
@@ -57,12 +59,44 @@ function array_init_align (size, align)
   mem_reserve (this.size + this.ptr - this.ptr_raw);
 );
 
+// Convenience function to avoid having to hardcode the 64*1024 alignment for
+// the fft everywhere.
+function array_init_fft (size)
+  local () global ()(
+    this.array_init_align (size, 64 * 1024);
+);
+
+// convenience function to set an array to 0.
 function array_clear()
   local() global()(
   memset (this.ptr, 0, this.size);
 );
 
-function array_drop_to_size (newsize)
+// Drop an array size.
+//
+// This doesn't implement a dynamic memory allocator. Its main inteded usage is
+// to allow the dynamic memory of JSFX to be used as a stack, so you can do:
+//
+// a.array_init (32);
+// b.array_init (32);
+// ... do something with A and B
+// b.array_size_drop_to (32);
+// a.array_size_drop_to (32);
+//
+// Two important things are to notice if the memory has to really be recovered:
+//
+// 1. It only works when the last array allocated is the first deallocated.
+//    Hence the reverse order on the example above.
+// 2. If some function is called between allocation and deallocation that
+//    allocates it can silently make the memory not able to be recovered.
+//
+// The rationale for not going full dynamic memory is:
+//
+// 1. Time to implement and test
+// 2. On a DSP/JSFX context it is not really necessary. The memory can be only
+//    allocated once.
+
+function array_size_drop_to (newsize)
   local (dropped) global (_memtop_ptr)(
 
   newsize = newsize < 0 ? this.size : newsize;
@@ -291,9 +325,8 @@ function range_shift_down (src_dst_ptr, size, count)
     memcpy (this.tmp.ptr, src_dst_ptr, size);
     memcpy (src_dst_ptr + count, this.tmp.ptr, size - count);
     memcpy (src_dst_ptr, this.tmp.ptr + size - count, count);
-    this.tmp.array_drop_to_size (0);
+    this.tmp.array_size_drop_to (0);
 );
-
 // -----------------------------------------------------------------------------
 function ifft_rescale (fft_ptr, fft_size) global() local (i, f, a, b)(
     range_mul_k (fft_ptr, fft_ptr, 1 / fft_size, fft_size * 2);
@@ -358,6 +391,15 @@ function gcd (v1, v2) local (a, b, c) global() (
   a;
 );
 // -----------------------------------------------------------------------------
+// Memory inspection functions.Usage e.g. from inside a function:
+//
+//  "this.dbg_varname.debug_xx (this.varname)"
+//
+// or
+//
+// "this.dbg_varname.debug_xx (ptr, size)"
+//
+
 // creates max 4 variables with the contents of memory or zero otherwise.
 function debug_4 (ptr, n)
   local()
@@ -370,7 +412,7 @@ function debug_4 (ptr, n)
   this.v03 = n >= 4 ? ptr[3] : 0;
 );
 
-function debug_4 (arr*) (this.debug_4 (arr.ptr, arr.size));
+
 // -----------------------------------------------------------------------------
 // creates max 8 variables with the contents of memory or zero otherwise.
 function debug_8 (ptr, n)
@@ -457,11 +499,6 @@ function debug_32 (ptr, n)
 );
 
 function debug_32 (arr*) (this.debug_32 (arr.ptr, arr.size));
-// -----------------------------------------------------------------------------
-// Arrays that doesn't cross 64K element boundaries for doing FFT ops, as
-// instructed on the JSFX manual.
-_fftmem_1.array_init (64 * 1024);
-_fftmem_2.array_init (64 * 1024);
 // -----------------------------------------------------------------------------
 // Some reserved library space e.g. for converting from pointer based interfaces
 // to value based ones. For some reason at some point trying to increment it

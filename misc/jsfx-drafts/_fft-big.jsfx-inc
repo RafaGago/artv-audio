@@ -1,5 +1,8 @@
 // from https://github.com/geraintluff/jsfx-fft-big/commit/8d204de0d0a61cf7a13e735a06162d276d091de4
 
+// addon
+import _core.jsfx-inc
+
 @init
 
 // working_space must be 2*sizeB big
@@ -178,6 +181,21 @@ function ifft_big(block, N, working_space) local(sizeB) (
 		ifft(block, N);
 	);
 );
+
+// addons, removing the "work" parameter by using a temporary.
+
+function fft_big (ptr, fft_size) global() local()(
+	this.work.array_init_fft (64 * 1024);
+	fft_big (ptr, fft_size, this.work.ptr);
+	this.work.array_size_drop_to (0);
+);
+
+function ifft_big (ptr, fft_size) global() local()(
+	this.work.array_init_fft (64 * 1024);
+	ifft_big (ptr, fft_size, this.work.ptr);
+	this.work.array_size_drop_to (0);
+);
+
 
 //// Test/development code
 //

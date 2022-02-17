@@ -323,71 +323,66 @@ function fir_kernel_normalize (dst*) global ()(
 // circular rotation, so it needs as many zero samples on the tail as the
 // rotation.
 function fir_kernel_to_minphase (kernel_ptr, kernel_size)
-  local (fft_size, i, n)
-  global (_fftmem_1*)(
+  local (fft_size, i, n) global ()(
 
   // log cepstrum method (Mystran's post):
   // https://www.kvraudio.com/forum/viewtopic.php?f=33&t=556692&start=45
 
   fft_size = max (kernel_size * 32, 32 * 1024);
-  this.buff.array_init_align (fft_size * 2, 64 * 1024);
-
-  this.buff.array_clear();
-  this.work.array_alias (_fftmem_1.ptr, _fftmem_1.size);
-  this.work.array_clear();
+  this.work.array_init_fft (fft_size * 2);
 
  // regular fft of the impulse
   i = 0;
   loop (kernel_size,
-    this.buff.ptr[i * 2] = kernel_ptr[i];
+    this.work.ptr[i * 2] = kernel_ptr[i];
     i += 1;
   );
-  fft_big (this.buff.ptr, fft_size, this.work.ptr);
+  fft_big (this.work.ptr, fft_size);
 
   // replace real part by log of magnitude, leave imaginary part to 0.
   i = 0;
   loop (fft_size * 2,
-    this.bucket.complex_load (this.buff.ptr + i);
+    this.bucket.complex_load (this.work.ptr + i);
     this.bucket.re = log (max (this.bucket.complex_abs(), 1e-12));
     this.bucket.im = 0;
-    this.bucket.complex_store (this.buff.ptr + i);
+    this.bucket.complex_store (this.work.ptr + i);
     i += 2;
   );
 
   // from log spectrum to log cepstrum
-  ifft_big (this.buff.ptr, fft_size, this.work.ptr);
-  ifft_rescale (this.buff.ptr, fft_size);
+  ifft_big (this.work.ptr, fft_size);
+  ifft_rescale (this.work.ptr, fft_size);
 
   //  multiply elements in range [1, N/2-1] by 2 and zero the elements in range
   // [N/2+1, N-1], bins 0 and N/2 are left "as-is", then FFT again.
   i = 2;
   loop ((fft_size / 2) - 1,
-    this.buff.ptr[i] *= 2;
-    this.buff.ptr[i + 1] = 0; // should be real already...
+    this.work.ptr[i] *= 2;
+    this.work.ptr[i + 1] = 0; // should be real already...
     i += 2;
   );
-  memset (this.buff.ptr + fft_size + 2, 0, fft_size - 2);
-  fft_big (this.buff.ptr, fft_size, this.work.ptr);
+  memset (this.work.ptr + fft_size + 2, 0, fft_size - 2);
+  fft_big (this.work.ptr, fft_size);
 
   // complex "exp" of each bin, IFFT and truncate.
   i = 0;
   loop (fft_size * 2,
-    this.bucket.complex_load (this.buff.ptr + i);
+    this.bucket.complex_load (this.work.ptr + i);
     this.bucket.complex_exp (this.bucket);
-    this.bucket.complex_store (this.buff.ptr + i);
+    this.bucket.complex_store (this.work.ptr + i);
     i += 2;
   );
 
-  ifft_big (this.buff.ptr, fft_size, this.work.ptr);
-  ifft_rescale (this.buff.ptr, fft_size);
+  ifft_big (this.work.ptr, fft_size);
+  ifft_rescale (this.work.ptr, fft_size);
 
   i = 0;
   loop (kernel_size,
-    kernel_ptr[i] = this.buff.ptr[i * 2];
+    kernel_ptr[i] = this.work.ptr[i * 2];
     i += 1;
   );
 
-  this.buff.array_drop_to_size (0);
+  this.work.array_size_drop_to (0);
 );
 
 function fir_kernel_to_minphase (kernel*)(
@@ -398,18 +393,15 @@ function fir_kernel_to_minphase (kernel*)(
 // fc norm freq from 0 to 0.5
 function get_group_delay (kernel*, fc)
   local (FFT_SIZE, b, br, br_re, br_im, b_re, b_im, bucket, i)
-  global (_fftmem_1*, _fftmem_2*)(
+  global ()(
 
   FFT_SIZE = 32 * 1024;
 
   bucket = (2 * fc * 2 * (FFT_SIZE - 1));
   bucket = (bucket + 0.5) | 0;
 
-  this.b.array_alias (_fftmem_1.ptr, _fftmem_1.size);
-  this.br.array_alias (_fftmem_2.ptr, _fftmem_2.size);
-
-  this.b.array_clear();
-  this.br.array_clear();
+  this.b.array_init_fft (FFT_SIZE * 2);
+  this.br.array_init_fft (FFT_SIZE * 2);
 
   i = 0;
   loop (kernel.size,
@@ -429,6 +421,9 @@ function get_group_delay (kernel*, fc)
   br_im = this.br.ptr[bucket + 1];
   b_re  = this.b.ptr[bucket];
   b_im  = this.b.ptr[bucket + 1];
+
+  this.br.array_size_drop_to (0);
+  this.b.array_size_drop_to (0);
 
   (br_re * b_re + br_im * b_im) / (b_re * b_re + b_im * b_im);
 );
@@ -701,8 +696,8 @@ function sinc_resampler_2c_init_2(
     range_get_sum (this.n_spls.ptr, this.n_spls.size) != this.rate_tgt;
 
 
-  // TODO, fractional delay compensation on the sinc, have to figure out how 
-  // to compute the latency first. This below worked for 2x downsampling 
+  // TODO, fractional delay compensation on the sinc, have to figure out how
+  // to compute the latency first. This below worked for 2x downsampling
   // ratios.
 
   // taps % 2 == 0 ? (
@@ -710,9 +705,9 @@ function sinc_resampler_2c_init_2(
   // ) : (
   //   mu_c = 0;
   // );
-  
-  // unfortunately the log cepstrum conversion was not friendly to timing 
-  // information. An oversized sinc is created instead and then interleaved 
+
+  // unfortunately the log cepstrum conversion was not friendly to timing
+  // information. An oversized sinc is created instead and then interleaved
   // to each branch.
 
   this.bigkernel.array_init (this.kernels.size);
@@ -731,13 +726,13 @@ function sinc_resampler_2c_init_2(
       k_ptr[k] = this.bigkernel.ptr[j];
       k += 1;
       j += this.rate_tgt;
-    ); 
+    );
     fir_kernel_normalize (k_ptr, taps);
     i += 1;
   );
 
-  this.bigkernel.array_drop_to_size (0);
-  this.mu.array_drop_to_size (0); // deallocate, it was only created for debugging.
+  this.bigkernel.array_size_drop_to (0);
+  this.mu.array_size_drop_to (0); // deallocate, it was only created for debugging.
 
   this.n_spls_out = 0;
   this.n_spls_in  = 0;
