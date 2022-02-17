@@ -279,7 +279,7 @@ function delay_line_allpass_tick_tapped_all (in, active_count, delay_spls_ptr)
     this.delay_line_advance();
     i = 0;
     next = in;
-    out = in;
+    out = 0;
     loop (active_count,
       next = this.delay_line_allpass_tick (next, i, delay_spls_ptr[i]);
       out += next;
@@ -289,7 +289,7 @@ function delay_line_allpass_tick_tapped_all (in, active_count, delay_spls_ptr)
       this.delay_line_allpass_tick (0, i, delay_spls_ptr[i]);
       i += 1;
     );
-    out / (active_count + 1);
+    out / active_count;
 );
 
 function delay_line_allpass_tick_tapped_cascade_all(
@@ -335,22 +335,136 @@ function schroeder_allpass_tick (in, delay_spls) global (_libmem*) (
 );
 //------------------------------------------------------------------------------
 // LP comb as in the freeverb comb
-function delay_line_lp_comb_add ()
+function delay_line_lp_comb_add()
     global()(
     this.g.array_init (this.n_channels);
     this.damp.array_init (this.n_channels);
+    this.filt_state.array_init (this.n_channels);
 );
 
-function delay_line_lp_comb_set_g (coeff, channel)
+function delay_line_lp_comb_set_g (g, channel)
    global()(
-   this.g.ptr[channel] = coeff;
+   this.g.ptr[channel] = g;
 );
 
-function delay_line_allpass_set_g_all (src_ptr) local (i)(
+function delay_line_lp_comb_set_g_all (src_ptr) local (i)(
     i = 0;
     loop (this.n_channels,
-        this.delay_line_allpass_set_g (src_ptr[i], i);
+        this.delay_line_lp_comb_set_g (src_ptr[i], i);
         i += 1;
     );
+);
+
+function delay_line_lp_comb_set_damp (damp, channel)
+   global()(
+   this.damp.ptr[channel] = damp;
+);
+
+function delay_line_lp_comb_set_damp_all (src_ptr) local (i)(
+    i = 0;
+    loop (this.n_channels,
+        this.delay_line_lp_comb_set_damp (src_ptr[i], i);
+        i += 1;
+    );
+);
+
+// no interpolation
+// dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
+function delay_line_lp_comb_tick (dst_ptr, in_ptr, delay_spls_ptr)
+    local (g, damp, y, lp, i) global()(
+
+    this.delay_line_advance();
+    i = 0;
+    loop (this.n_channels,
+        g    = this.g.ptr[i];
+        damp = this.damp.ptr[i];
+        lp   = this.filt_state[i];
+
+        y  = this.delay_line_get (delay_spls_ptr[i], i);
+        lp = y * (1 - damp) + lp * damp;
+        this.delay_line_set (in_ptr[i] + lp * g, 0, i);
+
+        this.filt_state[i] = lp;
+        dst_ptr[i] = y;
+        i += 1;
+    );
+);
+
+function delay_line_lp_comb_tick (in, chnl, delay_spls)
+  global() local (g, damp, y, lp) (
+
+  g    = this.g.ptr[chnl];
+  damp = this.damp.ptr[chnl];
+  lp   = this.filt_state[chnl];
+
+  y  = this.delay_line_get (delay_spls, chnl);
+  lp = y * (1 - damp) + lp * damp;
+  this.delay_line_set (in + lp * g, 0, chnl);
+
+  this.filt_state[chnl] = lp;
+  y;
+);
+
+// no interpolation
+// dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
+function delay_line_lp_comb_tick_cascade_all (in, active_count, delay_spls_ptr)
+    local (i, g, y, y1, out) global() (
+
+    this.delay_line_advance();
+    i = 0;
+    out = in;
+    loop (active_count,
+      out = this.delay_line_lp_comb_tick (out, i, delay_spls_ptr[i]);
+      i += 1;
+    );
+    loop (this.n_channels - active_count,
+      this.delay_line_lp_comb_tick (0, i, delay_spls_ptr[i]);
+      i += 1;
+    );
+    out;
+);
+
+// no interpolation
+// dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
+function delay_line_lp_comb_tick_tapped_all (in, active_count, delay_spls_ptr)
+    local (i, g, y, y1, next, out) global() (
+
+    this.delay_line_advance();
+    i = 0;
+    next = in;
+    out = in;
+    loop (active_count,
+      next = this.delay_line_lp_comb_tick (next, i, delay_spls_ptr[i]);
+      out += next;
+      i += 1;
+    );
+    loop (this.n_channels - active_count,
+      this.delay_line_lp_comb_tick (0, i, delay_spls_ptr[i]);
+      i += 1;
+    );
+    out / (active_count + 1);
+);
+
+// this.n_channels has to be a multiple of "n_groups"
+function delay_line_lp_comb_tick_tapped_parallel_all(
+    in, n_groups, delay_spls_ptr
+    )
+    local (total, groupsz, partial, i) global()(
+
+    this.delay_line_advance();
+
+    total = 0;
+    groupsz = floor (this.n_channels / n_groups);
+
+    i = 0;
+    loop (n_groups,
+      partial = 0;
+      loop (groupsz,
+        partial += this.delay_line_lp_comb_tick (in, i, delay_spls_ptr[i]);
+        i += 1;
+      );
+      total += partial;
+    );
+    total / i;
 );
 //------------------------------------------------------------------------------

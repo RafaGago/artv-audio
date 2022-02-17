@@ -153,6 +153,25 @@ function array_alias (other_ptr, other_size) global()(
     this.size = other_size;
 );
 
+function array_duplicate (other_ptr, other_size)
+  local() global()(
+
+  this.array_init (other_size);
+  memcpy (this.ptr, other_ptr, other_size);
+);
+
+function array_duplicate (other*)
+  local() global()(
+
+  this.array_duplicate (other.ptr, other.size);
+);
+
+function array_copy (other*)
+  local() global()(
+
+  memcpy (this.ptr, other.ptr, min (this.size, other.size));
+);
+
 // array 2d --------------------------------------------------------------------
 function array2d_init (size_a, size_b)global()(
     this.ptr = mem_reserve (size_a * size_b);
