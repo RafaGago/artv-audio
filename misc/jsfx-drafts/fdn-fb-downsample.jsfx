@@ -13,10 +13,10 @@ slider4:size_m=       22.09 <0.1, 70, 0.001>  Size1 (m)
 //slider12:n_density=       0 <0, 4, 1>         Density Inc
 //slider13:n_diffusers=     0 <0, 8, 1>         Diffusors
 //slider14:tilt=            0 <-0.5, 0.5, 0.01> Tilt
-slider15:angle1=      0.5 <0.01, 0.99, 0.001> Angle1
-slider16:angle2=      0.5 <0.01, 0.99, 0.001> Angle2
-slider17:angle3=      0.5 <0.01, 0.99, 0.001> Angle3
-slider18:angle4=      0.5 <0.01, 0.99, 0.001> Angle4
+slider15:angle1=      0.5 <0.1, 0.9, 0.001> L Angle
+slider16:angle2=      0.5 <0.1, 0.9, 0.001> R Angle
+slider17:angle3=      0.5 <0.1, 0.9, 0.001> L-R Angle
+slider19:diffusion=   0.6 <0.1, 0.95, 0.001> Diffusion
 
 in_pin:left input
 in_pin:right input
@@ -51,8 +51,10 @@ GOLDEN_RATIO = (1 + sqrt(5)) / 2;
 k.src.kaiser_att_db = 210;
 k.src.taps_branch = 32;
 k.src.taps_branch_frac = 16;
-k.src.cutoff = 7000;
+k.src.cutoff = 9000;
 k.src.srate = 27000;
+
+BYPASS_SRC = 0;
 
 src.down.resampler_2c_init(
   k.src.srate,
@@ -78,23 +80,48 @@ src.out_q.deque_init(
   src.up.resampler_2c_max_n_out_samples() * 2
   );
 
-// TODO how many?
-loop(floor (srate / 44100) * 2,
-  src.out_q.deque_push(0);
-  src.out_q.deque_push(0);
-);
-
 src.ins.array_init (src.down.resampler_2c_max_n_out_samples() * 2);
 src.outs.array_init (src.up.resampler_2c_max_n_out_samples() * 2);
 
 src.ins.array_clear();
 src.outs.array_clear();
 
-// Late feedback ---------------------------------------------------------------
+// TODO how many?
+loop(floor (srate / 44100) * 2,
+  src.out_q.deque_push(0);
+  src.out_q.deque_push(0);
+);
+
+// Input Diffusion ----------------------------------------------------------------
+
+BYPASS_DIFFUSOR = 0;
+
+k.dif.n_diffusors = 4;
+
+k.dif.n_spls.array2d_init (2, k.dif.n_diffusors);
+k.dif.n_spls.array2d_ptr(0)[0] = 11;
+k.dif.n_spls.array2d_ptr(0)[1] = 67;
+k.dif.n_spls.array2d_ptr(0)[2] = 89;
+k.dif.n_spls.array2d_ptr(0)[3] = 17;
+
+k.dif.n_spls.array2d_ptr(1)[0] = 13;
+k.dif.n_spls.array2d_ptr(1)[1] = 71;
+k.dif.n_spls.array2d_ptr(1)[2] = 83;
+k.dif.n_spls.array2d_ptr(1)[3] = 17;
+
+dif.l.delay_line_init (round_next_pow2 (k.src.srate), k.dif.n_diffusors);
+dif.l.delay_line_allpass_add();
+
+dif.r.delay_line_init (round_next_pow2 (k.src.srate), k.dif.n_diffusors);
+dif.r.delay_line_allpass_add();
+
+k.dif.g.array2d_init (2, k.dif.n_diffusors);
+
+// Late/Tail feedback ----------------------------------------------------------
 k.late.n_channels = 16;
 k.late.delay.prime_idx = 15;
 k.late.delay.rounding_factor = 1;
-k.late.delay.span_factor = GOLDEN_RATIO * 2   ;
+k.late.delay.span_factor = GOLDEN_RATIO * 2;
 
 late.delay_spls.array_init (k.late.n_channels);
 late.rt60_att.array_init (k.late.n_channels);
@@ -108,46 +135,45 @@ late.delay.delay_line_thiran2_add (k.src.srate); // disable thiran resync
 
 late.k.delay_preset.array2d_init (1, k.late.n_channels);
 
-late.k.delay_preset.array2d_ptr(0)[0] = 829;
-late.k.delay_preset.array2d_ptr(0)[1] = 947;
-late.k.delay_preset.array2d_ptr(0)[2] = 1051;
-late.k.delay_preset.array2d_ptr(0)[3] = 1171;
-late.k.delay_preset.array2d_ptr(0)[4] = 1289;
-late.k.delay_preset.array2d_ptr(0)[5] = 1427;
-late.k.delay_preset.array2d_ptr(0)[6] = 1523;
-late.k.delay_preset.array2d_ptr(0)[7] = 1621;
-late.k.delay_preset.array2d_ptr(0)[8] = 1753;
-late.k.delay_preset.array2d_ptr(0)[9] = 1879;
-late.k.delay_preset.array2d_ptr(0)[10] = 2011;
-late.k.delay_preset.array2d_ptr(0)[11] = 2131;
-late.k.delay_preset.array2d_ptr(0)[12] = 2269;
-late.k.delay_preset.array2d_ptr(0)[13] = 2381;
-late.k.delay_preset.array2d_ptr(0)[14] = 2521;
-late.k.delay_preset.array2d_ptr(0)[15] = 2659;
+late.k.delay_preset.array2d_ptr(0)[0] = 2957;
+late.k.delay_preset.array2d_ptr(0)[1] = 2647;
+late.k.delay_preset.array2d_ptr(0)[2] = 2131;
+late.k.delay_preset.array2d_ptr(0)[3] = 1753;
+late.k.delay_preset.array2d_ptr(0)[4] = 1669;
+late.k.delay_preset.array2d_ptr(0)[5] = 1289;
+late.k.delay_preset.array2d_ptr(0)[6] = 1181;
+late.k.delay_preset.array2d_ptr(0)[7] = 911;
 
-// tell the Host how much memory we need (TODO: there are scratch buffers).
-//freembuf (_memtop_ptr);
+late.k.delay_preset.array2d_ptr(0)[8]  = 967;
+late.k.delay_preset.array2d_ptr(0)[9]  = 1103;
+late.k.delay_preset.array2d_ptr(0)[10] = 1307;
+late.k.delay_preset.array2d_ptr(0)[11] = 1553;
+late.k.delay_preset.array2d_ptr(0)[12] = 1877;
+late.k.delay_preset.array2d_ptr(0)[13] = 2017;
+late.k.delay_preset.array2d_ptr(0)[14] = 2411;
+late.k.delay_preset.array2d_ptr(0)[15] = 2837;
+
 
 // DC blockers -----------------------------------------------------------------
 k.dc.cutoff_freq = 5;
 
-dc.a.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.b.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.c.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.d.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.e.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.f.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.g.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.h.dc_blocker_init (k.dc.cutoff_freq, src.srate);
+dc.a.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.b.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.c.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.d.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.e.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.f.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.g.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.h.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
 
-dc.i.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.j.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.k.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.l.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.m.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.n.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.o.dc_blocker_init (k.dc.cutoff_freq, src.srate);
-dc.p.dc_blocker_init (k.dc.cutoff_freq, src.srate);
+dc.i.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.j.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.k.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.l.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.m.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.n.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.o.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
+dc.p.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
 
 @slider //----------------------------------------------------------------------
 get_delay_length_samples(
@@ -169,10 +195,23 @@ get_rt60_gain(
   late.rt60_att.ptr,
   late.delay_spls.ptr,
   rt60_msec * 0.001,
-  0 ,
+  0,
   k.late.n_channels,
   k.src.srate
   );
+
+G = diffusion;
+k.dif.g.array2d_ptr(0)[0] = G;
+k.dif.g.array2d_ptr(0)[1] = G - 0.4;
+k.dif.g.array2d_ptr(0)[2] = G - 0.2;
+k.dif.g.array2d_ptr(0)[3] = G;
+dif.l.delay_line_allpass_set_g_all (k.dif.g.array2d_ptr (0));
+
+k.dif.g.array2d_ptr(1)[0] = G;
+k.dif.g.array2d_ptr(1)[1] = G - 0.4;
+k.dif.g.array2d_ptr(1)[2] = G - 0.2;
+k.dif.g.array2d_ptr(1)[3] = G;
+dif.r.delay_line_allpass_set_g_all (k.dif.g.array2d_ptr (1));
 
 late.mtx.w1_a = cos (2 * angle1 * $pi * 0.25);
 late.mtx.w2_a = sin (2 * angle1 * $pi * 0.25);
@@ -180,8 +219,6 @@ late.mtx.w1_b = cos (2 * angle2 * $pi * 0.25);
 late.mtx.w2_b = sin (2 * angle2 * $pi * 0.25);
 late.mtx.w1_c = cos (2 * angle3 * $pi * 0.25);
 late.mtx.w2_c = sin (2 * angle3 * $pi * 0.25);
-late.mtx.w1_d = cos (2 * angle4 * $pi * 0.25);
-late.mtx.w2_d = sin (2 * angle4 * $pi * 0.25);
 
 @block //-----------------------------------------------------------------------
 
@@ -208,7 +245,13 @@ function dc_blockers_x16_tick (dc*, sig*)
   sig.ptr[15] = dc.p.dc_blocker_tick (sig.ptr[15]);
 );
 
-n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
+BYPASS_SRC == 0 ? (
+  n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
+) : (
+  n_spls_down = 1;
+  src.ins.ptr[0] = spl0;
+  src.ins.ptr[1] = spl1;
+);
 
 (n_spls_down) ? (
   // time to run DSP at operating SR, we know that "src.frac_down" is a
@@ -220,55 +263,81 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   in.m = (in.l + in.r) * 0.5;
   in.s = (in.l - in.r) * 0.5;
 
+  BYPASS_DIFFUSOR == 0 ? (
+    dif.l = dif.l.delay_line_allpass_tick_cascade_all(
+      in.l, k.dif.n_diffusors, k.dif.n_spls.array2d_ptr (0)
+      );
+    dif.r = dif.r.delay_line_allpass_tick_cascade_all(
+      in.r, k.dif.n_diffusors, k.dif.n_spls.array2d_ptr (1)
+    );
+  ) : (
+    dif.l = in.l;
+    dif.r = in.r;
+  );
+
   late.signal.array_clear();
-  late.signal.ptr[3]  = in.m * 0.5;
-  late.signal.ptr[4]  = in.m * 0.5;
-  late.signal.ptr[2]  = ins.s;
+  late.signal.ptr[0] = dif.r;
+  late.signal.ptr[15] = dif.l;
 
   range_add(
     late.signal.ptr, late.signal.ptr, late.feedback.ptr, late.signal.size
     );
-  tmp.sig_cp.array_init (late.signal.size);
-  memcpy (tmp.sig_cp.ptr, late.signal.ptr, late.signal.size);
+  tmp.sig_cp1.array_init (late.signal.size);
+  memcpy (tmp.sig_cp1.ptr, late.signal.ptr, late.signal.size);
 
-  rot_matrix_16(
+  // l and r
+  rot_matrix_8(
     late.signal.ptr,
-    tmp.sig_cp.ptr,
+    tmp.sig_cp1.ptr,
     late.mtx.w1_a,
-    late.mtx.w2_a,
+    late.mtx.w2_a
+  );
+
+  rot_matrix_8(
+    late.signal.ptr + 8,
+    tmp.sig_cp1.ptr + 8,
     late.mtx.w1_b,
-    late.mtx.w2_b,
-    late.mtx.w1_c,
-    late.mtx.w2_c,
-    late.mtx.w1_d,
-    late.mtx.w2_d
+    late.mtx.w2_b
+  );
+
+  memcpy (tmp.sig_cp1.ptr, late.signal.ptr, late.signal.size);
+  rot_matrix_8 (
+    late.signal.ptr + 4, tmp.sig_cp1.ptr + 4, late.mtx.w1_c, late.mtx.w2_c
     );
 
-  tmp.sig_cp.array_size_drop_to(0); // return memory (used as a stack).
+
+  tmp.sig_cp1.array_size_drop_to(0); // return memory (used as a stack).
 
   memcpy (late.feedback.ptr, late.signal.ptr, late.signal.size);
 
   late.delay.delay_line_advance();
   late.delay.delay_line_set_all (late.feedback.ptr, 0);
   late.delay.delay_line_get_all (late.feedback.ptr, late.delay_spls.ptr);
-  dc_blockers_x16_tick (dc, late.feedback.ptr);
+  dc_blockers_x16_tick (dc, late.feedback);
   range_mul(
     late.feedback.ptr, late.feedback.ptr, late.rt60_att.ptr, late.feedback.size
   );
 
-  late.r = late.signal.ptr[6];
-  late.l = late.signal.ptr[7];
+  // invert l and r, one taken from a long delay, the other from a short
+  late.l = late.signal.ptr[11];
+  late.r = late.signal.ptr[4];
 
   out.l = late.l;
   out.r = late.r;
 
   spl_op_rate_counter += 1; // operating rate counter
 
-  n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, out.l, out.r);
-  i = 0;
-  loop (n_spls_up * 2, // *2 : two channels
-    src.out_q.deque_push (src.outs.ptr[i]);
-    i += 1;
+  BYPASS_SRC == 0 ? (
+    // upsampling
+    n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, out.l, out.r);
+    i = 0;
+    loop (n_spls_up * 2, // *2 : two channels
+      src.out_q.deque_push (src.outs.ptr[i]);
+      i += 1;
+    );
+  ):(
+    src.out_q.deque_push (out.l);
+    src.out_q.deque_push (out.r);
   );
 );
 

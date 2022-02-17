@@ -49,9 +49,9 @@ max_spls_stage_2 = stage2.sinc_resampler_2c_max_n_out_samples() * 2;
 //  2 because we start with N zero samples, as fractional rates
 // may have a 1 sample jitter on the count of number of samples returned.
 outs.deque_init (max (max_spls_stage_2, max_spls_stage_1) * 2);
-loop (max (max_spls_stage_1, max_spls_stage_2),
-  outs.deque_push (0);
-);
+//loop (max (max_spls_stage_1, max_spls_stage_2),
+//  outs.deque_push (0);
+//);
 
 // 2: N channels
 stage1_buff.array_init (max_spls_stage_1);

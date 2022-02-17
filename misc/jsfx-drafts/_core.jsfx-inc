@@ -316,7 +316,7 @@ function range_swap (src_dst_1_ptr, src_dst_2_ptr, size)
     );
 );
 
-function range_shift_down (src_dst_ptr, size, count)
+function range_rotate_down (src_dst_ptr, size, count)
     local (i, tmp)
     global()(
 

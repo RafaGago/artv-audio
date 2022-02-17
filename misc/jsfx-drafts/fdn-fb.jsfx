@@ -445,10 +445,10 @@ main.delay.delay_line_init (round_next_pow2 (srate), chnls.size);
 main.delay.delay_line_thiran2_add (srate); // disable thiran resync
 
 diffussor.l.delay_line_init (round_next_pow2 (srate), diffusor_spls.size);
-diffussor.l.delay_line_schroeder_ap_add();
+diffussor.l.delay_line_allpass_add();
 
 diffussor.r.delay_line_init (round_next_pow2 (srate), diffusor_spls.size);
-diffussor.r.delay_line_schroeder_ap_add();
+diffussor.r.delay_line_allpass_add();
 
 density.n_spls.array2d_init (N_CHNLS_LATE_DENSITY, N_DENSITY_STAGES);
 density.a.delay_line_init (
@@ -599,36 +599,36 @@ mem_swap (density.n_spls.array2d_ptr(3), 1, 2);
 sr_ratio = srate / 48000;
 
 diffusor_spls.ptr[0] = LATE_DIFFUSOR_1_SAMPLES_48KHZ;
-diffussor.l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_1_G * sr_ratio, 0);
-diffussor.r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_1_G * sr_ratio, 0);
+diffussor.l.delay_line_allpass_set_g (LATE_DIFFUSOR_1_G * sr_ratio, 0);
+diffussor.r.delay_line_allpass_set_g (LATE_DIFFUSOR_1_G * sr_ratio, 0);
 
 diffusor_spls.ptr[1] = LATE_DIFFUSOR_2_SAMPLES_48KHZ;
-diffussor.l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_2_G * sr_ratio, 1);
-diffussor.r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_2_G * sr_ratio, 1);
+diffussor.l.delay_line_allpass_set_g (LATE_DIFFUSOR_2_G * sr_ratio, 1);
+diffussor.r.delay_line_allpass_set_g (LATE_DIFFUSOR_2_G * sr_ratio, 1);
 
 diffusor_spls.ptr[2] = LATE_DIFFUSOR_3_SAMPLES_48KHZ;
-diffussor.l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_3_G * sr_ratio, 2);
-diffussor.r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_3_G * sr_ratio, 2);
+diffussor.l.delay_line_allpass_set_g (LATE_DIFFUSOR_3_G * sr_ratio, 2);
+diffussor.r.delay_line_allpass_set_g (LATE_DIFFUSOR_3_G * sr_ratio, 2);
 
 diffusor_spls.ptr[3] = LATE_DIFFUSOR_4_SAMPLES_48KHZ;
-diffussor.l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_4_G * sr_ratio, 3);
-diffussor.r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_4_G * sr_ratio, 3);
+diffussor.l.delay_line_allpass_set_g (LATE_DIFFUSOR_4_G * sr_ratio, 3);
+diffussor.r.delay_line_allpass_set_g (LATE_DIFFUSOR_4_G * sr_ratio, 3);
 
 diffusor_spls.ptr[4] = LATE_DIFFUSOR_5_SAMPLES_48KHZ;
-diffussor.l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_5_G * sr_ratio, 4);
-diffussor.r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_5_G * sr_ratio, 4);
+diffussor.l.delay_line_allpass_set_g (LATE_DIFFUSOR_5_G * sr_ratio, 4);
+diffussor.r.delay_line_allpass_set_g (LATE_DIFFUSOR_5_G * sr_ratio, 4);
 
 diffusor_spls.ptr[5] = LATE_DIFFUSOR_6_SAMPLES_48KHZ;
-diffussor.l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_6_G * sr_ratio, 5);
-diffussor.r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_6_G * sr_ratio, 5);
+diffussor.l.delay_line_allpass_set_g (LATE_DIFFUSOR_6_G * sr_ratio, 5);
+diffussor.r.delay_line_allpass_set_g (LATE_DIFFUSOR_6_G * sr_ratio, 5);
 
 diffusor_spls.ptr[6] = LATE_DIFFUSOR_7_SAMPLES_48KHZ;
-diffussor.l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_7_G * sr_ratio, 6);
-diffussor.r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_7_G * sr_ratio, 6);
+diffussor.l.delay_line_allpass_set_g (LATE_DIFFUSOR_7_G * sr_ratio, 6);
+diffussor.r.delay_line_allpass_set_g (LATE_DIFFUSOR_7_G * sr_ratio, 6);
 
 diffusor_spls.ptr[7] = LATE_DIFFUSOR_8_SAMPLES_48KHZ;
-diffussor.l.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_8_G * sr_ratio, 7);
-diffussor.r.delay_line_schroeder_set_coeff (LATE_DIFFUSOR_8_G * sr_ratio, 7);
+diffussor.l.delay_line_allpass_set_g (LATE_DIFFUSOR_8_G * sr_ratio, 7);
+diffussor.r.delay_line_allpass_set_g (LATE_DIFFUSOR_8_G * sr_ratio, 7);
 
 // readjust total size
 
@@ -757,11 +757,11 @@ er_r = er_sig_r * er_mix;
 er_tail = (er_sig_l + er_sig_r) * 0.5 * er_2_late;
 
 // Tail ------------------------------------------------------------------------
-m = diffussor.l.delay_line_schroeder_tick_tapped_all(
+m = diffussor.l.delay_line_allpass_tick_tapped_all(
   m, n_diffusers, diffusor_spls.ptr
   );
 
-s = diffussor.r.delay_line_schroeder_tick_tapped_all(
+s = diffussor.r.delay_line_allpass_tick_tapped_all(
   s, n_diffusers, diffusor_spls.ptr
   );
 
