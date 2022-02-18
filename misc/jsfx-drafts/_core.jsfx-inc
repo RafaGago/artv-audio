@@ -265,12 +265,20 @@ function range_mul (dst_ptr, src1_ptr, src2_ptr, size) local (i) global()(
     );
 );
 
+function range_mul (dst_src_ptr, src_ptr, size) local () global()(
+    range_mul (dst_src_ptr, dst_src_ptr, src_ptr, size);
+);
+
 function range_mul_k (dst_ptr, src_ptr, k, size) local (i) global()(
     i = 0;
     loop (size,
         dst_ptr[i] = src_ptr[i] * k;
         i += 1;
     );
+);
+
+function range_mul_k (dst_src_ptr, k, size) local () global()(
+    range_mul_k (dst_src_ptr, dst_src_ptr, k, size);
 );
 
 function range_add (dst_ptr, src1_ptr, src2_ptr, size) local (i) global()(
@@ -281,12 +289,20 @@ function range_add (dst_ptr, src1_ptr, src2_ptr, size) local (i) global()(
     );
 );
 
+function range_add (dst_src_ptr, src_ptr, size) local () global()(
+    range_add (dst_src_ptr, dst_src_ptr, src_ptr, size);
+);
+
 function range_add_k (dst_ptr, src_ptr, k, size) local (i) global()(
     i = 0;
     loop (size,
         dst_ptr[i] = src_ptr[i] + k;
         i += 1;
     );
+);
+
+function range_add_k (dst_src_ptr, k, size) local () global()(
+    range_add_k (dst_src_ptr, dst_src_ptr, k, size);
 );
 
 function range_sub (dst_ptr, src1_ptr, src2_ptr, size) local (i) global()(
@@ -297,6 +313,10 @@ function range_sub (dst_ptr, src1_ptr, src2_ptr, size) local (i) global()(
     );
 );
 
+function range_sub (dst_src_ptr, src_ptr, size) local () global()(
+    range_sub (dst_src_ptr, dst_src_ptr, src_ptr, size);
+);
+
 function range_sub_k (dst_ptr, src_ptr, k, size) local (i) global()(
     i = 0;
     loop (size,
@@ -305,12 +325,20 @@ function range_sub_k (dst_ptr, src_ptr, k, size) local (i) global()(
     );
 );
 
+function range_sub_k (dst_src_ptr, k, size) local () global()(
+    range_sub_k (dst_src_ptr, dst_src_ptr, k, size);
+);
+
 function range_to_int (dst_ptr, src_ptr, size) local (i) global()(
     i = 0;
     loop (size,
         dst_ptr[i] = src_ptr[i] | 0;
         i += 1;
     );
+);
+
+function range_to_int (dst_src_ptr, size) local () global()(
+    range_to_int (dst_src_ptr, dst_src_ptr, size);
 );
 
 function range_reverse_order (src_dst_ptr, size) local (i, hsz) global()(

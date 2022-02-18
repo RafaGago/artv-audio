@@ -11,7 +11,7 @@ function lfo_init (ptr, freq_hz, phase, srate) global() (
     ptr[1] = 0.5 + 2 * phase;
 );
 
-function lfo_size ()  global()(
+function lfo_size () global()(
     2;
 );
 
@@ -118,6 +118,8 @@ function lfo_filt_noise_init (freq, samplerate) global()(
 
 function lfo_filt_noise_tick () local (old_phase) global() (
     old_phase = lfo_tick_saw (this.lfo_ptr);
+    this.op = old_phase;
+    this.op != 0 ? this.A =1;
     (old_phase > lfo_get_phase (this.lfo_ptr)) ? ( // new LFO cycle change
         this.noise = rand (2) - 1;
     );
