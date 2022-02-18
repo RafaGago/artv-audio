@@ -17,7 +17,7 @@ slider16:angle2=      0.5 <0.1, 0.9, 0.001> R Angle
 slider17:angle3=      0.5 <0.1, 0.9, 0.001> L-R Angle
 slider19:diffusion=   0.6 <0, 0.77, 0.001> Diffusion
 slider20:width=       0.5 <0, 1, 0.01> Width
-slider21:damp=        0.5 <0.0, 0.90, 0.001> Damping
+slider21:damp=        0.5 <0.0, 1, 0.001> Damping
 
 in_pin:left input
 in_pin:right input
@@ -49,13 +49,13 @@ GOLDEN_RATIO = (1 + sqrt(5)) / 2;
 // 36000 is more friendly to 44100 multiples though. 27000 seems good too, but
 // 13.5K might start being dark.
 
+BYPASS_SRC = 0;
+
 k.src.kaiser_att_db = 210;
 k.src.taps_branch = 32;
 k.src.taps_branch_frac = 16;
 k.src.cutoff = 9000;
-k.src.srate = 27000;
-
-BYPASS_SRC = 0;
+k.src.srate = BYPASS_SRC ? srate : 27000;
 
 src.down.resampler_2c_init(
   k.src.srate,
@@ -120,7 +120,7 @@ combs.r_spls.array_init (k.combs.n_diffusors);
 
 // Late/Tail feedback ----------------------------------------------------------
 
-function late_delay_spls_reorder (spls_ptr, spls_size) global()(
+function from_ascending_to_chnl_order (spls_ptr, spls_size) global()(
   // from ascending order to an U shape ordering.
 
   this.tmp.array_init (spls_size);
@@ -182,8 +182,9 @@ late.k.delay_preset.array2d_ptr(0)[13] = 2411;
 late.k.delay_preset.array2d_ptr(0)[14] = 2957;
 late.k.delay_preset.array2d_ptr(0)[15] = 2837;
 
-late_delay_spls_reorder (late.k.delay_preset.array2d_ptr(0), k.late.n_channels);
-
+from_ascending_to_chnl_order(
+  late.k.delay_preset.array2d_ptr(0), k.late.n_channels
+  );
 // Output Diffusion ------------------------------------------------------------
 
 BYPASS_DIFFUSOR = 0;
@@ -231,6 +232,31 @@ dif.r.delay_line_allpass_add();
 
 k.dif.g.array2d_init (2, k.dif.n_diffusors);
 
+// Crossover -------------------------------------------------------------------
+// 1 pole lowpasses. HP by subtraction.
+
+BYPASS_FILTERING   = 0;
+k.filt.att_fact_db = -9;
+
+k.filt.dampfactor.array_init (k.late.n_channels);
+k.filt.dampfactor.ptr[0]  = 1 - 500 /  (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[1]  = 1 - 530 /  (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[2]  = 1 - 640 /  (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[3]  = 1 - 600 /  (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[4]  = 1 - 860 /  (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[5]  = 1 - 800 /  (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[6]  = 1 - 920 /  (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[7]  = 1 - 900 /  (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[8]  = 1 - 1000 / (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[9]  = 1 - 1100 / (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[10] = 1 - 1200 / (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[11] = 1 - 1000 / (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[12] = 1 - 2200 / (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[13] = 1 - 2000 / (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[14] = 1 - 3000 / (k.src.srate * 0.5 - 2);
+k.filt.dampfactor.ptr[15] = 1 - 3200 / (k.src.srate * 0.5 - 2);
+
+from_ascending_to_chnl_order (k.filt.dampfactor.ptr, k.filt.dampfactor.size);
 // DC blockers -----------------------------------------------------------------
 k.dc.cutoff_freq = 5;
 
@@ -242,7 +268,6 @@ dc.e.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
 dc.f.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
 dc.g.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
 dc.h.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-
 dc.i.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
 dc.j.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
 dc.k.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
@@ -253,6 +278,51 @@ dc.o.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
 dc.p.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
 
 @slider //----------------------------------------------------------------------
+
+function reset_filters (filt*, dampfact_ptr, damp, srate)
+  global() local(srn) (
+
+  this.sr.array_init (16);
+
+  srn = (srate / 2) - 2;
+
+  this.sr.ptr[0]  = srn - srn * damp * dampfact_ptr[0];
+  this.sr.ptr[1]  = srn - srn * damp * dampfact_ptr[1];
+  this.sr.ptr[2]  = srn - srn * damp * dampfact_ptr[2];
+  this.sr.ptr[3]  = srn - srn * damp * dampfact_ptr[3];
+  this.sr.ptr[4]  = srn - srn * damp * dampfact_ptr[4];
+  this.sr.ptr[5]  = srn - srn * damp * dampfact_ptr[5];
+  this.sr.ptr[6]  = srn - srn * damp * dampfact_ptr[6];
+  this.sr.ptr[7]  = srn - srn * damp * dampfact_ptr[7];
+  this.sr.ptr[8]  = srn - srn * damp * dampfact_ptr[8];
+  this.sr.ptr[9]  = srn - srn * damp * dampfact_ptr[9];
+  this.sr.ptr[10] = srn - srn * damp * dampfact_ptr[10];
+  this.sr.ptr[11] = srn - srn * damp * dampfact_ptr[11];
+  this.sr.ptr[12] = srn - srn * damp * dampfact_ptr[12];
+  this.sr.ptr[13] = srn - srn * damp * dampfact_ptr[13];
+  this.sr.ptr[14] = srn - srn * damp * dampfact_ptr[14];
+  this.sr.ptr[15] = srn - srn * damp * dampfact_ptr[15];
+
+  filt.a.tpt_1p_reset (this.sr.ptr[0], srate);
+  filt.b.tpt_1p_reset (this.sr.ptr[1], srate);
+  filt.c.tpt_1p_reset (this.sr.ptr[2], srate);
+  filt.d.tpt_1p_reset (this.sr.ptr[3], srate);
+  filt.e.tpt_1p_reset (this.sr.ptr[4], srate);
+  filt.f.tpt_1p_reset (this.sr.ptr[5], srate);
+  filt.g.tpt_1p_reset (this.sr.ptr[6], srate);
+  filt.h.tpt_1p_reset (this.sr.ptr[7], srate);
+  filt.i.tpt_1p_reset (this.sr.ptr[8], srate);
+  filt.j.tpt_1p_reset (this.sr.ptr[9], srate);
+  filt.k.tpt_1p_reset (this.sr.ptr[10], srate);
+  filt.l.tpt_1p_reset (this.sr.ptr[11], srate);
+  filt.m.tpt_1p_reset (this.sr.ptr[12], srate);
+  filt.n.tpt_1p_reset (this.sr.ptr[13], srate);
+  filt.o.tpt_1p_reset (this.sr.ptr[14], srate);
+  filt.p.tpt_1p_reset (this.sr.ptr[15], srate);
+
+  this.sr.array_size_drop_to (0);
+);
+
 get_delay_length_samples(
   late.delay_spls.ptr,
   k.late.n_channels,
@@ -263,7 +333,7 @@ get_delay_length_samples(
   k.src.srate
   );
 
-late_delay_spls_reorder (late.delay_spls.ptr, late.delay_spls.size);
+from_ascending_to_chnl_order (late.delay_spls.ptr, late.delay_spls.size);
 (1) ? (
 // using a preset
   memcpy(
@@ -316,12 +386,15 @@ late.mtx.w2_b = sin (2 * angle2 * $pi * 0.25);
 late.mtx.w1_c = cos (2 * angle3 * $pi * 0.25);
 late.mtx.w2_c = sin (2 * angle3 * $pi * 0.25);
 
+reset_filters (filt, k.filt.dampfactor.ptr, sqrt (damp), k.src.srate);
+k.filt.att = pow (10, k.filt.att_fact_db * damp * 1/40);
+
 @block //-----------------------------------------------------------------------
 
 @sample //----------------------------------------------------------------------
 
 function dc_blockers_x16_tick (dc*, sig*)
-  global ()(
+  global () local()(
   sig.ptr[0] = dc.a.dc_blocker_tick (sig.ptr[0]);
   sig.ptr[1] = dc.b.dc_blocker_tick (sig.ptr[1]);
   sig.ptr[2] = dc.c.dc_blocker_tick (sig.ptr[2]);
@@ -339,6 +412,44 @@ function dc_blockers_x16_tick (dc*, sig*)
   sig.ptr[13] = dc.n.dc_blocker_tick (sig.ptr[13]);
   sig.ptr[14] = dc.o.dc_blocker_tick (sig.ptr[14]);
   sig.ptr[15] = dc.p.dc_blocker_tick (sig.ptr[15]);
+);
+
+function run_filters (filt*, lp_ptr, hp_ptr, sig_ptr, hp_att)
+  global() local() (
+
+  lp_ptr[0]  = filt.a.tpt_1p_tick_lp (sig_ptr[0]);
+  lp_ptr[1]  = filt.b.tpt_1p_tick_lp (sig_ptr[1]);
+  lp_ptr[2]  = filt.c.tpt_1p_tick_lp (sig_ptr[2]);
+  lp_ptr[3]  = filt.d.tpt_1p_tick_lp (sig_ptr[3]);
+  lp_ptr[4]  = filt.e.tpt_1p_tick_lp (sig_ptr[4]);
+  lp_ptr[5]  = filt.f.tpt_1p_tick_lp (sig_ptr[5]);
+  lp_ptr[6]  = filt.g.tpt_1p_tick_lp (sig_ptr[6]);
+  lp_ptr[7]  = filt.h.tpt_1p_tick_lp (sig_ptr[7]);
+  lp_ptr[8]  = filt.i.tpt_1p_tick_lp (sig_ptr[8]);
+  lp_ptr[9]  = filt.j.tpt_1p_tick_lp (sig_ptr[9]);
+  lp_ptr[10] = filt.k.tpt_1p_tick_lp (sig_ptr[10]);
+  lp_ptr[11] = filt.l.tpt_1p_tick_lp (sig_ptr[11]);
+  lp_ptr[12] = filt.m.tpt_1p_tick_lp (sig_ptr[12]);
+  lp_ptr[13] = filt.n.tpt_1p_tick_lp (sig_ptr[13]);
+  lp_ptr[14] = filt.o.tpt_1p_tick_lp (sig_ptr[14]);
+  lp_ptr[15] = filt.p.tpt_1p_tick_lp (sig_ptr[15]);
+
+  hp_ptr[0]  = (sig_ptr[0]  - lp_ptr[0])  * hp_att;
+  hp_ptr[1]  = (sig_ptr[1]  - lp_ptr[1])  * hp_att;
+  hp_ptr[2]  = (sig_ptr[2]  - lp_ptr[2])  * hp_att;
+  hp_ptr[3]  = (sig_ptr[3]  - lp_ptr[3])  * hp_att;
+  hp_ptr[4]  = (sig_ptr[4]  - lp_ptr[4])  * hp_att;
+  hp_ptr[5]  = (sig_ptr[5]  - lp_ptr[5])  * hp_att;
+  hp_ptr[6]  = (sig_ptr[6]  - lp_ptr[6])  * hp_att;
+  hp_ptr[7]  = (sig_ptr[7]  - lp_ptr[7])  * hp_att;
+  hp_ptr[8]  = (sig_ptr[8]  - lp_ptr[8])  * hp_att;
+  hp_ptr[9]  = (sig_ptr[9]  - lp_ptr[9])  * hp_att;
+  hp_ptr[10] = (sig_ptr[10] - lp_ptr[10]) * hp_att;
+  hp_ptr[11] = (sig_ptr[11] - lp_ptr[11]) * hp_att;
+  hp_ptr[12] = (sig_ptr[12] - lp_ptr[12]) * hp_att;
+  hp_ptr[13] = (sig_ptr[13] - lp_ptr[13]) * hp_att;
+  hp_ptr[14] = (sig_ptr[14] - lp_ptr[14]) * hp_att;
+  hp_ptr[15] = (sig_ptr[15] - lp_ptr[15]) * hp_att;
 );
 
 BYPASS_SRC == 0 ? (
@@ -401,15 +512,33 @@ BYPASS_SRC == 0 ? (
     );
   tmp.sig_cp1.array_size_drop_to(0); // return memory (used as a stack).
 
+  // Feedback processing
+
   late.feedback.array_copy (late.signal);
 
   late.delay.delay_line_advance();
   late.delay.delay_line_set_all (late.feedback.ptr, 0);
   late.delay.delay_line_get_all (late.feedback.ptr, late.delay_spls.ptr);
-  dc_blockers_x16_tick (dc, late.feedback);
   range_mul(
     late.feedback.ptr, late.feedback.ptr, late.rt60_att.ptr, late.feedback.size
   );
+
+  late.lp.array_init (late.feedback.size);
+  late.hp.array_init (late.feedback.size);
+
+  run_filters (filt, late.lp.ptr, late.hp.ptr, late.feedback.ptr, k.filt.att);
+
+  BYPASS_FILTERING == 0 ? (
+    // YOLO correction
+    range_mul_k (late.lp.ptr, late.lp.ptr, 1 + k.filt.att * 0.01, late.lp.size);
+    range_add (late.feedback.ptr, late.lp.ptr, late.hp.ptr, late.feedback.size);
+  );
+
+  late.hp.array_size_drop_to (0);
+  late.lp.array_size_drop_to (0);
+
+  dc_blockers_x16_tick (dc, late.feedback);
+
 
   // invert l and r. The real L comes from the upper channel half. Different
   // Character can be selected by choosing different outs. With the diffusor
@@ -433,7 +562,7 @@ BYPASS_SRC == 0 ? (
   // modulate this fella...
   BYPASS_DIFFUSOR == 0 ? (
     postdif.l = dif.l.delay_line_allpass_tick_cascade_all(
-       out.l, k.dif.n_diffusors, k.dif.n_spls.array2d_ptr (0)
+       out.l, k.dif.n_diffusors, k.dif.n_spls.array2d_ptr (0) 
        );
     postdif.r = dif.r.delay_line_allpass_tick_cascade_all(
        out.r, k.dif.n_diffusors, k.dif.n_spls.array2d_ptr (1)
