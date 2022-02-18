@@ -34,7 +34,6 @@ import _fir.jsfx-inc
 
 @init
 
-
 GOLDEN_RATIO = (1 + sqrt(5)) / 2;
 // -----------------------------------------------------------------------------
 // Resource initialization
@@ -193,14 +192,36 @@ k.dif.n_diffusors = 4;
 
 k.dif.n_spls.array2d_init (2, k.dif.n_diffusors);
 
-k.dif.n_spls.array2d_ptr(0)[0] = 137;
-k.dif.n_spls.array2d_ptr(0)[1] = 337;
-k.dif.n_spls.array2d_ptr(0)[2] = 272;
-k.dif.n_spls.array2d_ptr(0)[3] = 207;
-k.dif.n_spls.array2d_ptr(1)[0] = 137;
-k.dif.n_spls.array2d_ptr(1)[1] = 337;
-k.dif.n_spls.array2d_ptr(1)[2] = 271;
-k.dif.n_spls.array2d_ptr(1)[3] = 207;
+// Prime factors with an approx difference of 2.85.
+// L channel
+k.dif.n_spls.array2d_ptr(0)[0] = 19;
+k.dif.n_spls.array2d_ptr(0)[1] = 53;
+k.dif.n_spls.array2d_ptr(0)[2] = 157;
+k.dif.n_spls.array2d_ptr(0)[3] = 443;
+
+// R channel
+(1) ? (
+  // more stereo, different set.
+  (1) ? (
+    // sounds more like noise and the equal"ish" set.
+    k.dif.n_spls.array2d_ptr(1)[0] = 23;
+    k.dif.n_spls.array2d_ptr(1)[1] = 67;
+    k.dif.n_spls.array2d_ptr(1)[2] = 191;
+    k.dif.n_spls.array2d_ptr(1)[3] = 532;
+  ) : (
+    // sounds more spatial probably
+    k.dif.n_spls.array2d_ptr(1)[0] = 29;
+    k.dif.n_spls.array2d_ptr(1)[1] = 83;
+    k.dif.n_spls.array2d_ptr(1)[2] = 239;
+    k.dif.n_spls.array2d_ptr(1)[3] = 683;
+  );
+) : (
+  // very similar set.
+  k.dif.n_spls.array2d_ptr(1)[0] = 19;
+  k.dif.n_spls.array2d_ptr(1)[1] = 53;
+  k.dif.n_spls.array2d_ptr(1)[2] = 163;
+  k.dif.n_spls.array2d_ptr(1)[3] = 439;
+);
 
 dif.l.delay_line_init (round_next_pow2 (k.src.srate), k.dif.n_diffusors);
 dif.l.delay_line_allpass_add();
@@ -350,8 +371,6 @@ BYPASS_SRC == 0 ? (
     );
   );
 
-  combs.l_spls_v.debug_8(combs.l_spls);
-
   late.signal.array_clear();
   late.signal.ptr[0] = dif.r;
   late.signal.ptr[15] = dif.l;
@@ -380,7 +399,6 @@ BYPASS_SRC == 0 ? (
   rot_matrix_8 (
     late.signal.ptr + 4, tmp.sig_cp1.ptr + 4, late.mtx.w1_c, late.mtx.w2_c
     );
-
   tmp.sig_cp1.array_size_drop_to(0); // return memory (used as a stack).
 
   late.feedback.array_copy (late.signal);
@@ -393,10 +411,17 @@ BYPASS_SRC == 0 ? (
     late.feedback.ptr, late.feedback.ptr, late.rt60_att.ptr, late.feedback.size
   );
 
-  // invert l and r, one taken from a long delay, the other from a short
-  late.l = late.signal.ptr[11];
-  late.r = late.signal.ptr[4];
-
+  // invert l and r. The real L comes from the upper channel half. Different
+  // Character can be selected by choosing different outs. With the diffusor
+  // working they even out, so I selected the 11-4 pair because it sounds more
+  // different with the diffusor on and off while still good.
+  (1) ? (
+    late.l = late.signal.ptr[11];
+    late.r = late.signal.ptr[4];
+  ) : (
+    late.l = late.signal.ptr[9];
+    late.r = late.signal.ptr[6];
+  );
   BYPASS_TAIL == 0 ? (
     out.l = late.l;
     out.r = late.r;
@@ -404,15 +429,21 @@ BYPASS_SRC == 0 ? (
     out.l = dif.l;
     out.r = dif.r;
   );
-  
+
   // modulate this fella...
   BYPASS_DIFFUSOR == 0 ? (
-    out.l += dif.l.delay_line_allpass_tick_cascade_all(
+    postdif.l = dif.l.delay_line_allpass_tick_cascade_all(
        out.l, k.dif.n_diffusors, k.dif.n_spls.array2d_ptr (0)
-       ) * (0.7 * diffusion + 0.01);
-     out.r -= dif.r.delay_line_allpass_tick_cascade_all(
+       );
+    postdif.r = dif.r.delay_line_allpass_tick_cascade_all(
        out.r, k.dif.n_diffusors, k.dif.n_spls.array2d_ptr (1)
-     ) * (0.7 * diffusion + 0.01);
+       );
+    // trade correlation for some fake stereo, this can be enabled on metallic
+    // (plate) reverbs.
+//    mix = 0.85;
+    mix = 1;
+    out.l = postdif.l * mix + out.l * (1 - mix);
+    out.r = postdif.r * mix - out.l * (1 - mix);
   );
 
   spl_op_rate_counter += 1; // operating rate counter
