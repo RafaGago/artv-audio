@@ -255,7 +255,7 @@ function delay_line_allpass_tick (in, chnl, delay_spls)
 // no interpolation
 // dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
 function delay_line_allpass_tick_cascade_all (in, active_count, delay_spls_ptr)
-    local (i, g, y, y1, out) global() (
+    local (i, out) global() (
 
     this.delay_line_advance();
     i = 0;
@@ -273,8 +273,22 @@ function delay_line_allpass_tick_cascade_all (in, active_count, delay_spls_ptr)
 
 // no interpolation
 // dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
+function delay_line_allpass_tick_parallel_all (out_ptr, in_ptr, delay_spls_ptr)
+    local (i) global() (
+
+    this.delay_line_advance();
+    i = 0;
+    loop (this.n_channels,
+      out_ptr[i] =
+        this.delay_line_allpass_tick (in_ptr[i], i, delay_spls_ptr[i]);
+      i += 1;
+    );
+);
+
+// no interpolation
+// dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
 function delay_line_allpass_tick_tapped_all (in, active_count, delay_spls_ptr)
-    local (i, g, y, y1, next, out) global() (
+    local (i, next, out) global() (
 
     this.delay_line_advance();
     i = 0;
@@ -295,7 +309,7 @@ function delay_line_allpass_tick_tapped_all (in, active_count, delay_spls_ptr)
 function delay_line_allpass_tick_tapped_cascade_all(
     in, count, count_tapped, delay_spls_ptr
     )
-    local (i, g, y, y1, next, out) global() (
+    local (i, next, out) global() (
 
    this.delay_line_advance();
     i = 0;

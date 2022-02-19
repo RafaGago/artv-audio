@@ -459,7 +459,7 @@ function debug_4 (ptr, n)
   this.v03 = n >= 4 ? ptr[3] : 0;
 );
 
-
+function debug_4 (arr*) (this.debug_4 (arr.ptr, arr.size));
 // -----------------------------------------------------------------------------
 // creates max 8 variables with the contents of memory or zero otherwise.
 function debug_8 (ptr, n)

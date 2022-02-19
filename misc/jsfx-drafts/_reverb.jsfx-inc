@@ -955,7 +955,8 @@ function get_delay_length_samples(
   dmin = srate * pathmin * (1 / 343); // 343 = C = soundspeed
   dmax = srate * pathmax * (1 / 343);
 
-  ok = get_delay_length_samples (dst_ptr, n_delays, dmin, dmax);
+  //ok = get_delay_length_samples (dst_ptr, n_delays, dmin, dmax);
+  ok = 0;
   (ok == 0) ? (
     primes_offs = 12;
     i = 0;
