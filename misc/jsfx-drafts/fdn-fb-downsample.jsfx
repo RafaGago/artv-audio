@@ -94,31 +94,6 @@ loop(floor (srate / 44100) * 2,
   src.out_q.deque_push(0);
 );
 
-// Freeverb diffussor ----------------------------------------------------------
-
-BYPASS_FREEVERB_DIFFUSOR = 1;
-
-k.combs.n_diffusors = 8;
-
-combs.l.delay_line_init (round_next_pow2 (k.src.srate), k.combs.n_diffusors);
-combs.l.delay_line_lp_comb_add();
-
-combs.r.delay_line_init (round_next_pow2 (k.src.srate), k.combs.n_diffusors);
-combs.r.delay_line_lp_comb_add();
-
-k.combs.n_spls.array_init (k.combs.n_diffusors);
-k.combs.n_spls.ptr[0] = ((1116 * k.src.srate) / 44100) | 0;
-k.combs.n_spls.ptr[1] = ((1188 * k.src.srate) / 44100) | 0;
-k.combs.n_spls.ptr[2] = ((1277 * k.src.srate) / 44100) | 0;
-k.combs.n_spls.ptr[3] = ((1356 * k.src.srate) / 44100) | 0;
-k.combs.n_spls.ptr[4] = ((1422 * k.src.srate) / 44100) | 0;
-k.combs.n_spls.ptr[5] = ((1491 * k.src.srate) / 44100) | 0;
-k.combs.n_spls.ptr[6] = ((1557 * k.src.srate) / 44100) | 0;
-k.combs.n_spls.ptr[7] = ((1617 * k.src.srate) / 44100) | 0;
-
-combs.l_spls.array_init (k.combs.n_diffusors);
-combs.r_spls.array_init (k.combs.n_diffusors);
-
 // Late/Tail feedback ----------------------------------------------------------
 
 function from_ascending_to_chnl_order (spls_ptr, spls_size) global()(
@@ -380,20 +355,6 @@ k.dif.g.array2d_ptr(1)[2] = G - 0.2;
 k.dif.g.array2d_ptr(1)[3] = G;
 dif.r.delay_line_allpass_set_g_all (k.dif.g.array2d_ptr (1));
 
-i = 0;
-combs.l_spls.array_copy (k.combs.n_spls);
-combs.r_spls.array_copy (k.combs.n_spls);
-loop (k.combs.n_diffusors,
-  tmp.fact = i / k.combs.n_diffusors;
-  combs.l.delay_line_lp_comb_set_damp (damp * damp + 0.07 * tmp.fact, i);
-  combs.r.delay_line_lp_comb_set_damp (damp * damp + 0.05 * tmp.fact, i);
-  combs.l.delay_line_lp_comb_set_g (sqrt (diffusion), i);
-  combs.r.delay_line_lp_comb_set_g (sqrt (diffusion), i);
-  combs.r_spls.ptr[i] += primes.ptr[i % 4] * width * i < 4 ? -4 : 4;
-  combs.r_spls.ptr[i] |= 0;
-  i += 1;
-);
-
 late.mtx.w1_a = cos (2 * angle1 * $pi * 0.25);
 late.mtx.w2_a = sin (2 * angle1 * $pi * 0.25);
 late.mtx.w1_b = cos (2 * angle2 * $pi * 0.25);
@@ -494,15 +455,6 @@ BYPASS_SRC == 0 ? (
 
   dif.l = in.l;
   dif.r = in.r;
-
-  BYPASS_FREEVERB_DIFFUSOR == 0 ? (
-    dif.l = combs.l.delay_line_lp_comb_tick_tapped_parallel_all(
-      dif.l, 2, combs.l_spls.ptr
-      );
-    dif.r = combs.r.delay_line_lp_comb_tick_tapped_parallel_all(
-      dif.r, 2, combs.r_spls.ptr
-    );
-  );
 
   late.signal.array_clear();
   late.signal.ptr[0] = dif.r;
