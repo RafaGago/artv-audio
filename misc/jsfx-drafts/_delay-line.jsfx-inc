@@ -360,12 +360,14 @@ function schroeder_allpass_tick (in, delay_spls) global (_libmem*) (
 //
 // nest_ap.delay_line_init (1024, 4);
 // nest_ap.delay_line_nested_allpass_add (3);
+//
+// To set "g" use the non-nested allpass functions.
 
 function delay_line_nested_allpass_add (depth)
     global() (
     this.delay_line_allpass_add();
     this.n_nested = depth;
-    this.n_channels_nested = this.channels / (depth + 1);
+    this.n_channels_nested = this.n_channels / (depth + 1);
 );
 
 function delay_line_nested_allpass_tick (in, chnl, delay_spls_ptr)
@@ -383,7 +385,7 @@ function delay_line_nested_allpass_tick (in, chnl, delay_spls_ptr)
   );
 
   y  = in + yn * g; // feedback
-  this.delay_line_set (y, 0, chnl);
+  this.delay_line_set (y, 0, ch_idx);
   yn - y * g; // feedforward
 );
 

@@ -1,29 +1,28 @@
   desc:Downsampled FDN draft
 //slider1:enable_impulse= 0   <0 ,2, 1{Off,Impulse,White noise}> Test
 //slider2:mute=           0   <0, 1{Off,On}>    Reverb mute
-slider3:rt60_msec=     3300 <10 ,12000 ,0.1>  RT60 (msec)
-slider4:size_m=       22.09 <1.2, 70, 0.001>  Size1 (m)
+slider3:rt60_msec=      3300 <10 ,12000 ,0.1> RT60 (msec)
+slider4:size_m=         22.09 <1.2, 70, 0.001> Size1 (m)
 
-slider6:early_amt=     0.7 <0, 1, 0.01>       ER
-slider7:er_2_late=      0.3 <0, 1, 0.01>    ER to late(%)
-slider8:sig_2_late=      0.3 <0, 1, 0.01>    Signal to late(%)
-slider9:late_amt=      0.7 <0, 1, 0.01>     late
+slider6:early_amt=      0.7 <0, 1, 0.01> ER
+slider7:er_2_late=      0.3 <0, 1, 0.01> ER to late(%)
+slider8:sig_2_late=     0.3 <0, 1, 0.01> Signal to late(%)
+slider9:late_amt=       0.7 <0, 1, 0.01> late
 
-slider11:mod_freq=     0.6 <0, 7, 0.001>     Mod Freq(Hz)
-slider12:mod_depth=     0.1 <0, 1, 0.001>     Mod Depth
-slider13:mod_stereo=    0.5 <-1, 1, 0.001>   Mod Stereo
+slider11:mod_freq=      0.6 <0, 7, 0.001> Mod Freq(Hz)
+slider12:mod_depth=     0.1 <0, 1, 0.001> Mod Depth
+slider13:mod_stereo=    0.5 <-1, 1, 0.001> Mod Stereo
 
-//slider12:n_density=       0 <0, 4, 1>         Density Inc
-//slider13:n_diffusers=     0 <0, 8, 1>         Diffusors
-//slider14:tilt=            0 <-0.5, 0.5, 0.01> Tilt
-slider15:angle1=      0.5 <0.1, 0.9, 0.001> L Angle
-slider16:angle2=      0.5 <0.1, 0.9, 0.001> R Angle
-slider17:angle3=      0.5 <0.1, 0.9, 0.001> L-R Angle
-slider19:diffusion=   0.6 <0, 0.77, 0.001> Diffusion
-//slider20:width=       0.5 <0, 1, 0.01> Width
-slider21:damp=        0.5 <0.0, 1, 0.001> Damping
-slider22:damp_f=      0. <-1, 1, 0.001> Damping Freq
-slider23:hp_f=        2. <2, 60, 0.001> HP (hz)
+slider15:angle1=        0.5 <0.1, 0.9, 0.001> L Angle
+slider16:angle2=        0.5 <0.1, 0.9, 0.001> R Angle
+slider17:angle3=        0.5 <0.1, 0.9, 0.001> L-R Angle
+
+slider19:diffusion=     0.6 <0, 0.77, 0.001> Out Diffusor
+slider20:diffusion_inc= 0.1 <0, 0.5, 0.001> FB Diffusor
+
+slider22:damp=          0.5 <0.0, 1, 0.001> Damping
+slider23:damp_f=        0. <-1, 1, 0.001> Damping Freq
+slider24:hp_f=          2. <2, 60, 0.001> HP (hz)
 
 in_pin:left input
 in_pin:right input
@@ -101,8 +100,8 @@ src.outs.array_clear();
 
 // TODO how many?
 loop(floor (srate / 44100) * 2,
-  src.out_q.deque_push(0);
-  src.out_q.deque_push(0);
+  src.out_q.deque_push (0);
+  src.out_q.deque_push (0);
 );
 
 // Early/Reflections -----------------------------------------------------------
@@ -304,6 +303,38 @@ dif.r.delay_line_allpass_add();
 
 k.dif.g.array2d_init (2, k.dif.n_diffusors);
 
+// Internal Diffusion ---------------------------------------------------------
+BYPASS_INTERNAL_DIFFUSOR = 0;
+
+k.int_dif.n_diffusors = 1;
+k.int_dif.nested_depth = 3;
+k.int_dif.n_raw_diffusors = (1 + k.int_dif.nested_depth) * k.int_dif.n_diffusors;
+
+k.int_dif.n_spls.array2d_init (2, k.int_dif.n_raw_diffusors);
+
+// Prime factors with an approx difference of 2.85.
+k.int_dif.n_spls.array2d_ptr(0)[0] = 37;
+k.int_dif.n_spls.array2d_ptr(0)[1] = 103;
+k.int_dif.n_spls.array2d_ptr(0)[2] = 293;
+k.int_dif.n_spls.array2d_ptr(0)[3] = 829;
+
+k.int_dif.n_spls.array2d_ptr(1)[0] = 41;
+k.int_dif.n_spls.array2d_ptr(1)[1] = 113;
+k.int_dif.n_spls.array2d_ptr(1)[2] = 317;
+k.int_dif.n_spls.array2d_ptr(1)[3] = 887;
+
+int_dif.l.delay_line_init(
+  round_next_pow2 (k.src.srate), k.int_dif.n_raw_diffusors
+  );
+int_dif.l.delay_line_nested_allpass_add (k.int_dif.nested_depth);
+
+int_dif.r.delay_line_init(
+  round_next_pow2 (k.src.srate), k.int_dif.n_raw_diffusors
+  );
+int_dif.r.delay_line_nested_allpass_add (k.int_dif.nested_depth);
+
+k.int_dif.g.array2d_init (2, k.int_dif.n_raw_diffusors);
+
 // Crossover -------------------------------------------------------------------
 // 1 pole lowpasses. HP by subtraction.
 
@@ -427,6 +458,19 @@ get_rt60_gain(
   k.late.n_channels,
   k.src.srate
   );
+
+G = diffusion_inc *  0.9;
+k.int_dif.g.array2d_ptr(0)[0] = G;
+k.int_dif.g.array2d_ptr(0)[1] = G;
+k.int_dif.g.array2d_ptr(0)[2] = G;
+k.int_dif.g.array2d_ptr(0)[3] = G;
+int_dif.l.delay_line_allpass_set_g_all (k.int_dif.g.array2d_ptr (0));
+
+k.int_dif.g.array2d_ptr(1)[0] = G;
+k.int_dif.g.array2d_ptr(1)[1] = G;
+k.int_dif.g.array2d_ptr(1)[2] = G;
+k.int_dif.g.array2d_ptr(1)[3] = G;
+int_dif.r.delay_line_allpass_set_g_all (k.int_dif.g.array2d_ptr (1));
 
 G = diffusion *  0.9;
 k.dif.g.array2d_ptr(0)[0] = G;
@@ -659,12 +703,12 @@ BYPASS_SRC == 0 ? (
       );
     range_add (chorus.n_spls.ptr, chorus.mod.ptr, chorus.mod.size);
 
-    late.delay.delay_line_thiran2_get_all(
-      chorus.signal.ptr, chorus.n_spls.ptr
-      );
-//    late.delay.delay_line_get_catmull_rom_interp_all(
+//    late.delay.delay_line_thiran2_get_all(
 //      chorus.signal.ptr, chorus.n_spls.ptr
-//    );
+//      );
+    late.delay.delay_line_get_catmull_rom_interp_all(
+      chorus.signal.ptr, chorus.n_spls.ptr
+    );
 
     late.feedback.array_copy (chorus.signal);
 
@@ -673,6 +717,37 @@ BYPASS_SRC == 0 ? (
     chorus.n_spls.array_size_drop_to (0);
   ) : (
     late.delay.delay_line_get_all (late.feedback.ptr, late.delay_spls.ptr);
+  );
+
+  // Additional diffusor
+  BYPASS_INTERNAL_DIFFUSOR == 0 ? (
+    // AP diffusion on the channels that go out.
+    // TODO Modulate.
+    int_dif.l.delay_line_advance();
+    int_dif.r.delay_line_advance();
+
+    late.feedback.ptr[4] = int_dif.l.delay_line_nested_allpass_tick(
+       late.feedback.ptr[4], 0, k.int_dif.n_spls.array2d_ptr (0)
+       );
+    late.feedback.ptr[11] = int_dif.r.delay_line_nested_allpass_tick(
+       late.feedback.ptr[11], 0, k.int_dif.n_spls.array2d_ptr (1)
+       );
+  );
+
+  BYPASS_TANH = 0;
+  BYPASS_TANH == 0 && spl_op_counter & 15 == 0 ? (
+    i = 0;
+    loop (late.feedback.size,
+      late.feedback.ptr[i] = tanh_vaneev (late.feedback.ptr[i]);
+      i += 1;
+    );
+  );
+
+  BYPASS_ROTATIONS = 1;
+  BYPASS_ROTATIONS == 0 ? (
+    spl_op_counter & 4095 == 0 ? (
+      range_rotate_down (late.feedback.ptr + 4, 8, 1);
+    );
   );
 
   BYPASS_FILTERING == 0 ? (

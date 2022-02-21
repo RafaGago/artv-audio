@@ -367,12 +367,32 @@ function range_rotate_down (src_dst_ptr, size, count)
     local (i, tmp)
     global()(
 
-    // not reinventing memmove, naive...
+    // naive...
     this.tmp.array_init (size);
     memcpy (this.tmp.ptr, src_dst_ptr, size);
     memcpy (src_dst_ptr + count, this.tmp.ptr, size - count);
     memcpy (src_dst_ptr, this.tmp.ptr + size - count, count);
     this.tmp.array_size_drop_to (0);
+);
+
+function range_rotate_up (src_dst_ptr, size, count)
+    local (i, tmp)
+    global()(
+
+    // naive...
+    this.tmp.array_init (size);
+    memcpy (this.tmp.ptr, src_dst_ptr, size);
+    memcpy (src_dst_ptr, this.tmp.ptr + count, size - count);
+    memcpy (src_dst_ptr + size - count, this.tmp.ptr, count);
+    this.tmp.array_size_drop_to (0);
+);
+
+function range_rotate (src_dst_ptr, size, count) global() (
+  count >= 0 ? (
+    range_rotate_down (src_dst_ptr, size, count);
+    ) : (
+    range_rotate_up (src_dst_ptr, size, -count);
+    );
 );
 // -----------------------------------------------------------------------------
 function ifft_rescale (fft_ptr, fft_size) global() local (i, f, a, b)(
@@ -424,7 +444,6 @@ function deque_pop() global() local (sz, ret) (
   );
   ret;
 );
-
 // -----------------------------------------------------------------------------
 function gcd (v1, v2) local (a, b, c) global() (
   c = 0;
@@ -437,6 +456,20 @@ function gcd (v1, v2) local (a, b, c) global() (
   );
   a;
 );
+// -----------------------------------------------------------------------------
+function tanh_vaneev (x)
+  global() local (ax, x2) (
+
+  ax = abs (x);
+  x2 = x * x;
+
+  x  * (2.45550750702956 +
+    2.45550750702956 * ax +
+    (0.893229853513558 + 0.821226666969744 * ax) * x2)
+    / (2.44506634652299 + (2.44506634652299 + x2) *
+    abs (x + 0.814642734961073 * x * ax));
+);
+
 // -----------------------------------------------------------------------------
 // Memory inspection functions.Usage e.g. from inside a function:
 //
