@@ -1,15 +1,17 @@
- desc:Downsampled FDN draft
+  desc:Downsampled FDN draft
 //slider1:enable_impulse= 0   <0 ,2, 1{Off,Impulse,White noise}> Test
 //slider2:mute=           0   <0, 1{Off,On}>    Reverb mute
 slider3:rt60_msec=     3300 <10 ,12000 ,0.1>  RT60 (msec)
 slider4:size_m=       22.09 <1.2, 70, 0.001>  Size1 (m)
 
-slider6:er_2_late=      0.3 <0, 1, 0.01>    ER to late(%)
-slider7:er_late=      0.7 <0, 1, 0.01>      ER/late
+slider6:early_amt=     0.7 <0, 1, 0.01>       ER
+slider7:er_2_late=      0.3 <0, 1, 0.01>    ER to late(%)
+slider8:sig_2_late=      0.3 <0, 1, 0.01>    Signal to late(%)
+slider9:late_amt=      0.7 <0, 1, 0.01>     late
 
-slider9:mod_freq=     0.6 <0, 7, 0.001>     Mod Freq(Hz)
-slider10:mod_depth=     0.1 <0, 1, 0.001>     Mod Depth
-slider11:mod_stereo=    0.5 <-1, 1, 0.001>   Mod Stereo
+slider11:mod_freq=     0.6 <0, 7, 0.001>     Mod Freq(Hz)
+slider12:mod_depth=     0.1 <0, 1, 0.001>     Mod Depth
+slider13:mod_stereo=    0.5 <-1, 1, 0.001>   Mod Stereo
 
 //slider12:n_density=       0 <0, 4, 1>         Density Inc
 //slider13:n_diffusers=     0 <0, 8, 1>         Diffusors
@@ -20,7 +22,9 @@ slider17:angle3=      0.5 <0.1, 0.9, 0.001> L-R Angle
 slider19:diffusion=   0.6 <0, 0.77, 0.001> Diffusion
 //slider20:width=       0.5 <0, 1, 0.01> Width
 slider21:damp=        0.5 <0.0, 1, 0.001> Damping
-Q
+slider22:damp_f=      0. <-1, 1, 0.001> Damping Freq
+slider23:hp_f=        2. <2, 60, 0.001> HP (hz)
+
 in_pin:left input
 in_pin:right input
 out_pin:left output
@@ -33,6 +37,12 @@ import _reverb.jsfx-inc
 import _dynamics.jsfx-inc
 import _lfo.jsfx-inc
 import _fir.jsfx-inc
+
+//Try
+// Nested allpasses
+// Nested combs
+// Circular allpasses
+// Circular combs
 
 @init
 
@@ -102,19 +112,19 @@ k.early.n_stages = 34;
 k.early.n_channels = 4;
 
 k.early.a.meters = 2;
-k.early.a.span = 8;
+k.early.a.span = 7;
 k.early.a.g  = 0.9;
 
 k.early.b.meters = 2.4;
-k.early.b.span = 2.;
+k.early.b.span = 3.;
 k.early.b.g  = 0.6;
 
 k.early.c.meters = 2.6;
-k.early.c.span = 1.7;
+k.early.c.span = 3.1;
 k.early.c.g  = 0.6;
 
-k.early.d.meters = 2.8;
-k.early.d.span = 1.5;
+k.early.d.meters = 3.8;
+k.early.d.span = 3.1;
 k.early.d.g  = 0.6;
 
 k.early.prime_idx = 1;
@@ -299,30 +309,14 @@ k.dif.g.array2d_init (2, k.dif.n_diffusors);
 
 BYPASS_FILTERING   = 0;
 k.filt.att_fact_db = -9;
+k.filt.freq_fact   = 1.4;
 
 k.filt.dampfactor.array_init (k.late.n_channels);
-k.filt.dampfactor.ptr[0]  = 1 - 500 /  (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[1]  = 1 - 530 /  (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[2]  = 1 - 640 /  (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[3]  = 1 - 600 /  (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[4]  = 1 - 860 /  (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[5]  = 1 - 800 /  (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[6]  = 1 - 920 /  (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[7]  = 1 - 900 /  (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[8]  = 1 - 1000 / (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[9]  = 1 - 1100 / (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[10] = 1 - 1200 / (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[11] = 1 - 1000 / (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[12] = 1 - 2200 / (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[13] = 1 - 2000 / (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[14] = 1 - 3000 / (k.src.srate * 0.5 - 2);
-k.filt.dampfactor.ptr[15] = 1 - 3200 / (k.src.srate * 0.5 - 2);
 
-from_ascending_to_chnl_order (k.filt.dampfactor.ptr, k.filt.dampfactor.size);
 // Chorus ----------------------------------------------------------------------
 BYPASS_CHORUS = 0;
 
-k.chorus.max_depth_spls = 60; // both sides
+k.chorus.max_depth_spls = 30; // both sides
 k.chorus.max_width = 0.5;
 
 // TODO: random walk?
@@ -335,23 +329,6 @@ chorus.lfo.r.lfo_bank_reset_phase (0);
 
 // DC blockers -----------------------------------------------------------------
 k.dc.cutoff_freq = 2;
-
-dc.a.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.b.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.c.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.d.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.e.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.f.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.g.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.h.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.i.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.j.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.k.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.l.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.m.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.n.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.o.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
-dc.p.dc_blocker_init (k.dc.cutoff_freq, k.src.srate);
 
 @slider //----------------------------------------------------------------------
 
@@ -398,6 +375,29 @@ function reset_filters (filt*, dampfact_ptr, damp, srate)
 
   this.sr.array_size_drop_to (0);
 );
+
+function reset_dc_blockers_x16 (dc*, freq, srate)
+  global() local ()(
+
+  dc.a.dc_blocker_init (freq, srate);
+  dc.b.dc_blocker_init (freq, srate);
+  dc.c.dc_blocker_init (freq, srate);
+  dc.d.dc_blocker_init (freq, srate);
+  dc.e.dc_blocker_init (freq, srate);
+  dc.f.dc_blocker_init (freq, srate);
+  dc.g.dc_blocker_init (freq, srate);
+  dc.h.dc_blocker_init (freq, srate);
+  dc.i.dc_blocker_init (freq, srate);
+  dc.j.dc_blocker_init (freq, srate);
+  dc.k.dc_blocker_init (freq, srate);
+  dc.l.dc_blocker_init (freq, srate);
+  dc.m.dc_blocker_init (freq, srate);
+  dc.n.dc_blocker_init (freq, srate);
+  dc.o.dc_blocker_init (freq, srate);
+  dc.p.dc_blocker_init (freq, srate);
+);
+
+reset_dc_blockers_x16 (dc, hp_f, k.src.srate);
 
 get_delay_length_samples(
   late.delay_spls.ptr,
@@ -454,6 +454,33 @@ chorus.freq_l = mod_freq;
 chorus.freq_r = mod_freq * exp (chorus.freq_fact);
 chorus.lfo.l.lfo_bank_reset_freq (0, chorus.freq_l, k.src.srate);
 chorus.lfo.r.lfo_bank_reset_freq (0, chorus.freq_r, k.src.srate);
+
+k.filt.damp_mult = exp (k.filt.freq_fact * damp_f);
+k.filt.dampfactor.ptr[0]  = 500 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[1]  = 530 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[2]  = 640 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[3]  = 600 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[4]  = 860 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[5]  = 800 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[6]  = 920 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[7]  = 900 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[8]  = 1000 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[9]  = 1100 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[10] = 1200 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[11] = 1000 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[12] = 2200 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[13] = 2000 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[14] = 3000 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[15] = 3200 * k.filt.damp_mult;
+
+i = 0;
+loop (k.filt.dampfactor.size,
+  k.filt.dampfactor.ptr[i] =
+    1 - k.filt.dampfactor.ptr[i] / (k.src.srate * 0.5 - 2);
+  i += 1;
+);
+
+from_ascending_to_chnl_order (k.filt.dampfactor.ptr, k.filt.dampfactor.size);
 
 reset_filters (filt, k.filt.dampfactor.ptr, sqrt (damp), k.src.srate);
 k.filt.att = pow (10, k.filt.att_fact_db * damp * 1/40);
@@ -574,8 +601,8 @@ BYPASS_SRC == 0 ? (
   range_rotate_down (early.mix.ptr, early.mix.size, 1);
   range_add (early.signal.ptr, early.mix.ptr, early.mix.size);
 
-  early.l = early.signal.ptr[0] * 0.25;
-  early.r = early.signal.ptr[3] * 0.25;
+  early.l = early.signal.ptr[0] * 0.5;
+  early.r = early.signal.ptr[3] * 0.5;
 
   early.mix.array_size_drop_to (0);
 
@@ -584,10 +611,10 @@ BYPASS_SRC == 0 ? (
   dif.r = in.r;
 
   late.signal.array_clear();
-  late.signal.ptr[0] = dif.r;
+  late.signal.ptr[0] = dif.r * sig_2_late;
   late.signal.ptr[1] = early.r * er_2_late;
   late.signal.ptr[14] = early.l * er_2_late;
-  late.signal.ptr[15] = dif.l;
+  late.signal.ptr[15] = dif.l * sig_2_late;
 
   range_add(
     late.signal.ptr, late.signal.ptr, late.feedback.ptr, late.signal.size
@@ -616,7 +643,6 @@ BYPASS_SRC == 0 ? (
   tmp.sig_cp1.array_size_drop_to(0); // return memory (used as a stack).
 
   // Feedback processing
-
   late.delay.delay_line_advance();
   late.delay.delay_line_set_all (late.signal.ptr, 0);
 
@@ -633,12 +659,12 @@ BYPASS_SRC == 0 ? (
       );
     range_add (chorus.n_spls.ptr, chorus.mod.ptr, chorus.mod.size);
 
-//    late.delay.delay_line_thiran2_get_all(
-//      chorus.signal.ptr, chorus.n_spls.ptr
-//      );
-    late.delay.delay_line_get_catmull_rom_interp_all(
+    late.delay.delay_line_thiran2_get_all(
       chorus.signal.ptr, chorus.n_spls.ptr
-    );
+      );
+//    late.delay.delay_line_get_catmull_rom_interp_all(
+//      chorus.signal.ptr, chorus.n_spls.ptr
+//    );
 
     late.feedback.array_copy (chorus.signal);
 
@@ -680,8 +706,8 @@ BYPASS_SRC == 0 ? (
   );
 
   BYPASS_LATE == 0 ? (
-    late.l *= er_late;
-    late.r *= er_late;
+    late.l *= late_amt;
+    late.r *= late_amt;
     out.l = late.l;
     out.r = late.r;
   ) : (
@@ -704,10 +730,10 @@ BYPASS_SRC == 0 ? (
     out.l = postdif.l * mix + out.l * (1 - mix);
     out.r = postdif.r * mix - out.r * (1 - mix);
   );
-  
+
   BYPASS_EARLY == 0 ? (
-    early.l *= (1 - er_late);
-    early.r *= (1 - er_late);
+    early.l *= early_amt;
+    early.r *= early_amt;
     out.l += early.l;
     out.r += early.r;
   );
