@@ -228,28 +228,28 @@ function freq_to_allpass_g (freq, samplerate)
 // no interpolation
 // dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
 function delay_line_allpass_tick (dst_ptr, in_ptr, delay_spls_ptr)
-    local (i, g, y, y1) global()(
+    local (i, g, y, yn) global()(
 
     this.delay_line_advance();
     i = 0;
     loop (this.n_channels,
         g  = this.g.ptr[i];
-        y1 = this.delay_line_get (delay_spls_ptr[i], i);
-        y  = in_ptr[i] - y1 * g;
+        yn = this.delay_line_get (delay_spls_ptr[i], i);
+        y  = in_ptr[i] + yn * g; // feedback
         this.delay_line_set (y, 0, i);
-        dst_ptr[i] = y * g + y1;
-        i += 1;
+        dst_ptr[i] = yn - y * g;
+        i += 1; // feedforward
     );
 );
 
 function delay_line_allpass_tick (in, chnl, delay_spls)
-  global() local(g, y, y1, out) (
+  global() local(g, y, yn, out) (
 
   g  = this.g.ptr[chnl];
-  y1 = this.delay_line_get (delay_spls, chnl);
-  y  = in - y1 * g;
+  yn = this.delay_line_get (delay_spls, chnl);
+  y  = in + yn * g; // feedback
   this.delay_line_set (y, 0, chnl);
-  y * g + y1;
+  yn - y * g; // feedforward
 );
 
 // no interpolation
@@ -330,7 +330,6 @@ function delay_line_allpass_tick_tapped_cascade_all(
     );
     out / (count_tapped + 1);
 );
-
 //------------------------------------------------------------------------------
 // object version of the Schroeder above
 function schroeder_allpass (max_delay_spls)(
@@ -346,6 +345,87 @@ function schroeder_allpass_tick (in, delay_spls) global (_libmem*) (
     _libmem.ptr[0] = delay_spls;
     _libmem.ptr[1] = 0;
     this.delay_line_allpass_tick_cascade_all (in, 1, _libmem.ptr);
+);
+//------------------------------------------------------------------------------
+// Adds a nested allpass delay line.
+//
+// Depth is the number of serial allpasses inside the nesting. The regular
+// nested allpass would be of depth = 1.
+//
+// The number of effective channels of the delay line gets divided by "1 +
+// depth". When passing the number of delays in samples, the order is
+// external delay + N nestings.
+//
+// E.g, this creates 1 channel of a nested allpass of 1 + 3 elements.
+//
+// nest_ap.delay_line_init (1024, 4);
+// nest_ap.delay_line_nested_allpass_add (3);
+
+function delay_line_nested_allpass_add (depth)
+    global() (
+    this.delay_line_allpass_add();
+    this.n_nested = depth;
+    this.n_channels_nested = this.channels / (depth + 1);
+);
+
+function delay_line_nested_allpass_tick (in, chnl, delay_spls_ptr)
+  global() local (ch_idx, g, y, yn, i) (
+
+  ch_idx = chnl * (this.n_nested + 1);
+
+  g  = this.g.ptr[ch_idx];
+  yn = this.delay_line_get (delay_spls_ptr[0], ch_idx);
+
+  i = 1;
+  loop (this.n_nested,
+    yn = this.delay_line_allpass_tick (yn, ch_idx + i, delay_spls_ptr[i]);
+    i += 1;
+  );
+
+  y  = in + yn * g; // feedback
+  this.delay_line_set (y, 0, chnl);
+  yn - y * g; // feedforward
+);
+
+// no interpolation
+// dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
+function delay_line_nested_allpass_tick_cascade_all(
+    in, active_count, delay_spls_ptr
+    )
+    local (i, offs, out) global() (
+
+    this.delay_line_advance();
+    i = 0;
+    out = in;
+    offs = 0;
+    loop (active_count,
+      out = this.delay_line_nested_allpass_tick (out, i, delay_spls_ptr + offs);
+      offs += this.n_channels_nested;
+      i += 1;
+    );
+    loop (this.n_channels_nested - active_count,
+      this.delay_line_nested_allpass_tick (0, i, delay_spls_ptr + offs);
+      offs += this.n_channels_nested;
+      i += 1;
+    );
+    out;
+);
+
+function delay_line_nested_allpass_tick_parallel_all(
+    out_ptr, in_ptr, delay_spls_ptr
+    )
+    local (i, offs) global() (
+
+    this.delay_line_advance();
+    i = 0;
+    offs = 0;
+    loop (this.n_channels_nested,
+      out_ptr[i] = this.delay_line_nested_allpass_tick(
+          in_ptr[i], i, delay_spls_ptr + offs
+          );
+      offs += this.n_channels_nested;
+      i += 1;
+    );
 );
 //------------------------------------------------------------------------------
 // LP comb as in the freeverb comb
