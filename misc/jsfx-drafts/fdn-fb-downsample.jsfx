@@ -17,8 +17,8 @@ slider15:angle1=        0.5 <0.1, 0.9, 0.001> L Angle
 slider16:angle2=        0.5 <0.1, 0.9, 0.001> R Angle
 slider17:angle3=        0.5 <0.1, 0.9, 0.001> L-R Angle
 
-slider19:diffusion=     0.6 <0, 0.77, 0.001> Out Diffusor
-slider20:diffusion_inc= 0.1 <0, 1, 0.001> FB Diffusor
+slider19:out_diffusion=  0.6 <0, 0.77, 0.001> Out Diffusor
+slider20:in_diffusion=   0.5 <0.0, 0.39, 0.001> In Diffusor
 
 slider22:damp=          0.5 <0.0, 1, 0.001> Damping
 slider23:damp_f=        0. <-1, 1, 0.001> Damping Freq
@@ -279,45 +279,44 @@ from_ascending_to_chnl_order(
   late.k.delay_preset.array2d_ptr(0), k.late.n_channels
   );
 
-// Internal Diffusion ---------------------------------------------------------
+// Input Diffusion -------------------------------------------------------------
 BYPASS_IN_DIFFUSOR = 0;
 
-k.pre_dif.n_diffusors = 4;
+pre_dif.g_mod_diffusor_init (k.pre_dif, 0.1, 1.6, 0.8, k.src.srate);
 
+// required by "g_mod_diffusor_tick"
 k.pre_dif.n_spls.array2d_init (2, k.pre_dif.n_diffusors);
-
-k.pre_dif.n_spls.array2d_ptr(0)[0] = 887;
-k.pre_dif.n_spls.array2d_ptr(0)[1] = 478;
-k.pre_dif.n_spls.array2d_ptr(0)[2] = 419;
+k.pre_dif.n_spls.array2d_ptr(0)[0] = 43;
+k.pre_dif.n_spls.array2d_ptr(0)[1] = 113;
+k.pre_dif.n_spls.array2d_ptr(0)[2] = 317;
 k.pre_dif.n_spls.array2d_ptr(0)[3] = 907;
 
-k.pre_dif.n_spls.array2d_ptr(1)[0] = 887;
-k.pre_dif.n_spls.array2d_ptr(1)[1] = 478;
-k.pre_dif.n_spls.array2d_ptr(1)[2] = 421;
-k.pre_dif.n_spls.array2d_ptr(1)[3] = 907;
+k.pre_dif.n_spls.array2d_ptr(1)[0] = 43;
+k.pre_dif.n_spls.array2d_ptr(1)[1] = 113;
+k.pre_dif.n_spls.array2d_ptr(1)[2] = 317;
+k.pre_dif.n_spls.array2d_ptr(1)[3] = 906;
 
-k.pre_dif.channel_l = 2;
-k.pre_dif.channel_r = 13;
+// Internal Diffusion ---------------------------------------------------------
+BYPASS_INTERNAL_DIFFUSOR = 0;
 
-pre_dif.l.delay_line_init(
-  round_next_pow2 (k.src.srate), k.pre_dif.n_diffusors
-  );
-pre_dif.l.delay_line_allpass_add();
+int_dif.g_mod_diffusor_init (k.int_dif, 0.11, 0.6, 0.8, k.src.srate);
 
-pre_dif.r.delay_line_init(
-  round_next_pow2 (k.src.srate), k.pre_dif.n_diffusors
-  );
-pre_dif.r.delay_line_allpass_add();
+// required by "g_mod_diffusor_tick"
+k.int_dif.n_spls.array2d_init (2, k.int_dif.n_diffusors);
+k.int_dif.n_spls.array2d_ptr(0)[0] = 887;
+k.int_dif.n_spls.array2d_ptr(0)[1] = 478;
+k.int_dif.n_spls.array2d_ptr(0)[2] = 419;
+k.int_dif.n_spls.array2d_ptr(0)[3] = 907;
 
-k.pre_dif.g_base = 0.65;
-k.pre_dif.g_mod_depth = 0.26;
-k.pre_dif.g_mod_freq = 0.6;
+k.int_dif.n_spls.array2d_ptr(1)[0] = 887;
+k.int_dif.n_spls.array2d_ptr(1)[1] = 478;
+k.int_dif.n_spls.array2d_ptr(1)[2] = 421;
+k.int_dif.n_spls.array2d_ptr(1)[3] = 907;
 
-// a random lfo?
-pre_dif.lfo.l.lfo_drift_sin_init (k.pre_dif.g_mod_freq, 0.8, k.src.srate);
-pre_dif.lfo.r.lfo_drift_sin_init (k.pre_dif.g_mod_freq, 0.8, k.src.srate);
-
-pre_dif.g.array2d_init (2, k.pre_dif.n_diffusors);
+// specific
+k.int_dif.channel_l = 2;
+k.int_dif.channel_r = 13;
+k.int_dif.g_base = 0.45;
 
 // Output Diffusion ------------------------------------------------------------
 BYPASS_OUT_DIFFUSOR = 0;
@@ -368,28 +367,6 @@ out_dif.r.delay_line_init(
 out_dif.r.delay_line_allpass_add();
 
 k.out_dif.g.array2d_init (2, k.out_dif.n_diffusors);
-
-// Internal Diffusion ---------------------------------------------------------
-BYPASS_INTERNAL_DIFFUSOR = 0;
-
-int_dif.g_mod_diffusor_init (k.int_dif, 0.26, 0.6, 0.8, k.src.srate);
-
-// required by "g_mod_diffusor_tick"
-k.int_dif.n_spls.array2d_init (2, k.int_dif.n_diffusors);
-k.int_dif.n_spls.array2d_ptr(0)[0] = 887;
-k.int_dif.n_spls.array2d_ptr(0)[1] = 478;
-k.int_dif.n_spls.array2d_ptr(0)[2] = 419;
-k.int_dif.n_spls.array2d_ptr(0)[3] = 907;
-
-k.int_dif.n_spls.array2d_ptr(1)[0] = 887;
-k.int_dif.n_spls.array2d_ptr(1)[1] = 478;
-k.int_dif.n_spls.array2d_ptr(1)[2] = 421;
-k.int_dif.n_spls.array2d_ptr(1)[3] = 907;
-
-// specific
-k.int_dif.channel_l = 2;
-k.int_dif.channel_r = 13;
-k.int_dif.g_base = 0.65;
 
 // Crossover -------------------------------------------------------------------
 // 1 pole lowpasses. HP by subtraction.
@@ -515,7 +492,7 @@ get_rt60_gain(
   k.src.srate
   );
 
-G = diffusion *  0.9;
+G = out_diffusion *  0.9;
 k.out_dif.g.array2d_ptr(0)[0] = G;
 k.out_dif.g.array2d_ptr(0)[1] = G - 0.4;
 k.out_dif.g.array2d_ptr(0)[2] = G - 0.2;
@@ -641,15 +618,14 @@ function g_mod_diffusor_tick (k*, g_base, in_l, in_r, n_spls_l_ptr, n_spls_r_ptr
   this.mod_r = this.lfo.r.lfo_drift_sin_tick();
 
   memset(
-    this.g.array2d_ptr (0),
-    g_base + this.mod_l * k.int_dif.g_mod_depth,
-    k.n_diffusors
+    this.g.array2d_ptr (0), g_base + this.mod_l * k.g_mod_depth, k.n_diffusors
     );
   memset(
-    this.g.array2d_ptr (1),
-    g_base + this.mod_r * k.g_mod_depth,
-    k.n_diffusors
+    this.g.array2d_ptr (1), g_base + this.mod_r * k.g_mod_depth, k.n_diffusors
     );
+
+  this.l.delay_line_allpass_set_g_all (this.g.array2d_ptr (0));
+  this.r.delay_line_allpass_set_g_all (this.g.array2d_ptr (1));
 
   this.out_l = this.l.delay_line_allpass_tick_cascade_all(
       in_l, k.n_diffusors, n_spls_l_ptr
@@ -675,18 +651,37 @@ BYPASS_SRC == 0 ? (
 
   in.l = src.ins.ptr[0];
   in.r = src.ins.ptr[1];
+  
+  // Input diffusor
+  BYPASS_INPUT_DIFFUSOR = 0;
+  BYPASS_INPUT_DIFFUSOR == 0 ? (
+    pre_dif.g_mod_diffusor_tick(
+      k.pre_dif,
+      in_diffusion,
+      in.l,
+      in.r,
+      k.pre_dif.n_spls.array2d_ptr (0),
+      k.pre_dif.n_spls.array2d_ptr (1)
+      );
+  
+    dif.l = pre_dif.out_l;
+    dif.r = pre_dif.out_r;
+  ) : (
+    dif.l = in.l;
+    dif.r = in.r;
+  );
 
-  in.m = (in.l + in.r) * 0.5;
-  in.s = (in.l - in.r) * 0.5;
+  in.m = (dif.l + dif.r) * 0.5;
+  in.s = (dif.l - dif.r) * 0.5;
 
   // early ---------------------------------------------------------------------
 
   early.mix.array_init (early.signal.size);
 
-  early.mix.ptr[0] = in.l;
-  early.mix.ptr[1] = in.m;
-  early.mix.ptr[2] = in.m;
-  early.mix.ptr[3] = in.r;
+  early.mix.ptr[0] = dif.l;
+  early.mix.ptr[1] = dif.m;
+  early.mix.ptr[2] = dif.m;
+  early.mix.ptr[3] = dif.r;
 
   early.a.delay.delay_line_allpass_tick_parallel_all(
     early.mix.ptr, early.mix.ptr, early.a.n_spls.ptr
@@ -720,8 +715,6 @@ BYPASS_SRC == 0 ? (
   early.mix.array_size_drop_to (0);
 
   // late ----------------------------------------------------------------------
-  dif.l = in.l;
-  dif.r = in.r;
 
   late.signal.array_clear();
   late.signal.ptr[0] = dif.r * sig_2_late;
