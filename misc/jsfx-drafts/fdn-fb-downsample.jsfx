@@ -13,9 +13,9 @@ slider11:mod_freq=      0.6 <0, 7, 0.001> Mod Freq(Hz)
 slider12:mod_depth=     0.1 <0, 1, 0.001> Mod Depth
 slider13:mod_stereo=    0.5 <-1, 1, 0.001> Mod Stereo
 
-slider15:angle1=        0.5 <0.1, 0.9, 0.001> L Angle
-slider16:angle2=        0.5 <0.1, 0.9, 0.001> R Angle
-slider17:angle3=        0.5 <0.1, 0.9, 0.001> L-R Angle
+slider15:angle1=        0.5 <0.2, 0.9, 0.001> L Angle
+slider16:angle2=        0.5 <0.2, 0.9, 0.001> R Angle
+slider17:angle3=        0.5 <0.2, 0.9, 0.001> L-R Angle
 
 slider19:out_diffusion=  0.6 <0, 0.77, 0.001> Out Diffusor
 slider20:in_diffusion=   0.5 <0.0, 0.39, 0.001> In Diffusor
@@ -23,6 +23,7 @@ slider20:in_diffusion=   0.5 <0.0, 0.39, 0.001> In Diffusor
 slider22:damp=          0.5 <0.0, 1, 0.001> Damping
 slider23:damp_f=        0. <-1, 1, 0.001> Damping Freq
 slider24:hp_f=          2. <2, 60, 0.001> HP (hz)
+slider25:rt60_l_mul=    1. <0.333, 2, 0.001> RT60 L mul
 
 in_pin:left input
 in_pin:right input
@@ -247,7 +248,8 @@ k.late.delay.rounding_factor = 1;
 k.late.delay.span_factor = GOLDEN_RATIO * 1.5;
 
 late.delay_spls.array_init (k.late.n_channels);
-late.rt60_att.array_init (k.late.n_channels);
+late.rt60_att_h.array_init (k.late.n_channels);
+late.rt60_att_l.array_init (k.late.n_channels);
 late.signal.array_init (k.late.n_channels);
 late.feedback.array_init (k.late.n_channels);
 
@@ -373,7 +375,7 @@ k.out_dif.g.array2d_init (2, k.out_dif.n_diffusors);
 
 BYPASS_FILTERING   = 0;
 k.filt.att_fact_db = -9;
-k.filt.freq_fact   = 1.4;
+k.filt.freq_fact   = 1.6;
 
 k.filt.dampfactor.array_init (k.late.n_channels);
 
@@ -484,7 +486,7 @@ from_ascending_to_chnl_order (late.delay_spls.ptr, late.delay_spls.size);
 );
 
 get_rt60_gain(
-  late.rt60_att.ptr,
+  late.rt60_att_h.ptr,
   late.delay_spls.ptr,
   rt60_msec * 0.001,
   0,
@@ -492,16 +494,25 @@ get_rt60_gain(
   k.src.srate
   );
 
+get_rt60_gain(
+  late.rt60_att_l.ptr,
+  late.delay_spls.ptr,
+  rt60_msec * 0.001 * rt60_l_mul,
+  0,
+  k.late.n_channels,
+  k.src.srate
+  );
+
 G = out_diffusion *  0.9;
 k.out_dif.g.array2d_ptr(0)[0] = G;
-k.out_dif.g.array2d_ptr(0)[1] = G - 0.4;
-k.out_dif.g.array2d_ptr(0)[2] = G - 0.2;
+k.out_dif.g.array2d_ptr(0)[1] = G;
+k.out_dif.g.array2d_ptr(0)[2] = G;
 k.out_dif.g.array2d_ptr(0)[3] = G;
 out_dif.l.delay_line_allpass_set_g_all (k.out_dif.g.array2d_ptr (0));
 
 k.out_dif.g.array2d_ptr(1)[0] = G;
-k.out_dif.g.array2d_ptr(1)[1] = G - 0.4;
-k.out_dif.g.array2d_ptr(1)[2] = G - 0.2;
+k.out_dif.g.array2d_ptr(1)[1] = G;
+k.out_dif.g.array2d_ptr(1)[2] = G;
 k.out_dif.g.array2d_ptr(1)[3] = G;
 out_dif.r.delay_line_allpass_set_g_all (k.out_dif.g.array2d_ptr (1));
 
@@ -534,8 +545,8 @@ k.filt.dampfactor.ptr[10] = 1200 * k.filt.damp_mult;
 k.filt.dampfactor.ptr[11] = 1000 * k.filt.damp_mult;
 k.filt.dampfactor.ptr[12] = 2200 * k.filt.damp_mult;
 k.filt.dampfactor.ptr[13] = 2000 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[14] = 3000 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[15] = 3200 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[14] = 2500 * k.filt.damp_mult;
+k.filt.dampfactor.ptr[15] = 2700 * k.filt.damp_mult;
 
 i = 0;
 loop (k.filt.dampfactor.size,
@@ -651,7 +662,7 @@ BYPASS_SRC == 0 ? (
 
   in.l = src.ins.ptr[0];
   in.r = src.ins.ptr[1];
-  
+
   // Input diffusor
   BYPASS_INPUT_DIFFUSOR = 0;
   BYPASS_INPUT_DIFFUSOR == 0 ? (
@@ -663,7 +674,7 @@ BYPASS_SRC == 0 ? (
       k.pre_dif.n_spls.array2d_ptr (0),
       k.pre_dif.n_spls.array2d_ptr (1)
       );
-  
+
     dif.l = pre_dif.out_l;
     dif.r = pre_dif.out_r;
   ) : (
@@ -797,7 +808,7 @@ BYPASS_SRC == 0 ? (
   );
 
   BYPASS_TANH = 0;
-  BYPASS_TANH == 0 && spl_op_counter & 15 == 0 ? (
+  BYPASS_TANH == 0 && spl_op_counter & 1 == 0 ? (
     i = 0;
     loop (late.feedback.size,
       late.feedback.ptr[i] = tanh_vaneev (late.feedback.ptr[i]);
@@ -819,16 +830,20 @@ BYPASS_SRC == 0 ? (
     run_filters (filt, late.lp.ptr, late.hp.ptr, late.feedback.ptr, k.filt.att);
 
     // YOLO correction
-    range_mul_k (late.lp.ptr, 1 + k.filt.att * 0.01, late.lp.size);
+    range_mul (late.hp.ptr, late.rt60_att_h.ptr, late.hp.size);
+    range_mul (late.lp.ptr, late.rt60_att_l.ptr, late.lp.size);
     range_add (late.feedback.ptr, late.lp.ptr, late.hp.ptr, late.feedback.size);
+
 
     late.hp.array_size_drop_to (0);
     late.lp.array_size_drop_to (0);
+  ) : (
+    range_mul (late.feedback.ptr, late.rt60_att_h.ptr, late.feedback.size);
   );
 
   dc_blockers_x16_tick (dc, late.feedback);
 
-  range_mul (late.feedback.ptr, late.rt60_att.ptr, late.feedback.size);
+
 
   // invert l and r. The real L comes from the upper channel half. Different
   // Character can be selected by choosing different outs. With the diffusor
