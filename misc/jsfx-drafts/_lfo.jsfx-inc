@@ -15,6 +15,16 @@ function lfo_size () global()(
     2;
 );
 
+function lfo_set_phase_inc (ptr, val)  global()(
+    // ptr[0] = phase delta, ptr[1] = current phase
+    ptr[0] = val;
+);
+
+function lfo_get_phase_inc (ptr)  global()(
+    // ptr[0] = phase delta, ptr[1] = current phase
+    ptr[0];
+);
+
 function lfo_get_phase (ptr)  global()(
     // ptr[0] = phase delta, ptr[1] = current phase
     ptr[1];
@@ -125,3 +135,22 @@ function lfo_filt_noise_tick () local (old_phase) global() (
     );
     this.lp.smooth_lp_1p_0z_tick (this.noise);
 );
+
+// Drifting SIN LFO -----------------------------------------------------------
+function lfo_drift_sin_init (freq, rnd_factor, samplerate) global()(
+    this.lp.smooth_lp_1p_0z_init (64 * freq, samplerate);
+    this.lfo_ptr  = mem_reserve (lfo_size());
+    lfo_init (this.lfo_ptr, freq, 0, samplerate);
+    this.phase_inc_ref = lfo_get_phase_inc (this.lfo_ptr);
+    this.factor = rnd_factor;
+);
+
+function lfo_drift_sin_tick() local (phase_inc) global() (
+    phase_inc  = this.phase_inc_ref;
+    phase_inc += this.phase_inc_ref * (rand (this.factor * 2) - this.factor);
+    phase_inc  = this.lp.smooth_lp_1p_0z_tick (phase_inc);
+    this.phi = phase_inc;
+    lfo_set_phase_inc (this.lfo_ptr, phase_inc);
+    lfo_tick_sin (this.lfo_ptr);
+);
+

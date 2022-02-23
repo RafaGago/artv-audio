@@ -1,4 +1,4 @@
-  desc:Downsampled FDN draft
+   desc:Downsampled FDN draft
 //slider1:enable_impulse= 0   <0 ,2, 1{Off,Impulse,White noise}> Test
 //slider2:mute=           0   <0, 1{Off,On}>    Reverb mute
 slider3:rt60_msec=      3300 <10 ,12000 ,0.1> RT60 (msec)
@@ -18,7 +18,7 @@ slider16:angle2=        0.5 <0.1, 0.9, 0.001> R Angle
 slider17:angle3=        0.5 <0.1, 0.9, 0.001> L-R Angle
 
 slider19:diffusion=     0.6 <0, 0.77, 0.001> Out Diffusor
-slider20:diffusion_inc= 0.1 <0, 0.5, 0.001> FB Diffusor
+slider20:diffusion_inc= 0.1 <0, 1, 0.001> FB Diffusor
 
 slider22:damp=          0.5 <0.0, 1, 0.001> Damping
 slider23:damp_f=        0. <-1, 1, 0.001> Damping Freq
@@ -233,7 +233,7 @@ late.feedback.array_init (k.late.n_channels);
 late.delay.delay_line_init(
   round_next_pow2 (k.src.srate), k.late.n_channels
   );
-late.delay.delay_line_thiran2_add (k.src.srate); // disable thiran resync
+late.delay.delay_line_thiran2_add (4);
 
 late.k.delay_preset.array2d_init (1, k.late.n_channels);
 
@@ -258,82 +258,91 @@ from_ascending_to_chnl_order(
   late.k.delay_preset.array2d_ptr(0), k.late.n_channels
   );
 // Output Diffusion ------------------------------------------------------------
-BYPASS_DIFFUSOR = 0;
+BYPASS_OUT_DIFFUSOR = 0;
 
-k.dif.n_diffusors = 4;
+k.out_dif.n_diffusors = 4;
 
-k.dif.n_spls.array2d_init (2, k.dif.n_diffusors);
+k.out_dif.n_spls.array2d_init (2, k.out_dif.n_diffusors);
 
 // Prime factors with an approx difference of 2.85.
 // L channel
-k.dif.n_spls.array2d_ptr(0)[0] = 19;
-k.dif.n_spls.array2d_ptr(0)[1] = 53;
-k.dif.n_spls.array2d_ptr(0)[2] = 157;
-k.dif.n_spls.array2d_ptr(0)[3] = 443;
+k.out_dif.n_spls.array2d_ptr(0)[0] = 19;
+k.out_dif.n_spls.array2d_ptr(0)[1] = 53;
+k.out_dif.n_spls.array2d_ptr(0)[2] = 157;
+k.out_dif.n_spls.array2d_ptr(0)[3] = 443;
 
 // R channel
 (1) ? (
   // more stereo, different set.
   (1) ? (
     // sounds more like noise and the equal"ish" set.
-    k.dif.n_spls.array2d_ptr(1)[0] = 23;
-    k.dif.n_spls.array2d_ptr(1)[1] = 67;
-    k.dif.n_spls.array2d_ptr(1)[2] = 191;
-    k.dif.n_spls.array2d_ptr(1)[3] = 532;
+    k.out_dif.n_spls.array2d_ptr(1)[0] = 23;
+    k.out_dif.n_spls.array2d_ptr(1)[1] = 67;
+    k.out_dif.n_spls.array2d_ptr(1)[2] = 191;
+    k.out_dif.n_spls.array2d_ptr(1)[3] = 532;
   ) : (
     // sounds more spatial probably
-    k.dif.n_spls.array2d_ptr(1)[0] = 29;
-    k.dif.n_spls.array2d_ptr(1)[1] = 83;
-    k.dif.n_spls.array2d_ptr(1)[2] = 239;
-    k.dif.n_spls.array2d_ptr(1)[3] = 683;
+    k.out_dif.n_spls.array2d_ptr(1)[0] = 29;
+    k.out_dif.n_spls.array2d_ptr(1)[1] = 83;
+    k.out_dif.n_spls.array2d_ptr(1)[2] = 239;
+    k.out_dif.n_spls.array2d_ptr(1)[3] = 683;
   );
 ) : (
   // very similar set.
-  k.dif.n_spls.array2d_ptr(1)[0] = 19;
-  k.dif.n_spls.array2d_ptr(1)[1] = 53;
-  k.dif.n_spls.array2d_ptr(1)[2] = 163;
-  k.dif.n_spls.array2d_ptr(1)[3] = 439;
+  k.out_dif.n_spls.array2d_ptr(1)[0] = 19;
+  k.out_dif.n_spls.array2d_ptr(1)[1] = 53;
+  k.out_dif.n_spls.array2d_ptr(1)[2] = 163;
+  k.out_dif.n_spls.array2d_ptr(1)[3] = 439;
 );
 
-dif.l.delay_line_init (round_next_pow2 (k.src.srate), k.dif.n_diffusors);
-dif.l.delay_line_allpass_add();
+out_dif.l.delay_line_init (round_next_pow2 (k.src.srate), k.out_dif.n_diffusors);
+out_dif.l.delay_line_allpass_add();
 
-dif.r.delay_line_init (round_next_pow2 (k.src.srate), k.dif.n_diffusors);
-dif.r.delay_line_allpass_add();
+out_dif.r.delay_line_init (round_next_pow2 (k.src.srate), k.out_dif.n_diffusors);
+out_dif.r.delay_line_allpass_add();
 
-k.dif.g.array2d_init (2, k.dif.n_diffusors);
+k.out_dif.g.array2d_init (2, k.out_dif.n_diffusors);
 
 // Internal Diffusion ---------------------------------------------------------
 BYPASS_INTERNAL_DIFFUSOR = 0;
 
-k.int_dif.n_diffusors = 1;
-k.int_dif.nested_depth = 3;
-k.int_dif.n_raw_diffusors = (1 + k.int_dif.nested_depth) * k.int_dif.n_diffusors;
+k.int_dif.n_diffusors = 4;
 
-k.int_dif.n_spls.array2d_init (2, k.int_dif.n_raw_diffusors);
+k.int_dif.n_spls.array2d_init (2, k.int_dif.n_diffusors);
+k.int_dif.diffusors_enabled = 4;
 
-// Prime factors with an approx difference of 2.85.
-k.int_dif.n_spls.array2d_ptr(0)[0] = 37;
-k.int_dif.n_spls.array2d_ptr(0)[1] = 103;
-k.int_dif.n_spls.array2d_ptr(0)[2] = 293;
-k.int_dif.n_spls.array2d_ptr(0)[3] = 829;
+k.int_dif.n_spls.array2d_ptr(0)[0] = 887;
+k.int_dif.n_spls.array2d_ptr(0)[1] = 478;
+k.int_dif.n_spls.array2d_ptr(0)[2] = 419;
+k.int_dif.n_spls.array2d_ptr(0)[3] = 907;
 
-k.int_dif.n_spls.array2d_ptr(1)[0] = 41;
-k.int_dif.n_spls.array2d_ptr(1)[1] = 113;
-k.int_dif.n_spls.array2d_ptr(1)[2] = 317;
-k.int_dif.n_spls.array2d_ptr(1)[3] = 887;
+k.int_dif.n_spls.array2d_ptr(1)[0] = 887;
+k.int_dif.n_spls.array2d_ptr(1)[1] = 478;
+k.int_dif.n_spls.array2d_ptr(1)[2] = 421;
+k.int_dif.n_spls.array2d_ptr(1)[3] = 907;
+
+k.int_dif.channel_l = 2;
+k.int_dif.channel_r = 13;
 
 int_dif.l.delay_line_init(
-  round_next_pow2 (k.src.srate), k.int_dif.n_raw_diffusors
+  round_next_pow2 (k.src.srate), k.int_dif.n_diffusors
   );
-int_dif.l.delay_line_nested_allpass_add (k.int_dif.nested_depth);
+int_dif.l.delay_line_allpass_add();
 
 int_dif.r.delay_line_init(
-  round_next_pow2 (k.src.srate), k.int_dif.n_raw_diffusors
+  round_next_pow2 (k.src.srate), k.int_dif.n_diffusors
   );
-int_dif.r.delay_line_nested_allpass_add (k.int_dif.nested_depth);
+int_dif.r.delay_line_allpass_add();
 
-k.int_dif.g.array2d_init (2, k.int_dif.n_raw_diffusors);
+k.int_dif.g_base = 0.65;
+k.int_dif.g_mod_depth = 0.26;
+k.int_dif.g_mod_freq = 0.6;
+
+// a random lfo?
+int_dif.lfo.l.lfo_drift_sin_init (k.int_dif.g_mod_freq, 0.8, k.src.srate);
+int_dif.lfo.r.lfo_drift_sin_init (k.int_dif.g_mod_freq, 0.8, k.src.srate);
+
+int_dif.g.array2d_init (2, k.int_dif.n_diffusors);
 
 // Crossover -------------------------------------------------------------------
 // 1 pole lowpasses. HP by subtraction.
@@ -459,31 +468,18 @@ get_rt60_gain(
   k.src.srate
   );
 
-G = diffusion_inc *  0.9;
-k.int_dif.g.array2d_ptr(0)[0] = G;
-k.int_dif.g.array2d_ptr(0)[1] = G;
-k.int_dif.g.array2d_ptr(0)[2] = G;
-k.int_dif.g.array2d_ptr(0)[3] = G;
-int_dif.l.delay_line_allpass_set_g_all (k.int_dif.g.array2d_ptr (0));
-
-k.int_dif.g.array2d_ptr(1)[0] = G;
-k.int_dif.g.array2d_ptr(1)[1] = G;
-k.int_dif.g.array2d_ptr(1)[2] = G;
-k.int_dif.g.array2d_ptr(1)[3] = G;
-int_dif.r.delay_line_allpass_set_g_all (k.int_dif.g.array2d_ptr (1));
-
 G = diffusion *  0.9;
-k.dif.g.array2d_ptr(0)[0] = G;
-k.dif.g.array2d_ptr(0)[1] = G - 0.4;
-k.dif.g.array2d_ptr(0)[2] = G - 0.2;
-k.dif.g.array2d_ptr(0)[3] = G;
-dif.l.delay_line_allpass_set_g_all (k.dif.g.array2d_ptr (0));
+k.out_dif.g.array2d_ptr(0)[0] = G;
+k.out_dif.g.array2d_ptr(0)[1] = G - 0.4;
+k.out_dif.g.array2d_ptr(0)[2] = G - 0.2;
+k.out_dif.g.array2d_ptr(0)[3] = G;
+out_dif.l.delay_line_allpass_set_g_all (k.out_dif.g.array2d_ptr (0));
 
-k.dif.g.array2d_ptr(1)[0] = G;
-k.dif.g.array2d_ptr(1)[1] = G - 0.4;
-k.dif.g.array2d_ptr(1)[2] = G - 0.2;
-k.dif.g.array2d_ptr(1)[3] = G;
-dif.r.delay_line_allpass_set_g_all (k.dif.g.array2d_ptr (1));
+k.out_dif.g.array2d_ptr(1)[0] = G;
+k.out_dif.g.array2d_ptr(1)[1] = G - 0.4;
+k.out_dif.g.array2d_ptr(1)[2] = G - 0.2;
+k.out_dif.g.array2d_ptr(1)[3] = G;
+out_dif.r.delay_line_allpass_set_g_all (k.out_dif.g.array2d_ptr (1));
 
 late.mtx.w1_a = cos (2 * angle1 * $pi * 0.25);
 late.mtx.w2_a = sin (2 * angle1 * $pi * 0.25);
@@ -720,17 +716,33 @@ BYPASS_SRC == 0 ? (
   );
 
   // Additional diffusor
+  BYPASS_INTERNAL_DIFFUSOR = 0;
   BYPASS_INTERNAL_DIFFUSOR == 0 ? (
-    // AP diffusion on the channels that go out.
-    // TODO Modulate.
-    int_dif.l.delay_line_advance();
-    int_dif.r.delay_line_advance();
+    int_dif.mod_l = int_dif.lfo.l.lfo_drift_sin_tick();
+    int_dif.mod_r = int_dif.lfo.r.lfo_drift_sin_tick();
 
-    late.feedback.ptr[4] = int_dif.l.delay_line_nested_allpass_tick(
-       late.feedback.ptr[4], 0, k.int_dif.n_spls.array2d_ptr (0)
+    memset(
+      int_dif.g.array2d_ptr (0),
+      k.int_dif.g_base + int_dif.mod_l * k.int_dif.g_mod_depth,
+      k.int_dif.n_diffusors
+      );
+    memset(
+      int_dif.g.array2d_ptr (1),
+      k.int_dif.g_base + int_dif.mod_r * k.int_dif.g_mod_depth,
+      k.int_dif.n_diffusors
+      );
+
+    late.feedback.ptr[k.int_dif.channel_l] =
+      int_dif.l.delay_line_allpass_tick_cascade_all(
+       late.feedback.ptr[k.int_dif.channel_l],
+       k.int_dif.diffusors_enabled,
+       k.int_dif.n_spls.array2d_ptr (0)
        );
-    late.feedback.ptr[11] = int_dif.r.delay_line_nested_allpass_tick(
-       late.feedback.ptr[11], 0, k.int_dif.n_spls.array2d_ptr (1)
+    late.feedback.ptr[k.int_dif.channel_r] =
+      int_dif.r.delay_line_allpass_tick_cascade_all(
+       late.feedback.ptr[k.int_dif.channel_r],
+       k.int_dif.diffusors_enabled,
+       k.int_dif.n_spls.array2d_ptr (1)
        );
   );
 
@@ -791,12 +803,12 @@ BYPASS_SRC == 0 ? (
   );
 
   // modulate this fella...
-  BYPASS_DIFFUSOR == 0 ? (
-    postdif.l = dif.l.delay_line_allpass_tick_cascade_all(
-       out.l, k.dif.n_diffusors, k.dif.n_spls.array2d_ptr (0)
+  BYPASS_OUT_DIFFUSOR == 0 ? (
+    postdif.l = out_dif.l.delay_line_allpass_tick_cascade_all(
+       out.l, k.out_dif.n_diffusors, k.out_dif.n_spls.array2d_ptr (0)
        );
-    postdif.r = dif.r.delay_line_allpass_tick_cascade_all(
-       out.r, k.dif.n_diffusors, k.dif.n_spls.array2d_ptr (1)
+    postdif.r = out_dif.r.delay_line_allpass_tick_cascade_all(
+      out.r, k.out_dif.n_diffusors, k.out_dif.n_spls.array2d_ptr (0)
        );
     // trade correlation for some fake stereo, this can be enabled on metallic
     // (plate) reverbs.
