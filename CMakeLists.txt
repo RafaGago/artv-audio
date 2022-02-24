@@ -231,18 +231,6 @@ set (WDL_REPO ${wdl_fetch_SOURCE_DIR})
 add_library (wdl INTERFACE)
 target_include_directories (wdl INTERFACE ${WDL_REPO})
 
-# As this is a C library, make sure it inherits the release CMake flags for
-# vectorization etc if used as main fft.
-add_library (wdl-fft)
-target_link_libraries (wdl-fft PUBLIC wdl)
-target_link_libraries (wdl-fft PRIVATE dsp_target_compile_options)
-target_sources (wdl-fft PRIVATE ${WDL_REPO}/WDL/fft.c)
-target_include_directories (wdl-fft PRIVATE ${WDL_REPO}/WDL)
-target_compile_definitions(
-    wdl-fft
-    PUBLIC
-    WDL_FFT_REALSIZE=8
-    )
 #-- Own Utilities library (C) --------------------------------------------------
 
 # Just using the headers, avoiding meson for now.
@@ -670,7 +658,7 @@ add_executable(
     test/common/fft.cpp
     test/common/simd.cpp
     )
-target_link_libraries (common-test PUBLIC test mufft-all wdl-fft)
+target_link_libraries (common-test PUBLIC test mufft-all pffft)
 #-- Oversampr utility ----------------------------------------------------------
 add_executable(
     oversampler-util
@@ -746,7 +734,6 @@ function (add_mix_maxtrix_plugin_target target channels)
         rubberband
         SoundTouch
         wdl
-        wdl-fft
         pffft
         )
     install(

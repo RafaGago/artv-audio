@@ -70,6 +70,9 @@ public:
     return true;
   }
   //----------------------------------------------------------------------------
+  // Notice PFFT forward and backwards doesn't even leave the bins as an
+  // unordered complex array, so in practice forward/backward is for little use
+  // except for performing some functionality not yet wrapped.
   void forward (
     crange<value_type>       out,
     const crange<value_type> in,
@@ -81,6 +84,9 @@ public:
     pffftd_transform (_setup, &in[0], &out[0], &work[0], PFFFT_FORWARD);
   }
   //----------------------------------------------------------------------------
+  // Notice PFFT forward and backwards doesn't even leave the bins as an
+  // unordered complex array, so in practice forward/backward is for little use
+  // except for performing some functionality not yet wrapped.
   void backward (
     crange<value_type>       out,
     const crange<value_type> in,
@@ -129,6 +135,16 @@ public:
     align_assert (work.data());
     pffftd_transform_ordered (
       _setup, &in[0], &out[0], &work[0], PFFFT_BACKWARD);
+  }
+  //----------------------------------------------------------------------------
+  void data_rescale (crange<value_type> v, uint fft_size, bool complex)
+  {
+    uint elems = fft_size * (complex ? 2 : 1);
+    assert (v.size() >= elems);
+    auto f = (value_type) 1 / (value_type) fft_size;
+    for (uint i = 0; i < elems; ++i) {
+      v[i] *= f;
+    }
   }
   //----------------------------------------------------------------------------
 private:

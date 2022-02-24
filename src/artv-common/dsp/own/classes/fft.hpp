@@ -76,6 +76,7 @@ private:
 public:
   using value_type                   = T;
   static constexpr uint io_alignment = impl::io_alignment;
+  using allocator = overaligned_allocator<value_type, io_alignment>;
   //----------------------------------------------------------------------------
   bool reset (
     uint               blocksize,
@@ -90,6 +91,7 @@ public:
     if constexpr (Use_external_buffer) {
       _work.set_buffer (extbuff, iosize);
     }
+    _complex = complex;
     return true;
   }
   //----------------------------------------------------------------------------
@@ -205,13 +207,28 @@ public:
     }
   }
   //----------------------------------------------------------------------------
+  void data_rescale (crange<value_type> v)
+  {
+    _impl.data_rescale (v, size(), is_complex());
+  }
+  //----------------------------------------------------------------------------
+  uint size() const
+  {
+    return _complex ? _work.buffer_size() / 2 : _work.buffer_size();
+  }
+  //----------------------------------------------------------------------------
+  uint buffer_size() const { return _work.buffer_size(); }
+  //----------------------------------------------------------------------------
+  bool is_complex() const { return _complex; }
+  //----------------------------------------------------------------------------
 private:
   static constexpr bool has_work_buffer = detail::fft_requires_buffer<impl>;
 
   impl _impl;
   detail::
     fft_members<value_type, io_alignment, has_work_buffer, Use_external_buffer>
-      _work;
+       _work;
+  bool _complex;
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
@@ -270,9 +287,8 @@ private:
   //----------------------------------------------------------------------------
   using blocksize_list = mp11::mp_list_c<int, blocksizes...>;
 
-  std::array<fft_type, sizeof...(blocksizes)> _ffts;
-  std::vector<value_type, overaligned_allocator<value_type, io_alignment>>
-    _workbuff;
+  std::array<fft_type, sizeof...(blocksizes)>           _ffts;
+  std::vector<value_type, typename fft_type::allocator> _workbuff;
 };
 //------------------------------------------------------------------------------
 

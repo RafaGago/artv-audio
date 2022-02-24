@@ -3,10 +3,10 @@
 #include <algorithm>
 
 #include "artv-common/dsp/own/classes/delay_line.hpp"
+#include "artv-common/dsp/own/classes/fft.hpp"
 #include "artv-common/dsp/own/classes/fir.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
-#include "artv-common/dsp/own/classes/wdl_fft.hpp"
 #include "artv-common/dsp/own/classes/windowed_sync.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_types.hpp"
@@ -56,9 +56,10 @@ public:
 template <class T = float>
 class oversampled_common {
 public:
-  static constexpr uint max_oversampling = 16;
-  static constexpr uint max_tap_ratio    = 32;
-  static constexpr uint n_channels       = 2;
+  static constexpr uint max_oversampling  = 16;
+  static constexpr uint cepstrum_fft_size = 256 * 1024;
+  static constexpr uint max_tap_ratio     = 32;
+  static constexpr uint n_channels        = 2;
 
   using decimator_type    = fir_decimator<T, 2>;
   using interpolator_type = fir_interpolator<T, 2>;
@@ -114,7 +115,8 @@ public:
     _tmp_kernel.reserve (max_tap_ratio * max_oversampling);
 
     _fft_buff.clear();
-    _fft_buff.resize (std::min<uint> (_fft.max_blocksize * 2, 128 * 1024));
+    _fft_buff.resize (2 * cepstrum_fft_size);
+    _fft.reset (cepstrum_fft_size, true);
 
     fx_reset_fn (_pc);
   }
@@ -241,8 +243,7 @@ private:
     apply_kaiser_window (kernel, kaiser_beta_estimate (att_db), frac);
 
     if (_minphase) {
-      auto wb = make_crange (&_fft_buff[0], _fft_buff.size() / 2);
-      fir_kernel_to_minphase (kernel, _fft, wb);
+      fir_kernel_to_minphase (kernel, _fft, make_crange (_fft_buff));
       // there is the "fir_kernel_group_delay" function implemented but I can't
       // make sense of it. Setting to the perceptually-found value that causes
       // less combing when added back to the main signal on a drum loop with
@@ -318,8 +319,8 @@ private:
   std::array<delay_compensated_block<T>, n_channels> _work_buffers;
   std::vector<T>                                     _work_buffers_mem;
   std::vector<T>                                     _tmp_kernel;
-  std::vector<double>                                _fft_buff;
-  wdl::initialized_ffts<double>                      _fft;
+  fft<double>                                        _fft;
+  std::vector<double, fft<double>::allocator>        _fft_buff;
   bool                                               _minphase;
   bool                                               _steep;
 };

@@ -117,6 +117,16 @@ public:
     backward (out, in);
   }
   //----------------------------------------------------------------------------
+  void data_rescale (crange<value_type> v, uint fft_size, bool complex)
+  {
+    uint elems = fft_size * (complex ? 2 : 1);
+    assert (v.size() >= elems);
+    auto f = (value_type) 1 / (value_type) fft_size;
+    for (uint i = 0; i < elems; ++i) {
+      v[i] *= f;
+    }
+  }
+  //----------------------------------------------------------------------------
 private:
   static void align_assert (void const* ptr)
   {
