@@ -522,50 +522,50 @@ static void make_contiguous_range (
   static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
 };
 
-template <class T>
-static contiguous_range<T> make_contiguous_range (std::vector<T>& vec)
+template <class T, class Alloc>
+static contiguous_range<T> make_contiguous_range (std::vector<T, Alloc>& vec)
 {
   return {vec.data(), vec.size()};
 };
 
-template <class T>
+template <class T, class Alloc>
 static contiguous_range<const T> make_contiguous_range (
-  std::vector<T> const& vec)
+  std::vector<T, Alloc> const& vec)
 {
   return {vec.data(), vec.size()};
 };
 
-template <class T>
-static void make_contiguous_range (std::vector<T>&& vec)
+template <class T, class Alloc>
+static void make_contiguous_range (std::vector<T, Alloc>&& vec)
 {
   static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
 };
 
-template <class T>
+template <class T, class Alloc>
 static contiguous_range<T> make_contiguous_range (
-  std::vector<T>& vec,
-  size_t          count,
-  size_t          offset_idx = 0)
+  std::vector<T, Alloc>& vec,
+  size_t                 count,
+  size_t                 offset_idx = 0)
 {
   assert (count + offset_idx <= vec.size() && "out of bounds");
   return {vec.data() + offset_idx, count};
 };
 
-template <class T>
+template <class T, class Alloc>
 static contiguous_range<const T> make_contiguous_range (
-  std::vector<T> const& vec,
-  size_t                count,
-  size_t                offset_idx = 0)
+  std::vector<T, Alloc> const& vec,
+  size_t                       count,
+  size_t                       offset_idx = 0)
 {
   assert (count + offset_idx <= vec.size() && "out of bounds");
   return {vec.data() + offset_idx, count};
 };
 
-template <class T>
+template <class T, class Alloc>
 static void make_contiguous_range (
-  std::vector<T>&& vec,
-  size_t           count,
-  size_t           offset_idx = 0)
+  std::vector<T, Alloc>&& vec,
+  size_t                  count,
+  size_t                  offset_idx = 0)
 {
   static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
 };
