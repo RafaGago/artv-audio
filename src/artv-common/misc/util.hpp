@@ -627,13 +627,13 @@ static uint crange_memcpy (crange<T> dst, const crange<U> src)
 }
 //------------------------------------------------------------------------------
 template <class T>
-static uint contiguous_range_copy (crange<T> dst, crange<const T> src)
+static uint contiguous_range_copy (crange<T> dst, const crange<T> src)
 {
   return crange_memcpy (dst, src) / sizeof (T);
 }
 
 template <class T>
-static uint crange_copy (crange<T> dst, crange<const T> src)
+static uint crange_copy (crange<T> dst, const crange<T> src)
 {
   return crange_memcpy (dst, src) / sizeof (T);
 }
@@ -878,7 +878,7 @@ constexpr bool is_aligned_to (uint align, T* v)
   auto addr = reinterpret_cast<same_size_uint<T*>> (v);
   return (addr & (align - 1)) == 0;
 }
-
 //------------------------------------------------------------------------------
-
+struct null_type {};
+//------------------------------------------------------------------------------
 } // namespace artv

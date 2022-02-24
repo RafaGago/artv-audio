@@ -6491,27 +6491,17 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  reverb_params,
-  sound_delay_params,
-  event_horizon_2_params,
-  eq4x_params>;
+  atlantis_reverb_params>;
 
-static constexpr auto fx_choices = make_cstr_array (
-  "none",
-  "LR",
-  "Wonky",
-  "lin IIR",
-  "FX",
-  "del",
-  "Evhoriz",
-  "EQ");
+static constexpr auto fx_choices
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "FX");
 
 #else
 // clang-format off
@@ -6806,8 +6796,11 @@ static constexpr char const* about_text =
 "Using some pieces of Cockos WDL:\n"
 "https://www.cockos.com/wdl/\n"
 "\n"
-"Using muFFT:\n"
+"Using muFFT (for float):\n"
 "https://github.com/Themaister/muFFT\n"
+"\n"
+"Using PFFFT port (for double):\n"
+"https://github.com/marton78/pffft\n"
 "\n"
 "Using XSIMD:\n"
 "https://github.com/xtensor-stack/xsimd.git\n"
@@ -6830,7 +6823,8 @@ static constexpr char const* about_text =
 "For the full licenses of each used project see the 3RD-PARTY-LICENSES file:\n"
 "https://github.com/RafaGago/artv-audio/blob/master/3RD-PARTY-LICENSES.\n"
 "\n"
-"The sources of projects have been used as references or had some code loaned:\n"
+"The sources of projects have been used as references for doing own\n"
+"implementations:\n"
 "\n"
 "RS-MET library by Robin Schmidt:\n"
 "https://github.com/RobinSchmidt/RS-MET\n"

@@ -1,11 +1,12 @@
 #pragma once
 
-#include "artv-common/dsp/own/classes/mufft.hpp"
+#include "artv-common/dsp/own/classes/fft.hpp"
 
 namespace artv { namespace jsfx {
 
-using fft = mufft::initialized_ffts<
+using fft = initialized_ffts<
   float,
+  true,
   16,
   32,
   64,

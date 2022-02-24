@@ -1,13 +1,13 @@
 // Sanity testing FFTs to see if they match what jsfx expects
 
 #include <cstring>
-
 #include <math.h>
+#include <vector>
 
 #include "gtest/gtest.h"
 
-#include "artv-common/dsp/own/classes/mufft.hpp"
-#include "artv-common/dsp/own/classes/wdl_fft.hpp"
+#include "artv-common/dsp/own/classes/fft.hpp"
+#include "artv-common/misc/overaligned_allocator.hpp"
 
 #if 0
 // JSFX verification
@@ -90,21 +90,20 @@ out_i_15 = in[31];
 
 namespace artv {
 
+static constexpr uint fftsize = 512;
+
 //------------------------------------------------------------------------------
 template <class T, class FFT>
 class fft_test : public ::testing::Test {
 public:
   fft_test() {}
   //----------------------------------------------------------------------------
-  static constexpr uint block_size = 16;
+  static constexpr uint block_size = fftsize;
   //----------------------------------------------------------------------------
   void SetUp()
   {
-    in_mem.resize (block_size * 2 / simdwrapper::n_elems);
-    out_mem.resize (block_size * 2 / simdwrapper::n_elems);
-
-    in  = &in_mem[0][0];
-    out = &out_mem[0][0];
+    in.resize (block_size * 2);
+    out.resize (block_size * 2);
 
     constexpr double pi = M_PI;
 
@@ -135,43 +134,42 @@ public:
   }
   //----------------------------------------------------------------------------
   FFT fft_impl;
-
-  using simdwrapper = simd_mem<T, 32 / sizeof (T), 32>;
-
-  std::vector<simdwrapper> in_mem {};
-  std::vector<simdwrapper> out_mem {};
-
-  T* in  = nullptr;
-  T* out = nullptr;
+  std::vector<T, overaligned_allocator<T, FFT::fft_type::io_alignment>> in;
+  std::vector<T, overaligned_allocator<T, FFT::fft_type::io_alignment>> out;
 };
 //------------------------------------------------------------------------------
-using mufft_test  = fft_test<float, artv::mufft::initialized_ffts<float, 16>>;
-using wdlfft_test = fft_test<double, artv::wdl::initialized_ffts<double>>;
+using mufft_test
+  = fft_test<float, artv::initialized_ffts<float, true, fftsize>>;
+using pffft_test
+  = fft_test<double, artv::initialized_ffts<double, true, fftsize>>;
 //------------------------------------------------------------------------------
-TEST_F (wdlfft_test, wdl_matches_in)
+TEST_F (pffft_test, pffft_matches_in)
 {
-  fft_impl.forward_transform (out, in, block_size);
-  fft_impl.backward_transform (out, block_size);
-  scale_buffer (out);
-  match_fft_buffers (out, in);
+  auto& fft = *fft_impl.get_fft (block_size);
+  fft.forward (out, in);
+  fft.backward (out);
+  scale_buffer (out.data());
+  match_fft_buffers (out.data(), in.data());
 }
 //------------------------------------------------------------------------------
-TEST_F (wdlfft_test, permuted_wdl_matches_in)
+TEST_F (pffft_test, permuted_pffft_matches_in)
 {
-  fft_impl.forward_transform (out, in, block_size);
-  fft_impl.forward_permute (out, block_size);
-  fft_impl.backward_permute (out, block_size);
-  fft_impl.backward_transform (out, block_size);
-  scale_buffer (out);
-  match_fft_buffers (out, in);
+  auto& fft = *fft_impl.get_fft (block_size);
+  fft.forward (out, in);
+  fft.reorder_after_forward (out);
+  fft.reorder_before_backward (out);
+  fft.backward (out);
+  scale_buffer (out.data());
+  match_fft_buffers (out.data(), in.data());
 }
 //------------------------------------------------------------------------------
 TEST_F (mufft_test, mufft_matches_in)
 {
-  fft_impl.forward_transform (out, in, block_size);
-  fft_impl.backward_transform (out, block_size);
-  scale_buffer (out);
-  match_fft_buffers (out, in);
+  auto& fft = *fft_impl.get_fft (block_size);
+  fft.forward (out, in);
+  fft.backward (out);
+  scale_buffer (out.data());
+  match_fft_buffers (out.data(), in.data());
 }
 //------------------------------------------------------------------------------
 } // namespace artv

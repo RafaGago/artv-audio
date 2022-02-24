@@ -352,7 +352,7 @@ ExternalProject_Add(
 add_library (hiir INTERFACE)
 target_include_directories (hiir INTERFACE ${HIIR_REPO})
 add_dependencies (hiir hiir_fetch)
-#--muFFT -----------------------------------------------------------------------
+#--muFFT (float)----------------------------------------------------------------
 set (MUFFT_INCLUDE ${CMAKE_BINARY_DIR}/mufft-src-hack)
 set (MUFFT_REPO ${MUFFT_INCLUDE}/mufft)
 
@@ -372,6 +372,46 @@ set_target_properties (muFFT-avx PROPERTIES POSITION_INDEPENDENT_CODE On)
 add_library (mufft-all INTERFACE)
 target_include_directories (mufft-all INTERFACE ${MUFFT_INCLUDE})
 target_link_libraries (mufft-all INTERFACE muFFT muFFT-sse muFFT-sse3 muFFT-avx)
+#--PFFFT port (double) ----------------------------------------------------------
+
+set (PFFFT_INCLUDE ${CMAKE_BINARY_DIR}/pffft-git)
+set (PFFFT_REPO ${PFFFT_INCLUDE}/pffft) # to be able to "#include" cleanly.
+ExternalProject_Add(
+    pffft_fetch
+    GIT_REPOSITORY    https://github.com/marton78/pffft.git
+    GIT_TAG           9603871ac44b6f782e9666a968d25977f7124e39
+    GIT_SUBMODULES    ""
+    SOURCE_DIR        "${PFFFT_REPO}"
+    UPDATE_COMMAND    ""
+    BUILD_ALWAYS      False
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND     ""
+    INSTALL_COMMAND   ""
+    )
+
+# Ignoring the provided CMakeLists with hardcoded flags, just going after the C
+# files.
+
+add_library (pffft STATIC)
+target_compile_features (pffft PUBLIC c_std_99)
+target_include_directories (pffft PUBLIC ${PFFFT_INCLUDE})
+target_include_directories (pffft PRIVATE ${PFFFT_REPO})
+target_sources(
+    pffft
+    PRIVATE
+    ${PFFFT_REPO}/pffft_double.c
+    ${PFFFT_REPO}/pffft_common.c
+    )
+set_source_files_properties(
+    ${PFFFT_REPO}/pffft_double.c
+    ${PFFFT_REPO}/pffft_common.c
+    PROPERTIES GENERATED 1
+    )
+target_compile_definitions (pffft PRIVATE _USE_MATH_DEFINES)
+
+set_property (TARGET pffft PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_link_libraries (pffft PRIVATE dsp_target_compile_options)
+add_dependencies (pffft pffft_fetch)
 
 #--GCEM (constexpr math) -------------------------------------------------------
 set (GCEM_REPO ${CMAKE_BINARY_DIR}/gcem)
@@ -585,7 +625,7 @@ set_property (TARGET SoundTouch PROPERTY POSITION_INDEPENDENT_CODE ON)
 # the CMP0069 policy. This was not a problem locally, but it failed on GitHub's
 # servers which are slow and painful to Debug (TODO if feeling veeeery bored).
 target_compile_options(
-    SoundTouch PRIVATE INTERFACE ${ARTV_DSP_COMPILE_OPTIONS_LIST}
+    SoundTouch PRIVATE ${ARTV_DSP_COMPILE_OPTIONS_LIST}
     )
 #-- Common ---------------------------------------------------------------------
 add_library(common INTERFACE)
@@ -707,6 +747,7 @@ function (add_mix_maxtrix_plugin_target target channels)
         SoundTouch
         wdl
         wdl-fft
+        pffft
         )
     install(
         TARGETS ${target}
