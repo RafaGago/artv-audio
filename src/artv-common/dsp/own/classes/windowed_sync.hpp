@@ -5,17 +5,19 @@
 #include <cmath>
 #include <complex>
 #include <type_traits>
+#include <vector>
 
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"
 
+#include "artv-common/dsp/own/classes/fft.hpp"
 #include "artv-common/dsp/own/classes/window.hpp"
 
 namespace artv {
 //------------------------------------------------------------------------------
-// "mu" is a fractional delay in samples, from -0.5 to 0.5
+// "mu" is a fractional delay in samples
 template <class T>
 static void get_sinc_lowpass (
   crange<T> dst_kernel,
@@ -36,7 +38,8 @@ static void fir_kernel_normalize (crange<T> kernel)
 {
   static_assert (std::is_floating_point_v<T>);
 
-  T gain = (T) 1 / std::accumulate (kernel.begin(), kernel.end(), (T) 0);
+  T sum  = std::accumulate (kernel.begin(), kernel.end(), (T) 0);
+  T gain = ((T) 1) / sum;
   for (auto& v : kernel) {
     v *= gain;
   }
@@ -102,6 +105,17 @@ static void fir_kernel_to_minphase (
   }
 }
 //------------------------------------------------------------------------------
+template <class T>
+static void fir_kernel_to_minphase (crange<T> kernel)
+{
+  fft<double>                                 fftv;
+  std::vector<double, fft<double>::allocator> fft_buff;
+  uint fft_size = pow2_round_ceil (kernel.size() * 16);
+  fftv.reset (fft_size, true);
+  fft_buff.resize (fft_size * 2);
+  fir_kernel_to_minphase<T, double> (kernel, fftv, fft_buff);
+}
+//------------------------------------------------------------------------------
 // https://www.dsprelated.com/freebooks/filters/Numerical_Computation_Group_Delay.html
 template <class T, class U, class FFT>
 static void fir_kernel_group_delay (
@@ -145,25 +159,36 @@ static void fir_kernel_group_delay (
 //------------------------------------------------------------------------------
 // fc normalized freq, 0 to 0.5 (nyquist)
 template <class T>
-static void kaiser_lp_kernel_2 (crange<T> dst_kernel, T fc, T beta, T mu)
+static void kaiser_lp_kernel_2 (
+  crange<T> dst_kernel,
+  T         fc,
+  T         beta,
+  T         mu,
+  bool      minphase)
 {
   static_assert (std::is_floating_point_v<T>);
 
   get_sinc_lowpass (dst_kernel, fc, mu);
   apply_kaiser_window (dst_kernel, beta, mu);
+  if (minphase) {
+    fir_kernel_to_minphase (dst_kernel);
+  }
   fir_kernel_normalize (dst_kernel);
 }
 //------------------------------------------------------------------------------
+// fc normalized freq, 0 to 0.5 (nyquist)
 template <class T>
 static void kaiser_lp_kernel (
   crange<T> dst_kernel,
   T         fc,
-  T         att_db, // positive
-  T         mu)
+  T         att_db,
+  T         mu,
+  bool      minphase)
 {
   static_assert (std::is_floating_point_v<T>);
 
-  kaiser_lp_kernel_2 (dst_kernel, fc, kaiser_beta_estimate (att_db), mu);
+  kaiser_lp_kernel_2 (
+    dst_kernel, fc, kaiser_beta_estimate (att_db), mu, minphase);
 }
 //------------------------------------------------------------------------------
 } // namespace artv

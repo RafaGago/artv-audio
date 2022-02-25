@@ -109,7 +109,8 @@
 
 #define VERSION_INT VERSION_GET (VERSION_MAJOR, VERSION_MINOR, VERSION_REV)
 
-namespace artv { namespace parameters {
+namespace artv {
+namespace parameters {
 
 // parameter definitions in one place ------------------------------------------
 constexpr std::size_t n_stereo_busses = 8;
@@ -6437,7 +6438,7 @@ parameter_cpp_class_define (
 using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #endif
 //------------------------------------------------------------------------------
-#if 0 // experiments
+#if 1 // experiments
 }
 } // namespace artv::parameters
 
@@ -6491,19 +6492,18 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  sound_delay_params,
-  event_horizon_2_params,
-  eq4x_params>;
+  experiments_params,
+  event_horizon_2_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "del", "Evhoriz", "EQ");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "experiments", "eventh");
 
 #else
 // clang-format off
@@ -6858,4 +6858,5 @@ static constexpr char const* about_text =
 "https://github.com/RafaGago/artv-audio/blob/master/3RD-PARTY-LICENSES\n"
 ;
 // clang-format on
-}} // namespace artv::parameters
+}
+} // namespace artv::parameters

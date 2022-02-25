@@ -1,8 +1,14 @@
 #pragma once
 
-// a dummy plugin to experiment with
+#include <cstdio>
+// a dummy dsp process to experiment with
+
+#include "artv-common/dsp/own/classes/circular_queue.hpp"
+#include "artv-common/dsp/own/classes/fir.hpp"
+#include "artv-common/dsp/own/classes/window.hpp"
 
 #include "artv-common/dsp/own/classes/linphase_iir_crossover.hpp"
+
 #include "artv-common/dsp/own/parts/filters/composite/butterworth.hpp"
 #include "artv-common/dsp/own/parts/filters/composite/linear_iir_butterworth.hpp"
 #include "artv-common/dsp/own/parts/filters/poles_zeros.hpp"
@@ -15,8 +21,133 @@
 #include "artv-common/misc/util.hpp"
 
 namespace artv {
-
 #if 1
+// resampler test
+//------------------------------------------------------------------------------
+class experiments {
+public:
+  //----------------------------------------------------------------------------
+  static constexpr dsp_types dsp_type  = dsp_types::delay;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
+  //----------------------------------------------------------------------------
+  struct param_a_tag {};
+
+  void set (param_a_tag, float v)
+  {
+    if (_a == v) {
+      return;
+    }
+    _a = v;
+    reset_src();
+  }
+
+  static constexpr auto get_parameter (param_a_tag)
+  {
+    return float_param ("Ratio", 0.25, 2., 1., 0.25);
+  }
+  //----------------------------------------------------------------------------
+  struct param_b_tag {};
+
+  void set (param_b_tag, float v) { _b = v; }
+
+  static constexpr auto get_parameter (param_b_tag)
+  {
+    return float_param ("B", 0., 1., 0.5, 0.001);
+  }
+  //----------------------------------------------------------------------------
+  struct param_c_tag {};
+
+  void set (param_c_tag, float v) { _c = v; }
+
+  static constexpr auto get_parameter (param_c_tag)
+  {
+    return float_param ("C", 0., 1., 0.5, 0.001);
+  }
+  //----------------------------------------------------------------------------
+  struct param_d_tag {};
+
+  void set (param_d_tag, float v) { _d = v; }
+
+  static constexpr auto get_parameter (param_d_tag)
+  {
+    return float_param ("D", 0., 1., 0.5, 0.001);
+  }
+  //----------------------------------------------------------------------------
+  using parameters
+    = mp_list<param_a_tag, param_b_tag, param_c_tag, param_d_tag>;
+  //----------------------------------------------------------------------------
+  void reset (plugin_context& pc)
+  {
+    memset (this, 0, sizeof *this);
+    _plugcontext = &pc;
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
+  {
+    for (uint i = 0; i < block_samples; ++i) {
+      // we know that the max interpolation ratio is 4 (0.25x).
+      std::array<float, 4 * n_channels> out_st1, out_st2;
+      std::array<float, n_channels>     spl = {ins[0][i], ins[1][i]};
+
+      uint n_spls_1 = _stage1.tick (out_st1, spl);
+
+      for (uint s1 = 0; s1 < n_spls_1; ++s1) {
+        crange<float> in {&out_st1[s1 * n_channels], n_channels};
+        // some DSP ...
+        uint n_spls_2 = _stage2.tick (out_st2, in);
+        for (uint s2 = 0; s2 < (n_spls_2 * n_channels); s2 += n_channels) {
+          _spls.push ({out_st2[s2], out_st2[s2 + 1]});
+        }
+      }
+
+      auto next  = _spls.pop();
+      outs[0][i] = next[0];
+      outs[1][i] = next[1];
+    }
+  }
+  //----------------------------------------------------------------------------
+private:
+  //----------------------------------------------------------------------------
+  void reset_src()
+  {
+    uint  src_srate = _plugcontext->get_sample_rate();
+    uint  tgt_srate = (uint) (_a * (float) src_srate);
+    auto  beta      = kaiser_beta_estimate (100.f);
+    float fc        = 0.48f;
+    auto  taps      = 32;
+    float fc1       = fc * (float) tgt_srate;
+    float fc2       = fc * (float) std::min (tgt_srate, src_srate);
+
+    printf ("ratio: %f\n", (float) tgt_srate / (float) src_srate);
+    printf ("src_rate(Hz): %u\n", src_srate);
+    printf ("tgt_rate(Hz): %u\n", tgt_srate);
+    printf ("fc1(Hz): %f\n", fc1);
+    printf ("fc2(Hz): %f\n\n", fc2);
+
+    // TODO...
+    _stage1.reset (tgt_srate, src_srate, taps, taps, fc1, beta, false);
+    _stage2.reset (src_srate, tgt_srate, taps, taps, fc2, beta, false);
+
+    uint max_spls = std::max (_stage1.max_n_samples(), _stage2.max_n_samples());
+    _spls_mem.resize (pow2_round_ceil (max_spls));
+    _spls.reset (_spls_mem);
+  }
+  //----------------------------------------------------------------------------
+  plugin_context* _plugcontext;
+  float           _a, _b, _c, _d;
+
+  static constexpr uint n_channels = 2;
+
+  resampler<float, n_channels>                       _stage1;
+  resampler<float, n_channels>                       _stage2;
+  static_pow2_circular_queue<vec<float, n_channels>> _spls;
+  std::vector<vec<float, n_channels>>                _spls_mem;
+};
+#endif
+#if 0
 // variable order butterworth linear phase, wrapper class
 //------------------------------------------------------------------------------
 class experiments {

@@ -709,7 +709,7 @@ function sinc_resampler_2c_init_2(
   // unfortunately the log cepstrum conversion was not friendly to timing
   // information. An oversized sinc is created instead and then interleaved
   // to each branch.
-  
+
   this.bigkernel.array_init (this.kernels.size);
 
   set_sinc_lowpass (this.bigkernel, this.fc / this.rate_tgt, this.rate_tgt);

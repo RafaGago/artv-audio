@@ -78,10 +78,11 @@ static T kaiser (uint n, uint n_count, T beta, T mu)
 {
   static_assert (std::is_floating_point_v<T>);
 
-  T t = (T) n - ((T) n_count - (T) 1) * (T) 0.5 + mu;
-  T r = (T) 2 * t / (T) n_count;
-  T a = bessel_i0_function (beta * sqrt ((T) 1 - r * r));
-  T b = bessel_i0_function (beta);
+  T t  = (T) n - ((T) n_count - (T) 1) * (T) 0.5 + mu;
+  T r  = (T) 2 * t / (T) n_count;
+  T r2 = r * r;
+  T a  = (r2 <= (T) 1) ? bessel_i0_function (beta * sqrt ((T) 1 - r2)) : (T) 1;
+  T b  = bessel_i0_function (beta);
   return a / b;
 }
 //------------------------------------------------------------------------------

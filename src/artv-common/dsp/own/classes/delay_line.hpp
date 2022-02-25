@@ -19,7 +19,7 @@ namespace artv {
 // - random access.
 // - power of 2 capacity.
 // - not interleaved
-// - highest indexes = older samples
+// - highest indexes = older samples (LIFO)
 template <class V>
 class pow2_circular_buffer {
 public:
