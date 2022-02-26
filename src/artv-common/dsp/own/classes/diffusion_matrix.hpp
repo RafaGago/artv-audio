@@ -14,8 +14,10 @@ template <uint N>
 struct householder_matrix {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (std::array<V, N> x)
+  static std::array<V, N> tick (crange<const V> x)
   {
+    assert (x.size() >= N);
+
     using T = vec_value_type_t<V>;
     std::array<V, N> y;
 
@@ -31,9 +33,9 @@ struct householder_matrix {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (std::array<T, N> x)
+  static std::array<T, N> tick (crange<const T> x)
   {
-    return vec_array_unwrap<1, T> (tick (vec_array_wrap<1> (x)));
+    return vec_array_unwrap<1, T> (tick (x.cast (vec<T, 1> {})));
   }
   //----------------------------------------------------------------------------
 };
@@ -48,8 +50,9 @@ class hadamard_matrix {
 public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (std::array<V, N> x)
+  static std::array<V, N> tick (crange<const V> x)
   {
+    assert (x.size() >= N);
     using T                      = vec_value_type_t<V>;
     static constexpr double norm = 1. / gcem::sqrt ((double) N);
 
@@ -61,9 +64,9 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (std::array<T, N> x)
+  static std::array<T, N> tick (crange<const T> x)
   {
-    return vec_array_unwrap<1, T> (tick (vec_array_wrap<1> (x)));
+    return vec_array_unwrap<1, T> (tick (x.cast (vec<T, 1> {})));
   }
   //----------------------------------------------------------------------------
 private:
@@ -108,8 +111,9 @@ struct almost_hadamard_matrix<6> {
   static constexpr uint N = 6;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (std::array<V, N> x)
+  static std::array<V, N> tick (crange<const V> x)
   {
+    assert (x.size() >= N);
     static constexpr double norm = 1. / 3. * gcem::sqrt (2.);
 
     using T = vec_value_type_t<V>;
@@ -142,9 +146,9 @@ struct almost_hadamard_matrix<6> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (std::array<T, N> x)
+  static std::array<T, N> tick (crange<const T> x)
   {
-    return vec_array_unwrap<1, T> (tick (vec_array_wrap<1> (x)));
+    return vec_array_unwrap<1, T> (tick (x.cast (vec<T, 1> {})));
   }
   //----------------------------------------------------------------------------
 };
@@ -156,8 +160,9 @@ struct almost_hadamard_matrix<7> {
   static constexpr uint N = 7;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (std::array<V, N> x)
+  static std::array<V, N> tick (crange<const V> x)
   {
+    assert (x.size() >= N);
     static constexpr double A = -0.26120387496374144251476820691706;
     static constexpr double B = 0.4459029062228060818860761551878;
 
@@ -176,12 +181,259 @@ struct almost_hadamard_matrix<7> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (std::array<T, N> x)
+  static std::array<T, N> tick (crange<const T> x)
   {
-    return vec_array_unwrap<1, T> (tick (vec_array_wrap<1> (x)));
+    return vec_array_unwrap<1, T> (tick (x.cast (vec<T, 1> {})));
   }
   //----------------------------------------------------------------------------
 };
+//------------------------------------------------------------------------------
+template <uint N>
+struct rotation_matrix;
+
+template <>
+struct rotation_matrix<4> {
+  //----------------------------------------------------------------------------
+  static constexpr uint N = 4;
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static std::array<V, N> tick (crange<const V> x, crange<std::array<V, 2>> w)
+  {
+    assert (x.size() >= N);
+    assert (w.size() >= N / 4);
+
+    //     1 2 3 4
+    // ------------
+    // 1 | + - - +
+    // 2 | + - + -
+    // 3 | + + - -
+    // 4 | + + + +
+
+    std::array<V, N> y;
+
+    auto w1 = w[0][0];
+    auto w2 = w[0][1];
+
+    auto y1 = w1 * x[0] - w2 * x[1];
+    auto y2 = w2 * x[0] + w1 * x[1];
+
+    auto y3 = w1 * x[2] - w2 * x[3];
+    auto y4 = w2 * x[2] + w1 * x[3];
+
+    y[0] = w1 * y1 - w2 * y3;
+    y[1] = w2 * y1 + w1 * y3;
+
+    y[2] = w1 * y2 - w2 * y4;
+    y[3] = w2 * y2 + w1 * y4;
+
+    return y;
+  }
+  //----------------------------------------------------------------------------
+  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  static std::array<T, N> tick (crange<const T> x, crange<std::array<T, 2>> w)
+  {
+    using vectype = vec<T, 1>;
+    return vec_array_unwrap<1, T> (
+      tick (x.cast (vectype {})), w.cast (std::array<vectype, 2> {}));
+  }
+  //----------------------------------------------------------------------------
+};
+
+template <>
+struct rotation_matrix<8> {
+  //----------------------------------------------------------------------------
+  static constexpr uint N = 8;
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static std::array<V, N> tick (crange<const V> x, crange<std::array<V, 2>> w)
+  {
+    assert (x.size() >= N);
+    assert (w.size() >= N / 4);
+
+    //    1 2 3 4
+    // ------------
+    // 1 | + - - +
+    // 2 | + - + -
+    // 3 | + + - -
+    // 4 | + + + +
+
+    //     5 6 7 8
+    // ------------
+    // 5 | + - - +
+    // 6 | + - + -
+    // 7 | + + - -
+    // 8 | + + + +
+
+    //     1 2 3 4 5 6 7 8
+    // ---------------------
+    // 1 | + - - + - + + -
+    // 2 | + - - + + - - +
+    // 3 | + - + - - + - +
+    // 4 | + - + - + - + -
+    // 5 | + + - - - - + +
+    // 6 | + + - - + + - -
+    // 7 | + + + + - - - -
+    // 8 | + + + + + + + +
+
+    std::array<V, N> y;
+
+    auto y_a = rot_matrix_4 (x.resize_head (4), w.resize_head (1));
+    auto y_b = rot_matrix_4 (x.shrink_head (4), w.shrink_head (1));
+
+    auto y1 = y_a[0];
+    auto y2 = y_a[1];
+    auto y3 = y_a[2];
+    auto y4 = y_a[3];
+    auto y5 = y_b[0];
+    auto y6 = y_b[1];
+    auto y7 = y_b[2];
+    auto y8 = y_b[3];
+
+    auto w1a = w[0][0];
+    auto w2a = w[0][1];
+    auto w1b = w[1][0];
+    auto w2b = w[1][1];
+
+    y[0] = w1a * y1 - w2a * y5;
+    y[1] = w2a * y1 + w1a * y5;
+    y[2] = w1a * y2 - w2a * y6;
+    y[3] = w2a * y2 + w1a * y6;
+    y[4] = w1b * y3 - w2b * y7;
+    y[5] = w2b * y3 + w1b * y7;
+    y[6] = w1b * y4 - w2b * y8;
+    y[7] = w2b * y4 + w1b * y8;
+
+    return y;
+  }
+  //----------------------------------------------------------------------------
+  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  static std::array<T, N> tick (crange<const T> x, crange<std::array<T, 2>> w)
+  {
+    using vectype = vec<T, 1>;
+    return vec_array_unwrap<1, T> (
+      tick (x.cast (vectype {})), w.cast (std::array<vectype, 2> {}));
+  }
+  //----------------------------------------------------------------------------
+};
+
+template <>
+struct rotation_matrix<16> {
+  //----------------------------------------------------------------------------
+  static constexpr uint N = 16;
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static std::array<V, N> tick (crange<const V> x, crange<std::array<V, 2>> w)
+  {
+    assert (x.size() >= N);
+    assert (w.size() >= N / 4);
+
+    //     1 2 3 4 5 6 7 8
+    // ---------------------
+    // 1 | + - - + - + + -
+    // 2 | + - - + + - - +
+    // 3 | + - + - - + - +
+    // 4 | + - + - + - + -
+    // 5 | + + - - - - + +
+    // 6 | + + - - + + - -
+    // 7 | + + + + - - - -
+    // 8 | + + + + + + + +
+
+    //      9 0 1 2 3 4 5 6
+    // ---------------------
+    // 9  | + - - + - + + -
+    // 10 | + - - + + - - +
+    // 11 | + - + - - + - +
+    // 12 | + - + - + - + -
+    // 13 | + + - - - - + +
+    // 14 | + + - - + + - -
+    // 15 | + + + + - - - -
+    // 16 | + + + + + + + +
+
+    //      1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6
+    //    ---------------------------------
+    //  1 | + - - + - + + - - + + - + - - +
+    //  2 | + - - + - + + - + - - + - + + -
+    //  3 | + - - + + - - + - + + - - + + -
+    //  4 | + - - + + - - + + - - + + - - +
+    //  5 | + - + - - + - + - + - + + - + -
+    //  6 | + - + - - + - + + - + - - + - +
+    //  7 | + - + - + - + - - + - + - + - +
+    //  8 | + - + - + - + - + - + - + - + -
+    //  9 | + + - - - - + + - - + + + + - -
+    // 10 | + + - - - - + + + + - - - - + +
+    // 11 | + + - - + + - - - - + + - - + +
+    // 12 | + + - - + + - - + + - - + + - -
+    // 13 | + + + + - - - - - - - - + + + +
+    // 14 | + + + + - - - - + + + + - - - -
+    // 15 | + + + + + + + + - - - - - - - -
+    // 16 | + + + + + + + + + + + + + + + +
+
+    std::array<V, N> y;
+
+    auto y_a = rot_matrix_8 (x.resize_head (8), w.resize_head (2));
+    auto y_b = rot_matrix_8 (x.shrink_head (8), w.shrink_head (2));
+
+    auto y1 = y_a[0];
+    auto y2 = y_a[1];
+    auto y3 = y_a[2];
+    auto y4 = y_a[3];
+    auto y5 = y_a[4];
+    auto y6 = y_a[5];
+    auto y7 = y_a[6];
+    auto y8 = y_a[7];
+    auto y9 = y_b[0];
+    auto ya = y_b[1];
+    auto yb = y_b[2];
+    auto yc = y_b[3];
+    auto yd = y_b[4];
+    auto ye = y_b[5];
+    auto yf = y_b[6];
+    auto yg = y_b[7];
+
+    auto w1a = w[0][0];
+    auto w2a = w[0][1];
+    auto w1b = w[1][0];
+    auto w2b = w[1][1];
+    auto w1c = w[2][0];
+    auto w2c = w[2][1];
+    auto w1d = w[3][0];
+    auto w2d = w[3][1];
+
+    y[0]  = w1a * y1 - w2a * y9;
+    y[1]  = w2a * y1 + w1a * y9;
+    y[2]  = w1a * y2 - w2a * ya;
+    y[3]  = w2a * y2 + w1a * ya;
+    y[4]  = w1b * y3 - w2b * yb;
+    y[5]  = w2b * y3 + w1b * yb;
+    y[6]  = w1b * y4 - w2b * yc;
+    y[7]  = w2b * y4 + w1b * yc;
+    y[8]  = w1c * y5 - w2c * yd;
+    y[9]  = w2c * y5 + w1c * yd;
+    y[10] = w1c * y6 - w2c * ye;
+    y[11] = w2c * y6 + w1c * ye;
+    y[12] = w1d * y7 - w2d * yf;
+    y[13] = w2d * y7 + w1d * yf;
+    y[14] = w1d * y8 - w2d * yg;
+    y[15] = w2d * y8 + w1d * yg;
+
+    return y;
+  }
+  //----------------------------------------------------------------------------
+  template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  static std::array<T, N> tick (crange<const T> x, crange<std::array<T, 2>> w)
+  {
+    using vectype = vec<T, 1>;
+    return vec_array_unwrap<1, T> (
+      tick (x.cast (vectype {})), w.cast (std::array<vectype, 2> {}));
+  }
+  //----------------------------------------------------------------------------
+};
+//------------------------------------------------------------------------------
+// TODO; there are more experimental matrices on "_reverb.jsfx-inc"
+//------------------------------------------------------------------------------
+// "rochebois_matrix" are conference matrices. Some experimentation was done
+// with of them are found on "_reverb.jsfx-inc" but they are not ported. Albeit
+// more expensive, the rotation matrices sounded better for me.
 //------------------------------------------------------------------------------
 template <uint N>
 struct rochebois_matrix;
@@ -194,8 +446,9 @@ struct rochebois_matrix<4> {
   static constexpr uint N = 4;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (std::array<V, N> x)
+  static std::array<V, N> tick (crange<const V> x)
   {
+    assert (x.size() >= N);
     static constexpr double norm = 1. / gcem::sqrt (3.);
 
     using T = vec_value_type_t<V>;
@@ -213,9 +466,9 @@ struct rochebois_matrix<4> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (std::array<T, N> x)
+  static std::array<T, N> tick (crange<const T> x)
   {
-    return vec_array_unwrap<1, T> (tick (vec_array_wrap<1> (x)));
+    return vec_array_unwrap<1, T> (tick (x.cast (vec<T, 1> {})));
   }
   //----------------------------------------------------------------------------
 };
@@ -228,8 +481,9 @@ struct rochebois_matrix<6> {
   static constexpr uint N = 6;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (std::array<V, N> x)
+  static std::array<V, N> tick (crange<const V> x)
   {
+    assert (x.size() >= N);
     static constexpr double norm = 1. / gcem::sqrt (5.);
 
     using T = vec_value_type_t<V>;
@@ -257,9 +511,9 @@ struct rochebois_matrix<6> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (std::array<T, N> x)
+  static std::array<T, N> tick (crange<const T> x)
   {
-    return vec_array_unwrap<1, T> (tick (vec_array_wrap<1> (x)));
+    return vec_array_unwrap<1, T> (tick (x.cast (vec<T, 1> {})));
   }
   //----------------------------------------------------------------------------
 };
@@ -272,8 +526,9 @@ struct rochebois_matrix<8> {
   static constexpr uint N = 8;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (std::array<V, N> x)
+  static std::array<V, N> tick (crange<const V> x)
   {
+    assert (x.size() >= N);
     static constexpr double norm = 1. / gcem::sqrt (7.);
 
     using T = vec_value_type_t<V>;
@@ -300,9 +555,9 @@ struct rochebois_matrix<8> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (std::array<T, N> x)
+  static std::array<T, N> tick (crange<const T> x)
   {
-    return vec_array_unwrap<1, T> (tick (vec_array_wrap<1> (x)));
+    return vec_array_unwrap<1, T> (tick (x.cast (vec<T, 1> {})));
   }
   //----------------------------------------------------------------------------
 };
@@ -315,8 +570,9 @@ struct rochebois_matrix<10> {
   static constexpr uint N = 10;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (std::array<V, N> x)
+  static std::array<V, N> tick (crange<const V> x)
   {
+    assert (x.size() >= N);
     static constexpr double norm = 1. / 3.; // 1/sqrt(9)
 
     using T = vec_value_type_t<V>;
@@ -352,12 +608,11 @@ struct rochebois_matrix<10> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (std::array<T, N> x)
+  static std::array<T, N> tick (crange<const T> x)
   {
-    return vec_array_unwrap<1, T> (tick (vec_array_wrap<1> (x)));
+    return vec_array_unwrap<1, T> (tick (x.cast (vec<T, 1> {})));
   }
   //----------------------------------------------------------------------------
 };
 
-//------------------------------------------------------------------------------
 } // namespace artv

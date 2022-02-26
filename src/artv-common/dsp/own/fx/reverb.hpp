@@ -179,7 +179,7 @@ public:
 #endif
         // diffusion matrix
         for (uint i = 0; i < blocksize; ++i) {
-          io[i] = hadamard_matrix<n_channels>::tick (io[i]);
+          io[i] = hadamard_matrix<n_channels>::tick<float_x1> (io[i]);
         }
       }
 #if 0
