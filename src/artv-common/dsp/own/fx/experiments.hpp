@@ -3,9 +3,7 @@
 #include <cstdio>
 // a dummy dsp process to experiment with
 
-#include "artv-common/dsp/own/classes/circular_queue.hpp"
-#include "artv-common/dsp/own/classes/fir.hpp"
-#include "artv-common/dsp/own/classes/window.hpp"
+#include "artv-common/dsp/own/classes/block_resampler.hpp"
 
 #include "artv-common/dsp/own/classes/linphase_iir_crossover.hpp"
 
@@ -22,7 +20,8 @@
 
 namespace artv {
 #if 1
-// resampler test
+
+// block_resampler test
 //------------------------------------------------------------------------------
 class experiments {
 public:
@@ -87,53 +86,34 @@ public:
   template <class T>
   void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
   {
-    for (uint i = 0; i < block_samples; ++i) {
-      // we know that the max interpolation ratio is 4 (0.25x).
-      std::array<float, 4 * n_channels> out_st1, out_st2;
-      std::array<float, n_channels>     spl = {ins[0][i], ins[1][i]};
-
-      uint n_spls_1 = _stage1.tick (out_st1, spl);
-
-      for (uint s1 = 0; s1 < n_spls_1; ++s1) {
-        crange<float> in {&out_st1[s1 * n_channels], n_channels};
-        // some DSP ...
-        uint n_spls_2 = _stage2.tick (out_st2, in);
-        for (uint s2 = 0; s2 < (n_spls_2 * n_channels); s2 += n_channels) {
-          _spls.push ({out_st2[s2], out_st2[s2 + 1]});
-        }
-      }
-
-      auto next  = _spls.pop();
-      outs[0][i] = next[0];
-      outs[1][i] = next[1];
-    }
+    _resampler.process (outs, ins, block_samples, [=] (auto block) {
+      process_resampled_block (block);
+    });
   }
   //----------------------------------------------------------------------------
 private:
+  void process_resampled_block (crange<vec<float, 2>> io)
+  {
+    // process the block here...
+  }
   //----------------------------------------------------------------------------
   void reset_src()
   {
     uint  src_srate = _plugcontext->get_sample_rate();
     uint  tgt_srate = (uint) (_a * (float) src_srate);
-    auto  beta      = kaiser_beta_estimate (100.f);
     float fc        = 0.48f;
     auto  taps      = 32;
     float fc1       = fc * (float) tgt_srate;
     float fc2       = fc * (float) std::min (tgt_srate, src_srate);
+
+    _resampler.reset (
+      tgt_srate, src_srate, fc1, fc2, taps, taps, 100.f, false, 16, 6 * 1024);
 
     printf ("ratio: %f\n", (float) tgt_srate / (float) src_srate);
     printf ("src_rate(Hz): %u\n", src_srate);
     printf ("tgt_rate(Hz): %u\n", tgt_srate);
     printf ("fc1(Hz): %f\n", fc1);
     printf ("fc2(Hz): %f\n\n", fc2);
-
-    // TODO...
-    _stage1.reset (tgt_srate, src_srate, taps, taps, fc1, beta, false);
-    _stage2.reset (src_srate, tgt_srate, taps, taps, fc2, beta, false);
-
-    uint max_spls = std::max (_stage1.max_n_samples(), _stage2.max_n_samples());
-    _spls_mem.resize (pow2_round_ceil (max_spls));
-    _spls.reset (_spls_mem);
   }
   //----------------------------------------------------------------------------
   plugin_context* _plugcontext;
@@ -141,10 +121,7 @@ private:
 
   static constexpr uint n_channels = 2;
 
-  resampler<float, n_channels>                       _stage1;
-  resampler<float, n_channels>                       _stage2;
-  static_pow2_circular_queue<vec<float, n_channels>> _spls;
-  std::vector<vec<float, n_channels>>                _spls_mem;
+  block_resampler<float, n_channels> _resampler;
 };
 #endif
 #if 0

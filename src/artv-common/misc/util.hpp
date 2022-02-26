@@ -349,6 +349,9 @@ public:
     assert (idx < size());
     return _start[idx];
   }
+
+  constexpr explicit operator bool() const { return !empty(); }
+
   // TODO: these functions for shrink/cut/resize need a better name that makes
   // obvious when they modify the object without looking at the "const"-
 
@@ -359,6 +362,7 @@ public:
     contiguous_range<T> r {*this};
     r._start += count;
     r._size -= count;
+    r._start = r._size ? r._start : nullptr;
     return r;
   }
   // returns a subrange without "count" elems on the tail.
@@ -367,6 +371,7 @@ public:
     assert (count <= size());
     contiguous_range<T> r {*this};
     r._size -= count;
+    r._start = r._size ? r._start : nullptr;
     return r;
   }
   // returns a subrange with "count" elems on the head.
@@ -374,7 +379,8 @@ public:
   {
     assert (count <= size());
     contiguous_range<T> r {*this};
-    r._size = count;
+    r._size  = count;
+    r._start = r._size ? r._start : nullptr;
     return r;
   }
   // returns a subrange with "count" elems on the tail.
@@ -383,7 +389,8 @@ public:
     assert (count <= size());
     contiguous_range<T> r {*this};
     r._start += r._size - count;
-    r._size = count;
+    r._size  = count;
+    r._start = r._size ? r._start : nullptr;
     return r;
   }
   // drops "count" elems from the head and returns the cut subrange
@@ -415,6 +422,12 @@ public:
   constexpr T const* data() const { return _start; }
 
   constexpr bool empty() const { return size() == 0; }
+
+  constexpr void clear()
+  {
+    _start = nullptr;
+    _size == 0;
+  }
 
   template <class U>
   contiguous_range<U> cast() const

@@ -5,6 +5,7 @@
 // -Handrolled SSE version. Some performance might be gained if some dev time is
 //    spent optimizing this. Worth?
 
+#include <algorithm>
 #include <cassert>
 #include <limits>
 #include <optional>
@@ -697,6 +698,19 @@ public:
   //----------------------------------------------------------------------------
   uint max_n_samples() const { return _max_samples; }
   //----------------------------------------------------------------------------
+  bool is_downsampler() const { return _max_samples == 1; };
+  //----------------------------------------------------------------------------
+  uint next_tick_n_spls_out() const { return _n_spls_tbl[_n_in]; }
+  //----------------------------------------------------------------------------
+  // ratio as a fraction, the first element is the target rate, the second the
+  // source.
+  std::array<uint, 2> ratio() const
+  {
+    uint tgt_rate
+      = std::accumulate (&_n_spls_tbl[0], &_n_spls_tbl[_period], (uint) 0);
+    return {tgt_rate, _period};
+  };
+  //----------------------------------------------------------------------------
   // outputs and takes interleaved samples, "out" has to contain enough space
   // for "max_n_samples() * n_channels" elements.
   //
@@ -870,6 +884,30 @@ public:
   //----------------------------------------------------------------------------
   uint max_n_samples() const { return _max_samples; }
   //----------------------------------------------------------------------------
+  bool is_downsampler() const { return _max_samples == 1; };
+  //----------------------------------------------------------------------------
+  // ratio as a fraction, the first element is the target rate, the second the
+  // source.
+  std::array<uint, 2> ratio() const
+  {
+    std::array<uint, 2> ret {1, 1};
+    if (_fractional) {
+      ret = _fractional->ratio();
+    }
+    if (is_downsampler()) {
+      if (std::holds_alternative<decimator_type> (_integer)) {
+        auto& decimator = std::get<decimator_type> (_integer).decimator;
+        ret[1] *= decimator.ratio();
+      }
+    }
+    else {
+      if (std::holds_alternative<interpolator_type> (_integer)) {
+        auto& interpolator = std::get<interpolator_type> (_integer);
+        ret[0] *= interpolator.ratio();
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
   uint tick_upsampler (crange<value_type> out, const crange<value_type> in)
   {
     assert (max_n_samples() > 1);
@@ -938,7 +976,7 @@ public:
   //----------------------------------------------------------------------------
   uint tick (crange<value_type> out, const crange<value_type> in)
   {
-    if (max_n_samples() == 1) {
+    if (is_downsampler()) {
       return tick_downsampler (out, in);
     }
     else {
