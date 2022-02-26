@@ -48,7 +48,7 @@ struct moving_average {
       z[0]   = prev;
       sum += next;
       prev = next;
-      z    = z.shrink_head (1);
+      z.cut_head (1);
     }
     static constexpr double coeff = (T) 1 / (T) length;
     sum *= coeff;

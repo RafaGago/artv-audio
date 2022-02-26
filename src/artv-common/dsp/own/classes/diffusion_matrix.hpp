@@ -277,8 +277,8 @@ struct rotation_matrix<8> {
 
     std::array<V, N> y;
 
-    auto y_a = rot_matrix_4 (x.resize_head (4), w.resize_head (1));
-    auto y_b = rot_matrix_4 (x.shrink_head (4), w.shrink_head (1));
+    auto y_a = rot_matrix_4 (x.get_head (4), w.get_head (1));
+    auto y_b = rot_matrix_4 (x.advanced (4), w.advanced (1));
 
     auto y1 = y_a[0];
     auto y2 = y_a[1];
@@ -370,8 +370,8 @@ struct rotation_matrix<16> {
 
     std::array<V, N> y;
 
-    auto y_a = rot_matrix_8 (x.resize_head (8), w.resize_head (2));
-    auto y_b = rot_matrix_8 (x.shrink_head (8), w.shrink_head (2));
+    auto y_a = rot_matrix_8 (x.get_head (8), w.get_head (2));
+    auto y_b = rot_matrix_8 (x.advanced (8), w.advanced (2));
 
     auto y1 = y_a[0];
     auto y2 = y_a[1];

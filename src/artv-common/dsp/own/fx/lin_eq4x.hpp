@@ -463,11 +463,11 @@ private:
     b.slope_gain = gain - 1; // e.g 0dB = 1, so the multiplier is 0
 
     auto co        = make_crange (_target_coeffs[band]);
-    auto co_biquad = co.shrink_head (_eq[0].get_coeff_offset<fwd_idx>());
+    auto co_biquad = co.advanced (_eq[0].get_coeff_offset<fwd_idx>());
     auto co_bwd_poles
-      = co.shrink_head (_eq[0].get_coeff_offset<bckwd_poles_idx>());
+      = co.advanced (_eq[0].get_coeff_offset<bckwd_poles_idx>());
     auto co_bwd_zeros
-      = co.shrink_head (_eq[0].get_coeff_offset<bckwd_zeros_idx>());
+      = co.advanced (_eq[0].get_coeff_offset<bckwd_zeros_idx>());
 
     std::array<double_x2, biquad::n_coeffs> coeffs;
     bool high_srate = _plugcontext->get_sample_rate() > 70000;

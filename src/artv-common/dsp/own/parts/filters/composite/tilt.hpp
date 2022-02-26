@@ -31,7 +31,7 @@ public:
   {
     assert (co.size() >= n_coeffs);
     andy::svf::reset_coeffs (co, freq, q, gain_db, sr, lowshelf_tag {});
-    co = co.shrink_head (andy::svf::n_coeffs);
+    co.cut_head (andy::svf::n_coeffs);
     andy::svf::reset_coeffs (co, freq, q, -gain_db, sr, highshelf_tag {});
   }
   //----------------------------------------------------------------------------
@@ -54,8 +54,8 @@ public:
     assert (st.size() >= n_states);
 
     in = andy::svf::tick (co, st, in);
-    co = co.shrink_head (andy::svf::n_coeffs);
-    st = st.shrink_head (andy::svf::n_states);
+    co.cut_head (andy::svf::n_coeffs);
+    st.cut_head (andy::svf::n_states);
     return andy::svf::tick (co, st, in);
   }
   //----------------------------------------------------------------------------
@@ -69,8 +69,8 @@ public:
     assert (st.size() >= n_states);
 
     in = andy::svf::tick (co, st, in);
-    co = co.shrink_head (andy::svf::n_coeffs);
-    st = st.shrink_head (andy::svf::n_states);
+    co.cut_head (andy::svf::n_coeffs);
+    st.cut_head (andy::svf::n_states);
     return andy::svf::tick (co, st, in);
   }
   //----------------------------------------------------------------------------

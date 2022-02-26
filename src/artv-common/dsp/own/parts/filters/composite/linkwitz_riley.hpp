@@ -67,8 +67,8 @@ public:
     lr_crossover_out<V> ret;
     // LP + AP. lowpasses on index 0, allpasses on 1.
     auto stage1 = onepole_type::tick (c, s, in);
-    auto stage2 = onepole_type::tick (
-      c, s.shrink_head (onepole_type::n_states), stage1[0]);
+    auto stage2
+      = onepole_type::tick (c, s.advanced (onepole_type::n_states), stage1[0]);
 
     ret.lp = stage2[0];
     ret.hp = stage1[1] - ret.lp; // HP = Allpass - LP
@@ -133,8 +133,7 @@ public:
     lr_crossover_out<V> ret;
     // LP
     auto multimode = svf_lp_ap::tick (c, s, in);
-    ret.lp
-      = svf_lp::tick (c, s.shrink_head (svf_lp_ap::n_states), multimode[0]);
+    ret.lp = svf_lp::tick (c, s.advanced (svf_lp_ap::n_states), multimode[0]);
     // HP = Allpass - LP
     ret.hp = multimode[1] - ret.lp;
     return ret;
@@ -182,7 +181,7 @@ public:
 
     svf_lp_ap::reset_coeffs (c, freq, vec_set<V> (qlist[0]), sr);
     svf_lp_ap::reset_coeffs (
-      c.shrink_head (svf_lp_ap::n_coeffs), freq, vec_set<V> (qlist[1]), sr);
+      c.advanced (svf_lp_ap::n_coeffs), freq, vec_set<V> (qlist[1]), sr);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -230,21 +229,21 @@ public:
 
     // First Butterworth LP + AP
     auto coeffs1 = c;
-    auto coeffs2 = c.shrink_head (svf_lp_ap::n_coeffs);
+    auto coeffs2 = c.advanced (svf_lp_ap::n_coeffs);
     auto s_ptr   = s;
 
     auto multimode = svf_lp_ap::tick (coeffs1, s_ptr, in);
-    s_ptr          = s_ptr.shrink_head (svf_lp_ap::n_states);
+    s_ptr.cut_head (svf_lp_ap::n_states);
 
-    V ap  = svf_lp_ap::tick (coeffs2, s_ptr, multimode[1])[1];
-    s_ptr = s_ptr.shrink_head (svf_lp_ap::n_states);
+    V ap = svf_lp_ap::tick (coeffs2, s_ptr, multimode[1])[1];
+    s_ptr.cut_head (svf_lp_ap::n_states);
 
     ret.lp = svf_lp::tick (coeffs2, s_ptr, multimode[0]);
-    s_ptr  = s_ptr.shrink_head (svf_lp::n_states);
+    s_ptr.cut_head (svf_lp::n_states);
 
     // Second Butterworth LP
     ret.lp = svf_lp::tick (coeffs1, s_ptr, ret.lp);
-    s_ptr  = s_ptr.shrink_head (svf_lp::n_states);
+    s_ptr.cut_head (svf_lp::n_states);
 
     ret.lp = svf_lp::tick (coeffs2, s_ptr, ret.lp);
 
@@ -264,8 +263,8 @@ public:
 
     V r = svf_lp_ap::tick (c, extern_s, in)[1];
     return svf_lp_ap::tick (
-      c.shrink_head (svf_lp_ap::n_coeffs),
-      extern_s.shrink_head (svf_lp_ap::n_states),
+      c.advanced (svf_lp_ap::n_coeffs),
+      extern_s.advanced (svf_lp_ap::n_states),
       r)[1];
   }
   //----------------------------------------------------------------------------

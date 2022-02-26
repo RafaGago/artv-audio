@@ -62,11 +62,11 @@ public:
 
     if (order & 1) {
       onepole_type::reset_coeffs (co, freq, sr);
-      co = co.shrink_head (onepole_type::n_coeffs);
+      co.cut_head (onepole_type::n_coeffs);
     }
     for (uint i = 0; i < n_svfs; ++i) {
       svf_type::reset_coeffs (co, freq, vec_set<V> (q_list[i]), sr);
-      co = co.shrink_head (svf_type::n_coeffs);
+      co.cut_head (svf_type::n_coeffs);
     }
   }
   //----------------------------------------------------------------------------
@@ -115,13 +115,13 @@ private:
 
     if (order & 1) {
       out = onepole_type::tick (co, st, out);
-      co  = co.shrink_head (onepole_type::n_coeffs);
-      st  = st.shrink_head (onepole_type::n_states);
+      co.cut_head (onepole_type::n_coeffs);
+      st.cut_head (onepole_type::n_states);
     }
     for (uint i = 0; i < (order / 2); ++i) {
       out = svf_type::tick (co, st, out);
-      co  = co.shrink_head (svf_type::n_coeffs);
-      st  = st.shrink_head (svf_type::n_states);
+      co.cut_head (svf_type::n_coeffs);
+      st.cut_head (svf_type::n_states);
     }
     return out;
   }

@@ -433,7 +433,7 @@ struct t_rev_naive_cascade_pair {
     value_type<V> zero_or_pole2)
   {
     base::reset_coeffs (co, zero_or_pole1);
-    co = co.shrink_head (base::n_coeffs);
+    co.cut_head (base::n_coeffs);
     base::reset_coeffs (co, zero_or_pole2);
   }
   //----------------------------------------------------------------------------
@@ -454,8 +454,8 @@ struct t_rev_naive_cascade_pair {
     uint            sample_idx) // sample counter (external)
   {
     auto out = base::tick (co, st, value_type<V> {in}, n_stages, sample_idx);
-    co       = co.shrink_head (base::n_coeffs);
-    st       = st.shrink_head (base::get_n_states (n_stages));
+    co.cut_head (base::n_coeffs);
+    st.cut_head (base::get_n_states (n_stages));
     out      = base::tick (co, st, out, n_stages, sample_idx);
     if constexpr (is_complex) {
       return out.re;
@@ -486,8 +486,8 @@ struct t_rev_naive_cascade_pair {
       buff = io;
     }
 
-    auto co2 = co.shrink_head (base::n_coeffs);
-    auto st2 = st.shrink_head (base::get_n_states (n_stages));
+    auto co2 = co.advanced (base::n_coeffs);
+    auto st2 = st.advanced (base::get_n_states (n_stages));
 
     for (uint offset = 0; offset < io.size(); offset += buff.size()) {
       auto block = make_crange (
@@ -869,7 +869,7 @@ struct t_rev_rpole_rzero {
   static void reset_coeffs (crange<V> co, V re_pole, V re_zero)
   {
     t_rev_rpole::reset_coeffs (co, re_pole);
-    co = co.shrink_head (t_rev_rpole::n_coeffs);
+    co.cut_head (t_rev_rpole::n_coeffs);
     rzero::reset_coeffs (co, re_zero);
   }
   //----------------------------------------------------------------------------
@@ -890,8 +890,8 @@ struct t_rev_rpole_rzero {
     uint            sample_idx)
   {
     V out = t_rev_rpole::tick (co, st, x, n_stages, sample_idx);
-    co    = co.shrink_head (t_rev_rpole::n_coeffs);
-    st    = st.shrink_head (t_rev_rpole::get_n_states (n_stages));
+    co.cut_head (t_rev_rpole::n_coeffs);
+    st.cut_head (t_rev_rpole::get_n_states (n_stages));
     return rzero::tick (co, st, out);
   }
   //----------------------------------------------------------------------------
@@ -904,8 +904,8 @@ struct t_rev_rpole_rzero {
     uint            sample_idx)
   {
     t_rev_rpole::tick (co, st, io, n_stages, sample_idx);
-    co = co.shrink_head (t_rev_rpole::n_coeffs);
-    st = st.shrink_head (t_rev_rpole::get_n_states (n_stages));
+    co.cut_head (t_rev_rpole::n_coeffs);
+    st.cut_head (t_rev_rpole::get_n_states (n_stages));
 
     for (uint i = 0; i < io.size(); ++i) {
       io[i] = rzero::tick (co, st, io[i]);
@@ -932,7 +932,7 @@ struct t_rev_ccpole_pair_rzero_eq_pair {
   static void reset_coeffs (crange<V> co, vec_complex<V> pole, V re_zero)
   {
     t_rev_ccpole_pair::reset_coeffs (co, pole);
-    co = co.shrink_head (t_rev_ccpole_pair::n_coeffs);
+    co.cut_head (t_rev_ccpole_pair::n_coeffs);
     rzero::reset_coeffs (co, re_zero);
   }
   //----------------------------------------------------------------------------
@@ -955,13 +955,13 @@ struct t_rev_ccpole_pair_rzero_eq_pair {
     auto out = x;
 
     out = t_rev_ccpole_pair::tick (co, st, out, n_stages, sample_idx);
-    co  = co.shrink_head (t_rev_ccpole_pair::n_coeffs);
-    st  = st.shrink_head (t_rev_ccpole_pair::get_n_states (n_stages));
+    co.cut_head (t_rev_ccpole_pair::n_coeffs);
+    st.cut_head (t_rev_ccpole_pair::get_n_states (n_stages));
 
     for (uint i = 0; i < 2; ++i) {
       out = rzero::tick (co, st, out);
       // same zero location
-      st = st.shrink_head (rzero::n_states);
+      st.cut_head (rzero::n_states);
     }
     return out;
   }
@@ -975,14 +975,14 @@ struct t_rev_ccpole_pair_rzero_eq_pair {
     uint            sample_idx)
   {
     t_rev_ccpole_pair::tick (co, st, io, n_stages, sample_idx);
-    co = co.shrink_head (t_rev_ccpole_pair::n_coeffs);
-    st = st.shrink_head (t_rev_ccpole_pair::get_n_states (n_stages));
+    co.cut_head (t_rev_ccpole_pair::n_coeffs);
+    st.cut_head (t_rev_ccpole_pair::get_n_states (n_stages));
 
     for (uint j = 0; j < 2; ++j) {
       for (uint i = 0; i < io.size(); ++i) {
         io[i] = rzero::tick (co, st, io[i]);
       }
-      st = st.shrink_head (rzero::n_states);
+      st.cut_head (rzero::n_states);
     }
     return io; // forwarding
   }

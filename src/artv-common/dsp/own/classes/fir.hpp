@@ -408,7 +408,7 @@ public:
   {
     _delays[1].push (in);
     for (auto& r : in) {
-      r = r.shrink_head (1);
+      r.cut_head (1);
     }
     _delays[0].push (in, _ratio - 1);
     return tick_after_input();
@@ -417,8 +417,8 @@ public:
   // interleaved version
   std::array<T, n_channels> tick (crange<const T> in)
   {
-    _delays[1].push (in);
-    _delays[0].push (in.shrink_head (n_channels), _ratio - 1);
+    _delays[1].push (in.get_head (1));
+    _delays[0].push (in.advanced (n_channels), _ratio - 1);
     return tick_after_input();
   }
   //----------------------------------------------------------------------------

@@ -352,11 +352,18 @@ public:
 
   constexpr explicit operator bool() const { return !empty(); }
 
-  // TODO: these functions for shrink/cut/resize need a better name that makes
-  // obvious when they modify the object without looking at the "const"-
+  // returns a copy/subrange with "count" elements dropped from the tail.
+  constexpr contiguous_range<T> reduced (uint count) const
+  {
+    assert (count <= size());
+    contiguous_range<T> r {*this};
+    r._size -= count;
+    r._start = r._size ? r._start : nullptr;
+    return r;
+  }
 
-  // returns a copy/subrange with "count" dropped from the head.
-  constexpr contiguous_range<T> shrink_head (uint count) const
+  // returns a copy/subrange with "count" elements dropped from the head.
+  constexpr contiguous_range<T> advanced (uint count) const
   {
     assert (count <= size());
     contiguous_range<T> r {*this};
@@ -365,17 +372,9 @@ public:
     r._start = r._size ? r._start : nullptr;
     return r;
   }
-  // returns a copy/subrange with "count" dropped from the tail.
-  constexpr contiguous_range<T> shrink_tail (uint count) const
-  {
-    assert (count <= size());
-    contiguous_range<T> r {*this};
-    r._size -= count;
-    r._start = r._size ? r._start : nullptr;
-    return r;
-  }
-  // returns a copy/subrange with "count" elems starting from the head.
-  constexpr contiguous_range<T> resize_head (uint count) const
+  // returns a copy/subrange containing "count" elements starting from the
+  // head.
+  constexpr contiguous_range<T> get_head (uint count) const
   {
     assert (count <= size());
     contiguous_range<T> r {*this};
@@ -383,8 +382,8 @@ public:
     r._start = r._size ? r._start : nullptr;
     return r;
   }
-  // returns a copy/subrange with "count" elems starting from the tail.
-  constexpr contiguous_range<T> resize_tail (uint count) const
+  // returns a copy/subrange containing "count" elements starting from the tail.
+  constexpr contiguous_range<T> get_tail (uint count) const
   {
     assert (count <= size());
     contiguous_range<T> r {*this};
@@ -396,15 +395,15 @@ public:
   // drops "count" elems from the head and returns the cut subrange
   constexpr contiguous_range<T> cut_head (uint count)
   {
-    auto r = resize_head (count);
-    *this  = shrink_head (count);
+    auto r = get_head (count);
+    *this  = advanced (count);
     return r;
   }
   // drops "count" elems from the tail and returns the cut subrange
   constexpr contiguous_range<T> cut_tail (uint count)
   {
-    auto r = resize_tail (count);
-    *this  = shrink_tail (count);
+    auto r = get_tail (count);
+    *this  = reduced (count);
     return r;
   }
 

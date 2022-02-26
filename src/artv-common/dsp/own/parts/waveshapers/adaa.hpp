@@ -218,7 +218,7 @@ public:
   static void reset_states (crange<V> s)
   {
     // maybe memset delay line and boxcar?
-    Impl<1, Ts...>::template reset_states<V> (s.shrink_head (impl_states_idx));
+    Impl<1, Ts...>::template reset_states<V> (s.advanced (impl_states_idx));
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -229,10 +229,10 @@ public:
 
     // comments on the non-vectorized version
     V delayed = allpass_interpolator::tick (c, st, x);
-    st        = st.shrink_head (allpass_interpolator::n_states);
+    st.cut_head (allpass_interpolator::n_states);
 
     V filtered = moving_average<2>::tick ({}, st, x);
-    st         = st.shrink_head (moving_average<2>::n_states);
+    st.cut_head (moving_average<2>::n_states);
 
     V eq = delayed + (delayed - filtered);
     return Impl<1, Ts...>::tick ({}, st, eq);

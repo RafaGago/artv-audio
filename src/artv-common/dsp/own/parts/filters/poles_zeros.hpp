@@ -199,7 +199,7 @@ struct rpole_rzero {
   static void reset_coeffs (crange<V> co, V re_pole, V re_zero)
   {
     rpole::reset_coeffs (co, re_pole);
-    co = co.shrink_head (rpole::n_coeffs);
+    co.cut_head (rpole::n_coeffs);
     rzero::reset_coeffs (co, re_zero);
   }
   //----------------------------------------------------------------------------
@@ -214,8 +214,8 @@ struct rpole_rzero {
   static V tick (crange<const V> co, crange<V> st, V x)
   {
     V out = rpole::tick (co, st, x);
-    co    = co.shrink_head (rpole::n_coeffs);
-    st    = st.shrink_head (rpole::n_states);
+    co.cut_head (rpole::n_coeffs);
+    st.cut_head (rpole::n_states);
     return rzero::tick (co, st, out);
   }
   //----------------------------------------------------------------------------
@@ -233,7 +233,7 @@ struct ccpole_pair_rzero_pair {
   static void reset_coeffs (crange<V> co, vec_complex<V> pole, V re_zero)
   {
     ccpole_pair::reset_coeffs (co, pole);
-    co = co.shrink_head (ccpole_pair::n_coeffs);
+    co.cut_head (ccpole_pair::n_coeffs);
     rzero::reset_coeffs (co, re_zero);
   }
   //----------------------------------------------------------------------------
@@ -248,13 +248,13 @@ struct ccpole_pair_rzero_pair {
   static V tick (crange<const V> co, crange<V> st, V x)
   {
     V out = ccpole_pair::tick (co, st, x);
-    co    = co.shrink_head (ccpole_pair::n_coeffs);
-    st    = st.shrink_head (ccpole_pair::n_states);
+    co.cut_head (ccpole_pair::n_coeffs);
+    st.cut_head (ccpole_pair::n_states);
 
     for (uint i = 0; i < 2; ++i) {
       out = rzero::tick (co, st, out);
       // same zero location
-      st = st.shrink_head (rzero::n_states);
+      st.cut_head (rzero::n_states);
     }
     return out;
   }
@@ -373,7 +373,7 @@ struct cpole_pair_czero_pair {
     assert (co.size() >= vec_complex<V>::size);
 
     czero_pair::reset_coeffs (co, zero1, zero2);
-    co = co.shrink_head (czero_pair::n_coeffs);
+    co.cut_head (czero_pair::n_coeffs);
     cpole_pair::reset_coeffs (co, pole1, pole2);
   }
   //----------------------------------------------------------------------------
@@ -381,7 +381,7 @@ struct cpole_pair_czero_pair {
   static void reset_states (crange<V> st)
   {
     czero_pair::reset_states (st);
-    st = st.shrink_head (czero_pair::n_states);
+    st.cut_head (czero_pair::n_states);
     cpole_pair::reset_states (st);
   }
   //----------------------------------------------------------------------------
@@ -390,9 +390,9 @@ struct cpole_pair_czero_pair {
   {
     V out = x;
     out   = czero_pair::tick (co, st, out);
-    co    = co.shrink_head (czero_pair::n_coeffs);
-    st    = st.shrink_head (czero_pair::n_states);
-    out   = cpole_pair::tick (co, st, out);
+    co.cut_head (czero_pair::n_coeffs);
+    st.cut_head (czero_pair::n_states);
+    out = cpole_pair::tick (co, st, out);
     return out;
   }
   //----------------------------------------------------------------------------

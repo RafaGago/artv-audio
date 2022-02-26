@@ -49,7 +49,7 @@ public:
     co[gain] = butterworth_lp_complex::gain (make_crange (poles), 1);
 
     rev_1pole::reset_coeffs (co, vec_real (poles), vec_real (zeros));
-    co = co.shrink_head (rev_1pole::n_coeffs);
+    co.cut_head (rev_1pole::n_coeffs);
 
     fwd_1pole::reset_coeffs (co, freq, sr);
   }
@@ -79,8 +79,8 @@ public:
 
     out = rev_1pole::tick (co, st, out, n_stages, sample_idx);
     out *= gain_v;
-    co = co.shrink_head (rev_1pole::n_coeffs);
-    st = st.shrink_head (rev_1pole::get_n_states (n_stages));
+    co.cut_head (rev_1pole::n_coeffs);
+    st.cut_head (rev_1pole::get_n_states (n_stages));
 
     out = fwd_1pole::tick (co, st, out);
     return out;
@@ -101,8 +101,8 @@ public:
     V gain_v = co[gain];
 
     rev_1pole::tick (co, st, io, n_stages, sample_idx);
-    co = co.shrink_head (rev_1pole::n_coeffs);
-    st = st.shrink_head (rev_1pole::get_n_states (n_stages));
+    co.cut_head (rev_1pole::n_coeffs);
+    st.cut_head (rev_1pole::get_n_states (n_stages));
 
     for (uint i = 0; i < io.size(); ++i) {
       io[i] *= gain_v; // gain from previous stage
@@ -160,11 +160,11 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
     butterworth_lp_complex::poles (make_crange (poles), freq, sr, order / 2);
 
     co[gain] = butterworth_lp_complex::gain (make_crange (poles), order / 2);
-    co       = co.shrink_head (1); // advance the gain coefficient
+    co.cut_head (1); // advance the gain coefficient
 
     for (uint i = 0; i < (order / 4); ++i) {
       rev_2pole::reset_coeffs (co, poles[i], vec_real (zeros[0]));
-      co = co.shrink_head (rev_2pole::n_coeffs);
+      co.cut_head (rev_2pole::n_coeffs);
     }
     fwd_2pole::reset_coeffs (co, freq, sr, order / 2);
   }
@@ -193,12 +193,12 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
 
     V out    = v;
     V gain_v = co[gain];
-    co       = co.shrink_head (1);
+    co.cut_head (1);
 
     for (uint i = 0; i < (order / 4); ++i) {
       out = rev_2pole::tick (co, st, out, n_stages, sample_idx);
-      co  = co.shrink_head (rev_2pole::n_coeffs);
-      st  = st.shrink_head (rev_2pole::get_n_states (n_stages));
+      co.cut_head (rev_2pole::n_coeffs);
+      st.cut_head (rev_2pole::get_n_states (n_stages));
     }
     out *= gain_v;
     return fwd_2pole::tick (co, st, out, order / 2);
@@ -222,12 +222,12 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
     assert ((order % 4) == 0);
 
     V gain_v = co[gain];
-    co       = co.shrink_head (1);
+    co.cut_head (1);
 
     for (uint i = 0; i < (order / 4); ++i) {
       rev_2pole::tick (co, st, io, n_stages, sample_idx);
-      co = co.shrink_head (rev_2pole::n_coeffs);
-      st = st.shrink_head (rev_2pole::get_n_states (n_stages));
+      co.cut_head (rev_2pole::n_coeffs);
+      st.cut_head (rev_2pole::get_n_states (n_stages));
     }
     for (uint i = 0; i < io.size(); ++i) {
       io[i] *= gain_v;

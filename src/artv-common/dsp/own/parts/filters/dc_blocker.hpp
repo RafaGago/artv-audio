@@ -147,7 +147,7 @@ struct mystran_dc_blocker_2pole {
     assert (s.size() >= n_states);
 
     V  now         = andy::svf_lowpass::tick (c, s, x);
-    V* prev        = s.shrink_head (andy::svf_lowpass::n_states).data();
+    V* prev        = s.advanced (andy::svf_lowpass::n_states).data();
     V  prev_lp_out = *prev;
     *prev          = now;
     return x - prev_lp_out;
@@ -163,7 +163,7 @@ struct mystran_dc_blocker_2pole {
     assert (s.size() >= n_states);
 
     V  now         = andy::svf_lowpass::tick (c, s, x);
-    V* prev        = s.shrink_head (andy::svf_lowpass::n_states).data();
+    V* prev        = s.advanced (andy::svf_lowpass::n_states).data();
     V  prev_lp_out = *prev;
     *prev          = now;
     return x - prev_lp_out;
