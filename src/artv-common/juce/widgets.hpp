@@ -14,6 +14,7 @@
 //#include <stdio.h>
 
 #include "artv-common/misc/bits.hpp"
+#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/util.hpp"
 
 namespace artv {
@@ -573,7 +574,7 @@ private:
     char const* str;
     uint        id;
 
-    bool operator<(comboitem const& other)
+    bool operator< (comboitem const& other)
     {
       return strcmp (str, other.str) < 0;
     }

@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "artv-common/misc/midi.hpp"
+#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/util.hpp"
 
 namespace artv {

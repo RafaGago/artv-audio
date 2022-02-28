@@ -6,6 +6,7 @@
 #include <optional>
 #include <type_traits>
 
+#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/util.hpp"
 
 namespace artv {

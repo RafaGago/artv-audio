@@ -8,6 +8,7 @@
 #include "artv-common/dsp/own/parts/filters/moving_average.hpp"
 #include "artv-common/dsp/own/parts/misc/interpolators.hpp"
 
+#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"

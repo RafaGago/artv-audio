@@ -11,6 +11,7 @@
 #include "artv-common/juce/widgets.hpp"
 #include "artv-common/misc/hana.hpp"
 #include "artv-common/misc/mp11.hpp"
+#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/util.hpp"
 
 /*

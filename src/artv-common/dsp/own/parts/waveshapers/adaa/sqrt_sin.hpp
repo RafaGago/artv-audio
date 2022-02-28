@@ -5,6 +5,7 @@
 #include <type_traits>
 
 #include "artv-common/dsp/own/parts/waveshapers/adaa.hpp"
+#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
 

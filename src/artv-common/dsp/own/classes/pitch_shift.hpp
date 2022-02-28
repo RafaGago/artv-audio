@@ -5,6 +5,7 @@
 #include "artv-common/dsp/own/classes/delay_line.hpp"
 #include "artv-common/dsp/own/parts/interpolation/stateless.hpp"
 #include "artv-common/misc/fixed_point.hpp"
+#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/util.hpp"

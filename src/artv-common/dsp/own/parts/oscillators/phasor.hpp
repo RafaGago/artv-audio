@@ -4,6 +4,7 @@
 #include <limits>
 
 #include "artv-common/dsp/own/classes/misc.hpp"
+#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
 

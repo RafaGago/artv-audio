@@ -25,6 +25,7 @@
 
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/mp11.hpp"
+#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/util.hpp"
 #if 0 // was required when maybe implementing __shufflevector wrapper.

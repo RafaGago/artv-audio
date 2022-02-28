@@ -7,6 +7,7 @@
 #include <type_traits>
 
 #include "artv-common/juce/widgets.hpp"
+#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/util.hpp"
 
 namespace artv {
