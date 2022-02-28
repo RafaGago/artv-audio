@@ -54,9 +54,7 @@ public:
       // sizes, so client code can happily declare its variables related to the
       // block size on the stack.
       auto block_spls_in = resampling::get_n_ticks_for_n_new_spls_floor (
-        _converter_in.ratio(),
-        _converter_in.corrected_pos(),
-        _desired_block_size);
+        _converter_in.ratio(), _converter_in.corrected_pos(), _max_block_size);
       assert (block_spls_in && "block extremely small compared with the ratio");
       block_spls_in = std::min (block_rem, block_spls_in);
       block_rem -= block_spls_in;
@@ -74,7 +72,7 @@ public:
         block.cast (value_type {}),
         interleaved.cast (value_type {}),
         block_spls_in);
-      assert (blocksize <= _desired_block_size && "Bug!!!");
+      assert (blocksize <= _max_block_size && "Bug!!!");
 
       // process
       block = block.get_head (blocksize);
@@ -111,8 +109,7 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  // "desired_block_size": The average block length. When the first stage is an
-  //   upsampler it might be exceeded by "ceil(ratio) - 1" samples.
+  // "max_block_size": The maximum block length.
   //
   // "block_buffers_max_stack_bytes": The implementation tries to keep the cache
   //  hot by using the stack for as many intermediate buffers as possible. This
@@ -127,7 +124,7 @@ public:
     uint  n_taps_frac,
     float kaiser_att_db,
     bool  minphase,
-    uint  desired_block_size,
+    uint  max_block_size,
     uint  block_buffers_max_stack_bytes)
   {
     auto beta = kaiser_beta_estimate (kaiser_att_db);
@@ -148,7 +145,7 @@ public:
       beta,
       minphase);
 
-    _desired_block_size = desired_block_size;
+    _max_block_size = max_block_size;
 
     uint remainder_n_spls;
 
@@ -159,7 +156,7 @@ public:
     if (tgt_srate > src_srate) {
       // upsampler first
       uint ratio        = div_ceil (tgt_srate, src_srate);
-      _tgt_rate_bf_spls = desired_block_size;
+      _tgt_rate_bf_spls = max_block_size;
 #if 0
       // A downsampler always outputs 0 or 1 samples, subtracting one from the
       // ratio to so ratios like e.g. 1.001 get enough samples
@@ -168,7 +165,7 @@ public:
       // The current implementation uses the output buffer as an input
       // deinterleaving buffer, so we set it to the desired block size. If this
       // requisite changes this #ifdef can be left on the other branch.
-      _src_rate_bf_spls = desired_block_size;
+      _src_rate_bf_spls = max_block_size;
 #endif
       // Having a remainder queue with a surplus of samples equal to the ratio.
       remainder_n_spls = ratio;
@@ -178,7 +175,7 @@ public:
       uint ratio = div_ceil (src_srate, tgt_srate);
       // A downsampler always outputs 0 or 1 samples, so the desired block size
       // will never be surpassed.
-      _tgt_rate_bf_spls = desired_block_size;
+      _tgt_rate_bf_spls = max_block_size;
       // The upsampler will never output more samples than the scaled up ratio
       _src_rate_bf_spls = _tgt_rate_bf_spls * ratio;
       // Having a remainder queue with a surplus of samples equal to the ratio.
@@ -224,9 +221,9 @@ private:
   resampler<value_type, n_channels>       _converter_out;
   sample_type*                            _tgt_rate_bf;
   sample_type*                            _src_rate_bf;
-  uint                                    _tgt_rate_bf_spls   = 0;
-  uint                                    _src_rate_bf_spls   = 0;
-  uint                                    _desired_block_size = 0;
+  uint                                    _tgt_rate_bf_spls = 0;
+  uint                                    _src_rate_bf_spls = 0;
+  uint                                    _max_block_size   = 0;
   static_pow2_circular_queue<sample_type> _remainder;
   std::vector<sample_type>                _raw_mem;
 };

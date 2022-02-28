@@ -737,7 +737,7 @@ public:
 
     _ratio.den = rate_src;
     _ratio.num = rate_tgt;
-    // using u8 for the spls table and "_max_samples"
+    // using u8 for "_max_samples"
     assert (_ratio.den < 256 && _ratio.num < 256);
     _max_samples = resampling::max_samples (_ratio);
     _kernel_size = taps;
@@ -766,7 +766,6 @@ public:
       auto n1     = t1 / rate_src;
       auto n_spls = n1 - n2;
       assert (n_spls <= std::numeric_limits<u8>::max());
-      _n_spls_tbl[i] = n_spls;
 
       for (uint spl = 1; spl < (n_spls + 1); ++spl) {
         auto t_in_spl = (n2 + spl) * rate_src;
@@ -790,12 +789,7 @@ public:
   //----------------------------------------------------------------------------
   uint next_tick_n_spls_out() const
   {
-    // The _n_spls_tbl table could be dropped in exchange for an integer
-    // division and some adds and multiplies by doing:
-    // return resampling::get_n_new_outs_for_n_ticks (ratio(), corrected_pos(),
-    // 1);
-    // TODO: measure, there must be no difference.
-    return _n_spls_tbl[_n_in];
+    return resampling::get_n_new_outs_for_n_ticks (ratio(), corrected_pos(), 1);
   }
   //----------------------------------------------------------------------------
   // ratio as a fraction, the first element is the numerator
@@ -827,7 +821,6 @@ public:
   //----------------------------------------------------------------------------
   // outputs and takes interleaved samples, "out" has to contain enough space
   // to contain "next_tick_n_spls_out" multichannel elements.
-  //
   uint tick (
     crange<value_type>       out,
     crange<const value_type> ins,
@@ -876,18 +869,14 @@ private:
   {
     _kernel_bytes = round_ceil<uint> (_kernel_size * sizeof (T), alignment);
 
-    uint mem_align        = std::max<uint> (alignment, sizeof (T));
-    uint n_spls_tbl_bytes = round_ceil (_ratio.den, mem_align);
-    uint del_elems        = n_channels * _kernel_size * 2;
+    uint mem_align      = std::max<uint> (alignment, sizeof (T));
+    uint del_elems      = n_channels * _kernel_size * 2;
     uint del_size_bytes = round_ceil<uint> (del_elems * sizeof (T), mem_align);
     uint k_size_bytes   = _kernel_bytes * n_kernel_tables;
 
-    _mem.resize (n_spls_tbl_bytes + del_size_bytes + k_size_bytes);
-
-    _n_spls_tbl = &_mem[0];
-    _delay.reset (
-      make_crange ((T*) &_mem[n_spls_tbl_bytes], del_elems), _kernel_size);
-    _kernels = &_mem[n_spls_tbl_bytes + del_size_bytes];
+    _mem.resize (del_size_bytes + k_size_bytes);
+    _delay.reset (make_crange ((T*) &_mem[0], del_elems), _kernel_size);
+    _kernels = &_mem[del_size_bytes];
   }
   //----------------------------------------------------------------------------
   void write_subkernel (
@@ -906,7 +895,6 @@ private:
   //----------------------------------------------------------------------------
   detail::fir_std_vector<u8>                    _mem;
   detail::convolution_delay_line<T, n_channels> _delay;
-  u8*                                           _n_spls_tbl;
   u8*                                           _kernels;
   uint                                          _kernel_size;
   uint                                          _kernel_bytes;
@@ -915,7 +903,6 @@ private:
   fraction<uint>                                _ratio;
   u8                                            _max_samples;
 };
-
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 // A polyphase decimator or interpolator taking care of power of two factors

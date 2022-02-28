@@ -57,7 +57,7 @@ struct fp_type<
 } // namespace detail
 
 //------------------------------------------------------------------------------
-// A (not that) quick and dirty class to avoid some mistakes when doing floating
+// A (not that) quick and dirty class to avoid some mistakes when doing fixed
 // point arithmetic. It could probably be good to use a 3rd party lib as there
 // are a lot of details and decisions to be made.
 //
