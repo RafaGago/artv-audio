@@ -9,8 +9,8 @@
 #include <hiir/PolyphaseIir2Designer.cpp>
 // clang-format on
 
+#include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/range.hpp"
-#include "artv-common/misc/util.hpp"
 
 // NOTE: Not using <iostream> is deliberate. "fmt" is not available on C++17.
 namespace artv {

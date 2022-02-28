@@ -5,10 +5,10 @@
 #include <cmath>
 
 #include "artv-common/dsp/own/parts/traits.hpp"
+#include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
-#include "artv-common/misc/util.hpp"
 //------------------------------------------------------------------------------
 namespace artv { namespace saike {
 

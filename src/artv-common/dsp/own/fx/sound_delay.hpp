@@ -14,10 +14,10 @@
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/bits.hpp"
+#include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/util.hpp"
 
 namespace artv {
 

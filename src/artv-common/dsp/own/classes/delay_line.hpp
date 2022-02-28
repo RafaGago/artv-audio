@@ -4,10 +4,10 @@
 #include <cstring>
 
 #include "artv-common/misc/bits.hpp"
+#include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
-#include "artv-common/misc/util.hpp"
 
 #include "artv-common/dsp/own/parts/interpolation/stateful.hpp"
 #include "artv-common/dsp/own/parts/interpolation/stateless.hpp"

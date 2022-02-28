@@ -5,9 +5,9 @@
 #include <complex>
 #include <cstring>
 
+#include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/range.hpp"
 #include "artv-common/misc/simd.hpp"
-#include "artv-common/misc/util.hpp"
 
 namespace artv {
 

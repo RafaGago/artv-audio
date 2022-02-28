@@ -14,8 +14,8 @@
 //#include <stdio.h>
 
 #include "artv-common/misc/bits.hpp"
+#include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/range.hpp"
-#include "artv-common/misc/util.hpp"
 
 namespace artv {
 // -----------------------------------------------------------------------------

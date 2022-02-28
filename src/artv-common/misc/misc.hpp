@@ -14,6 +14,7 @@
 #include <gcem.hpp>
 
 #include "artv-common/misc/bits.hpp"
+#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 
 // TODO: Split this.

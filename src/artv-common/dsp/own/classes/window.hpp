@@ -5,9 +5,9 @@
 
 #include <gcem.hpp>
 
+#include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/util.hpp"
 
 namespace artv {
 //------------------------------------------------------------------------------

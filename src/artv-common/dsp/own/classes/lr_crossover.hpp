@@ -3,10 +3,10 @@
 #include <cmath>
 #include <type_traits>
 
+#include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
-#include "artv-common/misc/util.hpp"
 
 #include "artv-common/dsp/own/parts/filters/composite/linkwitz_riley.hpp"
 

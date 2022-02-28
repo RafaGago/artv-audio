@@ -4,11 +4,11 @@
 #include <type_traits>
 
 #include "artv-common/misc/delay_compensation_buffers.hpp"
+#include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/overaligned_allocator.hpp"
 #include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
-#include "artv-common/misc/util.hpp"
 
 #include "artv-common/dsp/own/parts/filters/composite/linear_iir_butterworth.hpp"
 
