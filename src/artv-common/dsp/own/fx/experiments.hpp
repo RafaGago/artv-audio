@@ -102,13 +102,13 @@ private:
   {
     uint  src_srate = _plugcontext->get_sample_rate();
     uint  tgt_srate = (uint) (_a * (float) src_srate);
-    float fc        = 0.48f;
-    auto  taps      = 32;
+    float fc        = 0.46f;
+    auto  taps      = 128;
     float fc1       = fc * (float) tgt_srate;
     float fc2       = fc * (float) std::min (tgt_srate, src_srate);
 
     _resampler.reset (
-      tgt_srate, src_srate, fc1, fc2, taps, taps, 100.f, false, 16, 6 * 1024);
+      tgt_srate, src_srate, fc1, fc2, taps, taps, 120.f, false, 16, 6 * 1024);
 
     printf ("ratio: %f\n", (float) tgt_srate / (float) src_srate);
     printf ("src_rate(Hz): %u\n", src_srate);

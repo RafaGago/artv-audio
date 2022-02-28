@@ -111,7 +111,7 @@ static void fir_kernel_to_minphase (crange<T> kernel)
 {
   fft<double>                                 fftv;
   std::vector<double, fft<double>::allocator> fft_buff;
-  uint fft_size = pow2_round_ceil (kernel.size() * 16);
+  uint fft_size = pow2_round_ceil (kernel.size() * 64);
   fftv.reset (fft_size, true);
   fft_buff.resize (fft_size * 2);
   fir_kernel_to_minphase<T, double> (kernel, fftv, fft_buff);

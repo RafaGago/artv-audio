@@ -745,12 +745,21 @@ public:
 
     assert ((cutoff_hz * 2.f) <= (float) tgt_srate);
     auto  ratio = (float) rate_tgt / (float) rate_src;
-    float fc    = cutoff_hz / ((ratio <= 1.f) ? src_srate : tgt_srate);
+    float fc;
+    if (ratio <= 1.f) {
+      fc = cutoff_hz / src_srate;
+      fc /= rate_tgt;
+    }
+    else {
+      fc = cutoff_hz / tgt_srate;
+      fc /= rate_src;
+    }
+
     std::vector<value_type> bigkernel {};
     bigkernel.resize (taps * rate_tgt);
 
     kaiser_lp_kernel_2<value_type> (
-      bigkernel, fc / rate_tgt, kaiser_beta, rate_tgt, minphase);
+      bigkernel, fc, kaiser_beta, rate_tgt, minphase);
 
     // t1 = time of output sample
     // t2 = time of previous output sample

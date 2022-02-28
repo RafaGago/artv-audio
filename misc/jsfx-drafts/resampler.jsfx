@@ -29,7 +29,7 @@ stage1.resampler_2c_init(
   taps / 2,
   tgt_process_rate * 0.5 * cutoff,
   att,
-  0
+  1
   );
 // cutoff near nyquist when upsampling
 stage2.resampler_2c_init(
@@ -39,7 +39,7 @@ stage2.resampler_2c_init(
   taps / 2,
   min (tgt_process_rate, srate) * 0.5 * cutoff,
   att,
-  0
+  1
   );
 
 // N * 2 (channels)
