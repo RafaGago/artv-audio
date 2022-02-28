@@ -36,72 +36,76 @@ public:
     // Using the VLA extension (non-portable) to avoid touching a lot of memory
     // whenever it's possible. It may inhibit inlining but I guess it's not that
     // important at this level.
-    sample_type stack_in_buff[_in_buff ? 0 : _in_buff_spls];
-    sample_type stack_out_buff[_out_buff ? 0 : _out_buff_spls];
+    sample_type stack_tgt_buff[_tgt_rate_bf ? 0 : _tgt_rate_bf_spls];
+    sample_type stack_src_buff[_src_rate_bf ? 0 : _src_rate_bf_spls];
 
-    auto blockbf
-      = make_crange (_in_buff ? _in_buff : stack_in_buff, _in_buff_spls);
-    auto convertbf
-      = make_crange (_out_buff ? _out_buff : stack_out_buff, _out_buff_spls);
+    auto tgt_rate_bf = make_crange (
+      _tgt_rate_bf ? _tgt_rate_bf : stack_tgt_buff, _tgt_rate_bf_spls);
 
-    uint spls_out = 0;
+    auto src_rate_bf = make_crange (
+      _src_rate_bf ? _src_rate_bf : stack_src_buff, _src_rate_bf_spls);
 
-    for (uint spls_in = 0; spls_in < block_samples;) {
-      uint spls_in_past = spls_in;
-      uint blocksize    = 0;
-      auto block        = blockbf;
+    uint spls_out  = 0;
+    uint block_rem = block_samples;
 
-      // resample the input, if "_converter_in" is upsampling a fractiona ratio
-      // the block size might go above the desired size (variably between
-      // calls).
-      while (spls_in < block_samples && blocksize < _desired_block_size) {
-        sample_type spl;
+    while (block_rem) {
+      // ensure that the number of ticks never exceeds the internal buffer
+      // sizes, so client code can happily declare its variables related to the
+      // block size on the stack.
+      auto block_spls_in = resampling::get_n_ticks_for_n_new_spls_floor (
+        _converter_in.ratio(),
+        _converter_in.corrected_pos(),
+        _desired_block_size);
+      assert (block_spls_in && "block extremely small compared with the ratio");
+      block_spls_in = std::min (block_rem, block_spls_in);
+      block_rem -= block_spls_in;
+
+      // interleave
+      auto interleaved = src_rate_bf;
+      for (uint i = 0; i < block_spls_in; ++i) {
         for (uint c = 0; c < n_channels; ++c) {
-          spl[c] = ins[c][spls_in];
+          interleaved[i][c] = ins[c][spls_out + i];
         }
-        ++spls_in;
-        uint n_spls = _converter_in.tick (
-          block.cast (value_type {}),
-          make_crange ((value_type*) &spl, n_channels));
-        block.cut_head (n_spls);
-        blocksize += n_spls;
       }
+      // resample
+      auto block     = tgt_rate_bf;
+      uint blocksize = _converter_in.tick (
+        block.cast (value_type {}),
+        interleaved.cast (value_type {}),
+        block_spls_in);
+      assert (blocksize <= _desired_block_size && "Bug!!!");
 
-      block = make_crange (blockbf.data(), blocksize);
+      // process
+      block = block.get_head (blocksize);
       block_processor_fn (block); // It this doesn't inline, then CRTP
 
-      // resample the block
-      auto convert     = convertbf;
-      uint n_converted = 0;
-      while (block.size()) {
-        auto in     = block.cut_head (1);
-        uint n_spls = _converter_out.tick (
-          convert.cast (value_type {}), in.cast (value_type {}));
-        convert.cut_head (n_spls);
-        n_converted += n_spls;
-      }
+      // resample
+      auto converted   = src_rate_bf;
+      uint n_converted = _converter_out.tick (
+        converted.cast (value_type {}), block.cast (value_type {}), blocksize);
+      converted = converted.get_head (n_converted);
 
-      // try to clear remaining samples
-      uint block_spls_rem = spls_in - spls_in_past;
-      uint spls_out_end   = spls_out + block_spls_rem;
-      for (; _remainder.size() && spls_out < spls_out_end; ++spls_out) {
+      // try to clear remaining samples from past runs
+      uint allowed_spls_out = spls_out + block_spls_in;
+      while (_remainder.size() && spls_out < allowed_spls_out) {
         auto spl = _remainder.pop();
         for (uint c = 0; c < n_channels; ++c) {
           outs[c][spls_out] = spl[c];
         }
+        ++spls_out;
       }
-      // generate as many outs as possible
-      uint conv_out = 0;
-      while (spls_out < spls_out_end && conv_out < n_converted) {
+      // generate as many output samples as input samples where fed
+      while (spls_out < allowed_spls_out && converted.size()) {
         for (uint c = 0; c < n_channels; ++c) {
-          outs[c][spls_out] = convertbf[conv_out][c];
+          outs[c][spls_out] = converted[0][c];
         }
         ++spls_out;
-        ++conv_out;
+        converted.cut_head (1);
       }
       // save the new remainder (if any)
-      for (; conv_out < n_converted; ++conv_out) {
-        _remainder.push (convertbf[conv_out]);
+      while (converted.size()) {
+        _remainder.push (converted[0]);
+        converted.cut_head (1);
       }
     }
   }
@@ -153,13 +157,18 @@ public:
     // precompute intermediate buffer sizes
     if (tgt_srate > src_srate) {
       // upsampler first
-      uint ratio = div_ceil (tgt_srate, src_srate);
-      // The upsampler will output some times more samples than the desired
-      // block size, hence we account for them.
-      _in_buff_spls = round_ceil (desired_block_size + ratio, ratio);
+      uint ratio        = div_ceil (tgt_srate, src_srate);
+      _tgt_rate_bf_spls = desired_block_size;
+#if 0
       // A downsampler always outputs 0 or 1 samples, subtracting one from the
       // ratio to so ratios like e.g. 1.001 get enough samples
-      _out_buff_spls = div_ceil (_in_buff_spls, ratio - 1);
+      _src_rate_bf_spls = div_ceil (_tgt_rate_bf_spls, ratio - 1);
+#else
+      // The current implementation uses the output buffer as an input
+      // deinterleaving buffer, so we set it to the desired block size. If this
+      // requisite changes this #ifdef can be left on the other branch.
+      _src_rate_bf_spls = desired_block_size;
+#endif
       // Having a remainder queue with a surplus of samples equal to the ratio.
       remainder_n_spls = ratio;
     }
@@ -168,53 +177,54 @@ public:
       uint ratio = div_ceil (src_srate, tgt_srate);
       // A downsampler always outputs 0 or 1 samples, so the desired block size
       // will never be surpassed.
-      _in_buff_spls = desired_block_size;
+      _tgt_rate_bf_spls = desired_block_size;
       // The upsampler will never output more samples than the scaled up ratio
-      _out_buff_spls = _in_buff_spls * ratio;
+      _src_rate_bf_spls = _tgt_rate_bf_spls * ratio;
       // Having a remainder queue with a surplus of samples equal to the ratio.
       remainder_n_spls = ratio;
     }
 
     // ensure that we not allocate too big buffers on the stack
-    uint dyn_in_buff_spls  = 0;
-    uint dyn_out_buff_spls = 0;
+    uint dyn_tgt_rate_bf_spls = 0;
+    uint dyn_src_rate_bf_spls = 0;
 
-    if ((_in_buff_spls + _out_buff_spls) > max_stack_spls) {
-      uint big   = std::max (_in_buff_spls, _out_buff_spls);
-      uint small = std::min (_in_buff_spls, _out_buff_spls);
+    if ((_tgt_rate_bf_spls + _src_rate_bf_spls) > max_stack_spls) {
+      uint big   = std::max (_tgt_rate_bf_spls, _src_rate_bf_spls);
+      uint small = std::min (_tgt_rate_bf_spls, _src_rate_bf_spls);
 
       if (big > max_stack_spls && small > max_stack_spls) {
-        dyn_in_buff_spls  = _in_buff_spls;
-        dyn_out_buff_spls = _out_buff_spls;
+        dyn_tgt_rate_bf_spls = _tgt_rate_bf_spls;
+        dyn_src_rate_bf_spls = _src_rate_bf_spls;
       }
       else {
         assert (big > max_stack_spls);
-        if (big == _in_buff_spls) {
-          dyn_in_buff_spls = _in_buff_spls;
+        if (big == _tgt_rate_bf_spls) {
+          dyn_tgt_rate_bf_spls = _tgt_rate_bf_spls;
         }
         else {
-          dyn_out_buff_spls = _out_buff_spls;
+          dyn_src_rate_bf_spls = _src_rate_bf_spls;
         }
       }
     }
     // allocate and assign memory
     remainder_n_spls = pow2_round_ceil (remainder_n_spls);
     _raw_mem.clear();
-    _raw_mem.resize (remainder_n_spls + dyn_in_buff_spls + dyn_out_buff_spls);
+    _raw_mem.resize (
+      remainder_n_spls + dyn_tgt_rate_bf_spls + dyn_src_rate_bf_spls);
     auto dynmem = make_crange (_raw_mem);
 
     _remainder.reset (dynmem.cut_head (remainder_n_spls));
-    _in_buff  = dynmem.cut_head (dyn_in_buff_spls).data();
-    _out_buff = dynmem.cut_head (dyn_out_buff_spls).data();
+    _tgt_rate_bf = dynmem.cut_head (dyn_tgt_rate_bf_spls).data();
+    _src_rate_bf = dynmem.cut_head (dyn_src_rate_bf_spls).data();
   }
   //----------------------------------------------------------------------------
 private:
   resampler<value_type, n_channels>       _converter_in;
   resampler<value_type, n_channels>       _converter_out;
-  sample_type*                            _in_buff;
-  sample_type*                            _out_buff;
-  uint                                    _in_buff_spls       = 0;
-  uint                                    _out_buff_spls      = 0;
+  sample_type*                            _tgt_rate_bf;
+  sample_type*                            _src_rate_bf;
+  uint                                    _tgt_rate_bf_spls   = 0;
+  uint                                    _src_rate_bf_spls   = 0;
   uint                                    _desired_block_size = 0;
   static_pow2_circular_queue<sample_type> _remainder;
   std::vector<sample_type>                _raw_mem;

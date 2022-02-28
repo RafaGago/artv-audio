@@ -1,5 +1,7 @@
 #pragma once
 
+// miscellanious things that probably don't deserve its own header.
+
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -682,7 +684,7 @@ static constexpr auto array_reinterpret_cast (std::array<T, N>& in)
   return ret;
 }
 //------------------------------------------------------------------------------
-// Apply a function to each parameter on a  variadic argument pack
+// Apply a function to each parameter on a variadic argument pack
 template <class funct>
 static void apply (funct const& f)
 {}
@@ -892,5 +894,20 @@ constexpr bool is_aligned_to (uint align, T* v)
 }
 //------------------------------------------------------------------------------
 struct null_type {};
+//------------------------------------------------------------------------------
+// Add more stuff if/when required...
+template <class T>
+struct fraction {
+  using value_type = T;
+
+  constexpr void reset (value_type n, value_type d)
+  {
+    num = n;
+    den = d;
+  }
+
+  value_type num;
+  value_type den;
+};
 //------------------------------------------------------------------------------
 } // namespace artv
