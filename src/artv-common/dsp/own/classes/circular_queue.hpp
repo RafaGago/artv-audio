@@ -1,4 +1,4 @@
-#pragma
+#pragma once
 
 #include <cassert>
 
@@ -34,12 +34,22 @@ public:
   void push (T const& v)
   {
     // the interface could return a bool or throw...
-    assert (size() <= _mask);
+    assert (size() < capacity());
     _mem[_head & _mask] = v;
     ++_head;
   }
   //----------------------------------------------------------------------------
+  void push (crange<const T> vs)
+  {
+    assert ((vs.size() + size()) <= capacity());
+    for (auto v : vs) {
+      push (v);
+    }
+  }
+  //----------------------------------------------------------------------------
   uint size() const { return _head - _tail; }
+  //----------------------------------------------------------------------------
+  uint capacity() const { return _mask + 1; }
   //----------------------------------------------------------------------------
 private:
   T*   _mem;
