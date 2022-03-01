@@ -63,7 +63,7 @@ static void fir_kernel_to_minphase (
   const uint fftsize = fft.size();
 
   assert (fft.buffer_size() <= fftwb.size());
-  assert (fftsize > (kernel.size() * 8));
+  assert (fftsize >= (kernel.size() * 8));
 
   crange_memset (fftwb, 0);
 
@@ -82,19 +82,21 @@ static void fir_kernel_to_minphase (
   // FFT back from log spectrum to log cepstrum (and rescaling)
   fft.backward_ordered (fftwb);
   fft.data_rescale (fftwb);
+
   //  multiply elements in range [1, N/2-1] by 2 and zero the elements in range
   // [N/2+1, N-1], bins 0 and N/2 are left "as-is".
   for (uint i = 2; i < fftsize; i += 2) {
     fftwb[i] *= (U) 2;
     fftwb[i + 1] = (U) 0; // should be real already...
   }
-  memset (&fftwb[fftsize + 2], 0, sizeof (U) * (fftsize - 2));
+  crange_memset (fftwb.advanced (fftsize + 2), 0);
+
   // FFT again
   fft.forward_ordered (fftwb);
   // complex "exp" of each bin
   for (uint i = 0; i < fftwb.size(); i += 2) {
-    auto expv = std::exp (std::complex<U> {fftwb[i], fftwb[i + 1]});
-    fftwb[i] *= expv.real();
+    auto expv    = std::exp (std::complex<U> {fftwb[i], fftwb[i + 1]});
+    fftwb[i]     = expv.real();
     fftwb[i + 1] = expv.imag();
   }
   // IFFT and truncating back to the kernel.
@@ -111,7 +113,7 @@ static void fir_kernel_to_minphase (crange<T> kernel)
 {
   fft<double>                                 fftv;
   std::vector<double, fft<double>::allocator> fft_buff;
-  uint fft_size = pow2_round_ceil (kernel.size() * 64);
+  uint fft_size = pow2_round_ceil (kernel.size() * 128);
   fftv.reset (fft_size, true);
   fft_buff.resize (fft_size * 2);
   fir_kernel_to_minphase<T, double> (kernel, fftv, fft_buff);

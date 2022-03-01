@@ -12,6 +12,7 @@
 #include "artv-common/dsp/own/parts/filters/poles_zeros.hpp"
 #include "artv-common/dsp/own/parts/filters/poles_zeros_reversed.hpp"
 
+#include "artv-common/dsp/own/classes/circular_queue.hpp"
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
@@ -21,7 +22,6 @@
 
 namespace artv {
 #if 1
-
 // block_resampler test
 //------------------------------------------------------------------------------
 class experiments {
@@ -50,11 +50,18 @@ public:
   //----------------------------------------------------------------------------
   struct param_b_tag {};
 
-  void set (param_b_tag, float v) { _b = v; }
+  void set (param_b_tag, float v)
+  {
+    if (_b == v) {
+      return;
+    }
+    _b = v;
+    reset_src();
+  }
 
   static constexpr auto get_parameter (param_b_tag)
   {
-    return float_param ("B", 0., 1., 0.5, 0.001);
+    return float_param ("Minphase", 0., 1., 0., 1.);
   }
   //----------------------------------------------------------------------------
   struct param_c_tag {};
@@ -108,7 +115,16 @@ private:
     float fc2       = fc * (float) std::min (tgt_srate, src_srate);
 
     _resampler.reset (
-      tgt_srate, src_srate, fc1, fc2, taps, taps, 120.f, false, 16, 6 * 1024);
+      tgt_srate,
+      src_srate,
+      fc1,
+      fc2,
+      taps,
+      taps,
+      120.f,
+      _b == 1.f,
+      16,
+      6 * 1024);
 
     printf ("ratio: %f\n", (float) tgt_srate / (float) src_srate);
     printf ("src_rate(Hz): %u\n", src_srate);
@@ -123,6 +139,119 @@ private:
   static constexpr uint n_channels = 2;
 
   block_resampler<float, n_channels> _resampler;
+};
+#endif
+#if 0
+// 0.5x minphase resampler
+//------------------------------------------------------------------------------
+class experiments {
+public:
+  //----------------------------------------------------------------------------
+  static constexpr dsp_types dsp_type  = dsp_types::delay;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 1;
+  static constexpr uint      n_outputs = 1;
+  //----------------------------------------------------------------------------
+  struct param_a_tag {};
+
+  void set (param_a_tag, float v) { _a = v; }
+
+  static constexpr auto get_parameter (param_a_tag)
+  {
+    return float_param ("Ratio", 0.25, 2., 1., 0.25);
+  }
+  //----------------------------------------------------------------------------
+  struct param_b_tag {};
+
+  void set (param_b_tag, float v) { _b = v; }
+
+  static constexpr auto get_parameter (param_b_tag)
+  {
+    return float_param ("Minphase", 0., 1., 0., 1.);
+  }
+  //----------------------------------------------------------------------------
+  struct param_c_tag {};
+
+  void set (param_c_tag, float v) { _c = v; }
+
+  static constexpr auto get_parameter (param_c_tag)
+  {
+    return float_param ("C", 0., 1., 0.5, 0.001);
+  }
+  //----------------------------------------------------------------------------
+  struct param_d_tag {};
+
+  void set (param_d_tag, float v) { _d = v; }
+
+  static constexpr auto get_parameter (param_d_tag)
+  {
+    return float_param ("D", 0., 1., 0.5, 0.001);
+  }
+  //----------------------------------------------------------------------------
+  using parameters
+    = mp_list<param_a_tag, param_b_tag, param_c_tag, param_d_tag>;
+  //----------------------------------------------------------------------------
+  void reset (plugin_context& pc)
+  {
+    memset (this, 0, sizeof *this);
+    _plugcontext = &pc;
+    std::vector<float> kernel;
+    kernel.resize (128);
+    kaiser_lp_kernel_2<float> (
+      kernel,
+      (1. / (float) ratio) * 0.48f,
+      kaiser_beta_estimate (120.f),
+      0,
+      true);
+    _decimator.reset (kernel, ratio);
+    _interpolator.reset (kernel, ratio);
+    _in_bf.clear();
+    _in_bf.resize ((ratio - 1) * n_channels);
+    _out_bf_mem.clear();
+    _out_bf_mem.resize (pow2_round_ceil (ratio * n_channels));
+    _out_bf.reset (_out_bf_mem);
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
+  {
+    uint n_out = 0;
+    for (uint i = 0; i < block_samples; ++i) {
+      while (_out_bf.size() && n_out < i) {
+        outs[0][n_out] = _out_bf.pop();
+        outs[1][n_out] = _out_bf.pop();
+        ++n_out;
+      }
+      _in_bf.push_back (ins[0][i]);
+      _in_bf.push_back (ins[1][i]);
+      if (_in_bf.size() == (ratio * n_channels)) {
+        auto dspl = _decimator.tick (_in_bf);
+        _in_bf.clear();
+        std::array<float, ratio * n_channels> uspls;
+        _interpolator.tick (uspls, dspl);
+        _out_bf.push (uspls);
+      }
+    }
+    while (_out_bf.size() && n_out < block_samples) {
+      outs[0][n_out] = _out_bf.pop();
+      outs[1][n_out] = _out_bf.pop();
+      ++n_out;
+    }
+  }
+  //----------------------------------------------------------------------------
+private:
+  //----------------------------------------------------------------------------
+  plugin_context* _plugcontext;
+  float           _a, _b, _c, _d;
+
+  static constexpr uint n_channels = 2;
+  static constexpr uint ratio      = 2;
+
+  fir_decimator<float, 2>           _decimator;
+  fir_interpolator<float, 2>        _interpolator;
+  std::vector<float>                _in_bf;
+  std::vector<float>                _out_bf_mem;
+  static_pow2_circular_queue<float> _out_bf;
 };
 #endif
 #if 0
