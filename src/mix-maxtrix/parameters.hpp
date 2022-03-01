@@ -12,68 +12,68 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 
-#include "artv-common/dsp/airwindows/all_consoles.hpp"
-#include "artv-common/dsp/airwindows/busscolors4.hpp"
+#include "artv-common/dsp/third_party/airwindows/all_consoles.hpp"
+#include "artv-common/dsp/third_party/airwindows/busscolors4.hpp"
 
-#include "artv-common/dsp/chokehold/consolidator.hpp"
-#include "artv-common/dsp/chokehold/gate_expander.hpp"
-#include "artv-common/dsp/chokehold/signal_crusher.hpp"
-#include "artv-common/dsp/chokehold/track_comp.hpp"
+#include "artv-common/dsp/third_party/chokehold/consolidator.hpp"
+#include "artv-common/dsp/third_party/chokehold/gate_expander.hpp"
+#include "artv-common/dsp/third_party/chokehold/signal_crusher.hpp"
+#include "artv-common/dsp/third_party/chokehold/track_comp.hpp"
 
-#include "artv-common/dsp/chow/phaser.hpp"
+#include "artv-common/dsp/third_party/chow/phaser.hpp"
 
-#include "artv-common/dsp/dragonfly/early_reflections.hpp"
-#include "artv-common/dsp/dragonfly/hall.hpp"
-#include "artv-common/dsp/dragonfly/plate.hpp"
-#include "artv-common/dsp/dragonfly/room.hpp"
+#include "artv-common/dsp/third_party/dragonfly/early_reflections.hpp"
+#include "artv-common/dsp/third_party/dragonfly/hall.hpp"
+#include "artv-common/dsp/third_party/dragonfly/plate.hpp"
+#include "artv-common/dsp/third_party/dragonfly/room.hpp"
 
-#include "artv-common/dsp/geraintluff/atlantis_reverb.hpp"
-#include "artv-common/dsp/geraintluff/echo_cycles.hpp"
-#include "artv-common/dsp/geraintluff/ripple.hpp"
-#include "artv-common/dsp/geraintluff/sandwitch_amp.hpp"
-#include "artv-common/dsp/geraintluff/spring_box.hpp"
+#include "artv-common/dsp/third_party/geraintluff/atlantis_reverb.hpp"
+#include "artv-common/dsp/third_party/geraintluff/echo_cycles.hpp"
+#include "artv-common/dsp/third_party/geraintluff/ripple.hpp"
+#include "artv-common/dsp/third_party/geraintluff/sandwitch_amp.hpp"
+#include "artv-common/dsp/third_party/geraintluff/spring_box.hpp"
 
-#include "artv-common/dsp/liteon/nonlinear.hpp"
-#include "artv-common/dsp/liteon/sonic_enhancer.hpp"
-#include "artv-common/dsp/liteon/stereotilt.hpp"
+#include "artv-common/dsp/third_party/liteon/nonlinear.hpp"
+#include "artv-common/dsp/third_party/liteon/sonic_enhancer.hpp"
+#include "artv-common/dsp/third_party/liteon/stereotilt.hpp"
 #if 0 // sounds broken
-#include "artv-common/dsp/liteon/tubeharmonics.hpp"
+#include "artv-common/dsp/third_party/liteon/tubeharmonics.hpp"
 #endif
 
-#include "artv-common/dsp/ljkb/luftikus.hpp"
+#include "artv-common/dsp/third_party/ljkb/luftikus.hpp"
 
-#include "artv-common/dsp/rubberband/rubberband.hpp"
+#include "artv-common/dsp/third_party/rubberband/rubberband.hpp"
 
-#include "artv-common/dsp/saike/stereo_bub3.hpp"
+#include "artv-common/dsp/third_party/saike/stereo_bub3.hpp"
 #if 0
-#include "artv-common/dsp/saike/tanh_aa.hpp"
+#include "artv-common/dsp/third_party/saike/tanh_aa.hpp"
 #endif
-#include "artv-common/dsp/saike/transience.hpp"
+#include "artv-common/dsp/third_party/saike/transience.hpp"
 
-#include "artv-common/dsp/smashed_transistors/ze_big_chorus3.hpp"
-#include "artv-common/dsp/smashed_transistors/ze_little_scanner_chorus.hpp"
+#include "artv-common/dsp/third_party/smashed_transistors/ze_big_chorus3.hpp"
+#include "artv-common/dsp/third_party/smashed_transistors/ze_little_scanner_chorus.hpp"
 
-#include "artv-common/dsp/sonic_anomaly/bass_professor1.hpp"
-#include "artv-common/dsp/sonic_anomaly/slax.hpp"
+#include "artv-common/dsp/third_party/sonic_anomaly/bass_professor1.hpp"
+#include "artv-common/dsp/third_party/sonic_anomaly/slax.hpp"
 #if 0
-#include "artv-common/dsp/sonic_anomaly/vola2.hpp"
+#include "artv-common/dsp/third_party/sonic_anomaly/vola2.hpp"
 #endif
 
-#include "artv-common/dsp/soundtouch/soundtouch.hpp"
+#include "artv-common/dsp/third_party/soundtouch/soundtouch.hpp"
 
-#include "artv-common/dsp/sstillwell/1175.hpp"
-#include "artv-common/dsp/sstillwell/4x4.hpp"
-#include "artv-common/dsp/sstillwell/eventhorizon2.hpp"
-#include "artv-common/dsp/sstillwell/fairlychildish.hpp"
-#include "artv-common/dsp/sstillwell/hugebooty.hpp"
-#include "artv-common/dsp/sstillwell/majortom.hpp"
-#include "artv-common/dsp/sstillwell/rbj1073.hpp"
+#include "artv-common/dsp/third_party/sstillwell/1175.hpp"
+#include "artv-common/dsp/third_party/sstillwell/4x4.hpp"
+#include "artv-common/dsp/third_party/sstillwell/eventhorizon2.hpp"
+#include "artv-common/dsp/third_party/sstillwell/fairlychildish.hpp"
+#include "artv-common/dsp/third_party/sstillwell/hugebooty.hpp"
+#include "artv-common/dsp/third_party/sstillwell/majortom.hpp"
+#include "artv-common/dsp/third_party/sstillwell/rbj1073.hpp"
 
-#include "artv-common/dsp/tal/reverb2.hpp"
+#include "artv-common/dsp/third_party/tal/reverb2.hpp"
 
-#include "artv-common/dsp/shabtronic/fdn_verb.hpp"
+#include "artv-common/dsp/third_party/shabtronic/fdn_verb.hpp"
 
-#include "artv-common/dsp/witti/bbd_echo_stereo.hpp"
+#include "artv-common/dsp/third_party/witti/bbd_echo_stereo.hpp"
 
 #include "artv-common/dsp/own/classes/oversampled.hpp"
 
@@ -6847,7 +6847,7 @@ static constexpr char const* about_text =
 "(not everyone might be mentioned, but I aim to):\n"
 "\n"
 "-mystran (Teemu Voipio)\n"
-"-martinvicanek (Martin Vicanek). The linear phase crossover is implemented\n"
+"-martinvicanek (Martin Vicanek). The linear phase crossover is impleming\n"
 " his \"A New Reverse IIR Filtering Algorithm\" paper."
 "-rs-met (Robin Schmidt)\n"
 "-Z1202 (Vadim Zavalishin). Author of the also helpful \"The art of va filter\n"

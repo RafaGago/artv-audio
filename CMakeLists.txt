@@ -518,7 +518,7 @@ function (add_dragonfly_plugin_lib target plugin_name)
         ${target}
         PRIVATE
         ${DRAGONFLY_REPO}/plugins/${plugin_name}/DSP.cpp
-        src/artv-common/dsp/dragonfly/${target}_cfirewall.cpp
+        src/artv-common/dsp/third_party/dragonfly/${target}_cfirewall.cpp
         )
     target_include_directories(
         ${target}
@@ -692,7 +692,7 @@ function (add_mix_maxtrix_plugin_target target channels)
     target_sources(
         ${target}
         PRIVATE
-        src/artv-common/dsp/jsfx_engine/jsfx_engine.cpp
+        src/artv-common/dsp/third_party/jsfx_engine/jsfx_engine.cpp
         src/mix-maxtrix/processor.cpp
         src/mix-maxtrix/editor.cpp
         )
@@ -703,7 +703,7 @@ function (add_mix_maxtrix_plugin_target target channels)
         "${ARTV_PLAIN_COMPILE_OPTIONS}"
         )
     set_source_files_properties(
-        src/artv-common/dsp/jsfx_engine/jsfx_engine.cpp
+        src/artv-common/dsp/third_party/jsfx_engine/jsfx_engine.cpp
         src/mix-maxtrix/processor.cpp
         PROPERTIES
         COMPILE_FLAGS

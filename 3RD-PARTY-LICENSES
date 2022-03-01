@@ -1,7 +1,7 @@
 Notice that the reference of which FX are is given on the program itself.
 
-for all the FX under the "src/common/dsp/airwindows" folder:
-------------------------------------------------------------
+for all the FX under the "src/common/dsp/third_party/airwindows" folder:
+-----------------------------------------------------------------------
 
 MIT License
 
@@ -25,8 +25,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-for all the FX under the "src/common/dsp/chokehold" folder:
-------------------------------------------------------------
+for all the FX under the "src/common/dsp/third_party/chokehold" folder:
+-----------------------------------------------------------------------
 
 MIT License
 
@@ -50,8 +50,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-for all the FX under the "src/common/dsp/chow" folder:
-------------------------------------------------------------
+for all the FX under the "src/common/dsp/third_party/chow" folder:
+------------------------------------------------------------------
 (*Note to self: some of his FX is GPL)
 
 BSD 3-Clause License
@@ -84,21 +84,21 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-For all the FX under the "src/common/dsp/dragonfly" folder:
------------------------------------------------------------
+For all the FX under the "src/common/dsp/third_party/dragonfly" folder:
+-----------------------------------------------------------------------
 
 It seems to have a GPLV3 template with no copyright owner.:
 https://github.com/michaelwillis/dragonfly-reverb/blob/master/LICENSE
 
-for all the FX under the "src/common/dsp/geraint_luff" folder:
---------------------------------------------------------
+for all the FX under the "src/common/dsp/third_party/geraint_luff" folder:
+--------------------------------------------------------------------------
 
 Copyright (C) 2016 and later Geraint Luff
 
 Used in MixMaxtrix with permission from the author.
 
-for all the FX under the "src/common/dsp/liteon" folder:
---------------------------------------------------------
+for all the FX under the "src/common/dsp/third_party/liteon" folder:
+--------------------------------------------------------------------
 
 Copyright (C) 20xx lubomir i. ivanov
 
@@ -114,8 +114,8 @@ You should have received a copy of the GNU General Public License along
 with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-for all the FX under the "src/common/dsp/lkjb" folder:
---------------------------------------------------------
+for all the FX under the "src/common/dsp/third_party/lkjb" folder:
+------------------------------------------------------------------
 
 Copyright 2019 lkjb
 
@@ -138,8 +138,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-For all the FX under the "src/common/dsp/saike" folder:
--------------------------------------------------------
+For all the FX under the "src/common/dsp/third_party/saike" folder:
+-------------------------------------------------------------------
 
 MIT License
 
@@ -163,8 +163,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-For all the FX under the "src/common/dsp/smashed_transistors" folder:
---------------------------------------------------------------------
+For all the FX under the "src/common/dsp/third_party/smashed_transistors" folder:
+---------------------------------------------------------------------------------
 
 Copyright 201x, Thierry Rochebois
 All rights reserved.
@@ -196,14 +196,14 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-For all the FX under the "src/common/dsp/sonic-anomaly" folder:
----------------------------------------------------------------
+For all the FX under the "src/common/dsp/third_party/sonic-anomaly" folder:
+---------------------------------------------------------------------------
 
 TODO: Waiting for response:
 https://github.com/Sonic-Anomaly/Sonic-Anomaly-JSFX/issues/4
 
-For all the FX under the "src/common/dsp/sstillwell" folder:
----------------------------------------------------------------
+For all the FX under the "src/common/dsp/third_party/sstillwell" folder:
+------------------------------------------------------------------------
 
  Copyright 2006, Thomas Scott Stillwell
  All rights reserved.
@@ -229,14 +229,14 @@ PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY
 STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-For all the FX under the "src/common/dsp/witti" folder:
------------------------------------------------------------
+For all the FX under the "src/common/dsp/third_party/witti" folder:
+-------------------------------------------------------------------
 
 No license. Seems to be public domain.
 
 
-For all the FX under the "src/common/dsp/tal" folder:
------------------------------------------------------------
+For all the FX under the "src/common/dsp/third_party/tal" folder:
+-----------------------------------------------------------------
 
 	Copyright(c) 20xx-20xx Patrick Kunz, TAL
 	Togu Audio Line, Inc.
@@ -1653,3 +1653,26 @@ EXEMPLARY, OR CONSEQUENTIAL DAMAGES OR OTHER LIABILITY, WHETHER IN AN
 ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
 SOFTWARE.
+
+Liquiddsp (small parts ported)
+---------------------------------
+
+Copyright (c) 2007 - 2016 Joseph Gaeddert
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
