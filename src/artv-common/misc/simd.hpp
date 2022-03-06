@@ -59,7 +59,10 @@ struct simd_vector_traits {
   using same_size_uint_type = rebind<same_size_uint<T>>;
 
   template <class U>
-  using rebind_traits = simd_vector_traits<U, bytes / sizeof (U)>;
+  using rebind_traits_same_bytes = simd_vector_traits<U, bytes / sizeof (U)>;
+
+  template <class U>
+  using rebind_traits_same_size = simd_vector_traits<U, N>;
 
   // As attributes don't participate on template argument deduction or
   // specialization, only the type of the vector can be deduced. Fortunately
@@ -541,6 +544,26 @@ static constexpr auto vec_array_unwrap (std::array<vec<T, VecN>, Size> v)
   return ret;
 }
 //------------------------------------------------------------------------------
+template <class T, size_t Size>
+static constexpr auto vec_to_array (vec<T, Size> v)
+{
+  std::array<T, Size> arr;
+  for (uint i = 0; i < Size; ++i) {
+    arr[i] = v[i];
+  }
+  return arr;
+}
+
+template <class T, size_t Size>
+static constexpr auto vec_from_array (std::array<T, Size> arr)
+{
+  vec<T, Size> v;
+  for (uint i = 0; i < Size; ++i) {
+    v[i] = arr[i];
+  }
+  return v;
+}
+//------------------------------------------------------------------------------
 #if 0
 // Clang doesn't support "__builtin_shuffle".
 template <class V, class IV>
@@ -604,11 +627,16 @@ static inline V vec_shuffle (V a, V b, Ts... indexes)
 }
 #endif
 //------------------------------------------------------------------------------
+// Cast to a vector of another type with the same number of elements. If T is
+// of a different size than V::value_type "-Wpsabi" warnings might be generated.
+// The ABI-related warnings are no problem if there are no vectors in shared
+// interfaces. Suppressing has to be done globally or in place unfortunately.
 template <class T, class V>
 static inline auto vec_cast (V a)
 {
   constexpr auto src_traits = vec_traits<V>();
-  using dst_traits = typename decltype (src_traits)::template rebind_traits<T>;
+  using src_traits_t        = decltype (src_traits);
+  using dst_traits = typename src_traits_t::template rebind_traits_same_size<T>;
 
   static_assert (src_traits.size == dst_traits {}.size, "sizes must match");
 

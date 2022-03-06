@@ -403,7 +403,7 @@ public:
         vec_store (&smooth.arr[j], out);
       }
 
-      float lfo = _lfo.tick_sine();
+      float lfo = _lfo.tick_sine()[0];
       lfo *= smooth.p.lfo_depth;
       float lfo_shape = light_shape (lfo, smooth.p.skew);
 
@@ -499,7 +499,8 @@ private:
   {
     // the LFO coefficient is placed with the parameter smoothing....
     float mult = _params.freq_mult ? 10.f : 1.f;
-    _lfo.set_freq (_params.lfo_freq * mult, _plugcontext->get_sample_rate());
+    _lfo.set_freq (
+      vec_set<1> (_params.lfo_freq * mult), _plugcontext->get_sample_rate());
   }
   //----------------------------------------------------------------------------
   inline float light_shape (float x, float skewpow) noexcept
@@ -513,7 +514,7 @@ private:
 
   std::array<double, phase_section::n_coeffs> _ph_coeffs;
   std::array<double, fb_section::n_coeffs>    _fb_coeffs;
-  lfo                                         _lfo;
+  lfo<1>                                      _lfo;
 
   static_assert (smoother::n_states == 1, "");
   float           _smooth_coeff;

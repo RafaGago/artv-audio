@@ -224,8 +224,7 @@ public:
     _allpass.reset_states_cascade();
     memset (&_feedback_samples, 0, sizeof _feedback_samples);
 
-    _lfos[0].reset();
-    _lfos[1].reset();
+    _lfos.reset();
 
     _params.smooth_target.value.freq_lo
       = get_parameter (low_freq_tag {}).defaultv;
@@ -306,49 +305,47 @@ public:
 
       // control rate refresh block
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        _lfos[0].set_freq (pars.lfo_hz_final, _plugcontext->get_sample_rate());
-        _lfos[1].set_freq (pars.lfo_hz_final, _plugcontext->get_sample_rate());
-
-        auto stereo_ph = phase {pars.lfo_stereo, phase::degrees {}};
+        _lfos.set_freq (
+          vec_set<2> (pars.lfo_hz_final), _plugcontext->get_sample_rate());
+        auto stereo_ph
+          = phase<1> {vec_set<1> (pars.lfo_stereo), phase<1>::degrees {}}
+              .get_raw (0);
         if (pars.lfo_hz_final != 0.f) {
           // updating stereo phase diff.
-          _lfos[1].set_phase (_lfos[0].get_phase() + stereo_ph);
+          auto ph = _lfos.get_phase();
+          ph.set_raw (ph.get_raw (0) + stereo_ph, 1);
+          _lfos.set_phase (ph);
         }
         else {
-          auto start_ph = phase {pars.lfo_start_phase, phase::degrees {}};
-          _lfos[0].set_phase (start_ph);
-          _lfos[1].set_phase (start_ph + stereo_ph);
+          auto start_ph = phase<n_channels> {
+            vec_set<n_channels> (pars.lfo_start_phase),
+            phase<n_channels>::degrees {}};
+          start_ph.set_raw (start_ph.get_raw (0) + stereo_ph, 1);
+          _lfos.set_phase (start_ph);
         }
-        auto                 n_samples = _control_rate_mask + 1;
-        std::array<float, 2> lfov;
+        auto          n_samples = _control_rate_mask + 1;
+        vec<float, 2> lfov;
         switch (pars.lfo_wave) {
         case 0:
-          lfov[0] = _lfos[0].tick_sine (n_samples);
-          lfov[1] = _lfos[1].tick_sine (n_samples);
+          lfov = _lfos.tick_sine (n_samples);
           break;
         case 1:
-          lfov[0] = _lfos[0].tick_triangle (n_samples);
-          lfov[1] = _lfos[1].tick_triangle (n_samples);
+          lfov = _lfos.tick_triangle (n_samples);
           break;
         case 2:
-          lfov[0] = _lfos[0].tick_sample_hold (n_samples);
-          lfov[1] = _lfos[1].tick_sample_hold (n_samples);
+          lfov = _lfos.tick_sample_hold (n_samples);
           break;
         case 3:
-          lfov[0] = _lfos[0].tick_filtered_noise (n_samples);
-          lfov[1] = _lfos[1].tick_filtered_noise (n_samples);
+          lfov = _lfos.tick_filtered_noise (n_samples);
           break;
         case 4:
-          lfov[0] = _lfos[0].tick_trapezoid (0.3, n_samples);
-          lfov[1] = _lfos[1].tick_trapezoid (0.3, n_samples);
+          lfov = _lfos.tick_trapezoid (vec_set<2> (0.3f), n_samples);
           break;
         case 5:
-          lfov[0] = _lfos[0].tick_square (n_samples);
-          lfov[1] = _lfos[1].tick_square (n_samples);
+          lfov = _lfos.tick_square (n_samples);
           break;
         case 6:
-          lfov[0] = _lfos[0].tick_saw (n_samples);
-          lfov[1] = _lfos[1].tick_saw (n_samples);
+          lfov = _lfos.tick_saw (n_samples);
           break;
         }
 
@@ -538,9 +535,9 @@ private:
   part_class_array<andy::svf_allpass, float_x4, 16> _allpass;
   part_class_array<mystran_dc_blocker, double_x2>   _dc_blocker;
 
-  std::array<lfo, n_channels> _lfos; // 0 = L, 1 = R
-  uint                        _n_processed_samples;
-  uint                        _control_rate_mask;
+  lfo<n_channels> _lfos; // 0 = L, 1 = R
+  uint            _n_processed_samples;
+  uint            _control_rate_mask;
 
   float _lp_smooth_coeff;
 

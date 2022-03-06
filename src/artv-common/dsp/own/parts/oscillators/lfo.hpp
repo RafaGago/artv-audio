@@ -14,30 +14,31 @@
 namespace artv {
 
 //------------------------------------------------------------------------------
+template <uint N>
 class lfo {
 public:
+  //----------------------------------------------------------------------------
+  static constexpr uint n_channels = N;
   //----------------------------------------------------------------------------
   void reset()
   {
     _phasor.reset();
-    _smooth_coeff = 0.f;
-    _smooth_state = 0.f;
+    _smooth_coeff = vec_set<N> (0.f);
+    _smooth_state = vec_set<N> (0.f);
   }
   //----------------------------------------------------------------------------
-  void set_freq (float f, float samplerate)
+  void set_freq (vec<float, N> f, float samplerate)
   {
     _phasor.set_freq (f, samplerate);
     onepole_smoother::reset_coeffs (
-      make_crange (_smooth_coeff).cast (vec<float, 1> {}),
-      make_vec (f * 2),
-      samplerate);
+      make_crange (_smooth_coeff), f * 2.f, samplerate);
   }
   //----------------------------------------------------------------------------
-  void set_phase (phase p) { _phasor.set_phase (p); }
+  void set_phase (phase<N> p) { _phasor.set_phase (p); }
   //----------------------------------------------------------------------------
-  phase get_phase() const { return _phasor.get_phase(); }
+  phase<N> get_phase() const { return _phasor.get_phase(); }
   //----------------------------------------------------------------------------
-  float tick_sine (uint n = 1)
+  vec<float, N> tick_sine (uint n = 1)
   {
     // parabola from 0 to -int32_min. Low precision, but enough for an LFO.
     // solving for points. basically this:
@@ -52,29 +53,31 @@ public:
     // a = 1.862645149230957e-09
     // b = 8.673617379884035e-19
     auto phase     = _phasor.tick (n).to_int(); // -INT_MAX to INT_MAX
-    bool negative  = phase < 0;
+    auto negative  = phase < 0;
     auto calcphase = negative ? phase : -phase;
-    auto p         = (double) calcphase;
+    auto p         = vec_cast<double> (calcphase);
     auto dsin      = 1.862645149230957e-09 * p + 8.673617379884035e-19 * p * p;
-    return (float) negative ? dsin : -dsin;
+    auto dsinf     = vec_cast<float> (dsin);
+    return (negative ? dsinf : -dsinf);
   }
   //----------------------------------------------------------------------------
-  float tick_saw (uint n = 1)
+  vec<float, N> tick_saw (uint n = 1)
   {
     return _phasor.tick (n).to_normalized_bipolar();
   }
   //----------------------------------------------------------------------------
-  float tick_square (uint n = 1)
+  vec<float, N> tick_square (uint n = 1)
   {
     return _phasor.tick (n).to_int() < 0 ? -1.f : 1.f;
   }
   //----------------------------------------------------------------------------
-  float tick_triangle (uint n = 1)
+  vec<float, N> tick_triangle (uint n = 1)
   {
     // triangle by abs of phase (saw) + scaling. Adding a quarter cycle so its
     // starts at 0
-    constexpr auto quarter_cycle = phase {90., phase::degrees {}};
-    constexpr auto quarter_range = quarter_cycle.to_uint();
+    const auto quarter_cycle
+      = phase<N> {vec_set<N> (90.f), typename phase<N>::degrees {}};
+    const auto quarter_range = quarter_cycle.to_uint();
 
     auto ph = _phasor.tick (n);
     ph += quarter_cycle;
@@ -83,54 +86,63 @@ public:
     // make it bipolar
     ph_int -= quarter_range; // -INT32_MAX/2 to INT32_MAX/2
 
-    return ((double) ph_int)
-      * (2. / std::numeric_limits<phase::phase_int>::max());
+    static constexpr double step
+      = 2. / (double) std::numeric_limits<typename phase<N>::raw_int>::max();
+
+    return vec_cast<float> (vec_cast<double> (ph_int) * step);
   }
   //----------------------------------------------------------------------------
   // A trapezoid done by clipping a triangle and rescaling to -1 to 1.
-  float tick_trapezoid (float clip_level, uint n = 1)
+  vec<float, N> tick_trapezoid (vec<float, N> clip_level, uint n = 1)
   {
     // triangle by abs of phase + scaling
-    float tri = tick_triangle (n);
-    tri       = std::min (clip_level, tri);
-    tri       = std::max (-clip_level, tri);
+    auto tri = tick_triangle (n);
+    tri      = vec_min (clip_level, tri);
+    tri      = vec_max (-clip_level, tri);
     return tri * (1. / clip_level);
   }
   //----------------------------------------------------------------------------
-  float tick_sample_hold (uint n = 1)
+  vec<float, N> tick_sample_hold (uint n = 1)
   {
-    // triangle by abs of phase + scaling
-    if (_phasor.tick_ext (n).new_cycle) {
-      _noise_value = _whitenoise (1.f);
+    auto new_cycle = _phasor.tick_ext (n).new_cycle;
+    for (uint i = 0; i < N; ++i) {
+      if (new_cycle[i]) {
+        _specific_data[i] = _whitenoise (1.f);
+      }
     }
-    return _noise_value;
+    return _specific_data;
   }
   //----------------------------------------------------------------------------
-  float tick_filtered_noise (uint n = 1)
+  vec<float, N> tick_filtered_noise (uint n = 1)
   {
-    // triangle by abs of phase + scaling
-    if (_phasor.tick_ext (n).new_cycle) {
-      _noise_value = _whitenoise (1.f);
-    }
-    float ret;
+    vec<float, N> ret {};
     for (uint i = 0; i < n; ++i) {
-      ret = onepole_smoother::tick (
-        make_crange (_smooth_coeff),
-        make_crange (_smooth_state).cast (vec<float, 1> {}),
-        make_vec (_noise_value))[0];
+      ret = tick_sample_hold (1);
+      ret = onepole_smoother::tick<decltype (ret)> (
+        make_crange (_smooth_coeff), make_crange (_smooth_state), ret);
     }
     return ret;
   }
   //----------------------------------------------------------------------------
+  vec<float, N> tick_pm (phase<N> delta, uint n = 1)
+  {
+    auto old  = _phasor.get_increment();
+    auto newv = old + delta;
+    _phasor.set_increment (newv);
+    auto ret = _phasor.tick_sine (n);
+    _phasor.set_increment (old);
+    return ret;
+  }
+  //----------------------------------------------------------------------------
 private:
-  int_phasor            _phasor;
-  float                 _noise_value;
+  int_phasor<N>         _phasor;
+  vec<float, N>         _specific_data;
   white_noise_generator _whitenoise;
   static_assert (onepole_smoother::n_coeffs == 1, "");
   static_assert (onepole_smoother::n_coeffs_int == 0, "");
-  float _smooth_coeff;
+  vec<float, N> _smooth_coeff;
   static_assert (onepole_smoother::n_states == 1, "");
-  float _smooth_state;
+  vec<float, N> _smooth_state;
   //----------------------------------------------------------------------------
 };
 

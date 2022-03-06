@@ -360,7 +360,7 @@ public:
       auto old = l;
 
       l = _mod.get<linear_interp> (
-        _mod_delay_spls, _lfo.tick_sine(), _mod_depth_spls, 0);
+        _mod_delay_spls, _lfo.tick_sine()[0], _mod_depth_spls, 0);
       _mod.push (make_crange (old));
       for (auto& ap : _ap) {
         l = ap.tick (l);
@@ -389,7 +389,7 @@ private:
     _mod_delay_spls  = srate * (1. / 75.);
     float hz_correct = std::min (1.0 / (2.0 * _mod_hz), 1.);
     _mod_depth_spls  = hz_correct * _mod_depth * _mod_delay_spls * (0.5f);
-    _lfo.set_freq (_mod_hz, srate);
+    _lfo.set_freq (make_vec (_mod_hz), srate);
   }
   //----------------------------------------------------------------------------
   void reinitialize (bool reallocate = false)
@@ -471,7 +471,7 @@ private:
   enum filter_type { filter_lp, filter_hp };
   using filter_types = mp_list<andy::svf_lowpass, andy::svf_highpass>;
 
-  lfo                            _lfo;
+  lfo<1>                         _lfo;
   modulable_delay_line<float_x1> _mod;
 
   std::array<schroeder_allpass<float_x1>, ap_size>              _ap;
