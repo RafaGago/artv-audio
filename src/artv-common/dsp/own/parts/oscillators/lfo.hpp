@@ -113,7 +113,7 @@ public:
     return _specific_data;
   }
   //----------------------------------------------------------------------------
-  vec<float, N> tick_filtered_noise (uint n = 1)
+  vec<float, N> tick_filt_sample_and_hold (uint n = 1)
   {
     vec<float, N> ret {};
     for (uint i = 0; i < n; ++i) {

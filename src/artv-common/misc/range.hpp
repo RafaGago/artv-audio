@@ -188,19 +188,22 @@ public:
     return *this;
   }
 
-  constexpr value_type& operator[] (size_t idx)
+  constexpr value_type& at (size_t idx)
   {
     assert (_start);
     assert (idx < size());
     return _start[idx];
   }
 
-  constexpr value_type const& operator[] (size_t idx) const
+  constexpr value_type const& at (size_t idx) const
   {
     assert (_start);
     assert (idx < size());
     return _start[idx];
   }
+
+  constexpr value_type&       operator[] (size_t idx) { return at (idx); }
+  constexpr value_type const& operator[] (size_t idx) const { return at (idx); }
 
   constexpr explicit operator bool() const { return !empty(); }
 
@@ -274,6 +277,11 @@ public:
 
   constexpr bool empty() const { return size() == 0; }
 
+  constexpr T&       first() { return at (0); }
+  constexpr T const& first() const { return at (0); }
+  constexpr T&       last() { return at (_size - 1); }
+  constexpr T const& last() const { return at (_size - 1); }
+
   constexpr void clear()
   {
     _start = nullptr;
@@ -306,13 +314,15 @@ private:
 };
 //------------------------------------------------------------------------------
 template <class T>
-static contiguous_range<T> make_contiguous_range (T* mem, size_t count)
+static constexpr contiguous_range<T> make_contiguous_range (
+  T*     mem,
+  size_t count)
 {
   return {mem, count};
 };
 
 template <class T>
-static contiguous_range<const T> make_contiguous_range (
+static constexpr contiguous_range<const T> make_contiguous_range (
   T const* mem,
   size_t   count)
 {
@@ -320,25 +330,25 @@ static contiguous_range<const T> make_contiguous_range (
 };
 
 template <class T>
-static contiguous_range<T> make_contiguous_range (T& mem)
+static constexpr contiguous_range<T> make_contiguous_range (T& mem)
 {
   return {&mem, 1};
 };
 
 template <class T>
-static contiguous_range<const T> make_contiguous_range (T const& mem)
+static constexpr contiguous_range<const T> make_contiguous_range (T const& mem)
 {
   return {&mem, 1};
 };
 
 template <class T>
-static void make_contiguous_range (T&& mem)
+static constexpr void make_contiguous_range (T&& mem)
 {
   static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
 };
 
 template <class T, size_t N>
-static contiguous_range<T> make_contiguous_range (
+static constexpr contiguous_range<T> make_contiguous_range (
   T (&arr)[N],
   size_t count      = N,
   size_t offset_idx = 0)
@@ -348,7 +358,7 @@ static contiguous_range<T> make_contiguous_range (
 };
 
 template <class T, size_t N>
-static contiguous_range<const T> make_contiguous_range (
+static constexpr contiguous_range<const T> make_contiguous_range (
   T const (&arr)[N],
   size_t count      = N,
   size_t offset_idx = 0)
@@ -358,7 +368,7 @@ static contiguous_range<const T> make_contiguous_range (
 };
 
 template <class T, size_t N>
-static contiguous_range<T> make_contiguous_range (
+static constexpr contiguous_range<T> make_contiguous_range (
   std::array<T, N>& arr,
   size_t            count      = N,
   size_t            offset_idx = 0)
@@ -368,7 +378,7 @@ static contiguous_range<T> make_contiguous_range (
 };
 
 template <class T, size_t N>
-static contiguous_range<const T> make_contiguous_range (
+static constexpr contiguous_range<const T> make_contiguous_range (
   std::array<T, N> const& arr,
   size_t                  count      = N,
   size_t                  offset_idx = 0)
@@ -378,7 +388,7 @@ static contiguous_range<const T> make_contiguous_range (
 };
 
 template <class T, size_t N>
-static void make_contiguous_range (
+static constexpr void make_contiguous_range (
   std::array<T, N>&& arr,
   size_t             count      = N,
   size_t             offset_idx = 0)
@@ -387,26 +397,27 @@ static void make_contiguous_range (
 };
 
 template <class T, class Alloc>
-static contiguous_range<T> make_contiguous_range (std::vector<T, Alloc>& vec)
+static constexpr contiguous_range<T> make_contiguous_range (
+  std::vector<T, Alloc>& vec)
 {
   return {vec.data(), vec.size()};
 };
 
 template <class T, class Alloc>
-static contiguous_range<const T> make_contiguous_range (
+static constexpr contiguous_range<const T> make_contiguous_range (
   std::vector<T, Alloc> const& vec)
 {
   return {vec.data(), vec.size()};
 };
 
 template <class T, class Alloc>
-static void make_contiguous_range (std::vector<T, Alloc>&& vec)
+static constexpr void make_contiguous_range (std::vector<T, Alloc>&& vec)
 {
   static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
 };
 
 template <class T, class Alloc>
-static contiguous_range<T> make_contiguous_range (
+static constexpr contiguous_range<T> make_contiguous_range (
   std::vector<T, Alloc>& vec,
   size_t                 count,
   size_t                 offset_idx = 0)
@@ -416,7 +427,7 @@ static contiguous_range<T> make_contiguous_range (
 };
 
 template <class T, class Alloc>
-static contiguous_range<const T> make_contiguous_range (
+static constexpr contiguous_range<const T> make_contiguous_range (
   std::vector<T, Alloc> const& vec,
   size_t                       count,
   size_t                       offset_idx = 0)
@@ -426,7 +437,7 @@ static contiguous_range<const T> make_contiguous_range (
 };
 
 template <class T, class Alloc>
-static void make_contiguous_range (
+static constexpr void make_contiguous_range (
   std::vector<T, Alloc>&& vec,
   size_t                  count,
   size_t                  offset_idx = 0)
@@ -435,7 +446,7 @@ static void make_contiguous_range (
 };
 
 template <class T>
-static contiguous_range<T> make_contiguous_range (
+static constexpr contiguous_range<T> make_contiguous_range (
   contiguous_range<T> range,
   size_t              count,
   size_t              offset_idx = 0)
@@ -445,7 +456,7 @@ static contiguous_range<T> make_contiguous_range (
 };
 
 template <class T>
-static contiguous_range<const T> make_contiguous_range (
+static constexpr contiguous_range<const T> make_contiguous_range (
   contiguous_range<T> range,
   size_t              count,
   size_t              offset_idx = 0)
@@ -492,7 +503,7 @@ template <class T>
 using crange = contiguous_range<T>;
 
 template <class... Ts>
-static auto make_crange (Ts&&... args)
+static constexpr auto make_crange (Ts&&... args)
 {
   return make_contiguous_range (std::forward<Ts> (args)...);
 }

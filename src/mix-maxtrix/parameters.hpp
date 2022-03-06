@@ -6409,20 +6409,23 @@ using soundtouch_params
   = mp_list<soundtouch_semitones, soundtouch_detune, soundtouch_mode>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
-  reverb_time,
+  reverb_diff_in,
   n_stereo_busses,
-  param_common ("Time", declptr<reverb>(), declptr<reverb::time_tag>()),
-  reverb::get_parameter (reverb::time_tag {}),
+  param_common (
+    "In Diff",
+    declptr<reverb>(),
+    declptr<reverb::in_diffusion_tag>()),
+  reverb::get_parameter (reverb::in_diffusion_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  reverb_algo,
+  reverb_early_gain,
   n_stereo_busses,
-  param_common ("Algo", declptr<reverb>(), declptr<reverb::algorithm_tag>()),
-  reverb::get_parameter (reverb::algorithm_tag {}),
+  param_common ("Early", declptr<reverb>(), declptr<reverb::_early_gain>()),
+  reverb::get_parameter (reverb::_early_gain {}),
   slider_ext);
 
-using reverb_params = mp_list<reverb_algo, reverb_time>;
+using reverb_params = mp_list<reverb_diff_in, reverb_early_gain>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
@@ -6492,18 +6495,17 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  experiments_params,
-  event_horizon_2_params>;
+  reverb_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "experiments", "eventh");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "Artv reverb");
 
 #else
 // clang-format off

@@ -115,6 +115,24 @@ static constexpr auto make_cstr_array (Ts&&... args)
 {
   return make_array<char const*> (std::forward<Ts> (args)...);
 }
+
+template <size_t N, class T>
+static constexpr auto array_broadcast (T v)
+{
+  std::array<T, N> ret;
+  ret.fill (v);
+  return ret;
+}
+
+template <class U, class T, size_t N>
+static constexpr auto array_cast (std::array<T, N> v)
+{
+  std::array<U, N> ret {};
+  for (uint i = 0; i < N; ++i) {
+    ret[i] = static_cast<U> (v[i]);
+  }
+  return ret;
+}
 //------------------------------------------------------------------------------
 namespace detail {
 
@@ -415,5 +433,8 @@ struct fraction {
   value_type num;
   value_type den;
 };
+//------------------------------------------------------------------------------
+template <class T, size_t D1, size_t D2>
+using array2d = std::array<std::array<T, D1>, D2>;
 //------------------------------------------------------------------------------
 } // namespace artv

@@ -336,7 +336,7 @@ public:
           lfov = _lfos.tick_sample_hold (n_samples);
           break;
         case 3:
-          lfov = _lfos.tick_filtered_noise (n_samples);
+          lfov = _lfos.tick_filt_sample_and_hold (n_samples);
           break;
         case 4:
           lfov = _lfos.tick_trapezoid (vec_set<2> (0.3f), n_samples);

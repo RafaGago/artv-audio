@@ -663,7 +663,7 @@ BYPASS_SRC == 0 ? (
   in.l = src.ins.ptr[0];
   in.r = src.ins.ptr[1];
 
-  // Input diffusor
+  // Input diffusor ------------------------------------------------------------
   BYPASS_INPUT_DIFFUSOR = 0;
   BYPASS_INPUT_DIFFUSOR == 0 ? (
     pre_dif.g_mod_diffusor_tick(

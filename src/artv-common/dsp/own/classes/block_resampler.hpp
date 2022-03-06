@@ -19,7 +19,7 @@ public:
   static constexpr uint n_channels = N_channels;
 
   using value_type  = T;
-  using sample_type = vec<value_type, n_channels>;
+  using sample_type = std::array<value_type, n_channels>;
   //----------------------------------------------------------------------------
   // "block_processor_fn" has to have the signature below:
   //

@@ -544,11 +544,13 @@ static constexpr auto vec_array_unwrap (std::array<vec<T, VecN>, Size> v)
   return ret;
 }
 //------------------------------------------------------------------------------
-template <class T, size_t Size>
-static constexpr auto vec_to_array (vec<T, Size> v)
+template <class V, enable_if_vec_t<V>* = nullptr>
+static constexpr auto vec_to_array (V v)
 {
-  std::array<T, Size> arr;
-  for (uint i = 0; i < Size; ++i) {
+  using T = vec_value_type_t<V>;
+  std::array<T, vec_traits_t<V>::size> arr;
+  // no memcpy, memory ordering is unspecified
+  for (uint i = 0; i < arr.size(); ++i) {
     arr[i] = v[i];
   }
   return arr;
@@ -558,6 +560,7 @@ template <class T, size_t Size>
 static constexpr auto vec_from_array (std::array<T, Size> arr)
 {
   vec<T, Size> v;
+  // no memcpy, memory ordering is unspecified
   for (uint i = 0; i < Size; ++i) {
     v[i] = arr[i];
   }
