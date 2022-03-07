@@ -139,18 +139,18 @@ public:
       array_cast<u16> (make_array (317, 317)),
       array_cast<u16> (make_array (907, 906)));
 
-    r.early.stage[0].meters = 2.f;
-    r.early.stage[0].span   = 7.f;
-    r.early.stage[0].g      = 0.9f;
-    r.early.stage[1].meters = 2.4f;
-    r.early.stage[1].span   = 3.f;
-    r.early.stage[1].g      = 0.6f;
-    r.early.stage[2].meters = 2.6f;
+    r.early.stage[0].meters = 3.1f;
+    r.early.stage[0].span   = 3.2f;
+    r.early.stage[0].g      = 0.5f;
+    r.early.stage[1].meters = 4.1f;
+    r.early.stage[1].span   = 5.f;
+    r.early.stage[1].g      = 0.3f;
+    r.early.stage[2].meters = 2.1f;
     r.early.stage[2].span   = 3.1f;
-    r.early.stage[2].g      = 0.6f;
-    r.early.stage[3].meters = 3.8f;
+    r.early.stage[2].g      = 0.35f;
+    r.early.stage[3].meters = 1.9f;
     r.early.stage[3].span   = 3.1f;
-    r.early.stage[3].g      = 0.6f;
+    r.early.stage[3].g      = 0.8f;
     r.early.prime_idx       = 1;
     r.early.rounding_factor = 1000;
 
@@ -333,20 +333,24 @@ private:
         g += mod * _cfg.pre_dif.g_mod_depth;
         mod_g[i] = vec_to_array (g);
       }
-      // allpasses (todo loop ordering)
       for (uint i = 0; i < block.size(); ++i) {
         // hardcoding 2's to avoid unreadability, so "static_asserting"
         static_assert (n_channels == 2);
         pre_dif[i] = block[i];
+      }
 
-        for (uint st = 0; st < _pre_dif.size(); ++st) {
+      for (uint st = 0; st < _pre_dif.size(); ++st) {
+        for (uint i = 0; i < block.size(); ++i) {
           allpass_stage_tick (
             pre_dif[i], _pre_dif[st], mod_g[i], _cfg.pre_dif.n_samples[st]);
         }
       }
+
       // early -----------------------------------------------------------------
       // the stages are expanded blockwise manually as a perf optimization
       static_assert (early_cfg::n_stages == 4);
+
+      memset (&early, 0, sizeof early);
 
       // building the 4-wide matrices
       for (uint i = 0; i < block.size(); ++i) {
@@ -356,7 +360,7 @@ private:
         early_mtx[i][2] = early_mtx[i][1];
       }
 
-      for (uint stage = 0; stage < early_cfg::n_stages; ++stage) {
+      for (uint stage = 0; stage < 1 /*early_cfg::n_stages*/; ++stage) {
         // allpass
         auto g = array_broadcast<4> (_cfg.early.stage[stage].g);
         for (uint i = 0; i < block.size(); ++i) {
@@ -366,21 +370,12 @@ private:
         // diffusion
         if (stage < 3) {
           for (uint i = 0; i < block.size(); ++i) {
-            auto mtx = hadamard_matrix<4>::tick<float> (early_mtx[i]);
-            if (stage == 0) {
-              crange_memset<float> (early_mtx[i], 0);
-            }
-            for (uint j = 0; j < mtx.size(); ++j) {
-              early_mtx[i][j] += mtx[j];
-            }
+            early_mtx[i] = hadamard_matrix<4>::tick<float> (early_mtx[i]);
           }
         }
         else {
           for (uint i = 0; i < block.size(); ++i) {
-            auto mtx = householder_matrix<4>::tick<float> (early_mtx[i]);
-            for (uint j = 0; j < mtx.size(); ++j) {
-              early_mtx[i][j] += mtx[j];
-            }
+            early_mtx[i] = householder_matrix<4>::tick<float> (early_mtx[i]);
           }
         }
 
@@ -408,10 +403,10 @@ private:
             early_mtx[i].begin() + n_rot,
             early_mtx[i].end());
         }
-      }
-      for (uint i = 0; i < block.size(); ++i) {
-        early[i][0] = early_mtx[i][0];
-        early[i][1] = early_mtx[i][3];
+        for (uint i = 0; i < block.size(); ++i) {
+          early[i][0] += early_mtx[i][0];
+          early[i][1] += early_mtx[i][3];
+        }
       }
       // late ------------------------------------------------------------------
       for (uint i = 0; i < block.size(); ++i) {
@@ -514,6 +509,10 @@ private:
         _cfg.early.prime_idx,
         _cfg.early.rounding_factor);
     }
+
+    std::reverse (_early_delay_spls[1].begin(), _early_delay_spls[1].end());
+    std::reverse (_early_delay_spls[3].begin(), _early_delay_spls[3].end());
+
     // lfo
     _pre_dif_lfo.reset();
     auto f = vec_set<2> (_cfg.pre_dif.g_mod_freq);

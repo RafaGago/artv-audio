@@ -217,6 +217,14 @@ function delay_line_allpass_set_g_all (src_ptr) local (i)(
     );
 );
 
+function delay_line_allpass_set_g_k_all (v) local (i)(
+    i = 0;
+    loop (this.n_channels,
+        this.delay_line_allpass_set_g (v, i);
+        i += 1;
+    );
+);
+
 function freq_to_allpass_g (freq, samplerate)
     local (coeff) global()(
     coeff = tan ($pi * freq / samplerate);

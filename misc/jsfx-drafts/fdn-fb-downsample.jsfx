@@ -129,24 +129,24 @@ loop(floor (srate / 44100) * 2,
 // Early/Reflections -----------------------------------------------------------
 BYPASS_EARLY = 0;
 
-k.early.n_stages = 34;
+k.early.n_stages = 4;
 k.early.n_channels = 4;
 
-k.early.a.meters = 2;
-k.early.a.span = 7;
-k.early.a.g  = 0.9;
+k.early.a.meters = 3.1;
+k.early.a.span = 3.2;
+k.early.a.g  = 0.5;
 
-k.early.b.meters = 2.4;
-k.early.b.span = 3.;
-k.early.b.g  = 0.6;
+k.early.b.meters = 4.1;
+k.early.b.span = 5.;
+k.early.b.g  = 0.3;
 
-k.early.c.meters = 2.6;
+k.early.c.meters = 2.1;
 k.early.c.span = 3.1;
-k.early.c.g  = 0.6;
+k.early.c.g  = 0.35;
 
-k.early.d.meters = 3.8;
+k.early.d.meters = 1.9;
 k.early.d.span = 3.1;
-k.early.d.g  = 0.6;
+k.early.d.g  = 0.8;
 
 k.early.prime_idx = 1;
 k.early.rounding_factor = 1000;
@@ -208,10 +208,12 @@ early.b.delay.delay_line_allpass_add();
 early.c.delay.delay_line_allpass_add();
 early.d.delay.delay_line_allpass_add();
 
-early.a.delay.delay_line_allpass_set_g_all (k.early.a.g);
-early.b.delay.delay_line_allpass_set_g_all (k.early.b.g);
-early.c.delay.delay_line_allpass_set_g_all (k.early.c.g);
-early.d.delay.delay_line_allpass_set_g_all (k.early.d.g);
+early.a.delay.delay_line_allpass_set_g_k_all (k.early.a.g);
+early.b.delay.delay_line_allpass_set_g_k_all (k.early.b.g);
+early.c.delay.delay_line_allpass_set_g_k_all (k.early.c.g);
+early.d.delay.delay_line_allpass_set_g_k_all (k.early.d.g);
+
+early.a_g_dbg.debug_4(early.a.delay.g.ptr, 4);
 
 // Late/Tail feedback ----------------------------------------------------------
 function from_ascending_to_chnl_order (spls_ptr, spls_size) global()(
