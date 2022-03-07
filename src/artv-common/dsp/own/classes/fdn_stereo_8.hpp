@@ -158,7 +158,7 @@ public:
     r.late.rounding_factor = 1;
     r.late.span_factor     = golden_ratio * 1.5f;
 
-    r.late.max_chorus_depth_spls = 30;
+    r.late.max_chorus_depth_spls = 150;
     r.late.max_chorus_freq       = 7;
     r.late.max_chorus_width      = 0.5f;
 
@@ -213,14 +213,14 @@ public:
   void set_mod_freq (float factor)
   {
     assert (factor >= 0.f && factor <= 1.f);
-    _mod_freq_hz = factor * _cfg.late.max_chorus_freq;
+    _mod_freq_hz = factor * factor * _cfg.late.max_chorus_freq;
     reset_late_lfo();
   }
   //----------------------------------------------------------------------------
   void set_mod_depth (float factor)
   {
     assert (factor >= 0.f && factor <= 1.f);
-    _mod_depth_spls = factor * (float) _cfg.late.max_chorus_depth_spls;
+    _mod_depth_spls = factor * factor * (float) _cfg.late.max_chorus_depth_spls;
   }
   //----------------------------------------------------------------------------
   void set_mod_stereo (float factor)

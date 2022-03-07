@@ -119,7 +119,7 @@ public:
 
   static constexpr auto get_parameter (mod_freq_tag)
   {
-    return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 5.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct mod_depth_tag {};
@@ -134,7 +134,7 @@ public:
 
   static constexpr auto get_parameter (mod_depth_tag)
   {
-    return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 10.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct mod_stereo_tag {};
@@ -149,7 +149,7 @@ public:
 
   static constexpr auto get_parameter (mod_stereo_tag)
   {
-    return float_param ("%", -100.f, 100.f, 0.f, 0.01f);
+    return float_param ("%", -100.f, 100.f, -50.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct l_matrix_angle_tag {};
