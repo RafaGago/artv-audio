@@ -77,6 +77,7 @@ public:
   struct out_dif_cfg {
     static constexpr uint              n_channels = 2;
     static constexpr uint              n_stages   = 4;
+    float                              g_max;
     array2d<u16, n_channels, n_stages> n_samples;
   };
   //----------------------------------------------------------------------------
@@ -191,6 +192,7 @@ public:
       array_cast<u16> (make_array (419, 421)),
       array_cast<u16> (make_array (907, 906)));
 
+    r.out_dif.g_max     = 0.77f;
     r.out_dif.n_samples = make_array (
       array_cast<u16> (make_array (19, 23)),
       array_cast<u16> (make_array (53, 67)),
@@ -204,6 +206,12 @@ public:
   {
     assert (factor >= 0.f && factor <= 1.f);
     _pre_dif_g = _cfg.pre_dif.g_max * factor;
+  }
+  //----------------------------------------------------------------------------
+  void set_output_diffusor_gain (float factor)
+  {
+    assert (factor >= 0.f && factor <= 1.f);
+    _out_dif_g = _cfg.out_dif.g_max * factor;
   }
   //----------------------------------------------------------------------------
   void set_early_gain (float g) { _early_gain = g; }
@@ -472,6 +480,15 @@ private:
           _late_feedback[i] *= _late_feedback_gain[i];
         }
       }
+      // output diffusion
+      // -----------------------------------------------------------------------
+      std::array<float, 2> g_arr {_out_dif_g, _out_dif_g};
+      for (uint st = 0; st < _out_dif.size(); ++st) {
+        for (uint i = 0; i < block.size(); ++i) {
+          allpass_stage_tick (
+            late[i], _out_dif[st], g_arr, _cfg.out_dif.n_samples[st]);
+        }
+      }
       // mixing
       // -----------------------------------------------------------------------
       for (uint i = 0; i < block.size(); ++i) {
@@ -641,6 +658,7 @@ private:
     auto early_n_spls   = _early_delay_spls;
     auto late_n_spls    = _cfg.late.n_samples;
     auto int_dif_n_spls = _cfg.int_dif.n_samples;
+    auto out_dif_n_spls = _cfg.out_dif.n_samples;
 
     // computing.
     uint mem_total = 0;
@@ -650,6 +668,7 @@ private:
       late_n_spls,
       (u16) (_cfg.late.max_chorus_depth_spls + catmull_rom_interp::n_points));
     mem_total += round_array_pow2_and_accumulate (int_dif_n_spls);
+    mem_total += round_array_pow2_and_accumulate (out_dif_n_spls);
 
     // allocating
     _mem.clear();
@@ -677,6 +696,12 @@ private:
     for (uint i = 0; i < int_dif_n_spls.size(); ++i) {
       for (uint j = 0; j < int_dif_n_spls[0].size(); ++j) {
         _int_dif[i][j].reset (mem.cut_head (int_dif_n_spls[i][j]));
+      }
+    }
+    // output diffusor
+    for (uint i = 0; i < out_dif_n_spls.size(); ++i) {
+      for (uint j = 0; j < out_dif_n_spls[0].size(); ++j) {
+        _out_dif[i][j].reset (mem.cut_head (out_dif_n_spls[i][j]));
       }
     }
   }
@@ -740,6 +765,9 @@ private:
 
   reverb_array<allpass<float_x1>, internal_dif_cfg> _int_dif;
   lfo<2>                                            _int_dif_lfo;
+
+  reverb_array<allpass<float_x1>, internal_dif_cfg> _out_dif;
+  float                                             _out_dif_g;
 
   float _early_gain = 0.05f;
   float _late_gain  = 0.1f;

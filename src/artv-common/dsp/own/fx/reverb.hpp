@@ -32,6 +32,21 @@ public:
     return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
   }
   //----------------------------------------------------------------------------
+  struct out_diffusion_tag {};
+  void set (out_diffusion_tag, float v)
+  {
+    if (v == _out_diffusion) {
+      return;
+    }
+    _out_diffusion = v;
+    _impl.set_output_diffusor_gain (v * 0.01f);
+  }
+
+  static constexpr auto get_parameter (out_diffusion_tag)
+  {
+    return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
+  }
+  //----------------------------------------------------------------------------
   struct early_gain_tag {};
   void set (early_gain_tag, float v)
   {
@@ -290,6 +305,7 @@ private:
 
   float _time_msec;
   float _in_diffusion;
+  float _out_diffusion;
   float _early_gain;
   float _late_gain;
   float _early_2_late;

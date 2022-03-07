@@ -6481,6 +6481,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  reverb_diff_out,
+  n_stereo_busses,
+  param_common (
+    "Out Diff",
+    declptr<reverb>(),
+    declptr<reverb::out_diffusion_tag>()),
+  reverb::get_parameter (reverb::out_diffusion_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   reverb_mtx_l_angle,
   n_stereo_busses,
   param_common (
@@ -6520,6 +6530,7 @@ using reverb_params = mp_list<
   reverb_early_2_late,
   reverb_in_2_late,
   reverb_diff_in,
+  reverb_diff_out,
   reverb_mtx_l_angle,
   reverb_mtx_r_angle,
   reverb_mtx_lr_angle>;
