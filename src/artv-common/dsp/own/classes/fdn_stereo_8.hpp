@@ -33,7 +33,6 @@ public:
     static constexpr uint              n_stages   = 4;
     float                              g_mod_depth;
     float                              g_mod_freq;
-    float                              g_drift_fact;
     float                              g_max;
     array2d<u16, n_channels, n_stages> n_samples;
   };
@@ -64,12 +63,11 @@ public:
     std::array<u16, n_channels> n_samples;
   };
   //----------------------------------------------------------------------------
-  struct int_dif_cfg {
+  struct internal_dif_cfg {
     static constexpr uint              n_channels = 2;
     static constexpr uint              n_stages   = 4;
     float                              g_mod_depth;
     float                              g_mod_freq;
-    float                              g_drift_fact;
     float                              g_base;
     u8                                 channel_l;
     u8                                 channel_r;
@@ -83,12 +81,12 @@ public:
   };
   //----------------------------------------------------------------------------
   struct cfg {
-    src_cfg     src;
-    pre_dif_cfg pre_dif;
-    early_cfg   early;
-    late_cfg    late;
-    int_dif_cfg int_dif;
-    out_dif_cfg out_dif;
+    src_cfg          src;
+    pre_dif_cfg      pre_dif;
+    early_cfg        early;
+    late_cfg         late;
+    internal_dif_cfg int_dif;
+    out_dif_cfg      out_dif;
   };
   //----------------------------------------------------------------------------
   // a helper to aid in writing "cfg::late::n_samples" in ascending order.
@@ -128,10 +126,9 @@ public:
     r.src.cutoff           = 9000;
     r.src.srate            = 27000;
 
-    r.pre_dif.g_mod_depth  = 0.1f;
-    r.pre_dif.g_mod_freq   = 1.6f;
-    r.pre_dif.g_drift_fact = 0.8f;
-    r.pre_dif.g_max        = 0.39f;
+    r.pre_dif.g_mod_depth = 0.1f;
+    r.pre_dif.g_mod_freq  = 1.6f;
+    r.pre_dif.g_max       = 0.39f;
 
     r.pre_dif.n_samples = make_array (
       array_cast<u16> (make_array (43, 43)),
@@ -182,10 +179,13 @@ public:
 
     from_ascending_pairs_to_internal_chnl_order (r.late.n_samples);
 
-    r.int_dif.g_mod_depth  = 0.11f;
-    r.int_dif.g_mod_freq   = 0.6f;
-    r.int_dif.g_drift_fact = 0.8f;
-    r.int_dif.n_samples    = make_array (
+    r.int_dif.g_mod_depth = 0.11f;
+    r.int_dif.g_mod_freq  = 0.6f;
+    r.int_dif.g_base      = 0.45f;
+    r.int_dif.channel_l   = 2;
+    r.int_dif.channel_r   = 13;
+
+    r.int_dif.n_samples = make_array (
       array_cast<u16> (make_array (887, 887)),
       array_cast<u16> (make_array (478, 478)),
       array_cast<u16> (make_array (419, 421)),
@@ -287,8 +287,10 @@ public:
       blocksize,
       6 * 1024);
 
+    setup_in_diffusor();
     setup_early();
     setup_late();
+    setup_internal_diffusor();
     setup_memory();
 
     // TODO: check no value under (blocksize) 16 after modulation
@@ -448,6 +450,24 @@ private:
           _late_feedback[i]
             = _late[i].get<catmull_rom_interp> (n_spls[i], 0)[0];
         }
+
+        // internal diffusor
+        vec<float, 2> mod = _int_dif_lfo.tick_filt_sample_and_hold();
+        vec<float, 2> g   = vec_set<2> (_cfg.int_dif.g_base);
+        g += mod * _cfg.int_dif.g_mod_depth;
+        std::array<float, 2> g_arr {g[0], g[1]};
+
+        std::array<float, 2> diffused;
+        diffused[0] = _late_feedback[_cfg.int_dif.channel_l];
+        diffused[1] = _late_feedback[_cfg.int_dif.channel_r];
+
+        for (uint st = 0; st < _int_dif.size(); ++st) {
+          allpass_stage_tick (
+            diffused, _int_dif[st], g_arr, _cfg.int_dif.n_samples[st]);
+        }
+        _late_feedback[_cfg.int_dif.channel_l] = diffused[0];
+        _late_feedback[_cfg.int_dif.channel_r] = diffused[1];
+        // gain
         for (uint i = 0; i < 16; ++i) {
           _late_feedback[i] *= _late_feedback_gain[i];
         }
@@ -492,6 +512,22 @@ private:
       dst, spls_min, spls_max, prime_idx, rounding_fact, work_mem);
   }
   //----------------------------------------------------------------------------
+  void setup_in_diffusor()
+  {
+    _pre_dif_lfo.reset();
+    auto f = vec_set<2> (_cfg.pre_dif.g_mod_freq);
+    f[0] *= 1.01; // desync
+    _pre_dif_lfo.set_freq (f, _cfg.src.srate);
+  }
+  //----------------------------------------------------------------------------
+  void setup_internal_diffusor()
+  {
+    _int_dif_lfo.reset();
+    auto f = vec_set<2> (_cfg.int_dif.g_mod_freq);
+    f[0] *= 1.01; // desync
+    _int_dif_lfo.set_freq (f, _cfg.src.srate);
+  }
+  //----------------------------------------------------------------------------
   void setup_early()
   {
     // compute delay lengths
@@ -512,12 +548,6 @@ private:
 
     std::reverse (_early_delay_spls[1].begin(), _early_delay_spls[1].end());
     std::reverse (_early_delay_spls[3].begin(), _early_delay_spls[3].end());
-
-    // lfo
-    _pre_dif_lfo.reset();
-    auto f = vec_set<2> (_cfg.pre_dif.g_mod_freq);
-    f[0] *= 1.01; // desync
-    _pre_dif_lfo.set_freq (f, _cfg.src.srate);
   };
   //----------------------------------------------------------------------------
   void setup_late()
@@ -610,6 +640,7 @@ private:
     auto pre_dif_n_spls = _cfg.pre_dif.n_samples;
     auto early_n_spls   = _early_delay_spls;
     auto late_n_spls    = _cfg.late.n_samples;
+    auto int_dif_n_spls = _cfg.int_dif.n_samples;
 
     // computing.
     uint mem_total = 0;
@@ -618,6 +649,7 @@ private:
     mem_total += round_array_pow2_and_accumulate (
       late_n_spls,
       (u16) (_cfg.late.max_chorus_depth_spls + catmull_rom_interp::n_points));
+    mem_total += round_array_pow2_and_accumulate (int_dif_n_spls);
 
     // allocating
     _mem.clear();
@@ -640,6 +672,12 @@ private:
     // late
     for (uint i = 0; i < late_n_spls.size(); ++i) {
       _late[i].reset (mem.cut_head (late_n_spls[i]), 1);
+    }
+    // internal diffusor
+    for (uint i = 0; i < int_dif_n_spls.size(); ++i) {
+      for (uint j = 0; j < int_dif_n_spls[0].size(); ++j) {
+        _int_dif[i][j].reset (mem.cut_head (int_dif_n_spls[i][j]));
+      }
     }
   }
   //----------------------------------------------------------------------------
@@ -694,16 +732,21 @@ private:
   std::array<interpolated_delay_line<float_x1, false>, late_cfg::n_channels>
     _late;
 
-  std::vector<float_x1> _mem;
-  float                 _early_gain     = 0.05f;
-  float                 _late_gain      = 0.1f;
-  float                 _mod_freq_hz    = 0.f;
-  float                 _mod_depth_spls = 30.f;
-  float                 _mod_stereo     = 0.f;
-  float                 _in_2_late      = 1.f;
-  float                 _er_2_late      = 1.f;
+  float _in_2_late      = 1.f;
+  float _er_2_late      = 1.f;
+  float _mod_freq_hz    = 0.f;
+  float _mod_depth_spls = 30.f;
+  float _mod_stereo     = 0.f;
+
+  reverb_array<allpass<float_x1>, internal_dif_cfg> _int_dif;
+  lfo<2>                                            _int_dif_lfo;
+
+  float _early_gain = 0.05f;
+  float _late_gain  = 0.1f;
 
   cfg _cfg;
+
+  std::vector<float_x1> _mem;
 };
 //------------------------------------------------------------------------------
 } // namespace artv
