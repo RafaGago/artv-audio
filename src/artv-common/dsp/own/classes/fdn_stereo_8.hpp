@@ -365,9 +365,9 @@ private:
       // building the 4-wide matrices
       for (uint i = 0; i < block.size(); ++i) {
         early_mtx[i][0] = pre_dif[i][0];
-        early_mtx[i][3] = pre_dif[i][1];
-        early_mtx[i][1] = (early_mtx[i][0] + early_mtx[i][3]) * 0.5f; // mid
-        early_mtx[i][2] = early_mtx[i][1];
+        early_mtx[i][1] = pre_dif[i][1];
+        early_mtx[i][2] = (early_mtx[i][0] + early_mtx[i][1]) * 0.5f; // mid
+        early_mtx[i][3] = early_mtx[i][2];
       }
 
       for (uint stage = 0; stage < 1 /*early_cfg::n_stages*/; ++stage) {
@@ -388,34 +388,14 @@ private:
             early_mtx[i] = householder_matrix<4>::tick<float> (early_mtx[i]);
           }
         }
-
-        uint n_rot = 0;
-        switch (stage) {
-        case 0:
-          n_rot = 0;
-          break;
-        case 1:
-          n_rot = 2;
-          break;
-        case 2:
-          n_rot = 1;
-          break;
-        case 3:
-          n_rot = 1;
-          break;
-        default:
-          break;
-        }
         // rotation
         for (uint i = 0; i < block.size(); ++i) {
           std::rotate (
-            early_mtx[i].begin(),
-            early_mtx[i].begin() + n_rot,
-            early_mtx[i].end());
+            early_mtx[i].begin(), early_mtx[i].begin() + 1, early_mtx[i].end());
         }
         for (uint i = 0; i < block.size(); ++i) {
           early[i][0] += early_mtx[i][0];
-          early[i][1] += early_mtx[i][3];
+          early[i][1] += early_mtx[i][1];
         }
       }
       // late ------------------------------------------------------------------
