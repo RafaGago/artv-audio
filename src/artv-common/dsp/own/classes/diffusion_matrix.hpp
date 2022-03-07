@@ -206,7 +206,9 @@ struct rotation_matrix<4> {
   static constexpr uint N = 4;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (crange<const V> x, crange<std::array<V, 2>> w)
+  static std::array<V, N> tick (
+    crange<const V>                x,
+    crange<const std::array<V, 2>> w)
   {
     assert (x.size() >= N);
     assert (w.size() >= N / 4);
@@ -239,11 +241,14 @@ struct rotation_matrix<4> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (crange<const T> x)
+  static std::array<T, N> tick (
+    crange<const T>                x,
+    crange<const std::array<T, 2>> w)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (
-      tick<vectype> (x.template cast<const vectype>()));
+    return vec_array_unwrap<1, T> (tick<vectype> (
+      x.template cast<const vectype>(),
+      w.template cast<const std::array<vectype, 2>>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -254,7 +259,9 @@ struct rotation_matrix<8> {
   static constexpr uint N = 8;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (crange<const V> x, crange<std::array<V, 2>> w)
+  static std::array<V, N> tick (
+    crange<const V>                x,
+    crange<const std::array<V, 2>> w)
   {
     assert (x.size() >= N);
     assert (w.size() >= N / 4);
@@ -286,8 +293,8 @@ struct rotation_matrix<8> {
 
     std::array<V, N> y;
 
-    auto y_a = rot_matrix_4 (x.get_head (4), w.get_head (1));
-    auto y_b = rot_matrix_4 (x.advanced (4), w.advanced (1));
+    auto y_a = rotation_matrix<4>::tick<V> (x.get_head (4), w.get_head (1));
+    auto y_b = rotation_matrix<4>::tick<V> (x.advanced (4), w.advanced (1));
 
     auto y1 = y_a[0];
     auto y2 = y_a[1];
@@ -316,11 +323,14 @@ struct rotation_matrix<8> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (crange<const T> x)
+  static std::array<T, N> tick (
+    crange<const T>                x,
+    crange<const std::array<T, 2>> w)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (
-      tick<vectype> (x.template cast<const vectype>()));
+    return vec_array_unwrap<1, T> (tick<vectype> (
+      x.template cast<const vectype>(),
+      w.template cast<const std::array<vectype, 2>>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -331,7 +341,9 @@ struct rotation_matrix<16> {
   static constexpr uint N = 16;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (crange<const V> x, crange<std::array<V, 2>> w)
+  static std::array<V, N> tick (
+    crange<const V>                x,
+    crange<const std::array<V, 2>> w)
   {
     assert (x.size() >= N);
     assert (w.size() >= N / 4);
@@ -379,8 +391,8 @@ struct rotation_matrix<16> {
 
     std::array<V, N> y;
 
-    auto y_a = rot_matrix_8 (x.get_head (8), w.get_head (2));
-    auto y_b = rot_matrix_8 (x.advanced (8), w.advanced (2));
+    auto y_a = rotation_matrix<8>::tick<V> (x.get_head (8), w.get_head (2));
+    auto y_b = rotation_matrix<8>::tick<V> (x.advanced (8), w.advanced (2));
 
     auto y1 = y_a[0];
     auto y2 = y_a[1];
@@ -429,11 +441,14 @@ struct rotation_matrix<16> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (crange<const T> x)
+  static std::array<T, N> tick (
+    crange<const T>                x,
+    crange<const std::array<T, 2>> w)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (
-      tick<vectype> (x.template cast<const vectype>()));
+    return vec_array_unwrap<1, T> (tick<vectype> (
+      x.template cast<const vectype>(),
+      w.template cast<const std::array<vectype, 2>>()));
   }
   //----------------------------------------------------------------------------
 };

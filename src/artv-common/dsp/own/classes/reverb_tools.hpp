@@ -36,7 +36,7 @@ private:
 };
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-static constexpr V get_delay_line_gain (
+static constexpr V delay_get_feedback_gain_for_time (
   vec_value_type_t<V> time_sec, // desired
   vec_value_type_t<V> att, // -60. for RT60
   vec_value_type_t<V> srate,
@@ -45,9 +45,8 @@ static constexpr V get_delay_line_gain (
   using T = vec_value_type_t<V>;
 
   auto rate = srate / delays_spls;
-  vec_pow ((T) 10, ((T) 1 / (T) 20) * att / (srate * time_sec));
+  return vec_pow ((T) 10, ((T) 1 / (T) 20) * att / (rate * time_sec));
 }
-//------------------------------------------------------------------------------
 // a namespace class...
 struct delay_length {
   //----------------------------------------------------------------------------
