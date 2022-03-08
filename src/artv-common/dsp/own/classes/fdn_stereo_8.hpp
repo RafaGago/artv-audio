@@ -455,6 +455,9 @@ private:
         }
         _late_feedback[_cfg.int_dif.channel_l] = diffused[0];
         _late_feedback[_cfg.int_dif.channel_r] = diffused[1];
+
+        _late_feedback = vec_to_array (
+          vec_tanh_approx_vaneev (vec_from_array (_late_feedback)));
         // gain
         for (uint i = 0; i < 16; ++i) {
           _late_feedback[i] *= _late_feedback_gain[i];
