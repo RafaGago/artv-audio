@@ -11,6 +11,12 @@
 // Unfortunately at the time of writing GCC support for vector types is buggy
 // too on C++. This code requires clang 11 or higher:
 // https://gcc.gnu.org/bugzilla//show_bug.cgi?id=57572
+//
+// At some point XSIMD might be dropped, as Clang supports libmvec and SVML, so
+// it is a matter of trying if it works for Windows and doing the refactoring
+// chores. Given my (good)interactions with XSIMD devs, it seems it is not to
+// rely on with --ffast-math enabled, as it is not their use case. I'd trust
+// more something built-in on the compiler.
 
 #define XSIMD_DISABLED 1
 #define XSIMD_NEW_INTERFACE 1
@@ -33,6 +39,21 @@
 #endif
 
 namespace artv {
+
+#if defined(__AVX512F__) || defined(__AVX512CD__) || defined(__AVX512DQ__) \
+  || defined(__AVX512BW__)
+static constexpr uint vec_max_bytes = 64;
+
+#elif defined(__AVX__) || defined(__AVX2__)
+static constexpr uint vec_max_bytes = 32;
+
+#elif defined(__SSE2__) || defined(__SSE3__) || defined(__SSSE3__) \
+  || defined(__SSE4_1__) || defined(__SSE4_2__) || defined(__ARM_NEON)
+static constexpr uint vec_max_bytes = 16;
+
+#else
+static constexpr uint vec_max_bytes = 0;
+#endif
 //------------------------------------------------------------------------------
 template <class T, uint N>
 struct simd_vector_traits {
@@ -337,6 +358,47 @@ static inline auto vec_to_intrin (V simdvec)
     static_assert (!std::is_same_v<V, V>, "Unkown intrinsic conversion");
     return 0;
   }
+}
+//------------------------------------------------------------------------------
+// split N elements from vec as a new vector of the appropiate size
+template <uint N, class V, enable_if_vec_t<V>* = nullptr>
+static inline auto vec_split (V src, uint offset)
+{
+  using T               = vec_value_type_t<V>;
+  constexpr auto traits = vec_traits<V>();
+
+  static_assert (traits.size >= N);
+  assert ((offset + N) <= traits.size);
+
+  vec<T, N> dst;
+  // no memcpy, ordering inside the vector not guaranteed.
+  for (uint i = 0; i < N; ++i) {
+    dst[i] = src[offset + i];
+  }
+  return dst;
+}
+//------------------------------------------------------------------------------
+// join all elements from "src" into "dst" at a given offset.
+template <
+  class V1,
+  class V2,
+  std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
+static inline auto vec_join (V1& dst, V2 src, uint offset)
+{
+  using T = vec_value_type_t<V1>;
+  static_assert (std::is_same_v<T, vec_value_type_t<V2>>);
+
+  constexpr auto traits1 = vec_traits<V1>();
+  constexpr auto traits2 = vec_traits<V2>();
+
+  static_assert (traits1.size >= traits2.size);
+  assert ((offset + traits2.size) <= traits1.size);
+
+  // no memcpy, ordering inside the vector not guaranteed.
+  for (uint i = 0; i < traits2.size; ++i) {
+    dst[offset + i] = src[i];
+  }
+  return dst;
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
@@ -656,19 +718,44 @@ static inline auto call_vec_function_impl (
   Ts&&... args)
 {
   using V               = std::common_type_t<Ts...>;
+  using T               = vec_value_type_t<V>;
   constexpr auto traits = vec_traits<V>();
 
   if constexpr (traits.size > 1) {
-    // simd, As of now only XSIMD, but the type returned by "simdf" could be
-    // detected.
-    using batch  = to_xsimd_batch_t<vec_value_type_t<V>, traits.bytes>;
-    using intrin = decltype (vec_to_intrin (V {}));
+    if constexpr (traits.bytes <= vec_max_bytes) {
+      // simd, As of now only XSIMD, but the type returned by "simdf" could be
+      // detected.
+      using batch  = to_xsimd_batch_t<T, traits.bytes>;
+      using intrin = decltype (vec_to_intrin (V {}));
 
-    // xsimd batches can be casted back to intrinsic types
-    auto result = static_cast<intrin> (
-      simdf (batch {vec_to_intrin (std::forward<Ts> (args))}...));
+      // xsimd batches can be casted back to intrinsic types
+      auto result = static_cast<intrin> (
+        simdf (batch {vec_to_intrin (std::forward<Ts> (args))}...));
+      // vector types are __may_alias__, so they can be casted back from
+      // intrinsic types
+      return *reinterpret_cast<V*> (&result);
+    }
+    else {
+      // The virtual vector simd type is bigger than the hardware one, so doing
+      // it in batches of the biggest SIMD instruction available and rejoining.
+      V ret;
 
-    return *reinterpret_cast<V*> (&result);
+      static constexpr uint n_elems = vec_max_bytes / sizeof (T);
+      using V_small                 = vec<T, n_elems>;
+      static constexpr uint n_parts = sizeof (V) / sizeof (V_small);
+      using batch                   = to_xsimd_batch_t<T, vec_max_bytes>;
+      using intrin                  = decltype (vec_to_intrin (V_small {}));
+
+      for (uint i = 0; i < n_parts; ++i) {
+        // xsimd batches can be casted back to intrinsic types
+        auto result = static_cast<intrin> (simdf (batch {vec_to_intrin (
+          vec_split<n_elems> (std::forward<Ts> (args), i * n_elems))}...));
+        // vector types are __may_alias__, so they can be casted back from
+        // intrinsic types
+        vec_join (ret, *reinterpret_cast<V_small*> (&result), i * n_elems);
+      }
+      return ret;
+    }
   }
   else {
     // vectors of size == 1, scalar.
@@ -688,7 +775,6 @@ static inline auto call_vec_function_impl (
     //
     // It is know that the vector is of size 1 and that it has the
     // "__may_alias__" attribute set.
-    using T  = vec_value_type_t<V>;
     T result = scalarf ((*((T*) &args))...);
     return make_vec (result);
   }
