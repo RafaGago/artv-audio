@@ -5,6 +5,10 @@
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 
+#include "artv-common/dsp/own/parts/filters/dc_blocker.hpp"
+#include "artv-common/dsp/own/parts/filters/onepole.hpp"
+#include "artv-common/dsp/own/parts/parts_to_class.hpp"
+
 #include "artv-common/dsp/own/classes/block_resampler.hpp"
 #include "artv-common/dsp/own/classes/delay_line.hpp"
 #include "artv-common/dsp/own/classes/diffusion_matrix.hpp"
@@ -81,6 +85,13 @@ public:
     array2d<u16, n_channels, n_stages> n_samples;
   };
   //----------------------------------------------------------------------------
+  struct filter_cfg {
+    static constexpr uint       n_channels = 16;
+    float                       max_att_db;
+    float                       freq_factor;
+    std::array<u16, n_channels> freqs;
+  };
+  //----------------------------------------------------------------------------
   struct cfg {
     src_cfg          src;
     pre_dif_cfg      pre_dif;
@@ -88,6 +99,7 @@ public:
     late_cfg         late;
     internal_dif_cfg int_dif;
     out_dif_cfg      out_dif;
+    filter_cfg       filter;
   };
   //----------------------------------------------------------------------------
   // a helper to aid in writing "cfg::late::n_samples" in ascending order.
@@ -199,6 +211,29 @@ public:
       array_cast<u16> (make_array (157, 191)),
       array_cast<u16> (make_array (443, 532)));
 
+    r.filter.max_att_db  = -9.f;
+    r.filter.freq_factor = -1.6f;
+
+    r.filter.freqs = array_cast<u16> (make_array (
+      500,
+      530,
+      640,
+      600,
+      860,
+      800,
+      920,
+      900,
+      1000,
+      1100,
+      1200,
+      1000,
+      2200,
+      2000,
+      2500,
+      2700));
+
+    from_ascending_pairs_to_internal_chnl_order (r.filter.freqs);
+
     return r;
   }
   //----------------------------------------------------------------------------
@@ -270,13 +305,37 @@ public:
   //----------------------------------------------------------------------------
   void set_time_msec (float msec)
   {
-    for (uint i = 0; i < _late_feedback_gain.size(); ++i) {
-      _late_feedback_gain[i] = delay_get_feedback_gain_for_time (
-        msec * 0.001f,
-        -60.f,
-        _cfg.src.srate,
-        vec_set<1> ((float) _cfg.late.n_samples[i]))[0];
-    }
+    _seconds = msec * 0.001f;
+    reset_times();
+  }
+  //----------------------------------------------------------------------------
+  void set_damp_freq (float factor)
+  {
+    assert (factor >= -1.f && factor <= 1.f);
+    _damp_freq = -factor;
+    reset_damping_filters();
+  }
+  //----------------------------------------------------------------------------
+  void set_damp_factor (float factor)
+  {
+    assert (factor >= 0.f && factor <= 1.f);
+    _damp_factor = factor;
+    reset_damping_filters();
+  }
+  //----------------------------------------------------------------------------
+  void set_hp_freq (float factor)
+  {
+    assert (factor >= 0.f && factor <= 1.f);
+    float hp_freq = 2.f + (factor * 58.f); // TODO: make variables
+    _filters.reset_coeffs<dc_idx> (
+      vec_set<16> (hp_freq), (float) _cfg.src.srate);
+  }
+  //----------------------------------------------------------------------------
+  void set_lf_time_factor (float factor)
+  {
+    assert (factor >= 0.f && factor <= 1.f);
+    _lf_rt60_factor = 0.3333f + factor * 1.6666f; // TODO: make variables
+    reset_times();
   }
   //----------------------------------------------------------------------------
   void reset (uint samplerate, cfg const& cfg)
@@ -456,12 +515,22 @@ private:
         _late_feedback[_cfg.int_dif.channel_l] = diffused[0];
         _late_feedback[_cfg.int_dif.channel_r] = diffused[1];
 
-        _late_feedback = vec_to_array (
-          vec_tanh_approx_vaneev (vec_from_array (_late_feedback)));
-        // gain
-        for (uint i = 0; i < 16; ++i) {
-          _late_feedback[i] *= _late_feedback_gain[i];
-        }
+        // Some spice
+        auto late_fb_vec
+          = vec_tanh_approx_vaneev (vec_from_array (_late_feedback));
+
+        // DC blocker and HP
+        late_fb_vec = _filters.tick<dc_idx> (late_fb_vec);
+
+        // Filtering
+        auto lp = _filters.tick<lp_idx> (late_fb_vec);
+        auto hp = (late_fb_vec - lp) * _filter_hp_att;
+
+        // Final attenuation
+        lp *= _rt60_att_l;
+        hp *= _rt60_att_h;
+
+        _late_feedback = vec_to_array (lp + hp);
       }
       // output diffusion
       // -----------------------------------------------------------------------
@@ -553,7 +622,6 @@ private:
   void setup_late()
   {
     crange_memset<float> (_late_feedback, 0);
-    crange_memset<float> (_late_feedback_gain, 0);
 
     _late_lfo.reset();
 
@@ -718,6 +786,36 @@ private:
     return ret;
   }
   //----------------------------------------------------------------------------
+  void reset_times()
+  {
+    for (uint i = 0; i < late_cfg::n_channels; ++i) {
+      _rt60_att_h[i] = delay_get_feedback_gain_for_time (
+        _seconds,
+        -60.f,
+        _cfg.src.srate,
+        vec_set<1> ((float) _cfg.late.n_samples[i]))[0];
+
+      _rt60_att_l[i] = delay_get_feedback_gain_for_time (
+        _seconds * _lf_rt60_factor,
+        -60.f,
+        _cfg.src.srate,
+        vec_set<1> ((float) _cfg.late.n_samples[i]))[0];
+    }
+  }
+  //----------------------------------------------------------------------------
+  void reset_damping_filters()
+  {
+    vec<float, 16> freqs = vec_cast<float> (vec_from_array (_cfg.filter.freqs));
+    freqs *= (float) std::exp (_damp_freq * _cfg.filter.freq_factor);
+    float nyquist = (float) _cfg.src.srate * 0.5f - 2.f;
+    freqs         = 1.f - freqs / nyquist; // now a factor ready to be scaled
+    // TODO: Why both the damping factor and the damping frequency affect the
+    // frequency? this was so on the JSFX prototype but I forgot...
+    freqs = nyquist - nyquist * (float) sqrt (_damp_factor) * freqs;
+    _filters.reset_coeffs<lp_idx> (freqs, (float) _cfg.src.srate);
+    _filter_hp_att = db_to_gain (_cfg.filter.max_att_db * _damp_factor * 0.5f);
+  }
+  //----------------------------------------------------------------------------
   template <class T, class Cfg>
   using reverb_array = array2d<T, Cfg::n_channels, Cfg::n_stages>;
   //----------------------------------------------------------------------------
@@ -731,7 +829,6 @@ private:
   reverb_array<allpass<float_x1>, early_cfg> _early;
 
   std::array<float, late_cfg::n_channels> _late_feedback;
-  std::array<float, late_cfg::n_channels> _late_feedback_gain;
   lfo<late_cfg::n_channels>               _late_lfo;
   array2d<float, 2, 2>                    _late_l_angle;
   array2d<float, 2, 2>                    _late_r_angle;
@@ -752,12 +849,30 @@ private:
   reverb_array<allpass<float_x1>, internal_dif_cfg> _out_dif;
   float                                             _out_dif_g;
 
+  enum { dc_idx, lp_idx };
+
+  part_classes<
+    mp_list<mystran_dc_blocker, onepole_lowpass>,
+    vec<float, 16>,
+    false>
+    _filters;
+
+  float _damp_freq;
+  float _damp_factor;
+  float _lf_rt60_factor;
+  float _filter_hp_att;
+
+  vec<float, late_cfg::n_channels> _rt60_att_h {};
+  vec<float, late_cfg::n_channels> _rt60_att_l {};
+
   float _early_gain = 0.05f;
   float _late_gain  = 0.1f;
 
   cfg _cfg;
 
   std::vector<float_x1> _mem;
+
+  float _seconds;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

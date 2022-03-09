@@ -212,6 +212,66 @@ public:
     return float_param ("%", 0.f, 100.f, 51.23f, 0.01f);
   }
   //----------------------------------------------------------------------------
+  struct damp_freq_tag {};
+  void set (damp_freq_tag, float v)
+  {
+    if (v == _damp_freq) {
+      return;
+    }
+    _damp_freq = v;
+    _impl.set_damp_freq (_damp_freq * 0.01f);
+  }
+
+  static constexpr auto get_parameter (damp_freq_tag)
+  {
+    return float_param ("%", -100.f, 100.f, 0.f, 0.01f);
+  }
+  //----------------------------------------------------------------------------
+  struct damp_factor_tag {};
+  void set (damp_factor_tag, float v)
+  {
+    if (v == _damp_factor) {
+      return;
+    }
+    _damp_factor = v;
+    _impl.set_damp_factor (_damp_factor * 0.01f);
+  }
+
+  static constexpr auto get_parameter (damp_factor_tag)
+  {
+    return float_param ("%", 0.f, 100.f, 40.f, 0.01f);
+  }
+  //----------------------------------------------------------------------------
+  struct hp_freq_tag {};
+  void set (hp_freq_tag, float v)
+  {
+    if (v == _hp_freq) {
+      return;
+    }
+    _hp_freq = v;
+    _impl.set_hp_freq (_hp_freq * 0.01f);
+  }
+
+  static constexpr auto get_parameter (hp_freq_tag)
+  {
+    return float_param ("%", 0.f, 100.f, 40.f, 0.01f);
+  }
+  //----------------------------------------------------------------------------
+  struct lf_time_factor_tag {};
+  void set (lf_time_factor_tag, float v)
+  {
+    if (v == _lf_rt60_factor) {
+      return;
+    }
+    _lf_rt60_factor = v;
+    _impl.set_lf_time_factor (_lf_rt60_factor * 0.01f);
+  }
+
+  static constexpr auto get_parameter (lf_time_factor_tag)
+  {
+    return float_param ("%", 0.f, 100.f, 35.f, 0.01f);
+  }
+  //----------------------------------------------------------------------------
 #if 0
   //----------------------------------------------------------------------------
   struct predelay_tag {};
@@ -291,7 +351,25 @@ public:
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
+    static constexpr float invalid_val = INFINITY;
     _impl.reset (pc.get_sample_rate(), _impl.get_default_cfg_preset());
+    _time_msec       = invalid_val;
+    _in_diffusion    = invalid_val;
+    _out_diffusion   = invalid_val;
+    _early_gain      = invalid_val;
+    _late_gain       = invalid_val;
+    _early_2_late    = invalid_val;
+    _in_2_late       = invalid_val;
+    _mod_freq        = invalid_val;
+    _mod_depth       = invalid_val;
+    _mod_stereo      = invalid_val;
+    _l_matrix_angle  = invalid_val;
+    _r_matrix_angle  = invalid_val;
+    _lr_matrix_angle = invalid_val;
+    _damp_freq       = invalid_val;
+    _damp_factor     = invalid_val;
+    _hp_freq         = invalid_val;
+    _lf_rt60_factor  = invalid_val;
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -316,6 +394,10 @@ private:
   float _l_matrix_angle;
   float _r_matrix_angle;
   float _lr_matrix_angle;
+  float _damp_freq;
+  float _damp_factor;
+  float _hp_freq;
+  float _lf_rt60_factor;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

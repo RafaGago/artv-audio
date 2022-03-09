@@ -6520,6 +6520,40 @@ parameter_cpp_class_define (
   reverb::get_parameter (reverb::lr_matrix_angle_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  reverb_damp_factor,
+  n_stereo_busses,
+  param_common ("Damp", declptr<reverb>(), declptr<reverb::damp_factor_tag>()),
+  reverb::get_parameter (reverb::damp_factor_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  reverb_damp_freq,
+  n_stereo_busses,
+  param_common (
+    "Damp Freq",
+    declptr<reverb>(),
+    declptr<reverb::damp_freq_tag>()),
+  reverb::get_parameter (reverb::damp_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  reverb_lf_time_factor,
+  n_stereo_busses,
+  param_common (
+    "LF Factor",
+    declptr<reverb>(),
+    declptr<reverb::lf_time_factor_tag>()),
+  reverb::get_parameter (reverb::lf_time_factor_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  reverb_hp_freq,
+  n_stereo_busses,
+  param_common ("Hp Freq", declptr<reverb>(), declptr<reverb::hp_freq_tag>()),
+  reverb::get_parameter (reverb::hp_freq_tag {}),
+  slider_ext);
+
 using reverb_params = mp_list<
   reverb_time,
   reverb_mod_freq,
@@ -6533,7 +6567,11 @@ using reverb_params = mp_list<
   reverb_diff_out,
   reverb_mtx_l_angle,
   reverb_mtx_r_angle,
-  reverb_mtx_lr_angle>;
+  reverb_mtx_lr_angle,
+  reverb_damp_factor,
+  reverb_lf_time_factor,
+  reverb_damp_freq,
+  reverb_hp_freq>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
