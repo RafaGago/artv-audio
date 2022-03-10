@@ -134,7 +134,7 @@ public:
 
   static constexpr auto get_parameter (mod_freq_tag)
   {
-    return float_param ("%", 0.f, 100.f, 5.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 5.f, 0.001f, 0.6f);
   }
   //----------------------------------------------------------------------------
   struct mod_depth_tag {};
@@ -254,7 +254,7 @@ public:
 
   static constexpr auto get_parameter (hp_freq_tag)
   {
-    return float_param ("%", 0.f, 100.f, 40.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 35.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct lf_time_factor_tag {};

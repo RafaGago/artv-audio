@@ -485,6 +485,9 @@ private:
         late[i][0] = late_mtx[11];
         late[i][1] = late_mtx[4];
 
+        std::rotate (
+          late_mtx.begin() + 5, late_mtx.begin() + 6, late_mtx.begin() + 11);
+
         for (uint i = 0; i < 16; ++i) {
           _late[i].push (make_crange (late_mtx[i]).cast<float_x1>());
         }

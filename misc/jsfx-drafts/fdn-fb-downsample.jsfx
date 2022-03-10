@@ -810,7 +810,7 @@ BYPASS_SRC == 0 ? (
   );
 
   BYPASS_TANH = 0;
-  BYPASS_TANH == 0 && spl_op_counter & 1 == 0 ? (
+  BYPASS_TANH == 0 && spl_op_counter & 0 == 0 ? (
     i = 0;
     loop (late.feedback.size,
       late.feedback.ptr[i] = tanh_vaneev (late.feedback.ptr[i]);
@@ -818,10 +818,10 @@ BYPASS_SRC == 0 ? (
     );
   );
 
-  BYPASS_ROTATIONS = 1;
+  BYPASS_ROTATIONS = 0;
   BYPASS_ROTATIONS == 0 ? (
-    spl_op_counter & 4095 == 0 ? (
-      range_rotate_down (late.feedback.ptr + 4, 8, 1);
+    spl_op_counter & 0 == 0 ? (
+      range_rotate_down (late.feedback.ptr + 5, 6, 1);
     );
   );
 
