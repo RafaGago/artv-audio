@@ -56,14 +56,15 @@ public:
   };
   //----------------------------------------------------------------------------
   struct late_cfg {
-    static constexpr uint       n_channels = 16;
-    static constexpr uint       n_stages   = 1;
-    float                       rounding_factor;
-    float                       span_factor;
-    float                       max_chorus_width;
-    float                       max_chorus_freq;
-    u16                         max_chorus_depth_spls;
-    u16                         prime_idx;
+    static constexpr uint n_channels = 16;
+    static constexpr uint n_stages   = 1;
+    float                 rounding_factor;
+    float                 span_factor;
+    float                 max_chorus_width;
+    float                 max_chorus_freq;
+    float                 size_factor; // spls = [-1,1] * exp (size_factor)
+    u16                   max_chorus_depth_spls;
+    u16                   prime_idx;
     std::array<u16, n_channels> n_samples;
   };
   //----------------------------------------------------------------------------
@@ -166,6 +167,7 @@ public:
 
     r.late.prime_idx       = 15;
     r.late.rounding_factor = 1;
+    r.late.size_factor     = 2.f;
     r.late.span_factor     = golden_ratio * 1.5f;
 
     r.late.max_chorus_depth_spls = 150;
@@ -306,6 +308,13 @@ public:
   void set_time_msec (float msec)
   {
     _seconds = msec * 0.001f;
+    reset_times();
+  }
+  //----------------------------------------------------------------------------
+  void set_size (float size)
+  {
+    assert (size >= -1.f && size <= 1.f);
+    _size = size;
     reset_times();
   }
   //----------------------------------------------------------------------------
@@ -642,7 +651,7 @@ private:
     _late_lfo.set_phase (phase_type {phase, phase_type::normalized {}});
 
     for (uint i = 0; i < _cfg.late.n_samples.size(); ++i) {
-      _late_n_spls[i] = (float) (_cfg.late.n_samples[i]);
+      _late_n_spls_master[i] = (float) (_cfg.late.n_samples[i]);
     }
   }
   //----------------------------------------------------------------------------
@@ -688,7 +697,9 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class T, size_t Sz>
-  static uint round_array_pow2_and_accumulate (std::array<T, Sz>& arr, T mod)
+  static uint round_array_pow2_and_accumulate (
+    std::array<T, Sz>& arr,
+    T                  mod_add)
   {
     uint mem_total = 0;
 
@@ -696,8 +707,8 @@ private:
       auto spls = arr[i];
       // check constraints for block processing, notice that this is not
       // accounting interpolation
-      assert ((spls - mod) > blocksize);
-      auto new_spls = pow2_round_ceil (spls + mod);
+      assert ((spls - mod_add) > blocksize);
+      auto new_spls = pow2_round_ceil (spls + mod_add);
       assert (new_spls >= spls); // using uint16_t sometimes...
       arr[i] = new_spls;
       mem_total += new_spls;
@@ -710,9 +721,15 @@ private:
     // A single contiguous allocation (not likely to matter a lot)
     auto pre_dif_n_spls = _cfg.pre_dif.n_samples;
     auto early_n_spls   = _early_delay_spls;
-    auto late_n_spls    = _cfg.late.n_samples;
     auto int_dif_n_spls = _cfg.int_dif.n_samples;
     auto out_dif_n_spls = _cfg.out_dif.n_samples;
+
+    auto late_n_spls_tmp = _late_n_spls_master;
+    for (auto& spls : late_n_spls_tmp) {
+      spls *= exp (_cfg.late.size_factor);
+      spls += 1.f; // before casting
+    }
+    auto late_n_spls = array_cast<u32> (late_n_spls_tmp);
 
     // computing.
     uint mem_total = 0;
@@ -720,7 +737,7 @@ private:
     mem_total += round_array_pow2_and_accumulate (early_n_spls);
     mem_total += round_array_pow2_and_accumulate (
       late_n_spls,
-      (u16) (_cfg.late.max_chorus_depth_spls + catmull_rom_interp::n_points));
+      (u32) (_cfg.late.max_chorus_depth_spls + catmull_rom_interp::n_points));
     mem_total += round_array_pow2_and_accumulate (int_dif_n_spls);
     mem_total += round_array_pow2_and_accumulate (out_dif_n_spls);
 
@@ -791,18 +808,17 @@ private:
   //----------------------------------------------------------------------------
   void reset_times()
   {
+    _late_n_spls = vec_from_array (_late_n_spls_master) * (float) exp (_size);
+
     for (uint i = 0; i < late_cfg::n_channels; ++i) {
       _rt60_att_h[i] = delay_get_feedback_gain_for_time (
-        _seconds,
-        -60.f,
-        _cfg.src.srate,
-        vec_set<1> ((float) _cfg.late.n_samples[i]))[0];
+        _seconds, -60.f, _cfg.src.srate, vec_set<1> (_late_n_spls[i]))[0];
 
       _rt60_att_l[i] = delay_get_feedback_gain_for_time (
         _seconds * _lf_rt60_factor,
         -60.f,
         _cfg.src.srate,
-        vec_set<1> ((float) _cfg.late.n_samples[i]))[0];
+        vec_set<1> (_late_n_spls[i]))[0];
     }
   }
   //----------------------------------------------------------------------------
@@ -836,10 +852,12 @@ private:
   array2d<float, 2, 2>                    _late_l_angle;
   array2d<float, 2, 2>                    _late_r_angle;
   array2d<float, 2, 2>                    _late_lr_angle;
+  std::array<float, late_cfg::n_channels> _late_n_spls_master;
   vec<float, late_cfg::n_channels>        _late_n_spls;
   std::array<interpolated_delay_line<float_x1, false>, late_cfg::n_channels>
     _late;
 
+  float _size           = 1.f;
   float _in_2_late      = 1.f;
   float _er_2_late      = 1.f;
   float _mod_freq_hz    = 0.f;

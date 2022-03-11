@@ -2,7 +2,7 @@
 //slider1:enable_impulse= 0   <0 ,2, 1{Off,Impulse,White noise}> Test
 //slider2:mute=           0   <0, 1{Off,On}>    Reverb mute
 slider3:rt60_msec=      3300 <10 ,12000 ,0.1> RT60 (msec)
-slider4:size_m=         22.09 <1.2, 70, 0.001> Size1 (m)
+slider4:size=           0.   <-1, 1, 0.001> Size1 (m)
 
 slider6:early_amt=      0.7 <0, 1, 0.01> ER
 slider7:er_2_late=      0.3 <0, 1, 0.01> ER to late(%)
@@ -467,25 +467,15 @@ function reset_dc_blockers_x16 (dc*, freq, srate)
 
 reset_dc_blockers_x16 (dc, hp_f, k.src.srate);
 
-get_delay_length_samples(
-  late.delay_spls.ptr,
-  k.late.n_channels,
-  size_m,
-  size_m * k.late.delay.span_factor,
-  k.late.delay.prime_idx ,
-  k.late.delay.rounding_factor,
-  k.src.srate
-  );
 
-from_ascending_to_chnl_order (late.delay_spls.ptr, late.delay_spls.size);
-(1) ? (
 // using a preset
   memcpy(
     late.delay_spls.ptr,
     late.k.delay_preset.array2d_ptr(0),
     k.late.n_channels
     );
-);
+
+range_mul_k (late.delay_spls.ptr, exp (size * 2), late.delay_spls.size);
 
 get_rt60_gain(
   late.rt60_att_h.ptr,

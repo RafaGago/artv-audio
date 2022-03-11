@@ -122,6 +122,21 @@ public:
     return float_param ("msec", 0.1f, 15000.f, 1500.f, 1.f, 0.5f);
   }
   //----------------------------------------------------------------------------
+  struct size_tag {};
+  void set (size_tag, float v)
+  {
+    if (v == _size) {
+      return;
+    }
+    _size = v;
+    _impl.set_size (v * 0.01f);
+  }
+
+  static constexpr auto get_parameter (size_tag)
+  {
+    return float_param ("%", -100.f, 100.f, 0.f, 0.001f);
+  }
+  //----------------------------------------------------------------------------
   struct mod_freq_tag {};
   void set (mod_freq_tag, float v)
   {
@@ -354,6 +369,7 @@ public:
     static constexpr float invalid_val = INFINITY;
     _impl.reset (pc.get_sample_rate(), _impl.get_default_cfg_preset());
     _time_msec       = invalid_val;
+    _size            = invalid_val;
     _in_diffusion    = invalid_val;
     _out_diffusion   = invalid_val;
     _early_gain      = invalid_val;
@@ -382,6 +398,7 @@ private:
   fdn_stereo_8 _impl;
 
   float _time_msec;
+  float _size;
   float _in_diffusion;
   float _out_diffusion;
   float _early_gain;

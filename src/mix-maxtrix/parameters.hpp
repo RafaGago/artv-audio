@@ -6416,6 +6416,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  reverb_size,
+  n_stereo_busses,
+  param_common ("Size", declptr<reverb>(), declptr<reverb::size_tag>()),
+  reverb::get_parameter (reverb::size_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   reverb_early_gain,
   n_stereo_busses,
   param_common ("Early", declptr<reverb>(), declptr<reverb::early_gain_tag>()),
@@ -6556,6 +6563,7 @@ parameter_cpp_class_define (
 
 using reverb_params = mp_list<
   reverb_time,
+  reverb_size,
   reverb_mod_freq,
   reverb_mod_depth,
   reverb_mod_stereo,
