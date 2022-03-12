@@ -6656,10 +6656,16 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  reverb_params>;
+  reverb_params,
+  fdnverb_params>;
 
-static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "Artv reverb");
+static constexpr auto fx_choices = make_cstr_array (
+  "none",
+  "LR",
+  "Wonky",
+  "lin IIR",
+  "Artv reverb",
+  "FDN riser");
 
 #else
 // clang-format off

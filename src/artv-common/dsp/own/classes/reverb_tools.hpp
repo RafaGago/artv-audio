@@ -32,7 +32,7 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  pow2_circular_buffer<V> _mem;
+  circular_buffer<V> _mem;
 };
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

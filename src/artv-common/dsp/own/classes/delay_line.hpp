@@ -65,22 +65,59 @@ private:
   uint _pos;
 };
 //------------------------------------------------------------------------------
-// - not managed memory
-// - multichannel
+// - non-owned memory
+// - single channel
 // - random access.
-// - power of 2 capacity.
-// - channels might or not be interleaved
-// - same sized channels
-// - highest indexes = older samples
-//
-// Note: It doesn't reuse "pow2_circular_buffer" to be smaller, as "mask" and
-// "pos" is not required for each channel.
+// - not interleaved
+// - highest indexes = older samples (LIFO)
+template <class V>
+class circular_buffer {
+public:
+  //----------------------------------------------------------------------------
+  void reset (crange<V> mem)
+  {
+    assert (mem.size());
+    crange_memset (mem, 0);
+    _pos  = 0;
+    _mem  = mem.data();
+    _size = mem.size();
+  };
+  //----------------------------------------------------------------------------
+  // idx from newest to oldest, so idx=0 -> z, idx=1 -> z-1, etc.
+  V get (uint idx) const
+  {
+    assert (idx < _size);
+    idx = _pos - idx;
+    idx += idx > _size ? _size : 0;
+    return _mem[idx];
+  }
+  //----------------------------------------------------------------------------
+  V operator[] (uint idx) const { return get (idx); }
+  //----------------------------------------------------------------------------
+  void push (const V& value)
+  {
+    ++_pos;
+    _pos       = _pos < _size ? _pos : 0;
+    _mem[_pos] = value;
+  }
+  //----------------------------------------------------------------------------
+  uint size() const { return _size; }
+  //----------------------------------------------------------------------------
+private:
+  V*   _mem;
+  uint _pos;
+  uint _size;
+};
 //------------------------------------------------------------------------------
-
 namespace detail {
+
+//------------------------------------------------------------------------------
+template <class T, bool Use_pow2_sizes_sizes>
+struct static_delay_line_base;
+
 //------------------------------------------------------------------------------
 template <class T>
-struct static_delay_line_base {
+struct static_delay_line_base<T, true> {
 public:
   //----------------------------------------------------------------------------
   using value_type = T;
@@ -107,17 +144,61 @@ public:
   uint _pos;
   uint _n_channels;
 };
+
+//------------------------------------------------------------------------------
+template <class T>
+struct static_delay_line_base<T, false> {
+public:
+  //----------------------------------------------------------------------------
+  using value_type = T;
+  //----------------------------------------------------------------------------
+  constexpr void reset (crange<T> mem, uint n_channels)
+  {
+    uint size = mem.size() / n_channels;
+    assert ((mem.size() % n_channels) == 0);
+    assert (size != 0);
+
+    crange_memset (mem, 0);
+    _z          = mem.data();
+    _size       = size;
+    _pos        = 0;
+    _n_channels = n_channels;
+  }
+  //----------------------------------------------------------------------------
+  constexpr uint size() const { return _size; }
+  //----------------------------------------------------------------------------
+  constexpr uint n_channels() const { return _n_channels; }
+  //----------------------------------------------------------------------------
+  T*   _z;
+  uint _size;
+  uint _pos;
+  uint _n_channels;
+};
+
 //------------------------------------------------------------------------------
 } // namespace detail
 
-template <class T, bool Interleaved>
+//------------------------------------------------------------------------------
+// - not managed memory
+// - multichannel
+// - random access.
+// - Optional power of 2 capacity optimization.
+// - channels might or not be interleaved
+// - same sized channels
+// - highest indexes = older samples
+//
+// Note: It doesn't reuse "pow2_circular_buffer" to be smaller, as "mask" and
+// "pos" is not required for each channel.
+//------------------------------------------------------------------------------
+template <class T, bool Interleaved, bool Use_pow2_sizes_sizes>
 class static_delay_line;
 
-// interleaved overload
+// interleaved and pow2 overload
 template <class T>
-class static_delay_line<T, true> : private detail::static_delay_line_base<T> {
+class static_delay_line<T, true, true>
+  : private detail::static_delay_line_base<T, true> {
 private:
-  using base = detail::static_delay_line_base<T>;
+  using base = detail::static_delay_line_base<T, true>;
 
 public:
   //----------------------------------------------------------------------------
@@ -150,11 +231,53 @@ public:
   //----------------------------------------------------------------------------
 };
 
-// non-interleaved overload
+// interleaved non pow2 overload
 template <class T>
-class static_delay_line<T, false> : private detail::static_delay_line_base<T> {
+class static_delay_line<T, true, false>
+  : private detail::static_delay_line_base<T, false> {
 private:
-  using base = detail::static_delay_line_base<T>;
+  using base = detail::static_delay_line_base<T, false>;
+
+public:
+  //----------------------------------------------------------------------------
+  using base::n_channels;
+  using base::reset;
+  using base::size;
+  using value_type = typename base::value_type;
+  using time_type  = uint;
+  //----------------------------------------------------------------------------
+  constexpr value_type get (time_type delay_spls, uint chnl) const
+  {
+    auto& t = *this;
+
+    assert (delay_spls <= t._size && "Out of range");
+    assert (chnl < t._n_channels);
+
+    uint pos = t._pos - delay_spls;
+    pos += pos > t._size ? t._size : 0;
+
+    return t._z[pos * t._n_channels + chnl];
+  }
+  //----------------------------------------------------------------------------
+  constexpr void push (const crange<value_type> row)
+  {
+    auto& t = *this;
+
+    assert (row.size() >= t._n_channels);
+    ++t._pos;
+    t._pos = t._pos < t._size ? t._pos : 0;
+    memcpy (
+      &t._z[t._pos * t._n_channels], row.data(), sizeof (T) * t._n_channels);
+  }
+  //----------------------------------------------------------------------------
+};
+
+// non-interleaved pow 2 overload
+template <class T>
+class static_delay_line<T, false, true>
+  : private detail::static_delay_line_base<T, true> {
+private:
+  using base = detail::static_delay_line_base<T, true>;
 
 public:
   //----------------------------------------------------------------------------
@@ -189,8 +312,51 @@ public:
   }
   //----------------------------------------------------------------------------
 };
-namespace detail {
 
+// non-interleaved non-pow 2 overload
+template <class T>
+class static_delay_line<T, false, false>
+  : private detail::static_delay_line_base<T, false> {
+private:
+  using base = detail::static_delay_line_base<T, false>;
+
+public:
+  //----------------------------------------------------------------------------
+  using base::n_channels;
+  using base::reset;
+  using base::size;
+  using value_type = typename base::value_type;
+  using time_type  = uint;
+  //----------------------------------------------------------------------------
+  constexpr T get (time_type delay_spls, uint chnl) const
+  {
+    auto& t = *this;
+
+    assert (delay_spls <= t._size && "Out of range");
+    assert (chnl < t._n_channels);
+
+    uint pos = t._pos - delay_spls;
+    pos += pos > t._size ? t._size : 0;
+    uint chmem = t._size * chnl;
+    return t._z[chmem + pos];
+  }
+  //----------------------------------------------------------------------------
+  constexpr void push (const crange<value_type> row)
+  {
+    auto& t = *this;
+
+    assert (row.size() >= t._n_channels);
+    ++t._pos;
+    t._pos = t._pos < t._size ? t._pos : 0;
+
+    for (uint i = 0, chmem = 0; i < t._n_channels; ++i, chmem += t._size) {
+      t._z[chmem + t._pos] = row[i];
+    }
+  }
+  //----------------------------------------------------------------------------
+};
+
+namespace detail {
 //------------------------------------------------------------------------------
 // "Delay_line_base" = the underlying buffer type, e.g. "static_delay_line".
 template <class Delay_line_base>
@@ -363,45 +529,52 @@ private:
 // - not managed memory
 // - multichannel
 // - random access interpolator.
-// - power of 2 capacity.
+// - optional power of 2 capacity optimization.
 // - channels might or not be interleaved
 // - same sized channels
 // - highest indexes = older samples
 // - fractional delay line support
 //------------------------------------------------------------------------------
-template <class T, bool Interleaved = false>
-using interpolated_delay_line
-  = detail::interpolated_delay_line<static_delay_line<T, Interleaved>>;
+template <class T, bool Interleaved = false, bool Use_pow2_sizes = false>
+using interpolated_delay_line = detail::interpolated_delay_line<
+  static_delay_line<T, Interleaved, Use_pow2_sizes>>;
 
 //------------------------------------------------------------------------------
 // - not managed memory
 // - multichannel
 // - stateful interpolator.
-// - power of 2 capacity.
+// - optional power of 2 capacity optimization.
 // - channels might or not be interleaved
 // - same sized channels
 // - highest indexes = older samples
 // - fractional delay line support
 //------------------------------------------------------------------------------
-template <class T, class Interp = thiran_interp<1>, bool Interleaved = false>
-using statefully_interpolated_delay_line = detail::
-  statefully_interpolated_delay_line<static_delay_line<T, Interleaved>, Interp>;
+template <
+  class T,
+  class Interp        = thiran_interp<1>,
+  bool Interleaved    = false,
+  bool Use_pow2_sizes = false>
+using statefully_interpolated_delay_line
+  = detail::statefully_interpolated_delay_line<
+    static_delay_line<T, Interleaved, Use_pow2_sizes>,
+    Interp>;
 
 //------------------------------------------------------------------------------
 // - not managed memory
 // - multichannel
 // - random access interpolator.
-// - power of 2 capacity.
+// - optional power of 2 capacity optimization.
 // - channels might or not be interleaved
 // - same sized channels
 // - highest indexes = older samples
 // - fractional delay line support
 // - convenience functions for taking modulation
 //------------------------------------------------------------------------------
-template <class T, bool Interleaved = false>
-class modulable_delay_line : private interpolated_delay_line<T, Interleaved> {
+template <class T, bool Interleaved = false, bool Use_pow2_sizes = false>
+class modulable_delay_line
+  : private interpolated_delay_line<T, Interleaved, Use_pow2_sizes> {
 private:
-  using base = interpolated_delay_line<T, Interleaved>;
+  using base = interpolated_delay_line<T, Interleaved, Use_pow2_sizes>;
 
 public:
   //----------------------------------------------------------------------------
@@ -473,16 +646,18 @@ struct thiran_interp_2_df1 {
 
 //------------------------------------------------------------------------------
 // Slowly modulable Thiran2-frankenstein.
-template <class T, bool Interleaved = false>
+template <class T, bool Interleaved = false, bool Use_pow2_sizes = false>
 class modulable_thiran_2
   : private statefully_interpolated_delay_line<
       T,
       detail::thiran_interp_2_df1,
-      Interleaved> {
+      Interleaved,
+      Use_pow2_sizes> {
   using base = statefully_interpolated_delay_line<
     T,
     detail::thiran_interp_2_df1,
-    Interleaved>;
+    Interleaved,
+    Use_pow2_sizes>;
 
 public:
   //----------------------------------------------------------------------------
@@ -548,7 +723,7 @@ private:
 // - not interleaved
 // - same sized channels
 // - highest indexes = older samples
-template <class T, bool Interleaved>
+template <class T, bool Interleaved, bool Use_pow2_sizes = false>
 class dynamic_delay_line {
 public:
   //----------------------------------------------------------------------------
@@ -559,7 +734,9 @@ public:
   //----------------------------------------------------------------------------
   void reset (uint n_channels, time_type max_delay)
   {
-    max_delay = pow2_round_ceil (max_delay);
+    if constexpr (Use_pow2_sizes) {
+      max_delay = pow2_round_ceil (max_delay);
+    }
     do_delete();
     uint elems = max_delay * n_channels;
     _mem       = new value_type[elems];
@@ -584,8 +761,8 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  static_delay_line<T, Interleaved> _z;
-  T*                                _mem = nullptr;
+  static_delay_line<T, Interleaved, Use_pow2_sizes> _z;
+  T*                                                _mem = nullptr;
 };
 //------------------------------------------------------------------------------
 // Basic reverb building block. Strictly not a delay line. Not sure if it

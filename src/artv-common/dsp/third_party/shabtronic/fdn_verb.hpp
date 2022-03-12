@@ -70,9 +70,9 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  static_delay_line<V, true> _z;
-  std::array<uint, size>     _t {};
-  V                          _fb {};
+  static_delay_line<V, true, true> _z;
+  std::array<uint, size>           _t {};
+  V                                _fb {};
 };
 //------------------------------------------------------------------------------
 class fdn_verb {
@@ -471,8 +471,8 @@ private:
   enum filter_type { filter_lp, filter_hp };
   using filter_types = mp_list<andy::svf_lowpass, andy::svf_highpass>;
 
-  lfo<1>                         _lfo;
-  modulable_delay_line<float_x1> _mod;
+  lfo<1>                                      _lfo;
+  modulable_delay_line<float_x1, false, true> _mod;
 
   std::array<schroeder_allpass<float_x1>, ap_size>              _ap;
   part_classes<filter_types, float_x1>                          _filters;

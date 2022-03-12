@@ -2,7 +2,6 @@
 
 #include <algorithm>
 
-#include "artv-common/dsp/own/classes/delay_line.hpp"
 #include "artv-common/dsp/own/classes/fir.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"

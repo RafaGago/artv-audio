@@ -678,7 +678,7 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class T, size_t A, size_t B>
-  static uint round_array_pow2_and_accumulate (array2d<T, A, B>& arr)
+  static uint convert_to_max_sizes (array2d<T, A, B>& arr)
   {
     uint mem_total = 0;
     for (uint i = 0; i < B; ++i) {
@@ -687,7 +687,7 @@ private:
         // check constraints for block processing, notice that this is not
         // accounting interpolation
         assert (spls > blocksize);
-        auto new_spls = pow2_round_ceil (spls);
+        auto new_spls = spls + 1;
         assert (new_spls >= spls); // using uint16_t sometimes...
         arr[i][j] = new_spls;
         mem_total += new_spls;
@@ -697,9 +697,7 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class T, size_t Sz>
-  static uint round_array_pow2_and_accumulate (
-    std::array<T, Sz>& arr,
-    T                  mod_add)
+  static uint convert_to_max_sizes (std::array<T, Sz>& arr, T mod_add)
   {
     uint mem_total = 0;
 
@@ -708,7 +706,7 @@ private:
       // check constraints for block processing, notice that this is not
       // accounting interpolation
       assert ((spls - mod_add) > blocksize);
-      auto new_spls = pow2_round_ceil (spls + mod_add);
+      auto new_spls = spls + mod_add + 1;
       assert (new_spls >= spls); // using uint16_t sometimes...
       arr[i] = new_spls;
       mem_total += new_spls;
@@ -719,27 +717,27 @@ private:
   void setup_memory()
   {
     // A single contiguous allocation (not likely to matter a lot)
-    auto pre_dif_n_spls = _cfg.pre_dif.n_samples;
-    auto early_n_spls   = _early_delay_spls;
-    auto int_dif_n_spls = _cfg.int_dif.n_samples;
-    auto out_dif_n_spls = _cfg.out_dif.n_samples;
+    auto pre_dif_sizes = _cfg.pre_dif.n_samples;
+    auto early_sizes   = _early_delay_spls;
+    auto int_dif_sizes = _cfg.int_dif.n_samples;
+    auto out_dif_sizes = _cfg.out_dif.n_samples;
 
-    auto late_n_spls_tmp = _late_n_spls_master;
-    for (auto& spls : late_n_spls_tmp) {
+    auto late_sizes_tmp = _late_n_spls_master;
+    for (auto& spls : late_sizes_tmp) {
       spls *= exp (_cfg.late.size_factor);
       spls += 1.f; // before casting
     }
-    auto late_n_spls = array_cast<u32> (late_n_spls_tmp);
+    auto late_sizes = array_cast<u32> (late_sizes_tmp);
 
     // computing.
     uint mem_total = 0;
-    mem_total += round_array_pow2_and_accumulate (pre_dif_n_spls);
-    mem_total += round_array_pow2_and_accumulate (early_n_spls);
-    mem_total += round_array_pow2_and_accumulate (
-      late_n_spls,
+    mem_total += convert_to_max_sizes (pre_dif_sizes);
+    mem_total += convert_to_max_sizes (early_sizes);
+    mem_total += convert_to_max_sizes (
+      late_sizes,
       (u32) (_cfg.late.max_chorus_depth_spls + catmull_rom_interp::n_points));
-    mem_total += round_array_pow2_and_accumulate (int_dif_n_spls);
-    mem_total += round_array_pow2_and_accumulate (out_dif_n_spls);
+    mem_total += convert_to_max_sizes (int_dif_sizes);
+    mem_total += convert_to_max_sizes (out_dif_sizes);
 
     // allocating
     _mem.clear();
@@ -748,31 +746,31 @@ private:
     // assigning memory
     // pre diffusor
     auto mem = make_crange (_mem);
-    for (uint i = 0; i < pre_dif_n_spls.size(); ++i) {
-      for (uint j = 0; j < pre_dif_n_spls[0].size(); ++j) {
-        _pre_dif[i][j].reset (mem.cut_head (pre_dif_n_spls[i][j]));
+    for (uint i = 0; i < pre_dif_sizes.size(); ++i) {
+      for (uint j = 0; j < pre_dif_sizes[0].size(); ++j) {
+        _pre_dif[i][j].reset (mem.cut_head (pre_dif_sizes[i][j]));
       }
     }
     // early
-    for (uint i = 0; i < early_n_spls.size(); ++i) {
-      for (uint j = 0; j < early_n_spls[0].size(); ++j) {
-        _early[i][j].reset (mem.cut_head (early_n_spls[i][j]));
+    for (uint i = 0; i < early_sizes.size(); ++i) {
+      for (uint j = 0; j < early_sizes[0].size(); ++j) {
+        _early[i][j].reset (mem.cut_head (early_sizes[i][j]));
       }
     }
     // late
-    for (uint i = 0; i < late_n_spls.size(); ++i) {
-      _late[i].reset (mem.cut_head (late_n_spls[i]), 1);
+    for (uint i = 0; i < late_sizes.size(); ++i) {
+      _late[i].reset (mem.cut_head (late_sizes[i]), 1);
     }
     // internal diffusor
-    for (uint i = 0; i < int_dif_n_spls.size(); ++i) {
-      for (uint j = 0; j < int_dif_n_spls[0].size(); ++j) {
-        _int_dif[i][j].reset (mem.cut_head (int_dif_n_spls[i][j]));
+    for (uint i = 0; i < int_dif_sizes.size(); ++i) {
+      for (uint j = 0; j < int_dif_sizes[0].size(); ++j) {
+        _int_dif[i][j].reset (mem.cut_head (int_dif_sizes[i][j]));
       }
     }
     // output diffusor
-    for (uint i = 0; i < out_dif_n_spls.size(); ++i) {
-      for (uint j = 0; j < out_dif_n_spls[0].size(); ++j) {
-        _out_dif[i][j].reset (mem.cut_head (out_dif_n_spls[i][j]));
+    for (uint i = 0; i < out_dif_sizes.size(); ++i) {
+      for (uint j = 0; j < out_dif_sizes[0].size(); ++j) {
+        _out_dif[i][j].reset (mem.cut_head (out_dif_sizes[i][j]));
       }
     }
   }
@@ -790,8 +788,8 @@ private:
   //----------------------------------------------------------------------------
   static array2d<float, 2, 2> set_rotation_angle (float weight)
   {
-    weight *= 0.7f;
-    weight += 0.15f; // 0.15 to 0.85
+    weight *= 0.8f;
+    weight += 0.1f; // 0.1 to 0.8
 
     float w1a = std::cos (weight * 0.5f * M_PI);
     float w1b = std::sqrt (1.f - w1a * w1a);
