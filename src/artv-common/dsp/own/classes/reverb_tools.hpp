@@ -14,10 +14,11 @@
 
 namespace artv {
 
-//------------------------------------------------------------------------------
-// Basic reverb building block. Strictly not a delay line. Not sure if it
-// belongs here. It probably needs to be moved.
-template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+namespace detail {
+template <
+  class V,
+  class Circ_bufer,
+  enable_if_vec_of_float_point_t<V>* = nullptr>
 class allpass {
 public:
   //----------------------------------------------------------------------------
@@ -32,8 +33,20 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  circular_buffer<V> _mem;
+  Circ_bufer _mem;
 };
+
+} // namespace detail
+//------------------------------------------------------------------------------
+template <class V, bool Use_pow2_opt = true>
+using allpass = detail::allpass<
+  V,
+  std::
+    conditional_t<Use_pow2_opt, pow2_circular_buffer<V>, circular_buffer<V>>>;
+//------------------------------------------------------------------------------
+// Basic reverb building block. Strictly not a delay line. Not sure if it
+// belongs here. It probably needs to be moved.
+
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static constexpr V delay_get_feedback_gain_for_time (

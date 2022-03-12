@@ -535,7 +535,7 @@ private:
 // - highest indexes = older samples
 // - fractional delay line support
 //------------------------------------------------------------------------------
-template <class T, bool Interleaved = false, bool Use_pow2_sizes = false>
+template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
 using interpolated_delay_line = detail::interpolated_delay_line<
   static_delay_line<T, Interleaved, Use_pow2_sizes>>;
 
@@ -553,7 +553,7 @@ template <
   class T,
   class Interp        = thiran_interp<1>,
   bool Interleaved    = false,
-  bool Use_pow2_sizes = false>
+  bool Use_pow2_sizes = true>
 using statefully_interpolated_delay_line
   = detail::statefully_interpolated_delay_line<
     static_delay_line<T, Interleaved, Use_pow2_sizes>,
@@ -570,7 +570,7 @@ using statefully_interpolated_delay_line
 // - fractional delay line support
 // - convenience functions for taking modulation
 //------------------------------------------------------------------------------
-template <class T, bool Interleaved = false, bool Use_pow2_sizes = false>
+template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
 class modulable_delay_line
   : private interpolated_delay_line<T, Interleaved, Use_pow2_sizes> {
 private:
@@ -646,7 +646,7 @@ struct thiran_interp_2_df1 {
 
 //------------------------------------------------------------------------------
 // Slowly modulable Thiran2-frankenstein.
-template <class T, bool Interleaved = false, bool Use_pow2_sizes = false>
+template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
 class modulable_thiran_2
   : private statefully_interpolated_delay_line<
       T,
@@ -723,7 +723,7 @@ private:
 // - not interleaved
 // - same sized channels
 // - highest indexes = older samples
-template <class T, bool Interleaved, bool Use_pow2_sizes = false>
+template <class T, bool Interleaved, bool Use_pow2_sizes = true>
 class dynamic_delay_line {
 public:
   //----------------------------------------------------------------------------

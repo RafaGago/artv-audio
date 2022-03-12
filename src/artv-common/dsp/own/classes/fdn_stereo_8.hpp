@@ -687,7 +687,7 @@ private:
         // check constraints for block processing, notice that this is not
         // accounting interpolation
         assert (spls > blocksize);
-        auto new_spls = spls + 1;
+        auto new_spls = pow2_round_ceil (spls + 1);
         assert (new_spls >= spls); // using uint16_t sometimes...
         arr[i][j] = new_spls;
         mem_total += new_spls;
@@ -706,7 +706,7 @@ private:
       // check constraints for block processing, notice that this is not
       // accounting interpolation
       assert ((spls - mod_add) > blocksize);
-      auto new_spls = spls + mod_add + 1;
+      auto new_spls = pow2_round_ceil (spls + mod_add + 1);
       assert (new_spls >= spls); // using uint16_t sometimes...
       arr[i] = new_spls;
       mem_total += new_spls;
