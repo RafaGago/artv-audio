@@ -287,15 +287,22 @@ public:
     return float_param ("%", 0.f, 100.f, 35.f, 0.01f);
   }
   //----------------------------------------------------------------------------
-#if 0
-  //----------------------------------------------------------------------------
   struct predelay_tag {};
-  void set (predelay_tag, float v) {}
+  void set (predelay_tag, float v)
+  {
+    if (v == _predelay) {
+      return;
+    }
+    _predelay = v;
+    _impl.set_predelay (v);
+  }
 
   static constexpr auto get_parameter (predelay_tag)
   {
-    return float_param ("sec", 0.01f, 2.f, 0.1f, 0.01f, 0.6f);
+    return float_param ("sixteenths", 0.f, 16.f, 0.f, 0.001f);
   }
+  //----------------------------------------------------------------------------
+#if 0
   //----------------------------------------------------------------------------
   struct er_late_tag {};
   void set (er_late_tag, float v) {}
@@ -366,26 +373,31 @@ public:
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
+    _impl.reset (
+      pc.get_sample_rate(),
+      pc.get_play_state().bpm,
+      _impl.get_default_cfg_preset());
+
     static constexpr float invalid_val = INFINITY;
-    _impl.reset (pc.get_sample_rate(), _impl.get_default_cfg_preset());
-    _time_msec       = invalid_val;
-    _size            = invalid_val;
-    _in_diffusion    = invalid_val;
-    _out_diffusion   = invalid_val;
-    _early_gain      = invalid_val;
-    _late_gain       = invalid_val;
-    _early_2_late    = invalid_val;
-    _in_2_late       = invalid_val;
-    _mod_freq        = invalid_val;
-    _mod_depth       = invalid_val;
-    _mod_stereo      = invalid_val;
-    _l_matrix_angle  = invalid_val;
-    _r_matrix_angle  = invalid_val;
-    _lr_matrix_angle = invalid_val;
-    _damp_freq       = invalid_val;
-    _damp_factor     = invalid_val;
-    _hp_freq         = invalid_val;
-    _lf_rt60_factor  = invalid_val;
+    _time_msec                         = invalid_val;
+    _size                              = invalid_val;
+    _in_diffusion                      = invalid_val;
+    _out_diffusion                     = invalid_val;
+    _early_gain                        = invalid_val;
+    _late_gain                         = invalid_val;
+    _early_2_late                      = invalid_val;
+    _in_2_late                         = invalid_val;
+    _mod_freq                          = invalid_val;
+    _mod_depth                         = invalid_val;
+    _mod_stereo                        = invalid_val;
+    _l_matrix_angle                    = invalid_val;
+    _r_matrix_angle                    = invalid_val;
+    _lr_matrix_angle                   = invalid_val;
+    _damp_freq                         = invalid_val;
+    _damp_factor                       = invalid_val;
+    _hp_freq                           = invalid_val;
+    _lf_rt60_factor                    = invalid_val;
+    _predelay                          = invalid_val;
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -415,6 +427,7 @@ private:
   float _damp_factor;
   float _hp_freq;
   float _lf_rt60_factor;
+  float _predelay;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

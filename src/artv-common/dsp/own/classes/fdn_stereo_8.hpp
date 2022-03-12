@@ -347,7 +347,15 @@ public:
     reset_times();
   }
   //----------------------------------------------------------------------------
-  void reset (uint samplerate, cfg const& cfg)
+  void set_predelay (float sixteenths)
+  {
+    assert (sixteenths >= 0.f && sixteenths <= 16.f);
+    float predelay_spls = sixteenths * _beat_16th_spls;
+    predelay_spls       = predelay_spls - (float) _pre_delay_lat_spls;
+    _pre_delay_spls     = predelay_spls <= 0.f ? 0 : (uint) predelay_spls;
+  }
+  //----------------------------------------------------------------------------
+  void reset (uint samplerate, float bpm, cfg const& cfg)
   {
     _cfg = cfg;
 
@@ -363,13 +371,15 @@ public:
       blocksize,
       6 * 1024);
 
+    _pre_delay_lat_spls = get_in_diff_delay();
+    float sixtenths_sec = bpm * (1.f / 60.f) * (1.f / 60.f);
+    _beat_16th_spls     = sixtenths_sec * (float) samplerate;
+
     setup_in_diffusor();
     setup_early();
     setup_late();
     setup_internal_diffusor();
     setup_memory();
-
-    // TODO: check no value under (blocksize) 16 after modulation
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -381,6 +391,15 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
+  //----------------------------------------------------------------------------
+  uint get_in_diff_delay() const
+  {
+    uint ret = 0;
+    for (auto v : _cfg.pre_dif.n_samples) {
+      ret += std::max (v[0], v[0]);
+    }
+    return ret;
+  }
   //----------------------------------------------------------------------------
   void process_block (crange<std::array<float, 2>> io)
   {
@@ -411,10 +430,19 @@ private:
         g += mod * _cfg.pre_dif.g_mod_depth;
         mod_g[i] = vec_to_array (g);
       }
-      for (uint i = 0; i < block.size(); ++i) {
-        // hardcoding 2's to avoid unreadability, so "static_asserting"
-        static_assert (n_channels == 2);
-        pre_dif[i] = block[i];
+      // hardcoding 2's to avoid unreadability, so "static_asserting"
+      static_assert (n_channels == 2);
+      if (_pre_delay_spls) {
+        for (uint i = 0; i < block.size(); ++i) {
+          _pre_delay.push (block[i]);
+          pre_dif[i][0] = _pre_delay.get (_pre_delay_spls, 0);
+          pre_dif[i][1] = _pre_delay.get (_pre_delay_spls, 1);
+        }
+      }
+      else {
+        for (uint i = 0; i < block.size(); ++i) {
+          pre_dif[i] = block[i];
+        }
       }
 
       for (uint st = 0; st < _pre_dif.size(); ++st) {
@@ -474,8 +502,8 @@ private:
         auto late_mtx     = make_crange (late_mtx_arr);
 
         late_mtx[0] += pre_dif[i][0] * _in_2_late;
-        late_mtx[1] += early[i][0] * _er_2_late;
-        late_mtx[14] += early[i][1] * _er_2_late;
+        late_mtx[1] += early[i][1] * _er_2_late;
+        late_mtx[14] += early[i][0] * _er_2_late;
         late_mtx[15] += pre_dif[i][1] * _in_2_late;
 
         // diffusion
@@ -739,13 +767,22 @@ private:
     mem_total += convert_to_max_sizes (int_dif_sizes);
     mem_total += convert_to_max_sizes (out_dif_sizes);
 
+    // pre_delay
+    uint pre_delay_spls_max = (uint) (_beat_16th_spls * 16.f + 1.f);
+    pre_delay_spls_max -= _pre_delay_lat_spls;
+    pre_delay_spls_max *= 2;
+    pre_delay_spls_max = pow2_round_ceil (pre_delay_spls_max);
+    mem_total += pre_delay_spls_max;
+
     // allocating
     _mem.clear();
     _mem.resize (mem_total);
 
     // assigning memory
-    // pre diffusor
+    // pre delay
     auto mem = make_crange (_mem);
+    _pre_delay.reset (mem.cut_head (pre_delay_spls_max).cast (float {}), 2);
+    // pre diffusor
     for (uint i = 0; i < pre_dif_sizes.size(); ++i) {
       for (uint j = 0; j < pre_dif_sizes[0].size(); ++j) {
         _pre_dif[i][j].reset (mem.cut_head (pre_dif_sizes[i][j]));
@@ -838,6 +875,10 @@ private:
   //----------------------------------------------------------------------------
   block_resampler<float, 2> _resampler;
 
+  static_delay_line<float, true, true> _pre_delay;
+  uint                                 _pre_delay_lat_spls;
+  uint                                 _pre_delay_spls;
+
   reverb_array<allpass<float_x1>, pre_dif_cfg> _pre_dif;
   lfo<2>                                       _pre_dif_lfo;
   float                                        _pre_dif_g;
@@ -892,6 +933,7 @@ private:
   std::vector<float_x1> _mem;
 
   float _seconds;
+  float _beat_16th_spls;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

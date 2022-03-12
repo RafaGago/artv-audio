@@ -6423,6 +6423,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  reverb_predelay,
+  n_stereo_busses,
+  param_common ("Predelay", declptr<reverb>(), declptr<reverb::predelay_tag>()),
+  reverb::get_parameter (reverb::predelay_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   reverb_early_gain,
   n_stereo_busses,
   param_common ("Early", declptr<reverb>(), declptr<reverb::early_gain_tag>()),
@@ -6564,6 +6571,7 @@ parameter_cpp_class_define (
 using reverb_params = mp_list<
   reverb_time,
   reverb_size,
+  reverb_predelay,
   reverb_mod_freq,
   reverb_mod_depth,
   reverb_mod_stereo,
@@ -6656,16 +6664,10 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  reverb_params,
-  fdnverb_params>;
+  reverb_params>;
 
-static constexpr auto fx_choices = make_cstr_array (
-  "none",
-  "LR",
-  "Wonky",
-  "lin IIR",
-  "Artv reverb",
-  "FDN riser");
+static constexpr auto fx_choices
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "Artv reverb");
 
 #else
 // clang-format off
