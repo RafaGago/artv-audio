@@ -6485,10 +6485,10 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  reverb_mod_stereo,
+  reverb_mod_wave,
   n_stereo_busses,
-  param_common ("Mod St", declptr<reverb>(), declptr<reverb::mod_stereo_tag>()),
-  reverb::get_parameter (reverb::mod_stereo_tag {}),
+  param_common ("Mod Wave", declptr<reverb>(), declptr<reverb::mod_wave_tag>()),
+  reverb::get_parameter (reverb::mod_wave_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -6588,7 +6588,7 @@ using reverb_params = mp_list<
   reverb_hp_freq,
   reverb_mod_freq,
   reverb_mod_depth,
-  reverb_mod_stereo,
+  reverb_mod_wave,
   reverb_mtx_lr_angle,
   reverb_mtx_l_angle,
   reverb_mtx_r_angle,

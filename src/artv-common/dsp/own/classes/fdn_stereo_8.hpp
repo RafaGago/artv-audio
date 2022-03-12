@@ -170,7 +170,7 @@ public:
     r.late.size_factor     = 2.f;
     r.late.span_factor     = golden_ratio * 1.5f;
 
-    r.late.max_chorus_depth_spls = 150;
+    r.late.max_chorus_depth_spls = 300; // goes to not subtle at all
     r.late.max_chorus_freq       = 7;
     r.late.max_chorus_width      = 0.5f;
 
@@ -265,7 +265,8 @@ public:
   void set_mod_depth (float factor)
   {
     assert (factor >= 0.f && factor <= 1.f);
-    _mod_depth_spls = factor * factor * (float) _cfg.late.max_chorus_depth_spls;
+    _mod_depth_spls
+      = factor * factor * factor * (float) _cfg.late.max_chorus_depth_spls;
   }
   //----------------------------------------------------------------------------
   void set_mod_stereo (float factor)
@@ -273,6 +274,12 @@ public:
     assert (factor >= -1.f && factor <= 1.f);
     _mod_stereo = factor;
     reset_late_lfo();
+  }
+  //----------------------------------------------------------------------------
+  void set_mod_wave (uint wv)
+  {
+    assert (wv < modwv_count);
+    _late_wave = wv;
   }
   //----------------------------------------------------------------------------
   void set_early_to_late (float factor)
@@ -428,10 +435,11 @@ private:
       auto block = io.cut_head (std::min<uint> (io.size(), blocksize));
 
       // pre diffusor ----------------------------------------------------------
+
       // AP gain LFO
       auto mod_g = make_crange (tmp);
       for (uint i = 0; i < block.size(); ++i) {
-        vec<float, 2> mod = _pre_dif_lfo.tick_filt_sample_and_hold();
+        vec<float, 2> mod = _pre_dif_lfo.tick_trapezoid (vec_set<2> (0.75f));
         vec<float, 2> g   = vec_set<2> (_pre_dif_g);
         g += mod * _cfg.pre_dif.g_mod_depth;
         mod_g[i] = vec_to_array (g);
@@ -556,7 +564,30 @@ private:
           _late[i].push (make_crange (late_mtx[i]).cast<float_x1>());
         }
         // chorus
-        vec<float, 16> n_spls = _late_lfo.tick_filt_sample_and_hold();
+        vec<float, 16> n_spls;
+        switch (_late_wave) {
+        case modwv_sh:
+          n_spls = _late_lfo.tick_filt_sample_and_hold();
+          break;
+        case modwv_sin:
+          n_spls = _late_lfo.tick_sine();
+          break;
+        case modwv_tri:
+          n_spls = _late_lfo.tick_triangle();
+          break;
+        case modwv_sqr:
+          n_spls = _late_lfo.tick_square();
+          break;
+        case modwv_saw:
+          n_spls = _late_lfo.tick_saw();
+          break;
+        case modwv_tra:
+          n_spls = _late_lfo.tick_trapezoid (vec_set<16> (0.75f));
+          break;
+        default:
+          assert (false);
+          break;
+        };
         n_spls *= _mod_depth_spls;
         n_spls += _late_n_spls;
 
@@ -906,6 +937,16 @@ private:
   template <class T, class Cfg>
   using reverb_array = array2d<T, Cfg::n_channels, Cfg::n_stages>;
   //----------------------------------------------------------------------------
+  enum mod_wave {
+    modwv_sh,
+    modwv_sin,
+    modwv_tri,
+    modwv_sqr,
+    modwv_saw,
+    modwv_tra,
+    modwv_count,
+  };
+
   block_resampler<float, 2> _resampler;
 
   static_delay_line<float, true, true> _pre_delay;
@@ -930,6 +971,7 @@ private:
   array2d<float, 2, 2>                    _late_lr_angle;
   std::array<float, late_cfg::n_channels> _late_n_spls_master;
   vec<float, late_cfg::n_channels>        _late_n_spls;
+  uint                                    _late_wave = 0;
   std::array<interpolated_delay_line<float_x1, false>, late_cfg::n_channels>
     _late;
 

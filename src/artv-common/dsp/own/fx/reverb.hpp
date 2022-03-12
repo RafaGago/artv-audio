@@ -182,6 +182,25 @@ public:
     return float_param ("%", -100.f, 100.f, -50.f, 0.01f);
   }
   //----------------------------------------------------------------------------
+  struct mod_wave_tag {};
+  void set (mod_wave_tag, uint v)
+  {
+    if (v == _mod_wave) {
+      return;
+    }
+    _mod_wave = v;
+    _impl.set_mod_wave (v);
+  }
+
+  static constexpr auto get_parameter (mod_wave_tag)
+  {
+    return choice_param (
+      0,
+      make_cstr_array (
+        "Sample&Hold", "Sine", "Triangle", "Square", "Saw", "Trapezoid"),
+      10);
+  }
+  //----------------------------------------------------------------------------
   struct l_matrix_angle_tag {};
   void set (l_matrix_angle_tag, float v)
   {
@@ -361,6 +380,8 @@ public:
       pc.get_play_state().bpm,
       _impl.get_default_cfg_preset());
 
+    _impl.set_mod_stereo (-0.5f);
+
     static constexpr float invalid_val = INFINITY;
     _time_msec                         = invalid_val;
     _size                              = invalid_val;
@@ -413,6 +434,7 @@ private:
   float _lf_rt60_factor;
   float _predelay;
   float _gap;
+  uint  _mod_wave;
 };
 //------------------------------------------------------------------------------
 } // namespace artv
