@@ -368,6 +368,8 @@ public:
     _gap_spls = (uint) sixteenths * _beat_16th_spls;
   }
   //----------------------------------------------------------------------------
+  void set_test_param (uint v) { _test = v; }
+  //----------------------------------------------------------------------------
   void reset (uint samplerate, float bpm, cfg const& cfg)
   {
     _cfg = cfg;
@@ -617,9 +619,8 @@ private:
         _late_feedback[_cfg.int_dif.channel_r] = diffused[1];
 
         // Some spice
-        auto late_fb_vec
-          = vec_tanh_approx_vaneev (vec_from_array (_late_feedback));
-
+        auto late_fb_vec = vec_from_array (_late_feedback);
+        late_fb_vec = late_fb_vec / vec_sqrt (late_fb_vec * late_fb_vec + 1.f);
         // DC blocker and HP
         late_fb_vec = _filters.tick<dc_idx> (late_fb_vec);
 
@@ -1016,6 +1017,8 @@ private:
 
   float _seconds;
   float _beat_16th_spls;
+
+  uint _test;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

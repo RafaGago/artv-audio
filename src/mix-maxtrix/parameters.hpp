@@ -6584,6 +6584,15 @@ parameter_cpp_class_define (
   reverb::get_parameter (reverb::hp_freq_tag {}),
   slider_ext);
 
+#if 0
+parameter_cpp_class_define (
+  reverb_test,
+  n_stereo_busses,
+  param_common ("Test", declptr<reverb>(), declptr<reverb::test_param_tag>()),
+  reverb::get_parameter (reverb::test_param_tag {}),
+  slider_ext);
+#endif
+
 using reverb_params = mp_list<
   reverb_time,
   reverb_size,
@@ -6603,6 +6612,7 @@ using reverb_params = mp_list<
   reverb_diff_in,
   reverb_diff_out,
 
+  // reverb_test,
   reverb_damp_factor,
   reverb_lf_time_factor,
   reverb_damp_freq,

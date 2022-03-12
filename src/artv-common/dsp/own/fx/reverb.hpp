@@ -335,6 +335,16 @@ public:
   {
     return float_param ("sixteenths", 0.f, 16.f, 0.f, 0.001f);
   }
+#if 0
+  //----------------------------------------------------------------------------
+  struct test_param_tag {};
+  void set (test_param_tag, uint v) { _impl.set_test_param (v); }
+
+  static constexpr auto get_parameter (test_param_tag)
+  {
+    return int_param ("test", 0, 10, 0);
+  }
+#endif
   //----------------------------------------------------------------------------
 #if 0
   //----------------------------------------------------------------------------
