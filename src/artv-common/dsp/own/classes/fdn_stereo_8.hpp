@@ -335,15 +335,15 @@ public:
   void set_hp_freq (float factor)
   {
     assert (factor >= 0.f && factor <= 1.f);
-    float hp_freq = 2.f + (factor * 58.f); // TODO: make variables
+    float hp_freq = exp (factor * 4.1f); // TODO: make variables
     _filters.reset_coeffs<dc_idx> (
       vec_set<16> (hp_freq), (float) _cfg.src.srate);
   }
   //----------------------------------------------------------------------------
   void set_lf_time_factor (float factor)
   {
-    assert (factor >= 0.f && factor <= 1.f);
-    _lf_rt60_factor = 0.3333f + factor * 1.6666f; // TODO: make variables
+    assert (factor >= -1.f && factor <= 1.f);
+    _lf_rt60_factor = exp (factor); // TODO: make variables
     reset_times();
   }
   //----------------------------------------------------------------------------

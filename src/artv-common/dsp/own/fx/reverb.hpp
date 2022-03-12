@@ -284,7 +284,7 @@ public:
 
   static constexpr auto get_parameter (lf_time_factor_tag)
   {
-    return float_param ("%", 0.f, 100.f, 35.f, 0.01f);
+    return float_param ("%", -100.f, 100.f, 0.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct predelay_tag {};
