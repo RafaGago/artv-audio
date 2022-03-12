@@ -529,6 +529,14 @@ private:
           early[i][1]   = _gap.get (gap_spls, 3);
         }
       }
+      // internal diffusor lfo.
+      mod_g = make_crange (tmp);
+      for (uint i = 0; i < block.size(); ++i) {
+        vec<float, 2> mod = _int_dif_lfo.tick_filt_sample_and_hold();
+        vec<float, 2> g   = vec_set<2> (_cfg.int_dif.g_base);
+        g += mod * _cfg.int_dif.g_mod_depth;
+        mod_g[i] = vec_to_array (g);
+      }
       // late ------------------------------------------------------------------
       for (uint i = 0; i < block.size(); ++i) {
         // the parts between the single sample feedback don't run blockwise
@@ -597,18 +605,13 @@ private:
         }
 
         // internal diffusor
-        vec<float, 2> mod = _int_dif_lfo.tick_filt_sample_and_hold();
-        vec<float, 2> g   = vec_set<2> (_cfg.int_dif.g_base);
-        g += mod * _cfg.int_dif.g_mod_depth;
-        std::array<float, 2> g_arr {g[0], g[1]};
-
         std::array<float, 2> diffused;
         diffused[0] = _late_feedback[_cfg.int_dif.channel_l];
         diffused[1] = _late_feedback[_cfg.int_dif.channel_r];
 
         for (uint st = 0; st < _int_dif.size(); ++st) {
           allpass_stage_tick (
-            diffused, _int_dif[st], g_arr, _cfg.int_dif.n_samples[st]);
+            diffused, _int_dif[st], mod_g[i], _cfg.int_dif.n_samples[st]);
         }
         _late_feedback[_cfg.int_dif.channel_l] = diffused[0];
         _late_feedback[_cfg.int_dif.channel_r] = diffused[1];
