@@ -6430,6 +6430,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  reverb_gap,
+  n_stereo_busses,
+  param_common ("Gap", declptr<reverb>(), declptr<reverb::gap_tag>()),
+  reverb::get_parameter (reverb::gap_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   reverb_early_gain,
   n_stereo_busses,
   param_common ("Early", declptr<reverb>(), declptr<reverb::early_gain_tag>()),
@@ -6508,7 +6515,7 @@ parameter_cpp_class_define (
   reverb_mtx_l_angle,
   n_stereo_busses,
   param_common (
-    "L angle",
+    "L m.rot",
     declptr<reverb>(),
     declptr<reverb::l_matrix_angle_tag>()),
   reverb::get_parameter (reverb::l_matrix_angle_tag {}),
@@ -6518,7 +6525,7 @@ parameter_cpp_class_define (
   reverb_mtx_r_angle,
   n_stereo_busses,
   param_common (
-    "R angle",
+    "R m.rot",
     declptr<reverb>(),
     declptr<reverb::r_matrix_angle_tag>()),
   reverb::get_parameter (reverb::r_matrix_angle_tag {}),
@@ -6528,7 +6535,7 @@ parameter_cpp_class_define (
   reverb_mtx_lr_angle,
   n_stereo_busses,
   param_common (
-    "LR angle",
+    "LR m.rot",
     declptr<reverb>(),
     declptr<reverb::lr_matrix_angle_tag>()),
   reverb::get_parameter (reverb::lr_matrix_angle_tag {}),
@@ -6572,22 +6579,23 @@ using reverb_params = mp_list<
   reverb_time,
   reverb_size,
   reverb_predelay,
-  reverb_mod_freq,
-  reverb_mod_depth,
-  reverb_mod_stereo,
+  reverb_gap,
   reverb_early_gain,
   reverb_late_gain,
-  reverb_early_2_late,
-  reverb_in_2_late,
-  reverb_diff_in,
-  reverb_diff_out,
-  reverb_mtx_l_angle,
-  reverb_mtx_r_angle,
-  reverb_mtx_lr_angle,
   reverb_damp_factor,
   reverb_lf_time_factor,
   reverb_damp_freq,
-  reverb_hp_freq>;
+  reverb_hp_freq,
+  reverb_mod_freq,
+  reverb_mod_depth,
+  reverb_mod_stereo,
+  reverb_mtx_lr_angle,
+  reverb_mtx_l_angle,
+  reverb_mtx_r_angle,
+  reverb_early_2_late,
+  reverb_in_2_late,
+  reverb_diff_in,
+  reverb_diff_out>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (

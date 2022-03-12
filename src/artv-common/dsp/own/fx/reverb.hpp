@@ -119,7 +119,7 @@ public:
 
   static constexpr auto get_parameter (time_tag)
   {
-    return float_param ("msec", 0.1f, 15000.f, 1500.f, 1.f, 0.5f);
+    return float_param ("msec", 1.f, 15000.f, 1500.f, 1.f, 0.35f);
   }
   //----------------------------------------------------------------------------
   struct size_tag {};
@@ -302,15 +302,22 @@ public:
     return float_param ("sixteenths", 0.f, 16.f, 0.f, 0.001f);
   }
   //----------------------------------------------------------------------------
-#if 0
-  //----------------------------------------------------------------------------
-  struct er_late_tag {};
-  void set (er_late_tag, float v) {}
-
-  static constexpr auto get_parameter (er_late_tag)
+  struct gap_tag {};
+  void set (gap_tag, float v)
   {
-    return float_param ("%", 0.f, 100.f, 20.f, 0.01f);
+    if (v == _gap) {
+      return;
+    }
+    _gap = v;
+    _impl.set_gap (v);
   }
+
+  static constexpr auto get_parameter (gap_tag)
+  {
+    return float_param ("sixteenths", 0.f, 16.f, 0.f, 0.001f);
+  }
+  //----------------------------------------------------------------------------
+#if 0
   //----------------------------------------------------------------------------
   struct algorithm_tag {};
   void set (algorithm_tag, uint v)
@@ -334,30 +341,6 @@ public:
   static constexpr auto get_parameter (algorithm_param_tag)
   {
     return float_param ("%", 0.f, 100.f, 520.f, 0.01f);
-  }
-  //----------------------------------------------------------------------------
-  struct tail_gap_tag {};
-  void set (tail_gap_tag, float v) {}
-
-  static constexpr auto get_parameter (tail_gap_tag)
-  {
-    return float_param ("sec", 0.01f, 2.f, 0.1f, 0.01f, 0.6f);
-  }
-  //----------------------------------------------------------------------------
-  struct tilt_tag {};
-  void set (tilt_tag, float v) {}
-
-  static constexpr auto get_parameter (tilt_tag)
-  {
-    return float_param ("%", 0.f, 100.f, 20.f, 0.01f);
-  }
-  //----------------------------------------------------------------------------
-  struct width_tag {};
-  void set (width_tag, float v) {}
-
-  static constexpr auto get_parameter (width_tag)
-  {
-    return float_param ("%", 0.f, 100.f, 20.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   using parameters = mp_list<
@@ -398,6 +381,7 @@ public:
     _hp_freq                           = invalid_val;
     _lf_rt60_factor                    = invalid_val;
     _predelay                          = invalid_val;
+    _gap                               = invalid_val;
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -428,6 +412,7 @@ private:
   float _hp_freq;
   float _lf_rt60_factor;
   float _predelay;
+  float _gap;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

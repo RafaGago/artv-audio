@@ -355,6 +355,12 @@ public:
     _pre_delay_spls     = predelay_spls <= 0.f ? 0 : (uint) predelay_spls;
   }
   //----------------------------------------------------------------------------
+  void set_gap (float sixteenths)
+  {
+    assert (sixteenths >= 0.f && sixteenths <= 16.f);
+    _gap_spls = (uint) sixteenths * _beat_16th_spls;
+  }
+  //----------------------------------------------------------------------------
   void reset (uint samplerate, float bpm, cfg const& cfg)
   {
     _cfg = cfg;
@@ -494,6 +500,27 @@ private:
           early[i][1] += early_mtx[i][1];
         }
       }
+      // mix early before gap delay --------------------------------------------
+      for (uint i = 0; i < block.size(); ++i) {
+        block[i][0] = early[i][0] * _early_gain;
+        block[i][1] = early[i][1] * _early_gain;
+      }
+      // gap -------------------------------------------------------------------
+      if (_gap_spls > _gap_lat_spls) {
+        uint gap_spls = _gap_spls - _gap_lat_spls;
+
+        for (uint i = 0; i < block.size(); ++i) {
+          std::array<float, 4> gap_spl {
+            pre_dif[i][0], pre_dif[i][1], early[i][0], early[i][1]};
+
+          _gap.push (gap_spl);
+
+          pre_dif[i][0] = _gap.get (gap_spls, 0);
+          pre_dif[i][1] = _gap.get (gap_spls, 1);
+          early[i][0]   = _gap.get (gap_spls, 2);
+          early[i][1]   = _gap.get (gap_spls, 3);
+        }
+      }
       // late ------------------------------------------------------------------
       for (uint i = 0; i < block.size(); ++i) {
         // the parts between the single sample feedback don't run blockwise
@@ -581,12 +608,7 @@ private:
             late[i], _out_dif[st], g_arr, _cfg.out_dif.n_samples[st]);
         }
       }
-      // mixing
-      // -----------------------------------------------------------------------
-      for (uint i = 0; i < block.size(); ++i) {
-        block[i][0] = early[i][0] * _early_gain;
-        block[i][1] = early[i][1] * _early_gain;
-      }
+      // mixing late
       for (uint i = 0; i < block.size(); ++i) {
         block[i][0] += late[i][0] * _late_gain;
         block[i][1] += late[i][1] * _late_gain;
@@ -774,14 +796,21 @@ private:
     pre_delay_spls_max = pow2_round_ceil (pre_delay_spls_max);
     mem_total += pre_delay_spls_max;
 
+    // gap
+    uint gap_spls_max = (uint) (_beat_16th_spls * 16.f + 1.f);
+    gap_spls_max *= 4;
+    gap_spls_max = pow2_round_ceil (gap_spls_max);
+    mem_total += gap_spls_max;
     // allocating
     _mem.clear();
     _mem.resize (mem_total);
 
     // assigning memory
-    // pre delay
     auto mem = make_crange (_mem);
+    // pre delay
     _pre_delay.reset (mem.cut_head (pre_delay_spls_max).cast (float {}), 2);
+    // gap
+    _gap.reset (mem.cut_head (gap_spls_max).cast (float {}), 4);
     // pre diffusor
     for (uint i = 0; i < pre_dif_sizes.size(); ++i) {
       for (uint j = 0; j < pre_dif_sizes[0].size(); ++j) {
@@ -845,6 +874,8 @@ private:
   {
     _late_n_spls = vec_from_array (_late_n_spls_master) * (float) exp (_size);
 
+    _gap_lat_spls = (uint) -1;
+
     for (uint i = 0; i < late_cfg::n_channels; ++i) {
       _rt60_att_h[i] = delay_get_feedback_gain_for_time (
         _seconds, -60.f, _cfg.src.srate, vec_set<1> (_late_n_spls[i]))[0];
@@ -854,6 +885,8 @@ private:
         -60.f,
         _cfg.src.srate,
         vec_set<1> (_late_n_spls[i]))[0];
+
+      _gap_lat_spls = std::min<uint> (_late_n_spls[i], _gap_lat_spls);
     }
   }
   //----------------------------------------------------------------------------
@@ -885,6 +918,10 @@ private:
 
   reverb_array<u16, early_cfg>               _early_delay_spls;
   reverb_array<allpass<float_x1>, early_cfg> _early;
+
+  uint                                 _gap_lat_spls;
+  uint                                 _gap_spls;
+  static_delay_line<float, true, true> _gap;
 
   std::array<float, late_cfg::n_channels> _late_feedback;
   lfo<late_cfg::n_channels>               _late_lfo;
