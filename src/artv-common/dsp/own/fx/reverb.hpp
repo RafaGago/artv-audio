@@ -119,7 +119,7 @@ public:
 
   static constexpr auto get_parameter (time_tag)
   {
-    return float_param ("msec", 1.f, 15000.f, 1500.f, 1.f, 0.35f);
+    return float_param ("msec", 10.f, 20000.f, 1500.f, 1.f, 0.32f);
   }
   //----------------------------------------------------------------------------
   struct size_tag {};

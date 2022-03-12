@@ -6439,14 +6439,20 @@ parameter_cpp_class_define (
 parameter_cpp_class_define (
   reverb_early_gain,
   n_stereo_busses,
-  param_common ("Early", declptr<reverb>(), declptr<reverb::early_gain_tag>()),
+  param_common (
+    "Early Lvl",
+    declptr<reverb>(),
+    declptr<reverb::early_gain_tag>()),
   reverb::get_parameter (reverb::early_gain_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   reverb_late_gain,
   n_stereo_busses,
-  param_common ("Late", declptr<reverb>(), declptr<reverb::late_gain_tag>()),
+  param_common (
+    "Late Lvl",
+    declptr<reverb>(),
+    declptr<reverb::late_gain_tag>()),
   reverb::get_parameter (reverb::late_gain_tag {}),
   slider_ext);
 
@@ -6454,7 +6460,7 @@ parameter_cpp_class_define (
   reverb_early_2_late,
   n_stereo_busses,
   param_common (
-    "Early2Late",
+    "Early 2 Late",
     declptr<reverb>(),
     declptr<reverb::early_2_late_tag>()),
   reverb::get_parameter (reverb::early_2_late_tag {}),
@@ -6463,7 +6469,10 @@ parameter_cpp_class_define (
 parameter_cpp_class_define (
   reverb_in_2_late,
   n_stereo_busses,
-  param_common ("In2Late", declptr<reverb>(), declptr<reverb::in_2_late_tag>()),
+  param_common (
+    "In 2 Late",
+    declptr<reverb>(),
+    declptr<reverb::in_2_late_tag>()),
   reverb::get_parameter (reverb::in_2_late_tag {}),
   slider_ext);
 
@@ -6582,20 +6591,23 @@ using reverb_params = mp_list<
   reverb_gap,
   reverb_early_gain,
   reverb_late_gain,
-  reverb_damp_factor,
-  reverb_lf_time_factor,
-  reverb_damp_freq,
-  reverb_hp_freq,
+  reverb_early_2_late,
+  reverb_in_2_late,
+
   reverb_mod_freq,
   reverb_mod_depth,
   reverb_mod_wave,
   reverb_mtx_lr_angle,
   reverb_mtx_l_angle,
   reverb_mtx_r_angle,
-  reverb_early_2_late,
-  reverb_in_2_late,
   reverb_diff_in,
-  reverb_diff_out>;
+  reverb_diff_out,
+
+  reverb_damp_factor,
+  reverb_lf_time_factor,
+  reverb_damp_freq,
+  reverb_hp_freq>;
+
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
