@@ -6423,6 +6423,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  reverb_early_size,
+  n_stereo_busses,
+  param_common ("ER Size", declptr<reverb>(), declptr<reverb::er_size_tag>()),
+  reverb::get_parameter (reverb::er_size_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   reverb_predelay,
   n_stereo_busses,
   param_common ("Predelay", declptr<reverb>(), declptr<reverb::predelay_tag>()),
@@ -6457,23 +6464,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  reverb_early_2_late,
+  reverb_early_2_late_bal,
   n_stereo_busses,
   param_common (
-    "Early 2 Late",
+    "Early Bal",
     declptr<reverb>(),
-    declptr<reverb::early_2_late_tag>()),
-  reverb::get_parameter (reverb::early_2_late_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
-  reverb_in_2_late,
-  n_stereo_busses,
-  param_common (
-    "In 2 Late",
-    declptr<reverb>(),
-    declptr<reverb::in_2_late_tag>()),
-  reverb::get_parameter (reverb::in_2_late_tag {}),
+    declptr<reverb::early_2_late_bal_tag>()),
+  reverb::get_parameter (reverb::early_2_late_bal_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -6564,7 +6561,7 @@ parameter_cpp_class_define (
   reverb_damp_freq,
   n_stereo_busses,
   param_common (
-    "Damp Cutoff",
+    "Damp FCut",
     declptr<reverb>(),
     declptr<reverb::damp_freq_tag>()),
   reverb::get_parameter (reverb::damp_freq_tag {}),
@@ -6583,7 +6580,7 @@ parameter_cpp_class_define (
 parameter_cpp_class_define (
   reverb_hp_freq,
   n_stereo_busses,
-  param_common ("Hp Freq", declptr<reverb>(), declptr<reverb::hp_freq_tag>()),
+  param_common ("HP FCut", declptr<reverb>(), declptr<reverb::hp_freq_tag>()),
   reverb::get_parameter (reverb::hp_freq_tag {}),
   slider_ext);
 
@@ -6599,12 +6596,12 @@ parameter_cpp_class_define (
 using reverb_params = mp_list<
   reverb_time,
   reverb_size,
+  reverb_early_2_late_bal,
+  reverb_early_size,
+  reverb_late_gain,
+  reverb_early_gain,
   reverb_predelay,
   reverb_gap,
-  reverb_early_gain,
-  reverb_late_gain,
-  reverb_early_2_late,
-  reverb_in_2_late,
 
   reverb_mod_freq,
   reverb_mod_depth,

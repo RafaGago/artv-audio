@@ -2,28 +2,29 @@
 //slider1:enable_impulse= 0   <0 ,2, 1{Off,Impulse,White noise}> Test
 //slider2:mute=           0   <0, 1{Off,On}>    Reverb mute
 slider3:rt60_msec=      3300 <10 ,12000 ,0.1> RT60 (msec)
-slider4:size=           0.   <-1, 1, 0.001> Size1 (m)
+slider4:size=           0.   <-1, 1, 0.001> Size (m)
+slider5:er_size=           0.   <-1, 1, 0.001> ER Size (m)
 
-slider6:early_amt=      0.7 <0, 1, 0.01> ER
-slider7:er_2_late=      0.3 <0, 1, 0.01> ER to late(%)
-slider8:sig_2_late=     0.3 <0, 1, 0.01> Signal to late(%)
-slider9:late_amt=       0.7 <0, 1, 0.01> late
+slider7:early_amt=      0.7 <0, 1, 0.01> ER
+slider8:er_2_late=      0.3 <0, 1, 0.01> ER to late(%)
+slider9:sig_2_late=     0.3 <0, 1, 0.01> Signal to late(%)
+slider10:late_amt=       0.7 <0, 1, 0.01> late
 
-slider11:mod_freq=      0.6 <0, 7, 0.001> Mod Freq(Hz)
-slider12:mod_depth=     0.1 <0, 1, 0.001> Mod Depth
-slider13:mod_stereo=    0.5 <-1, 1, 0.001> Mod Stereo
+slider12:mod_freq=      0.6 <0, 7, 0.001> Mod Freq(Hz)
+slider13:mod_depth=     0.1 <0, 1, 0.001> Mod Depth
+slider14:mod_stereo=    0.5 <-1, 1, 0.001> Mod Stereo
 
-slider15:angle1=        0.5 <0.2, 0.9, 0.001> L Angle
-slider16:angle2=        0.5 <0.2, 0.9, 0.001> R Angle
-slider17:angle3=        0.5 <0.2, 0.9, 0.001> L-R Angle
+slider16:angle1=        0.5 <0.2, 0.9, 0.001> L Angle
+slider17:angle2=        0.5 <0.2, 0.9, 0.001> R Angle
+slider18:angle3=        0.5 <0.2, 0.9, 0.001> L-R Angle
 
-slider19:out_diffusion=  0.6 <0, 0.77, 0.001> Out Diffusor
-slider20:in_diffusion=   0.5 <0.0, 0.39, 0.001> In Diffusor
+slider20:out_diffusion=  0.6 <0, 0.77, 0.001> Out Diffusor
+slider21:in_diffusion=   0.5 <0.0, 0.39, 0.001> In Diffusor
 
-slider22:damp=          0.5 <0.0, 1, 0.001> Damping
-slider23:damp_f=        0. <-1, 1, 0.001> Damping Freq
-slider24:hp_f=          2. <2, 60, 0.001> HP (hz)
-slider25:rt60_l_mul=    1. <0.333, 2, 0.001> RT60 L mul
+slider23:damp=          0.5 <0.0, 1, 0.001> Damping
+slider24:damp_f=        0. <-1, 1, 0.001> Damping Freq
+slider25:hp_f=          2. <2, 60, 0.001> HP (hz)
+slider26:rt60_l_mul=    1. <0.333, 2, 0.001> RT60 L mul
 
 in_pin:left input
 in_pin:right input
@@ -132,21 +133,21 @@ BYPASS_EARLY = 0;
 k.early.n_stages = 4;
 k.early.n_channels = 4;
 
-k.early.a.meters = 3.1;
-k.early.a.span = 3.2;
+k.early.a.meters = 4.129;
+k.early.a.span = 3.209;
 k.early.a.g  = 0.5;
 
-k.early.b.meters = 4.1;
-k.early.b.span = 5.;
+k.early.b.meters = 5.101;
+k.early.b.span = 5.003;
 k.early.b.g  = 0.3;
 
-k.early.c.meters = 2.1;
-k.early.c.span = 3.1;
-k.early.c.g  = 0.35;
+k.early.c.meters = 3.163;
+k.early.c.span = 3.121;
+k.early.c.g  = 0.5;
 
-k.early.d.meters = 1.9;
-k.early.d.span = 3.1;
-k.early.d.g  = 0.8;
+k.early.d.meters = 2.909;
+k.early.d.span = 3.187;
+k.early.d.g  = 0.65;
 
 k.early.prime_idx = 1;
 k.early.rounding_factor = 1000;
@@ -157,46 +158,6 @@ early.a.n_spls.array_init (k.early.n_channels);
 early.b.n_spls.array_init (k.early.n_channels);
 early.c.n_spls.array_init (k.early.n_channels);
 early.d.n_spls.array_init (k.early.n_channels);
-
-get_delay_length_samples(
-  early.a.n_spls.ptr,
-  k.early.n_channels,
-  k.early.a.meters,
-  k.early.a.meters * k.early.a.span,
-  k.early.prime_idx,
-  k.early.rounding_factor,
-  k.src.srate
-  );
-
-get_delay_length_samples(
-  early.b.n_spls.ptr,
-  k.early.n_channels,
-  k.early.b.meters,
-  k.early.b.meters * k.early.b.span,
-  k.early.prime_idx,
-  k.early.rounding_factor,
-  k.src.srate
-  );
-
-get_delay_length_samples(
-  early.c.n_spls.ptr,
-  k.early.n_channels,
-  k.early.c.meters,
-  k.early.c.meters * k.early.c.span,
-  k.early.prime_idx,
-  k.early.rounding_factor,
-  k.src.srate
-  );
-
-get_delay_length_samples(
-  early.d.n_spls.ptr,
-  k.early.n_channels,
-  k.early.d.meters,
-  k.early.d.meters * k.early.d.span,
-  k.early.prime_idx,
-  k.early.rounding_factor,
-  k.src.srate
-  );
 
 early.a.delay.delay_line_init (round_next_pow2 (k.src.srate), k.early.n_channels);
 early.b.delay.delay_line_init (round_next_pow2 (k.src.srate), k.early.n_channels);
@@ -445,8 +406,52 @@ function reset_dc_blockers_x16 (dc*, freq, srate)
 
 reset_dc_blockers_x16 (dc, hp_f, k.src.srate);
 
+// Early
 
-// using a preset
+early.size_fact = exp (er_size);
+
+get_delay_length_samples(
+  early.a.n_spls.ptr,
+  k.early.n_channels,
+  k.early.a.meters * early.size_fact,
+  k.early.a.meters * early.size_fact * k.early.a.span,
+  k.early.prime_idx,
+  k.early.rounding_factor,
+  k.src.srate
+  );
+
+get_delay_length_samples(
+  early.b.n_spls.ptr,
+  k.early.n_channels,
+  k.early.b.meters * early.size_fact,
+  k.early.b.meters * early.size_fact * k.early.b.span,
+  k.early.prime_idx,
+  k.early.rounding_factor,
+  k.src.srate
+  );
+
+get_delay_length_samples(
+  early.c.n_spls.ptr,
+  k.early.n_channels,
+  k.early.c.meters * early.size_fact,
+  k.early.c.meters * early.size_fact * k.early.c.span,
+  k.early.prime_idx,
+  k.early.rounding_factor,
+  k.src.srate
+  );
+
+get_delay_length_samples(
+  early.d.n_spls.ptr,
+  k.early.n_channels,
+  k.early.d.meters * early.size_fact,
+  k.early.d.meters *early.size_fact * k.early.d.span,
+  k.early.prime_idx,
+  k.early.rounding_factor,
+  k.src.srate
+  );
+
+
+// Late: using a preset
   memcpy(
     late.delay_spls.ptr,
     late.k.delay_preset.array2d_ptr(0),

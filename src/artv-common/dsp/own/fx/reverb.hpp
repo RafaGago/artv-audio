@@ -77,34 +77,21 @@ public:
     return float_param ("dB", -60.f, 6.f, -6.f, 0.2f);
   }
   //----------------------------------------------------------------------------
-  struct early_2_late_tag {};
-  void set (early_2_late_tag, float v)
+  struct early_2_late_bal_tag {};
+  void set (early_2_late_bal_tag, float v)
   {
-    if (v == _early_2_late) {
+    if (v == _early_2_late_bal) {
       return;
     }
-    _early_2_late = v;
-    _impl.set_early_to_late (db_to_gain (v, -60.f));
+    _early_2_late_bal = v;
+    v *= 0.01;
+    _impl.set_in_to_late (1.f - v);
+    _impl.set_early_to_late (v);
   }
 
-  static constexpr auto get_parameter (early_2_late_tag)
+  static constexpr auto get_parameter (early_2_late_bal_tag)
   {
-    return float_param ("dB", -60.f, 0.f, -6.f, 0.2f);
-  }
-  //----------------------------------------------------------------------------
-  struct in_2_late_tag {};
-  void set (in_2_late_tag, float v)
-  {
-    if (v == _in_2_late) {
-      return;
-    }
-    _in_2_late = v;
-    _impl.set_in_to_late (db_to_gain (v, -60.f));
-  }
-
-  static constexpr auto get_parameter (in_2_late_tag)
-  {
-    return float_param ("dB", -60.f, 0.f, -6.f, 0.2f);
+    return float_param ("dB", 0.f, 100.f, -0.f, 0.1f);
   }
   //----------------------------------------------------------------------------
   struct time_tag {};
@@ -133,6 +120,21 @@ public:
   }
 
   static constexpr auto get_parameter (size_tag)
+  {
+    return float_param ("%", -100.f, 100.f, 0.f, 0.001f);
+  }
+  //----------------------------------------------------------------------------
+  struct er_size_tag {};
+  void set (er_size_tag, float v)
+  {
+    if (v == _er_size) {
+      return;
+    }
+    _er_size = v;
+    _impl.set_er_size (v * 0.01f);
+  }
+
+  static constexpr auto get_parameter (er_size_tag)
   {
     return float_param ("%", -100.f, 100.f, 0.f, 0.001f);
   }
@@ -395,12 +397,12 @@ public:
     static constexpr float invalid_val = INFINITY;
     _time_msec                         = invalid_val;
     _size                              = invalid_val;
+    _er_size                           = invalid_val;
     _in_diffusion                      = invalid_val;
     _out_diffusion                     = invalid_val;
     _early_gain                        = invalid_val;
     _late_gain                         = invalid_val;
-    _early_2_late                      = invalid_val;
-    _in_2_late                         = invalid_val;
+    _early_2_late_bal                  = invalid_val;
     _mod_freq                          = invalid_val;
     _mod_depth                         = invalid_val;
     _mod_stereo                        = invalid_val;
@@ -426,12 +428,12 @@ private:
 
   float _time_msec;
   float _size;
+  float _er_size;
   float _in_diffusion;
   float _out_diffusion;
   float _early_gain;
   float _late_gain;
-  float _early_2_late;
-  float _in_2_late;
+  float _early_2_late_bal;
   float _mod_freq;
   float _mod_depth;
   float _mod_stereo;

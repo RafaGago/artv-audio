@@ -47,6 +47,7 @@ public:
 
     u16   prime_idx;
     float rounding_factor;
+    float size_factor;
 
     struct {
       float meters;
@@ -58,8 +59,6 @@ public:
   struct late_cfg {
     static constexpr uint n_channels = 16;
     static constexpr uint n_stages   = 1;
-    float                 rounding_factor;
-    float                 span_factor;
     float                 max_chorus_width;
     float                 max_chorus_freq;
     float                 size_factor; // spls = [-1,1] * exp (size_factor)
@@ -150,25 +149,24 @@ public:
       array_cast<u16> (make_array (317, 317)),
       array_cast<u16> (make_array (907, 906)));
 
-    r.early.stage[0].meters = 3.1f;
-    r.early.stage[0].span   = 3.2f;
+    r.early.stage[0].meters = 4.129f;
+    r.early.stage[0].span   = 3.209f;
     r.early.stage[0].g      = 0.5f;
-    r.early.stage[1].meters = 4.1f;
-    r.early.stage[1].span   = 5.f;
+    r.early.stage[1].meters = 5.101f;
+    r.early.stage[1].span   = 5.003f;
     r.early.stage[1].g      = 0.3f;
-    r.early.stage[2].meters = 2.1f;
-    r.early.stage[2].span   = 3.1f;
-    r.early.stage[2].g      = 0.35f;
-    r.early.stage[3].meters = 1.9f;
-    r.early.stage[3].span   = 3.1f;
-    r.early.stage[3].g      = 0.8f;
+    r.early.stage[2].meters = 3.163f;
+    r.early.stage[2].span   = 3.121f;
+    r.early.stage[2].g      = 0.5f;
+    r.early.stage[3].meters = 2.909f;
+    r.early.stage[3].span   = 3.187f;
+    r.early.stage[3].g      = 0.65f;
     r.early.prime_idx       = 1;
     r.early.rounding_factor = 1000;
+    r.early.size_factor     = 1.f; // log(e)
 
-    r.late.prime_idx       = 15;
-    r.late.rounding_factor = 1;
-    r.late.size_factor     = 2.f;
-    r.late.span_factor     = golden_ratio * 1.5f;
+    r.late.prime_idx   = 15;
+    r.late.size_factor = 2.f;
 
     r.late.max_chorus_depth_spls = 300; // goes to not subtle at all
     r.late.max_chorus_freq       = 7;
@@ -368,6 +366,12 @@ public:
     _gap_spls = (uint) sixteenths * _beat_16th_spls;
   }
   //----------------------------------------------------------------------------
+  void set_er_size (float factor)
+  {
+    assert (factor >= -1.f && factor <= 1.f);
+    reset_early (factor);
+  }
+  //----------------------------------------------------------------------------
   void set_test_param (uint v) { _test = v; }
   //----------------------------------------------------------------------------
   void reset (uint samplerate, float bpm, cfg const& cfg)
@@ -391,7 +395,6 @@ public:
     _beat_16th_spls     = sixtenths_sec * (float) samplerate;
 
     setup_in_diffusor();
-    setup_early();
     setup_late();
     setup_internal_diffusor();
     setup_memory();
@@ -448,11 +451,12 @@ private:
       }
       // hardcoding 2's to avoid unreadability, so "static_asserting"
       static_assert (n_channels == 2);
-      if (_pre_delay_spls) {
+      if (_pre_delay_spls > _pre_delay_lat_spls) {
+        uint pre_delay_spls = _pre_delay_spls - _pre_delay_lat_spls;
         for (uint i = 0; i < block.size(); ++i) {
           _pre_delay.push (block[i]);
-          pre_dif[i][0] = _pre_delay.get (_pre_delay_spls, 0);
-          pre_dif[i][1] = _pre_delay.get (_pre_delay_spls, 1);
+          pre_dif[i][0] = _pre_delay.get (pre_delay_spls, 0);
+          pre_dif[i][1] = _pre_delay.get (pre_delay_spls, 1);
         }
       }
       else {
@@ -694,14 +698,16 @@ private:
     _int_dif_lfo.set_freq (f, _cfg.src.srate);
   }
   //----------------------------------------------------------------------------
-  void setup_early()
+  void reset_early (float size_factor)
   {
+    float f             = std::exp (size_factor * _cfg.early.size_factor);
+    _pre_delay_lat_spls = (uint) -1;
     // compute delay lengths
     for (uint i = 0; i < _cfg.early.n_stages; ++i) {
       uint spls_min = delay_length::meters_to_samples (
-        _cfg.early.stage[i].meters, _cfg.src.srate, false);
+        _cfg.early.stage[i].meters * f, _cfg.src.srate, false);
       uint spls_max = delay_length::meters_to_samples (
-        _cfg.early.stage[i].meters * _cfg.early.stage[i].span,
+        _cfg.early.stage[i].meters * f * _cfg.early.stage[i].span,
         _cfg.src.srate,
         true);
       get_delay_length<u16> (
@@ -710,6 +716,7 @@ private:
         spls_max,
         _cfg.early.prime_idx,
         _cfg.early.rounding_factor);
+      _pre_delay_lat_spls = std::min<uint> (_pre_delay_lat_spls, spls_min);
     }
 
     std::reverse (_early_delay_spls[1].begin(), _early_delay_spls[1].end());
@@ -801,6 +808,10 @@ private:
   //----------------------------------------------------------------------------
   void setup_memory()
   {
+    // set "_early_delay_spls" to its maximum possible size just for this
+    // maximum memory computation.
+    reset_early (1.f);
+
     // A single contiguous allocation (not likely to matter a lot)
     auto pre_dif_sizes = _cfg.pre_dif.n_samples;
     auto early_sizes   = _early_delay_spls;
@@ -1000,6 +1011,7 @@ private:
 
   std::vector<float_x1> _mem;
 
+  float _early_size;
   float _seconds;
   float _beat_16th_spls;
 
