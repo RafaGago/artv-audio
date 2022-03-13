@@ -413,10 +413,6 @@ public:
     setup_late();
     setup_internal_diffusor();
     setup_memory();
-
-    for (auto& dl : _late) {
-      dl.set_resync_delta_spls (1.f);
-    }
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -636,8 +632,7 @@ private:
 
           for (uint i = 0; i < 16; ++i) {
             _late_feedback[i]
-              //= _late[i].get<catmull_rom_interp> (n_spls[i], 0)[0];
-              = _late[i].get (n_spls[i], 0)[0];
+              = _late[i].get<catmull_rom_interp> (n_spls[i], 0)[0];
           }
           if (_test) {
             // internal diffusor
@@ -881,11 +876,6 @@ private:
       late_sizes,
       (u32) (_cfg.late.max_chorus_depth_spls + catmull_rom_interp::n_points));
 
-    for (uint i = 0; i < late_sizes.size(); ++i) {
-      late_sizes[i] += _late[i].interp_overhead_elems (1);
-    }
-    mem_total += _late[0].interp_overhead_elems (1) * late_sizes.size();
-
     mem_total += convert_to_max_sizes (int_dif_sizes);
     mem_total += convert_to_max_sizes (out_dif_sizes);
 
@@ -1032,7 +1022,8 @@ private:
   std::array<float, late_cfg::n_channels> _late_n_spls_master;
   vec<float, late_cfg::n_channels>        _late_n_spls;
   uint                                    _late_wave = 0;
-  std::array<modulable_thiran_1<float_x1, false>, late_cfg::n_channels> _late;
+  std::array<interpolated_delay_line<float_x1, false>, late_cfg::n_channels>
+    _late;
 
   float _size           = 1.f;
   float _in_2_late      = 1.f;
