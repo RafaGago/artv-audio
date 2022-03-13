@@ -234,6 +234,77 @@ static constexpr preset presets[] = {
     <gui_data bus1_text="Lows" bus2_text="Low mojo" bus3_text="Highs" bus4_text="Extra tails" bus5_text="" bus6_text="" bus7_text="" bus8_text="Mute me!" />
 </params>
      )END"},
+  {.name = "Mix: Long Sparse Reverb (metals, sax)",
+   .xml = R"END(
+<?xml version="1.0" encoding="UTF-8"?>
+<params plugin_version="1005000">
+    <PARAM id="in_selection_01" value="1.0" />
+    <PARAM id="out_selection_01" value="1.0" />
+    <PARAM id="fx_type_01" value="50.0" />
+    <PARAM id="in_selection_02" value="1.0" />
+    <PARAM id="out_selection_02" value="1.0" />
+    <PARAM id="reverb_damp_factor_01" value="40.0" />
+    <PARAM id="reverb_damp_freq_01" value="-56.79999923706055" />
+    <PARAM id="reverb_diff_in_01" value="0.0" />
+    <PARAM id="reverb_diff_out_01" value="0.0" />
+    <PARAM id="reverb_early_2_late_bal_01" value="47.5" />
+    <PARAM id="reverb_early_gain_01" value="-15.0" />
+    <PARAM id="reverb_early_size_01" value="-78.40000152587891" />
+    <PARAM id="reverb_gap_01" value="0.0" />
+    <PARAM id="reverb_hp_freq_01" value="48.59999847412109" />
+    <PARAM id="reverb_l_sparseness_01" value="-55.26000213623047" />
+    <PARAM id="reverb_late_gain_01" value="-9.0" />
+    <PARAM id="reverb_lf_time_factor_01" value="24.0" />
+    <PARAM id="reverb_lr_sparseness_01" value="-73.16999816894531" />
+    <PARAM id="reverb_mod_depth_01" value="63.34000015258789" />
+    <PARAM id="reverb_mod_freq_01" value="0.3920000195503235" />
+    <PARAM id="reverb_mod_wave_01" value="5.0" />
+    <PARAM id="reverb_r_sparseness_01" value="-65.69000244140625" />
+    <PARAM id="reverb_size_01" value="72.80000305175781" />
+    <PARAM id="reverb_time_01" value="12133.0" />
+    <gui_data bus1_text="Wet" bus2_text="Dry" bus3_text="" bus4_text="" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
+</params>
+   )END"},
+  {.name = "Mix: Long Dense Reverb",
+   .xml = R"END(
+<?xml version="1.0" encoding="UTF-8"?>
+<params plugin_version="1005000">
+    <PARAM id="in_selection_01" value="1.0" />
+    <PARAM id="fx_type_01" value="39.0" />
+    <PARAM id="fx_type_02" value="50.0" />
+    <PARAM id="in_selection_03" value="1.0" />
+    <PARAM id="mixer_sends" value="1.0" />
+    <PARAM id="out_selection_02" value="1.0" />
+    <PARAM id="out_selection_03" value="1.0" />
+    <PARAM id="reverb_damp_factor_02" value="30.0" />
+    <PARAM id="reverb_damp_freq_02" value="-4.800003051757812" />
+    <PARAM id="reverb_diff_in_02" value="29.19999885559082" />
+    <PARAM id="reverb_diff_out_02" value="100.0" />
+    <PARAM id="reverb_early_gain_02" value="4.0" />
+    <PARAM id="reverb_early_size_02" value="11.74100494384766" />
+    <PARAM id="reverb_gap_02" value="2.944000244140625" />
+    <PARAM id="reverb_hp_freq_02" value="76.06999969482422" />
+    <PARAM id="reverb_l_sparseness_02" value="12.73999786376953" />
+    <PARAM id="reverb_late_gain_02" value="-7.0" />
+    <PARAM id="reverb_lf_time_factor_02" value="48.0" />
+    <PARAM id="reverb_lr_sparseness_02" value="2.569999694824219" />
+    <PARAM id="reverb_mod_depth_02" value="42.39999771118164" />
+    <PARAM id="reverb_mod_freq_02" value="22.07600021362305" />
+    <PARAM id="reverb_mod_wave_02" value="1.0" />
+    <PARAM id="reverb_predelay_02" value="0.4880000352859497" />
+    <PARAM id="reverb_r_sparseness_02" value="15.79999542236328" />
+    <PARAM id="reverb_size_02" value="-68.0" />
+    <PARAM id="reverb_stereo_02" value="84.79999542236328" />
+    <PARAM id="reverb_time_02" value="20000.0" />
+    <PARAM id="track_comp_compattack_01" value="1.85099995136261" />
+    <PARAM id="track_comp_compfeedbk_01" value="0.0" />
+    <PARAM id="track_comp_compratio_01" value="6.200000286102295" />
+    <PARAM id="track_comp_comprelease_01" value="137.3099975585938" />
+    <PARAM id="track_comp_compthresh_01" value="-34.31999969482422" />
+    <PARAM id="track_comp_saturation_01" value="0.0" />
+    <gui_data bus1_text="Pre-Comp" bus2_text="Wet" bus3_text="Dry" bus4_text="-" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
+</params>
+     )END"},
   {.name = "FX: Phased Delay",
    .xml = R"END(
 <?xml version="1.0" encoding="UTF-8"?>

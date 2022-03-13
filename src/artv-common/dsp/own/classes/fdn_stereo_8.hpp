@@ -413,6 +413,10 @@ public:
     setup_late();
     setup_internal_diffusor();
     setup_memory();
+
+    for (auto& dl : _late) {
+      dl.set_resync_delta_spls (1.f);
+    }
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -632,7 +636,8 @@ private:
 
           for (uint i = 0; i < 16; ++i) {
             _late_feedback[i]
-              = _late[i].get<catmull_rom_interp> (n_spls[i], 0)[0];
+              //= _late[i].get<catmull_rom_interp> (n_spls[i], 0)[0];
+              = _late[i].get (n_spls[i], 0)[0];
           }
           if (_test) {
             // internal diffusor
@@ -782,24 +787,34 @@ private:
   //----------------------------------------------------------------------------
   void reset_late_lfo()
   {
-    using freq_type             = typename decltype (_late_lfo)::value_type;
-    constexpr uint n_side_chnls = vec_traits_t<freq_type>::size / 2;
+    using vec_type              = typename decltype (_late_lfo)::value_type;
+    constexpr uint n_side_chnls = vec_traits_t<vec_type>::size / 2;
 
-    auto      freq_fact = _mod_stereo * _cfg.late.max_chorus_width;
-    auto      freq_l    = _mod_freq_hz;
-    auto      freq_r    = _mod_freq_hz * expf (freq_fact);
-    freq_type freq;
+    auto     freq_fact = _mod_stereo * _cfg.late.max_chorus_width;
+    auto     freq_l    = _mod_freq_hz;
+    auto     freq_r    = _mod_freq_hz * expf (freq_fact);
+    vec_type freq;
 
     // TODO: "desync_factor": probably a CFG param?
-    static constexpr float desync_factor = 0.000001f;
-    float                  desync        = 1.f;
+    float desync_factor = 0.03f * _mod_stereo;
+    float desync        = 1.f;
 
     for (uint i = 0; i < n_side_chnls; ++i) {
-      freq[i]                = freq_l * desync;
-      freq[i + n_side_chnls] = freq_r * desync;
+      freq[i]                          = freq_l * desync;
+      freq[(2 * n_side_chnls - 1) - i] = freq_r * desync;
       desync += desync_factor;
     }
     _late_lfo.set_freq (freq, _cfg.src.srate);
+
+    vec_type vphase;
+    float    inc    = 1. / n_side_chnls;
+    float    cphase = 0.f;
+    for (uint i = 0; i < n_side_chnls; ++i) {
+      vphase[i]                          = i & 1 ? cphase : -cphase;
+      vphase[(2 * n_side_chnls - 1) - i] = i & 1 ? cphase : -cphase;
+      cphase += inc;
+    }
+    _late_lfo.set_phase (phase<16> {vphase, phase<16>::normalized()});
   }
   //----------------------------------------------------------------------------
   template <class T, size_t A, size_t B>
@@ -865,6 +880,12 @@ private:
     mem_total += convert_to_max_sizes (
       late_sizes,
       (u32) (_cfg.late.max_chorus_depth_spls + catmull_rom_interp::n_points));
+
+    for (uint i = 0; i < late_sizes.size(); ++i) {
+      late_sizes[i] += _late[i].interp_overhead_elems (1);
+    }
+    mem_total += _late[0].interp_overhead_elems (1) * late_sizes.size();
+
     mem_total += convert_to_max_sizes (int_dif_sizes);
     mem_total += convert_to_max_sizes (out_dif_sizes);
 
@@ -1011,8 +1032,7 @@ private:
   std::array<float, late_cfg::n_channels> _late_n_spls_master;
   vec<float, late_cfg::n_channels>        _late_n_spls;
   uint                                    _late_wave = 0;
-  std::array<interpolated_delay_line<float_x1, false>, late_cfg::n_channels>
-    _late;
+  std::array<modulable_thiran_1<float_x1, false>, late_cfg::n_channels> _late;
 
   float _size           = 1.f;
   float _in_2_late      = 1.f;

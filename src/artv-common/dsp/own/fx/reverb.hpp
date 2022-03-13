@@ -181,7 +181,7 @@ public:
 
   static constexpr auto get_parameter (mod_stereo_tag)
   {
-    return float_param ("%", -100.f, 100.f, -50.f, 0.01f);
+    return float_param ("%", -100.f, 100.f, 0.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct mod_wave_tag {};

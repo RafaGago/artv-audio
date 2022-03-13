@@ -436,7 +436,7 @@ public:
     _interp     = mem.cut_head (n_interp_states * n_channels);
     _delay_spls = mem.cut_head (1 * n_channels);
     crange_memset (_delay_spls, 0);
-    base::reset (mem);
+    base::reset (mem, n_channels);
   }
   //----------------------------------------------------------------------------
   static constexpr uint interp_overhead_elems (uint n_channels)
@@ -459,11 +459,11 @@ public:
 
     using V = make_vector_t<value_type>;
 
-    return base::get<interp::n_points, interp::x_offset> (
-      get_delay_spls (channel), channel, [this] (auto y, auto x) {
+    return base::template get<interp::n_points, interp::x_offset> (
+      get_delay_spls (channel), channel, [channel, this] (auto y, auto x) {
         return interp::tick (
-          this->get_interp_coeffs.cast (V {}),
-          this->get_interp_states.cast (V {}),
+          this->get_interp_coeffs (channel).template cast<const V>(),
+          this->get_interp_states (channel).template cast<V>(),
           y,
           x);
       });
@@ -603,6 +603,41 @@ public:
 };
 
 namespace detail {
+// Frankenstein to be able to implement "modulable_thiran_1"
+struct thiran_interp_1 {
+  //----------------------------------------------------------------------------
+  enum coeffs { n_coeffs };
+  enum coeffs_int { n_coeffs_int };
+  enum state { y1, n_states };
+  //----------------------------------------------------------------------------
+  static constexpr uint n_points = 2;
+  static constexpr uint x_offset = 0;
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (crange<V> co, V fractional)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<V> st)
+  {
+    st[y1] = vec_set<V> ((vec_value_type_t<V>) 0);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const V>         co,
+    crange<V>               st,
+    std::array<V, n_points> y_points,
+    V                       x [[maybe_unused]])
+  {
+    auto& z = y_points; // to avoid nomenclature clash
+    V     y = z[0] + x * (z[1] - st[y1]);
+    st[y1]  = y;
+    return y;
+  }
+  //----------------------------------------------------------------------------
+};
+
 // Frankenstein to be able to implement "modulable_thiran_2"
 // It is a direct form 1 to be able to tweak the past outputs. It also doesn't
 // maintain its own delay line.
@@ -613,6 +648,7 @@ struct thiran_interp_2_df1 {
   enum state { y1, y2, n_states };
   //----------------------------------------------------------------------------
   static constexpr uint n_points = 3;
+  static constexpr uint x_offset = 0;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> co, V fractional)
@@ -634,7 +670,8 @@ struct thiran_interp_2_df1 {
     V                       x [[maybe_unused]])
   {
     auto& z = y_points; // to avoid nomenclature clash
-    V y = co[biquad::b0] * z[0] + co[biquad::b1] * z[1] + co[biquad::b2] * z[2];
+    // b2 is 0, ommiting "co[biquad::b2] * z[2]";
+    V y = co[biquad::b0] * z[0] + co[biquad::b1] * z[1];
     y -= co[biquad::a1] * st[y1] + co[biquad::a2] * st[y2];
     st[y2] = st[y1];
     st[y1] = y;
@@ -645,17 +682,17 @@ struct thiran_interp_2_df1 {
 }; // namespace detail
 
 //------------------------------------------------------------------------------
-// Slowly modulable Thiran2-frankenstein.
+// Slowly modulable Thiran1-frankenstein.
 template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
-class modulable_thiran_2
+class modulable_thiran_1
   : private statefully_interpolated_delay_line<
       T,
-      detail::thiran_interp_2_df1,
+      detail::thiran_interp_1,
       Interleaved,
       Use_pow2_sizes> {
   using base = statefully_interpolated_delay_line<
     T,
-    detail::thiran_interp_2_df1,
+    detail::thiran_interp_1,
     Interleaved,
     Use_pow2_sizes>;
 
@@ -665,6 +702,7 @@ public:
   using base::interp_overhead_elems;
   using base::n_channels;
   using base::push;
+  using base::reset;
   using base::size;
   using interp                          = typename base::interp;
   using value_type                      = typename base::value_type;
@@ -699,9 +737,80 @@ public:
         }
 
         assert (spls <= size() - 3);
-        auto z0 = get (spls, channel);
-        auto z1 = get (spls + 1, channel);
-        auto z2 = get (spls + 2, channel);
+        auto z0 = get_raw (spls, channel);
+        auto z1 = get_raw (spls + 1, channel);
+        auto st = this->get_interp_states (channel);
+
+        st[interp::y1] = linear_interp::tick (make_array (z0, z1), frac);
+      }
+      this->reset_interpolator (delay_spls, channel, false);
+    }
+    return base::get (delay_spls, channel);
+  }
+  //----------------------------------------------------------------------------
+private:
+  float _resync_delta_spls {};
+};
+//------------------------------------------------------------------------------
+
+// Slowly modulable Thiran2-frankenstein. (TODO: broken?)
+template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
+class modulable_thiran_2
+  : private statefully_interpolated_delay_line<
+      T,
+      detail::thiran_interp_2_df1,
+      Interleaved,
+      Use_pow2_sizes> {
+  using base = statefully_interpolated_delay_line<
+    T,
+    detail::thiran_interp_2_df1,
+    Interleaved,
+    Use_pow2_sizes>;
+
+public:
+  //----------------------------------------------------------------------------
+  using base::get_raw;
+  using base::interp_overhead_elems;
+  using base::n_channels;
+  using base::push;
+  using base::reset;
+  using base::size;
+  using interp                          = typename base::interp;
+  using value_type                      = typename base::value_type;
+  static constexpr uint n_interp_states = base::n_interp_states;
+  //----------------------------------------------------------------------------
+  static constexpr uint interp_overhead_elems (uint n_channels)
+  {
+    return base::interp_overhead_elems (n_channels);
+  }
+  //----------------------------------------------------------------------------
+  void set_resync_delta_spls (float v) { _resync_delta_spls = v; }
+  //----------------------------------------------------------------------------
+  value_type get (float delay_spls, uint channel)
+  {
+    assert (channel < n_channels());
+
+    auto diff = abs (delay_spls - this->get_delay_spls (channel));
+
+    if (diff != 0) {
+      if (unlikely (diff >= _resync_delta_spls)) {
+        // resync: aproximate filter state reconstruction by linear interp.
+        uint       spls = (uint) delay_spls;
+        value_type frac;
+
+        if constexpr (is_vec_v<value_type>) {
+          using builtin = vec_value_type_t<value_type>;
+          frac
+            = vec_set<value_type> (((builtin) delay_spls) - ((builtin) spls));
+        }
+        else {
+          frac = ((value_type) delay_spls) - ((value_type) spls);
+        }
+
+        assert (spls <= size() - 3);
+        auto z0 = get_raw (spls, channel);
+        auto z1 = get_raw (spls + 1, channel);
+        auto z2 = get_raw (spls + 2, channel);
         auto st = this->get_interp_states (channel);
 
         st[interp::y1] = linear_interp::tick (make_array (z0, z1), frac);
@@ -713,7 +822,7 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  float _resync_delta_spls;
+  float _resync_delta_spls {};
 };
 //------------------------------------------------------------------------------
 // - single dynamic allocation

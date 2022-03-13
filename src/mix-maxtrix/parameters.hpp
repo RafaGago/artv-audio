@@ -6498,6 +6498,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  reverb_mod_stereo,
+  n_stereo_busses,
+  param_common (
+    "Mod Stereo",
+    declptr<reverb>(),
+    declptr<reverb::mod_stereo_tag>()),
+  reverb::get_parameter (reverb::mod_stereo_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   reverb_diff_in,
   n_stereo_busses,
   param_common (
@@ -6617,13 +6627,14 @@ using reverb_params = mp_list<
   reverb_mod_freq,
   reverb_mod_depth,
   reverb_mod_wave,
-  reverb_stereo,
+  reverb_mod_stereo,
 
   reverb_diff_in,
   reverb_diff_out,
   reverb_l_sparseness,
   reverb_r_sparseness,
-  reverb_lr_sparseness>;
+  reverb_lr_sparseness,
+  reverb_stereo>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
@@ -6693,7 +6704,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
