@@ -6553,7 +6553,10 @@ parameter_cpp_class_define (
 parameter_cpp_class_define (
   reverb_damp_factor,
   n_stereo_busses,
-  param_common ("Damp", declptr<reverb>(), declptr<reverb::damp_factor_tag>()),
+  param_common (
+    "Damp Amt",
+    declptr<reverb>(),
+    declptr<reverb::damp_factor_tag>()),
   reverb::get_parameter (reverb::damp_factor_tag {}),
   slider_ext);
 
@@ -6561,7 +6564,7 @@ parameter_cpp_class_define (
   reverb_damp_freq,
   n_stereo_busses,
   param_common (
-    "Damp Freq",
+    "Damp Cutoff",
     declptr<reverb>(),
     declptr<reverb::damp_freq_tag>()),
   reverb::get_parameter (reverb::damp_freq_tag {}),
@@ -6571,7 +6574,7 @@ parameter_cpp_class_define (
   reverb_lf_time_factor,
   n_stereo_busses,
   param_common (
-    "LF Factor",
+    "Damp Bal",
     declptr<reverb>(),
     declptr<reverb::lf_time_factor_tag>()),
   reverb::get_parameter (reverb::lf_time_factor_tag {}),
@@ -6613,9 +6616,9 @@ using reverb_params = mp_list<
   reverb_diff_out,
 
   // reverb_test,
+  reverb_damp_freq,
   reverb_damp_factor,
   reverb_lf_time_factor,
-  reverb_damp_freq,
   reverb_hp_freq>;
 
 //------------------------------------------------------------------------------
@@ -6687,14 +6690,14 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  waveshaper_params>;
+  reverb_params>;
 
 static constexpr auto fx_choices
   = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "1.FX-tested");

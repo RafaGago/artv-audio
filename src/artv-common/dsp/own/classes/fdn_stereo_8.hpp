@@ -214,7 +214,7 @@ public:
       array_cast<u16> (make_array (443, 532)));
 
     r.filter.max_att_db  = -9.f;
-    r.filter.freq_factor = -1.6f;
+    r.filter.freq_factor = std::log (4.5f);
 
     r.filter.freqs = array_cast<u16> (make_array (
       500,
@@ -231,8 +231,8 @@ public:
       1000,
       2200,
       2000,
-      2500,
-      2700));
+      2800,
+      3000));
 
     from_ascending_pairs_to_internal_chnl_order (r.filter.freqs);
 
@@ -328,15 +328,15 @@ public:
   void set_damp_freq (float factor)
   {
     assert (factor >= -1.f && factor <= 1.f);
-    _damp_freq = -factor;
-    reset_damping_filters();
+    vec<float, 16> freqs = vec_cast<float> (vec_from_array (_cfg.filter.freqs));
+    freqs *= (float) std::exp (factor * _cfg.filter.freq_factor);
+    _filters.reset_coeffs<lp_idx> (freqs, (float) _cfg.src.srate);
   }
   //----------------------------------------------------------------------------
   void set_damp_factor (float factor)
   {
     assert (factor >= 0.f && factor <= 1.f);
-    _damp_factor = factor;
-    reset_damping_filters();
+    _filter_hp_att = db_to_gain (_cfg.filter.max_att_db * factor * 0.5f);
   }
   //----------------------------------------------------------------------------
   void set_hp_freq (float factor)
@@ -925,19 +925,6 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  void reset_damping_filters()
-  {
-    vec<float, 16> freqs = vec_cast<float> (vec_from_array (_cfg.filter.freqs));
-    freqs *= (float) std::exp (_damp_freq * _cfg.filter.freq_factor);
-    float nyquist = (float) _cfg.src.srate * 0.5f - 2.f;
-    freqs         = 1.f - freqs / nyquist; // now a factor ready to be scaled
-    // TODO: Why both the damping factor and the damping frequency affect the
-    // frequency? this was so on the JSFX prototype but I forgot...
-    freqs = nyquist - nyquist * (float) sqrt (_damp_factor) * freqs;
-    _filters.reset_coeffs<lp_idx> (freqs, (float) _cfg.src.srate);
-    _filter_hp_att = db_to_gain (_cfg.filter.max_att_db * _damp_factor * 0.5f);
-  }
-  //----------------------------------------------------------------------------
   template <class T, class Cfg>
   using reverb_array = array2d<T, Cfg::n_channels, Cfg::n_stages>;
   //----------------------------------------------------------------------------
@@ -1000,8 +987,6 @@ private:
     false>
     _filters;
 
-  float _damp_freq;
-  float _damp_factor;
   float _lf_rt60_factor;
   float _filter_hp_att;
 

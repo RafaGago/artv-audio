@@ -375,11 +375,12 @@ k.out_dif.g.array2d_init (2, k.out_dif.n_diffusors);
 // Crossover -------------------------------------------------------------------
 // 1 pole lowpasses. HP by subtraction.
 
-BYPASS_FILTERING   = 0;
-k.filt.att_fact_db = -9;
-k.filt.freq_fact   = 1.6;
+BYPASS_FILTERING    = 0;
+k.filt.att_fact_db  = -9;
+k.filt.freq_fact    = 4.5;
+k.filt.freq_fact_ln = log (k.filt.freq_fact);
 
-k.filt.dampfactor.array_init (k.late.n_channels);
+k.filt.dampfreq.array_init (k.late.n_channels);
 
 // Chorus ----------------------------------------------------------------------
 BYPASS_CHORUS = 0;
@@ -400,48 +401,25 @@ k.dc.cutoff_freq = 2;
 
 @slider //----------------------------------------------------------------------
 
-function reset_filters (filt*, dampfact_ptr, damp, srate)
+function reset_filters (filt*, freq_ptr, srate)
   global() local(srn) (
 
-  this.sr.array_init (16);
-
-  srn = (srate / 2) - 2;
-
-  this.sr.ptr[0]  = srn - srn * damp * dampfact_ptr[0];
-  this.sr.ptr[1]  = srn - srn * damp * dampfact_ptr[1];
-  this.sr.ptr[2]  = srn - srn * damp * dampfact_ptr[2];
-  this.sr.ptr[3]  = srn - srn * damp * dampfact_ptr[3];
-  this.sr.ptr[4]  = srn - srn * damp * dampfact_ptr[4];
-  this.sr.ptr[5]  = srn - srn * damp * dampfact_ptr[5];
-  this.sr.ptr[6]  = srn - srn * damp * dampfact_ptr[6];
-  this.sr.ptr[7]  = srn - srn * damp * dampfact_ptr[7];
-  this.sr.ptr[8]  = srn - srn * damp * dampfact_ptr[8];
-  this.sr.ptr[9]  = srn - srn * damp * dampfact_ptr[9];
-  this.sr.ptr[10] = srn - srn * damp * dampfact_ptr[10];
-  this.sr.ptr[11] = srn - srn * damp * dampfact_ptr[11];
-  this.sr.ptr[12] = srn - srn * damp * dampfact_ptr[12];
-  this.sr.ptr[13] = srn - srn * damp * dampfact_ptr[13];
-  this.sr.ptr[14] = srn - srn * damp * dampfact_ptr[14];
-  this.sr.ptr[15] = srn - srn * damp * dampfact_ptr[15];
-
-  filt.a.tpt_1p_reset (this.sr.ptr[0], srate);
-  filt.b.tpt_1p_reset (this.sr.ptr[1], srate);
-  filt.c.tpt_1p_reset (this.sr.ptr[2], srate);
-  filt.d.tpt_1p_reset (this.sr.ptr[3], srate);
-  filt.e.tpt_1p_reset (this.sr.ptr[4], srate);
-  filt.f.tpt_1p_reset (this.sr.ptr[5], srate);
-  filt.g.tpt_1p_reset (this.sr.ptr[6], srate);
-  filt.h.tpt_1p_reset (this.sr.ptr[7], srate);
-  filt.i.tpt_1p_reset (this.sr.ptr[8], srate);
-  filt.j.tpt_1p_reset (this.sr.ptr[9], srate);
-  filt.k.tpt_1p_reset (this.sr.ptr[10], srate);
-  filt.l.tpt_1p_reset (this.sr.ptr[11], srate);
-  filt.m.tpt_1p_reset (this.sr.ptr[12], srate);
-  filt.n.tpt_1p_reset (this.sr.ptr[13], srate);
-  filt.o.tpt_1p_reset (this.sr.ptr[14], srate);
-  filt.p.tpt_1p_reset (this.sr.ptr[15], srate);
-
-  this.sr.array_size_drop_to (0);
+  filt.a.tpt_1p_reset (freq_ptr[0], srate);
+  filt.b.tpt_1p_reset (freq_ptr[1], srate);
+  filt.c.tpt_1p_reset (freq_ptr[2], srate);
+  filt.d.tpt_1p_reset (freq_ptr[3], srate);
+  filt.e.tpt_1p_reset (freq_ptr[4], srate);
+  filt.f.tpt_1p_reset (freq_ptr[5], srate);
+  filt.g.tpt_1p_reset (freq_ptr[6], srate);
+  filt.h.tpt_1p_reset (freq_ptr[7], srate);
+  filt.i.tpt_1p_reset (freq_ptr[8], srate);
+  filt.j.tpt_1p_reset (freq_ptr[9], srate);
+  filt.k.tpt_1p_reset (freq_ptr[10], srate);
+  filt.l.tpt_1p_reset (freq_ptr[11], srate);
+  filt.m.tpt_1p_reset (freq_ptr[12], srate);
+  filt.n.tpt_1p_reset (freq_ptr[13], srate);
+  filt.o.tpt_1p_reset (freq_ptr[14], srate);
+  filt.p.tpt_1p_reset (freq_ptr[15], srate);
 );
 
 function reset_dc_blockers_x16 (dc*, freq, srate)
@@ -522,34 +500,28 @@ chorus.freq_r = mod_freq * exp (chorus.freq_fact);
 chorus.lfo.l.lfo_bank_reset_freq (0, chorus.freq_l, k.src.srate);
 chorus.lfo.r.lfo_bank_reset_freq (0, chorus.freq_r, k.src.srate);
 
-k.filt.damp_mult = exp (k.filt.freq_fact * damp_f);
-k.filt.dampfactor.ptr[0]  = 500 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[1]  = 530 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[2]  = 640 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[3]  = 600 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[4]  = 860 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[5]  = 800 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[6]  = 920 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[7]  = 900 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[8]  = 1000 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[9]  = 1100 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[10] = 1200 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[11] = 1000 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[12] = 2200 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[13] = 2000 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[14] = 2500 * k.filt.damp_mult;
-k.filt.dampfactor.ptr[15] = 2700 * k.filt.damp_mult;
+k.filt.damp_mult = exp (k.filt.freq_fact_ln * damp_f);
 
-i = 0;
-loop (k.filt.dampfactor.size,
-  k.filt.dampfactor.ptr[i] =
-    1 - k.filt.dampfactor.ptr[i] / (k.src.srate * 0.5 - 2);
-  i += 1;
-);
+k.filt.dampfreq.ptr[0]  = 500 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[1]  = 530 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[2]  = 640 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[3]  = 600 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[4]  = 860 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[5]  = 800 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[6]  = 920 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[7]  = 900 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[8]  = 1000 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[9]  = 1100 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[10] = 1200 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[11] = 1000 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[12] = 2200 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[13] = 2000 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[14] = 2800 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[15] = 3000 * k.filt.damp_mult;
 
-from_ascending_to_chnl_order (k.filt.dampfactor.ptr, k.filt.dampfactor.size);
+from_ascending_to_chnl_order (k.filt.dampfreq.ptr, k.filt.dampfreq.size);
 
-reset_filters (filt, k.filt.dampfactor.ptr, sqrt (damp), k.src.srate);
+reset_filters (filt, k.filt.dampfreq.ptr, k.src.srate);
 k.filt.att = pow (10, k.filt.att_fact_db * damp * 1/40);
 
 @block //-----------------------------------------------------------------------
