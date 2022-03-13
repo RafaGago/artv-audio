@@ -514,25 +514,23 @@ public:
     params                  p                = _p;
 
     if (unlikely (p.type_prev != p.type || p.mode_prev != p.mode)) {
+      _p.type_prev = _p.type;
+      _p.mode_prev = _p.mode;
+      // Avoid peaks, start from a steady state.
       _dc_block.reset_states();
       _wvsh.zero_all_states();
-      // some waveshapers will create peaks, as the integral on 0 might not be
-      // 0. Running them for some samples of silence to initialize. This avoids
-      // too having to run the "reset_states" functions on the waveshapers.
-      static constexpr uint n_samples = 32;
-      _p.type_prev                    = _p.type;
-      _p.mode_prev                    = _p.mode;
-      std::array<T, 2> value_increment {
-        (T) (ins[0][0] * (1. / n_samples)), (T) (ins[1][0] * (1. / n_samples))};
+      _envfollow.reset_states();
+      _pre_emphasis.reset_states();
+      _post_emphasis.reset_states();
+      _crossv.zero_all_states();
+      _wvsh.zero_all_states();
+      _sat_prev = _dcmod_prev     = _crossv_prev[lo_crossv]
+        = _crossv_prev[hi_crossv] = double_x2 {};
+      // feed some 0 samples
+      static constexpr uint        n_samples = 32;
       std::array<T, n_samples * 2> in {};
-      for (uint i = 1; i < n_samples; ++i) {
-        in[i] = in[i - 1] + value_increment[0];
-      }
-      for (uint i = n_samples + 1; i < (n_samples * 2); ++i) {
-        in[i] = in[i - 1] + value_increment[1];
-      }
-      std::array<T*, 2> io  = {&in[0], &in[n_samples]};
-      auto              cio = array_const_cast<T const*> (io);
+      std::array<T*, 2>            io  = {&in[0], &in[n_samples]};
+      auto                         cio = array_const_cast<T const*> (io);
       process<T> (io, cio, n_samples);
     }
 

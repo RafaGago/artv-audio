@@ -6,8 +6,6 @@
   modern plugin versions (unlikely to happen to me, I will always be using the
   last version).
 
-- Bug: Waveshaper: Fix spikes when changing sqrt/sqrt_sin waveform.
-
 - Chore: For C conformance, substitute many pointer reads/writes by memcpy.
 
 - Chore: Investigate dropping xsimd for libmvec or SVML (-fveclib=SVML flag). Will it work with clang-cl?
