@@ -26,6 +26,8 @@ slider24:damp_f=        0. <-1, 1, 0.001> Damping Freq
 slider25:hp_f=          2. <2, 60, 0.001> HP (hz)
 slider26:rt60_l_mul=    1. <0.333, 2, 0.001> RT60 L mul
 
+slider28:stereo=        0. <0, 1, 0.001> Stereo
+
 in_pin:left input
 in_pin:right input
 out_pin:left output
@@ -847,7 +849,7 @@ BYPASS_SRC == 0 ? (
     // trade correlation for some fake stereo, this can be enabled on metallic
     // (plate) reverbs.
 //    mix = 0.85;
-    mix = 1;
+    mix = 0.95;
     out.l = postdif.l * mix + out.l * (1 - mix);
     out.r = postdif.r * mix - out.r * (1 - mix);
   );
@@ -858,6 +860,9 @@ BYPASS_SRC == 0 ? (
     out.l += early.l;
     out.r += early.r;
   );
+
+  st = sqrt(stereo);
+  out.r = out.r * st + out.l * (1 - st);
 
   spl_op_rate_counter += 1; // operating rate counter
 

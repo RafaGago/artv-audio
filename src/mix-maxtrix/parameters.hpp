@@ -6411,14 +6411,14 @@ using soundtouch_params
 parameter_cpp_class_define (
   reverb_time,
   n_stereo_busses,
-  param_common ("Time", declptr<reverb>(), declptr<reverb::time_tag>()),
+  param_common ("Late Time", declptr<reverb>(), declptr<reverb::time_tag>()),
   reverb::get_parameter (reverb::time_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   reverb_size,
   n_stereo_busses,
-  param_common ("Size", declptr<reverb>(), declptr<reverb::size_tag>()),
+  param_common ("Late Size", declptr<reverb>(), declptr<reverb::size_tag>()),
   reverb::get_parameter (reverb::size_tag {}),
   slider_ext);
 
@@ -6447,7 +6447,7 @@ parameter_cpp_class_define (
   reverb_early_gain,
   n_stereo_busses,
   param_common (
-    "Early Lvl",
+    "ER Gain",
     declptr<reverb>(),
     declptr<reverb::early_gain_tag>()),
   reverb::get_parameter (reverb::early_gain_tag {}),
@@ -6457,7 +6457,7 @@ parameter_cpp_class_define (
   reverb_late_gain,
   n_stereo_busses,
   param_common (
-    "Late Lvl",
+    "Late Gain",
     declptr<reverb>(),
     declptr<reverb::late_gain_tag>()),
   reverb::get_parameter (reverb::late_gain_tag {}),
@@ -6467,7 +6467,7 @@ parameter_cpp_class_define (
   reverb_early_2_late_bal,
   n_stereo_busses,
   param_common (
-    "Early Bal",
+    "ER->Late",
     declptr<reverb>(),
     declptr<reverb::early_2_late_bal_tag>()),
   reverb::get_parameter (reverb::early_2_late_bal_tag {}),
@@ -6501,7 +6501,7 @@ parameter_cpp_class_define (
   reverb_diff_in,
   n_stereo_busses,
   param_common (
-    "In Diff",
+    "Attack",
     declptr<reverb>(),
     declptr<reverb::in_diffusion_tag>()),
   reverb::get_parameter (reverb::in_diffusion_tag {}),
@@ -6511,7 +6511,7 @@ parameter_cpp_class_define (
   reverb_diff_out,
   n_stereo_busses,
   param_common (
-    "Out Diff",
+    "Diffusion",
     declptr<reverb>(),
     declptr<reverb::out_diffusion_tag>()),
   reverb::get_parameter (reverb::out_diffusion_tag {}),
@@ -6584,6 +6584,13 @@ parameter_cpp_class_define (
   reverb::get_parameter (reverb::hp_freq_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  reverb_stereo,
+  n_stereo_busses,
+  param_common ("Stereo", declptr<reverb>(), declptr<reverb::stereo_tag>()),
+  reverb::get_parameter (reverb::stereo_tag {}),
+  slider_ext);
+
 #if 0
 parameter_cpp_class_define (
   reverb_test,
@@ -6594,30 +6601,29 @@ parameter_cpp_class_define (
 #endif
 
 using reverb_params = mp_list<
-  reverb_time,
-  reverb_size,
-  reverb_early_2_late_bal,
-  reverb_early_size,
-  reverb_late_gain,
-  reverb_early_gain,
   reverb_predelay,
+  reverb_early_gain,
+  reverb_early_size,
+  reverb_early_2_late_bal,
   reverb_gap,
+  reverb_late_gain,
+  reverb_size,
+  reverb_time,
 
-  reverb_mod_freq,
-  reverb_mod_depth,
-  reverb_mod_wave,
-  reverb_mtx_lr_angle,
-  reverb_mtx_l_angle,
-  reverb_mtx_r_angle,
-  reverb_diff_in,
-  reverb_diff_out,
-
-  // reverb_test,
   reverb_damp_freq,
   reverb_damp_factor,
   reverb_lf_time_factor,
-  reverb_hp_freq>;
+  reverb_hp_freq,
+  reverb_mod_freq,
+  reverb_mod_depth,
+  reverb_mod_wave,
+  reverb_stereo,
 
+  reverb_diff_in,
+  reverb_diff_out,
+  reverb_mtx_lr_angle,
+  reverb_mtx_l_angle,
+  reverb_mtx_r_angle>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (

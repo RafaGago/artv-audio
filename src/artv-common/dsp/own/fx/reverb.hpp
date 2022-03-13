@@ -91,7 +91,7 @@ public:
 
   static constexpr auto get_parameter (early_2_late_bal_tag)
   {
-    return float_param ("dB", 0.f, 100.f, -0.f, 0.1f);
+    return float_param ("%", 0.f, 100.f, -0.f, 0.1f);
   }
   //----------------------------------------------------------------------------
   struct time_tag {};
@@ -337,6 +337,21 @@ public:
   {
     return float_param ("sixteenths", 0.f, 16.f, 0.f, 0.001f);
   }
+  //----------------------------------------------------------------------------
+  struct stereo_tag {};
+  void set (stereo_tag, float v)
+  {
+    if (v == _stereo) {
+      return;
+    }
+    _stereo = v;
+    _impl.set_stereo (_stereo * 0.01f);
+  }
+
+  static constexpr auto get_parameter (stereo_tag)
+  {
+    return float_param ("%", 0.f, 100.f, 100.f, 0.01f);
+  }
 #if 0
   //----------------------------------------------------------------------------
   struct test_param_tag {};
@@ -415,6 +430,7 @@ public:
     _lf_rt60_factor                    = invalid_val;
     _predelay                          = invalid_val;
     _gap                               = invalid_val;
+    _stereo                            = invalid_val;
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -446,6 +462,7 @@ private:
   float _lf_rt60_factor;
   float _predelay;
   float _gap;
+  float _stereo;
   uint  _mod_wave;
 };
 //------------------------------------------------------------------------------

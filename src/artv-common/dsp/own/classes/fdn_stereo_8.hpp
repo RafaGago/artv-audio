@@ -249,9 +249,17 @@ public:
     _out_dif_g = _cfg.out_dif.g_max * factor;
   }
   //----------------------------------------------------------------------------
-  void set_early_gain (float g) { _early_gain = g; }
+  void set_early_gain (float g)
+  {
+    static constexpr float zero = constexpr_db_to_gain (-60.f);
+    _early_gain                 = g > zero ? g : 0.f;
+  }
   //----------------------------------------------------------------------------
-  void set_late_gain (float g) { _late_gain = g; }
+  void set_late_gain (float g)
+  {
+    static constexpr float zero = constexpr_db_to_gain (-60.f);
+    _late_gain                  = g > zero ? g : 0.f;
+  }
   //----------------------------------------------------------------------------
   void set_mod_freq (float factor)
   {
@@ -372,6 +380,12 @@ public:
     reset_early (factor);
   }
   //----------------------------------------------------------------------------
+  void set_stereo (float factor)
+  {
+    assert (factor >= 0.f && factor <= 1.f);
+    _stereo = sqrt (factor);
+  }
+  //----------------------------------------------------------------------------
   void set_test_param (uint v) { _test = v; }
   //----------------------------------------------------------------------------
   void reset (uint samplerate, float bpm, cfg const& cfg)
@@ -486,38 +500,46 @@ private:
         early_mtx[i][3] = early_mtx[i][2];
       }
 
-      for (uint stage = 0; stage < 1 /*early_cfg::n_stages*/; ++stage) {
-        // allpass
-        auto g = array_broadcast<4> (_cfg.early.stage[stage].g);
-        for (uint i = 0; i < block.size(); ++i) {
-          allpass_stage_tick (
-            early_mtx[i], _early[stage], g, _early_delay_spls[stage]);
-        }
-        // diffusion
-        if (stage < 3) {
+      if (_early_gain != 0.f || _er_2_late != 0.f) {
+        for (uint stage = 0; stage < 1 /*early_cfg::n_stages*/; ++stage) {
+          // allpass
+          auto g = array_broadcast<4> (_cfg.early.stage[stage].g);
           for (uint i = 0; i < block.size(); ++i) {
-            early_mtx[i] = hadamard_matrix<4>::tick<float> (early_mtx[i]);
+            allpass_stage_tick (
+              early_mtx[i], _early[stage], g, _early_delay_spls[stage]);
+          }
+          // diffusion
+          if (stage < 3) {
+            for (uint i = 0; i < block.size(); ++i) {
+              early_mtx[i] = hadamard_matrix<4>::tick<float> (early_mtx[i]);
+            }
+          }
+          else {
+            for (uint i = 0; i < block.size(); ++i) {
+              early_mtx[i] = householder_matrix<4>::tick<float> (early_mtx[i]);
+            }
+          }
+          // rotation
+          for (uint i = 0; i < block.size(); ++i) {
+            std::rotate (
+              early_mtx[i].begin(),
+              early_mtx[i].begin() + 1,
+              early_mtx[i].end());
+          }
+          for (uint i = 0; i < block.size(); ++i) {
+            early[i][0] += early_mtx[i][0];
+            early[i][1] += early_mtx[i][1];
           }
         }
-        else {
-          for (uint i = 0; i < block.size(); ++i) {
-            early_mtx[i] = householder_matrix<4>::tick<float> (early_mtx[i]);
-          }
-        }
-        // rotation
+        // mix early before gap delay
+        // --------------------------------------------
         for (uint i = 0; i < block.size(); ++i) {
-          std::rotate (
-            early_mtx[i].begin(), early_mtx[i].begin() + 1, early_mtx[i].end());
-        }
-        for (uint i = 0; i < block.size(); ++i) {
-          early[i][0] += early_mtx[i][0];
-          early[i][1] += early_mtx[i][1];
+          block[i][0] = early[i][0] * _early_gain;
+          block[i][1] = early[i][1] * _early_gain;
         }
       }
-      // mix early before gap delay --------------------------------------------
-      for (uint i = 0; i < block.size(); ++i) {
-        block[i][0] = early[i][0] * _early_gain;
-        block[i][1] = early[i][1] * _early_gain;
+      else {
+        crange_memset (block, 0);
       }
       // gap -------------------------------------------------------------------
       if (_gap_spls > _gap_lat_spls) {
@@ -535,122 +557,132 @@ private:
           early[i][1]   = _gap.get (gap_spls, 3);
         }
       }
-      // internal diffusor lfo.
-      mod_g = make_crange (tmp);
-      for (uint i = 0; i < block.size(); ++i) {
-        vec<float, 2> mod = _int_dif_lfo.tick_filt_sample_and_hold();
-        vec<float, 2> g   = vec_set<2> (_cfg.int_dif.g_base);
-        g += mod * _cfg.int_dif.g_mod_depth;
-        mod_g[i] = vec_to_array (g);
-      }
-      // late ------------------------------------------------------------------
-      for (uint i = 0; i < block.size(); ++i) {
-        // the parts between the single sample feedback don't run blockwise
-        // unfortunately.
-        auto late_mtx_arr = _late_feedback;
-        auto late_mtx     = make_crange (late_mtx_arr);
-
-        late_mtx[0] += pre_dif[i][0] * _in_2_late;
-        late_mtx[1] += early[i][1] * _er_2_late;
-        late_mtx[14] += early[i][0] * _er_2_late;
-        late_mtx[15] += pre_dif[i][1] * _in_2_late;
-
-        // diffusion
-        auto l = rotation_matrix<8>::tick<float> (
-          late_mtx.get_head (8), _late_l_angle);
-        crange_copy<float> (late_mtx.get_head (8), l);
-
-        auto r = rotation_matrix<8>::tick<float> (
-          late_mtx.advanced (8), _late_r_angle);
-        crange_copy<float> (late_mtx.advanced (8), r);
-
-        auto midch = rotation_matrix<8>::tick<float> (
-          late_mtx.advanced (4).get_head (8), _late_lr_angle);
-        crange_copy<float> (late_mtx.advanced (4).get_head (8), midch);
-
-        late[i][0] = late_mtx[11];
-        late[i][1] = late_mtx[4];
-
-        std::rotate (
-          late_mtx.begin() + 5, late_mtx.begin() + 6, late_mtx.begin() + 11);
-
-        for (uint i = 0; i < 16; ++i) {
-          _late[i].push (make_crange (late_mtx[i]).cast<float_x1>());
-        }
-        // chorus
-        vec<float, 16> n_spls;
-        switch (_late_wave) {
-        case modwv_sh:
-          n_spls = _late_lfo.tick_filt_sample_and_hold();
-          break;
-        case modwv_sin:
-          n_spls = _late_lfo.tick_sine();
-          break;
-        case modwv_tri:
-          n_spls = _late_lfo.tick_triangle();
-          break;
-        case modwv_sqr:
-          n_spls = _late_lfo.tick_square();
-          break;
-        case modwv_saw:
-          n_spls = _late_lfo.tick_saw();
-          break;
-        case modwv_tra:
-          n_spls = _late_lfo.tick_trapezoid (vec_set<16> (0.75f));
-          break;
-        default:
-          assert (false);
-          break;
-        };
-        n_spls *= _mod_depth_spls;
-        n_spls += _late_n_spls;
-
-        for (uint i = 0; i < 16; ++i) {
-          _late_feedback[i]
-            = _late[i].get<catmull_rom_interp> (n_spls[i], 0)[0];
-        }
-
-        // internal diffusor
-        std::array<float, 2> diffused;
-        diffused[0] = _late_feedback[_cfg.int_dif.channel_l];
-        diffused[1] = _late_feedback[_cfg.int_dif.channel_r];
-
-        for (uint st = 0; st < _int_dif.size(); ++st) {
-          allpass_stage_tick (
-            diffused, _int_dif[st], mod_g[i], _cfg.int_dif.n_samples[st]);
-        }
-        _late_feedback[_cfg.int_dif.channel_l] = diffused[0];
-        _late_feedback[_cfg.int_dif.channel_r] = diffused[1];
-
-        // Some spice
-        auto late_fb_vec = vec_from_array (_late_feedback);
-        late_fb_vec = late_fb_vec / vec_sqrt (late_fb_vec * late_fb_vec + 1.f);
-        // DC blocker and HP
-        late_fb_vec = _filters.tick<dc_idx> (late_fb_vec);
-
-        // Filtering
-        auto lp = _filters.tick<lp_idx> (late_fb_vec);
-        auto hp = (late_fb_vec - lp) * _filter_hp_att;
-
-        // Final attenuation
-        lp *= _rt60_att_l;
-        hp *= _rt60_att_h;
-
-        _late_feedback = vec_to_array (lp + hp);
-      }
-      // output diffusion
+      // late
       // -----------------------------------------------------------------------
-      std::array<float, 2> g_arr {_out_dif_g, _out_dif_g};
-      for (uint st = 0; st < _out_dif.size(); ++st) {
+      if (_late_gain != 0.f) {
+        // internal diffusor lfo.
+        mod_g = make_crange (tmp);
         for (uint i = 0; i < block.size(); ++i) {
-          allpass_stage_tick (
-            late[i], _out_dif[st], g_arr, _cfg.out_dif.n_samples[st]);
+          vec<float, 2> mod = _int_dif_lfo.tick_filt_sample_and_hold();
+          vec<float, 2> g   = vec_set<2> (_cfg.int_dif.g_base);
+          g += mod * _cfg.int_dif.g_mod_depth;
+          mod_g[i] = vec_to_array (g);
+        }
+        for (uint i = 0; i < block.size(); ++i) {
+          // the parts between the single sample feedback don't run blockwise
+          // unfortunately.
+          auto late_mtx_arr = _late_feedback;
+          auto late_mtx     = make_crange (late_mtx_arr);
+
+          late_mtx[0] += pre_dif[i][0] * _in_2_late;
+          late_mtx[1] += early[i][1] * _er_2_late;
+          late_mtx[14] += early[i][0] * _er_2_late;
+          late_mtx[15] += pre_dif[i][1] * _in_2_late;
+
+          // diffusion
+          auto l = rotation_matrix<8>::tick<float> (
+            late_mtx.get_head (8), _late_l_angle);
+          crange_copy<float> (late_mtx.get_head (8), l);
+
+          auto r = rotation_matrix<8>::tick<float> (
+            late_mtx.advanced (8), _late_r_angle);
+          crange_copy<float> (late_mtx.advanced (8), r);
+
+          auto midch = rotation_matrix<8>::tick<float> (
+            late_mtx.advanced (4).get_head (8), _late_lr_angle);
+          crange_copy<float> (late_mtx.advanced (4).get_head (8), midch);
+
+          late[i][0] = late_mtx[11];
+          late[i][1] = late_mtx[4];
+
+          std::rotate (
+            late_mtx.begin() + 5, late_mtx.begin() + 6, late_mtx.begin() + 11);
+
+          for (uint i = 0; i < 16; ++i) {
+            _late[i].push (make_crange (late_mtx[i]).cast<float_x1>());
+          }
+          // chorus
+          vec<float, 16> n_spls;
+          switch (_late_wave) {
+          case modwv_sh:
+            n_spls = _late_lfo.tick_filt_sample_and_hold();
+            break;
+          case modwv_sin:
+            n_spls = _late_lfo.tick_sine();
+            break;
+          case modwv_tri:
+            n_spls = _late_lfo.tick_triangle();
+            break;
+          case modwv_sqr:
+            n_spls = _late_lfo.tick_square();
+            break;
+          case modwv_saw:
+            n_spls = _late_lfo.tick_saw();
+            break;
+          case modwv_tra:
+            n_spls = _late_lfo.tick_trapezoid (vec_set<16> (0.75f));
+            break;
+          default:
+            assert (false);
+            break;
+          };
+          n_spls *= _mod_depth_spls;
+          n_spls += _late_n_spls;
+
+          for (uint i = 0; i < 16; ++i) {
+            _late_feedback[i]
+              = _late[i].get<catmull_rom_interp> (n_spls[i], 0)[0];
+          }
+          if (_test) {
+            // internal diffusor
+            std::array<float, 2> diffused;
+            diffused[0] = _late_feedback[_cfg.int_dif.channel_l];
+            diffused[1] = _late_feedback[_cfg.int_dif.channel_r];
+
+            for (uint st = 0; st < _int_dif.size(); ++st) {
+              allpass_stage_tick (
+                diffused, _int_dif[st], mod_g[i], _cfg.int_dif.n_samples[st]);
+            }
+            _late_feedback[_cfg.int_dif.channel_l] = diffused[0];
+            _late_feedback[_cfg.int_dif.channel_r] = diffused[1];
+          }
+          // Some spice
+          auto late_fb_vec = vec_from_array (_late_feedback);
+          late_fb_vec
+            = late_fb_vec / vec_sqrt (late_fb_vec * late_fb_vec + 1.f);
+          // DC blocker and HP
+          late_fb_vec = _filters.tick<dc_idx> (late_fb_vec);
+
+          // Filtering
+          auto lp = _filters.tick<lp_idx> (late_fb_vec);
+          auto hp = (late_fb_vec - lp) * _filter_hp_att;
+
+          // Final attenuation
+          lp *= _rt60_att_l;
+          hp *= _rt60_att_h;
+
+          _late_feedback = vec_to_array (lp + hp);
+        }
+        // output diffusion
+        // -----------------------------------------------------------------------
+        std::array<float, 2> g_arr {_out_dif_g, _out_dif_g};
+        for (uint st = 0; st < _out_dif.size(); ++st) {
+          for (uint i = 0; i < block.size(); ++i) {
+            allpass_stage_tick (
+              late[i], _out_dif[st], g_arr, _cfg.out_dif.n_samples[st]);
+          }
+        }
+        // mixing late
+        for (uint i = 0; i < block.size(); ++i) {
+          block[i][0] += late[i][0] * _late_gain;
+          block[i][1] += late[i][1] * _late_gain;
         }
       }
-      // mixing late
-      for (uint i = 0; i < block.size(); ++i) {
-        block[i][0] += late[i][0] * _late_gain;
-        block[i][1] += late[i][1] * _late_gain;
+      // stereo
+      if (_stereo != 1.f) {
+        for (uint i = 0; i < block.size(); ++i) {
+          block[i][1] = block[i][1] * _stereo + block[i][0] * (1.f - _stereo);
+        }
       }
     }
   }
@@ -700,7 +732,7 @@ private:
   //----------------------------------------------------------------------------
   void reset_early (float size_factor)
   {
-    float f             = std::exp (size_factor * _cfg.early.size_factor);
+    float f             = exp (size_factor * _cfg.early.size_factor);
     _pre_delay_lat_spls = (uint) -1;
     // compute delay lengths
     for (uint i = 0; i < _cfg.early.n_stages; ++i) {
@@ -903,10 +935,10 @@ private:
     weight *= 0.8f;
     weight += 0.1f; // 0.1 to 0.8
 
-    float w1a = std::cos (weight * 0.5f * M_PI);
-    float w1b = std::sqrt (1.f - w1a * w1a);
-    float w2a = std::cos (weight * 0.49f * M_PI);
-    float w2b = std::sqrt (1.f - w2a * w2a);
+    float w1a = cos (weight * 0.5f * M_PI);
+    float w1b = sqrt (1.f - w1a * w1a);
+    float w2a = cos (weight * 0.49f * M_PI);
+    float w2b = sqrt (1.f - w2a * w2a);
 
     array2d<float, 2, 2> ret;
     ret[0][0] = w1a;
@@ -1013,6 +1045,7 @@ private:
 
   float _early_size;
   float _seconds;
+  float _stereo;
   float _beat_16th_spls;
 
   uint _test;
