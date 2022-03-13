@@ -210,10 +210,11 @@ add_compile_definitions(
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_USE_SSE_INTRINSICS=1
     )
+# 6.1.5-lv2
 FetchContent_Declare(
     juce
     GIT_REPOSITORY https://github.com/lv2-porting-project/JUCE
-    GIT_TAG        f00a420bc348d79c4688b33b2b905b8ca0f25a3a
+    GIT_TAG        a59c238919dab18e28d97a98d8c0f737a058d15a
     PATCH_COMMAND  git reset --hard f00a420bc348d79c4688b33b2b905b8ca0f25a3a && git apply --whitespace=fix ${JUCE_PATCH}
     )
 FetchContent_MakeAvailable (juce)
