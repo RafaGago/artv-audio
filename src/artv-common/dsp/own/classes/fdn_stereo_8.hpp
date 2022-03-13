@@ -168,7 +168,7 @@ public:
     r.late.prime_idx   = 15;
     r.late.size_factor = 2.f;
 
-    r.late.max_chorus_depth_spls = 300; // goes to not subtle at all
+    r.late.max_chorus_depth_spls = 200; // goes to not subtle at all
     r.late.max_chorus_freq       = 7;
     r.late.max_chorus_width      = 0.5f;
 

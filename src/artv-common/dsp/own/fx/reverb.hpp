@@ -320,7 +320,7 @@ public:
 
   static constexpr auto get_parameter (predelay_tag)
   {
-    return float_param ("sixteenths", 0.f, 16.f, 0.f, 0.001f);
+    return float_param ("sixteenths", 0.f, 16.f, 1.f, 0.001f);
   }
   //----------------------------------------------------------------------------
   struct gap_tag {};
@@ -335,7 +335,7 @@ public:
 
   static constexpr auto get_parameter (gap_tag)
   {
-    return float_param ("sixteenths", 0.f, 16.f, 0.f, 0.001f);
+    return float_param ("sixteenths", 0.f, 16.f, 3.f, 0.001f);
   }
   //----------------------------------------------------------------------------
   struct stereo_tag {};

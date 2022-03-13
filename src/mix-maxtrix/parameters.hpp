@@ -6693,7 +6693,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
@@ -6756,7 +6756,8 @@ using all_fx_typelists = mp_list<
   lin_eq4x_params,
   naive_pitch_params,
   rubberband_params,
-  soundtouch_params>;
+  soundtouch_params,
+  reverb_params>;
 // clang-format on
 //------------------------------------------------------------------------------
 // ordering between "fx_choices" and "all_fx_params_typelists" MUST match!
@@ -6813,7 +6814,8 @@ static constexpr auto fx_choices = make_cstr_array (
   ":EQ 4-band LinPh",
   ":Pitch Naive",
   ":Pitch Rubberband",
-  ":Pitch Soundtouch");
+  ":Pitch Soundtouch",
+  ":Reverb Artv Reverb");
 
 #endif // #if TWEAK_BUILD
 
