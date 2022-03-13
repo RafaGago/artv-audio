@@ -203,49 +203,49 @@ public:
       10);
   }
   //----------------------------------------------------------------------------
-  struct l_matrix_angle_tag {};
-  void set (l_matrix_angle_tag, float v)
+  struct l_sparseness_tag {};
+  void set (l_sparseness_tag, float v)
   {
-    if (v == _l_matrix_angle) {
+    if (v == _l_sparseness) {
       return;
     }
-    _l_matrix_angle = v;
+    _l_sparseness = v;
     _impl.set_l_matrix_angle (v * 0.01f);
   }
 
-  static constexpr auto get_parameter (l_matrix_angle_tag)
+  static constexpr auto get_parameter (l_sparseness_tag)
   {
-    return float_param ("%", 0.f, 100.f, 52.34f, 0.01f);
+    return float_param ("%", -100.f, 100.f, 2.34f, 0.01f);
   }
   //----------------------------------------------------------------------------
-  struct r_matrix_angle_tag {};
-  void set (r_matrix_angle_tag, float v)
+  struct r_sparseness_tag {};
+  void set (r_sparseness_tag, float v)
   {
-    if (v == _r_matrix_angle) {
+    if (v == _r_sparseness) {
       return;
     }
-    _r_matrix_angle = v;
+    _r_sparseness = v;
     _impl.set_r_matrix_angle (v * 0.01f);
   }
 
-  static constexpr auto get_parameter (r_matrix_angle_tag)
+  static constexpr auto get_parameter (r_sparseness_tag)
   {
-    return float_param ("%", 0.f, 100.f, 48.12f, 0.01f);
+    return float_param ("%", -100.f, 100.f, -1.f, 0.01f);
   }
   //----------------------------------------------------------------------------
-  struct lr_matrix_angle_tag {};
-  void set (lr_matrix_angle_tag, float v)
+  struct lr_sparseness_tag {};
+  void set (lr_sparseness_tag, float v)
   {
-    if (v == _lr_matrix_angle) {
+    if (v == _lr_sparseness) {
       return;
     }
-    _lr_matrix_angle = v;
+    _lr_sparseness = v;
     _impl.set_lr_matrix_angle (v * 0.01f);
   }
 
-  static constexpr auto get_parameter (lr_matrix_angle_tag)
+  static constexpr auto get_parameter (lr_sparseness_tag)
   {
-    return float_param ("%", 0.f, 100.f, 51.23f, 0.01f);
+    return float_param ("%", -100.f, 100.f, 1.23f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct damp_freq_tag {};
@@ -421,9 +421,9 @@ public:
     _mod_freq                          = invalid_val;
     _mod_depth                         = invalid_val;
     _mod_stereo                        = invalid_val;
-    _l_matrix_angle                    = invalid_val;
-    _r_matrix_angle                    = invalid_val;
-    _lr_matrix_angle                   = invalid_val;
+    _l_sparseness                      = invalid_val;
+    _r_sparseness                      = invalid_val;
+    _lr_sparseness                     = invalid_val;
     _damp_freq                         = invalid_val;
     _damp_factor                       = invalid_val;
     _hp_freq                           = invalid_val;
@@ -453,9 +453,9 @@ private:
   float _mod_freq;
   float _mod_depth;
   float _mod_stereo;
-  float _l_matrix_angle;
-  float _r_matrix_angle;
-  float _lr_matrix_angle;
+  float _l_sparseness;
+  float _r_sparseness;
+  float _lr_sparseness;
   float _damp_freq;
   float _damp_factor;
   float _hp_freq;

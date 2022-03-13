@@ -302,19 +302,19 @@ public:
   //----------------------------------------------------------------------------
   void set_l_matrix_angle (float factor)
   {
-    assert (factor >= 0.f && factor <= 1.f);
+    assert (factor >= -1.f && factor <= 1.f);
     _late_l_angle = set_rotation_angle (factor);
   }
   //----------------------------------------------------------------------------
   void set_r_matrix_angle (float factor)
   {
-    assert (factor >= 0.f && factor <= 1.f);
+    assert (factor >= -1.f && factor <= 1.f);
     _late_r_angle = set_rotation_angle (factor);
   }
   //----------------------------------------------------------------------------
   void set_lr_matrix_angle (float factor)
   {
-    assert (factor >= 0.f && factor <= 1.f);
+    assert (factor >= -1.f && factor <= 1.f);
     _late_lr_angle = set_rotation_angle (factor);
   }
   //----------------------------------------------------------------------------
@@ -342,6 +342,7 @@ public:
   void set_damp_factor (float factor)
   {
     assert (factor >= 0.f && factor <= 1.f);
+    factor *= factor;
     _filter_hp_att = db_to_gain (_cfg.filter.max_att_db * factor * 0.5f);
   }
   //----------------------------------------------------------------------------
@@ -932,8 +933,12 @@ private:
   //----------------------------------------------------------------------------
   static array2d<float, 2, 2> set_rotation_angle (float weight)
   {
+    // from [-1,1] to [0, 1]
+    weight += 1.f;
+    weight *= 0.5f;
+    // from [0,1] to [0.1, 0.9]
     weight *= 0.8f;
-    weight += 0.1f; // 0.1 to 0.8
+    weight += 0.1f;
 
     float w1a = cos (weight * 0.5f * M_PI);
     float w1b = sqrt (1.f - w1a * w1a);

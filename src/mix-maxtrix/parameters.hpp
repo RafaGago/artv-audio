@@ -6518,33 +6518,33 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  reverb_mtx_l_angle,
+  reverb_l_sparseness,
   n_stereo_busses,
   param_common (
-    "L m.rot",
+    "L Sparse",
     declptr<reverb>(),
-    declptr<reverb::l_matrix_angle_tag>()),
-  reverb::get_parameter (reverb::l_matrix_angle_tag {}),
+    declptr<reverb::l_sparseness_tag>()),
+  reverb::get_parameter (reverb::l_sparseness_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  reverb_mtx_r_angle,
+  reverb_r_sparseness,
   n_stereo_busses,
   param_common (
-    "R m.rot",
+    "R Sparse",
     declptr<reverb>(),
-    declptr<reverb::r_matrix_angle_tag>()),
-  reverb::get_parameter (reverb::r_matrix_angle_tag {}),
+    declptr<reverb::r_sparseness_tag>()),
+  reverb::get_parameter (reverb::r_sparseness_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  reverb_mtx_lr_angle,
+  reverb_lr_sparseness,
   n_stereo_busses,
   param_common (
-    "LR m.rot",
+    "LR Sparse",
     declptr<reverb>(),
-    declptr<reverb::lr_matrix_angle_tag>()),
-  reverb::get_parameter (reverb::lr_matrix_angle_tag {}),
+    declptr<reverb::lr_sparseness_tag>()),
+  reverb::get_parameter (reverb::lr_sparseness_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -6621,9 +6621,9 @@ using reverb_params = mp_list<
 
   reverb_diff_in,
   reverb_diff_out,
-  reverb_mtx_lr_angle,
-  reverb_mtx_l_angle,
-  reverb_mtx_r_angle>;
+  reverb_l_sparseness,
+  reverb_r_sparseness,
+  reverb_lr_sparseness>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
