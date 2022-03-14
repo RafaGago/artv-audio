@@ -159,7 +159,7 @@ public:
     r.early.stage[2].meters = 3.163f;
     r.early.stage[2].span   = 3.121f;
     r.early.stage[2].g      = 0.5f;
-    r.early.stage[3].meters = 2.909f;
+    r.early.stage[3].meters = 7.333f;
     r.early.stage[3].span   = 3.187f;
     r.early.stage[3].g      = 0.65f;
     r.early.prime_idx       = 1;
@@ -449,7 +449,7 @@ private:
     array2d<float, 4, blocksize> early_mtx;
 
     static_assert (late_cfg::n_channels == 16); // hardcoding for readability
-    array2d<float, 2, blocksize>                           late;
+    array2d<float, 2, blocksize>                           early_then_late;
     alignas (vec<float, 16>) array2d<float, 16, blocksize> late_mtx;
 
     while (io.size()) {
@@ -547,11 +547,14 @@ private:
 
           _gap.push (gap_spl);
 
-          pre_dif[i][0] = _gap.get (gap_spls, 0);
-          pre_dif[i][1] = _gap.get (gap_spls, 1);
-          block[i][0]   = _gap.get (gap_spls, 2);
-          block[i][1]   = _gap.get (gap_spls, 3);
+          pre_dif[i][0]         = _gap.get (gap_spls, 0);
+          pre_dif[i][1]         = _gap.get (gap_spls, 1);
+          early_then_late[i][0] = _gap.get (gap_spls, 2);
+          early_then_late[i][1] = _gap.get (gap_spls, 3);
         }
+      }
+      else {
+        crange_copy<std::array<float, 2>> (early_then_late, block);
       }
       // late
       // -----------------------------------------------------------------------
@@ -638,10 +641,10 @@ private:
 
         // end of feedback path. Starting feedforward
         for (uint i = 0; i < block.size(); ++i) {
-          // reminder block[i][0/1] contains the unscaled early reflections
+          // reminder "early_then_late" contains the unscaled early reflections
           late_mtx[i][0] += pre_dif[i][0] * _in_2_late;
-          late_mtx[i][1] += block[i][1] * _er_2_late;
-          late_mtx[i][14] += block[i][0] * _er_2_late;
+          late_mtx[i][1] += early_then_late[i][1] * _er_2_late;
+          late_mtx[i][14] += early_then_late[i][0] * _er_2_late;
           late_mtx[i][15] += pre_dif[i][1] * _in_2_late;
         }
 
@@ -662,8 +665,8 @@ private:
         }
 
         for (uint i = 0; i < block.size(); ++i) {
-          late[i][0] = late_mtx[i][11];
-          late[i][1] = late_mtx[i][4];
+          early_then_late[i][0] = late_mtx[i][11];
+          early_then_late[i][1] = late_mtx[i][4];
 
           std::rotate (
             late_mtx[i].begin() + 5,
@@ -680,7 +683,10 @@ private:
         for (uint st = 0; st < _out_dif.size(); ++st) {
           for (uint i = 0; i < block.size(); ++i) {
             allpass_stage_tick (
-              late[i], _out_dif[st], g_arr, _cfg.out_dif.n_samples[st]);
+              early_then_late[i],
+              _out_dif[st],
+              g_arr,
+              _cfg.out_dif.n_samples[st]);
           }
         }
         // mixing late + early + stereo
@@ -690,8 +696,8 @@ private:
           block[i][0] *= _early_gain;
           block[i][1] *= _early_gain;
 
-          block[i][0] += late[i][0] * _late_gain;
-          block[i][1] += late[i][1] * _late_gain;
+          block[i][0] += early_then_late[i][0] * _late_gain;
+          block[i][1] += early_then_late[i][1] * _late_gain;
 
           block[i][1] = block[i][1] * _stereo + block[i][0] * (1.f - _stereo);
         }
