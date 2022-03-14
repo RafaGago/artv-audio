@@ -475,6 +475,9 @@ private:
           pre_dif[i][1] = _pre_delay.get (pre_delay_spls, 1);
         }
       }
+      else {
+        crange_copy<std::array<float, 2>> (pre_dif, block);
+      }
 
       for (uint st = 0; st < _pre_dif.size(); ++st) {
         for (uint i = 0; i < block.size(); ++i) {
@@ -493,10 +496,14 @@ private:
         early_mtx[i][1] = pre_dif[i][1];
         early_mtx[i][2] = (early_mtx[i][0] + early_mtx[i][1]) * 0.5f; // mid
         early_mtx[i][3] = early_mtx[i][2];
+
+        block[i][0] = 0.f;
+        block[i][1] = 0.f;
       }
 
       if (_early_gain != 0.f || _er_2_late != 0.f) {
-        for (uint stage = 0; stage < 1 /*early_cfg::n_stages*/; ++stage) {
+        float stage_gain = 0.7f;
+        for (uint stage = 0; stage < early_cfg::n_stages; ++stage) {
           // allpass
           auto g = array_broadcast<4> (_cfg.early.stage[stage].g);
           for (uint i = 0; i < block.size(); ++i) {
@@ -514,15 +521,16 @@ private:
               early_mtx[i] = householder_matrix<4>::tick<float> (early_mtx[i]);
             }
           }
-          // rotation + storeage
+          // rotation + storage
           for (uint i = 0; i < block.size(); ++i) {
             std::rotate (
               early_mtx[i].begin(),
               early_mtx[i].begin() + 1,
               early_mtx[i].end());
-            block[i][0] = early_mtx[i][0];
-            block[i][1] = early_mtx[i][1];
+            block[i][(stage & 1) == 0] += early_mtx[i][0] * stage_gain;
+            block[i][(stage & 1) == 1] += early_mtx[i][1] * stage_gain;
           }
+          stage_gain *= stage_gain;
         }
       }
       else {
