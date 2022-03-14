@@ -169,8 +169,8 @@ public:
     r.late.prime_idx   = 15;
     r.late.size_factor = 2.f;
 
-    r.late.max_chorus_depth_spls = 200; // goes to not subtle at all
-    r.late.max_chorus_freq       = 7;
+    r.late.max_chorus_depth_spls = 125;
+    r.late.max_chorus_freq       = 2.5f;
     r.late.max_chorus_width      = 0.5f;
 
     r.late.n_samples = array_cast<u16> (make_array (
@@ -272,8 +272,7 @@ public:
   void set_mod_depth (float factor)
   {
     assert (factor >= 0.f && factor <= 1.f);
-    _mod_depth_spls
-      = factor * factor * factor * (float) _cfg.late.max_chorus_depth_spls;
+    _mod_depth_spls = factor * (float) _cfg.late.max_chorus_depth_spls;
   }
   //----------------------------------------------------------------------------
   void set_mod_stereo (float factor)
@@ -826,8 +825,9 @@ private:
     _late_lfo.set_freq (freq, _cfg.src.srate);
 
     vec_type vphase;
-    float    inc    = 1. / n_side_chnls;
+    float    inc    = 1.f / (float) n_side_chnls;
     float    cphase = 0.f;
+    inc *= _mod_stereo;
     for (uint i = 0; i < n_side_chnls; ++i) {
       vphase[i]                          = i & 1 ? cphase : -cphase;
       vphase[(2 * n_side_chnls - 1) - i] = i & 1 ? cphase : -cphase;

@@ -199,7 +199,7 @@ struct catmull_rom_interp {
   static constexpr uint n_coeffs_int = 0;
   static constexpr uint n_states     = 0;
   static constexpr uint n_points     = 4;
-  static constexpr uint x_offset     = 1; // interpolates between y[1] and y[2]
+  static constexpr uint x_offset     = 2; // interpolates between y[2] and y[3]
   //----------------------------------------------------------------------------
   template <class T>
   static void reset_coeffs (crange<T>)
