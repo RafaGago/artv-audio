@@ -642,6 +642,65 @@ struct allpass_interp {
   }
   //----------------------------------------------------------------------------
 };
+//------------------------------------------------------------------------------
+// Frankenstein to be able to implement "modulable_thiran_1"
+struct thiran_interp_1 {
+  //----------------------------------------------------------------------------
+  enum coeffs { a, n_coeffs };
+  enum coeffs_int { n_coeffs_int };
+  enum state { y1, n_states };
+  //----------------------------------------------------------------------------
+  static constexpr uint n_points = 2;
+  static constexpr uint x_offset = 0;
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (crange<V> co, V fractional)
+  {
+    using T = vec_value_type_t<V>;
+    // D parameter between 0.418 and 1.418
+    V d = fractional + (T) 0.418;
+#if 0
+    // See https://dafx09.como.polimi.it/proceedings/papers/paper_72.pdf
+    // chapter 6.
+    // TODO: Is this really faster than 2 divs?
+    // TODO: It seems to cause noise/be broken.
+
+    V v = ((T) 1. - d) * (T) (1. / 2.);
+
+    V v_p2 = v * v;
+    V v_p4 = v_p2 * v_p2;
+    V v_p8 = v_p4 * v_p4;
+
+    co[a] = v;
+    co[a] *= ((T) 1 + v);
+    co[a] *= ((T) 1 + v_p2);
+    co[a] *= ((T) 1 + v_p4);
+    co[a] *= ((T) 1 + v_p8);
+
+#else
+    co[a]  = (1 - d) / (1 + d);
+#endif
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<V> st)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const V>         co,
+    crange<V>               st,
+    std::array<V, n_points> y_points,
+    V                       x [[maybe_unused]])
+  {
+    auto& z = y_points;
+    V     y = z[0] * co[a] + z[1] - co[a] * st[y1];
+    st[y1]  = y;
+    return y;
+  }
+  //----------------------------------------------------------------------------
+};
+//------------------------------------------------------------------------------
 
 // Frankenstein to be able to implement "modulable_thiran_2"
 // It is a direct form 1 to be able to tweak the past outputs. It also doesn't
@@ -731,6 +790,74 @@ class modulable_allpass_delay_line
   using base = statefully_interpolated_delay_line<
     T,
     detail::allpass_interp,
+    Interleaved,
+    Use_pow2_sizes>;
+
+public:
+  //----------------------------------------------------------------------------
+  using base::get_raw;
+  using base::interp_overhead_elems;
+  using base::n_channels;
+  using base::push;
+  using base::reset;
+  using base::size;
+  using interp                          = typename base::interp;
+  using value_type                      = typename base::value_type;
+  static constexpr uint n_interp_states = base::n_interp_states;
+  //----------------------------------------------------------------------------
+  static constexpr uint interp_overhead_elems (uint n_channels)
+  {
+    return base::interp_overhead_elems (n_channels);
+  }
+  //----------------------------------------------------------------------------
+  value_type get (float delay_spls, uint channel)
+  {
+    assert (channel < n_channels());
+
+    auto diff = abs (delay_spls - this->get_delay_spls (channel));
+    if (diff != 0) {
+
+      // resync: aproximate current filter state reconstruction by linear
+      // interp.
+      uint       spls = (uint) delay_spls;
+      value_type frac;
+
+      if constexpr (is_vec_v<value_type>) {
+        using builtin = vec_value_type_t<value_type>;
+        frac = vec_set<value_type> (((builtin) delay_spls) - ((builtin) spls));
+      }
+      else {
+        frac = ((value_type) delay_spls) - ((value_type) spls);
+      }
+      auto z0 = get_raw (spls, channel);
+      auto z1 = get_raw (spls + 1, channel);
+      auto st = this->get_interp_states (channel);
+
+      st[interp::y1] = linear_interp::tick (make_array (z0, z1), frac);
+
+      if constexpr (is_vec_v<value_type>) {
+        this->reset_interpolator (delay_spls, (float) frac[0], channel, false);
+      }
+      else {
+        this->reset_interpolator (delay_spls, (float) frac, channel, false);
+      }
+    }
+    return base::get (delay_spls, channel);
+  }
+  //----------------------------------------------------------------------------
+};
+//------------------------------------------------------------------------------
+// Slowly modulable allpass.
+template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
+class modulable_thiran_1
+  : private statefully_interpolated_delay_line<
+      T,
+      detail::thiran_interp_1,
+      Interleaved,
+      Use_pow2_sizes> {
+  using base = statefully_interpolated_delay_line<
+    T,
+    detail::thiran_interp_1,
     Interleaved,
     Use_pow2_sizes>;
 
