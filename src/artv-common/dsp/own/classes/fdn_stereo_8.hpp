@@ -569,24 +569,27 @@ private:
         uint lw = _late_wave; // telling the optimizer it won't change, so it
         // can optimize the switch below
         for (uint i = 0; i < block.size(); ++i) {
-          vec<float, 16> n_spls;
+          vec<float, 16> mod;
           switch (lw) {
           case modwv_sh:
-            n_spls = _late_lfo.tick_filt_sample_and_hold();
+            mod = _late_lfo.tick_filt_sample_and_hold();
             break;
           case modwv_sin:
-            n_spls = _late_lfo.tick_sine();
+            mod = _late_lfo.tick_sine();
             break;
           case modwv_tri:
-            n_spls = _late_lfo.tick_triangle();
+            mod = _late_lfo.tick_triangle();
             break;
           default:
             assert (false);
             break;
           };
-          n_spls *= _mod_depth_spls;
-          n_spls += _late_n_spls;
-          late_mtx[i] = vec_to_array (n_spls);
+          auto n_spls_mod = mod * _mod_depth_spls;
+          auto n_spls     = n_spls_mod + _late_n_spls;
+          late_mtx[i]     = vec_to_array (n_spls);
+          for (uint j = 0; j < 16; ++j) {
+            assert (late_mtx[i][j] >= 0.f);
+          }
         }
         // chorus, "late_mtx" has now the LFOS
         float i_flt = 0.f;
@@ -1022,11 +1025,13 @@ private:
     spls *= _mod_depth_factor * 0.5f;
     spls /= _mod_freq_hz;
 
-    // limit the excursion
+    // limit the excursion on both sides
     auto max_spls = (uint) _late_n_spls[0]
       - (blocksize + delay_line_type::interp::n_points);
 
     _mod_depth_spls = std::min<float> (spls, max_spls);
+    _mod_depth_spls
+      = std::min<float> (_mod_depth_spls, _cfg.late.max_chorus_depth_spls);
   }
   //----------------------------------------------------------------------------
   template <class T, class Cfg>
@@ -1063,7 +1068,7 @@ private:
   std::array<float, late_cfg::n_channels> _late_n_spls_master;
   vec<float, late_cfg::n_channels>        _late_n_spls;
   uint                                    _late_wave = 0;
-  using delay_line_type = modulable_allpass_delay_line<float_x1, false>;
+  using delay_line_type = modulable_thiran_2<float_x1, false>;
   std::array<delay_line_type, late_cfg::n_channels> _late;
 
   float _size             = 1.f;

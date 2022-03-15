@@ -450,7 +450,8 @@ public:
   // -for the "get" function to be called once for each "push" call.
   void reset_interpolator (float delay_spls, uint channel)
   {
-    reset_interpolator (delay_spls, channel, true);
+    reset_interpolator (
+      delay_spls, delay_spls - (float) ((uint) delay_spls), channel, true);
   }
   //----------------------------------------------------------------------------
   value_type get (float delay_spls, uint channel)
@@ -471,17 +472,21 @@ public:
   //----------------------------------------------------------------------------
 protected:
   //----------------------------------------------------------------------------
-  void reset_interpolator (float delay_spls, uint channel, bool clear_state)
+  void reset_interpolator (
+    float delay_spls,
+    float delay_spls_frac,
+    uint  channel,
+    bool  clear_state)
   {
     assert (channel < n_channels());
-    uint del_uint = (uint) delay_spls;
-    auto frac     = delay_spls - (float) del_uint;
-    auto co       = get_interp_coeffs (channel);
-    auto st       = get_interp_states (channel);
+    assert (delay_spls_frac == delay_spls - (float) ((uint) delay_spls));
+
+    auto co = get_interp_coeffs (channel);
+    auto st = get_interp_states (channel);
 
     using V = make_vector_t<value_type>;
 
-    interp::reset_coeffs (co.cast (V {}), vec_set<V> (frac));
+    interp::reset_coeffs (co.cast (V {}), vec_set<V> (delay_spls_frac));
     if (clear_state) {
       interp::reset_states (st.cast (V {}));
     }
@@ -603,7 +608,7 @@ public:
 };
 
 namespace detail {
-// Frankenstein to be able to implement "modulable_allpass"
+// Frankenstein to be able to implement "modulable_allpass".
 struct allpass_interp {
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs };
@@ -628,7 +633,7 @@ struct allpass_interp {
     crange<const V>         co,
     crange<V>               st,
     std::array<V, n_points> y_points,
-    V                       x [[maybe_unused]])
+    V                       x)
   {
     auto& z = y_points; // to avoid nomenclature clash
     V     y = z[0] + x * (z[1] - st[y1]);
@@ -643,7 +648,7 @@ struct allpass_interp {
 // maintain its own delay line.
 struct thiran_interp_2_df1 {
   //----------------------------------------------------------------------------
-  enum coeffs { n_coeffs = thiran_interp<2>::n_coeffs };
+  enum coeffs { a1, a2, n_coeffs };
   enum coeffs_int { n_coeffs_int };
   enum state { y1, y2, n_states };
   //----------------------------------------------------------------------------
@@ -653,14 +658,47 @@ struct thiran_interp_2_df1 {
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> co, V fractional)
   {
-    thiran_interp<2>::reset_coeffs (co, fractional);
+    using T = vec_value_type_t<V>;
+    // D parameter between 1.5 and 2.5
+    V d = fractional + (T) 1.5;
+#if 0
+    // See https://dafx09.como.polimi.it/proceedings/papers/paper_72.pdf
+    // chapter 6.
+    // TODO: Is this really faster than 2 divs?
+    // TODO: It seems to cause noise/be broken.
+
+    V v1 = ((T) 3. - d) * (T) (1. / 4.);
+    V v2 = ((T) 2. - d) * (T) (1. / 4.);
+
+    V v1_p2 = v1 * v1;
+    V v1_p4 = v1_p2 * v1_p2;
+    V v1_p8 = v1_p4 * v1_p4;
+
+    co[a1] = (T) -2 * ((T) 0.25 - v1);
+    co[a1] *= ((T) 1 + v1);
+    co[a1] *= ((T) 1 + v1_p2);
+    co[a1] *= ((T) 1 + v1_p4);
+    co[a1] *= ((T) 1 + v1_p8);
+
+    V v2_p2 = v2 * v2;
+    V v2_p4 = v2_p2 * v2_p2;
+    V v2_p8 = v2_p4 * v2_p4;
+
+    co[a2] = co[a1] * (T) -0.5 * ((T) 0.25 - v2);
+    co[a2] *= ((T) 1 + v2);
+    co[a2] *= ((T) 1 + v2_p2);
+    co[a2] *= ((T) 1 + v2_p4);
+    co[a2] *= ((T) 1 + v2_p8);
+
+#else
+    co[a1] = -(d - 2) / (d + 1);
+    co[a2] = ((d - 1) * (d - 2)) / ((d + 1) * (d + 2));
+#endif
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_states (crange<V> st)
-  {
-    biquad::reset_states (st);
-  }
+  {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
@@ -669,10 +707,10 @@ struct thiran_interp_2_df1 {
     std::array<V, n_points> y_points,
     V                       x [[maybe_unused]])
   {
-    auto& z = y_points; // to avoid nomenclature clash
-    // b2 is 0, ommiting "co[biquad::b2] * z[2]";
-    V y = co[biquad::b0] * z[0] + co[biquad::b1] * z[1];
-    y -= co[biquad::a1] * st[y1] + co[biquad::a2] * st[y2];
+    auto& z = y_points;
+
+    V y = co[a2] * z[0] + co[a1] * z[1] + z[2];
+    y -= co[a1] * st[y1] + co[a2] * st[y2];
     st[y2] = st[y1];
     st[y1] = y;
     return y;
@@ -682,7 +720,7 @@ struct thiran_interp_2_df1 {
 }; // namespace detail
 
 //------------------------------------------------------------------------------
-// Slowly modulable Thiran1-frankenstein.
+// Slowly modulable allpass.
 template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
 class modulable_allpass_delay_line
   : private statefully_interpolated_delay_line<
@@ -713,46 +751,43 @@ public:
     return base::interp_overhead_elems (n_channels);
   }
   //----------------------------------------------------------------------------
-  void set_resync_delta_spls (float v) { _resync_delta_spls = v; }
-  //----------------------------------------------------------------------------
   value_type get (float delay_spls, uint channel)
   {
     assert (channel < n_channels());
 
     auto diff = abs (delay_spls - this->get_delay_spls (channel));
-
     if (diff != 0) {
-      if (unlikely (diff >= _resync_delta_spls)) {
-        // resync: aproximate filter state reconstruction by linear interp.
-        uint       spls = (uint) delay_spls;
-        value_type frac;
 
-        if constexpr (is_vec_v<value_type>) {
-          using builtin = vec_value_type_t<value_type>;
-          frac
-            = vec_set<value_type> (((builtin) delay_spls) - ((builtin) spls));
-        }
-        else {
-          frac = ((value_type) delay_spls) - ((value_type) spls);
-        }
+      // resync: aproximate current filter state reconstruction by linear
+      // interp.
+      uint       spls = (uint) delay_spls;
+      value_type frac;
 
-        assert (spls <= size() - 3);
-        auto z0 = get_raw (spls, channel);
-        auto z1 = get_raw (spls + 1, channel);
-        auto st = this->get_interp_states (channel);
-
-        st[interp::y1] = linear_interp::tick (make_array (z0, z1), frac);
+      if constexpr (is_vec_v<value_type>) {
+        using builtin = vec_value_type_t<value_type>;
+        frac = vec_set<value_type> (((builtin) delay_spls) - ((builtin) spls));
       }
-      this->reset_interpolator (delay_spls, channel, false);
+      else {
+        frac = ((value_type) delay_spls) - ((value_type) spls);
+      }
+      auto z0 = get_raw (spls, channel);
+      auto z1 = get_raw (spls + 1, channel);
+      auto st = this->get_interp_states (channel);
+
+      st[interp::y1] = linear_interp::tick (make_array (z0, z1), frac);
+
+      if constexpr (is_vec_v<value_type>) {
+        this->reset_interpolator (delay_spls, (float) frac[0], channel, false);
+      }
+      else {
+        this->reset_interpolator (delay_spls, (float) frac, channel, false);
+      }
     }
     return base::get (delay_spls, channel);
   }
   //----------------------------------------------------------------------------
-private:
-  float _resync_delta_spls {};
 };
 //------------------------------------------------------------------------------
-
 // Slowly modulable Thiran2-frankenstein. (TODO: broken?)
 template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
 class modulable_thiran_2
@@ -784,8 +819,6 @@ public:
     return base::interp_overhead_elems (n_channels);
   }
   //----------------------------------------------------------------------------
-  void set_resync_delta_spls (float v) { _resync_delta_spls = v; }
-  //----------------------------------------------------------------------------
   value_type get (float delay_spls, uint channel)
   {
     assert (channel < n_channels());
@@ -793,36 +826,37 @@ public:
     auto diff = abs (delay_spls - this->get_delay_spls (channel));
 
     if (diff != 0) {
-      if (unlikely (diff >= _resync_delta_spls)) {
-        // resync: aproximate filter state reconstruction by linear interp.
-        uint       spls = (uint) delay_spls;
-        value_type frac;
+      // resync: aproximate filter state reconstruction by linear interp.
+      uint       spls = (uint) delay_spls;
+      value_type frac;
 
-        if constexpr (is_vec_v<value_type>) {
-          using builtin = vec_value_type_t<value_type>;
-          frac
-            = vec_set<value_type> (((builtin) delay_spls) - ((builtin) spls));
-        }
-        else {
-          frac = ((value_type) delay_spls) - ((value_type) spls);
-        }
-
-        assert (spls <= size() - 3);
-        auto z0 = get_raw (spls, channel);
-        auto z1 = get_raw (spls + 1, channel);
-        auto z2 = get_raw (spls + 2, channel);
-        auto st = this->get_interp_states (channel);
-
-        st[interp::y1] = linear_interp::tick (make_array (z0, z1), frac);
-        st[interp::y2] = linear_interp::tick (make_array (z1, z2), frac);
+      if constexpr (is_vec_v<value_type>) {
+        using builtin = vec_value_type_t<value_type>;
+        frac = vec_set<value_type> (((builtin) delay_spls) - ((builtin) spls));
       }
-      this->reset_interpolator (delay_spls, channel, false);
+      else {
+        frac = ((value_type) delay_spls) - ((value_type) spls);
+      }
+
+      assert (spls <= size() - 3);
+      auto z0 = get_raw (spls, channel);
+      auto z1 = get_raw (spls + 1, channel);
+      auto z2 = get_raw (spls + 2, channel);
+      auto st = this->get_interp_states (channel);
+
+      st[interp::y1] = linear_interp::tick (make_array (z0, z1), frac);
+      st[interp::y2] = linear_interp::tick (make_array (z1, z2), frac);
+
+      if constexpr (is_vec_v<value_type>) {
+        this->reset_interpolator (delay_spls, (float) frac[0], channel, false);
+      }
+      else {
+        this->reset_interpolator (delay_spls, (float) frac, channel, false);
+      }
     }
     return base::get (delay_spls, channel);
   }
-  //----------------------------------------------------------------------------
-private:
-  float _resync_delta_spls {};
+  //--------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
 // - single dynamic allocation
