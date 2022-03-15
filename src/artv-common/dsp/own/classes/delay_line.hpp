@@ -662,7 +662,7 @@ struct thiran_interp_1 {
 #if 0
     // See https://dafx09.como.polimi.it/proceedings/papers/paper_72.pdf
     // chapter 6.
-    // TODO: Is this really faster than 2 divs?
+    // TODO: Is this really faster than 1 divs?
     // TODO: It seems to cause noise/be broken.
 
     V v = ((T) 1. - d) * (T) (1. / 2.);

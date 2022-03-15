@@ -170,7 +170,7 @@ public:
     r.late.prime_idx   = 15;
     r.late.size_factor = 2.5f;
 
-    r.late.max_chorus_freq       = 20.f;
+    r.late.max_chorus_freq       = 8.f;
     r.late.min_chorus_freq       = 0.01f;
     r.late.max_chorus_depth_spls = 220; // bipolar, 2x the samples here
     r.late.max_chorus_width      = 0.5f;
