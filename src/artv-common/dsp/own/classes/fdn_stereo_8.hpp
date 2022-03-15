@@ -580,15 +580,6 @@ private:
           case modwv_tri:
             n_spls = _late_lfo.tick_triangle();
             break;
-          case modwv_sqr:
-            n_spls = _late_lfo.tick_square();
-            break;
-          case modwv_saw:
-            n_spls = _late_lfo.tick_saw();
-            break;
-          case modwv_tra:
-            n_spls = _late_lfo.tick_trapezoid (vec_set<16> (0.75f));
-            break;
           default:
             assert (false);
             break;
@@ -602,7 +593,9 @@ private:
         for (uint i = 0; i < block.size(); ++i) {
           for (uint j = 0; j < 16; ++j) {
             late_mtx[i][j]
-              = _late[j].get<catmull_rom_interp> (late_mtx[i][j] - i_flt, 0)[0];
+              //= _late[j].get<catmull_rom_interp> (late_mtx[i][j] - i_flt,
+              // 0)[0];
+              = _late[j].get (late_mtx[i][j] - i_flt, 0)[0];
           }
           ++i_flt;
         }
@@ -904,7 +897,12 @@ private:
     mem_total += convert_to_max_sizes (early_sizes);
     mem_total += convert_to_max_sizes (
       late_sizes,
-      (u32) (_cfg.late.max_chorus_depth_spls + catmull_rom_interp::n_points));
+      (u32) (_cfg.late.max_chorus_depth_spls + delay_line_type::interp::n_points));
+
+    for (uint i = 0; i < late_sizes.size(); ++i) {
+      late_sizes[i] += _late[i].interp_overhead_elems (1);
+    }
+    mem_total += _late[0].interp_overhead_elems (1) * late_sizes.size();
 
     mem_total += convert_to_max_sizes (int_dif_sizes);
     mem_total += convert_to_max_sizes (out_dif_sizes);
@@ -1025,8 +1023,8 @@ private:
     spls /= _mod_freq_hz;
 
     // limit the excursion
-    auto max_spls
-      = (uint) _late_n_spls[0] - (blocksize + catmull_rom_interp::n_points);
+    auto max_spls = (uint) _late_n_spls[0]
+      - (blocksize + delay_line_type::interp::n_points);
 
     _mod_depth_spls = std::min<float> (spls, max_spls);
   }
@@ -1038,9 +1036,6 @@ private:
     modwv_sh,
     modwv_sin,
     modwv_tri,
-    modwv_sqr,
-    modwv_saw,
-    modwv_tra,
     modwv_count,
   };
 
@@ -1068,8 +1063,8 @@ private:
   std::array<float, late_cfg::n_channels> _late_n_spls_master;
   vec<float, late_cfg::n_channels>        _late_n_spls;
   uint                                    _late_wave = 0;
-  std::array<interpolated_delay_line<float_x1, false>, late_cfg::n_channels>
-    _late;
+  using delay_line_type = modulable_allpass_delay_line<float_x1, false>;
+  std::array<delay_line_type, late_cfg::n_channels> _late;
 
   float _size             = 1.f;
   float _in_2_late        = 1.f;

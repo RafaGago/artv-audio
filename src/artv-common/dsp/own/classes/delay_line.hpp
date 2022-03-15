@@ -603,8 +603,8 @@ public:
 };
 
 namespace detail {
-// Frankenstein to be able to implement "modulable_thiran_1"
-struct thiran_interp_1 {
+// Frankenstein to be able to implement "modulable_allpass"
+struct allpass_interp {
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs };
   enum coeffs_int { n_coeffs_int };
@@ -684,15 +684,15 @@ struct thiran_interp_2_df1 {
 //------------------------------------------------------------------------------
 // Slowly modulable Thiran1-frankenstein.
 template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
-class modulable_thiran_1
+class modulable_allpass_delay_line
   : private statefully_interpolated_delay_line<
       T,
-      detail::thiran_interp_1,
+      detail::allpass_interp,
       Interleaved,
       Use_pow2_sizes> {
   using base = statefully_interpolated_delay_line<
     T,
-    detail::thiran_interp_1,
+    detail::allpass_interp,
     Interleaved,
     Use_pow2_sizes>;
 
