@@ -61,6 +61,7 @@ public:
     static constexpr uint n_channels = 16;
     static constexpr uint n_stages   = 1;
     float                 max_chorus_width;
+    float                 min_chorus_freq;
     float                 max_chorus_freq;
     float                 size_factor; // spls = [-1,1] * exp (size_factor)
     u16                   max_chorus_depth_spls;
@@ -167,10 +168,11 @@ public:
     r.early.size_factor     = 1.f; // log(e)
 
     r.late.prime_idx   = 15;
-    r.late.size_factor = 2.f;
+    r.late.size_factor = 2.5f;
 
-    r.late.max_chorus_depth_spls = 125;
-    r.late.max_chorus_freq       = 2.5f;
+    r.late.max_chorus_freq       = 20.f;
+    r.late.min_chorus_freq       = 0.01f;
+    r.late.max_chorus_depth_spls = 220; // bipolar, 2x the samples here
     r.late.max_chorus_width      = 0.5f;
 
     r.late.n_samples = array_cast<u16> (make_array (
@@ -265,14 +267,17 @@ public:
   void set_mod_freq (float factor)
   {
     assert (factor >= 0.f && factor <= 1.f);
-    _mod_freq_hz = factor * factor * _cfg.late.max_chorus_freq;
+    auto diff    = _cfg.late.max_chorus_freq - _cfg.late.min_chorus_freq;
+    _mod_freq_hz = _cfg.late.min_chorus_freq + (diff * factor * factor);
     reset_late_lfo();
+    reset_mod_depth();
   }
   //----------------------------------------------------------------------------
   void set_mod_depth (float factor)
   {
     assert (factor >= 0.f && factor <= 1.f);
-    _mod_depth_spls = factor * (float) _cfg.late.max_chorus_depth_spls;
+    _mod_depth_factor = factor;
+    reset_mod_depth();
   }
   //----------------------------------------------------------------------------
   void set_mod_stereo (float factor)
@@ -329,6 +334,7 @@ public:
     assert (size >= -1.f && size <= 1.f);
     _size = size;
     reset_times();
+    reset_mod_depth();
   }
   //----------------------------------------------------------------------------
   void set_damp_freq (float factor)
@@ -1008,6 +1014,23 @@ private:
     }
   }
   //----------------------------------------------------------------------------
+  void reset_mod_depth()
+  {
+    // kind-of constant module
+    // max mod depth at 0.5Hz and below, decreasing after that
+    constexpr float max_depth_freq_hz = 0.5f;
+
+    float spls = (float) _cfg.late.max_chorus_depth_spls;
+    spls *= _mod_depth_factor * 0.5f;
+    spls /= _mod_freq_hz;
+
+    // limit the excursion
+    auto max_spls
+      = (uint) _late_n_spls[0] - (blocksize + catmull_rom_interp::n_points);
+
+    _mod_depth_spls = std::min<float> (spls, max_spls);
+  }
+  //----------------------------------------------------------------------------
   template <class T, class Cfg>
   using reverb_array = array2d<T, Cfg::n_channels, Cfg::n_stages>;
   //----------------------------------------------------------------------------
@@ -1048,12 +1071,13 @@ private:
   std::array<interpolated_delay_line<float_x1, false>, late_cfg::n_channels>
     _late;
 
-  float _size           = 1.f;
-  float _in_2_late      = 1.f;
-  float _er_2_late      = 1.f;
-  float _mod_freq_hz    = 0.f;
-  float _mod_depth_spls = 30.f;
-  float _mod_stereo     = 0.f;
+  float _size             = 1.f;
+  float _in_2_late        = 1.f;
+  float _er_2_late        = 1.f;
+  float _mod_freq_hz      = 0.f;
+  float _mod_depth_spls   = 30.f;
+  float _mod_depth_factor = 0.f;
+  float _mod_stereo       = 0.f;
 
   reverb_array<allpass<float_x1>, internal_dif_cfg> _int_dif;
   lfo<2>                                            _int_dif_lfo;
