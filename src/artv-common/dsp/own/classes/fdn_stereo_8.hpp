@@ -1068,7 +1068,7 @@ private:
   std::array<float, late_cfg::n_channels> _late_n_spls_master;
   vec<float, late_cfg::n_channels>        _late_n_spls;
   uint                                    _late_wave = 0;
-  using delay_line_type = modulable_thiran_1<float_x1, false>;
+  using delay_line_type = modulable_thiran1_delay_line<float_x1, 2, false>;
   std::array<delay_line_type, late_cfg::n_channels> _late;
 
   float _size             = 1.f;

@@ -379,23 +379,36 @@ public:
   }
   //----------------------------------------------------------------------------
   template <uint N_points, uint X_offset, class InterpFunctor>
-  value_type get (float delay_spls, uint channel, InterpFunctor&& interp)
+  value_type get (
+    uint            delay_spls_int,
+    float           delay_spls_frac,
+    uint            channel,
+    InterpFunctor&& interp)
   {
     std::array<value_type, N_points> y;
     // probably not making it an assert but a clamp, let's see?
     assert (
-      std::clamp<float> (delay_spls, X_offset, size() - N_points + X_offset)
-      == delay_spls);
+      std::clamp<float> (
+        delay_spls_frac + (float) delay_spls_int,
+        X_offset,
+        size() - N_points + X_offset)
+      == (delay_spls_frac + (float) delay_spls_int));
 
-    auto spls = (uint) delay_spls;
-    auto frac = delay_spls - (float) spls;
     // e.g. Catmull-Rom interpolates between the 2 central points of 4.
-    spls -= X_offset;
+    delay_spls_int -= X_offset;
 
     for (uint i = 0; i < y.size(); ++i) {
-      y[i] = get_raw (spls + i, channel);
+      y[i] = get_raw (delay_spls_int + i, channel);
     }
-    return interp (y, make_vec<value_type> (frac));
+    return interp (y, make_vec<value_type> (delay_spls_frac));
+  }
+  //----------------------------------------------------------------------------
+  template <uint N_points, uint X_offset, class InterpFunctor>
+  value_type get (float delay_spls, uint channel, InterpFunctor&& interp)
+  {
+    auto spls = (uint) delay_spls;
+    auto frac = delay_spls - (float) spls;
+    return get<N_points, X_offset> (spls, frac, channel, std::move (interp));
   }
   //----------------------------------------------------------------------------
   // Stateless_interp = a class on
@@ -404,7 +417,6 @@ public:
   value_type get (float delay_spls, uint channel)
   {
     using interp = Stateless_interp;
-
     return get<interp::n_points, interp::x_offset> (
       delay_spls, channel, [] (auto y, auto x) { return interp::tick (y, x); });
   }
@@ -454,7 +466,7 @@ public:
       delay_spls, delay_spls - (float) ((uint) delay_spls), channel, true);
   }
   //----------------------------------------------------------------------------
-  value_type get (float delay_spls, uint channel)
+  value_type get (uint channel)
   {
     assert (channel < n_channels());
 
@@ -521,6 +533,26 @@ protected:
     else {
       return (float) _delay_spls[channel];
     }
+  }
+  //----------------------------------------------------------------------------
+  // this one ignores "_delay_spls"
+  value_type get_interpolated_unchecked (
+    uint  spls_uint,
+    float spls_frac,
+    uint  channel)
+  {
+    assert (channel < n_channels());
+
+    using V = make_vector_t<value_type>;
+
+    return base::template get<interp::n_points, interp::x_offset> (
+      spls_uint, spls_frac, channel, [channel, this] (auto y, auto x) {
+        return interp::tick (
+          this->get_interp_coeffs (channel).template cast<const V>(),
+          this->get_interp_states (channel).template cast<V>(),
+          y,
+          x);
+      });
   }
   //----------------------------------------------------------------------------
 private:
@@ -608,8 +640,9 @@ public:
 };
 
 namespace detail {
-// Frankenstein to be able to implement "modulable_allpass".
-struct allpass_interp {
+// Allpass interpolator taking the fractional part as a coefficient, as seen on
+// Freeverb3
+struct raw_allpass_interp {
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs };
   enum coeffs_int { n_coeffs_int };
@@ -643,7 +676,8 @@ struct allpass_interp {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-// Frankenstein to be able to implement "modulable_thiran_1"
+// 1-st order thiran, but with no previous inputs, as the delay line will pass
+// them.
 struct thiran_interp_1 {
   //----------------------------------------------------------------------------
   enum coeffs { a, n_coeffs };
@@ -701,10 +735,8 @@ struct thiran_interp_1 {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-
-// Frankenstein to be able to implement "modulable_thiran_2"
-// It is a direct form 1 to be able to tweak the past outputs. It also doesn't
-// maintain its own delay line.
+// 2-st order thiran, but with no previous inputs, as the delay line will pass
+// them -> Direct form 1 because of this.
 struct thiran_interp_2_df1 {
   //----------------------------------------------------------------------------
   enum coeffs { a1, a2, n_coeffs };
@@ -776,22 +808,27 @@ struct thiran_interp_2_df1 {
   }
   //----------------------------------------------------------------------------
 };
-}; // namespace detail
-
 //------------------------------------------------------------------------------
-// Slowly modulable allpass.
-template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
+// Slowly modulable allpass. The main difference with
+// "statefully_interpolated_delay_line" is that it is setting the interpolator
+// states to linear interpolation and optionally running an extra  warmup. This
+// is specialized for the allpass classes above, hence it is on the ::detail
+// namespace.
+
+template <
+  class T,
+  uint Allpass_warmup_spls,
+  bool Interleaved,
+  bool Use_pow2_sizes,
+  class Interp>
 class modulable_allpass_delay_line
-  : private statefully_interpolated_delay_line<
+  : private artv::statefully_interpolated_delay_line<
       T,
-      detail::allpass_interp,
+      Interp,
       Interleaved,
       Use_pow2_sizes> {
-  using base = statefully_interpolated_delay_line<
-    T,
-    detail::allpass_interp,
-    Interleaved,
-    Use_pow2_sizes>;
+  using base = artv::
+    statefully_interpolated_delay_line<T, Interp, Interleaved, Use_pow2_sizes>;
 
 public:
   //----------------------------------------------------------------------------
@@ -801,190 +838,125 @@ public:
   using base::push;
   using base::reset;
   using base::size;
-  using interp                          = typename base::interp;
+  using raw_interp = typename base::interp;
+  struct interp {
+    static constexpr uint n_points = raw_interp::n_points + Allpass_warmup_spls;
+    static constexpr uint x_offset = raw_interp::x_offset;
+  };
   using value_type                      = typename base::value_type;
   static constexpr uint n_interp_states = base::n_interp_states;
+  static constexpr uint n_warmup_spls   = Allpass_warmup_spls;
   //----------------------------------------------------------------------------
   static constexpr uint interp_overhead_elems (uint n_channels)
   {
     return base::interp_overhead_elems (n_channels);
   }
   //----------------------------------------------------------------------------
-  value_type get (float delay_spls, uint channel)
-  {
-    assert (channel < n_channels());
-
-    auto diff = abs (delay_spls - this->get_delay_spls (channel));
-    if (diff != 0) {
-
-      // resync: aproximate current filter state reconstruction by linear
-      // interp.
-      uint       spls = (uint) delay_spls;
-      value_type frac;
-
-      if constexpr (is_vec_v<value_type>) {
-        using builtin = vec_value_type_t<value_type>;
-        frac = vec_set<value_type> (((builtin) delay_spls) - ((builtin) spls));
-      }
-      else {
-        frac = ((value_type) delay_spls) - ((value_type) spls);
-      }
-      auto z0 = get_raw (spls, channel);
-      auto z1 = get_raw (spls + 1, channel);
-      auto st = this->get_interp_states (channel);
-
-      st[interp::y1] = linear_interp::tick (make_array (z0, z1), frac);
-
-      if constexpr (is_vec_v<value_type>) {
-        this->reset_interpolator (delay_spls, (float) frac[0], channel, false);
-      }
-      else {
-        this->reset_interpolator (delay_spls, (float) frac, channel, false);
-      }
-    }
-    return base::get (delay_spls, channel);
-  }
-  //----------------------------------------------------------------------------
-};
-//------------------------------------------------------------------------------
-// Slowly modulable allpass.
-template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
-class modulable_thiran_1
-  : private statefully_interpolated_delay_line<
-      T,
-      detail::thiran_interp_1,
-      Interleaved,
-      Use_pow2_sizes> {
-  using base = statefully_interpolated_delay_line<
-    T,
-    detail::thiran_interp_1,
-    Interleaved,
-    Use_pow2_sizes>;
-
-public:
-  //----------------------------------------------------------------------------
-  using base::get_raw;
-  using base::interp_overhead_elems;
-  using base::n_channels;
-  using base::push;
-  using base::reset;
-  using base::size;
-  using interp                          = typename base::interp;
-  using value_type                      = typename base::value_type;
-  static constexpr uint n_interp_states = base::n_interp_states;
-  //----------------------------------------------------------------------------
-  static constexpr uint interp_overhead_elems (uint n_channels)
-  {
-    return base::interp_overhead_elems (n_channels);
-  }
+  void set_resync_delta (float spls) { _resync_delta = spls; }
   //----------------------------------------------------------------------------
   value_type get (float delay_spls, uint channel)
   {
     assert (channel < n_channels());
 
-    auto diff = abs (delay_spls - this->get_delay_spls (channel));
-    if (diff != 0) {
+    auto diff     = delay_spls - this->get_delay_spls (channel);
+    auto diff_abs = abs (diff);
+    if (unlikely (diff_abs == 0.f)) {
+      // no modulation, not the main use case for this...
+      return base::get (channel);
+    }
 
-      // resync: aproximate current filter state reconstruction by linear
-      // interp.
-      uint       spls = (uint) delay_spls;
-      value_type frac;
+    uint  spls = (uint) delay_spls;
+    float frac = delay_spls - (float) spls;
+    this->reset_interpolator (delay_spls, frac, channel, false);
 
-      if constexpr (is_vec_v<value_type>) {
-        using builtin = vec_value_type_t<value_type>;
-        frac = vec_set<value_type> (((builtin) delay_spls) - ((builtin) spls));
+    if (diff_abs >= _resync_delta) {
+      // hack the previous states to linear interpolation as a starting point
+      std::array<value_type, raw_interp::n_points> z;
+
+      bool delay_is_increasing = diff > 0.f;
+      if (delay_is_increasing) {
+        // move in increasing direction: away from the write pointer (idx 0)
+        for (uint i = z.size() - 1; i < z.size(); --i) {
+          z[i] = get_raw (spls - n_warmup_spls - i, channel);
+        }
       }
       else {
-        frac = ((value_type) delay_spls) - ((value_type) spls);
+        // move in decreasing direction: towards the write pointer (idx 0)
+        for (uint i = z.size() - 1; i < z.size(); --i) {
+          z[i] = get_raw (spls + n_warmup_spls + i, channel);
+        }
       }
-      auto z0 = get_raw (spls, channel);
-      auto z1 = get_raw (spls + 1, channel);
       auto st = this->get_interp_states (channel);
-
-      st[interp::y1] = linear_interp::tick (make_array (z0, z1), frac);
-
-      if constexpr (is_vec_v<value_type>) {
-        this->reset_interpolator (delay_spls, (float) frac[0], channel, false);
+      for (uint i = 0; i < z.size() - 1; ++i) {
+        if constexpr (is_vec_v<value_type>) {
+          using builtin = vec_value_type_t<value_type>;
+          st[i]         = linear_interp::tick (
+            make_array (z[i], z[i + 1]), vec_set<value_type> ((builtin) frac));
+        }
+        else {
+          st[i] = linear_interp::tick (make_array (z[i], z[i + 1]), frac);
+        }
+      }
+      // run some warmup samples on the allpass (if any)
+      if (delay_is_increasing) {
+        // move in increasing direction: away from the write pointer (idx 0)
+        for (uint i = 0; i < n_warmup_spls; ++i) {
+          base::get_interpolated_unchecked (
+            spls - n_warmup_spls + i, frac, channel);
+        }
       }
       else {
-        this->reset_interpolator (delay_spls, (float) frac, channel, false);
+        // move in decreasing direction: towards the write pointer (idx 0)
+        for (uint i = 0; i < n_warmup_spls; ++i) {
+          base::get_interpolated_unchecked (
+            spls + n_warmup_spls - i, frac, channel);
+        }
       }
     }
-    return base::get (delay_spls, channel);
+    return base::get_interpolated_unchecked (spls, frac, channel);
   }
   //----------------------------------------------------------------------------
+private:
+  float _resync_delta {};
 };
-//------------------------------------------------------------------------------
-// Slowly modulable Thiran2-frankenstein. (TODO: broken?)
-template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
-class modulable_thiran_2
-  : private statefully_interpolated_delay_line<
-      T,
-      detail::thiran_interp_2_df1,
-      Interleaved,
-      Use_pow2_sizes> {
-  using base = statefully_interpolated_delay_line<
-    T,
-    detail::thiran_interp_2_df1,
-    Interleaved,
-    Use_pow2_sizes>;
+} // namespace detail
 
-public:
-  //----------------------------------------------------------------------------
-  using base::get_raw;
-  using base::interp_overhead_elems;
-  using base::n_channels;
-  using base::push;
-  using base::reset;
-  using base::size;
-  using interp                          = typename base::interp;
-  using value_type                      = typename base::value_type;
-  static constexpr uint n_interp_states = base::n_interp_states;
-  //----------------------------------------------------------------------------
-  static constexpr uint interp_overhead_elems (uint n_channels)
-  {
-    return base::interp_overhead_elems (n_channels);
-  }
-  //----------------------------------------------------------------------------
-  value_type get (float delay_spls, uint channel)
-  {
-    assert (channel < n_channels());
+// Adding (slow) modulation to allpass interpolated delay lines
+template <
+  class T,
+  uint Allpass_warmup_n_spls = 0,
+  bool Interleaved           = false,
+  bool Use_pow2_sizes        = true>
+using modulable_raw_allpass_delay_line = detail::modulable_allpass_delay_line<
+  T,
+  Allpass_warmup_n_spls,
+  Interleaved,
+  Use_pow2_sizes,
+  detail::raw_allpass_interp>;
 
-    auto diff = abs (delay_spls - this->get_delay_spls (channel));
+template <
+  class T,
+  uint Allpass_warmup_n_spls = 0,
+  bool Interleaved           = false,
+  bool Use_pow2_sizes        = true>
+using modulable_thiran1_delay_line = detail::modulable_allpass_delay_line<
+  T,
+  Allpass_warmup_n_spls,
+  Interleaved,
+  Use_pow2_sizes,
+  detail::thiran_interp_1>;
 
-    if (diff != 0) {
-      // resync: aproximate filter state reconstruction by linear interp.
-      uint       spls = (uint) delay_spls;
-      value_type frac;
-
-      if constexpr (is_vec_v<value_type>) {
-        using builtin = vec_value_type_t<value_type>;
-        frac = vec_set<value_type> (((builtin) delay_spls) - ((builtin) spls));
-      }
-      else {
-        frac = ((value_type) delay_spls) - ((value_type) spls);
-      }
-
-      assert (spls <= size() - 3);
-      auto z0 = get_raw (spls, channel);
-      auto z1 = get_raw (spls + 1, channel);
-      auto z2 = get_raw (spls + 2, channel);
-      auto st = this->get_interp_states (channel);
-
-      st[interp::y1] = linear_interp::tick (make_array (z0, z1), frac);
-      st[interp::y2] = linear_interp::tick (make_array (z1, z2), frac);
-
-      if constexpr (is_vec_v<value_type>) {
-        this->reset_interpolator (delay_spls, (float) frac[0], channel, false);
-      }
-      else {
-        this->reset_interpolator (delay_spls, (float) frac, channel, false);
-      }
-    }
-    return base::get (delay_spls, channel);
-  }
-  //--------------------------------------------------------------------------
-};
+template <
+  class T,
+  uint Allpass_warmup_n_spls = 0,
+  bool Interleaved           = false,
+  bool Use_pow2_sizes        = true>
+using modulable_thiran2_delay_line = detail::modulable_allpass_delay_line<
+  T,
+  Allpass_warmup_n_spls,
+  Interleaved,
+  Use_pow2_sizes,
+  detail::thiran_interp_2_df1>;
 //------------------------------------------------------------------------------
 // - single dynamic allocation
 // - multichannel
