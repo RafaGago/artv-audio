@@ -693,12 +693,11 @@ struct thiran_interp_1 {
     using T = vec_value_type_t<V>;
     // D parameter between 0.418 and 1.418
     V d = fractional + (T) 0.418;
-#if 0
+#if 1
+    co[a] = (1 - d) / (1 + d);
+#else
     // See https://dafx09.como.polimi.it/proceedings/papers/paper_72.pdf
     // chapter 6.
-    // TODO: Is this really faster than 1 divs?
-    // TODO: It seems to cause noise/be broken.
-
     V v = ((T) 1. - d) * (T) (1. / 2.);
 
     V v_p2 = v * v;
@@ -710,9 +709,6 @@ struct thiran_interp_1 {
     co[a] *= ((T) 1 + v_p2);
     co[a] *= ((T) 1 + v_p4);
     co[a] *= ((T) 1 + v_p8);
-
-#else
-    co[a]  = (1 - d) / (1 + d);
 #endif
   }
   //----------------------------------------------------------------------------
@@ -752,12 +748,14 @@ struct thiran_interp_2_df1 {
     using T = vec_value_type_t<V>;
     // D parameter between 1.5 and 2.5
     V d = fractional + (T) 1.5;
-#if 0
+#if 1
+    co[a1] = -(d - 2) / (d + 1);
+    co[a2] = ((d - 1) * (d - 2)) / ((d + 1) * (d + 2));
+#else
     // See https://dafx09.como.polimi.it/proceedings/papers/paper_72.pdf
     // chapter 6.
-    // TODO: Is this really faster than 2 divs?
-    // TODO: It seems to cause noise/be broken.
-
+    // These measured worse than the divisions on a Ryzen7-5800x running 8x16
+    // delay lines.
     V v1 = ((T) 3. - d) * (T) (1. / 4.);
     V v2 = ((T) 2. - d) * (T) (1. / 4.);
 
@@ -780,10 +778,6 @@ struct thiran_interp_2_df1 {
     co[a2] *= ((T) 1 + v2_p2);
     co[a2] *= ((T) 1 + v2_p4);
     co[a2] *= ((T) 1 + v2_p8);
-
-#else
-    co[a1] = -(d - 2) / (d + 1);
-    co[a2] = ((d - 1) * (d - 2)) / ((d + 1) * (d + 2));
 #endif
   }
   //----------------------------------------------------------------------------

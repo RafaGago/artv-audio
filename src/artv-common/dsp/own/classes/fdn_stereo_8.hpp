@@ -803,6 +803,9 @@ private:
     for (uint i = 0; i < _cfg.late.n_samples.size(); ++i) {
       _late_n_spls_master[i] = (float) (_cfg.late.n_samples[i]);
     }
+    for (auto& dl : _late) {
+      dl.set_resync_delta (20.f);
+    }
   }
   //----------------------------------------------------------------------------
   void reset_late_lfo()
@@ -1019,10 +1022,10 @@ private:
   {
     // kind-of constant module
     // max mod depth at 0.5Hz and below, decreasing after that
-    constexpr float max_depth_freq_hz = 0.5f;
+    constexpr float max_depth_freq_hz = 0.2f;
 
     float spls = (float) _cfg.late.max_chorus_depth_spls;
-    spls *= _mod_depth_factor * 0.5f;
+    spls *= _mod_depth_factor * max_depth_freq_hz;
     spls /= _mod_freq_hz;
 
     // limit the excursion on both sides
@@ -1068,7 +1071,7 @@ private:
   std::array<float, late_cfg::n_channels> _late_n_spls_master;
   vec<float, late_cfg::n_channels>        _late_n_spls;
   uint                                    _late_wave = 0;
-  using delay_line_type = modulable_thiran1_delay_line<float_x1, 2, false>;
+  using delay_line_type = modulable_thiran2_delay_line<float_x1, 2, false>;
   std::array<delay_line_type, late_cfg::n_channels> _late;
 
   float _size             = 1.f;
