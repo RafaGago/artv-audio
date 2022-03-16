@@ -197,7 +197,7 @@ public:
   static constexpr auto get_parameter (mod_wave_tag)
   {
     return choice_param (
-      0, make_cstr_array ("Sample&Hold", "Sine", "Triangle"), 10);
+      0, make_cstr_array ("Sample&Hold", "Sine", "Triangle", "Trapezoid"), 10);
   }
   //----------------------------------------------------------------------------
   struct l_sparseness_tag {};

@@ -580,6 +580,9 @@ private:
           case modwv_tri:
             mod = _late_lfo.tick_triangle();
             break;
+          case modwv_tra:
+            mod = _late_lfo.tick_trapezoid (vec_set<16> (0.75f));
+            break;
           default:
             assert (false);
             break;
@@ -1044,6 +1047,7 @@ private:
     modwv_sh,
     modwv_sin,
     modwv_tri,
+    modwv_tra,
     modwv_count,
   };
 
