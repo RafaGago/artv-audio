@@ -94,6 +94,13 @@ public:
     std::array<u16, n_channels> freqs;
   };
   //----------------------------------------------------------------------------
+  struct stereo_cfg {
+    static constexpr uint n_channels = 2;
+    float                 freq;
+    float                 g_base;
+    float                 max_samples;
+  };
+  //----------------------------------------------------------------------------
   struct cfg {
     src_cfg          src;
     pre_dif_cfg      pre_dif;
@@ -102,6 +109,7 @@ public:
     internal_dif_cfg int_dif;
     out_dif_cfg      out_dif;
     filter_cfg       filter;
+    stereo_cfg       stereo;
   };
   //----------------------------------------------------------------------------
   // a helper to aid in writing "cfg::late::n_samples" in ascending order.
@@ -235,6 +243,10 @@ public:
       3000));
 
     from_ascending_pairs_to_internal_chnl_order (r.filter.freqs);
+
+    r.stereo.freq        = 1.5f;
+    r.stereo.g_base      = 0.4f;
+    r.stereo.max_samples = 20.f;
 
     return r;
   }
@@ -417,6 +429,8 @@ public:
 
     setup_late();
     setup_memory();
+
+    _stereo_lfo.set_freq (make_vec (_cfg.stereo.freq), _cfg.src.srate);
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -691,8 +705,33 @@ private:
             _late[j].push (make_crange (late_mtx[i][j]).cast<float_x1>());
           }
         }
+        // stereo comb
+        // ---------------------------------------------------------------------
+        uint st_delay = _cfg.stereo.max_samples * _mod_depth_factor;
+        st_delay += blocksize;
+        for (uint i = 0; i < block.size(); ++i) {
+          vec<float, 1> stmod;
+          if (late_wave == modwv_sh) {
+            stmod = _stereo_lfo.tick_filt_sample_and_hold();
+          }
+          else {
+            stmod = _stereo_lfo.tick_sine();
+          }
+          stmod *= _cfg.stereo.g_base * _mod_stereo;
+
+          early_then_late[i][0] = _stereo_allpass[0].tick (
+            make_vec (early_then_late[i][0]),
+            st_delay,
+            vec_set<1> (0.f),
+            stmod)[0];
+          early_then_late[i][1] = _stereo_allpass[1].tick (
+            make_vec (early_then_late[i][1]),
+            st_delay,
+            vec_set<1> (0.f),
+            -stmod)[0];
+        }
         // output diffusion
-        // -----------------------------------------------------------------------
+        // ---------------------------------------------------------------------
         std::array<float, 2> g_arr {_out_dif_g, _out_dif_g};
         for (uint st = 0; st < _out_dif.size(); ++st) {
           for (uint i = 0; i < block.size(); ++i) {
@@ -954,6 +993,12 @@ private:
     gap_spls_max *= 4;
     gap_spls_max = pow2_round_ceil (gap_spls_max);
     mem_total += gap_spls_max;
+
+    // stereo
+    uint stereo_allpass_size
+      = pow2_round_ceil ((uint) _cfg.stereo.max_samples + blocksize);
+    mem_total += stereo_allpass_size * 2;
+
     // allocating
     _mem.clear();
     _mem.resize (mem_total);
@@ -991,6 +1036,10 @@ private:
       for (uint j = 0; j < out_dif_sizes[0].size(); ++j) {
         _out_dif[i][j].reset (mem.cut_head (out_dif_sizes[i][j]));
       }
+    }
+    // stereo
+    for (uint i = 0; i < _stereo_allpass.size(); ++i) {
+      _stereo_allpass[i].reset (mem.cut_head (stereo_allpass_size));
     }
   }
   //----------------------------------------------------------------------------
@@ -1114,6 +1163,9 @@ private:
 
   reverb_array<allpass<float_x1>, internal_dif_cfg> _out_dif;
   float                                             _out_dif_g;
+
+  std::array<allpass<float_x1>, n_channels> _stereo_allpass;
+  lfo<1>                                    _stereo_lfo;
 
   enum { dc_idx, lp_idx };
 
