@@ -37,7 +37,6 @@ public:
     static constexpr uint              n_channels = 2;
     static constexpr uint              n_stages   = 4;
     float                              g_mod_depth;
-    float                              g_mod_freq;
     float                              g_max;
     array2d<u16, n_channels, n_stages> n_samples;
   };
@@ -63,9 +62,11 @@ public:
     float                 max_chorus_width;
     float                 min_chorus_freq;
     float                 max_chorus_freq;
-    float                 size_factor; // spls = [-1,1] * exp (size_factor)
-    u16                   max_chorus_depth_spls;
-    u16                   prime_idx;
+    // max mod depth point (and below), linearly decreasing after that
+    float max_chorus_depth_freq;
+    float size_factor; // spls = [-1,1] * exp (size_factor)
+    u16   max_chorus_depth_spls;
+    u16   prime_idx;
     std::array<u16, n_channels> n_samples;
   };
   //----------------------------------------------------------------------------
@@ -73,7 +74,6 @@ public:
     static constexpr uint              n_channels = 2;
     static constexpr uint              n_stages   = 4;
     float                              g_mod_depth;
-    float                              g_mod_freq;
     float                              g_base;
     u8                                 channel_l;
     u8                                 channel_r;
@@ -142,7 +142,6 @@ public:
     r.src.srate            = 27000;
 
     r.pre_dif.g_mod_depth = 0.1f;
-    r.pre_dif.g_mod_freq  = 1.6f;
     r.pre_dif.g_max       = 0.39f;
 
     r.pre_dif.n_samples = make_array (
@@ -170,10 +169,11 @@ public:
     r.late.prime_idx   = 15;
     r.late.size_factor = 2.5f;
 
-    r.late.max_chorus_freq       = 8.f;
+    r.late.max_chorus_freq       = 4.5f;
     r.late.min_chorus_freq       = 0.01f;
-    r.late.max_chorus_depth_spls = 220; // bipolar, 2x the samples here
-    r.late.max_chorus_width      = 0.5f;
+    r.late.max_chorus_depth_spls = 170; // bipolar, 2x the samples here
+    r.late.max_chorus_depth_freq = 0.75f;
+    r.late.max_chorus_width      = 0.15f;
 
     r.late.n_samples = array_cast<u16> (make_array (
       911,
@@ -196,7 +196,6 @@ public:
     from_ascending_pairs_to_internal_chnl_order (r.late.n_samples);
 
     r.int_dif.g_mod_depth = 0.11f;
-    r.int_dif.g_mod_freq  = 0.6f;
     r.int_dif.g_base      = 0.45f;
     r.int_dif.channel_l   = 2;
     r.int_dif.channel_r   = 13;
@@ -276,7 +275,7 @@ public:
   void set_mod_depth (float factor)
   {
     assert (factor >= 0.f && factor <= 1.f);
-    _mod_depth_factor = factor;
+    _mod_depth_factor = factor * factor * factor;
     reset_mod_depth();
   }
   //----------------------------------------------------------------------------
@@ -291,6 +290,7 @@ public:
   {
     assert (wv < modwv_count);
     _late_wave = wv;
+    reset_late_lfo();
   }
   //----------------------------------------------------------------------------
   void set_early_to_late (float factor)
@@ -415,9 +415,7 @@ public:
     float sixtenths_sec = bpm * (1.f / 60.f) * (1.f / 60.f);
     _beat_16th_spls     = sixtenths_sec * (float) samplerate;
 
-    setup_in_diffusor();
     setup_late();
-    setup_internal_diffusor();
     setup_memory();
   }
   //----------------------------------------------------------------------------
@@ -463,10 +461,17 @@ private:
       // pre diffusor ----------------------------------------------------------
 
       // AP gain LFO
-      auto mod_g = make_crange (tmp);
+      auto mod_g     = make_crange (tmp);
+      uint late_wave = _late_wave; // telling the optimizer to ignore changes
       for (uint i = 0; i < block.size(); ++i) {
-        vec<float, 2> mod = _pre_dif_lfo.tick_trapezoid (vec_set<2> (0.75f));
-        vec<float, 2> g   = vec_set<2> (_pre_dif_g);
+        vec<float, 2> mod;
+        if (late_wave == modwv_sh) {
+          mod = _int_dif_lfo.tick_filt_sample_and_hold();
+        }
+        else {
+          mod = _int_dif_lfo.tick_sine();
+        }
+        vec<float, 2> g = vec_set<2> (_pre_dif_g);
         g += mod * _cfg.pre_dif.g_mod_depth;
         mod_g[i] = vec_to_array (g);
       }
@@ -566,11 +571,10 @@ private:
       if (_late_gain != 0.f) {
 
         // feedback chorus lfo
-        uint lw = _late_wave; // telling the optimizer it won't change, so it
-        // can optimize the switch below
+        uint late_wave = _late_wave; // telling the optimizer to ignore changes
         for (uint i = 0; i < block.size(); ++i) {
           vec<float, 16> mod;
-          switch (lw) {
+          switch (late_wave) {
           case modwv_sh:
             mod = _late_lfo.tick_filt_sample_and_hold();
             break;
@@ -608,8 +612,14 @@ private:
         // internal diffusor lfo.
         mod_g = make_crange (tmp);
         for (uint i = 0; i < block.size(); ++i) {
-          vec<float, 2> mod = _int_dif_lfo.tick_filt_sample_and_hold();
-          vec<float, 2> g   = vec_set<2> (_cfg.int_dif.g_base);
+          vec<float, 2> mod;
+          if (late_wave == modwv_sh) {
+            mod = _int_dif_lfo.tick_filt_sample_and_hold();
+          }
+          else {
+            mod = _int_dif_lfo.tick_sine();
+          }
+          vec<float, 2> g = vec_set<2> (_cfg.int_dif.g_base);
           g += mod * _cfg.int_dif.g_mod_depth;
           mod_g[i] = vec_to_array (g);
         }
@@ -745,22 +755,6 @@ private:
       dst, spls_min, spls_max, prime_idx, rounding_fact, work_mem);
   }
   //----------------------------------------------------------------------------
-  void setup_in_diffusor()
-  {
-    _pre_dif_lfo.reset();
-    auto f = vec_set<2> (_cfg.pre_dif.g_mod_freq);
-    f[0] *= 1.01; // desync
-    _pre_dif_lfo.set_freq (f, _cfg.src.srate);
-  }
-  //----------------------------------------------------------------------------
-  void setup_internal_diffusor()
-  {
-    _int_dif_lfo.reset();
-    auto f = vec_set<2> (_cfg.int_dif.g_mod_freq);
-    f[0] *= 1.01; // desync
-    _int_dif_lfo.set_freq (f, _cfg.src.srate);
-  }
-  //----------------------------------------------------------------------------
   void reset_early (float size_factor)
   {
     float f             = exp (size_factor * _cfg.early.size_factor);
@@ -815,33 +809,65 @@ private:
   {
     using vec_type              = typename decltype (_late_lfo)::value_type;
     constexpr uint n_side_chnls = vec_traits_t<vec_type>::size / 2;
+    constexpr uint n_chnls      = vec_traits_t<vec_type>::size;
 
-    auto     freq_fact = _mod_stereo * _cfg.late.max_chorus_width;
-    auto     freq_l    = _mod_freq_hz;
-    auto     freq_r    = _mod_freq_hz * expf (freq_fact);
-    vec_type freq;
+    vec_type vfreq {};
+    vec_type vphase {};
 
-    // TODO: "desync_factor": probably a CFG param?
-    float desync_factor = 0.03f * _mod_stereo;
-    float desync        = 1.f;
+    auto freq_fact = _mod_stereo * _cfg.late.max_chorus_width;
+    auto freq_l    = _mod_freq_hz;
+    auto freq_r    = _mod_freq_hz * expf (freq_fact);
 
-    for (uint i = 0; i < n_side_chnls; ++i) {
-      freq[i]                          = freq_l * desync;
-      freq[(2 * n_side_chnls - 1) - i] = freq_r * desync;
-      desync += desync_factor;
+    if (_late_wave == modwv_sh) {
+
+      float desync_factor = 0.05f * _mod_stereo;
+      float desync        = 1.f;
+
+      for (uint i = 0; i < n_side_chnls; ++i) {
+        vfreq[i] = freq_l * desync;
+        desync += desync_factor;
+      }
+      desync = 1.f;
+      for (uint i = 0; i < n_side_chnls; ++i) {
+        vfreq[i + n_side_chnls] = freq_r * desync;
+        desync += desync_factor;
+      }
+
+      float inc    = 1.f / ((float) (n_chnls));
+      float cphase = 0.f;
+      inc *= _mod_stereo;
+      for (uint i = 0; i < n_chnls; ++i) {
+        vphase[i] = cphase;
+        cphase += inc;
+      }
     }
-    _late_lfo.set_freq (freq, _cfg.src.srate);
+    else {
+      for (uint i = 0; i < n_side_chnls; ++i) {
+        vfreq[i] = freq_l;
+      }
+      for (uint i = 0; i < n_side_chnls; ++i) {
+        vfreq[i + n_side_chnls] = freq_r;
+      }
+      float ph  = 0.5 * _mod_stereo;
+      float mul = 1.f / ((float) (n_side_chnls * 2));
 
-    vec_type vphase;
-    float    inc    = 1.f / (float) n_side_chnls;
-    float    cphase = 0.f;
-    inc *= _mod_stereo;
-    for (uint i = 0; i < n_side_chnls; ++i) {
-      vphase[i]                          = i & 1 ? cphase : -cphase;
-      vphase[(2 * n_side_chnls - 1) - i] = i & 1 ? cphase : -cphase;
-      cphase += inc;
+      for (uint i = 0; i < n_side_chnls; ++i) {
+        vphase[i] = (i & 2) ? ph : -ph;
+      }
+      for (uint i = 0; i < n_side_chnls; ++i) {
+        vphase[i] = (i & 2) ? -ph : ph;
+      }
     }
+
+    _late_lfo.set_freq (vfreq, _cfg.src.srate);
     _late_lfo.set_phase (phase<16> {vphase, phase<16>::normalized()});
+
+    vec<float, 2> dif_freq {freq_r, freq_l};
+    _int_dif_lfo.reset();
+    _int_dif_lfo.set_freq (dif_freq, _cfg.src.srate);
+
+    _pre_dif_lfo.reset();
+    _pre_dif_lfo.set_freq (dif_freq, _cfg.src.srate);
   }
   //----------------------------------------------------------------------------
   template <class T, size_t A, size_t B>
@@ -1024,11 +1050,8 @@ private:
   void reset_mod_depth()
   {
     // kind-of constant module
-    // max mod depth at 0.5Hz and below, decreasing after that
-    constexpr float max_depth_freq_hz = 0.2f;
-
     float spls = (float) _cfg.late.max_chorus_depth_spls;
-    spls *= _mod_depth_factor * max_depth_freq_hz;
+    spls *= _mod_depth_factor * _cfg.late.max_chorus_depth_freq;
     spls /= _mod_freq_hz;
 
     // limit the excursion on both sides

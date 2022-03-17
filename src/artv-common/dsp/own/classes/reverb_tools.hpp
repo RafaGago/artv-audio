@@ -32,6 +32,14 @@ public:
     return yn - y * gain;
   }
   //----------------------------------------------------------------------------
+  V tick (V in, uint delay, V gain_forward, V gain_backward)
+  {
+    V yn = _mem[delay];
+    V y  = in + yn * gain_backward;
+    _mem.push (y);
+    return yn - y * gain_forward;
+  }
+  //----------------------------------------------------------------------------
 private:
   Circ_bufer _mem;
 };

@@ -6491,20 +6491,20 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  reverb_mod_wave,
+  reverb_mod_mode,
   n_stereo_busses,
-  param_common ("Mod Wave", declptr<reverb>(), declptr<reverb::mod_wave_tag>()),
-  reverb::get_parameter (reverb::mod_wave_tag {}),
+  param_common ("Mod Mode", declptr<reverb>(), declptr<reverb::mod_mode_tag>()),
+  reverb::get_parameter (reverb::mod_mode_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  reverb_mod_stereo,
+  reverb_mod_spread,
   n_stereo_busses,
   param_common (
-    "Mod Stereo",
+    "Mod Spread",
     declptr<reverb>(),
-    declptr<reverb::mod_stereo_tag>()),
-  reverb::get_parameter (reverb::mod_stereo_tag {}),
+    declptr<reverb::mod_spread_tag>()),
+  reverb::get_parameter (reverb::mod_spread_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -6626,8 +6626,8 @@ using reverb_params = mp_list<
   reverb_hp_freq,
   reverb_mod_freq,
   reverb_mod_depth,
-  reverb_mod_wave,
-  reverb_mod_stereo,
+  reverb_mod_mode,
+  reverb_mod_spread,
 
   reverb_diff_in,
   reverb_diff_out,
@@ -6704,7 +6704,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<

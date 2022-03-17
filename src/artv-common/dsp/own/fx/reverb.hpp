@@ -169,35 +169,35 @@ public:
     return float_param ("%", 0.f, 100.f, 10.f, 0.01f);
   }
   //----------------------------------------------------------------------------
-  struct mod_stereo_tag {};
-  void set (mod_stereo_tag, float v)
+  struct mod_spread_tag {};
+  void set (mod_spread_tag, float v)
   {
-    if (v == _mod_stereo) {
+    if (v == _mod_spread) {
       return;
     }
-    _mod_stereo = v;
+    _mod_spread = v;
     _impl.set_mod_stereo (v * 0.01f);
   }
 
-  static constexpr auto get_parameter (mod_stereo_tag)
+  static constexpr auto get_parameter (mod_spread_tag)
   {
     return float_param ("%", -100.f, 100.f, 0.f, 0.01f);
   }
   //----------------------------------------------------------------------------
-  struct mod_wave_tag {};
-  void set (mod_wave_tag, uint v)
+  struct mod_mode_tag {};
+  void set (mod_mode_tag, uint v)
   {
-    if (v == _mod_wave) {
+    if (v == _mod_mode) {
       return;
     }
-    _mod_wave = v;
+    _mod_mode = v;
     _impl.set_mod_wave (v);
   }
 
-  static constexpr auto get_parameter (mod_wave_tag)
+  static constexpr auto get_parameter (mod_mode_tag)
   {
     return choice_param (
-      0, make_cstr_array ("Sample&Hold", "Sine", "Triangle", "Trapezoid"), 10);
+      0, make_cstr_array ("Random", "Chorus1", "Chorus2", "Chorus3"), 10);
   }
   //----------------------------------------------------------------------------
   struct l_sparseness_tag {};
@@ -404,8 +404,6 @@ public:
       pc.get_play_state().bpm,
       _impl.get_default_cfg_preset());
 
-    _impl.set_mod_stereo (-0.5f);
-
     static constexpr float invalid_val = INFINITY;
     _time_msec                         = invalid_val;
     _size                              = invalid_val;
@@ -417,7 +415,7 @@ public:
     _early_2_late_bal                  = invalid_val;
     _mod_freq                          = invalid_val;
     _mod_depth                         = invalid_val;
-    _mod_stereo                        = invalid_val;
+    _mod_spread                        = invalid_val;
     _l_sparseness                      = invalid_val;
     _r_sparseness                      = invalid_val;
     _lr_sparseness                     = invalid_val;
@@ -449,7 +447,7 @@ private:
   float _early_2_late_bal;
   float _mod_freq;
   float _mod_depth;
-  float _mod_stereo;
+  float _mod_spread;
   float _l_sparseness;
   float _r_sparseness;
   float _lr_sparseness;
@@ -460,7 +458,7 @@ private:
   float _predelay;
   float _gap;
   float _stereo;
-  uint  _mod_wave;
+  uint  _mod_mode;
 };
 //------------------------------------------------------------------------------
 } // namespace artv
