@@ -94,6 +94,15 @@ function delay_line_get_catmull_rom_interp_all (dst_ptr, times_ptr)
     );
 );
 
+function delay_line_get_allpass (in, chnl, g_back, g_fwd, delay_spls)
+  global() local (y, yn, out) (
+
+  yn = this.delay_line_get (delay_spls, chnl);
+  y  = in + yn * g_back; // feedback
+  this.delay_line_set (y, 0, chnl);
+  yn - y * g_fwd; // feedforward
+);
+
 function delay_line_advance() global()(
     this.pos -= 1;
     this.pos < 0 ? (this.pos = this.mask);
@@ -233,31 +242,11 @@ function freq_to_allpass_g (freq, samplerate)
     coeff;
 );
 
-// no interpolation
-// dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
-function delay_line_allpass_tick (dst_ptr, in_ptr, delay_spls_ptr)
-    local (i, g, y, yn) global()(
-
-    this.delay_line_advance();
-    i = 0;
-    loop (this.n_channels,
-        g  = this.g.ptr[i];
-        yn = this.delay_line_get (delay_spls_ptr[i], i);
-        y  = in_ptr[i] + yn * g; // feedback
-        this.delay_line_set (y, 0, i);
-        dst_ptr[i] = yn - y * g;
-        i += 1; // feedforward
-    );
-);
-
-function delay_line_allpass_tick (in, chnl, delay_spls)
-  global() local(g, y, yn, out) (
-
-  g  = this.g.ptr[chnl];
-  yn = this.delay_line_get (delay_spls, chnl);
-  y  = in + yn * g; // feedback
-  this.delay_line_set (y, 0, chnl);
-  yn - y * g; // feedforward
+function delay_line_allpass_get (in, chnl, delay_spls)
+  global() (
+    this.delay_line_get_allpass(
+        in, chnl, this.g.ptr[chnl], this.g.ptr[chnl], delay_spls
+        );
 );
 
 // no interpolation
@@ -269,11 +258,11 @@ function delay_line_allpass_tick_cascade_all (in, active_count, delay_spls_ptr)
     i = 0;
     out = in;
     loop (active_count,
-      out = this.delay_line_allpass_tick (out, i, delay_spls_ptr[i]);
+      out = this.delay_line_allpass_get (out, i, delay_spls_ptr[i]);
       i += 1;
     );
     loop (this.n_channels - active_count,
-      this.delay_line_allpass_tick (0, i, delay_spls_ptr[i]);
+      this.delay_line_allpass_get (0, i, delay_spls_ptr[i]);
       i += 1;
     );
     out;
@@ -288,7 +277,7 @@ function delay_line_allpass_tick_parallel_all (out_ptr, in_ptr, delay_spls_ptr)
     i = 0;
     loop (this.n_channels,
       out_ptr[i] =
-        this.delay_line_allpass_tick (in_ptr[i], i, delay_spls_ptr[i]);
+        this.delay_line_allpass_get (in_ptr[i], i, delay_spls_ptr[i]);
       i += 1;
     );
 );
@@ -303,12 +292,12 @@ function delay_line_allpass_tick_tapped_all (in, active_count, delay_spls_ptr)
     next = in;
     out = 0;
     loop (active_count,
-      next = this.delay_line_allpass_tick (next, i, delay_spls_ptr[i]);
+      next = this.delay_line_allpass_get (next, i, delay_spls_ptr[i]);
       out += next;
       i += 1;
     );
     loop (this.n_channels - active_count,
-      this.delay_line_allpass_tick (0, i, delay_spls_ptr[i]);
+      this.delay_line_allpass_get (0, i, delay_spls_ptr[i]);
       i += 1;
     );
     out / active_count;
@@ -324,16 +313,16 @@ function delay_line_allpass_tick_tapped_cascade_all(
     next = in;
     out = in;
     loop (count_tapped,
-      next = this.delay_line_allpass_tick (next, i, delay_spls_ptr[i]);
+      next = this.delay_line_allpass_get (next, i, delay_spls_ptr[i]);
       out += next;
       i += 1;
     );
     loop (count,
-      out = this.delay_line_allpass_tick (out, i, delay_spls_ptr[i]);
+      out = this.delay_line_allpass_get (out, i, delay_spls_ptr[i]);
       i += 1;
     );
     loop (this.n_channels - (count_tapped + count),
-      this.delay_line_allpass_tick (0, i, delay_spls_ptr[i]);
+      this.delay_line_allpass_get (0, i, delay_spls_ptr[i]);
       i += 1;
     );
     out / (count_tapped + 1);
@@ -388,7 +377,7 @@ function delay_line_nested_allpass_tick (in, chnl, delay_spls_ptr)
 
   i = 1;
   loop (this.n_nested,
-    yn = this.delay_line_allpass_tick (yn, ch_idx + i, delay_spls_ptr[i]);
+    yn = this.delay_line_allpass_get (yn, ch_idx + i, delay_spls_ptr[i]);
     i += 1;
   );
 
@@ -409,12 +398,12 @@ function delay_line_nested_allpass_tick_cascade_all(
     out = in;
     offs = 0;
     loop (active_count,
-      out = this.delay_line_nested_allpass_tick (out, i, delay_spls_ptr + offs);
+      out = this.delay_line_allpass_get (out, i, delay_spls_ptr + offs);
       offs += this.n_channels_nested;
       i += 1;
     );
     loop (this.n_channels_nested - active_count,
-      this.delay_line_nested_allpass_tick (0, i, delay_spls_ptr + offs);
+      this.delay_line_allpass_get (0, i, delay_spls_ptr + offs);
       offs += this.n_channels_nested;
       i += 1;
     );
