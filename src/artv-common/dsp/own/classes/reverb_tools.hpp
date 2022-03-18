@@ -54,7 +54,33 @@ using allpass = detail::allpass<
 //------------------------------------------------------------------------------
 // Basic reverb building block. Strictly not a delay line. Not sure if it
 // belongs here. It probably needs to be moved.
-
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+class allpass_with_params {
+public:
+  //----------------------------------------------------------------------------
+  void reset (crange<V> mem) { _ap.reset (mem); }
+  //----------------------------------------------------------------------------
+  void set (uint delay_samples, V gain)
+  {
+    set_time (delay_samples);
+    set_gain (gain);
+  }
+  //----------------------------------------------------------------------------
+  void set_time (uint samples)
+  {
+    assert (samples < _mem.size());
+    _delay = samples;
+  }
+  //----------------------------------------------------------------------------
+  void set_gain (V gain) { _gain = gain; }
+  //----------------------------------------------------------------------------
+  V tick (V in) { return _ap.tick (in, _delay, _gain); }
+  //----------------------------------------------------------------------------
+private:
+  allpass<V, true> _ap;
+  uint             _delay {};
+  V                _gain {};
+};
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static constexpr V delay_get_feedback_gain_for_time (

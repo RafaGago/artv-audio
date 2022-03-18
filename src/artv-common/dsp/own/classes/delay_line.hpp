@@ -180,7 +180,7 @@ public:
 
 //------------------------------------------------------------------------------
 // - not managed memory
-// - multichannel
+// - multichannel, but all of them of the same maximum size.
 // - random access.
 // - Optional power of 2 capacity optimization.
 // - channels might or not be interleaved
@@ -564,7 +564,7 @@ private:
 
 //------------------------------------------------------------------------------
 // - not managed memory
-// - multichannel
+// - multichannel, but all of them of the same maximum size.
 // - random access interpolator.
 // - optional power of 2 capacity optimization.
 // - channels might or not be interleaved
@@ -578,7 +578,7 @@ using interpolated_delay_line = detail::interpolated_delay_line<
 
 //------------------------------------------------------------------------------
 // - not managed memory
-// - multichannel
+// - multichannel, but all of them of the same maximum size.
 // - stateful interpolator.
 // - optional power of 2 capacity optimization.
 // - channels might or not be interleaved
@@ -598,7 +598,7 @@ using statefully_interpolated_delay_line
 
 //------------------------------------------------------------------------------
 // - not managed memory
-// - multichannel
+// - multichannel, but all of them of the same maximum size.
 // - random access interpolator.
 // - optional power of 2 capacity optimization.
 // - channels might or not be interleaved
@@ -953,7 +953,7 @@ using modulable_thiran2_delay_line = detail::modulable_allpass_delay_line<
   detail::thiran_interp_2_df1>;
 //------------------------------------------------------------------------------
 // - single dynamic allocation
-// - multichannel
+// - multichannel, but all of them of the same maximum size.
 // - random access.
 // - power of 2 capacity.
 // - not interleaved
@@ -999,43 +999,6 @@ private:
   //----------------------------------------------------------------------------
   static_delay_line<T, Interleaved, Use_pow2_sizes> _z;
   T*                                                _mem = nullptr;
-};
-//------------------------------------------------------------------------------
-// Basic reverb building block. Strictly not a delay line. Not sure if it
-// belongs here. It probably needs to be moved.
-template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-class schroeder_allpass {
-public:
-  //----------------------------------------------------------------------------
-  void reset (crange<V> mem) { _mem.reset (mem); }
-  //----------------------------------------------------------------------------
-  void set (uint delay_samples, V gain)
-  {
-    set_time (delay_samples);
-    set_gain (gain);
-  }
-  //----------------------------------------------------------------------------
-  void set_time (uint samples)
-  {
-    assert (samples < _mem.size());
-    _delay = samples;
-  }
-  //----------------------------------------------------------------------------
-  void set_gain (V gain) { _gain = gain; }
-  //----------------------------------------------------------------------------
-  V tick (V in)
-  {
-    V y1 = _mem[_delay];
-    V y  = in - y1 * _gain;
-    _mem.push (y);
-    return y * _gain + y1;
-  }
-  //----------------------------------------------------------------------------
-private:
-  pow2_circular_buffer<V> _mem;
-  uint                    _delay {};
-  V                       _gain {};
-  V                       _z1 {};
 };
 //------------------------------------------------------------------------------
 } // namespace artv

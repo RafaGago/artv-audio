@@ -2,10 +2,10 @@
 
 #include <algorithm>
 
-#include "artv-common/dsp/own/classes/delay_line.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/pitch_shift.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/reverb_tools.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/types.hpp"
@@ -474,7 +474,7 @@ private:
   lfo<1>                                      _lfo;
   modulable_delay_line<float_x1, false, true> _mod;
 
-  std::array<schroeder_allpass<float_x1>, ap_size>              _ap;
+  std::array<allpass_with_params<float_x1>, ap_size>            _ap;
   part_classes<filter_types, float_x1>                          _filters;
   std::array<fdn_verb_householder<float_x1, hh_matrix_size>, 2> _hhmatrix;
   pitch_shift_sin<float_x1, false>                              _fb_shift;
