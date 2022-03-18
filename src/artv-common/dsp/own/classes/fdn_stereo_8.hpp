@@ -96,7 +96,8 @@ public:
   //----------------------------------------------------------------------------
   struct stereo_cfg {
     static constexpr uint n_channels = 2;
-    float                 freq;
+    float                 freq_center;
+    float                 freq_factor;
     float                 g_base;
     float                 max_samples;
   };
@@ -179,8 +180,8 @@ public:
 
     r.late.max_chorus_freq       = 4.5f;
     r.late.min_chorus_freq       = 0.01f;
-    r.late.max_chorus_depth_spls = 170; // bipolar, 2x the samples here
-    r.late.max_chorus_depth_freq = 0.75f;
+    r.late.max_chorus_depth_spls = 120; // bipolar, 2x the samples here
+    r.late.max_chorus_depth_freq = 0.15f;
     r.late.max_chorus_width      = 0.15f;
 
     r.late.n_samples = array_cast<u16> (make_array (
@@ -244,7 +245,7 @@ public:
 
     from_ascending_pairs_to_internal_chnl_order (r.filter.freqs);
 
-    r.stereo.freq        = 1.5f;
+    r.stereo.freq_factor = 0.277f;
     r.stereo.g_base      = 0.4f;
     r.stereo.max_samples = 20.f;
 
@@ -280,14 +281,14 @@ public:
     assert (factor >= 0.f && factor <= 1.f);
     auto diff    = _cfg.late.max_chorus_freq - _cfg.late.min_chorus_freq;
     _mod_freq_hz = _cfg.late.min_chorus_freq + (diff * factor * factor);
-    reset_late_lfo();
+    reset_mod_freq();
     reset_mod_depth();
   }
   //----------------------------------------------------------------------------
   void set_mod_depth (float factor)
   {
     assert (factor >= 0.f && factor <= 1.f);
-    _mod_depth_factor = factor * factor * factor;
+    _mod_depth_factor = factor * factor;
     reset_mod_depth();
   }
   //----------------------------------------------------------------------------
@@ -295,14 +296,15 @@ public:
   {
     assert (factor >= -1.f && factor <= 1.f);
     _mod_stereo = factor;
-    reset_late_lfo();
+    reset_mod_freq();
+    reset_mod_stereo();
   }
   //----------------------------------------------------------------------------
   void set_mod_wave (uint wv)
   {
     assert (wv < modwv_count);
     _late_wave = wv;
-    reset_late_lfo();
+    reset_mod_freq();
   }
   //----------------------------------------------------------------------------
   void set_early_to_late (float factor)
@@ -429,8 +431,6 @@ public:
 
     setup_late();
     setup_memory();
-
-    _stereo_lfo.set_freq (make_vec (_cfg.stereo.freq), _cfg.src.srate);
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -707,7 +707,8 @@ private:
         }
         // stereo comb
         // ---------------------------------------------------------------------
-        uint st_delay = _cfg.stereo.max_samples * _mod_depth_factor;
+        uint st_delay
+          = _cfg.stereo.max_samples * _mod_depth_factor * _mod_depth_factor;
         st_delay += blocksize;
         for (uint i = 0; i < block.size(); ++i) {
           vec<float, 1> stmod;
@@ -844,22 +845,20 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  void reset_late_lfo()
+  void reset_mod_freq()
   {
     using vec_type              = typename decltype (_late_lfo)::value_type;
     constexpr uint n_side_chnls = vec_traits_t<vec_type>::size / 2;
     constexpr uint n_chnls      = vec_traits_t<vec_type>::size;
 
     vec_type vfreq {};
-    vec_type vphase {};
 
     auto freq_fact = _mod_stereo * _cfg.late.max_chorus_width;
     auto freq_l    = _mod_freq_hz;
     auto freq_r    = _mod_freq_hz * expf (freq_fact);
 
     if (_late_wave == modwv_sh) {
-
-      float desync_factor = 0.05f * _mod_stereo;
+      float desync_factor = 0.08f * _mod_stereo;
       float desync        = 1.f;
 
       for (uint i = 0; i < n_side_chnls; ++i) {
@@ -871,7 +870,36 @@ private:
         vfreq[i + n_side_chnls] = freq_r * desync;
         desync += desync_factor;
       }
+    }
+    else {
+      for (uint i = 0; i < n_side_chnls; ++i) {
+        vfreq[i] = freq_l;
+      }
+      for (uint i = 0; i < n_side_chnls; ++i) {
+        vfreq[i + n_side_chnls] = freq_r;
+      }
+    }
 
+    _late_lfo.set_freq (vfreq, _cfg.src.srate);
+
+    vec<float, 2> dif_freq {freq_r, freq_l};
+    _int_dif_lfo.set_freq (dif_freq, _cfg.src.srate);
+
+    _pre_dif_lfo.set_freq (dif_freq, _cfg.src.srate);
+
+    _stereo_lfo.set_freq (
+      make_vec (freq_r + freq_l * _cfg.stereo.freq_factor), _cfg.src.srate);
+  }
+  //----------------------------------------------------------------------------
+  void reset_mod_stereo()
+  {
+    using vec_type              = typename decltype (_late_lfo)::value_type;
+    constexpr uint n_side_chnls = vec_traits_t<vec_type>::size / 2;
+    constexpr uint n_chnls      = vec_traits_t<vec_type>::size;
+
+    vec_type vphase {};
+
+    if (_late_wave == modwv_sh) {
       float inc    = 1.f / ((float) (n_chnls));
       float cphase = 0.f;
       inc *= _mod_stereo;
@@ -881,14 +909,7 @@ private:
       }
     }
     else {
-      for (uint i = 0; i < n_side_chnls; ++i) {
-        vfreq[i] = freq_l;
-      }
-      for (uint i = 0; i < n_side_chnls; ++i) {
-        vfreq[i + n_side_chnls] = freq_r;
-      }
-      float ph  = 0.5 * _mod_stereo;
-      float mul = 1.f / ((float) (n_side_chnls * 2));
+      float ph = 0.5 * _mod_stereo;
 
       for (uint i = 0; i < n_side_chnls; ++i) {
         vphase[i] = (i & 2) ? ph : -ph;
@@ -897,16 +918,7 @@ private:
         vphase[i] = (i & 2) ? -ph : ph;
       }
     }
-
-    _late_lfo.set_freq (vfreq, _cfg.src.srate);
     _late_lfo.set_phase (phase<16> {vphase, phase<16>::normalized()});
-
-    vec<float, 2> dif_freq {freq_r, freq_l};
-    _int_dif_lfo.reset();
-    _int_dif_lfo.set_freq (dif_freq, _cfg.src.srate);
-
-    _pre_dif_lfo.reset();
-    _pre_dif_lfo.set_freq (dif_freq, _cfg.src.srate);
   }
   //----------------------------------------------------------------------------
   template <class T, size_t A, size_t B>
