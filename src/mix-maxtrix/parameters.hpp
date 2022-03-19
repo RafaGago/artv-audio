@@ -6409,10 +6409,10 @@ using soundtouch_params
   = mp_list<soundtouch_semitones, soundtouch_detune, soundtouch_mode>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
-  reverb_time,
+  reverb_decay,
   n_stereo_busses,
-  param_common ("Late Time", declptr<reverb>(), declptr<reverb::time_tag>()),
-  reverb::get_parameter (reverb::time_tag {}),
+  param_common ("Late Decay", declptr<reverb>(), declptr<reverb::decay_tag>()),
+  reverb::get_parameter (reverb::decay_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -6618,7 +6618,7 @@ using reverb_params = mp_list<
   reverb_gap,
   reverb_late_gain,
   reverb_size,
-  reverb_time,
+  reverb_decay,
 
   reverb_damp_freq,
   reverb_damp_factor,
@@ -6704,7 +6704,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<

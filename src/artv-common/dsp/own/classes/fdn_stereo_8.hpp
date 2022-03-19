@@ -176,11 +176,11 @@ public:
     r.early.size_factor     = 1.f; // log(e)
 
     r.late.prime_idx   = 15;
-    r.late.size_factor = 2.5f;
+    r.late.size_factor = 2.2f;
 
     r.late.max_chorus_freq       = 4.5f;
-    r.late.min_chorus_freq       = 0.01f;
-    r.late.max_chorus_depth_spls = 120; // bipolar, 2x the samples here
+    r.late.min_chorus_freq       = 0.15f;
+    r.late.max_chorus_depth_spls = 150; // bipolar, 2x the samples here
     r.late.max_chorus_depth_freq = 0.15f;
     r.late.max_chorus_width      = 0.15f;
 
@@ -222,30 +222,30 @@ public:
       array_cast<u16> (make_array (157, 191)),
       array_cast<u16> (make_array (443, 532)));
 
-    r.filter.max_att_db  = -9.f;
+    r.filter.max_att_db  = -13.f;
     r.filter.freq_factor = std::log (4.5f);
 
     r.filter.freqs = array_cast<u16> (make_array (
-      500,
-      530,
-      640,
-      600,
-      860,
-      800,
-      920,
-      900,
-      1000,
-      1100,
-      1200,
-      1000,
-      2200,
-      2000,
+      3000,
       2800,
-      3000));
+      2000,
+      2200,
+      1000,
+      1200,
+      1100,
+      1000,
+      900,
+      940,
+      800,
+      860,
+      600,
+      640,
+      330,
+      300));
 
     from_ascending_pairs_to_internal_chnl_order (r.filter.freqs);
 
-    r.stereo.freq_factor = 0.277f;
+    r.stereo.freq_factor = 0.317f;
     r.stereo.g_base      = 0.4f;
     r.stereo.max_samples = 20.f;
 
@@ -689,13 +689,8 @@ private:
             late_mtx[i].begin() + 5,
             late_mtx[i].begin() + 6,
             late_mtx[i].begin() + 11);
-#if 0
-          for (uint j = 0; j < 16; ++j) {
-            _late[j].push (make_crange (late_mtx[i][j]).cast<float_x1>());
-          }
-#else
+
           _late.push (late_mtx[i]);
-#endif
         }
         // stereo comb
         // ---------------------------------------------------------------------
@@ -1006,7 +1001,7 @@ private:
       = pow2_round_ceil ((uint) _cfg.stereo.max_samples + blocksize);
     mem_total += stereo_allpass_size * 2;
 
-    // allocating
+    // allocating_mem
     _mem.clear();
     _mem.resize (mem_total);
 
@@ -1028,15 +1023,8 @@ private:
         _early[i][j].reset (mem.cut_head (early_sizes[i][j]));
       }
     }
-#if 1
     // late
     mem = _late.reset<u32> (mem.cast<float>(), late_sizes).cast<float_x1>();
-#else
-    // late
-    for (uint i = 0; i < late_sizes.size(); ++i) {
-      _late[i].reset (mem.cut_head (late_sizes[i]), 1);
-    }
-#endif
     // internal diffusor
     for (uint i = 0; i < int_dif_sizes.size(); ++i) {
       for (uint j = 0; j < int_dif_sizes[0].size(); ++j) {

@@ -94,8 +94,8 @@ public:
     return float_param ("%", 0.f, 100.f, -0.f, 0.1f);
   }
   //----------------------------------------------------------------------------
-  struct time_tag {};
-  void set (time_tag, float v)
+  struct decay_tag {};
+  void set (decay_tag, float v)
   {
     if (v == _time_msec) {
       return;
@@ -104,7 +104,7 @@ public:
     _impl.set_time_msec (v);
   }
 
-  static constexpr auto get_parameter (time_tag)
+  static constexpr auto get_parameter (decay_tag)
   {
     return float_param ("msec", 10.f, 20000.f, 1500.f, 1.f, 0.32f);
   }
@@ -151,7 +151,7 @@ public:
 
   static constexpr auto get_parameter (mod_freq_tag)
   {
-    return float_param ("%", 0.f, 100.f, 5.f, 0.001f, 0.6f);
+    return float_param ("%", 0.f, 100.f, 50.f, 0.001f);
   }
   //----------------------------------------------------------------------------
   struct mod_depth_tag {};
@@ -387,7 +387,7 @@ public:
   }
   //----------------------------------------------------------------------------
   using parameters = mp_list<
-    time_tag,
+    decay_tag,
     predelay_tag,
     er_late_tag,
     algorithm_tag,
