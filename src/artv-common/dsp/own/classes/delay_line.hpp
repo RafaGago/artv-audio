@@ -869,6 +869,7 @@ public:
       std::array<value_type, raw_interp::n_points> z;
 
       bool delay_is_increasing = diff > 0.f;
+      // TODO: is the direction thing correct
       if (delay_is_increasing) {
         // move in increasing direction: away from the write pointer (idx 0)
         for (uint i = z.size() - 1; i < z.size(); --i) {
@@ -1008,8 +1009,9 @@ class multisized_delay_line;
 template <class T, uint N>
 class multisized_delay_line<T, N, true> {
 public:
-  using value_type                 = T;
-  static constexpr uint n_channels = N;
+  using value_type                          = T;
+  static constexpr uint n_channels          = N;
+  static constexpr bool requires_pow2_sizes = true;
   //----------------------------------------------------------------------------
   static_assert (std::is_floating_point_v<T>);
   //----------------------------------------------------------------------------
@@ -1019,9 +1021,9 @@ public:
     static_assert (std::is_unsigned_v<U>);
 
     assert (sizes.size() >= n_channels);
-    for (uint i = 0; i < _mem.size(); ++i) {
+    for (uint i = 0; i < _delays.size(); ++i) {
       assert (is_pow2 (sizes[i]));
-      _mem[i] = delay_data {mem.cut_head (sizes[i]).data(), sizes[i] - 1};
+      _delays[i] = delay_data {mem.cut_head (sizes[i]).data(), sizes[i] - 1};
     }
     return mem; // return the remainder
   }
@@ -1031,17 +1033,17 @@ public:
     assert (row.size() >= n_channels);
     ++_pos;
     for (uint i = 0; i < n_channels; ++i) {
-      auto& buff                 = _mem[i];
-      buff.ptr[buff.mask & _pos] = row[i];
+      auto& del                = _delays[i];
+      del.ptr[del.mask & _pos] = row[i];
     }
   }
   //----------------------------------------------------------------------------
   constexpr value_type get (uint del_spls, uint chnl)
   {
     assert (chnl < n_channels);
-    auto& buff = _mem[chnl];
-    assert (del_spls <= buff.mask); // unintended wraparound?
-    return buff.ptr[buff.mask & (_pos - del_spls)];
+    auto& del = _delays[chnl];
+    assert (del_spls <= del.mask); // unintended wraparound?
+    return del.ptr[del.mask & (_pos - del_spls)];
   }
   //----------------------------------------------------------------------------
   constexpr void get (crange<value_type> dst, crange<uint> del_spls)
@@ -1059,16 +1061,74 @@ private:
     uint        mask;
   };
   //----------------------------------------------------------------------------
-  std::array<delay_data, N> _mem {};
+  std::array<delay_data, N> _delays {};
   uint                      _pos {};
 };
 //------------------------------------------------------------------------------
-// This one was an experiment to see if doing the interpolation once the samples
-// were fetched was worth but it is actually a CPU killer
+template <class T, uint N>
+class multisized_delay_line<T, N, false> {
+public:
+  using value_type                          = T;
+  static constexpr uint n_channels          = N;
+  static constexpr bool requires_pow2_sizes = false;
+  //----------------------------------------------------------------------------
+  static_assert (std::is_floating_point_v<T>);
+  //----------------------------------------------------------------------------
+  template <class U>
+  crange<value_type> reset (crange<value_type> mem, crange<const U> sizes)
+  {
+    static_assert (std::is_unsigned_v<U>);
+
+    assert (sizes.size() >= n_channels);
+    for (uint i = 0; i < _delays.size(); ++i) {
+      _delays[i] = delay_data {mem.cut_head (sizes[i]).data(), sizes[i], 0};
+    }
+    return mem; // return the remainder
+  }
+  //----------------------------------------------------------------------------
+  constexpr void push (const crange<value_type> row)
+  {
+    assert (row.size() >= n_channels);
+    for (uint i = 0; i < n_channels; ++i) {
+      auto& del = _delays[i];
+      ++del.pos;
+      del.pos          = del.pos < del.size ? del.pos : 0;
+      del.ptr[del.pos] = row[i];
+    }
+  }
+  //----------------------------------------------------------------------------
+  constexpr value_type get (uint del_spls, uint chnl)
+  {
+    assert (chnl < n_channels);
+    auto& del = _delays[chnl];
+    assert (del_spls < del.size); // unintended wraparound?
+    del_spls = del.pos - del_spls;
+    del_spls += del_spls > del.size ? del.size : 0;
+    return del.ptr[del_spls];
+  }
+  //----------------------------------------------------------------------------
+  constexpr void get (crange<value_type> dst, crange<uint> del_spls)
+  {
+    assert (dst.size() >= n_channels);
+    assert (del_spls.size() >= n_channels);
+    for (uint i = 0; i < n_channels; ++i) {
+      dst[i] = get (del_spls[i], i);
+    }
+  }
+  //----------------------------------------------------------------------------
+private:
+  struct delay_data {
+    value_type* ptr;
+    uint        size;
+    uint        pos;
+  };
+  //----------------------------------------------------------------------------
+  std::array<delay_data, N> _delays {};
+};
 //------------------------------------------------------------------------------
 template <class T, uint N, class Stateless_interp, bool is_pow2>
 class interpolated_multisized_delay_line
-  : public multisized_delay_line<T, N, is_pow2> {
+  : private multisized_delay_line<T, N, is_pow2> {
 private:
   using base = multisized_delay_line<T, N, is_pow2>;
   //----------------------------------------------------------------------------
@@ -1076,6 +1136,9 @@ public:
   using value_type                 = typename base::value_type;
   static constexpr auto n_channels = base::n_channels;
   using interp                     = Stateless_interp;
+
+  using base::push;
+  using base::reset;
   //----------------------------------------------------------------------------
   // Stateless_interp = a class on
   // "artv-common/dsp/own/parts/interpolation/stateless.hpp"
@@ -1086,7 +1149,7 @@ public:
       delay_spls, [] (auto y, auto x) { return interp::tick (y, x); });
   }
   //----------------------------------------------------------------------------
-private:
+protected:
   //----------------------------------------------------------------------------
   template <uint N_points, uint X_offset, class InterpFunctor>
   std::array<value_type, n_channels> get (
@@ -1122,5 +1185,7 @@ private:
     return ret;
   }
 };
+//------------------------------------------------------------------------------
+// TODO: Thiran and others with the multichannel interface.
 //------------------------------------------------------------------------------
 } // namespace artv
