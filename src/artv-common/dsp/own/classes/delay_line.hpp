@@ -108,6 +108,7 @@ private:
   uint _pos;
   uint _size;
 };
+
 //------------------------------------------------------------------------------
 namespace detail {
 
@@ -999,6 +1000,127 @@ private:
   //----------------------------------------------------------------------------
   static_delay_line<T, Interleaved, Use_pow2_sizes> _z;
   T*                                                _mem = nullptr;
+};
+//------------------------------------------------------------------------------
+template <class T, uint N, bool is_pow2>
+class multisized_delay_line;
+
+template <class T, uint N>
+class multisized_delay_line<T, N, true> {
+public:
+  using value_type                 = T;
+  static constexpr uint n_channels = N;
+  //----------------------------------------------------------------------------
+  static_assert (std::is_floating_point_v<T>);
+  //----------------------------------------------------------------------------
+  template <class U>
+  crange<value_type> reset (crange<value_type> mem, crange<const U> sizes)
+  {
+    static_assert (std::is_unsigned_v<U>);
+
+    assert (sizes.size() >= n_channels);
+    for (uint i = 0; i < _mem.size(); ++i) {
+      assert (is_pow2 (sizes[i]));
+      _mem[i] = delay_data {mem.cut_head (sizes[i]).data(), sizes[i] - 1};
+    }
+    return mem; // return the remainder
+  }
+  //----------------------------------------------------------------------------
+  constexpr void push (const crange<value_type> row)
+  {
+    assert (row.size() >= n_channels);
+    ++_pos;
+    for (uint i = 0; i < n_channels; ++i) {
+      auto& buff                 = _mem[i];
+      buff.ptr[buff.mask & _pos] = row[i];
+    }
+  }
+  //----------------------------------------------------------------------------
+  constexpr value_type get (uint del_spls, uint chnl)
+  {
+    assert (chnl < n_channels);
+    auto& buff = _mem[chnl];
+    assert (del_spls <= buff.mask); // unintended wraparound?
+    return buff.ptr[buff.mask & (_pos - del_spls)];
+  }
+  //----------------------------------------------------------------------------
+  constexpr void get (crange<value_type> dst, crange<uint> del_spls)
+  {
+    assert (dst.size() >= n_channels);
+    assert (del_spls.size() >= n_channels);
+    for (uint i = 0; i < n_channels; ++i) {
+      dst[i] = get (del_spls[i], i);
+    }
+  }
+  //----------------------------------------------------------------------------
+private:
+  struct delay_data {
+    value_type* ptr;
+    uint        mask;
+  };
+  //----------------------------------------------------------------------------
+  std::array<delay_data, N> _mem {};
+  uint                      _pos {};
+};
+//------------------------------------------------------------------------------
+// This one was an experiment to see if doing the interpolation once the samples
+// were fetched was worth but it is actually a CPU killer
+//------------------------------------------------------------------------------
+template <class T, uint N, class Stateless_interp, bool is_pow2>
+class interpolated_multisized_delay_line
+  : public multisized_delay_line<T, N, is_pow2> {
+private:
+  using base = multisized_delay_line<T, N, is_pow2>;
+  //----------------------------------------------------------------------------
+public:
+  using value_type                 = typename base::value_type;
+  static constexpr auto n_channels = base::n_channels;
+  using interp                     = Stateless_interp;
+  //----------------------------------------------------------------------------
+  // Stateless_interp = a class on
+  // "artv-common/dsp/own/parts/interpolation/stateless.hpp"
+  vec<value_type, n_channels> get (vec<float, n_channels> delay_spls)
+  {
+    return get<interp::n_points, interp::x_offset> (
+      delay_spls, [] (auto y, auto x) { return interp::tick (y, x); });
+  }
+  //----------------------------------------------------------------------------
+private:
+  //----------------------------------------------------------------------------
+  template <uint N_points, uint X_offset, class InterpFunctor>
+  vec<value_type, n_channels> get (
+    vec<float, n_channels> delay_spls,
+    InterpFunctor&&        interp)
+  {
+    // check mod direction
+    auto is_increasing = delay_spls > _delay_spls_prev;
+
+    // calculate fractions and offsets
+    auto delay_spls_int  = vec_cast<same_size_uint<value_type>> (delay_spls);
+    auto delay_spls_frac = delay_spls - vec_cast<value_type> (delay_spls_int);
+    delay_spls_int -= X_offset;
+
+    // fetch samples to interpolate channel-wise.
+    array2d<value_type, n_channels, N_points> spls;
+    int                                       inc_mul;
+
+    // Sample fetch
+    for (uint c = 0; c < n_channels; ++c) {
+      uint delay = delay_spls_int[c];
+      for (uint i = 0; i < N_points; ++i) {
+        spls[i][c] = base::get (delay + i, c);
+      }
+    }
+    // initialize vectors
+    std::array<vec<value_type, n_channels>, N_points> vspls;
+    for (uint i = 0; i < N_points; ++i) {
+      vspls[i] = vec_from_array (spls[i]);
+    }
+    // do the parallel interpolation.
+    return interp (vspls, vec_cast<value_type> (delay_spls_frac));
+  }
+  //----------------------------------------------------------------------------
+  vec<float, n_channels> _delay_spls_prev {};
 };
 //------------------------------------------------------------------------------
 } // namespace artv

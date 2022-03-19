@@ -180,7 +180,7 @@ public:
 
     r.late.max_chorus_freq       = 4.5f;
     r.late.min_chorus_freq       = 0.01f;
-    r.late.max_chorus_depth_spls = 120; // bipolar, 2x the samples here
+    r.late.max_chorus_depth_spls = 150; // bipolar, 2x the samples here
     r.late.max_chorus_depth_freq = 0.15f;
     r.late.max_chorus_width      = 0.15f;
 
@@ -607,11 +607,13 @@ private:
           };
           auto n_spls_mod = mod * _mod_depth_spls;
           auto n_spls     = n_spls_mod + _late_n_spls;
-          late_mtx[i]     = vec_to_array (n_spls);
           for (uint j = 0; j < 16; ++j) {
-            assert (late_mtx[i][j] >= 0.f);
+            assert (n_spls[j] >= 0.f);
           }
+          auto row    = _late.get (n_spls - (float) i);
+          late_mtx[i] = vec_to_array (row);
         }
+#if 0
         // chorus, "late_mtx" has now the LFOS
         float i_flt = 0.f;
         for (uint i = 0; i < block.size(); ++i) {
@@ -623,6 +625,7 @@ private:
           }
           ++i_flt;
         }
+#endif
         // internal diffusor lfo.
         mod_g = make_crange (tmp);
         for (uint i = 0; i < block.size(); ++i) {
@@ -700,10 +703,13 @@ private:
             late_mtx[i].begin() + 5,
             late_mtx[i].begin() + 6,
             late_mtx[i].begin() + 11);
-
+#if 0
           for (uint j = 0; j < 16; ++j) {
             _late[j].push (make_crange (late_mtx[i][j]).cast<float_x1>());
           }
+#else
+          _late.push (late_mtx[i]);
+#endif
         }
         // stereo comb
         // ---------------------------------------------------------------------
@@ -840,9 +846,11 @@ private:
     for (uint i = 0; i < _cfg.late.n_samples.size(); ++i) {
       _late_n_spls_master[i] = (float) (_cfg.late.n_samples[i]);
     }
+#if 0
     for (auto& dl : _late) {
       dl.set_resync_delta (20.f);
     }
+#endif
   }
   //----------------------------------------------------------------------------
   void reset_mod_freq()
@@ -984,11 +992,12 @@ private:
     mem_total += convert_to_max_sizes (
       late_sizes,
       (u32) (_cfg.late.max_chorus_depth_spls + delay_line_type::interp::n_points));
-
+#if 0
     for (uint i = 0; i < late_sizes.size(); ++i) {
       late_sizes[i] += _late[i].interp_overhead_elems (1);
     }
     mem_total += _late[0].interp_overhead_elems (1) * late_sizes.size();
+#endif
 
     mem_total += convert_to_max_sizes (int_dif_sizes);
     mem_total += convert_to_max_sizes (out_dif_sizes);
@@ -1033,10 +1042,15 @@ private:
         _early[i][j].reset (mem.cut_head (early_sizes[i][j]));
       }
     }
+#if 1
+    // late
+    mem = _late.reset<u32> (mem.cast<float>(), late_sizes).cast<float_x1>();
+#else
     // late
     for (uint i = 0; i < late_sizes.size(); ++i) {
       _late[i].reset (mem.cut_head (late_sizes[i]), 1);
     }
+#endif
     // internal diffusor
     for (uint i = 0; i < int_dif_sizes.size(); ++i) {
       for (uint j = 0; j < int_dif_sizes[0].size(); ++j) {
@@ -1159,8 +1173,13 @@ private:
   std::array<float, late_cfg::n_channels> _late_n_spls_master;
   vec<float, late_cfg::n_channels>        _late_n_spls;
   uint                                    _late_wave = 0;
-  using delay_line_type = modulable_thiran2_delay_line<float_x1, 2, false>;
-  std::array<delay_line_type, late_cfg::n_channels> _late;
+
+  using delay_line_type = interpolated_multisized_delay_line<
+    float,
+    late_cfg::n_channels,
+    catmull_rom_interp,
+    true>;
+  delay_line_type _late;
 
   float _size             = 1.f;
   float _in_2_late        = 1.f;

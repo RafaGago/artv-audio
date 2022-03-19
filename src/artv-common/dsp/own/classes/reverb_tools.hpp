@@ -66,11 +66,7 @@ public:
     set_gain (gain);
   }
   //----------------------------------------------------------------------------
-  void set_time (uint samples)
-  {
-    assert (samples < _mem.size());
-    _delay = samples;
-  }
+  void set_time (uint samples) { _delay = samples; }
   //----------------------------------------------------------------------------
   void set_gain (V gain) { _gain = gain; }
   //----------------------------------------------------------------------------
