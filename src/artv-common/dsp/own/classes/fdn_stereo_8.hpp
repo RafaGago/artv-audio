@@ -180,7 +180,7 @@ public:
 
     r.late.max_chorus_freq       = 4.5f;
     r.late.min_chorus_freq       = 0.01f;
-    r.late.max_chorus_depth_spls = 150; // bipolar, 2x the samples here
+    r.late.max_chorus_depth_spls = 120; // bipolar, 2x the samples here
     r.late.max_chorus_depth_freq = 0.15f;
     r.late.max_chorus_width      = 0.15f;
 
@@ -610,22 +610,8 @@ private:
           for (uint j = 0; j < 16; ++j) {
             assert (n_spls[j] >= 0.f);
           }
-          auto row    = _late.get (n_spls - (float) i);
-          late_mtx[i] = vec_to_array (row);
+          late_mtx[i] = _late.get (vec_to_array (n_spls - (float) i));
         }
-#if 0
-        // chorus, "late_mtx" has now the LFOS
-        float i_flt = 0.f;
-        for (uint i = 0; i < block.size(); ++i) {
-          for (uint j = 0; j < 16; ++j) {
-            late_mtx[i][j]
-              //= _late[j].get<catmull_rom_interp> (late_mtx[i][j] - i_flt,
-              // 0)[0];
-              = _late[j].get (late_mtx[i][j] - i_flt, 0)[0];
-          }
-          ++i_flt;
-        }
-#endif
         // internal diffusor lfo.
         mod_g = make_crange (tmp);
         for (uint i = 0; i < block.size(); ++i) {

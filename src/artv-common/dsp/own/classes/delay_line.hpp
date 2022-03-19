@@ -1079,7 +1079,8 @@ public:
   //----------------------------------------------------------------------------
   // Stateless_interp = a class on
   // "artv-common/dsp/own/parts/interpolation/stateless.hpp"
-  vec<value_type, n_channels> get (vec<float, n_channels> delay_spls)
+  std::array<value_type, n_channels> get (
+    std::array<float, n_channels> delay_spls)
   {
     return get<interp::n_points, interp::x_offset> (
       delay_spls, [] (auto y, auto x) { return interp::tick (y, x); });
@@ -1088,39 +1089,38 @@ public:
 private:
   //----------------------------------------------------------------------------
   template <uint N_points, uint X_offset, class InterpFunctor>
-  vec<value_type, n_channels> get (
-    vec<float, n_channels> delay_spls,
-    InterpFunctor&&        interp)
+  std::array<value_type, n_channels> get (
+    std::array<float, n_channels> delay_spls,
+    InterpFunctor&&               interp)
   {
-    // check mod direction
-    auto is_increasing = delay_spls > _delay_spls_prev;
+    // calculate delays
+    std::array<uint, n_channels>  delay_spls_int;
+    std::array<float, n_channels> delay_spls_frac;
 
-    // calculate fractions and offsets
-    auto delay_spls_int  = vec_cast<same_size_uint<value_type>> (delay_spls);
-    auto delay_spls_frac = delay_spls - vec_cast<value_type> (delay_spls_int);
-    delay_spls_int -= X_offset;
-
-    // fetch samples to interpolate channel-wise.
-    array2d<value_type, n_channels, N_points> spls;
-    int                                       inc_mul;
-
-    // Sample fetch
+    for (uint i = 0; i < n_channels; ++i) {
+      delay_spls_int[i]  = (uint) delay_spls[i];
+      delay_spls_frac[i] = delay_spls[i] - (float) delay_spls_int[i];
+      delay_spls_int[i] -= X_offset;
+    }
+    // fetch all samples to interpolate
+    array2d<value_type, N_points, n_channels> spls;
     for (uint c = 0; c < n_channels; ++c) {
-      uint delay = delay_spls_int[c];
       for (uint i = 0; i < N_points; ++i) {
-        spls[i][c] = base::get (delay + i, c);
+        spls[c][i] = base::get (delay_spls_int[c] + i, c);
       }
     }
-    // initialize vectors
-    std::array<vec<value_type, n_channels>, N_points> vspls;
-    for (uint i = 0; i < N_points; ++i) {
-      vspls[i] = vec_from_array (spls[i]);
+    // interpolate
+    std::array<value_type, n_channels> ret;
+    for (uint c = 0; c < n_channels; ++c) {
+      auto frac = make_vec ((value_type) delay_spls_frac[c]);
+      std::array<decltype (frac), N_points> p;
+      for (uint i = 0; i < p.size(); ++i) {
+        p[i] = make_vec (spls[c][i]);
+      }
+      ret[c] = interp (p, frac)[0]; // vectors of size 1
     }
-    // do the parallel interpolation.
-    return interp (vspls, vec_cast<value_type> (delay_spls_frac));
+    return ret;
   }
-  //----------------------------------------------------------------------------
-  vec<float, n_channels> _delay_spls_prev {};
 };
 //------------------------------------------------------------------------------
 } // namespace artv
