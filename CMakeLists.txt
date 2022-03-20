@@ -88,12 +88,14 @@ if ("${CMAKE_BUILD_TYPE}" MATCHES "Release")
         )
     endif()
 
-    # Forced sse2 as of now. On the future maybe enabling AVX and other simd
+    # Forced sse4.2 as of now. On the future maybe enabling AVX and other simd
     # sets could be done.
     # REMINDER: "-fopt-info-vec-missed" to see missed vectorizations.
     set (ARTV_DSP_COMPILE_OPTIONS_LIST -ffast-math -ftree-vectorize)
     set (ARTV_PLAIN_COMPILE_OPTIONS_LIST -Os)
-    set (ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST -O2 -DNDEBUG -msse2)
+    # TODO: detecting target architecture is nontrivial from CMake, if compiling
+    # for other arch than x64 the sse flags will need to be conditional
+    set (ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST -O2 -DNDEBUG -msse4.2)
 
     if (ZEN3_BUILD)
         # TODO: this one should be taken from the command line, but it wasn't

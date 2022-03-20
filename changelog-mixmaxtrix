@@ -13,6 +13,8 @@
   can be changed without fully resetting the buffers.
 - waveshaper: Fix audio spikes and numerical instability when changing shape
   with companding enabled.
+- Enable SSE4.2 on optimized builds. Some 12+ years old AMD processor might stop
+  working.
 
 1.4.0
 - lin_eq4x: Add 4 band linear-phase EQ. It is based on the same (M.Vicanek's)
