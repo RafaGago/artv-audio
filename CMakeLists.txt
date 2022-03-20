@@ -95,7 +95,7 @@ if ("${CMAKE_BUILD_TYPE}" MATCHES "Release")
     set (ARTV_PLAIN_COMPILE_OPTIONS_LIST -Os)
     # TODO: detecting target architecture is nontrivial from CMake, if compiling
     # for other arch than x64 the sse flags will need to be conditional
-    set (ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST -O2 -DNDEBUG -msse4.2)
+    set (ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST -O3 -DNDEBUG -msse4.2)
 
     if (ZEN3_BUILD)
         # TODO: this one should be taken from the command line, but it wasn't
