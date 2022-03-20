@@ -261,14 +261,14 @@ static constexpr preset presets[] = {
     <PARAM id="reverb_mod_wave_01" value="5.0" />
     <PARAM id="reverb_r_sparseness_01" value="-65.69000244140625" />
     <PARAM id="reverb_size_01" value="72.80000305175781" />
-    <PARAM id="reverb_time_01" value="12133.0" />
+    <PARAM id="reverb_decay_01" value="12133.0" />
     <gui_data bus1_text="Wet" bus2_text="Dry" bus3_text="" bus4_text="" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
 </params>
    )END"},
-  {.name = "Mix: Long Dense Reverb",
+  {.name = "Mix: Long Reverb",
    .xml = R"END(
 <?xml version="1.0" encoding="UTF-8"?>
-<params plugin_version="1005000">
+<params plugin_version="1004000">
     <PARAM id="in_selection_01" value="1.0" />
     <PARAM id="fx_type_01" value="39.0" />
     <PARAM id="fx_type_02" value="50.0" />
@@ -278,22 +278,22 @@ static constexpr preset presets[] = {
     <PARAM id="out_selection_03" value="1.0" />
     <PARAM id="reverb_damp_factor_02" value="30.0" />
     <PARAM id="reverb_damp_freq_02" value="-4.800003051757812" />
-    <PARAM id="reverb_diff_in_02" value="29.19999885559082" />
+    <PARAM id="reverb_diff_in_02" value="32.0" />
     <PARAM id="reverb_diff_out_02" value="100.0" />
-    <PARAM id="reverb_early_gain_02" value="4.0" />
+    <PARAM id="reverb_early_gain_02" value="-11.0" />
     <PARAM id="reverb_early_size_02" value="11.74100494384766" />
     <PARAM id="reverb_gap_02" value="2.944000244140625" />
-    <PARAM id="reverb_hp_freq_02" value="76.06999969482422" />
-    <PARAM id="reverb_l_sparseness_02" value="12.73999786376953" />
+    <PARAM id="reverb_hp_freq_02" value="60.46999740600586" />
+    <PARAM id="reverb_l_sparseness_02" value="-2.910003662109375" />
     <PARAM id="reverb_late_gain_02" value="-7.0" />
     <PARAM id="reverb_lf_time_factor_02" value="48.0" />
-    <PARAM id="reverb_lr_sparseness_02" value="2.569999694824219" />
+    <PARAM id="reverb_lr_sparseness_02" value="1.349998474121094" />
     <PARAM id="reverb_mod_depth_02" value="42.39999771118164" />
     <PARAM id="reverb_mod_freq_02" value="22.07600021362305" />
     <PARAM id="reverb_mod_wave_02" value="1.0" />
     <PARAM id="reverb_predelay_02" value="0.4880000352859497" />
-    <PARAM id="reverb_r_sparseness_02" value="15.79999542236328" />
-    <PARAM id="reverb_size_02" value="-68.0" />
+    <PARAM id="reverb_r_sparseness_02" value="-0.7900009155273438" />
+    <PARAM id="reverb_size_02" value="7.62939453125e-6" />
     <PARAM id="reverb_stereo_02" value="84.79999542236328" />
     <PARAM id="reverb_time_02" value="20000.0" />
     <PARAM id="track_comp_compattack_01" value="1.85099995136261" />
@@ -302,6 +302,25 @@ static constexpr preset presets[] = {
     <PARAM id="track_comp_comprelease_01" value="137.3099975585938" />
     <PARAM id="track_comp_compthresh_01" value="-34.31999969482422" />
     <PARAM id="track_comp_saturation_01" value="0.0" />
+    <PARAM id="fx_mix_02" value="100.0" />
+    <PARAM id="reverb_damp_freq_01" value="0.0" />
+    <PARAM id="reverb_decay_01" value="1500.0" />
+    <PARAM id="reverb_decay_02" value="19017.0" />
+    <PARAM id="reverb_early_2_late_bal_01" value="0.0" />
+    <PARAM id="reverb_early_2_late_bal_02" value="0.0" />
+    <PARAM id="reverb_early_gain_01" value="-6.0" />
+    <PARAM id="reverb_early_size_01" value="7.62939453125e-6" />
+    <PARAM id="reverb_gap_01" value="3.000000238418579" />
+    <PARAM id="reverb_hp_freq_01" value="35.0" />
+    <PARAM id="reverb_l_sparseness_01" value="2.339996337890625" />
+    <PARAM id="reverb_late_gain_01" value="-6.0" />
+    <PARAM id="reverb_lf_time_factor_01" value="0.0" />
+    <PARAM id="reverb_lr_sparseness_01" value="1.229995727539062" />
+    <PARAM id="reverb_mod_depth_01" value="10.0" />
+    <PARAM id="reverb_mod_freq_01" value="50.00000381469727" />
+    <PARAM id="reverb_mod_mode_02" value="0.0" />
+    <PARAM id="reverb_r_sparseness_01" value="-1.0" />
+    <PARAM id="reverb_size_01" value="7.62939453125e-6" />
     <gui_data bus1_text="Pre-Comp" bus2_text="Wet" bus3_text="Dry" bus4_text="-" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
 </params>
      )END"},
@@ -1023,6 +1042,52 @@ static constexpr preset presets[] = {
     <PARAM id="zebigchorus3_gratedisp_07" value="0.7519999742507935" />
     <PARAM id="zebigchorus3_rate_07" value="0.1180000007152557" />
     <PARAM id="zebigchorus3_ratedisp_07" value="0.1319999992847443" />
+</params>
+     )END"},
+  {.name = "FX: Chorused Reverb",
+   .xml = R"END(
+<?xml version="1.0" encoding="UTF-8"?>
+<params plugin_version="1005000">
+    <PARAM id="in_selection_01" value="1.0" />
+    <PARAM id="out_selection_01" value="1.0" />
+    <PARAM id="fx_type_01" value="0.0" />
+    <PARAM id="fx_type_02" value="50.0" />
+    <PARAM id="in_selection_02" value="1.0" />
+    <PARAM id="in_selection_03" value="0.0" />
+    <PARAM id="mixer_sends" value="0.0" />
+    <PARAM id="out_selection_02" value="1.0" />
+    <PARAM id="out_selection_03" value="0.0" />
+    <PARAM id="reverb_damp_factor_02" value="10.39999961853027" />
+    <PARAM id="reverb_damp_freq_02" value="-33.59999847412109" />
+    <PARAM id="reverb_decay_02" value="13401.0" />
+    <PARAM id="reverb_diff_in_02" value="0.0" />
+    <PARAM id="reverb_diff_out_02" value="22.0" />
+    <PARAM id="reverb_early_gain_02" value="-0.3999977111816406" />
+    <PARAM id="reverb_early_size_02" value="-75.19999694824219" />
+    <PARAM id="reverb_gap_02" value="3.000000238418579" />
+    <PARAM id="reverb_hp_freq_02" value="35.0" />
+    <PARAM id="reverb_l_sparseness_02" value="-31.26000213623047" />
+    <PARAM id="reverb_late_gain_02" value="-6.0" />
+    <PARAM id="reverb_lf_time_factor_02" value="0.0" />
+    <PARAM id="reverb_lr_sparseness_02" value="11.62999725341797" />
+    <PARAM id="reverb_mod_depth_02" value="89.19999694824219" />
+    <PARAM id="reverb_mod_freq_02" value="47.20000076293945" />
+    <PARAM id="reverb_mod_mode_02" value="1.0" />
+    <PARAM id="reverb_mod_spread_02" value="100.0" />
+    <PARAM id="reverb_predelay_02" value="1.0" />
+    <PARAM id="reverb_r_sparseness_02" value="77.89999389648438" />
+    <PARAM id="reverb_size_02" value="43.20001220703125" />
+    <PARAM id="reverb_stereo_02" value="100.0" />
+    <PARAM id="track_comp_compattack_01" value="10.00100040435791" />
+    <PARAM id="track_comp_compfeedbk_01" value="25.0" />
+    <PARAM id="track_comp_compratio_01" value="4.0" />
+    <PARAM id="track_comp_comprelease_01" value="200.0" />
+    <PARAM id="track_comp_compthresh_01" value="0.0" />
+    <PARAM id="track_comp_saturation_01" value="25.0" />
+    <PARAM id="volume_02" value="-1.08" />
+    <PARAM id="wet_balance_03" value="-5.860000610351562" />
+    <PARAM id="wet_pan_02" value="14.39999389648438" />
+    <gui_data bus1_text="Dry" bus2_text="Wet" bus3_text="" bus4_text="" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
 </params>
      )END"},
 };
