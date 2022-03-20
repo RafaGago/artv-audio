@@ -160,8 +160,9 @@ inline T pow2_round_floor (T v)
 template <class T>
 inline T pow2_round_ceil (T v)
 {
+  using overload_type = std::conditional_t<sizeof (T) == 8, u64, u32>;
   static_assert (std::is_integral<T>::value, "");
-  uint lsb = last_bit_set (v);
+  uint lsb = last_bit_set ((overload_type) v);
   return (is_pow2 (v) || !v) ? v : bit<T> (lsb);
 }
 

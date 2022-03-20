@@ -8,7 +8,8 @@
 
 - Chore: For C conformance, substitute many pointer reads/writes by memcpy.
 
-- Chore: Investigate dropping xsimd for libmvec or SVML (-fveclib=SVML flag). Will it work with clang-cl?
+- Chore: Investigate dropping xsimd for libmvec or SVML (-fveclib=SVML flag).
+  Will it work with clang-cl? Update: it is indeed a chore.
 
 - Fix order and buffering tests and probably errors. Should they arise.
 
@@ -16,15 +17,11 @@
 
 - Feature: Check csound's ZDF filters(?).
 
-- Feature: Chow phaser. At a fixed sample rate.
-
 - Feature: Check csound's DC blocker (dcblock2).(?).
 
 - Feature: Oversampler: clicks when changing sample rate.
 
 - Feature: Try Chow exciter, Klon centaur and nonlinear Models. Port some?.
-
-- Feature: Tucan audio Lexikan 2 seems nice and has low parameter count.
 
 - Feature: Play with parallel eliptic downsampling IIR filters. scipy has
   "signal.iirdesign" and "signal.residuez" to do the partial fraction expansion.

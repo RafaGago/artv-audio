@@ -92,6 +92,7 @@ if ("${CMAKE_BUILD_TYPE}" MATCHES "Release")
     # sets could be done.
     # REMINDER: "-fopt-info-vec-missed" to see missed vectorizations.
     set (ARTV_DSP_COMPILE_OPTIONS_LIST -ffast-math -ftree-vectorize)
+
     set (ARTV_PLAIN_COMPILE_OPTIONS_LIST -Os)
     # TODO: detecting target architecture is nontrivial from CMake, if compiling
     # for other arch than x64 the sse flags will need to be conditional
@@ -100,7 +101,7 @@ if ("${CMAKE_BUILD_TYPE}" MATCHES "Release")
     if (ZEN3_BUILD)
         # TODO: this one should be taken from the command line, but it wasn't
         # trivial with clang-cl and the toolchain file.
-        set(ZEN3_FLAGS -mtune=znver2 -march=znver2) # Zen3 not available yet
+        set (ZEN3_FLAGS -mtune=znver3 -march=znver3)
         set (ARTV_DSP_COMPILE_OPTIONS_LIST ${ARTV_DSP_COMPILE_OPTIONS_LIST} ${ZEN3_FLAGS})
         set (ARTV_PLAIN_COMPILE_OPTIONS_LIST ${ARTV_PLAIN_COMPILE_OPTIONS_LIST} ${ZEN3_FLAGS})
         set (ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST ${ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST} ${ZEN3_FLAGS})
@@ -670,7 +671,7 @@ add_executable(
 target_link_libraries (oversampler-util PUBLIC common hiir)
 #-- Mix-maxtrix ----------------------------------------------------------------
 set (MIXMAXTRIX_VERSION_MAJOR 1)
-set (MIXMAXTRIX_VERSION_MINOR 4)
+set (MIXMAXTRIX_VERSION_MINOR 5)
 set (MIXMAXTRIX_VERSION_REV 0)
 set(
     MIXMAXTRIX_VERSION
