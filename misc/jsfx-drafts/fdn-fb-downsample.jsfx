@@ -254,14 +254,14 @@ pre_dif.g_mod_diffusor_init (k.pre_dif, 0.1, 1.6, 0.8, k.src.srate);
 // required by "g_mod_diffusor_tick"
 k.pre_dif.n_spls.array2d_init (2, k.pre_dif.n_diffusors);
 k.pre_dif.n_spls.array2d_ptr(0)[0] = 43;
-k.pre_dif.n_spls.array2d_ptr(0)[1] = 113;
-k.pre_dif.n_spls.array2d_ptr(0)[2] = 317;
+k.pre_dif.n_spls.array2d_ptr(0)[1] = 112;
+k.pre_dif.n_spls.array2d_ptr(0)[2] = 315;
 k.pre_dif.n_spls.array2d_ptr(0)[3] = 907;
 
 k.pre_dif.n_spls.array2d_ptr(1)[0] = 43;
 k.pre_dif.n_spls.array2d_ptr(1)[1] = 113;
-k.pre_dif.n_spls.array2d_ptr(1)[2] = 317;
-k.pre_dif.n_spls.array2d_ptr(1)[3] = 906;
+k.pre_dif.n_spls.array2d_ptr(1)[2] = 315;
+k.pre_dif.n_spls.array2d_ptr(1)[3] = 907;
 
 // Internal Diffusion ---------------------------------------------------------
 BYPASS_INTERNAL_DIFFUSOR = 0;
@@ -277,7 +277,7 @@ k.int_dif.n_spls.array2d_ptr(0)[3] = 907;
 
 k.int_dif.n_spls.array2d_ptr(1)[0] = 887;
 k.int_dif.n_spls.array2d_ptr(1)[1] = 478;
-k.int_dif.n_spls.array2d_ptr(1)[2] = 421;
+k.int_dif.n_spls.array2d_ptr(1)[2] = 4198;
 k.int_dif.n_spls.array2d_ptr(1)[3] = 907;
 
 // specific
@@ -306,8 +306,8 @@ k.out_dif.n_spls.array2d_ptr(0)[3] = 443;
     // sounds more like noise and the equal"ish" set.
     k.out_dif.n_spls.array2d_ptr(1)[0] = 23;
     k.out_dif.n_spls.array2d_ptr(1)[1] = 67;
-    k.out_dif.n_spls.array2d_ptr(1)[2] = 191;
-    k.out_dif.n_spls.array2d_ptr(1)[3] = 532;
+    k.out_dif.n_spls.array2d_ptr(1)[2] = 187;
+    k.out_dif.n_spls.array2d_ptr(1)[3] = 443;
   ) : (
     // sounds more spatial probably
     k.out_dif.n_spls.array2d_ptr(1)[0] = 29;
@@ -317,10 +317,10 @@ k.out_dif.n_spls.array2d_ptr(0)[3] = 443;
   );
 ) : (
   // very similar set.
-  k.out_dif.n_spls.array2d_ptr(1)[0] = 19;
+  k.out_dif.n_spls.array2d_ptr(1)[0] = 21;
   k.out_dif.n_spls.array2d_ptr(1)[1] = 53;
   k.out_dif.n_spls.array2d_ptr(1)[2] = 163;
-  k.out_dif.n_spls.array2d_ptr(1)[3] = 439;
+  k.out_dif.n_spls.array2d_ptr(1)[3] = 453;
 );
 
 out_dif.l.delay_line_init(
@@ -480,7 +480,7 @@ get_rt60_gain(
   k.src.srate
   );
 
-G = out_diffusion *  0.9;
+G = out_diffusion *  0.76;
 k.out_dif.g.array2d_ptr(0)[0] = G;
 k.out_dif.g.array2d_ptr(0)[1] = G;
 k.out_dif.g.array2d_ptr(0)[2] = G;

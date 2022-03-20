@@ -151,13 +151,13 @@ public:
     r.src.srate            = 27000;
 
     r.pre_dif.g_mod_depth = 0.1f;
-    r.pre_dif.g_max       = 0.39f;
+    r.pre_dif.g_max       = 0.35f;
 
     r.pre_dif.n_samples = make_array (
       array_cast<u16> (make_array (43, 43)),
-      array_cast<u16> (make_array (113, 113)),
-      array_cast<u16> (make_array (317, 317)),
-      array_cast<u16> (make_array (907, 906)));
+      array_cast<u16> (make_array (113, 112)),
+      array_cast<u16> (make_array (317, 315)),
+      array_cast<u16> (make_array (907, 907)));
 
     r.early.stage[0].meters = 4.129f;
     r.early.stage[0].span   = 3.209f;
@@ -215,12 +215,12 @@ public:
       array_cast<u16> (make_array (419, 421)),
       array_cast<u16> (make_array (907, 906)));
 
-    r.out_dif.g_max     = 0.77f;
+    r.out_dif.g_max     = 0.65f;
     r.out_dif.n_samples = make_array (
       array_cast<u16> (make_array (19, 23)),
       array_cast<u16> (make_array (53, 67)),
-      array_cast<u16> (make_array (157, 191)),
-      array_cast<u16> (make_array (443, 532)));
+      array_cast<u16> (make_array (157, 187)),
+      array_cast<u16> (make_array (443, 443)));
 
     r.filter.max_att_db  = -13.f;
     r.filter.freq_factor = std::log (4.5f);
