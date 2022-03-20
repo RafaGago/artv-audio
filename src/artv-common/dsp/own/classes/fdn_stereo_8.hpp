@@ -204,8 +204,8 @@ public:
 
     from_ascending_pairs_to_internal_chnl_order (r.late.n_samples);
 
-    r.int_dif.g_mod_depth = 0.11f;
-    r.int_dif.g_base      = 0.45f;
+    r.int_dif.g_mod_depth = 0.02f;
+    r.int_dif.g_base      = 0.4f;
     r.int_dif.channel_l   = 2;
     r.int_dif.channel_r   = 13;
 
@@ -614,7 +614,7 @@ private:
         }
 
         // chorus + dc + filtering in one stage to avoid multiple vector to
-        // SIMD conversions
+        // array conversions
         for (uint i = 0; i < block.size(); ++i) {
           auto mod_spls   = _late.get (late_mtx[i]);
           auto unmod_spls = _late.get (vec_to_array (_late_n_spls - (float) i));
@@ -635,7 +635,6 @@ private:
 #endif
           late_mtx[i] = vec_to_array (join);
         }
-
         // internal diffusor lfo.
         mod_g = make_crange (tmp);
         for (uint i = 0; i < block.size(); ++i) {
