@@ -1090,6 +1090,71 @@ static constexpr preset presets[] = {
     <gui_data bus1_text="Dry" bus2_text="Wet" bus3_text="" bus4_text="" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
 </params>
      )END"},
+  {.name = "FX: Shimmer Reverb",
+   .xml = R"END(
+<?xml version="1.0" encoding="UTF-8"?>
+<params plugin_version="1005000">
+    <PARAM id="in_selection_01" value="1.0" />
+    <PARAM id="out_selection_01" value="1.0" />
+    <PARAM id="fx_type_01" value="49.0" />
+    <PARAM id="fx_type_02" value="49.0" />
+    <PARAM id="in_selection_02" value="1.0" />
+    <PARAM id="in_selection_03" value="1.0" />
+    <PARAM id="mixer_sends" value="16.0" />
+    <PARAM id="out_selection_02" value="2.0" />
+    <PARAM id="out_selection_03" value="4.0" />
+    <PARAM id="volume_02" value="-6.900001525878906" />
+    <PARAM id="wet_balance_03" value="-5.860000610351562" />
+    <PARAM id="wet_pan_02" value="14.39999389648438" />
+    <PARAM id="filter2x_band1_ef_to_freq_05" value="79.19999694824219" />
+    <PARAM id="filter2x_band1_freq_05" value="76.65371704101562" />
+    <PARAM id="filter2x_band1_reso_05" value="0.7519999742507935" />
+    <PARAM id="filter2x_band1_type_05" value="1.0" />
+    <PARAM id="filter2x_envfollow_attack_05" value="27.20000076293945" />
+    <PARAM id="filter2x_envfollow_release_05" value="227.0" />
+    <PARAM id="filter2x_envfollow_sensitivity_05" value="27.04000091552734" />
+    <PARAM id="fx_mix_02" value="100.0" />
+    <PARAM id="fx_type_03" value="0.0" />
+    <PARAM id="fx_type_05" value="37.0" />
+    <PARAM id="fx_type_06" value="50.0" />
+    <PARAM id="global_volume" value="0.4399986267089844" />
+    <PARAM id="in_selection_05" value="3.0" />
+    <PARAM id="in_selection_07" value="4.0" />
+    <PARAM id="naive_pitch_amt_06" value="12.0" />
+    <PARAM id="out_selection_06" value="1.0" />
+    <PARAM id="out_selection_07" value="1.0" />
+    <PARAM id="reverb_damp_factor_06" value="7.599999904632568" />
+    <PARAM id="reverb_damp_freq_06" value="0.0" />
+    <PARAM id="reverb_decay_06" value="17152.0" />
+    <PARAM id="reverb_diff_out_06" value="12.79999923706055" />
+    <PARAM id="reverb_early_gain_06" value="-0.3999977111816406" />
+    <PARAM id="reverb_early_size_06" value="-91.19999694824219" />
+    <PARAM id="reverb_l_sparseness_06" value="-31.26000213623047" />
+    <PARAM id="reverb_lf_time_factor_06" value="-4.800003051757812" />
+    <PARAM id="reverb_lr_sparseness_06" value="11.62999725341797" />
+    <PARAM id="reverb_mod_depth_06" value="68.0" />
+    <PARAM id="reverb_mod_freq_06" value="55.87000274658203" />
+    <PARAM id="reverb_mod_mode_06" value="3.0" />
+    <PARAM id="reverb_mod_spread_06" value="40.0" />
+    <PARAM id="reverb_r_sparseness_06" value="77.89999389648438" />
+    <PARAM id="reverb_size_06" value="-100.0" />
+    <PARAM id="routing" value="1.0" />
+    <PARAM id="rubberband_formant_mode_01" value="0.0" />
+    <PARAM id="rubberband_mode_01" value="0.0" />
+    <PARAM id="rubberband_semitones_01" value="12.0" />
+    <PARAM id="soundtouch_detune_02" value="-0.1200000047683716" />
+    <PARAM id="soundtouch_mode_01" value="2.0" />
+    <PARAM id="soundtouch_mode_02" value="1.0" />
+    <PARAM id="soundtouch_semitones_01" value="-12.0" />
+    <PARAM id="soundtouch_semitones_02" value="12.0" />
+    <PARAM id="volume_01" value="0.0" />
+    <PARAM id="volume_05" value="0.80999755859375" />
+    <PARAM id="volume_06" value="-4.94000244140625" />
+    <PARAM id="volume_07" value="0.0" />
+    <PARAM id="wet_pan_03" value="-5.860000610351562" />
+    <gui_data bus1_text="-12" bus2_text="+12" bus3_text="Dry Passthrough" bus4_text="" bus5_text="Pre-filter" bus6_text="Wet" bus7_text="Dry" bus8_text="" />
+</params>
+     )END"},
 };
 
 // clang-format on
