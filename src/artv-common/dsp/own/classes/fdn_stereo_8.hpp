@@ -180,7 +180,7 @@ public:
 
     r.late.max_chorus_freq       = 4.5f;
     r.late.min_chorus_freq       = 0.15f;
-    r.late.max_chorus_depth_spls = 150; // bipolar, 2x the samples here
+    r.late.max_chorus_depth_spls = 180; // bipolar, 2x the samples here
     r.late.max_chorus_depth_freq = 0.15f;
     r.late.max_chorus_width      = 0.15f;
 
@@ -246,7 +246,7 @@ public:
     from_ascending_pairs_to_internal_chnl_order (r.filter.freqs);
 
     r.stereo.freq_factor = 0.317f;
-    r.stereo.g_base      = 0.4f;
+    r.stereo.g_base      = 0.3f;
     r.stereo.max_samples = 20.f;
 
     return r;
@@ -610,8 +610,32 @@ private:
           for (uint j = 0; j < 16; ++j) {
             assert (n_spls[j] >= 0.f);
           }
-          late_mtx[i] = _late.get (vec_to_array (n_spls - (float) i));
+          late_mtx[i] = vec_to_array (n_spls - (float) i);
         }
+
+        // chorus + dc + filtering in one stage to avoid multiple vector to
+        // SIMD conversions
+        for (uint i = 0; i < block.size(); ++i) {
+          auto mod_spls   = _late.get (late_mtx[i]);
+          auto unmod_spls = _late.get (vec_to_array (_late_n_spls - (float) i));
+
+          auto lp = _filters.tick<lp_idx> (vec_from_array (unmod_spls));
+          lp      = _filters.tick<dc_idx> (lp);
+          // YOLO hipass from different signals
+          auto hp = (vec_from_array (mod_spls) - lp) * _filter_hp_att;
+
+          // Final attenuation
+          lp *= _rt60_att_l;
+          hp *= _rt60_att_h;
+
+          auto join = lp + hp;
+#if 0 // Not sure if it contributes positively a lot, but it adds CPU.
+      // sigmoid
+          join = join / vec_sqrt (join * join + 1.f);
+#endif
+          late_mtx[i] = vec_to_array (join);
+        }
+
         // internal diffusor lfo.
         mod_g = make_crange (tmp);
         for (uint i = 0; i < block.size(); ++i) {
@@ -626,7 +650,6 @@ private:
           g += mod * _cfg.int_dif.g_mod_depth;
           mod_g[i] = vec_to_array (g);
         }
-
         // internal diffusor
         for (uint i = 0; i < block.size(); ++i) {
           std::array<float, 2> diffused;
@@ -640,22 +663,6 @@ private:
           late_mtx[i][_cfg.int_dif.channel_l] = diffused[0];
           late_mtx[i][_cfg.int_dif.channel_r] = diffused[1];
         }
-
-        // sigmoid + dc + filtering in one stage to avoid multiple vector to
-        // SIMD conversions
-        for (uint i = 0; i < block.size(); ++i) {
-          auto late_fb_vec = vec_from_array (late_mtx[i]);
-          late_fb_vec
-            = late_fb_vec / vec_sqrt (late_fb_vec * late_fb_vec + 1.f);
-          late_fb_vec = _filters.tick<dc_idx> (late_fb_vec);
-          auto lp     = _filters.tick<lp_idx> (late_fb_vec);
-          auto hp     = (late_fb_vec - lp) * _filter_hp_att;
-          // Final attenuation
-          lp *= _rt60_att_l;
-          hp *= _rt60_att_h;
-          late_mtx[i] = vec_to_array (lp + hp);
-        }
-
         // end of feedback path. Starting feedforward
         for (uint i = 0; i < block.size(); ++i) {
           // reminder "early_then_late" contains the unscaled early reflections
