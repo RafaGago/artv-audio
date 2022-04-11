@@ -4233,13 +4233,35 @@ parameter_cpp_class_define (
   sound_delay::get_parameter (sound_delay::delay_beats_r_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  sound_delay_mid_ms,
+  n_stereo_busses,
+  param_common (
+    "Mid",
+    declptr<sound_delay>(),
+    declptr<sound_delay::delay_mid_ms_tag>()),
+  sound_delay::get_parameter (sound_delay::delay_mid_ms_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  sound_delay_side_ms,
+  n_stereo_busses,
+  param_common (
+    "Side",
+    declptr<sound_delay>(),
+    declptr<sound_delay::delay_side_ms_tag>()),
+  sound_delay::get_parameter (sound_delay::delay_side_ms_tag {}),
+  slider_ext);
+
 using sound_delay_params = mp_list<
   sound_delay_main,
   sound_delay_main_samples,
   sound_delay_l,
   sound_delay_r,
   sound_delay_l_sync,
-  sound_delay_r_sync>;
+  sound_delay_r_sync,
+  sound_delay_mid_ms,
+  sound_delay_side_ms>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   zebigchorus3_algo,
@@ -6711,7 +6733,7 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  reverb_params>;
+  sound_delay_params>;
 
 static constexpr auto fx_choices
   = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "1.FX-tested");

@@ -1,3 +1,6 @@
+1.6.0
+- sound_delay: Add mid/side time delay.
+
 1.5.0
 - Add algorithmic reverb with stereo response and gap control.
 - Add naîve but cheap pitch shifter, mostly for weird FX.

@@ -78,6 +78,24 @@ public:
     return float_param ("ms", 0.0, 500, 0.0, 0.001);
   }
   //----------------------------------------------------------------------------
+  struct delay_mid_ms_tag {};
+
+  void set (delay_mid_ms_tag, float v) { _delays.m = get_delay_samples (v); }
+
+  static constexpr auto get_parameter (delay_mid_ms_tag)
+  {
+    return float_param ("ms", 0.0, 500, 0.0, 0.001);
+  }
+  //----------------------------------------------------------------------------
+  struct delay_side_ms_tag {};
+
+  void set (delay_side_ms_tag, float v) { _delays.s = get_delay_samples (v); }
+
+  static constexpr auto get_parameter (delay_side_ms_tag)
+  {
+    return float_param ("ms", 0.0, 500, 0.0, 0.001);
+  }
+  //----------------------------------------------------------------------------
   struct delay_beats_l_tag {};
 
   void set (delay_beats_l_tag, float v)
@@ -137,7 +155,9 @@ public:
     delay_ms_r_offset_tag,
     delay_beats_l_tag,
     delay_beats_r_tag,
-    delay_samples_tag>;
+    delay_samples_tag,
+    delay_mid_ms_tag,
+    delay_side_ms_tag>;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -150,7 +170,9 @@ public:
       get_parameter (delay_beats_l_tag {}).max * (1. / 16.)));
 
     _delay.reset (2, std::max (_max_delay_samples, _max_tempo_delay));
-    _delay_times_samples[0] = _delay_times_samples[1] = 0.;
+    _delay_midside.reset (2, _max_delay_samples);
+    _delays.l = _delays.r = 0.;
+    _delays.m = _delays.s = 0.;
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -159,12 +181,29 @@ public:
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
 
+    auto del_l = (uint) _delays.l;
+    auto del_r = (uint) _delays.r;
+    auto del_m = (uint) _delays.m;
+    auto del_s = (uint) _delays.s;
+
     for (uint i = 0; i < block_samples; ++i) {
-      auto t_samples = _delay_times_samples;
-      auto in        = make_array (ins[0][i], ins[1][i]);
-      _delay.push (in);
-      outs[0][i] = _delay.get (t_samples[0], 0);
-      outs[1][i] = _delay.get (t_samples[1], 1);
+      if (del_m == 0 && del_s == 0) {
+        auto in = make_array (ins[0][i], ins[1][i]);
+        _delay.push (in);
+        outs[0][i] = _delay.get (del_l, 0);
+        outs[1][i] = _delay.get (del_r, 1);
+      }
+      else {
+        auto in = make_array (
+          (ins[0][i] + ins[1][i]) * 0.5f, (ins[0][i] - ins[1][i]) * 0.5f);
+        _delay_midside.push (in);
+        in[0] = _delay_midside.get (del_m, 0);
+        in[1] = _delay_midside.get (del_s, 1);
+        in    = make_array (in[0] + in[1], in[0] - in[1]);
+        _delay.push (in);
+        outs[0][i] = _delay.get (del_l, 0);
+        outs[1][i] = _delay.get (del_r, 1);
+      }
     }
   }
   //----------------------------------------------------------------------------
@@ -182,19 +221,16 @@ private:
   //----------------------------------------------------------------------------
   void update_delay_times()
   {
-    _delay_times_samples[0]
-      = get_delay_samples (_delay_ms) + (float) _delay_samples;
-    _delay_times_samples[1] = _delay_times_samples[0];
+    _delays.l = get_delay_samples (_delay_ms) + (float) _delay_samples;
+    _delays.r = _delays.l;
 
-    _delay_times_samples[0] += get_delay_samples (_delay_ms_l);
-    _delay_times_samples[0] += get_synced_delay_samples (_delay_beats_l);
-    _delay_times_samples[0]
-      = std::min (_delay_times_samples[0], (double) _delay.size());
+    _delays.l += get_delay_samples (_delay_ms_l);
+    _delays.l += get_synced_delay_samples (_delay_beats_l);
+    _delays.l = std::min (_delays.l, (double) _delay.size());
 
-    _delay_times_samples[1] += get_delay_samples (_delay_ms_r);
-    _delay_times_samples[1] += get_synced_delay_samples (_delay_beats_r);
-    _delay_times_samples[1]
-      = std::min (_delay_times_samples[1], (double) _delay.size());
+    _delays.r += get_delay_samples (_delay_ms_r);
+    _delays.r += get_synced_delay_samples (_delay_beats_r);
+    _delays.r = std::min (_delays.r, (double) _delay.size());
   }
   //----------------------------------------------------------------------------
   float _delay_ms;
@@ -204,8 +240,16 @@ private:
   float _delay_beats_r;
   float _delay_samples;
 
-  std::array<double, 2>           _delay_times_samples;
+  struct delay {
+    double l {};
+    double r {};
+    double m {};
+    double s {};
+  };
+
+  delay                           _delays;
   dynamic_delay_line<float, true> _delay;
+  dynamic_delay_line<float, true> _delay_midside;
   plugin_context*                 _plugcontext = nullptr;
 };
 //------------------------------------------------------------------------------
