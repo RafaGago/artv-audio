@@ -103,6 +103,15 @@ function delay_line_get_allpass (in, chnl, g_back, g_fwd, delay_spls)
   yn - y * g_fwd; // feedforward
 );
 
+function delay_line_get_allpass_lerp (in, chnl, g_back, g_fwd, delay_spls)
+  global() local (y, yn, out) (
+
+  yn = this.delay_line_get_linterp (delay_spls, chnl);
+  y  = in + yn * g_back; // feedback
+  this.delay_line_set (y, 0, chnl);
+  yn - y * g_fwd; // feedforward
+);
+
 function delay_line_advance() global()(
     this.pos -= 1;
     this.pos < 0 ? (this.pos = this.mask);
@@ -249,6 +258,13 @@ function delay_line_allpass_get (in, chnl, delay_spls)
         );
 );
 
+function delay_line_allpass_get_lerp (in, chnl, delay_spls)
+  global() (
+    this.delay_line_get_allpass_lerp(
+        in, chnl, this.g.ptr[chnl], this.g.ptr[chnl], delay_spls
+        );
+);
+
 // no interpolation
 // dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
 function delay_line_allpass_tick_cascade_all (in, active_count, delay_spls_ptr)
@@ -263,6 +279,26 @@ function delay_line_allpass_tick_cascade_all (in, active_count, delay_spls_ptr)
     );
     loop (this.n_channels - active_count,
       this.delay_line_allpass_get (0, i, delay_spls_ptr[i]);
+      i += 1;
+    );
+    out;
+);
+
+// linear interpolation
+// dst_ptr = outs, in_ptr = ins, delay_spls_ptr = delays.
+function delay_line_allpass_tick_cascade_all_lerp(
+    in, active_count, delay_spls_ptr
+    ) local (i, out) global() (
+
+    this.delay_line_advance();
+    i = 0;
+    out = in;
+    loop (active_count,
+      out = this.delay_line_allpass_get_lerp (out, i, delay_spls_ptr[i]);
+      i += 1;
+    );
+    loop (this.n_channels - active_count,
+      this.delay_line_allpass_get_lerp (0, i, delay_spls_ptr[i]);
       i += 1;
     );
     out;
