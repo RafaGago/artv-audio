@@ -346,7 +346,7 @@ public:
       // both filters are parallel/operate on the same input
       std::array<double_x2, blocksize> in_cp;
       for (uint i = 0; i < blocksize; ++i) {
-        in_cp[i] = double_x2 {ins[0][block_smp + i], ins[0][block_smp + i]};
+        in_cp[i] = double_x2 {ins[0][block_smp + i], ins[1][block_smp + i]};
       }
       memset (&outs[0][block_smp], 0, n_samples * sizeof (T));
       memset (&outs[1][block_smp], 0, n_samples * sizeof (T));

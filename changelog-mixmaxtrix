@@ -1,5 +1,7 @@
 1.6.0
 - sound_delay: Add mid/side time delay.
+- filter_2x: Fix R input taking the input from L, which was resulting in mono
+  operation.
 
 1.5.0
 - Add algorithmic reverb with stereo response and gap control.
