@@ -1,0 +1,800 @@
+   desc:Downsampled FDN draft
+//slider1:enable_impulse= 0   <0 ,2, 1{Off,Impulse,White noise}> Test
+//slider2:mute=           0   <0, 1{Off,On}>    Reverb mute
+slider3:rt60_msec=      3300 <10 ,12000 ,0.1> RT60 (msec)
+slider4:size=           0.   <-1, 1, 0.001> Size (m)
+slider5:er_size=           0.   <-1, 1, 0.001> ER Size (m)
+
+slider7:early_amt=      0.7 <0, 1, 0.01> ER
+slider8:er_2_late=      0.3 <0, 1, 0.01> ER to late(%)
+slider9:sig_2_late=     0.3 <0, 1, 0.01> Signal to late(%)
+slider10:late_amt=       0.7 <0, 1, 0.01> late
+
+slider12:mod_freq=      0.6 <0, 7, 0.001> Mod Freq(Hz)
+slider13:mod_depth=     0.1 <0, 1, 0.001> Mod Depth
+slider14:mod_stereo=    0.5 <-1, 1, 0.001> Mod Stereo
+
+slider16:angle1=        0.5 <0.1, 0.9, 0.001> L Angle
+slider17:angle2=        0.5 <0.1, 0.9, 0.001> R Angle
+slider18:angle3=        0.5 <0.1, 0.9, 0.001> L-R Angle
+
+slider20:out_diffusion=  0.6 <0, 0.77, 0.001> Out Diffusor
+slider21:in_diffusion=   0.5 <0.0, 0.39, 0.001> In Diffusor
+
+slider23:damp=          0.5 <0.0, 1, 0.001> Damping
+slider24:damp_f=        0. <-1, 1, 0.001> Damping Freq
+slider25:hp_f=          2. <2, 60, 0.001> HP (hz)
+slider26:rt60_l_mul=    1. <0.333, 2, 0.001> RT60 L mul
+
+slider28:stereo=        0. <0, 1, 0.001> Stereo
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+import _core.jsfx-inc
+import _delay-line.jsfx-inc
+import _filters.jsfx-inc
+import _reverb.jsfx-inc
+import _dynamics.jsfx-inc
+import _lfo.jsfx-inc
+import _fir.jsfx-inc
+
+//Try
+// Nested allpasses
+// Nested combs
+// Circular allpasses
+// Circular combs
+
+@init
+
+function g_mod_diffusor_init(
+  k*, g_mod_depth, g_mod_freq, g_drift_fact, srate
+  ) global() (
+
+  k.n_diffusors = 4;
+
+  this.l.delay_line_init (round_next_pow2 (srate), k.n_diffusors);
+  this.l.delay_line_allpass_add();
+
+  this.r.delay_line_init (round_next_pow2 (srate), k.n_diffusors);
+  this.r.delay_line_allpass_add();
+
+  k.g_mod_depth = g_mod_depth;
+  k.g_mod_freq = g_mod_freq;
+
+  this.lfo.l.lfo_drift_sin_init (k.g_mod_freq, g_drift_fact, srate);
+  this.lfo.r.lfo_drift_sin_init (k.g_mod_freq, g_drift_fact, srate);
+
+  this.g.array2d_init (2, k.n_diffusors);
+);
+
+GOLDEN_RATIO = (1 + sqrt(5)) / 2;
+// -----------------------------------------------------------------------------
+// Resource initialization
+// -----------------------------------------------------------------------------
+
+// Sample rate conversion ------------------------------------------------------
+
+// gcd of 44100 and 48000 is 300. Choosing a target samplerate multiple of 300
+// will minimize the memory requirements for the fractional resampler on both.
+// 30000 seems a good candidate samplerate for a reverb, 15KHz BW should be
+// enough for a reverb.
+//
+// 36000 is more friendly to 44100 multiples though. 27000 seems good too, but
+// 13.5K might start being dark.
+
+BYPASS_SRC = 0;
+
+k.src.kaiser_att_db = 210;
+k.src.taps_branch = 32;
+k.src.taps_branch_frac = 16;
+k.src.cutoff = 9000;
+k.src.srate = BYPASS_SRC ? srate : 27000;
+
+src.down.resampler_2c_init(
+  k.src.srate,
+  srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.up.resampler_2c_init(
+  srate,
+  k.src.srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.out_q.deque_init(
+  src.up.resampler_2c_max_n_out_samples() * 2
+  );
+
+src.ins.array_init (src.down.resampler_2c_max_n_out_samples() * 2);
+src.outs.array_init (src.up.resampler_2c_max_n_out_samples() * 2);
+
+src.ins.array_clear();
+src.outs.array_clear();
+
+// TODO how many?
+loop(floor (srate / 44100) * 2,
+  src.out_q.deque_push (0);
+  src.out_q.deque_push (0);
+);
+
+// Early/Reflections -----------------------------------------------------------
+BYPASS_EARLY = 0;
+
+k.early.n_stages = 4;
+k.early.n_channels = 4;
+
+k.early.a.meters = 4.129;
+k.early.a.span = 3.209;
+k.early.a.g  = 0.5;
+
+k.early.b.meters = 5.101;
+k.early.b.span = 5.003;
+k.early.b.g  = 0.3;
+
+k.early.c.meters = 3.163;
+k.early.c.span = 3.121;
+k.early.c.g  = 0.5;
+
+k.early.d.meters = 2.909;
+k.early.d.span = 3.187;
+k.early.d.g  = 0.65;
+
+k.early.prime_idx = 1;
+k.early.rounding_factor = 1000;
+
+early.signal.array_init (k.early.n_channels);
+
+early.a.n_spls.array_init (k.early.n_channels);
+early.b.n_spls.array_init (k.early.n_channels);
+early.c.n_spls.array_init (k.early.n_channels);
+early.d.n_spls.array_init (k.early.n_channels);
+
+early.a.delay.delay_line_init (round_next_pow2 (k.src.srate), k.early.n_channels);
+early.b.delay.delay_line_init (round_next_pow2 (k.src.srate), k.early.n_channels);
+early.c.delay.delay_line_init (round_next_pow2 (k.src.srate), k.early.n_channels);
+early.d.delay.delay_line_init (round_next_pow2 (k.src.srate), k.early.n_channels);
+
+early.a.delay.delay_line_allpass_add();
+early.b.delay.delay_line_allpass_add();
+early.c.delay.delay_line_allpass_add();
+early.d.delay.delay_line_allpass_add();
+
+early.a.delay.delay_line_allpass_set_g_k_all (k.early.a.g);
+early.b.delay.delay_line_allpass_set_g_k_all (k.early.b.g);
+early.c.delay.delay_line_allpass_set_g_k_all (k.early.c.g);
+early.d.delay.delay_line_allpass_set_g_k_all (k.early.d.g);
+
+early.a_g_dbg.debug_4(early.a.delay.g.ptr, 4);
+
+// Late/Tail feedback ----------------------------------------------------------
+function from_ascending_to_chnl_order (spls_ptr, spls_size) global()(
+  // from ascending order to an U shape ordering.
+
+  this.tmp.array_init (spls_size);
+  memcpy (this.tmp.ptr, spls_ptr, spls_size);
+
+  spls_ptr[0]  = this.tmp.ptr[15];
+  spls_ptr[1]  = this.tmp.ptr[13];
+  spls_ptr[2]  = this.tmp.ptr[11];
+  spls_ptr[3]  = this.tmp.ptr[9];
+  spls_ptr[4]  = this.tmp.ptr[7];
+  spls_ptr[5]  = this.tmp.ptr[5];
+  spls_ptr[6]  = this.tmp.ptr[3];
+  spls_ptr[7]  = this.tmp.ptr[1];
+  spls_ptr[8]  = this.tmp.ptr[0];
+  spls_ptr[9]  = this.tmp.ptr[2];
+  spls_ptr[10] = this.tmp.ptr[4];
+  spls_ptr[11] = this.tmp.ptr[6];
+  spls_ptr[12] = this.tmp.ptr[8];
+  spls_ptr[13] = this.tmp.ptr[10];
+  spls_ptr[14] = this.tmp.ptr[12];
+  spls_ptr[15] = this.tmp.ptr[14];
+
+  this.tmp.array_size_drop_to (0);
+);
+
+BYPASS_LATE = 0;
+
+k.late.n_channels = 16;
+k.late.delay.prime_idx = 15;
+k.late.delay.rounding_factor = 1;
+k.late.delay.span_factor = GOLDEN_RATIO * 1.5;
+
+late.delay_spls.array_init (k.late.n_channels);
+late.rt60_att_h.array_init (k.late.n_channels);
+late.rt60_att_l.array_init (k.late.n_channels);
+late.signal.array_init (k.late.n_channels);
+late.feedback.array_init (k.late.n_channels);
+
+late.delay.delay_line_init(
+  round_next_pow2 (k.src.srate), k.late.n_channels
+  );
+late.delay.delay_line_thiran2_add (4);
+
+late.k.delay_preset.array2d_init (1, k.late.n_channels);
+
+k = 1.070;
+late.k.delay_preset.array2d_ptr(0)[0]  = 1565;
+late.k.delay_preset.array2d_ptr(0)[1]  = late.k.delay_preset.array2d_ptr(0)[0] * k;
+late.k.delay_preset.array2d_ptr(0)[2]  = late.k.delay_preset.array2d_ptr(0)[1] * k;
+late.k.delay_preset.array2d_ptr(0)[3]  = late.k.delay_preset.array2d_ptr(0)[2] * k;
+late.k.delay_preset.array2d_ptr(0)[4]  = late.k.delay_preset.array2d_ptr(0)[3] * k;
+late.k.delay_preset.array2d_ptr(0)[5]  = late.k.delay_preset.array2d_ptr(0)[4] * k;
+late.k.delay_preset.array2d_ptr(0)[6]  = late.k.delay_preset.array2d_ptr(0)[5] * k;
+late.k.delay_preset.array2d_ptr(0)[7]  = late.k.delay_preset.array2d_ptr(0)[6] * k;
+late.k.delay_preset.array2d_ptr(0)[8]  = late.k.delay_preset.array2d_ptr(0)[7] * k;
+late.k.delay_preset.array2d_ptr(0)[9]  = late.k.delay_preset.array2d_ptr(0)[8] * k;
+late.k.delay_preset.array2d_ptr(0)[10] = late.k.delay_preset.array2d_ptr(0)[9] * k;
+late.k.delay_preset.array2d_ptr(0)[11] = late.k.delay_preset.array2d_ptr(0)[10] * k;
+late.k.delay_preset.array2d_ptr(0)[12] = late.k.delay_preset.array2d_ptr(0)[11] * k;
+late.k.delay_preset.array2d_ptr(0)[13] = late.k.delay_preset.array2d_ptr(0)[12] * k;
+late.k.delay_preset.array2d_ptr(0)[14] = late.k.delay_preset.array2d_ptr(0)[13] * k;
+late.k.delay_preset.array2d_ptr(0)[15] = late.k.delay_preset.array2d_ptr(0)[14] * k;
+
+to_prime (late.k.delay_preset.array2d_ptr(0), 16);
+late.k.delay_preset_dbg.debug_16(late.k.delay_preset.array2d_ptr(0), 16);
+
+from_ascending_to_chnl_order(
+  late.k.delay_preset.array2d_ptr(0), k.late.n_channels
+  );
+
+late.lfo.lfo_bank_init (4, 1);
+late.lfo.lfo_bank_reset_phase (0);
+late.mmod.array_init (4);
+
+// Input Diffusion -------------------------------------------------------------
+BYPASS_IN_DIFFUSOR = 0;
+
+pre_dif.g_mod_diffusor_init (k.pre_dif, 0.1, 1.6, 0.8, k.src.srate);
+
+// required by "g_mod_diffusor_tick"
+k.pre_dif.n_spls.array2d_init (2, k.pre_dif.n_diffusors);
+k.pre_dif.n_spls.array2d_ptr(0)[0] = 43;
+k.pre_dif.n_spls.array2d_ptr(0)[1] = 112;
+k.pre_dif.n_spls.array2d_ptr(0)[2] = 315;
+k.pre_dif.n_spls.array2d_ptr(0)[3] = 907;
+
+k.pre_dif.n_spls.array2d_ptr(1)[0] = 43;
+k.pre_dif.n_spls.array2d_ptr(1)[1] = 113;
+k.pre_dif.n_spls.array2d_ptr(1)[2] = 315;
+k.pre_dif.n_spls.array2d_ptr(1)[3] = 907;
+
+// Output Diffusion ------------------------------------------------------------
+BYPASS_OUT_DIFFUSOR = 0;
+
+k.out_dif.n_diffusors = 4;
+
+k.out_dif.n_spls.array2d_init (2, k.out_dif.n_diffusors);
+
+// Prime factors with an approx difference of 2.85.
+// L channel
+k.out_dif.n_spls.array2d_ptr(0)[0] = 19;
+k.out_dif.n_spls.array2d_ptr(0)[1] = 53;
+k.out_dif.n_spls.array2d_ptr(0)[2] = 157;
+k.out_dif.n_spls.array2d_ptr(0)[3] = 443;
+
+// R channel
+(1) ? (
+  // more stereo, different set.
+  (1) ? (
+    // sounds more like noise and the equal"ish" set.
+    k.out_dif.n_spls.array2d_ptr(1)[0] = 23;
+    k.out_dif.n_spls.array2d_ptr(1)[1] = 67;
+    k.out_dif.n_spls.array2d_ptr(1)[2] = 187;
+    k.out_dif.n_spls.array2d_ptr(1)[3] = 443;
+  ) : (
+    // sounds more spatial probably
+    k.out_dif.n_spls.array2d_ptr(1)[0] = 29;
+    k.out_dif.n_spls.array2d_ptr(1)[1] = 83;
+    k.out_dif.n_spls.array2d_ptr(1)[2] = 239;
+    k.out_dif.n_spls.array2d_ptr(1)[3] = 683;
+  );
+) : (
+  // very similar set.
+  k.out_dif.n_spls.array2d_ptr(1)[0] = 21;
+  k.out_dif.n_spls.array2d_ptr(1)[1] = 53;
+  k.out_dif.n_spls.array2d_ptr(1)[2] = 163;
+  k.out_dif.n_spls.array2d_ptr(1)[3] = 453;
+);
+
+out_dif.l.delay_line_init(
+  round_next_pow2 (k.src.srate), k.out_dif.n_diffusors
+  );
+out_dif.l.delay_line_allpass_add();
+
+out_dif.r.delay_line_init(
+  round_next_pow2 (k.src.srate), k.out_dif.n_diffusors
+  );
+out_dif.r.delay_line_allpass_add();
+
+k.out_dif.g.array2d_init (2, k.out_dif.n_diffusors);
+
+// Crossover -------------------------------------------------------------------
+// 1 pole lowpasses. HP by subtraction.
+
+BYPASS_FILTERING    = 0;
+k.filt.att_fact_db  = -9;
+k.filt.freq_fact    = 4.5;
+k.filt.freq_fact_ln = log (k.filt.freq_fact);
+
+k.filt.dampfreq.array_init (k.late.n_channels);
+
+// Chorus ----------------------------------------------------------------------
+BYPASS_CHORUS = 0;
+
+k.chorus.max_depth_spls = 30; // both sides
+k.chorus.max_width = 0.5;
+
+// TODO: random walk?
+
+chorus.lfo.l.lfo_bank_init (k.late.n_channels / 2, 1);
+chorus.lfo.l.lfo_bank_reset_phase (0);
+
+chorus.lfo.r.lfo_bank_init (k.late.n_channels / 2, 1);
+chorus.lfo.r.lfo_bank_reset_phase (0);
+
+// DC blockers -----------------------------------------------------------------
+k.dc.cutoff_freq = 2;
+
+@slider //----------------------------------------------------------------------
+
+function reset_filters (filt*, freq_ptr, srate)
+  global() local(srn) (
+
+  filt.a.tpt_1p_reset (freq_ptr[0], srate);
+  filt.b.tpt_1p_reset (freq_ptr[1], srate);
+  filt.c.tpt_1p_reset (freq_ptr[2], srate);
+  filt.d.tpt_1p_reset (freq_ptr[3], srate);
+  filt.e.tpt_1p_reset (freq_ptr[4], srate);
+  filt.f.tpt_1p_reset (freq_ptr[5], srate);
+  filt.g.tpt_1p_reset (freq_ptr[6], srate);
+  filt.h.tpt_1p_reset (freq_ptr[7], srate);
+  filt.i.tpt_1p_reset (freq_ptr[8], srate);
+  filt.j.tpt_1p_reset (freq_ptr[9], srate);
+  filt.k.tpt_1p_reset (freq_ptr[10], srate);
+  filt.l.tpt_1p_reset (freq_ptr[11], srate);
+  filt.m.tpt_1p_reset (freq_ptr[12], srate);
+  filt.n.tpt_1p_reset (freq_ptr[13], srate);
+  filt.o.tpt_1p_reset (freq_ptr[14], srate);
+  filt.p.tpt_1p_reset (freq_ptr[15], srate);
+);
+
+function reset_dc_blockers_x16 (dc*, freq, srate)
+  global() local ()(
+
+  dc.a.dc_blocker_init (freq, srate);
+  dc.b.dc_blocker_init (freq, srate);
+  dc.c.dc_blocker_init (freq, srate);
+  dc.d.dc_blocker_init (freq, srate);
+  dc.e.dc_blocker_init (freq, srate);
+  dc.f.dc_blocker_init (freq, srate);
+  dc.g.dc_blocker_init (freq, srate);
+  dc.h.dc_blocker_init (freq, srate);
+  dc.i.dc_blocker_init (freq, srate);
+  dc.j.dc_blocker_init (freq, srate);
+  dc.k.dc_blocker_init (freq, srate);
+  dc.l.dc_blocker_init (freq, srate);
+  dc.m.dc_blocker_init (freq, srate);
+  dc.n.dc_blocker_init (freq, srate);
+  dc.o.dc_blocker_init (freq, srate);
+  dc.p.dc_blocker_init (freq, srate);
+);
+
+reset_dc_blockers_x16 (dc, hp_f, k.src.srate);
+
+// Early
+
+early.size_fact = exp (er_size);
+
+get_delay_length_samples(
+  early.a.n_spls.ptr,
+  k.early.n_channels,
+  k.early.a.meters * early.size_fact,
+  k.early.a.meters * early.size_fact * k.early.a.span,
+  k.early.prime_idx,
+  k.early.rounding_factor,
+  k.src.srate
+  );
+
+get_delay_length_samples(
+  early.b.n_spls.ptr,
+  k.early.n_channels,
+  k.early.b.meters * early.size_fact,
+  k.early.b.meters * early.size_fact * k.early.b.span,
+  k.early.prime_idx,
+  k.early.rounding_factor,
+  k.src.srate
+  );
+
+get_delay_length_samples(
+  early.c.n_spls.ptr,
+  k.early.n_channels,
+  k.early.c.meters * early.size_fact,
+  k.early.c.meters * early.size_fact * k.early.c.span,
+  k.early.prime_idx,
+  k.early.rounding_factor,
+  k.src.srate
+  );
+
+get_delay_length_samples(
+  early.d.n_spls.ptr,
+  k.early.n_channels,
+  k.early.d.meters * early.size_fact,
+  k.early.d.meters *early.size_fact * k.early.d.span,
+  k.early.prime_idx,
+  k.early.rounding_factor,
+  k.src.srate
+  );
+
+
+// Late: using a preset
+  memcpy(
+    late.delay_spls.ptr,
+    late.k.delay_preset.array2d_ptr(0),
+    k.late.n_channels
+    );
+
+range_mul_k (late.delay_spls.ptr, exp (size * 2), late.delay_spls.size);
+
+get_rt60_gain(
+  late.rt60_att_h.ptr,
+  late.delay_spls.ptr,
+  rt60_msec * 0.001,
+  0,
+  k.late.n_channels,
+  k.src.srate
+  );
+
+get_rt60_gain(
+  late.rt60_att_l.ptr,
+  late.delay_spls.ptr,
+  rt60_msec * 0.001 * rt60_l_mul,
+  0,
+  k.late.n_channels,
+  k.src.srate
+  );
+
+G = out_diffusion *  0.76;
+k.out_dif.g.array2d_ptr(0)[0] = G;
+k.out_dif.g.array2d_ptr(0)[1] = G;
+k.out_dif.g.array2d_ptr(0)[2] = G;
+k.out_dif.g.array2d_ptr(0)[3] = G;
+out_dif.l.delay_line_allpass_set_g_all (k.out_dif.g.array2d_ptr (0));
+
+k.out_dif.g.array2d_ptr(1)[0] = G;
+k.out_dif.g.array2d_ptr(1)[1] = G;
+k.out_dif.g.array2d_ptr(1)[2] = G;
+k.out_dif.g.array2d_ptr(1)[3] = G;
+out_dif.r.delay_line_allpass_set_g_all (k.out_dif.g.array2d_ptr (1));
+
+late.lfo.lfo_bank_reset_freq (0, mod_freq, k.src.srate);
+
+// TODO: slightly different frequencies ?
+chorus.freq_fact = mod_stereo * k.chorus.max_width;
+chorus.freq_l = mod_freq;
+chorus.freq_r = mod_freq * exp (chorus.freq_fact);
+chorus.lfo.l.lfo_bank_reset_freq (0, chorus.freq_l, k.src.srate);
+chorus.lfo.r.lfo_bank_reset_freq (0, chorus.freq_r, k.src.srate);
+
+k.filt.damp_mult = exp (k.filt.freq_fact_ln * damp_f);
+
+k.filt.dampfreq.ptr[0]  = 500 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[1]  = 530 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[2]  = 640 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[3]  = 600 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[4]  = 860 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[5]  = 800 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[6]  = 920 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[7]  = 900 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[8]  = 1000 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[9]  = 1100 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[10] = 1200 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[11] = 1000 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[12] = 2200 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[13] = 2000 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[14] = 2800 * k.filt.damp_mult;
+k.filt.dampfreq.ptr[15] = 3000 * k.filt.damp_mult;
+
+from_ascending_to_chnl_order (k.filt.dampfreq.ptr, k.filt.dampfreq.size);
+
+reset_filters (filt, k.filt.dampfreq.ptr, k.src.srate);
+k.filt.att = pow (10, k.filt.att_fact_db * damp * 1/40);
+
+@block //-----------------------------------------------------------------------
+
+@sample //----------------------------------------------------------------------
+function dc_blockers_x16_tick (dc*, sig*)
+  global () local()(
+  sig.ptr[0] = dc.a.dc_blocker_tick (sig.ptr[0]);
+  sig.ptr[1] = dc.b.dc_blocker_tick (sig.ptr[1]);
+  sig.ptr[2] = dc.c.dc_blocker_tick (sig.ptr[2]);
+  sig.ptr[3] = dc.d.dc_blocker_tick (sig.ptr[3]);
+  sig.ptr[4] = dc.e.dc_blocker_tick (sig.ptr[4]);
+  sig.ptr[5] = dc.f.dc_blocker_tick (sig.ptr[5]);
+  sig.ptr[6] = dc.g.dc_blocker_tick (sig.ptr[6]);
+  sig.ptr[7] = dc.h.dc_blocker_tick (sig.ptr[7]);
+
+  sig.ptr[8]  = dc.i.dc_blocker_tick (sig.ptr[8]);
+  sig.ptr[9]  = dc.j.dc_blocker_tick (sig.ptr[9]);
+  sig.ptr[10] = dc.k.dc_blocker_tick (sig.ptr[10]);
+  sig.ptr[11] = dc.l.dc_blocker_tick (sig.ptr[11]);
+  sig.ptr[12] = dc.m.dc_blocker_tick (sig.ptr[12]);
+  sig.ptr[13] = dc.n.dc_blocker_tick (sig.ptr[13]);
+  sig.ptr[14] = dc.o.dc_blocker_tick (sig.ptr[14]);
+  sig.ptr[15] = dc.p.dc_blocker_tick (sig.ptr[15]);
+);
+
+function run_filters (filt*, lp_ptr, hp_ptr, sig_ptr, hp_gain)
+  global() local() (
+
+  lp_ptr[0]  = filt.a.tpt_1p_tick_lp (sig_ptr[0]);
+  lp_ptr[1]  = filt.b.tpt_1p_tick_lp (sig_ptr[1]);
+  lp_ptr[2]  = filt.c.tpt_1p_tick_lp (sig_ptr[2]);
+  lp_ptr[3]  = filt.d.tpt_1p_tick_lp (sig_ptr[3]);
+  lp_ptr[4]  = filt.e.tpt_1p_tick_lp (sig_ptr[4]);
+  lp_ptr[5]  = filt.f.tpt_1p_tick_lp (sig_ptr[5]);
+  lp_ptr[6]  = filt.g.tpt_1p_tick_lp (sig_ptr[6]);
+  lp_ptr[7]  = filt.h.tpt_1p_tick_lp (sig_ptr[7]);
+  lp_ptr[8]  = filt.i.tpt_1p_tick_lp (sig_ptr[8]);
+  lp_ptr[9]  = filt.j.tpt_1p_tick_lp (sig_ptr[9]);
+  lp_ptr[10] = filt.k.tpt_1p_tick_lp (sig_ptr[10]);
+  lp_ptr[11] = filt.l.tpt_1p_tick_lp (sig_ptr[11]);
+  lp_ptr[12] = filt.m.tpt_1p_tick_lp (sig_ptr[12]);
+  lp_ptr[13] = filt.n.tpt_1p_tick_lp (sig_ptr[13]);
+  lp_ptr[14] = filt.o.tpt_1p_tick_lp (sig_ptr[14]);
+  lp_ptr[15] = filt.p.tpt_1p_tick_lp (sig_ptr[15]);
+
+  hp_ptr[0]  = (sig_ptr[0]  - lp_ptr[0])  * hp_gain;
+  hp_ptr[1]  = (sig_ptr[1]  - lp_ptr[1])  * hp_gain;
+  hp_ptr[2]  = (sig_ptr[2]  - lp_ptr[2])  * hp_gain;
+  hp_ptr[3]  = (sig_ptr[3]  - lp_ptr[3])  * hp_gain;
+  hp_ptr[4]  = (sig_ptr[4]  - lp_ptr[4])  * hp_gain;
+  hp_ptr[5]  = (sig_ptr[5]  - lp_ptr[5])  * hp_gain;
+  hp_ptr[6]  = (sig_ptr[6]  - lp_ptr[6])  * hp_gain;
+  hp_ptr[7]  = (sig_ptr[7]  - lp_ptr[7])  * hp_gain;
+  hp_ptr[8]  = (sig_ptr[8]  - lp_ptr[8])  * hp_gain;
+  hp_ptr[9]  = (sig_ptr[9]  - lp_ptr[9])  * hp_gain;
+  hp_ptr[10] = (sig_ptr[10] - lp_ptr[10]) * hp_gain;
+  hp_ptr[11] = (sig_ptr[11] - lp_ptr[11]) * hp_gain;
+  hp_ptr[12] = (sig_ptr[12] - lp_ptr[12]) * hp_gain;
+  hp_ptr[13] = (sig_ptr[13] - lp_ptr[13]) * hp_gain;
+  hp_ptr[14] = (sig_ptr[14] - lp_ptr[14]) * hp_gain;
+  hp_ptr[15] = (sig_ptr[15] - lp_ptr[15]) * hp_gain;
+);
+
+function g_mod_diffusor_tick (k*, g_base, in_l, in_r, n_spls_l_ptr, n_spls_r_ptr)
+  global() (
+
+  this.mod_l = this.lfo.l.lfo_drift_sin_tick();
+  this.mod_r = this.lfo.r.lfo_drift_sin_tick();
+
+  memset(
+    this.g.array2d_ptr (0), g_base + this.mod_l * k.g_mod_depth, k.n_diffusors
+    );
+  memset(
+    this.g.array2d_ptr (1), g_base + this.mod_r * k.g_mod_depth, k.n_diffusors
+    );
+
+  this.l.delay_line_allpass_set_g_all (this.g.array2d_ptr (0));
+  this.r.delay_line_allpass_set_g_all (this.g.array2d_ptr (1));
+
+  this.out_l = this.l.delay_line_allpass_tick_cascade_all(
+      in_l, k.n_diffusors, n_spls_l_ptr
+      );
+  this.out_r = this.r.delay_line_allpass_tick_cascade_all(
+      in_r, k.n_diffusors, n_spls_r_ptr
+      );
+
+  this.dbg.debug_4(n_spls_r_ptr, 4);
+);
+
+BYPASS_SRC == 0 ? (
+  n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
+) : (
+  n_spls_down = 1;
+  src.ins.ptr[0] = spl0;
+  src.ins.ptr[1] = spl1;
+);
+
+(n_spls_down) ? (
+  // time to run DSP at operating SR, we know that "src.frac_down" is a
+  // downsampler, so "n_spls_down" will always be 0 or 1
+
+  in.l = src.ins.ptr[0];
+  in.r = src.ins.ptr[1];
+
+  // Input diffusor ------------------------------------------------------------
+  BYPASS_INPUT_DIFFUSOR = 0;
+  BYPASS_INPUT_DIFFUSOR == 0 ? (
+    pre_dif.g_mod_diffusor_tick(
+      k.pre_dif,
+      in_diffusion,
+      in.l,
+      in.r,
+      k.pre_dif.n_spls.array2d_ptr (0),
+      k.pre_dif.n_spls.array2d_ptr (1)
+      );
+
+    dif.l = pre_dif.out_l;
+    dif.r = pre_dif.out_r;
+  ) : (
+    dif.l = in.l;
+    dif.r = in.r;
+  );
+
+  in.m = (dif.l + dif.r) * 0.5;
+  in.s = (dif.l - dif.r) * 0.5;
+
+
+  // late ----------------------------------------------------------------------
+
+  late.signal.array_clear();
+  late.signal.ptr[0] = dif.r * sig_2_late;
+  late.signal.ptr[1] = early.r * er_2_late;
+  late.signal.ptr[14] = early.l * er_2_late;
+  late.signal.ptr[15] = dif.l * sig_2_late;
+
+  range_add(
+    late.signal.ptr, late.signal.ptr, late.feedback.ptr, late.signal.size
+    );
+
+  late.lfo.lfo_bank_tick_sin (late.mmod.ptr, 0);
+  late.mmodd.debug_4 (late.mmod);
+
+  mul = 0.157;
+  w1_a = cos (angle1 * $pi * 0.5 + late.mmod.ptr[0] * mul * abs (mod_depth));
+  w1_b = cos (angle3 * $pi * 0.5 + late.mmod.ptr[1] * mul * abs (mod_depth));
+  w1_c = cos (angle3 * $pi * 0.5 + late.mmod.ptr[2] * mul * abs (mod_depth));
+  w1_d = cos (angle2 * $pi * 0.5 + late.mmod.ptr[3] * mul * abs (mod_depth));
+
+  w2_a = sqrt (1. - w1_a * w1_a);
+  w2_b = sqrt (1. - w1_b * w1_b);
+  w2_c = sqrt (1. - w1_c * w1_c);
+  w2_d = sqrt (1. - w1_d * w1_d);
+
+  tmp.sig_cp1.array_duplicate (late.signal);
+  rot_matrix_16(
+    late.signal.ptr,
+    tmp.sig_cp1.ptr,
+    w1_a,
+    w2_a,
+    w1_b,
+    w2_b,
+    w1_c,
+    w2_c,
+    w1_d,
+    w2_d
+  );
+  // return memory (used as a stack)
+  tmp.sig_cp1.array_size_drop_to(0);
+  
+  householder (late.signal.ptr + 1, late.signal.ptr + 1, 4);
+  householder (late.signal.ptr + 11, late.signal.ptr + 11, 4);
+
+  // Feedback processing
+  late.delay.delay_line_advance();
+  late.delay.delay_line_set_all (late.signal.ptr, 0);
+
+  BYPASS_CHORUS == 1 ? (
+    chorus.n_spls.array_duplicate (late.delay_spls);
+    chorus.mod.array_init (k.late.n_channels);
+    chorus.signal.array_init (k.late.n_channels);
+
+    chorus.lfo.l.lfo_bank_tick_sin (chorus.mod.ptr, 0);
+    chorus.lfo.r.lfo_bank_tick_sin (chorus.mod.ptr + chorus.mod.size / 2, 0);
+
+    range_mul_k(
+      chorus.mod.ptr, mod_depth * k.chorus.max_depth_spls, chorus.mod.size
+      );
+    range_add (chorus.n_spls.ptr, chorus.mod.ptr, chorus.mod.size);
+
+//    late.delay.delay_line_thiran2_get_all(
+//      chorus.signal.ptr, chorus.n_spls.ptr
+//      );
+    late.delay.delay_line_get_catmull_rom_interp_all(
+      chorus.signal.ptr, chorus.n_spls.ptr
+    );
+
+    late.feedback.array_copy (chorus.signal);
+
+    chorus.signal.array_size_drop_to (0);
+    chorus.mod.array_size_drop_to (0);
+    chorus.n_spls.array_size_drop_to (0);
+  ) : (
+    late.delay.delay_line_get_all (late.feedback.ptr, late.delay_spls.ptr);
+  );
+
+  BYPASS_FILTERING == 0 ? (
+    late.lp.array_init (late.feedback.size);
+    late.hp.array_init (late.feedback.size);
+
+    run_filters (filt, late.lp.ptr, late.hp.ptr, late.feedback.ptr, k.filt.att);
+
+    // YOLO correction
+    range_mul (late.hp.ptr, late.rt60_att_h.ptr, late.hp.size);
+    range_mul (late.lp.ptr, late.rt60_att_l.ptr, late.lp.size);
+    range_add (late.feedback.ptr, late.lp.ptr, late.hp.ptr, late.feedback.size);
+
+
+    late.hp.array_size_drop_to (0);
+    late.lp.array_size_drop_to (0);
+  ) : (
+    range_mul (late.feedback.ptr, late.rt60_att_h.ptr, late.feedback.size);
+  );
+
+  dc_blockers_x16_tick (dc, late.feedback);
+
+ (1) ? (
+    late.l = late.signal.ptr[11] + late.signal.ptr[10];
+    late.r = late.signal.ptr[4] + late.signal.ptr[5];
+  ) : (
+    late.l = late.signal.ptr[9];
+    late.r = late.signal.ptr[6];
+  );
+
+  BYPASS_LATE == 0 ? (
+    late.l *= late_amt;
+    late.r *= late_amt;
+    out.l = late.l;
+    out.r = late.r;
+  ) : (
+    out.l = dif.l;
+    out.r = dif.r;
+  );
+
+  // modulate this fella...
+  BYPASS_OUT_DIFFUSOR == 0 ? (
+    postdif.l = out_dif.l.delay_line_allpass_tick_cascade_all(
+       out.l, k.out_dif.n_diffusors, k.out_dif.n_spls.array2d_ptr (0)
+       );
+    postdif.r = out_dif.r.delay_line_allpass_tick_cascade_all(
+      out.r, k.out_dif.n_diffusors, k.out_dif.n_spls.array2d_ptr (1)
+       );
+    // trade correlation for some fake stereo, this can be enabled on metallic
+    // (plate) reverbs.
+//    mix = 0.85;
+    mix = 0.95;
+    out.l = postdif.l * mix + out.l * (1 - mix);
+    out.r = postdif.r * mix - out.r * (1 - mix);
+  );
+
+  BYPASS_EARLY == 1 ? (
+    early.l *= early_amt;
+    early.r *= early_amt;
+    out.l += early.l;
+    out.r += early.r;
+  );
+
+  st = sqrt(stereo);
+  out.r = out.r * st + out.l * (1 - st);
+
+  spl_op_rate_counter += 1; // operating rate counter
+
+  BYPASS_SRC == 0 ? (
+    // upsampling
+    n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, out.l, out.r);
+    i = 0;
+    loop (n_spls_up * 2, // *2 : two channels
+      src.out_q.deque_push (src.outs.ptr[i]);
+      i += 1;
+    );
+  ):(
+    src.out_q.deque_push (out.l);
+    src.out_q.deque_push (out.r);
+  );
+);
+
+spl0 = src.out_q.deque_pop();
+spl1 = src.out_q.deque_pop();

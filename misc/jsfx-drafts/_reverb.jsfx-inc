@@ -142,16 +142,14 @@ function rot_matrix_4 (y_ptr, x_ptr, w1, w2)
   y_ptr[3] = w2 * y2 + w1 * y4;
 );
 
-// TODO: different angles for each butterfly?
 // w1 (weight1) is usually cos(angle)
 // w2 (weight1) is usually sin(angle)
 // The weights can be anything, but "w1^2 + w2^2 = 1" has to hold.
-
-function rot_matrix_8 (y_ptr, x_ptr, w1, w2)
+function rot_matrix_8 (y_ptr, x_ptr, w1a, w2a, w1b, w2b)
   local(y1, y2, y3, y4, y5, y6, y7, y8) global()(
 
-  rot_matrix_4 (y_ptr, x_ptr, w1, w2);
-  rot_matrix_4 (y_ptr + 4, x_ptr + 4, w1, w2);
+  rot_matrix_4 (y_ptr, x_ptr, w1a, w2a);
+  rot_matrix_4 (y_ptr + 4, x_ptr + 4, w1b, w2b);
 
   //    1 2 3 4
   // ------------
@@ -187,16 +185,19 @@ function rot_matrix_8 (y_ptr, x_ptr, w1, w2)
   y7 = y_ptr[6];
   y8 = y_ptr[7];
 
-  y_ptr[0] = w1 * y1 - w2 * y5;
-  y_ptr[1] = w2 * y1 + w1 * y5;
-  y_ptr[2] = w1 * y2 - w2 * y6;
-  y_ptr[3] = w2 * y2 + w1 * y6;
-  y_ptr[4] = w1 * y3 - w2 * y7;
-  y_ptr[5] = w2 * y3 + w1 * y7;
-  y_ptr[6] = w1 * y4 - w2 * y8;
-  y_ptr[7] = w2 * y4 + w1 * y8;
+  y_ptr[0] = w1a * y1 - w2a * y5;
+  y_ptr[1] = w2a * y1 + w1a * y5;
+  y_ptr[2] = w1a * y2 - w2a * y6;
+  y_ptr[3] = w2a * y2 + w1a * y6;
+  y_ptr[4] = w1b * y3 - w2b * y7;
+  y_ptr[5] = w2b * y3 + w1b * y7;
+  y_ptr[6] = w1b * y4 - w2b * y8;
+  y_ptr[7] = w2b * y4 + w1b * y8;
 );
 
+function rot_matrix_8 (y_ptr, x_ptr, w1, w2) global()(
+  rot_matrix_8 (y_ptr, x_ptr, w1, w2, w1, w2);
+);
 
 // w1 (weight1) is usually cos(angle)
 // w2 (weight1) is usually sin(angle)
@@ -206,8 +207,8 @@ function rot_matrix_16 (y_ptr, x_ptr, w1a, w2a, w1b, w2b, w1c, w2c, w1d, w2d)
     y1, y2, y3, y4, y5, y6, y7, y8, y9, ya, yb, yc, yd, ye, yf, yg)
   global()(
 
-  rot_matrix_8 (y_ptr, x_ptr, w1a, w2a);
-  rot_matrix_8 (y_ptr + 8, x_ptr + 8, w1b, w2b);
+  rot_matrix_8 (y_ptr, x_ptr, w1a, w2a, w1b, w2b);
+  rot_matrix_8 (y_ptr + 8, x_ptr + 8, w1c, w2c, w1d, w2d);
 
   //     1 2 3 4 5 6 7 8
   // ---------------------
@@ -267,18 +268,18 @@ function rot_matrix_16 (y_ptr, x_ptr, w1a, w2a, w1b, w2b, w1c, w2c, w1d, w2d)
   yf = y_ptr[14];
   yg = y_ptr[15];
 
-  y_ptr[0]  = w1c * y1 - w2c * y9;
-  y_ptr[1]  = w2c * y1 + w1c * y9;
-  y_ptr[2]  = w1c * y2 - w2c * ya;
-  y_ptr[3]  = w2c * y2 + w1c * ya;
-  y_ptr[4]  = w1c * y3 - w2c * yb;
-  y_ptr[5]  = w2c * y3 + w1c * yb;
-  y_ptr[6]  = w1c * y4 - w2c * yc;
-  y_ptr[7]  = w2c * y4 + w1c * yc;
-  y_ptr[8]  = w1d * y5 - w2d * yd;
-  y_ptr[9]  = w2d * y5 + w1d * yd;
-  y_ptr[10] = w1d * y6 - w2d * ye;
-  y_ptr[11] = w2d * y6 + w1d * ye;
+  y_ptr[0]  = w1a * y1 - w2a * y9;
+  y_ptr[1]  = w2a * y1 + w1a * y9;
+  y_ptr[2]  = w1a * y2 - w2a * ya;
+  y_ptr[3]  = w2a * y2 + w1a * ya;
+  y_ptr[4]  = w1b * y3 - w2b * yb;
+  y_ptr[5]  = w2b * y3 + w1b * yb;
+  y_ptr[6]  = w1b * y4 - w2b * yc;
+  y_ptr[7]  = w2b * y4 + w1b * yc;
+  y_ptr[8]  = w1c * y5 - w2c * yd;
+  y_ptr[9]  = w2c * y5 + w1c * yd;
+  y_ptr[10] = w1c * y6 - w2c * ye;
+  y_ptr[11] = w2c * y6 + w1c * ye;
   y_ptr[12] = w1d * y7 - w2d * yf;
   y_ptr[13] = w2d * y7 + w1d * yf;
   y_ptr[14] = w1d * y8 - w2d * yg;
@@ -972,6 +973,32 @@ function get_delay_length_samples(
   );
 );
 
+function to_prime (array_ptr, array_size) global() local (maxv, minv, result, i, j) (
+  maxv = range_get_max (array_ptr, array_size);
+  minv = range_get_min (array_ptr, array_size);
+  make_primes_table (this.tmp_primes, minv, maxv + 1);
+  // this could be a more efficient search algorithm than linear, as of now this
+  // function is only needed for small sizes at startup time.
+  j = 0;
+  loop (array_size,
+    result = 0;
+    i = 0;
+    // the last element will be rounded backwards
+    while (
+      result = this.tmp_primes.ptr[i];
+      i += 1;
+      i < this.tmp_primes.size && result < array_ptr[j];
+    );
+    array_ptr[j] = result;
+    j += 1;
+  );
+  // free the memory.
+  this.tmp_primes.array_size_drop_to (0);
+);
+
+function to_prime (array*) global() (
+  to_prime (array.ptr, array.size);
+);
 
 /*
 TODO: Very broken!

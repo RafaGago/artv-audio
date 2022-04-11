@@ -206,7 +206,7 @@ function range_get_min (src_ptr, size) local (minv, i) global()(
     minv = src_ptr[0];
     i = 1;
     loop (size - 1,
-        minv = max (minv, src_ptr[i]);
+        minv = min (minv, src_ptr[i]);
         i += 1;
     );
     minv;
