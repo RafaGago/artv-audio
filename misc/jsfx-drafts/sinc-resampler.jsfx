@@ -36,8 +36,7 @@ stage2.sinc_resampler_2c_init(
   srate,
   tgt_process_rate,
   taps,
-  max (tgt_process_rate, srate) * 0.5 * cutoff,
-//  srate * 0.5,
+  min (tgt_process_rate, srate) * 0.5 * cutoff,
   att,
   minphase
   );

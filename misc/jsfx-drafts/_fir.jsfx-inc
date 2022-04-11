@@ -328,7 +328,7 @@ function fir_kernel_to_minphase (kernel_ptr, kernel_size)
   // log cepstrum method (Mystran's post):
   // https://www.kvraudio.com/forum/viewtopic.php?f=33&t=556692&start=45
 
-  fft_size = max (kernel_size * 32, 32 * 1024);
+  fft_size = max (1 << ceil (log (kernel_size) / log (2)) * 32, 32 * 1024);
   this.work.array_init_fft (fft_size * 2);
 
  // regular fft of the impulse
@@ -650,8 +650,15 @@ function sinc_resampler_2c_init_2(
   this.n_spls.array_init (this.rate_src);
 
   (cutoff_hz * 2) <= tgt_srate ? (
-    this.fc = 2 * cutoff_hz / tgt_srate;
-    this.ratio < 1 ? this.fc *= this.ratio;
+    this.bug_fc = 0;
+
+    (this.ratio <= 1) ? (
+      this.fc = cutoff_hz / src_srate;
+      this.fc /= this.rate_tgt;
+    ) : (
+      this.fc = cutoff_hz / tgt_srate;
+      this.fc /= this.rate_src;
+    );
   ) : (
     this.bug_fc = 1;
   );
@@ -712,7 +719,7 @@ function sinc_resampler_2c_init_2(
 
   this.bigkernel.array_init (this.kernels.size);
 
-  set_sinc_lowpass (this.bigkernel, this.fc / this.rate_tgt, this.rate_tgt);
+  set_sinc_lowpass (this.bigkernel, 2 * this.fc, this.rate_tgt);
   apply_kaiser_window (this.bigkernel, beta, this.rate_tgt);
   minphase ? (
     fir_kernel_to_minphase (this.bigkernel);
