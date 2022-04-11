@@ -1,0 +1,137 @@
+desc:Schroeder allpass phaser
+slider1:lo=0.3<0, 1, 0.001>lo(%)
+slider2:hi=0.6<0, 1, 0.001>hi(%)
+slider3:depth=0.8<0, 1, 0.001>depth(%)
+slider4:delay=1<1, 32, 1>delay(samples)
+slider5:delay_diff=0.4<0, 1, 0.001>delay diff(%)
+slider6:lfo_freq=0.5<0.001, 2, 0.001>freq(Hz)
+slider7:lfo_phase_diff=0.5<0, 1, 0.001>st diff(%)
+slider8:feedback=1<-1, 1, 0.001>feedback(%)
+slider9:n_stages=12<1, 32, 1>n_stages
+slider10:linear=0<0, 1, 1>linear
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+import _delay-line.jsfx-inc
+import _lfo.jsfx-inc
+
+@init
+
+k.n_stages = 32;
+k.n_channels = 2;
+
+ap.l.delay_line_init (64, k.n_stages);
+ap.l.delay_line_allpass_add();
+
+ap.r.delay_line_init (64, k.n_stages);
+ap.r.delay_line_allpass_add();
+
+ap.l1.delay_line_init (64, k.n_stages);
+ap.l1.delay_line_allpass_add();
+
+ap.r1.delay_line_init (64, k.n_stages);
+ap.r1.delay_line_allpass_add();
+
+lfo.lfo_bank_init (k.n_channels, 1);
+
+g.l.array_init (k.n_stages);
+g.r.array_init (k.n_stages);
+g.l1.array_init (k.n_stages);
+g.r1.array_init (k.n_stages);
+spls.l.array_init (k.n_stages);
+spls.r.array_init (k.n_stages);
+spls.l1.array_init (k.n_stages);
+spls.r1.array_init (k.n_stages);
+spls.l1v.array_init (k.n_stages);
+spls.r1v.array_init (k.n_stages);
+lfov.array_init (k.n_channels);
+
+fb.l = fb.r = 0;
+
+@slider
+
+lfo.lfo_bank_reset_freq (0, lfo_freq, srate);
+
+lo_g = min (lo, hi);
+hi_g = max (lo, hi);
+depth_scale = min (lo_g, 1 - hi_g);  // 0.5 to make LFO unipolar
+
+(linear) ? (
+  spread_mul = 1;
+  spread_sum = (hi_g - lo_g) / (n_stages - 1);
+) : (
+  spread_mul = pow (hi_g / lo_g, 1. / n_stages);
+  spread_sum = 0
+);
+
+lfo_phase_diff != lfo_phase_diff_prev ? (
+  lfo_phase_diff_prev = lfo_phase_diff;
+  lfo.lfo_bank_reset_phase (0, 0, 0);
+  lfo.lfo_bank_reset_phase (0, 1, lfo_phase_diff);
+);
+
+i = 0;
+loop (k.n_stages,
+    spls.l.ptr[i] = delay;
+    spls.r.ptr[i] = delay;
+    spls.l1.ptr[i] = delay + delay_diff * 1;
+    spls.r1.ptr[i] = delay + delay_diff * 1;
+    i += 1;
+);
+
+@sample
+
+lfo.lfo_bank_tick_sin (lfov.ptr, 0);
+
+// modulate "g"
+g.l.ptr[0] = lo_g;
+g.r.ptr[0] = g.l.ptr[0];
+i = 1;
+loop (k.n_stages - 1,
+    g.l.ptr[i] = -g.l.ptr[i - 1] * spread_mul + spread_sum;
+    g.r.ptr[i] = g.l.ptr[i];
+    i += 1;
+);
+
+i = 0;
+loop (k.n_stages,
+    g.l.ptr[i] +=  lfov.ptr[0] * depth * depth_scale;
+    g.r.ptr[i] +=  lfov.ptr[1] * depth * depth_scale;
+    i += 1;
+);
+
+i = 0;
+loop (k.n_stages,
+    g.l1.ptr[i] = g.l.ptr[i];
+    g.r1.ptr[i] = g.r.ptr[i];
+    i += 1;
+);
+
+i = 0;
+loop (k.n_stages,
+    spls.l1v.ptr[i] = spls.l1.ptr[i] - lfov.ptr[0] * 1 * (srate / 44100);
+    spls.r1v.ptr[i] = spls.r1.ptr[i] - lfov.ptr[1] * 1 * (srate / 44100);
+    i += 1;
+);
+
+in.l = spl0;
+in.r = spl1;
+
+ap.l.delay_line_allpass_set_g_all (g.l.ptr);
+spl0 = ap.l.delay_line_allpass_tick_cascade_all((in.l + fb.l) * 0.95, n_stages, spls.l.ptr);
+ap.r.delay_line_allpass_set_g_all (g.r.ptr);
+spl1 = ap.r.delay_line_allpass_tick_cascade_all((in.r + fb.r) * 0.95, n_stages, spls.r.ptr);
+
+ap.l1.delay_line_allpass_set_g_all (g.l1.ptr);
+l1 = ap.l1.delay_line_allpass_tick_cascade_all_lerp (spl0, n_stages, spls.l1.ptr);
+ap.r1.delay_line_allpass_set_g_all (g.r1.ptr);
+r1 = ap.r1.delay_line_allpass_tick_cascade_all_lerp (spl1, n_stages, spls.r1.ptr);
+
+fb.l = l1 * feedback;
+fb.r = r1 * feedback;
+
+spl0 = (spl0 + in.l) * 0.5;
+spl1 = (spl1 + in.r) * 0.5;
