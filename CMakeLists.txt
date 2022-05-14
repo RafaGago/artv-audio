@@ -328,22 +328,6 @@ FetchContent_MakeAvailable (googletest)
 # set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
 # set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
 # FetchContent_MakeAvailable (googlebenchmark)
-#-- Hiir ----- -----------------------------------------------------------------
-set (HIIR_REPO ${CMAKE_BINARY_DIR}/hiir-git)
-ExternalProject_Add(
-    hiir_fetch
-    URL http://ldesoras.free.fr/src/hiir-1.33.zip
-    URL_HASH SHA256=2a354da24f20361ebd16c1d276b4d91485478f31fde9df5e6efd7ac82212bdb6
-    SOURCE_DIR     "${HIIR_REPO}"
-    UPDATE_COMMAND    ""
-    BUILD_ALWAYS   False
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND     ""
-    INSTALL_COMMAND   ""
-    )
-add_library (hiir INTERFACE)
-target_include_directories (hiir INTERFACE ${HIIR_REPO})
-add_dependencies (hiir hiir_fetch)
 #--muFFT (float)----------------------------------------------------------------
 set (MUFFT_INCLUDE ${CMAKE_BINARY_DIR}/mufft-src-hack)
 set (MUFFT_REPO ${MUFFT_INCLUDE}/mufft)
@@ -663,12 +647,6 @@ add_executable(
     test/common/simd.cpp
     )
 target_link_libraries (common-test PUBLIC test mufft-all pffft)
-#-- Oversampr utility ----------------------------------------------------------
-add_executable(
-    oversampler-util
-    src/oversampler-util/main.cpp
-    )
-target_link_libraries (oversampler-util PUBLIC common hiir)
 #-- Mix-maxtrix ----------------------------------------------------------------
 set (MIXMAXTRIX_VERSION_MAJOR 1)
 set (MIXMAXTRIX_VERSION_MINOR 6)
