@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <math.h>
 #include <stdint.h>
 
@@ -25,9 +26,14 @@ public:
   virtual plugin_play_state get_play_state() const                = 0;
   virtual void              set_delay_compensation (uint samples) = 0;
   //----------------------------------------------------------------------------
-  float get_samples_per_beat() const
+  double get_samples_per_beat() const
   {
-    return (60. / get_play_state().bpm) * ((float) get_sample_rate());
+    auto vals = get_play_state();
+    if (vals.is_valid) {
+      return (60. / get_play_state().bpm) * ((double) get_sample_rate());
+    }
+    // TODO: return an optional<double> and refactor
+    return 0.;
   }
   //------------------------------------------------------------------------------
 };

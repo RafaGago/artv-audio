@@ -26,15 +26,19 @@ public:
   //----------------------------------------------------------------------------
   virtual plugin_play_state get_play_state() const override
   {
-    juce::AudioPlayHead::CurrentPositionInfo inf;
-    if (_processor->getPlayHead()->getCurrentPosition (inf)) {
+    auto pos = _processor->getPlayHead()->getPosition();
+    if (pos) {
+      auto bpm    = pos->getBpm();
+      auto t_spls = pos->getTimeInSamples();
+      auto ppq    = pos->getPpqPosition();
+      auto sec    = pos->getTimeInSeconds();
       return {
-        .bpm                   = inf.bpm,
-        .sample_position       = (u64) inf.timeInSamples,
-        .quarter_note_position = inf.ppqPosition,
-        .time_sec_position     = inf.timeInSeconds,
-        .is_playing            = inf.isPlaying,
-        .is_valid              = true,
+        .bpm                   = bpm ? *bpm : 0.,
+        .sample_position       = t_spls ? (u64) *t_spls : 0,
+        .quarter_note_position = ppq ? *ppq : 0,
+        .time_sec_position     = sec ? *sec : 0,
+        .is_playing            = pos->getIsPlaying(),
+        .is_valid              = bpm && t_spls && ppq && sec,
       };
     };
     return {};

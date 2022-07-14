@@ -212,13 +212,14 @@ add_compile_definitions(
     JUCER_ENABLE_GPL_MODE=1
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_USE_SSE_INTRINSICS=1
+    JUCE_DISABLE_CAUTIOUS_PARAMETER_ID_CHECKING=1 # To disable AAX-related asserts
     )
-# 6.1.5-lv2
+# Juce 7.0.1
 FetchContent_Declare(
     juce
-    GIT_REPOSITORY https://github.com/lv2-porting-project/JUCE
-    GIT_TAG        a59c238919dab18e28d97a98d8c0f737a058d15a
-    PATCH_COMMAND  git reset --hard f00a420bc348d79c4688b33b2b905b8ca0f25a3a && git apply --whitespace=fix ${JUCE_PATCH}
+    GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+    GIT_TAG        b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0
+    PATCH_COMMAND  git reset --hard b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0 && git apply --whitespace=fix ${JUCE_PATCH}
     )
 FetchContent_MakeAvailable (juce)
 set (JUCE_REPO ${juce_SOURCE_DIR})
