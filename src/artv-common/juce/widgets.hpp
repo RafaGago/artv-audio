@@ -425,9 +425,9 @@ struct combobox_ext
     public detail::widget_base<combobox_ext> {
   combobox_ext() = default;
   // there is a lambda capturing "this": no copy/move
-  combobox_ext (combobox_ext&&)      = delete;
-  combobox_ext (combobox_ext const&) = delete;
-  combobox_ext& operator= (combobox_ext&&) = delete;
+  combobox_ext (combobox_ext&&)                 = delete;
+  combobox_ext (combobox_ext const&)            = delete;
+  combobox_ext& operator= (combobox_ext&&)      = delete;
   combobox_ext& operator= (combobox_ext const&) = delete;
 
   ~combobox_ext()
@@ -485,6 +485,7 @@ struct combobox_ext
         combo.setSelectedItemIndex (id);
       }
     };
+    combo.setSelectedItemIndex (_default_id);
     next.setConnectedEdges (juce::TextButton::ConnectedOnLeft);
     parent.addAndMakeVisible (next);
   }
@@ -574,7 +575,7 @@ private:
     char const* str;
     uint        id;
 
-    bool operator< (comboitem const& other)
+    bool operator<(comboitem const& other)
     {
       return strcmp (str, other.str) < 0;
     }
@@ -817,10 +818,10 @@ public:
 
   // in the current state moving or copying invalidates the base, easy to fix
   // if required
-  toggle_buttons (const toggle_buttons&) = delete;
+  toggle_buttons (const toggle_buttons&)            = delete;
   toggle_buttons& operator= (toggle_buttons const&) = delete;
   toggle_buttons (toggle_buttons&&)                 = delete;
-  toggle_buttons& operator= (toggle_buttons&&) = delete;
+  toggle_buttons& operator= (toggle_buttons&&)      = delete;
 
   auto get_components()
   {
