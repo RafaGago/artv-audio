@@ -37,8 +37,7 @@ struct householder_matrix {
   static std::array<T, N> tick (crange<const T> x)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (
-      tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -70,8 +69,7 @@ public:
   static std::array<T, N> tick (crange<const T> x)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (
-      tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
   }
   //----------------------------------------------------------------------------
 private:
@@ -154,8 +152,7 @@ struct almost_hadamard_matrix<6> {
   static std::array<T, N> tick (crange<const T> x)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (
-      tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -191,8 +188,7 @@ struct almost_hadamard_matrix<7> {
   static std::array<T, N> tick (crange<const T> x)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (
-      tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -246,7 +242,7 @@ struct rotation_matrix<4> {
     crange<const std::array<T, 2>> w)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (tick<vectype> (
+    return vec1_array_unwrap (tick<vectype> (
       x.template cast<const vectype>(),
       w.template cast<const std::array<vectype, 2>>()));
   }
@@ -328,7 +324,7 @@ struct rotation_matrix<8> {
     crange<const std::array<T, 2>> w)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (tick<vectype> (
+    return vec1_array_unwrap (tick<vectype> (
       x.template cast<const vectype>(),
       w.template cast<const std::array<vectype, 2>>()));
   }
@@ -446,7 +442,7 @@ struct rotation_matrix<16> {
     crange<const std::array<T, 2>> w)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (tick<vectype> (
+    return vec1_array_unwrap (tick<vectype> (
       x.template cast<const vectype>(),
       w.template cast<const std::array<vectype, 2>>()));
   }
@@ -493,8 +489,7 @@ struct rochebois_matrix<4> {
   static std::array<T, N> tick (crange<const T> x)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (
-      tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -540,8 +535,7 @@ struct rochebois_matrix<6> {
   static std::array<T, N> tick (crange<const T> x)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (
-      tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -586,8 +580,7 @@ struct rochebois_matrix<8> {
   static std::array<T, N> tick (crange<const T> x)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (
-      tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -641,8 +634,7 @@ struct rochebois_matrix<10> {
   static std::array<T, N> tick (crange<const T> x)
   {
     using vectype = vec<T, 1>;
-    return vec_array_unwrap<1, T> (
-      tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
   }
   //----------------------------------------------------------------------------
 };

@@ -593,18 +593,35 @@ static constexpr auto vec_array_wrap (std::array<T, Size> v)
   return ret;
 }
 
-template <uint VecN, class T, size_t Size>
-static constexpr auto vec_array_unwrap (std::array<vec<T, VecN>, Size> v)
+template <class VecType, size_t Size>
+static constexpr auto vec_array_unwrap (std::array<VecType, Size> v)
 {
-  std::array<T, VecN * Size> ret;
+  static_assert (is_vec_v<VecType>);
+  using traits     = vec_traits_t<VecType>;
+  using value_type = typename traits::value_type;
+
+  std::array<value_type, traits::size * Size> ret;
 
   for (uint i = 0; i < ret.size(); ++i) {
-    for (uint j = 0; j < VecN; ++j) {
-      ret[i * VecN + j] = v[i][j];
+    for (uint j = 0; j < traits::size; ++j) {
+      ret[i * traits::size + j] = v[i][j];
     }
   }
   return ret;
 }
+
+template <class T, size_t Size>
+static constexpr auto vec1_array_wrap (std::array<T, Size> v)
+{
+  return vec_array_wrap<1> (v);
+}
+
+template <class VecType, size_t Size>
+static constexpr auto vec1_array_unwrap (std::array<VecType, Size> v)
+{
+  return vec_array_unwrap (v);
+}
+
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
 static constexpr auto vec_to_array (V v)
