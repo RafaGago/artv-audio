@@ -6752,7 +6752,7 @@ parameter_cpp_class_define (
   diffuse_delay_ducking_speed,
   n_stereo_busses,
   param_common (
-    "Duck Amnt",
+    "Duck Spd",
     declptr<diffuse_delay>(),
     declptr<diffuse_delay::ducking_speed_tag>()),
   diffuse_delay::get_parameter (diffuse_delay::ducking_speed_tag {}),
@@ -6807,8 +6807,8 @@ using diffuse_delay_params = mp_list<
   diffuse_delay_gain,
   diffuse_delay_damp,
   diffuse_delay_tilt,
-  diffuse_delay_ducking_speed,
   diffuse_delay_ducking_threshold,
+  diffuse_delay_ducking_speed,
   diffuse_delay_stereo,
   diffuse_delay_mod_mode,
   diffuse_delay_mod_freq,

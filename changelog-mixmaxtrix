@@ -1,5 +1,5 @@
 1.7.0
-- diffuse_delay: Add diffuse delay.
+- diffuse_delay: Add diffuse delay. Can go from echos to sparse reverbs.
 - JUCE: bump to version 7.0.1
 
 1.6.0

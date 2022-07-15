@@ -86,18 +86,11 @@ public:
   }
   //----------------------------------------------------------------------------
   struct ducking_threshold_tag {};
-  void set (ducking_threshold_tag, float v)
-  {
-    // TODO: dB!
-    if (v == _extpar.ducking_threshold) {
-      return;
-    }
-    _extpar.ducking_threshold = v;
-  }
+  void set (ducking_threshold_tag, float v) { _extpar.ducking_threshold = v; }
 
   static constexpr auto get_parameter (ducking_threshold_tag)
   {
-    return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
+    return float_param ("dB", -90.f, 20.f, 20.f, 0.1f, 1.5f);
   }
   //----------------------------------------------------------------------------
   struct ducking_speed_tag {};
@@ -108,6 +101,10 @@ public:
       return;
     }
     _extpar.ducking_speed = v;
+    _ducker_follow.reset_coeffs (
+      vec_set<1> (0.03f),
+      vec_set<1> (0.01f + 0.1f * v),
+      (float) sr_target_freq);
   }
 
   static constexpr auto get_parameter (ducking_speed_tag)
@@ -177,7 +174,7 @@ public:
 
   static constexpr auto get_parameter (mod_freq_tag)
   {
-    return float_param ("Hz", 0.f, 4.f, 0.07f, 0.01f, 0.5f);
+    return float_param ("Hz", 0.f, 4.f, 0.17f, 0.01f, 0.5f);
   }
   //----------------------------------------------------------------------------
   struct mod_depth_tag {};
@@ -192,7 +189,7 @@ public:
 
   static constexpr auto get_parameter (mod_depth_tag)
   {
-    return float_param ("%", 0.f, 100.f, 10.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 25.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct mod_mode_tag {};
@@ -248,7 +245,7 @@ public:
 
   static constexpr auto get_parameter (tilt_db_tag)
   {
-    return float_param ("dB", -12.f, 12.f, 0.f, 0.1f);
+    return float_param ("dB", -16.f, 16.f, 0.f, 0.1f);
   }
   //----------------------------------------------------------------------------
   struct stereo_tag {};
@@ -428,6 +425,21 @@ private:
       vec_set<1> (_extpar.delay_spls > 0.f ? _extpar.delay_spls : 0.1f))[0];
   }
   //----------------------------------------------------------------------------
+  float get_ducker_gain (float in)
+  {
+    // https://www.musicdsp.org/en/latest/Effects/204-simple-compressor-class-c.html
+
+    constexpr float ratio = 9.f;
+
+    in          = gain_to_db (fabs (in), -240.f); // convert linear -> dB
+    float delta = in - _extpar.ducking_threshold;
+    delta       = std::max (delta, 0.f);
+    float env   = _ducker_follow.tick (vec_set<1> (delta))[0];
+    float gr    = env * (ratio - 1.f);
+    return db_to_gain (-gr);
+  }
+
+  //----------------------------------------------------------------------------
   template <class T>
   void process_block (crange<std::array<T, 2>> io)
   {
@@ -529,11 +541,13 @@ private:
         auto spls_head_vec1 = vec1_array_wrap (spls_head);
         _delay.push (spls_head_vec1);
 
+        // gains
         sample[0] = spls_tail[0] + spls_tail[2];
         sample[1] = spls_tail[1] + spls_tail[3];
 
-        sample[0] *= _param.main_gain;
-        sample[1] *= _param.main_gain;
+        float gr = get_ducker_gain (mid);
+        sample[0] *= _param.main_gain * gr;
+        sample[1] *= _param.main_gain * gr;
       }
     }
   }
@@ -575,6 +589,7 @@ private:
   part_class_array<tilt_eq, double_x2>          _tilt {};
   lfo<n_delay_lines>                            _mod_lfo;
   lfo<n_delay_lines>                            _ap_lfo;
+  part_class_array<slew_limiter, vec1_type>     _ducker_follow;
   enum { dc_idx, lp_idx };
   part_classes<
     mp_list<mystran_dc_blocker, onepole_lowpass>,
