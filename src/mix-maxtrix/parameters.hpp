@@ -6722,7 +6722,7 @@ parameter_cpp_class_define (
   diffuse_delay_mode_param,
   n_stereo_busses,
   param_common (
-    "Mode Param",
+    "Mode Par",
     declptr<diffuse_delay>(),
     declptr<diffuse_delay::mode_param_tag>()),
   diffuse_delay::get_parameter (diffuse_delay::mode_param_tag {}),
@@ -6789,16 +6789,6 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  diffuse_delay_mod_spread,
-  n_stereo_busses,
-  param_common (
-    "Mod Spread",
-    declptr<diffuse_delay>(),
-    declptr<diffuse_delay::mod_spread_tag>()),
-  diffuse_delay::get_parameter (diffuse_delay::mod_spread_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
   diffuse_delay_mod_mode,
   n_stereo_busses,
   param_common (
@@ -6819,11 +6809,10 @@ using diffuse_delay_params = mp_list<
   diffuse_delay_tilt,
   diffuse_delay_ducking_speed,
   diffuse_delay_ducking_threshold,
+  diffuse_delay_stereo,
   diffuse_delay_mod_mode,
   diffuse_delay_mod_freq,
-  diffuse_delay_mod_depth,
-  diffuse_delay_mod_spread,
-  diffuse_delay_stereo>;
+  diffuse_delay_mod_depth>;
 
 //------------------------------------------------------------------------------
 #if 0

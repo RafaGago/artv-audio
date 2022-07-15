@@ -73,7 +73,7 @@ public:
   {
     v *= 0.01f;
     v *= v;
-    v *= 0.5f; // cut at 0.5f for the allpass
+    v *= -0.5f; // cut at 0.5f for the allpass
     if (v == _extpar.diffusion) {
       return;
     }
@@ -160,14 +160,7 @@ public:
     return choice_param (
       0,
       make_cstr_array (
-        "Ping-Pong",
-        "Pong-Ping",
-        "Stereo",
-        "L-C-R",
-        "R-C-L",
-        "L-2C-R",
-        "R-2C-L"
-        "Rotating"),
+        "Ping-Pong", "Pong-Ping", "Stereo", "L-C-R", "R-C-L", "Rotating"),
       32);
   }
 
@@ -184,7 +177,7 @@ public:
 
   static constexpr auto get_parameter (mod_freq_tag)
   {
-    return float_param ("Hz", 0.f, 10.f, 0.f, 0.01f, 0.5f);
+    return float_param ("Hz", 0.f, 4.f, 0.07f, 0.01f, 0.5f);
   }
   //----------------------------------------------------------------------------
   struct mod_depth_tag {};
@@ -200,21 +193,6 @@ public:
   static constexpr auto get_parameter (mod_depth_tag)
   {
     return float_param ("%", 0.f, 100.f, 10.f, 0.01f);
-  }
-  //----------------------------------------------------------------------------
-  struct mod_spread_tag {};
-  void set (mod_spread_tag, float v)
-  {
-    v *= 0.01f;
-    if (v == _extpar.mod_spread) {
-      return;
-    }
-    _extpar.mod_spread = v;
-  }
-
-  static constexpr auto get_parameter (mod_spread_tag)
-  {
-    return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct mod_mode_tag {};
@@ -298,12 +276,11 @@ public:
     mode_param_tag,
     diffusion_tag,
     stereo_tag,
-    ducking_speed_tag,
-    ducking_threshold_tag,
+    mod_mode_tag,
     mod_freq_tag,
     mod_depth_tag,
-    mod_mode_tag,
-    mod_spread_tag>;
+    ducking_speed_tag,
+    ducking_threshold_tag>;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -347,6 +324,11 @@ public:
     _mod_lfo.set_phase (phase_type {
       value_type {0.f, 0.25f, 0.5f, 0.75f}, phase_type::normalized {}});
 
+    _ap_lfo.reset();
+    _ap_lfo.set_phase (phase_type {
+      value_type {0.f, 0.25f, 0.5f, 0.75f}, phase_type::normalized {}});
+    _ap_lfo.set_freq (vec_set<n_delay_lines> (0.1f), (float) sr_target_freq);
+
     // hack to trigger intialization of the tilt filter before so a change is
     // detected on "mp_for_each"
     _extpar.tilt_db = 1.f;
@@ -368,7 +350,7 @@ private:
   //----------------------------------------------------------------------------
   static constexpr uint blocksize       = 32;
   static constexpr uint n_delay_lines   = 4;
-  static constexpr uint max_mod_samples = 132;
+  static constexpr uint max_mod_samples = 500;
   using arith_type                      = float;
   using vec1_type                       = vec<float, 1>;
   //----------------------------------------------------------------------------
@@ -411,9 +393,9 @@ private:
   {
     return {
       {{{225u, 556u, 441u, 341u}},
+       {{161, 523u, 1171u, 1821u}},
        {{225u, 556u, 441u, 341u}},
-       {{225u, 556u, 441u, 341u}},
-       {{225u, 556u, 441u, 341u}}}};
+       {{161, 523u, 1171u, 1821u}}}};
   }
   //----------------------------------------------------------------------------
   static std::array<uint, n_delay_lines> get_diffusor_delay_total_spls()
@@ -485,7 +467,8 @@ private:
         };
         mod *= (arith_type) (max_mod_samples * _extpar.mod_depth);
         n_spls += mod;
-        n_spls = vec_min (2.f, n_spls); // 2 samples for the thiran2 interp
+        auto min_spls = vec_set<n_delay_lines> (2.f);
+        n_spls        = n_spls >= min_spls ? n_spls : min_spls;
 
         auto& sample = block[i];
 
@@ -520,11 +503,18 @@ private:
 
         // difussion
         auto allpass_sizes = get_diffusor_delay_spls();
+        auto ap_lfo_flt    = _mod_lfo.tick_sine();
+        ap_lfo_flt += 1; // unipolar downwards 32 samples
+        ap_lfo_flt *= 0.5f * 32.f;
+        auto ap_lfo = vec_to_array (vec_cast<uint> (ap_lfo_flt));
+
         for (uint j = 0; j < _diffusor.size(); ++j) {
           auto diffuse = make_vec (spls_head[j]);
           for (uint k = 0; k < _diffusor[0].size(); ++k) {
             diffuse = _diffusor[j][k].tick (
-              diffuse, allpass_sizes[j][k], make_vec (_extpar.diffusion));
+              diffuse,
+              allpass_sizes[j][k] - ap_lfo[j],
+              make_vec (_extpar.diffusion));
           }
           spls_head[j] = diffuse[0];
         }
@@ -584,6 +574,7 @@ private:
   part_class_array<onepole_smoother, vec1_type> _n_spls_smoother {};
   part_class_array<tilt_eq, double_x2>          _tilt {};
   lfo<n_delay_lines>                            _mod_lfo;
+  lfo<n_delay_lines>                            _ap_lfo;
   enum { dc_idx, lp_idx };
   part_classes<
     mp_list<mystran_dc_blocker, onepole_lowpass>,

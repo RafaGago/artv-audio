@@ -1,3 +1,7 @@
+1.7.0
+- diffuse_delay: Add diffuse delay.
+- JUCE: bump to version 7.0.1
+
 1.6.0
 - sound_delay: Add mid/side time delay.
 - filter_2x: Fix R input taking the input from L, which was resulting in mono
