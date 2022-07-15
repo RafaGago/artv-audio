@@ -77,6 +77,7 @@
 
 #include "artv-common/dsp/own/classes/oversampled.hpp"
 
+#include "artv-common/dsp/own/fx/diffuse_delay.hpp"
 #include "artv-common/dsp/own/fx/eq4x.hpp"
 #include "artv-common/dsp/own/fx/filter2x.hpp"
 #include "artv-common/dsp/own/fx/lin_eq4x.hpp"
@@ -109,8 +110,7 @@
 
 #define VERSION_INT VERSION_GET (VERSION_MAJOR, VERSION_MINOR, VERSION_REV)
 
-namespace artv {
-namespace parameters {
+namespace artv { namespace parameters {
 
 // parameter definitions in one place ------------------------------------------
 constexpr std::size_t n_stereo_busses = 8;
@@ -6658,6 +6658,174 @@ using reverb_params = mp_list<
   reverb_lr_sparseness,
   reverb_stereo>;
 //------------------------------------------------------------------------------
+parameter_cpp_class_define (
+  diffuse_delay_sixteenths,
+  n_stereo_busses,
+  param_common (
+    "Sixteenths",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::sixteenths_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::sixteenths_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_gain,
+  n_stereo_busses,
+  param_common (
+    "Gain",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::gain_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::gain_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_feedback,
+  n_stereo_busses,
+  param_common (
+    "Feedback",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::feedback_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::feedback_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_damp,
+  n_stereo_busses,
+  param_common (
+    "Damp",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::damp_freq_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::damp_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_tilt,
+  n_stereo_busses,
+  param_common (
+    "Tilt",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::tilt_db_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::tilt_db_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_mode,
+  n_stereo_busses,
+  param_common (
+    "Mode",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::mode_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_mode_param,
+  n_stereo_busses,
+  param_common (
+    "Mode Param",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::mode_param_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::mode_param_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_diffusion,
+  n_stereo_busses,
+  param_common (
+    "Diffusion",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::diffusion_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::diffusion_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_stereo,
+  n_stereo_busses,
+  param_common (
+    "Stereo",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::stereo_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::stereo_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_ducking_speed,
+  n_stereo_busses,
+  param_common (
+    "Duck Amnt",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::ducking_speed_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::ducking_speed_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_ducking_threshold,
+  n_stereo_busses,
+  param_common (
+    "Duck Thres",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::ducking_threshold_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::ducking_threshold_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_mod_freq,
+  n_stereo_busses,
+  param_common (
+    "Mod Freq",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::mod_freq_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::mod_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_mod_depth,
+  n_stereo_busses,
+  param_common (
+    "Mod Amt",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::mod_depth_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::mod_depth_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_mod_spread,
+  n_stereo_busses,
+  param_common (
+    "Mod Spread",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::mod_spread_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::mod_spread_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_mod_mode,
+  n_stereo_busses,
+  param_common (
+    "Mod Mode",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::mod_mode_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::mod_mode_tag {}),
+  slider_ext);
+
+using diffuse_delay_params = mp_list<
+  diffuse_delay_mode,
+  diffuse_delay_mode_param,
+  diffuse_delay_sixteenths,
+  diffuse_delay_feedback,
+  diffuse_delay_diffusion,
+  diffuse_delay_gain,
+  diffuse_delay_damp,
+  diffuse_delay_tilt,
+  diffuse_delay_ducking_speed,
+  diffuse_delay_ducking_threshold,
+  diffuse_delay_mod_mode,
+  diffuse_delay_mod_freq,
+  diffuse_delay_mod_depth,
+  diffuse_delay_mod_spread,
+  diffuse_delay_stereo>;
+
+//------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
   polyphase_fir_test_gain,
@@ -6672,7 +6840,7 @@ parameter_cpp_class_define (
 using polyphase_fir_test_params = mp_list<polyphase_fir_test_gain>;
 #endif
 //------------------------------------------------------------------------------
-#if 1 // experiments
+#if 0 // experiments
 }
 } // namespace artv::parameters
 
@@ -6726,14 +6894,14 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  sound_delay_params>;
+  diffuse_delay_params>;
 
 static constexpr auto fx_choices
   = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "1.FX-tested");
@@ -7093,5 +7261,4 @@ static constexpr char const* about_text =
 "https://github.com/RafaGago/artv-audio/blob/master/3RD-PARTY-LICENSES\n"
 ;
 // clang-format on
-}
-} // namespace artv::parameters
+}} // namespace artv::parameters
