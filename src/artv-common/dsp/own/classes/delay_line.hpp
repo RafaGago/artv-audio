@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 
@@ -140,6 +141,11 @@ public:
   //----------------------------------------------------------------------------
   constexpr uint n_channels() const { return _n_channels; }
   //----------------------------------------------------------------------------
+  static constexpr uint n_required_elems (uint n_channels, uint n_spls)
+  {
+    return (n_spls * n_channels);
+  }
+  //----------------------------------------------------------------------------
   T*   _z;
   uint _mask;
   uint _pos;
@@ -169,6 +175,11 @@ public:
   constexpr uint size() const { return _size; }
   //----------------------------------------------------------------------------
   constexpr uint n_channels() const { return _n_channels; }
+  //----------------------------------------------------------------------------
+  static constexpr uint n_required_elems (uint n_channels, uint n_spls)
+  {
+    return (n_spls * n_channels);
+  }
   //----------------------------------------------------------------------------
   T*   _z;
   uint _size;
@@ -204,6 +215,7 @@ private:
 public:
   //----------------------------------------------------------------------------
   using base::n_channels;
+  using base::n_required_elems;
   using base::reset;
   using base::size;
   using value_type = typename base::value_type;
@@ -242,6 +254,7 @@ private:
 public:
   //----------------------------------------------------------------------------
   using base::n_channels;
+  using base::n_required_elems;
   using base::reset;
   using base::size;
   using value_type = typename base::value_type;
@@ -283,6 +296,7 @@ private:
 public:
   //----------------------------------------------------------------------------
   using base::n_channels;
+  using base::n_required_elems;
   using base::reset;
   using base::size;
   using value_type = typename base::value_type;
@@ -324,6 +338,7 @@ private:
 public:
   //----------------------------------------------------------------------------
   using base::n_channels;
+  using base::n_required_elems;
   using base::reset;
   using base::size;
   using value_type = typename base::value_type;
@@ -368,6 +383,7 @@ private:
 public:
   //----------------------------------------------------------------------------
   using base::n_channels;
+  using base::n_required_elems;
   using base::push;
   using base::reset;
   using base::size;
@@ -452,10 +468,10 @@ public:
     base::reset (mem, n_channels);
   }
   //----------------------------------------------------------------------------
-  static constexpr uint interp_overhead_elems (uint n_channels)
+  static constexpr uint n_required_elems (uint n_channels, uint n_spls)
   {
-    // + 1 for the delays
-    return n_channels * (n_interp_states + 1);
+    uint overhead = n_channels * (n_interp_states + 1);
+    return base::n_required_elems (n_channels, n_spls) + overhead;
   }
   //----------------------------------------------------------------------------
   // Stateful interpolators need this function to be called once setup and:
@@ -619,9 +635,11 @@ public:
   using base::get;
   using base::get_raw;
   using base::n_channels;
+  using base::n_required_elems;
   using base::push;
   using base::reset;
   using base::size;
+
   using value_type = typename base::value_type;
   //----------------------------------------------------------------------------
   // interpolated overload with modulation, just for convenience
@@ -828,8 +846,8 @@ class modulable_allpass_delay_line
 public:
   //----------------------------------------------------------------------------
   using base::get_raw;
-  using base::interp_overhead_elems;
   using base::n_channels;
+  using base::n_required_elems;
   using base::push;
   using base::reset;
   using base::size;
@@ -841,11 +859,6 @@ public:
   using value_type                      = typename base::value_type;
   static constexpr uint n_interp_states = base::n_interp_states;
   static constexpr uint n_warmup_spls   = Allpass_warmup_spls;
-  //----------------------------------------------------------------------------
-  static constexpr uint interp_overhead_elems (uint n_channels)
-  {
-    return base::interp_overhead_elems (n_channels);
-  }
   //----------------------------------------------------------------------------
   void set_resync_delta (float spls) { _resync_delta = spls; }
   //----------------------------------------------------------------------------
@@ -910,6 +923,15 @@ public:
       }
     }
     return base::get_interpolated_unchecked (spls, frac, channel);
+  }
+  //----------------------------------------------------------------------------
+  constexpr void get (crange<value_type> dst, crange<float> del_spls)
+  {
+    assert (dst.size() >= n_channels());
+    assert (del_spls.size() >= n_channels());
+    for (uint i = 0; i < n_channels(); ++i) {
+      dst[i] = get (del_spls[i], i);
+    }
   }
   //----------------------------------------------------------------------------
 private:
@@ -1114,6 +1136,11 @@ public:
     for (uint i = 0; i < n_channels; ++i) {
       dst[i] = get (del_spls[i], i);
     }
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint n_required_elems (crange<const uint> sizes)
+  {
+    return std::accumulate (sizes.begin(), sizes.end(), 0);
   }
   //----------------------------------------------------------------------------
 private:

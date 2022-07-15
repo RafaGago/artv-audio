@@ -979,12 +979,6 @@ private:
     mem_total += convert_to_max_sizes (
       late_sizes,
       (u32) (_cfg.late.max_chorus_depth_spls + delay_line_type::interp::n_points));
-#if 0
-    for (uint i = 0; i < late_sizes.size(); ++i) {
-      late_sizes[i] += _late[i].interp_overhead_elems (1);
-    }
-    mem_total += _late[0].interp_overhead_elems (1) * late_sizes.size();
-#endif
 
     mem_total += convert_to_max_sizes (int_dif_sizes);
     mem_total += convert_to_max_sizes (out_dif_sizes);
