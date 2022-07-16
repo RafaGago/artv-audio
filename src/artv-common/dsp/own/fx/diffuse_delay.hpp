@@ -72,7 +72,7 @@ public:
   void set (diffusion_tag, float v)
   {
     v *= 0.01f;
-    v *= v;
+    // v *= v;
     v *= -0.5f; // cut at 0.5f for the allpass
     if (v == _extpar.diffusion) {
       return;
@@ -149,15 +149,36 @@ public:
       return;
     }
     _extpar.mode = v;
-    // TODO:
   }
+
+  enum {
+    m_stereo,
+    m_ping_pong,
+    m_123,
+    m_132,
+    m_1234,
+    m_2413,
+    m_1324,
+    m_2314,
+    m_1423,
+    m_chorus
+  };
 
   static constexpr auto get_parameter (mode_tag)
   {
     return choice_param (
-      0,
+      1,
       make_cstr_array (
-        "Ping-Pong", "Pong-Ping", "Stereo", "L-C-R", "R-C-L", "Rotating"),
+        "Stereo",
+        "Ping-Pong",
+        "P1-P2-P3 (L-C-R)", // param = spread placement of P2?
+        "P1-P3-P2 (L-R-C)", // param = spread placement of P2?
+        "P1-P2-P3-P4", // param = spread placement of P2 and P3
+        "P2-P4-P1-P3", // param = spread placement of P2 and P3
+        "P1-P3-P2-P4", // param = spread placement of P2 and P3
+        "P2-P3-P1-P4", // param = spread placement of P2 and P3
+        "P1-P4-P2-P3", // param = spread placement of P2 and P3
+        "Chorus Mono"), // param = pan spread
       32);
   }
 
@@ -169,7 +190,7 @@ public:
       return;
     }
     _extpar.mod_freq = v;
-    _mod_lfo.set_freq (vec_set<n_delay_lines> (v), (float) sr_target_freq);
+    _mod_lfo.set_freq (vec_set<n_taps> (v), (float) sr_target_freq);
   }
 
   static constexpr auto get_parameter (mod_freq_tag)
@@ -204,7 +225,7 @@ public:
   static constexpr auto get_parameter (mod_mode_tag)
   {
     return choice_param (
-      0, make_cstr_array ("Random", "Chorus1", "Chorus2", "Chorus3"), 10);
+      0, make_cstr_array ("Random", "Sine", "Triangle", "Trapezoid"), 10);
   }
   //----------------------------------------------------------------------------
   struct damp_freq_tag {};
@@ -307,7 +328,7 @@ public:
     initialize_buffer_related_parts();
 
     _filters.reset_coeffs<dc_idx> (
-      vec_set<n_delay_lines> (1.f), (float) sr_target_freq);
+      vec_set<n_taps> (1.f), (float) sr_target_freq);
 
     _filters.reset_states<lp_idx>();
     _filters.reset_states<dc_idx>();
@@ -324,7 +345,7 @@ public:
     _ap_lfo.reset();
     _ap_lfo.set_phase (phase_type {
       value_type {0.f, 0.25f, 0.5f, 0.75f}, phase_type::normalized {}});
-    _ap_lfo.set_freq (vec_set<n_delay_lines> (0.1f), (float) sr_target_freq);
+    _ap_lfo.set_freq (vec_set<n_taps> (0.1f), (float) sr_target_freq);
 
     // hack to trigger intialization of the tilt filter before so a change is
     // detected on "mp_for_each"
@@ -345,11 +366,12 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  static constexpr uint blocksize       = 32;
-  static constexpr uint n_delay_lines   = 4;
+  static constexpr uint blocksize       = 16;
+  static constexpr uint n_taps          = 4;
   static constexpr uint max_mod_samples = 500;
   using arith_type                      = float;
-  using vec1_type                       = vec<float, 1>;
+  using vec1_type                       = vec<arith_type, 1>;
+  using vec_type                        = vec<arith_type, n_taps>;
   //----------------------------------------------------------------------------
   void initialize_buffer_related_parts()
   {
@@ -358,7 +380,7 @@ private:
     max_spls += _param.spls_x_beat * max_t_beats;
     auto fdn_size         = pow2_round_ceil ((uint) std::ceil (max_spls));
     _param.delay_spls_max = (double) (fdn_size);
-    uint n_samples_delay  = _delay.n_required_elems (n_delay_lines, fdn_size);
+    uint n_samples_delay  = _delay.n_required_elems (n_taps, fdn_size);
 
     auto allpass_sizes     = get_diffusor_delay_spls();
     uint n_samples_allpass = 0;
@@ -375,7 +397,7 @@ private:
     auto mem = make_crange (_mem);
 
     // distribute
-    _delay.reset (mem.cut_head (n_samples_delay), n_delay_lines);
+    _delay.reset (mem.cut_head (n_samples_delay), n_taps);
 
     for (uint i = 0; i < allpass_sizes.size(); ++i) {
       auto& line_sizes = allpass_sizes[i];
@@ -385,8 +407,7 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  static std::array<std::array<uint, 4>, n_delay_lines>
-  get_diffusor_delay_spls()
+  static std::array<std::array<uint, 4>, n_taps> get_diffusor_delay_spls()
   {
     return {
       {{{225u, 556u, 441u, 341u}},
@@ -395,10 +416,10 @@ private:
        {{161, 523u, 1171u, 1821u}}}};
   }
   //----------------------------------------------------------------------------
-  static std::array<uint, n_delay_lines> get_diffusor_delay_total_spls()
+  static std::array<uint, n_taps> get_diffusor_delay_total_spls()
   {
-    auto                            spls = get_diffusor_delay_spls();
-    std::array<uint, n_delay_lines> ret;
+    auto                     spls = get_diffusor_delay_spls();
+    std::array<uint, n_taps> ret;
     for (uint i = 0; i < ret.size(); ++i) {
       uint sum = 0;
       for (auto v : spls[i]) {
@@ -438,117 +459,220 @@ private:
     float gr    = env * (ratio - 1.f);
     return db_to_gain (-gr);
   }
-
   //----------------------------------------------------------------------------
   template <class T>
   void process_block (crange<std::array<T, 2>> io)
   {
-    // TODO: when do, split in sublocks for performance's sake.
+    auto const diffusor_correction
+      = vec_cast<arith_type> (vec_from_array (get_diffusor_delay_total_spls()));
+    auto const allpass_sizes = get_diffusor_delay_spls();
+
     while (io.size()) {
       auto block = io.cut_head (std::min<uint> (io.size(), blocksize));
+
+      std::array<vec_type, blocksize>                       n_spls;
+      std::array<std::array<arith_type, n_taps>, blocksize> tap_head;
+      std::array<std::array<arith_type, n_taps>, blocksize> tap_tail;
+
+      // delay samples smoothed
+      auto del_spls = vec_set<1> (_extpar.delay_spls);
       for (uint i = 0; i < block.size(); ++i) {
-
-        auto n_spls_smooth
-          = _n_spls_smoother.tick (vec_set<1> (_extpar.delay_spls))[0];
-        vec<arith_type, n_delay_lines> n_spls
-          = vec_set<n_delay_lines> ((arith_type) n_spls_smooth);
-
-        auto diffusor_correction = vec_cast<arith_type> (
-          vec_from_array (get_diffusor_delay_total_spls()));
-
-        n_spls -= diffusor_correction;
-
-        // delay lfo
-        vec<arith_type, n_delay_lines> mod;
-        switch (_extpar.mod_mode) {
+        auto smooth = _n_spls_smoother.tick (del_spls)[0];
+        n_spls[i]   = vec_set<n_taps> ((arith_type) smooth);
+        n_spls[i] -= diffusor_correction;
+      }
+      // delay samples lfo
+      auto mode  = _extpar.mod_mode;
+      auto depth = (arith_type) (max_mod_samples * _extpar.mod_depth);
+      for (uint i = 0; i < block.size(); ++i) {
+        switch (mode) {
+        // TODO enum instead of magic nums
         case 0:
-          mod = _mod_lfo.tick_filt_sample_and_hold();
+          n_spls[i] += _mod_lfo.tick_filt_sample_and_hold() * depth;
           break;
         case 1:
-          mod = _mod_lfo.tick_sine();
+          n_spls[i] += _mod_lfo.tick_sine() * depth;
           break;
         case 2:
-          mod = _mod_lfo.tick_triangle();
+          n_spls[i] += _mod_lfo.tick_triangle() * depth;
           break;
         case 3:
-          mod = _mod_lfo.tick_trapezoid (vec_set<n_delay_lines> (0.75f));
+          n_spls[i]
+            += _mod_lfo.tick_trapezoid (vec_set<n_taps> (0.75f)) * depth;
           break;
         default:
           assert (false);
           break;
         };
-        mod *= (arith_type) (max_mod_samples * _extpar.mod_depth);
-        n_spls += mod;
-        auto min_spls = vec_set<n_delay_lines> (2.f);
-        n_spls        = n_spls >= min_spls ? n_spls : min_spls;
-
-        auto& sample = block[i];
-
-        // tilt
-        double_x2 tilted {sample[0], sample[1]};
-        tilted    = _tilt.tick (tilted);
-        sample[0] = tilted[0];
-        sample[1] = tilted[1];
-
-        // ping pong.
-        auto mid  = (arith_type) (sample[0] + sample[1]);
-        auto side = (arith_type) (sample[0] - sample[1]);
-
-        std::array<arith_type, n_delay_lines> spls_tail;
-        std::array<vec1_type, n_delay_lines>  spls_tail_vec1;
-        auto n_spls_arr = vec_to_array (n_spls);
-        _delay.get (spls_tail_vec1, n_spls_arr);
-        spls_tail = vec1_array_unwrap (spls_tail_vec1);
-
-        std::array<arith_type, n_delay_lines> spls_head;
-        spls_head[0] = spls_tail[1];
-        spls_head[1] = spls_tail[0];
-        spls_head[2] = spls_tail[3];
-        spls_head[3] = spls_tail[2];
-
-        for (auto& v : spls_head) {
-          v *= _param.fb_gain;
+      }
+      // clamping the delay in samples after modulation
+      for (uint i = 0; i < block.size(); ++i) {
+        // 2 which is the number of states of a second order filter (Thiran2)
+        auto min_spls = vec_set<n_taps> (2.f + blocksize);
+        n_spls[i]     = n_spls[i] >= min_spls ? n_spls[i] : min_spls;
+        n_spls[i] -= vec_set<n_taps> ((arith_type) i);
+      }
+      // fill the tail samples, with feedback gain applied
+      for (uint i = 0; i < block.size(); ++i) {
+        std::array<vec1_type, n_taps> tailv;
+        auto                          n_spls_arr = vec_to_array (n_spls[i]);
+        _delay.get (tailv, n_spls_arr);
+        tap_tail[i] = vec1_array_unwrap (tailv);
+        // feedback gain
+        for (auto& val : tap_tail[i]) {
+          val *= _param.fb_gain;
         }
-
-        spls_head[0] += mid;
-        spls_head[2] += side;
-
-        // difussion
-        auto allpass_sizes = get_diffusor_delay_spls();
-        auto ap_lfo_flt    = _mod_lfo.tick_sine();
+      }
+      // tilt inputs
+      for (uint i = 0; i < block.size(); ++i) {
+        auto&     lr = block[i];
+        double_x2 tilted {lr[0], lr[1]};
+        tilted = _tilt.tick (tilted);
+        lr[0]  = (arith_type) tilted[0];
+        lr[1]  = (arith_type) tilted[1];
+      }
+      // specific interleaving
+      switch (_extpar.mode) {
+      case m_stereo:
+        stereo_interleaving<T> (tap_head.data(), block, tap_tail.data());
+        break;
+      case m_ping_pong:
+        pingpong_interleaving<T> (tap_head.data(), block, tap_tail.data());
+        break;
+      case m_123:
+        break;
+      case m_132:
+        break;
+      case m_1234:
+        break;
+      case m_2413:
+        break;
+      case m_1324:
+        break;
+      case m_2314:
+        break;
+      case m_1423:
+        break;
+      case m_chorus:
+        break;
+      default:
+        assert (false);
+        break;
+      }
+      // diffusion
+      for (uint i = 0; i < block.size(); ++i) {
+        auto ap_lfo_flt = _mod_lfo.tick_sine();
         ap_lfo_flt += 1; // unipolar downwards 32 samples
         ap_lfo_flt *= 0.5f * 32.f;
         auto ap_lfo = vec_to_array (vec_cast<uint> (ap_lfo_flt));
 
         for (uint j = 0; j < _diffusor.size(); ++j) {
-          auto diffuse = make_vec (spls_head[j]);
+          auto spl = make_vec (tap_head[i][j]);
           for (uint k = 0; k < _diffusor[0].size(); ++k) {
-            diffuse = _diffusor[j][k].tick (
-              diffuse,
+            spl = _diffusor[j][k].tick (
+              spl,
               allpass_sizes[j][k] - ap_lfo[j],
               make_vec (_extpar.diffusion));
           }
-          spls_head[j] = diffuse[0];
+          tap_head[i][j] = spl[0];
         }
-
-        // filters
-        auto filt_x4 = vec_from_array (spls_head);
-        filt_x4      = _filters.tick<lp_idx> (filt_x4);
-        filt_x4      = _filters.tick<dc_idx> (filt_x4);
-
-        // insert
-        spls_head           = vec_to_array (filt_x4);
-        auto spls_head_vec1 = vec1_array_wrap (spls_head);
-        _delay.push (spls_head_vec1);
-
-        // gains
-        sample[0] = spls_tail[0] + spls_tail[2];
-        sample[1] = spls_tail[1] + spls_tail[3];
-
-        float gr = get_ducker_gain (mid);
-        sample[0] *= _param.main_gain * gr;
-        sample[1] *= _param.main_gain * gr;
       }
+      // filter and feed back the samples
+      for (uint i = 0; i < block.size(); ++i) {
+        auto filt_x4   = vec_from_array (tap_head[i]);
+        filt_x4        = _filters.tick<lp_idx> (filt_x4);
+        auto head_vec1 = vec1_array_wrap (vec_to_array (filt_x4));
+        _delay.push (head_vec1);
+      }
+      // specific output selection
+      switch (_extpar.mode) {
+      case m_stereo:
+      case m_ping_pong:
+        x2_outputs (block, tap_tail.data());
+        break;
+      case m_123:
+        break;
+      case m_132:
+        break;
+      case m_1234:
+        break;
+      case m_2413:
+        break;
+      case m_1324:
+        break;
+      case m_2314:
+        break;
+      case m_1423:
+        break;
+      case m_chorus:
+        break;
+      default:
+        assert (false);
+        break;
+      }
+      // final gain
+      for (uint i = 0; i < block.size(); ++i) {
+        float gr = get_ducker_gain (block[i][0] + block[i][1]);
+        block[i][0] *= _param.main_gain * gr;
+        block[i][1] *= _param.main_gain * gr;
+      }
+    }
+  } //----------------------------------------------------------------------------
+  template <class T>
+  void stereo_interleaving (
+    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
+    crange<std::array<T, 2> const>  in, // inputs
+    std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
+  {
+    // _extpar.diffusion goes from 0 to 0.5
+    float weight = _extpar.diffusion * (2. * (M_PI / 4));
+    std::array<std::array<float, 2>, 1> angle;
+    angle[0][0] = cos (weight);
+    angle[0][1] = sqrt (1.f - angle[0][0] * angle[0][0]);
+
+    for (uint i = 0; i < in.size(); ++i) {
+      // ping pong.
+      tap_head[i][0] = tap_tail[i][1];
+      tap_head[i][1] = tap_tail[i][0];
+      tap_head[i][2] = tap_tail[i][2];
+      tap_head[i][3] = tap_tail[i][3];
+      // Extra FDN diffusion. Mostly will be noticed with allpass modulation
+      tap_head[i] = rotation_matrix<4>::tick<arith_type> (tap_head[i], angle);
+      tap_head[i][0] += in[i][0];
+      tap_head[i][2] += in[i][1];
+
+      tap_head[i][1] += in[i][1];
+      tap_head[i][3] += in[i][3];
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void pingpong_interleaving (
+    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
+    crange<std::array<T, 2> const>  in, // inputs
+    std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
+  {
+    for (uint i = 0; i < in.size(); ++i) {
+      // ping pong.
+      tap_head[i][0] = tap_tail[i][1];
+      tap_head[i][1] = tap_tail[i][0];
+      tap_head[i][2] = tap_tail[i][3];
+      tap_head[i][3] = tap_tail[i][2];
+      auto mid       = (arith_type) (in[i][0] + in[i][1]);
+      auto side      = (arith_type) (in[i][0] - in[i][1]);
+      tap_head[i][0] += mid;
+      tap_head[i][2] += side;
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void x2_outputs (
+    crange<std::array<T, 2>>              outs,
+    std::array<arith_type, n_taps> const* taps)
+  {
+    for (uint i = 0; i < outs.size(); ++i) {
+      outs[i][0] = taps[i][0] + taps[i][2];
+      outs[i][1] = taps[i][1] + taps[i][3];
     }
   }
   //----------------------------------------------------------------------------
@@ -578,7 +702,7 @@ private:
   };
   //----------------------------------------------------------------------------
   // starting point freeverb diffusor
-  std::array<std::array<allpass<float_x1>, 4>, n_delay_lines> _diffusor;
+  std::array<std::array<allpass<float_x1>, 4>, n_taps> _diffusor;
   //----------------------------------------------------------------------------
   external_parameters                           _extpar {};
   internal_parameters                           _param {};
@@ -587,13 +711,13 @@ private:
   std::vector<vec1_type>                        _mem {};
   part_class_array<onepole_smoother, vec1_type> _n_spls_smoother {};
   part_class_array<tilt_eq, double_x2>          _tilt {};
-  lfo<n_delay_lines>                            _mod_lfo;
-  lfo<n_delay_lines>                            _ap_lfo;
+  lfo<n_taps>                                   _mod_lfo;
+  lfo<n_taps>                                   _ap_lfo;
   part_class_array<slew_limiter, vec1_type>     _ducker_follow;
   enum { dc_idx, lp_idx };
   part_classes<
     mp_list<mystran_dc_blocker, onepole_lowpass>,
-    vec<arith_type, n_delay_lines>,
+    vec<arith_type, n_taps>,
     false>
     _filters;
 };
