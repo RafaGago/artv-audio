@@ -482,6 +482,8 @@ private:
       for (uint i = 0; i < block.size(); ++i) {
         n_spls[i] = vec_set<n_taps> (_extpar.delay_spls);
         n_spls[i] -= diffusor_correction;
+        float_x4 const desync_spls_max {0.f, 727.f, 1747.f, 2557.f};
+        n_spls[i] -= desync_spls_max * _extpar.desync;
       }
       // delay samples lfo
       auto mode  = _extpar.mod_mode;
