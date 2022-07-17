@@ -1,5 +1,6 @@
 #pragma once
 
+#include <gcem.hpp>
 #include <numeric>
 #include <vector>
 
@@ -153,6 +154,7 @@ public:
 
   enum {
     m_stereo,
+    m_stereo2,
     m_ping_pong,
     m_123,
     m_132,
@@ -170,16 +172,16 @@ public:
       1,
       make_cstr_array (
         "Stereo",
+        "Stereo 2",
         "Ping-Pong",
-        "P1-P2-P3 (L-C-R)", // param = spread placement of P2?
-        "P1-P3-P2 (L-R-C)", // param = spread placement of P2?
-        "P1-P2-P3-P4", // param = spread placement of P2 and P3
-        "P2-P4-P1-P3", // param = spread placement of P2 and P3
-        "P1-P3-P2-P4", // param = spread placement of P2 and P3
-        "P2-P3-P1-P4", // param = spread placement of P2 and P3
-        "P1-P4-P2-P3", // param = spread placement of P2 and P3
-        "Chorus Mono"), // param = pan spread
-      32);
+        "P1-P2-P3 (L-C-R)",
+        "P1-P3-P2 (L-R-C)",
+        "P1-P2-P3-P4",
+        "P2-P4-P1-P3",
+        "P1-P3-P2-P4",
+        "P2-P3-P1-P4",
+        "P1-P4-P2-P3",
+        "Chorus-friendy"),
   }
 
   //----------------------------------------------------------------------------
@@ -409,6 +411,10 @@ private:
   //----------------------------------------------------------------------------
   static std::array<std::array<uint, 4>, n_taps> get_diffusor_delay_spls()
   {
+    // some lines have the values of the Freeverb diffusor. Others come from
+    // a schematic on the Gearslutz reverb subculture thread. Both work with
+    // the allpasses at a gain of 0.5. Those were meant to be a starting point
+    // but I already liked them from the start.
     return {
       {{{225u, 556u, 441u, 341u}},
        {{161, 523u, 1171u, 1821u}},
@@ -536,24 +542,25 @@ private:
       case m_stereo:
         stereo_interleaving<T> (tap_head.data(), block, tap_tail.data());
         break;
+      case m_stereo2:
+        stereo_2_interleaving<T> (tap_head.data(), block, tap_tail.data());
+        break;
       case m_ping_pong:
         pingpong_interleaving<T> (tap_head.data(), block, tap_tail.data());
         break;
       case m_123:
-        break;
       case m_132:
+        x3_interleaving<T> (tap_head.data(), block, tap_tail.data());
         break;
       case m_1234:
-        break;
       case m_2413:
-        break;
       case m_1324:
-        break;
       case m_2314:
-        break;
       case m_1423:
+        x4_interleaving<T> (tap_head.data(), block, tap_tail.data());
         break;
       case m_chorus:
+        self_feed_interleaving<T> (tap_head.data(), block, tap_tail.data());
         break;
       default:
         assert (false);
@@ -584,65 +591,149 @@ private:
         auto head_vec1 = vec1_array_wrap (vec_to_array (filt_x4));
         _delay.push (head_vec1);
       }
+
+      // pan
+      std::array<std::array<float, 2>, n_taps> tap_mul;
+
       // specific output selection
       switch (_extpar.mode) {
       case m_stereo:
+      case m_stereo2:
       case m_ping_pong:
-        x2_outputs (block, tap_tail.data());
+        tap_mul[0] = get_pan (0.f);
+        tap_mul[1] = get_pan (1.f);
+        tap_mul[2] = get_pan (0.f);
+        tap_mul[3] = get_pan (1.f);
         break;
       case m_123:
+        tap_mul[0] = get_pan (0.f, 0.5f);
+        tap_mul[1] = get_pan (0.f, 0.5f);
+        tap_mul[2] = get_pan (0.5f);
+        tap_mul[3] = get_pan (1.f);
         break;
       case m_132:
+        tap_mul[0] = get_pan (0.f, 0.5f);
+        tap_mul[1] = get_pan (0.f, 0.5f);
+        tap_mul[2] = get_pan (1.f);
+        tap_mul[3] = get_pan (0.5f);
         break;
       case m_1234:
+        tap_mul[0] = get_pan (0.f);
+        tap_mul[1] = get_pan (0.333333f);
+        tap_mul[2] = get_pan (0.666666f);
+        tap_mul[3] = get_pan (1.f);
         break;
       case m_2413:
+        tap_mul[0] = get_pan (0.333333f);
+        tap_mul[1] = get_pan (1.f);
+        tap_mul[2] = get_pan (0.f);
+        tap_mul[3] = get_pan (0.666666f);
         break;
       case m_1324:
+        tap_mul[0] = get_pan (0.f);
+        tap_mul[1] = get_pan (0.666666f);
+        tap_mul[2] = get_pan (0.333333f);
+        tap_mul[3] = get_pan (1.f);
         break;
       case m_2314:
+        tap_mul[0] = get_pan (0.333333f);
+        tap_mul[1] = get_pan (0.666666f);
+        tap_mul[2] = get_pan (0.f);
+        tap_mul[3] = get_pan (1.f);
         break;
       case m_1423:
+        tap_mul[0] = get_pan (0.f);
+        tap_mul[1] = get_pan (1.f);
+        tap_mul[2] = get_pan (0.333333f);
+        tap_mul[3] = get_pan (0.666666f);
         break;
       case m_chorus:
+        tap_mul[0] = get_pan (0.f, 0.25f);
+        tap_mul[1] = get_pan (0.333333f, 0.25f);
+        tap_mul[2] = get_pan (0.666666f, 0.25f);
+        tap_mul[3] = get_pan (1.f, 0.25f);
         break;
       default:
         assert (false);
         break;
       }
-      // final gain
+      // final tap acummulaton + gain
       for (uint i = 0; i < block.size(); ++i) {
+        block[i][0] = 0.f;
+        block[i][1] = 0.f;
+        for (uint t = 0; t < n_taps; ++t) {
+          block[i][0] += tap_tail[i][t] * tap_mul[t][0];
+          block[i][1] += tap_tail[i][t] * tap_mul[t][1];
+        }
         float gr = get_ducker_gain (block[i][0] + block[i][1]);
         block[i][0] *= _param.main_gain * gr;
         block[i][1] *= _param.main_gain * gr;
       }
     }
-  } //----------------------------------------------------------------------------
-  template <class T>
-  void stereo_interleaving (
-    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
-    crange<std::array<T, 2> const>  in, // inputs
-    std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
+  }
+  //----------------------------------------------------------------------------
+  auto get_fdn4_angle()
   {
     // _extpar.diffusion goes from 0 to 0.5
     float weight = _extpar.diffusion * (2. * (M_PI / 4));
     std::array<std::array<float, 2>, 1> angle;
     angle[0][0] = cos (weight);
     angle[0][1] = sqrt (1.f - angle[0][0] * angle[0][0]);
-
+    return angle;
+  }
+  //----------------------------------------------------------------------------
+  static constexpr std::array<float, 2> get_pan (
+    float pan,
+    float correction = 1.f)
+  {
+    return {
+      (float) (gcem::sin (M_PI_2 * (1.0f - pan)) * M_SQRT2 * correction),
+      (float) (gcem::sin (M_PI_2 * pan) * M_SQRT2 * correction)};
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void stereo_interleaving (
+    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
+    crange<std::array<T, 2> const>  in, // inputs
+    std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
+  {
+    // stereo with side ping pong
+    auto angle = get_fdn4_angle();
     for (uint i = 0; i < in.size(); ++i) {
-      // ping pong.
-      tap_head[i][0] = tap_tail[i][1];
-      tap_head[i][1] = tap_tail[i][0];
+      tap_head[i][0] = tap_tail[i][0];
+      tap_head[i][1] = tap_tail[i][1];
       tap_head[i][2] = tap_tail[i][2];
       tap_head[i][3] = tap_tail[i][3];
       // Extra FDN diffusion. Mostly will be noticed with allpass modulation
       tap_head[i] = rotation_matrix<4>::tick<arith_type> (tap_head[i], angle);
       tap_head[i][0] += in[i][0];
       tap_head[i][2] += in[i][1];
-
-      tap_head[i][1] += in[i][1];
-      tap_head[i][3] += in[i][3];
+      auto side = (arith_type) (in[i][0] - in[i][1]);
+      tap_head[i][1] += side;
+      tap_head[i][3] += side;
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void stereo_2_interleaving (
+    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
+    crange<std::array<T, 2> const>  in, // inputs
+    std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
+  {
+    // stereo with side ping pong
+    auto angle = get_fdn4_angle();
+    for (uint i = 0; i < in.size(); ++i) {
+      tap_head[i][0] = tap_tail[i][0];
+      tap_head[i][1] = tap_tail[i][1];
+      tap_head[i][2] = tap_tail[i][3];
+      tap_head[i][3] = tap_tail[i][2];
+      // Extra FDN diffusion. Mostly will be noticed with allpass modulation
+      tap_head[i] = rotation_matrix<4>::tick<arith_type> (tap_head[i], angle);
+      tap_head[i][0] += in[i][0];
+      tap_head[i][2] += in[i][1];
+      auto side = (arith_type) (in[i][0] - in[i][1]);
+      tap_head[i][1] += side;
+      tap_head[i][3] += side;
     }
   }
   //----------------------------------------------------------------------------
@@ -653,7 +744,6 @@ private:
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     for (uint i = 0; i < in.size(); ++i) {
-      // ping pong.
       tap_head[i][0] = tap_tail[i][1];
       tap_head[i][1] = tap_tail[i][0];
       tap_head[i][2] = tap_tail[i][3];
@@ -666,13 +756,56 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void x2_outputs (
-    crange<std::array<T, 2>>              outs,
-    std::array<arith_type, n_taps> const* taps)
+  void x3_interleaving (
+    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
+    crange<std::array<T, 2> const>  in, // inputs
+    std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
-    for (uint i = 0; i < outs.size(); ++i) {
-      outs[i][0] = taps[i][0] + taps[i][2];
-      outs[i][1] = taps[i][1] + taps[i][3];
+    for (uint i = 0; i < in.size(); ++i) {
+      tap_head[i][0] = tap_tail[i][3] * 0.5f;
+      tap_head[i][1] = tap_tail[i][3] * 0.5f;
+      tap_head[i][2] = tap_tail[i][0] + tap_tail[i][1];
+      tap_head[i][3] = tap_tail[i][2];
+      auto mid       = (arith_type) (in[i][0] + in[i][1]);
+      auto side      = (arith_type) (in[i][0] - in[i][1]);
+      tap_head[i][0] += mid;
+      tap_head[i][1] += side;
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void x4_interleaving (
+    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
+    crange<std::array<T, 2> const>  in, // inputs
+    std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
+  {
+    for (uint i = 0; i < in.size(); ++i) {
+      tap_head[i][0] = tap_tail[i][3];
+      tap_head[i][1] = tap_tail[i][0];
+      tap_head[i][2] = tap_tail[i][1];
+      tap_head[i][3] = tap_tail[i][2];
+      auto mid       = (arith_type) (in[i][0] + in[i][1]);
+      auto side      = (arith_type) (in[i][0] - in[i][1]);
+      tap_head[i][0] += mid + side;
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void self_feed_interleaving (
+    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
+    crange<std::array<T, 2> const>  in, // inputs
+    std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
+  {
+    auto angle = get_fdn4_angle();
+    for (uint i = 0; i < in.size(); ++i) {
+      auto mid = (arith_type) (in[i][0] + in[i][1]);
+      for (uint j = 0; j < n_taps; ++j) {
+        tap_head[i][j] = tap_tail[i][j];
+      }
+      tap_head[i] = rotation_matrix<4>::tick<arith_type> (tap_head[i], angle);
+      for (uint j = 0; j < n_taps; ++j) {
+        tap_head[i][j] += mid;
+      }
     }
   }
   //----------------------------------------------------------------------------
@@ -701,7 +834,6 @@ private:
     float  main_gain;
   };
   //----------------------------------------------------------------------------
-  // starting point freeverb diffusor
   std::array<std::array<allpass<float_x1>, 4>, n_taps> _diffusor;
   //----------------------------------------------------------------------------
   external_parameters                           _extpar {};
