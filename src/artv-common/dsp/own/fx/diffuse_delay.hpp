@@ -588,11 +588,9 @@ private:
         auto head_vec1 = vec1_array_wrap (vec_to_array (filt_x4));
         _delay.push (head_vec1);
       }
-
-      // pan
-      std::array<std::array<float, 2>, n_taps> tap_mul;
-
       // specific output selection
+      std::array<std::array<float, 2>, n_taps> tap_mul;
+      // TODO: check if this is indeed constexpr
       switch (_extpar.mode) {
       case m_stereo:
       case m_stereo2:
@@ -679,13 +677,11 @@ private:
     return angle;
   }
   //----------------------------------------------------------------------------
-  static constexpr std::array<float, 2> get_pan (
-    float pan,
-    float correction = 1.f)
+  static std::array<float, 2> get_pan (float pan, float correction = 1.f)
   {
     return {
-      (float) (gcem::sin (M_PI_2 * (1.0f - pan)) * M_SQRT2 * correction),
-      (float) (gcem::sin (M_PI_2 * pan) * M_SQRT2 * correction)};
+      (float) (sin (M_PI_2 * (1.0f - pan)) * M_SQRT2 * correction),
+      (float) (sin (M_PI_2 * pan) * M_SQRT2 * correction)};
   }
   //----------------------------------------------------------------------------
   template <class T>
