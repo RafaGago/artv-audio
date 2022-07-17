@@ -6699,6 +6699,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  diffuse_delay_damp_balance,
+  n_stereo_busses,
+  param_common (
+    "Damp Bal",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::damp_balance_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::damp_balance_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   diffuse_delay_tilt,
   n_stereo_busses,
   param_common (
@@ -6719,16 +6729,6 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  diffuse_delay_mode_param,
-  n_stereo_busses,
-  param_common (
-    "Mode Par",
-    declptr<diffuse_delay>(),
-    declptr<diffuse_delay::mode_param_tag>()),
-  diffuse_delay::get_parameter (diffuse_delay::mode_param_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
   diffuse_delay_diffusion,
   n_stereo_busses,
   param_common (
@@ -6736,16 +6736,6 @@ parameter_cpp_class_define (
     declptr<diffuse_delay>(),
     declptr<diffuse_delay::diffusion_tag>()),
   diffuse_delay::get_parameter (diffuse_delay::diffusion_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
-  diffuse_delay_stereo,
-  n_stereo_busses,
-  param_common (
-    "Stereo",
-    declptr<diffuse_delay>(),
-    declptr<diffuse_delay::stereo_tag>()),
-  diffuse_delay::get_parameter (diffuse_delay::stereo_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -6798,21 +6788,30 @@ parameter_cpp_class_define (
   diffuse_delay::get_parameter (diffuse_delay::mod_mode_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  diffuse_delay_desync,
+  n_stereo_busses,
+  param_common (
+    "Desync",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::desync_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::desync_tag {}),
+  slider_ext);
 using diffuse_delay_params = mp_list<
   diffuse_delay_mode,
-  diffuse_delay_mode_param,
   diffuse_delay_sixteenths,
   diffuse_delay_feedback,
   diffuse_delay_diffusion,
-  diffuse_delay_gain,
   diffuse_delay_damp,
+  diffuse_delay_damp_balance,
   diffuse_delay_tilt,
+  diffuse_delay_desync,
   diffuse_delay_ducking_threshold,
   diffuse_delay_ducking_speed,
-  diffuse_delay_stereo,
   diffuse_delay_mod_mode,
   diffuse_delay_mod_freq,
-  diffuse_delay_mod_depth>;
+  diffuse_delay_mod_depth,
+  diffuse_delay_gain>;
 
 //------------------------------------------------------------------------------
 #if 0

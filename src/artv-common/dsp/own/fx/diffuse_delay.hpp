@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <gcem.hpp>
 #include <numeric>
 #include <vector>
@@ -128,21 +129,6 @@ public:
     return float_param ("dB", -50.f, 12.f, -20.f, 0.2f);
   }
   //----------------------------------------------------------------------------
-  struct mode_param_tag {};
-  void set (mode_param_tag, float v)
-  {
-    v *= 0.01f;
-    if (v == _extpar.mode_param) {
-      return;
-    }
-    _extpar.mode_param = v;
-  }
-
-  static constexpr auto get_parameter (mode_param_tag)
-  {
-    return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
-  }
-  //----------------------------------------------------------------------------
   struct mode_tag {};
   void set (mode_tag, int v)
   {
@@ -169,7 +155,7 @@ public:
   static constexpr auto get_parameter (mode_tag)
   {
     return choice_param (
-      1,
+      2,
       make_cstr_array (
         "Stereo",
         "Stereo 2",
@@ -182,6 +168,7 @@ public:
         "P2-P3-P1-P4",
         "P1-P4-P2-P3",
         "Chorus-friendy"),
+      32);
   }
 
   //----------------------------------------------------------------------------
@@ -237,19 +224,29 @@ public:
     if (v == _extpar.damp_freq) {
       return;
     }
-    constexpr float max_note   = 127; // 13289Hz
-    constexpr float min_note   = 60; // 261Hz
-    constexpr float note_range = max_note - min_note;
-
     _extpar.damp_freq = v;
-    float freq        = midi_note_to_hz (min_note + v * note_range);
-    _filters.reset_coeffs<lp_idx> (
-      vec_set<4> ((float) freq), (float) sr_target_freq);
+    update_damp();
   }
 
   static constexpr auto get_parameter (damp_freq_tag)
   {
     return float_param ("%", 0.f, 100.f, 50.f, 0.01f);
+  }
+  //----------------------------------------------------------------------------
+  struct damp_balance_tag {};
+  void set (damp_balance_tag, float v)
+  {
+    v *= 0.01f;
+    if (v == _extpar.damp_bal) {
+      return;
+    }
+    _extpar.damp_bal = v;
+    update_damp();
+  }
+
+  static constexpr auto get_parameter (damp_balance_tag)
+  {
+    return float_param ("%", -100.f, 100.f, 0.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct tilt_db_tag {};
@@ -271,19 +268,19 @@ public:
     return float_param ("dB", -16.f, 16.f, 0.f, 0.1f);
   }
   //----------------------------------------------------------------------------
-  struct stereo_tag {};
-  void set (stereo_tag, float v)
+  struct desync_tag {};
+  void set (desync_tag, float v)
   {
     v *= 0.01f;
-    if (v == _extpar.stereo) {
+    if (v == _extpar.desync) {
       return;
     }
-    _extpar.stereo = v;
+    _extpar.desync = v;
   }
 
-  static constexpr auto get_parameter (stereo_tag)
+  static constexpr auto get_parameter (desync_tag)
   {
-    return float_param ("%", 0.f, 100.f, 100.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   using parameters = mp_list<
@@ -291,11 +288,11 @@ public:
     gain_tag,
     sixteenths_tag,
     damp_freq_tag,
+    damp_balance_tag,
     tilt_db_tag,
     mode_tag,
-    mode_param_tag,
     diffusion_tag,
-    stereo_tag,
+    desync_tag,
     mod_mode_tag,
     mod_freq_tag,
     mod_depth_tag,
@@ -601,8 +598,8 @@ private:
       case m_stereo2:
       case m_ping_pong:
         tap_mul[0] = get_pan (0.f);
-        tap_mul[1] = get_pan (1.f);
-        tap_mul[2] = get_pan (0.f);
+        tap_mul[1] = get_pan (0.f);
+        tap_mul[2] = get_pan (1.f);
         tap_mul[3] = get_pan (1.f);
         break;
       case m_123:
@@ -707,10 +704,10 @@ private:
       // Extra FDN diffusion. Mostly will be noticed with allpass modulation
       tap_head[i] = rotation_matrix<4>::tick<arith_type> (tap_head[i], angle);
       tap_head[i][0] += in[i][0];
-      tap_head[i][2] += in[i][1];
+      tap_head[i][3] += in[i][1];
       auto side = (arith_type) (in[i][0] - in[i][1]);
       tap_head[i][1] += side;
-      tap_head[i][3] += side;
+      tap_head[i][2] += side;
     }
   }
   //----------------------------------------------------------------------------
@@ -724,16 +721,15 @@ private:
     auto angle = get_fdn4_angle();
     for (uint i = 0; i < in.size(); ++i) {
       tap_head[i][0] = tap_tail[i][0];
-      tap_head[i][1] = tap_tail[i][1];
-      tap_head[i][2] = tap_tail[i][3];
-      tap_head[i][3] = tap_tail[i][2];
+      tap_head[i][1] = tap_tail[i][2];
+      tap_head[i][2] = tap_tail[i][1];
+      tap_head[i][3] = tap_tail[i][3];
       // Extra FDN diffusion. Mostly will be noticed with allpass modulation
       tap_head[i] = rotation_matrix<4>::tick<arith_type> (tap_head[i], angle);
       tap_head[i][0] += in[i][0];
-      tap_head[i][2] += in[i][1];
+      tap_head[i][3] += in[i][1];
       auto side = (arith_type) (in[i][0] - in[i][1]);
       tap_head[i][1] += side;
-      tap_head[i][3] += side;
     }
   }
   //----------------------------------------------------------------------------
@@ -744,14 +740,14 @@ private:
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     for (uint i = 0; i < in.size(); ++i) {
-      tap_head[i][0] = tap_tail[i][1];
-      tap_head[i][1] = tap_tail[i][0];
-      tap_head[i][2] = tap_tail[i][3];
-      tap_head[i][3] = tap_tail[i][2];
+      tap_head[i][0] = tap_tail[i][3];
+      tap_head[i][1] = tap_tail[i][2];
+      tap_head[i][2] = tap_tail[i][1];
+      tap_head[i][3] = tap_tail[i][0];
       auto mid       = (arith_type) (in[i][0] + in[i][1]);
       auto side      = (arith_type) (in[i][0] - in[i][1]);
       tap_head[i][0] += mid;
-      tap_head[i][2] += side;
+      tap_head[i][1] += side;
     }
   }
   //----------------------------------------------------------------------------
@@ -809,6 +805,28 @@ private:
     }
   }
   //----------------------------------------------------------------------------
+  void update_damp()
+  {
+    constexpr float max_note   = 127.f; // 13289Hz
+    constexpr float min_note   = 60.f; // 261Hz
+    constexpr float note_range = max_note - min_note;
+    constexpr float bal_range  = 16.f;
+
+    float center  = min_note + _extpar.damp_freq * note_range;
+    float diff    = abs (_extpar.damp_bal) * bal_range * 0.5f;
+    bool  reverse = (_extpar.damp_bal < 0.f);
+    float note    = center + (reverse ? diff : -diff);
+    auto  step    = (diff * 2.f) / (n_taps - 1) * (reverse ? -1.f : 1.f);
+
+    std::array<float, n_taps> hz;
+    for (uint i = 0; i < hz.size(); ++i) {
+      note  = std::min (note, 127.f);
+      hz[i] = midi_note_to_hz (note);
+      note += step;
+    }
+    _filters.reset_coeffs<lp_idx> (vec_from_array (hz), (float) sr_target_freq);
+  }
+  //----------------------------------------------------------------------------
   struct external_parameters {
     uint  mode;
     uint  mod_mode;
@@ -818,13 +836,13 @@ private:
     float gain;
     float ducking_threshold;
     float ducking_speed;
-    float mode_param;
     float mod_freq;
     float mod_depth;
     float mod_spread;
     float damp_freq;
+    float damp_bal;
     float tilt_db;
-    float stereo;
+    float desync;
   };
   //----------------------------------------------------------------------------
   struct internal_parameters {
