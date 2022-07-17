@@ -319,7 +319,7 @@ public:
       blocksize,
       6 * 1024);
 
-    _n_spls_smoother.reset_coeffs (vec_set<1> (1.f), sr_target_freq);
+    _n_spls_smoother.reset_coeffs (vec_set<4> (1.f), sr_target_freq);
     _n_spls_smoother.reset_states();
 
     // get time info maximum buffer sizes and allocate
@@ -480,8 +480,7 @@ private:
       // delay samples smoothed
       auto del_spls = vec_set<1> (_extpar.delay_spls);
       for (uint i = 0; i < block.size(); ++i) {
-        auto smooth = _n_spls_smoother.tick (del_spls)[0];
-        n_spls[i]   = vec_set<n_taps> ((arith_type) smooth);
+        n_spls[i] = vec_set<n_taps> (_extpar.delay_spls);
         n_spls[i] -= diffusor_correction;
       }
       // delay samples lfo
@@ -508,8 +507,9 @@ private:
           break;
         };
       }
-      // clamping the delay in samples after modulation
+      // smoothing and clamping the delay in samples after modulation
       for (uint i = 0; i < block.size(); ++i) {
+        n_spls[i] = _n_spls_smoother.tick (n_spls[i]);
         // 2 which is the number of states of a second order filter (Thiran2)
         auto min_spls = vec_set<n_taps> (2.f + blocksize);
         n_spls[i]     = n_spls[i] >= min_spls ? n_spls[i] : min_spls;
@@ -810,7 +810,7 @@ private:
     constexpr float max_note   = 127.f; // 13289Hz
     constexpr float min_note   = 60.f; // 261Hz
     constexpr float note_range = max_note - min_note;
-    constexpr float bal_range  = 16.f;
+    constexpr float bal_range  = 20.f;
 
     float center  = min_note + _extpar.damp_freq * note_range;
     float diff    = abs (_extpar.damp_bal) * bal_range * 0.5f;
@@ -854,16 +854,16 @@ private:
   //----------------------------------------------------------------------------
   std::array<std::array<allpass<float_x1>, 4>, n_taps> _diffusor;
   //----------------------------------------------------------------------------
-  external_parameters                           _extpar {};
-  internal_parameters                           _param {};
-  block_resampler<arith_type, 2>                _resampler {};
-  modulable_thiran2_delay_line<vec1_type>       _delay {};
-  std::vector<vec1_type>                        _mem {};
-  part_class_array<onepole_smoother, vec1_type> _n_spls_smoother {};
-  part_class_array<tilt_eq, double_x2>          _tilt {};
-  lfo<n_taps>                                   _mod_lfo;
-  lfo<n_taps>                                   _ap_lfo;
-  part_class_array<slew_limiter, vec1_type>     _ducker_follow;
+  external_parameters                          _extpar {};
+  internal_parameters                          _param {};
+  block_resampler<arith_type, 2>               _resampler {};
+  modulable_thiran2_delay_line<vec1_type>      _delay {};
+  std::vector<vec1_type>                       _mem {};
+  part_class_array<onepole_smoother, float_x4> _n_spls_smoother {};
+  part_class_array<tilt_eq, double_x2>         _tilt {};
+  lfo<n_taps>                                  _mod_lfo;
+  lfo<n_taps>                                  _ap_lfo;
+  part_class_array<slew_limiter, vec1_type>    _ducker_follow;
   enum { dc_idx, lp_idx };
   part_classes<
     mp_list<mystran_dc_blocker, onepole_lowpass>,
