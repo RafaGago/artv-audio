@@ -78,6 +78,21 @@ public:
     return out;
   }
   //----------------------------------------------------------------------------
+  // special-casing the case of 1 channel to remove the loop
+  template <
+    class V,
+    class Time_type,
+    class Delay_line,
+    enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (V in, Time_type delay, V gain, Delay_line& dl)
+  {
+    assert (dl.n_channels() == 1);
+    V yn = dl.get (delay, 0);
+    V y  = in + yn * gain;
+    dl.push (make_crange (&y, 1));
+    return yn - y * gain;
+  }
+  //----------------------------------------------------------------------------
 };
 
 namespace detail {

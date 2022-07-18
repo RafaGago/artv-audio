@@ -335,37 +335,22 @@ public:
 
     _tilt.reset_states();
 
-    using phase_type    = decltype (_mod_lfo)::phase_type;
-    using value_type    = decltype (_mod_lfo)::value_type;
-    using ap_phase_type = decltype (_ap_lfo)::phase_type;
-    using ap_value_type = decltype (_ap_lfo)::value_type;
+    using phase_type = decltype (_mod_lfo)::phase_type;
+    using value_type = decltype (_mod_lfo)::value_type;
+
+    value_type phases {0.f, 0.25f, 0.5f, 0.75f};
 
     _mod_lfo.reset();
-    _mod_lfo.set_phase (phase_type {
-      value_type {0.f, 0.25f, 0.5f, 0.75f}, phase_type::normalized {}});
+    _mod_lfo.set_phase (phase_type {phases, phase_type::normalized {}});
 
-    _ap_lfo.reset();
-    _ap_lfo.set_phase (ap_phase_type {
-      ap_value_type {
-        0.f,
-        0.251f,
-        0.51f,
-        0.751f,
-        0.51f,
-        0.725f,
-        0.01f,
-        0.252f,
-        0.752f,
-        0.02f,
-        0.25f,
-        0.502f,
-        0.253f,
-        0.03f,
-        0.503f,
-        0.753f},
-      ap_phase_type::normalized {}});
-    _ap_lfo.set_freq (
-      vec_set<n_taps * n_serial_diffusors> (0.27f), (float) sr_target_freq);
+    for (uint i = 0; i < _ap_lfo.size(); ++i) {
+      _ap_lfo[i].reset();
+      _ap_lfo[i].set_phase (phase_type {phases, phase_type::normalized {}});
+      phases = vec_shuffle (phases, phases, 1, 2, 3, 0);
+      phases += 0.01f;
+      _ap_lfo[i].set_freq (
+        vec_set<n_serial_diffusors> (0.27f), (float) sr_target_freq);
+    }
 
     // hack to trigger intialization of the tilt filter before so a change is
     // detected on "mp_for_each"
@@ -409,14 +394,12 @@ private:
     uint const               n_allpasses       = allpass_sizes[0].size();
     std::array<uint, n_taps> row_sizes {};
 
-    for (uint i = 0; i < n_taps; ++i) {
-      for (auto& delay : allpass_sizes[i]) {
-        row_sizes[i] = std::max (pow2_round_ceil (delay), row_sizes[i]);
+    for (auto& row : allpass_sizes) {
+      for (auto& delay : row) {
+        delay = _diffusor[0][0].n_required_elems (pow2_round_ceil (delay), 1);
+        n_samples_allpass += delay;
       }
-      row_sizes[i] = _diffusor[i].n_required_elems (row_sizes[i], n_allpasses);
-      n_samples_allpass += row_sizes[i];
     }
-
     // allocate
     _mem.clear();
     _mem.resize (n_samples_delay + n_samples_allpass);
@@ -425,7 +408,10 @@ private:
     // distribute
     _delay.reset (mem.cut_head (n_samples_delay), n_taps);
     for (uint i = 0; i < n_taps; ++i) {
-      _diffusor[i].reset (mem.cut_head (row_sizes[i]), n_allpasses);
+      auto& line_sizes = allpass_sizes[i];
+      for (uint j = 0; j < line_sizes.size(); ++j) {
+        _diffusor[i][j].reset (mem.cut_head (line_sizes[j]), 1);
+      }
     }
     assert (mem.size() == 0);
   }
@@ -499,9 +485,10 @@ private:
     while (io.size()) {
       auto block = io.cut_head (std::min<uint> (io.size(), blocksize));
 
-      std::array<vec_type, blocksize>                       n_spls;
-      std::array<std::array<arith_type, n_taps>, blocksize> tap_head;
-      std::array<std::array<arith_type, n_taps>, blocksize> tap_tail;
+      std::array<vec_type, blocksize>                              n_spls;
+      std::array<std::array<arith_type, n_taps>, blocksize>        tap_head;
+      std::array<std::array<float, n_serial_diffusors>, blocksize> ap_spls;
+      std::array<std::array<arith_type, n_taps>, blocksize>        tap_tail;
 
       // delay samples smoothed
       auto del_spls = vec_set<1> (_extpar.delay_spls);
@@ -598,23 +585,24 @@ private:
         break;
       }
       // diffusion
-      auto gains = array_broadcast<n_taps> (make_vec (_extpar.diffusion));
-      for (uint i = 0; i < block.size(); ++i) {
-        auto ap_lfo_f = _ap_lfo.tick_sine();
-        ap_lfo_f *= diffusor_mod_range;
-        auto ap_spls_f
-          = vec_cast<float> (vec_from_array (array_flatten (allpass_sizes)));
-        ap_spls_f -= ap_lfo_f;
-        auto ap_spls = vec_to_array (ap_spls_f);
+      auto gain = make_vec (_extpar.diffusion);
+      for (uint t = 0; t < n_taps; ++t) {
+        std::array<std::array<float, n_serial_diffusors>, blocksize> ap_spls;
 
-        for (uint j = 0; j < n_taps; ++j) {
-          auto spl = make_vec (tap_head[i][j]);
-          spl      = allpass_fn::tick<vec1_type, float> (
-            spl,
-            make_crange (&ap_spls[j * n_taps], n_taps),
-            gains,
-            _diffusor[j]);
-          tap_head[i][j] = spl[0];
+        auto ap_spls_f = vec_cast<float> (vec_from_array (allpass_sizes[t]));
+        for (uint i = 0; i < block.size(); ++i) {
+          auto ap_lfo_f = _ap_lfo[t].tick_sine() * diffusor_mod_range;
+          ap_spls[i]    = vec_to_array (ap_spls_f - ap_lfo_f);
+        }
+
+        for (uint d = 0; d < n_serial_diffusors; ++d) {
+          for (uint i = 0; i < block.size(); ++i) {
+            tap_head[i][t] = allpass_fn::tick<vec1_type, float> (
+              make_vec (tap_head[i][t]),
+              ap_spls[i][d],
+              gain,
+              _diffusor[t][d])[0];
+          }
         }
       }
       // filter and feed back the samples
@@ -722,8 +710,9 @@ private:
   //----------------------------------------------------------------------------
   template <class T>
   void stereo_interleaving (
-    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
-    crange<std::array<T, 2> const>  in, // inputs
+    std::array<arith_type, n_taps>* tap_head, // samples that will be
+                                              // inserted
+    crange<std::array<T, 2> const>        in, // inputs
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     // stereo with side ping pong
@@ -745,8 +734,9 @@ private:
   //----------------------------------------------------------------------------
   template <class T>
   void stereo_2_interleaving (
-    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
-    crange<std::array<T, 2> const>  in, // inputs
+    std::array<arith_type, n_taps>* tap_head, // samples that will be
+                                              // inserted
+    crange<std::array<T, 2> const>        in, // inputs
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     // stereo with side ping pong
@@ -767,8 +757,9 @@ private:
   //----------------------------------------------------------------------------
   template <class T>
   void pingpong_interleaving (
-    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
-    crange<std::array<T, 2> const>  in, // inputs
+    std::array<arith_type, n_taps>* tap_head, // samples that will be
+                                              // inserted
+    crange<std::array<T, 2> const>        in, // inputs
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     for (uint i = 0; i < in.size(); ++i) {
@@ -785,8 +776,9 @@ private:
   //----------------------------------------------------------------------------
   template <class T>
   void x3_interleaving (
-    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
-    crange<std::array<T, 2> const>  in, // inputs
+    std::array<arith_type, n_taps>* tap_head, // samples that will be
+                                              // inserted
+    crange<std::array<T, 2> const>        in, // inputs
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     for (uint i = 0; i < in.size(); ++i) {
@@ -803,8 +795,9 @@ private:
   //----------------------------------------------------------------------------
   template <class T>
   void x4_interleaving (
-    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
-    crange<std::array<T, 2> const>  in, // inputs
+    std::array<arith_type, n_taps>* tap_head, // samples that will be
+                                              // inserted
+    crange<std::array<T, 2> const>        in, // inputs
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     for (uint i = 0; i < in.size(); ++i) {
@@ -820,8 +813,9 @@ private:
   //----------------------------------------------------------------------------
   template <class T>
   void self_feed_interleaving (
-    std::array<arith_type, n_taps>* tap_head, // samples that will be inserted
-    crange<std::array<T, 2> const>  in, // inputs
+    std::array<arith_type, n_taps>* tap_head, // samples that will be
+                                              // inserted
+    crange<std::array<T, 2> const>        in, // inputs
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     auto angle = get_fdn4_angle();
@@ -885,10 +879,17 @@ private:
   };
 //----------------------------------------------------------------------------
 #if 0
-  std::array<interpolated_delay_line<vec1_type, catmull_rom_interp>, n_taps>
+  std::array<
+    std::array<
+      interpolated_delay_line<vec1_type, catmull_rom_interp>,
+      n_serial_diffusors>,
+    n_taps>
     _diffusor;
 #else
-  std::array<modulable_thiran2_delay_line<vec1_type>, n_taps> _diffusor;
+  std::array<
+    std::array<modulable_thiran2_delay_line<vec1_type>, n_serial_diffusors>,
+    n_taps>
+    _diffusor;
 #endif
   //----------------------------------------------------------------------------
   external_parameters            _extpar {};
@@ -903,7 +904,7 @@ private:
   part_class_array<onepole_smoother, float_x4> _n_spls_smoother {};
   part_class_array<tilt_eq, double_x2>         _tilt {};
   lfo<n_taps>                                  _mod_lfo;
-  lfo<n_taps * n_serial_diffusors>             _ap_lfo;
+  std::array<lfo<n_serial_diffusors>, n_taps>  _ap_lfo;
   part_class_array<slew_limiter, vec1_type>    _ducker_follow;
   enum { dc_idx, lp_idx };
   part_classes<
