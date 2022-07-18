@@ -25,6 +25,8 @@
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 
+#define DIFFUSE_DELAY_USE_THIRAN2 1
+
 namespace artv {
 
 //------------------------------------------------------------------------------
@@ -67,7 +69,7 @@ public:
 
   static constexpr auto get_parameter (feedback_tag)
   {
-    return float_param ("%", 0.f, 100.f, 25.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 25.f, 0.001f);
   }
   //----------------------------------------------------------------------------
   struct diffusion_tag {};
@@ -344,7 +346,7 @@ public:
     _ap_lfo.reset();
     _ap_lfo.set_phase (phase_type {
       value_type {0.f, 0.25f, 0.5f, 0.75f}, phase_type::normalized {}});
-    _ap_lfo.set_freq (vec_set<n_taps> (0.1f), (float) sr_target_freq);
+    _ap_lfo.set_freq (vec_set<n_taps> (0.17f), (float) sr_target_freq);
 
     // hack to trigger intialization of the tilt filter before so a change is
     // detected on "mp_for_each"
@@ -365,12 +367,13 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  static constexpr uint blocksize       = 16;
-  static constexpr uint n_taps          = 4;
-  static constexpr uint max_mod_samples = 500;
-  using arith_type                      = float;
-  using vec1_type                       = vec<arith_type, 1>;
-  using vec_type                        = vec<arith_type, n_taps>;
+  static constexpr uint blocksize          = 16;
+  static constexpr uint n_taps             = 4;
+  static constexpr uint n_serial_diffusors = 4;
+  static constexpr uint max_mod_samples    = 500;
+  using arith_type                         = float;
+  using vec1_type                          = vec<arith_type, 1>;
+  using vec_type                           = vec<arith_type, n_taps>;
   //----------------------------------------------------------------------------
   void initialize_buffer_related_parts()
   {
@@ -379,8 +382,9 @@ private:
     max_spls += _param.spls_x_beat * max_t_beats;
     auto fdn_size         = pow2_round_ceil ((uint) std::ceil (max_spls));
     _param.delay_spls_max = (double) (fdn_size);
-    uint n_samples_delay  = _delay.n_required_elems (n_taps, fdn_size);
+    uint n_samples_delay  = _delay.n_required_elems (fdn_size, n_taps);
 
+#if DIFFUSE_DELAY_USE_UNINTERPOLATED_DIFFUSOR
     auto allpass_sizes     = get_diffusor_delay_spls();
     uint n_samples_allpass = 0;
     for (auto& row : allpass_sizes) {
@@ -389,6 +393,20 @@ private:
         n_samples_allpass += delay;
       }
     }
+#else
+    auto                     allpass_sizes     = get_diffusor_delay_spls();
+    uint                     n_samples_allpass = 0;
+    uint const               n_allpasses       = allpass_sizes[0].size();
+    std::array<uint, n_taps> row_sizes {};
+
+    for (uint i = 0; i < n_taps; ++i) {
+      for (auto& delay : allpass_sizes[i]) {
+        row_sizes[i] = std::max (pow2_round_ceil (row_sizes[i]), delay);
+      }
+      row_sizes[i] = _diffusor[i].n_required_elems (row_sizes[i], n_allpasses);
+      n_samples_allpass += row_sizes[i];
+    }
+#endif
 
     // allocate
     _mem.clear();
@@ -397,16 +415,22 @@ private:
 
     // distribute
     _delay.reset (mem.cut_head (n_samples_delay), n_taps);
-
-    for (uint i = 0; i < allpass_sizes.size(); ++i) {
+#if DIFFUSE_DELAY_USE_UNINTERPOLATED_DIFFUSOR
+    for (uint i = 0; i < n_taps; ++i) {
       auto& line_sizes = allpass_sizes[i];
       for (uint j = 0; j < line_sizes.size(); ++j) {
-        _diffusor[i][j].reset (mem.cut_head (allpass_sizes[i][j]));
+        _diffusor[i][j].reset (mem.cut_head (line_sizes[j]));
       }
     }
+#else
+    for (uint i = 0; i < n_taps; ++i) {
+      _diffusor[i].reset (mem.cut_head (row_sizes[i]), n_allpasses);
+    }
+#endif
   }
   //----------------------------------------------------------------------------
-  static std::array<std::array<uint, 4>, n_taps> get_diffusor_delay_spls()
+  static std::array<std::array<uint, n_serial_diffusors>, n_taps>
+  get_diffusor_delay_spls()
   {
     // some lines have the values of the Freeverb diffusor. Others come from
     // a schematic on the Gearslutz reverb subculture thread. Both work with
@@ -512,8 +536,14 @@ private:
       // smoothing and clamping the delay in samples after modulation
       for (uint i = 0; i < block.size(); ++i) {
         n_spls[i] = _n_spls_smoother.tick (n_spls[i]);
+#if DIFFUSE_DELAY_USE_THIRAN2
         // 2 which is the number of states of a second order filter (Thiran2)
-        auto min_spls = vec_set<n_taps> (2.f + blocksize);
+        float const interp_headroom_spls
+          = _delay.n_interp_states + _delay.n_warmup_spls;
+#else
+        float const interp_headroom_spls = catmull_rom_interp::n_points;
+#endif
+        auto min_spls = vec_set<n_taps> (interp_headroom_spls + blocksize);
         n_spls[i]     = n_spls[i] >= min_spls ? n_spls[i] : min_spls;
         n_spls[i] -= vec_set<n_taps> ((arith_type) i);
       }
@@ -566,13 +596,14 @@ private:
         break;
       }
       // diffusion
+#if DIFFUSE_DELAY_USE_UNINTERPOLATED_DIFFUSOR
       for (uint i = 0; i < block.size(); ++i) {
-        auto ap_lfo_flt = _mod_lfo.tick_sine();
+        auto ap_lfo_flt = _ap_lfo.tick_sine();
         ap_lfo_flt += 1; // unipolar downwards 32 samples
         ap_lfo_flt *= 0.5f * 32.f;
         auto ap_lfo = vec_to_array (vec_cast<uint> (ap_lfo_flt));
 
-        for (uint j = 0; j < _diffusor.size(); ++j) {
+        for (uint j = 0; j < n_taps; ++j) {
           auto spl = make_vec (tap_head[i][j]);
           for (uint k = 0; k < _diffusor[0].size(); ++k) {
             spl = _diffusor[j][k].tick (
@@ -583,6 +614,25 @@ private:
           tap_head[i][j] = spl[0];
         }
       }
+#else
+      for (uint i = 0; i < block.size(); ++i) {
+        auto ap_lfo = _ap_lfo.tick_filt_sample_and_hold();
+        ap_lfo += 1; // unipolar downwards 16 samples
+        ap_lfo *= 0.5f * 32.f;
+        auto gains = array_broadcast<n_taps> (make_vec (_extpar.diffusion));
+
+        for (uint j = 0; j < n_taps; ++j) {
+          auto time = array_cast<float> (allpass_sizes[j]);
+          for (uint k = 0; k < time.size(); ++k) {
+            time[k] -= ap_lfo[j];
+          }
+          auto spl = make_vec (tap_head[i][j]);
+          spl      = allpass_fn::tick<vec1_type, float> (
+            spl, time, gains, _diffusor[j]);
+          tap_head[i][j] = spl[0];
+        }
+      }
+#endif
       // filter and feed back the samples
       for (uint i = 0; i < block.size(); ++i) {
         auto filt_x4   = vec_from_array (tap_head[i]);
@@ -849,13 +899,27 @@ private:
     float  fb_gain;
     float  main_gain;
   };
+//----------------------------------------------------------------------------
+#if DIFFUSE_DELAY_USE_UNINTERPOLATED_DIFFUSOR
+  std::array<std::array<allpass<float_x1>, n_serial_diffusors>, n_taps>
+    _diffusor;
+#else
+#if 0
+  std::array<interpolated_delay_line<vec1_type, catmull_rom_interp>, n_taps>
+    _diffusor;
+#else
+  std::array<modulable_thiran2_delay_line<vec1_type>, n_taps> _diffusor;
+#endif
+#endif
   //----------------------------------------------------------------------------
-  std::array<std::array<allpass<float_x1>, 4>, n_taps> _diffusor;
-  //----------------------------------------------------------------------------
-  external_parameters                          _extpar {};
-  internal_parameters                          _param {};
-  block_resampler<arith_type, 2>               _resampler {};
-  modulable_thiran2_delay_line<vec1_type>      _delay {};
+  external_parameters            _extpar {};
+  internal_parameters            _param {};
+  block_resampler<arith_type, 2> _resampler {};
+#if DIFFUSE_DELAY_USE_THIRAN2
+  modulable_thiran2_delay_line<vec1_type, 2> _delay {};
+#else
+  interpolated_delay_line<vec1_type, catmull_rom_interp> _delay {};
+#endif
   std::vector<vec1_type>                       _mem {};
   part_class_array<onepole_smoother, float_x4> _n_spls_smoother {};
   part_class_array<tilt_eq, double_x2>         _tilt {};
