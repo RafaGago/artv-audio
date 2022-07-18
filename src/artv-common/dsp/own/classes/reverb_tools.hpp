@@ -14,11 +14,75 @@
 
 namespace artv {
 
+// Allpass with an externally managed multichannel delay line (see
+// delay_line.hpp), so interpolation can be reused.
+class allpass_fn {
+public:
+  //----------------------------------------------------------------------------
+  // tick all delay line channels in parallel
+  template <
+    class V,
+    class Time_type,
+    class Delay_line,
+    enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void tick (
+    crange<V>               out,
+    crange<const V>         in,
+    crange<const Time_type> delay,
+    crange<const V>         gain,
+    Delay_line&             dl)
+  {
+    assert (out.size() >= dl.n_channels());
+    assert (in.size() >= dl.n_channels());
+    assert (delay.size() >= dl.n_channels());
+    assert (gain.size() >= dl.n_channels());
+
+    assert (dl.n_channels() <= 512); // limit VLA range
+    V to_push[dl.n_channels()];
+
+    for (uint i = 0; i < dl.n_channels(); ++i) {
+      V yn       = dl.get (delay[i], i);
+      V y        = in[i] + yn * gain[i];
+      to_push[i] = y;
+      out[i]     = yn - y * gain[i];
+    }
+    dl.push (make_crange (&to_push[0], dl.n_channels()));
+  }
+  //----------------------------------------------------------------------------
+  // tick all delay line channels in serial
+  template <
+    class V,
+    class Time_type,
+    class Delay_line,
+    enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    V                       in,
+    crange<const Time_type> delay,
+    crange<const V>         gain,
+    Delay_line&             dl)
+  {
+    assert (delay.size() >= dl.n_channels());
+    assert (gain.size() >= dl.n_channels());
+
+    assert (dl.n_channels() <= 512); // limit VLA range
+    V to_push[dl.n_channels()];
+
+    V out = in;
+    for (uint i = 0; i < dl.n_channels(); ++i) {
+      V yn       = dl.get (delay[i], i);
+      V y        = out + yn * gain[i];
+      to_push[i] = y;
+      out        = yn - y * gain[i];
+    }
+    dl.push (make_crange (&to_push[0], dl.n_channels()));
+    return out;
+  }
+  //----------------------------------------------------------------------------
+};
+
 namespace detail {
-template <
-  class V,
-  class Circ_bufer,
-  enable_if_vec_of_float_point_t<V>* = nullptr>
+
+template <class V, class Circ_bufer>
 class allpass {
 public:
   //----------------------------------------------------------------------------
@@ -98,7 +162,7 @@ struct delay_length {
     float v = (srate * m * (1.f / 343.f)); // 343 : sounspeed m/s
     return ceil_round ? (uint) std::ceil (v) : (uint) v;
   }
-  //------------------------------------------------------------------------------
+  //----------------------------------------------------------------------------
   // Gets delay leghts as pure prime numbers
   // work mem should ideally contain "primes_table_size_guess (spls_min,
   // spls_max)" samples

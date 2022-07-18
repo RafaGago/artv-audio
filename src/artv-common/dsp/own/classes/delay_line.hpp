@@ -141,7 +141,7 @@ public:
   //----------------------------------------------------------------------------
   constexpr uint n_channels() const { return _n_channels; }
   //----------------------------------------------------------------------------
-  static constexpr uint n_required_elems (uint n_channels, uint n_spls)
+  static constexpr uint n_required_elems (uint n_spls, uint n_channels)
   {
     return (n_spls * n_channels);
   }
@@ -176,7 +176,7 @@ public:
   //----------------------------------------------------------------------------
   constexpr uint n_channels() const { return _n_channels; }
   //----------------------------------------------------------------------------
-  static constexpr uint n_required_elems (uint n_channels, uint n_spls)
+  static constexpr uint n_required_elems (uint n_spls, uint n_channels)
   {
     return (n_spls * n_channels);
   }
@@ -375,7 +375,11 @@ public:
 namespace detail {
 //------------------------------------------------------------------------------
 // "Delay_line_base" = the underlying buffer type, e.g. "static_delay_line".
-template <class Delay_line_base>
+// "Default_Interp "a class on
+// "artv-common/dsp/own/parts/interpolation/stateless.hpp"
+// It will be used as default interpolator on "get" when no template argument is
+// passed.
+template <class Delay_line_base, class Default_interp>
 class interpolated_delay_line : private Delay_line_base {
 private:
   using base = Delay_line_base;
@@ -430,12 +434,22 @@ public:
   //----------------------------------------------------------------------------
   // Stateless_interp = a class on
   // "artv-common/dsp/own/parts/interpolation/stateless.hpp"
-  template <class Stateless_interp>
+  template <class Stateless_interp = Default_interp>
   value_type get (float delay_spls, uint channel)
   {
     using interp = Stateless_interp;
     return get<interp::n_points, interp::x_offset> (
       delay_spls, channel, [] (auto y, auto x) { return interp::tick (y, x); });
+  }
+  //----------------------------------------------------------------------------
+  template <class Stateless_interp = Default_interp>
+  void get (crange<value_type> out, crange<float> n_spls)
+  {
+    assert (out.size() >= n_channels());
+    assert (n_spls.size() >= n_channels());
+    for (uint i = 0; i < n_channels(); ++i) {
+      out[i] = get<Stateless_interp> (n_spls[i], i);
+    }
   }
   //----------------------------------------------------------------------------
 };
@@ -445,9 +459,9 @@ public:
 // "artv-common/dsp/own/parts/interpolation/stateful.hpp"
 template <class Delay_line_base, class Interpolation>
 class statefully_interpolated_delay_line
-  : private interpolated_delay_line<Delay_line_base> {
+  : private interpolated_delay_line<Delay_line_base, null_type> {
 private:
-  using base = interpolated_delay_line<Delay_line_base>;
+  using base = interpolated_delay_line<Delay_line_base, null_type>;
 
 public:
   //----------------------------------------------------------------------------
@@ -468,7 +482,7 @@ public:
     base::reset (mem, n_channels);
   }
   //----------------------------------------------------------------------------
-  static constexpr uint n_required_elems (uint n_channels, uint n_spls)
+  static constexpr uint n_required_elems (uint n_spls, uint n_channels)
   {
     uint overhead = n_channels * (n_interp_states + 1);
     return base::n_required_elems (n_channels, n_spls) + overhead;
@@ -589,9 +603,14 @@ private:
 // - highest indexes = older samples
 // - fractional delay line support
 //------------------------------------------------------------------------------
-template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
+template <
+  class T,
+  class Default_interp = linear_interp,
+  bool Interleaved     = false,
+  bool Use_pow2_sizes  = true>
 using interpolated_delay_line = detail::interpolated_delay_line<
-  static_delay_line<T, Interleaved, Use_pow2_sizes>>;
+  static_delay_line<T, Interleaved, Use_pow2_sizes>,
+  Default_interp>;
 
 //------------------------------------------------------------------------------
 // - not managed memory
@@ -624,11 +643,20 @@ using statefully_interpolated_delay_line
 // - fractional delay line support
 // - convenience functions for taking modulation
 //------------------------------------------------------------------------------
-template <class T, bool Interleaved = false, bool Use_pow2_sizes = true>
+template <
+  class T,
+  class Default_interp = linear_interp,
+  bool Interleaved     = false,
+  bool Use_pow2_sizes  = true>
 class modulable_delay_line
-  : private interpolated_delay_line<T, Interleaved, Use_pow2_sizes> {
+  : private interpolated_delay_line<
+      T,
+      Default_interp,
+      Interleaved,
+      Use_pow2_sizes> {
 private:
-  using base = interpolated_delay_line<T, Interleaved, Use_pow2_sizes>;
+  using base
+    = interpolated_delay_line<T, Default_interp, Interleaved, Use_pow2_sizes>;
 
 public:
   //----------------------------------------------------------------------------
@@ -645,7 +673,7 @@ public:
   // interpolated overload with modulation, just for convenience
   // Stateless_interp = a class on
   // "artv-common/dsp/own/parts/interpolation/stateless.hpp"
-  template <class Stateless_interp>
+  template <class Stateless_interp = Default_interp>
   value_type get (float delay_spls, float mod_amt, float max_mod, uint channel)
   {
     // in case we are using a non interpolated delay line, no-op otherwise

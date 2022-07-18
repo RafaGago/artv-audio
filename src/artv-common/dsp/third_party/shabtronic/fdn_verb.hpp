@@ -359,8 +359,7 @@ public:
       l += (_out_prev * _feedback * 0.9f);
       auto old = l;
 
-      l = _mod.get<linear_interp> (
-        _mod_delay_spls, _lfo.tick_sine()[0], _mod_depth_spls, 0);
+      l = _mod.get (_mod_delay_spls, _lfo.tick_sine()[0], _mod_depth_spls, 0);
       _mod.push (make_crange (old));
       for (auto& ap : _ap) {
         l = ap.tick (l);
@@ -471,8 +470,8 @@ private:
   enum filter_type { filter_lp, filter_hp };
   using filter_types = mp_list<andy::svf_lowpass, andy::svf_highpass>;
 
-  lfo<1>                                      _lfo;
-  modulable_delay_line<float_x1, false, true> _mod;
+  lfo<1>                                                     _lfo;
+  modulable_delay_line<float_x1, linear_interp, false, true> _mod;
 
   std::array<allpass_with_params<float_x1>, ap_size>            _ap;
   part_classes<filter_types, float_x1>                          _filters;
