@@ -133,6 +133,19 @@ static constexpr auto array_cast (std::array<T, N> v)
   }
   return ret;
 }
+
+template <size_t N1, size_t N2, class T>
+static constexpr auto array_flatten (std::array<std::array<T, N2>, N1> v)
+{
+  std::array<T, N1 * N2> ret;
+  for (uint i = 0; i < v.size(); ++i) {
+    for (uint j = 0; j < v[i].size(); ++j) {
+      ret[i * v.size() + j] = v[i][j];
+    }
+  }
+  return ret;
+}
+
 //------------------------------------------------------------------------------
 namespace detail {
 
