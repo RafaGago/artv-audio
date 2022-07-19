@@ -562,14 +562,9 @@ private:
       }
       // fill the tail samples, with feedback gain applied
       auto fb_gain = _param.fb_gain;
-      for (uint i = 0; i < block.size(); ++i) {
-        std::array<vec1_type, n_taps> tailv;
-        auto                          n_spls_arr = vec_to_array (n_spls[i]);
-        _delay.get (tailv, n_spls_arr);
-        tap_tail[i] = vec1_array_unwrap (tailv);
-        // feedback gain
-        for (auto& val : tap_tail[i]) {
-          val *= fb_gain;
+      for (uint t = 0; t < n_taps; ++t) {
+        for (uint i = 0; i < block.size(); ++i) {
+          tap_tail[i][t] = _delay.get (n_spls[i][t], t)[0] * fb_gain;
         }
       }
       // tilt inputs
