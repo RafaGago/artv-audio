@@ -907,7 +907,7 @@ private:
     _diffusor;
 #else
   std::array<
-    std::array<modulable_thiran2_delay_line<vec1_type>, n_serial_diffusors>,
+    std::array<modulable_thiran1_delay_line<vec1_type>, n_serial_diffusors>,
     n_taps>
     _diffusor;
 #endif
@@ -916,7 +916,7 @@ private:
   internal_parameters            _param {};
   block_resampler<arith_type, 2> _resampler {};
 #if DIFFUSE_DELAY_USE_THIRAN2
-  modulable_thiran2_delay_line<vec1_type> _delay {};
+  modulable_thiran1_delay_line<vec1_type> _delay {};
 #else
   interpolated_delay_line<vec1_type, catmull_rom_interp> _delay {};
 #endif
