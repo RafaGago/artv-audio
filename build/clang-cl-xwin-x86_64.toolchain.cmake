@@ -1,5 +1,5 @@
 
-# sudo apt install lld-12 clang-tools-12
+# sudo apt install lld-142 clang-tools-14
 # cmake -DCMAKE_TOOLCHAIN_FILE=./clang-cl-xwin-x86_64.toolchain.cmake -DCMAKE_BUILD_TYPE=Release -B win-release-build -S .
 
 # Heavy lifting done here, just dumbing down:
@@ -27,23 +27,22 @@ set (CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set (CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set (CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 
-set (XWIN_ROOT "${CMAKE_SOURCE_DIR}/xwin-0.1.1/files/")
-
-# Compile flags ----
+set (XWIN_ROOT "${CMAKE_SOURCE_DIR}/xwin-0.2.5/files")
+ # Compile flags ----
 set (
-    COMPILE_FLAGS
+COMPILE_FLAGS
     -D_CRT_SECURE_NO_WARNINGS
+    -fuse-ld=lld
     --target=x86_64-windows-msvc
     # https://dev.to/yumetodo/list-of-mscver-and-mscfullver-8nd
     -fms-compatibility-version=19.29 # 2019 Update 11
     -Xclang -fexceptions
     -Xclang -fcxx-exceptions
-    -imsvc ${XWIN_ROOT}/crt/include
-    -imsvc ${XWIN_ROOT}/sdk/include/ucrt
-    -imsvc ${XWIN_ROOT}/sdk/include/um
-    -imsvc ${XWIN_ROOT}/sdk/include/shared
+    /winsdkdir "${XWIN_ROOT}/sdk"
+    /vctoolsdir "${XWIN_ROOT}/crt"
     )
 string (REPLACE ";" " " COMPILE_FLAGS "${COMPILE_FLAGS}")
+
 # CMake rigmarole to preserve user-passed flags.
 set(_CMAKE_C_FLAGS_INITIAL "${CMAKE_C_FLAGS}" CACHE STRING "")
 set(
