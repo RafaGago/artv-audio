@@ -347,7 +347,14 @@ public:
       phases = vec_shuffle (phases, phases, 1, 2, 3, 0);
       phases += 0.01f;
       _ap_lfo[i].set_freq (
-        vec_set<n_serial_diffusors> (0.27f), (float) sr_target_freq);
+        vec_set<n_serial_diffusors> (0.247f), (float) sr_target_freq);
+    }
+
+    _delay.set_resync_delta (0.0075f);
+    for (uint i = 0; i < n_taps; ++i) {
+      for (uint j = 0; j < n_serial_diffusors; ++j) {
+        _diffusor[i][j].set_resync_delta (0.0075f);
+      }
     }
 
     // hack to trigger intialization of the tilt filter before so a change is
@@ -370,11 +377,13 @@ public:
 private:
   //----------------------------------------------------------------------------
   // GCD(44100,33600) = 2100. GCD(48000,33600) = 4800
+  // for lower CPU: 31500: 6300 1500
+  //                21000: 2100 3000
   static constexpr uint sr_target_freq     = 33600;
   static constexpr uint blocksize          = 16;
   static constexpr uint n_taps             = 4;
   static constexpr uint n_serial_diffusors = 4;
-  static constexpr uint max_mod_samples    = 500;
+  static constexpr uint max_mod_samples    = 192; // unipolar
   static constexpr uint diffusor_mod_range = 48; // bipolar
   using arith_type                         = float;
   using vec1_type                          = vec<arith_type, 1>;
