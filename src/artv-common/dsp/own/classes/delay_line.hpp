@@ -967,7 +967,8 @@ private:
 };
 } // namespace detail
 
-// Adding (slow) modulation to allpass interpolated delay lines
+// Adding (slow) modulation to allpass interpolated delay lines.
+// These Thirans need good DC blocking if used on feedback loops.
 template <
   class T,
   uint Allpass_warmup_n_spls = 0,

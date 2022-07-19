@@ -18,7 +18,6 @@
 #include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 namespace artv { namespace saike {
-
 //------------------------------------------------------------------------------
 struct transience {
 public:
@@ -151,9 +150,11 @@ public:
     gainsmoothing_tag,
     compensate_tag>;
   //----------------------------------------------------------------------------
-  void reset (plugin_context& pc)
+  void reset (plugin_context& pc) { reset (pc.get_sample_rate()); }
+  //----------------------------------------------------------------------------
+  void reset (double sample_rate)
   {
-    _sample_rate  = pc.get_sample_rate(); // TODO: iterate every param
+    _sample_rate  = sample_rate;
     _db_gain_prev = 0;
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
@@ -164,42 +165,53 @@ public:
   void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
     for (uint i = 0; i < samples; ++i) {
-      double in_l = ins[0][i];
-      double in_r = ins[1][i];
-
-      double in_gain;
-      if (_squared_mode) {
-        in_gain = in_l * in_l + in_r * in_r;
-      }
-      else {
-        in_gain = std::abs (in_l) + std::abs (in_r);
-      }
-      in_gain *= 0.5;
-      in_gain = 20. * std::log10 (std::max (0.001, in_gain));
-
-      double c_env = _followers.tick<flw_main> (vec_set<V> (in_gain))[0];
-      double c_target_atk
-        = _followers.tick<flw_attack> (vec_set<V> (in_gain))[0];
-      double c_target_decay
-        = _followers.tick<flw_decay> (vec_set<V> (in_gain))[0];
-
-      /* Gain changes in dB space */
-      double l_diff_atk  = _strengthp * (c_target_atk - c_env);
-      double l_diff_rel  = _strength2p * (c_target_decay - c_env);
-      double db_gain_cur = -l_diff_atk + l_diff_rel + _compensatep;
-      double db_gain
-        = _alpha_gain * _db_gain_prev + (1. - _alpha_gain) * db_gain_cur;
-      _db_gain_prev = db_gain;
-
-      /* Convert to linear */
-      double gain = exp (M_LN10 * (0.05 * db_gain));
-
-      outs[0][i] = (in_l * gain);
-      outs[1][i] = (in_r * gain);
+      T gain     = get_gain (ins[0][i], ins[1][i]);
+      outs[0][i] = (ins[0][i] * gain);
+      outs[1][i] = (ins[1][i] * gain);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void process (crange<std::array<T, 2>> io)
+  {
+    for (uint i = 0; i < io.size(); ++i) {
+      T gain   = get_gain (io[i][0], io[i][1]);
+      io[i][0] = (io[i][0] * gain);
+      io[i][1] = (io[i][1] * gain);
     }
   }
   //----------------------------------------------------------------------------
 private:
+  //----------------------------------------------------------------------------
+  template <class T>
+  T get_gain (T in_l, T in_r)
+  {
+    double in_gain;
+    if (_squared_mode) {
+      in_gain = in_l * in_l + in_r * in_r;
+    }
+    else {
+      in_gain = std::abs (in_l) + std::abs (in_r);
+    }
+    in_gain *= 0.5;
+    in_gain = 20. * std::log10 (std::max (0.001, in_gain));
+
+    double c_env        = _followers.tick<flw_main> (vec_set<V> (in_gain))[0];
+    double c_target_atk = _followers.tick<flw_attack> (vec_set<V> (in_gain))[0];
+    double c_target_decay
+      = _followers.tick<flw_decay> (vec_set<V> (in_gain))[0];
+
+    /* Gain changes in dB space */
+    double l_diff_atk  = _strengthp * (c_target_atk - c_env);
+    double l_diff_rel  = _strength2p * (c_target_decay - c_env);
+    double db_gain_cur = -l_diff_atk + l_diff_rel + _compensatep;
+    double db_gain
+      = _alpha_gain * _db_gain_prev + (1. - _alpha_gain) * db_gain_cur;
+    _db_gain_prev = db_gain;
+
+    /* Convert to linear */
+    return exp ((T) (M_LN10 * (0.05 * db_gain)));
+  }
   //----------------------------------------------------------------------------
   void slider()
   {

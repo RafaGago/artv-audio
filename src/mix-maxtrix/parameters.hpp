@@ -6699,13 +6699,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  diffuse_delay_damp_balance,
+  diffuse_delay_damp_tap_bal,
   n_stereo_busses,
   param_common (
-    "Damp Bal",
+    "Damp Tap",
     declptr<diffuse_delay>(),
-    declptr<diffuse_delay::damp_balance_tag>()),
-  diffuse_delay::get_parameter (diffuse_delay::damp_balance_tag {}),
+    declptr<diffuse_delay::damp_tap_balance_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::damp_tap_balance_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -6797,20 +6797,42 @@ parameter_cpp_class_define (
     declptr<diffuse_delay::desync_tag>()),
   diffuse_delay::get_parameter (diffuse_delay::desync_tag {}),
   slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_transients,
+  n_stereo_busses,
+  param_common (
+    "Transient",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::transients_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::transients_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_delay_hipass,
+  n_stereo_busses,
+  param_common (
+    "HP Filt",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::hipass_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::hipass_tag {}),
+  slider_ext);
 using diffuse_delay_params = mp_list<
   diffuse_delay_mode,
   diffuse_delay_sixteenths,
   diffuse_delay_feedback,
   diffuse_delay_diffusion,
   diffuse_delay_damp,
-  diffuse_delay_damp_balance,
+  diffuse_delay_damp_tap_bal,
   diffuse_delay_tilt,
-  diffuse_delay_desync,
-  diffuse_delay_ducking_threshold,
-  diffuse_delay_ducking_speed,
+  diffuse_delay_hipass,
   diffuse_delay_mod_mode,
   diffuse_delay_mod_freq,
   diffuse_delay_mod_depth,
+  diffuse_delay_desync,
+  diffuse_delay_transients,
+  diffuse_delay_ducking_threshold,
+  diffuse_delay_ducking_speed,
   diffuse_delay_gain>;
 
 //------------------------------------------------------------------------------
@@ -6882,7 +6904,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<

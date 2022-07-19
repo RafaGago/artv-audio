@@ -16,6 +16,7 @@
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/dsp/own/parts/interpolation/stateless.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
+#include "artv-common/dsp/third_party/saike/transience.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"
@@ -25,7 +26,8 @@
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 
-#define DIFFUSE_DELAY_USE_THIRAN2 1
+#define DIFFUSE_DELAY_USE_THIRAN_TAPS 1
+#define DIFFUSE_DELAY_USE_THIRAN_DIFFUSORS 1
 namespace artv {
 
 //------------------------------------------------------------------------------
@@ -52,7 +54,7 @@ public:
 
   static constexpr auto get_parameter (sixteenths_tag)
   {
-    return float_param ("sixteenths", 0.1f, max_t_beats * 16, 12.f, 0.01f);
+    return float_param ("sixteenths", 0.1f, max_t_beats * 16, 6.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct feedback_tag {};
@@ -85,7 +87,7 @@ public:
 
   static constexpr auto get_parameter (diffusion_tag)
   {
-    return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 20.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct ducking_threshold_tag {};
@@ -112,7 +114,7 @@ public:
 
   static constexpr auto get_parameter (ducking_speed_tag)
   {
-    return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 20.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct gain_tag {};
@@ -141,10 +143,11 @@ public:
 
   enum {
     m_stereo,
-    m_stereo2,
     m_ping_pong,
+    m_ping_pong_stereo,
     m_123,
     m_132,
+    m_1223,
     m_1234,
     m_2413,
     m_1324,
@@ -156,19 +159,20 @@ public:
   static constexpr auto get_parameter (mode_tag)
   {
     return choice_param (
-      2,
+      1,
       make_cstr_array (
         "Stereo",
-        "Stereo 2",
         "Ping-Pong",
-        "P1-P2-P3 (L-C-R)",
-        "P1-P3-P2 (L-R-C)",
-        "P1-P2-P3-P4",
-        "P2-P4-P1-P3",
-        "P1-P3-P2-P4",
-        "P2-P3-P1-P4",
-        "P1-P4-P2-P3",
-        "Chorus-friendy"),
+        "Ping-Pong Stereo",
+        "L-C-R",
+        "L-R-C",
+        "L-C-C-R",
+        "L-LC-RC-R",
+        "LC-R-L-RC",
+        "L-RC-LC-R",
+        "LC-RC-L-R",
+        "L-R-LC-RC",
+        "4 synced taps"),
       32);
   }
   //----------------------------------------------------------------------------
@@ -199,7 +203,7 @@ public:
 
   static constexpr auto get_parameter (mod_depth_tag)
   {
-    return float_param ("%", 0.f, 100.f, 25.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 10.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct mod_mode_tag {};
@@ -230,11 +234,11 @@ public:
 
   static constexpr auto get_parameter (damp_freq_tag)
   {
-    return float_param ("%", 0.f, 100.f, 50.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 75.f, 0.01f);
   }
   //----------------------------------------------------------------------------
-  struct damp_balance_tag {};
-  void set (damp_balance_tag, float v)
+  struct damp_tap_balance_tag {};
+  void set (damp_tap_balance_tag, float v)
   {
     v *= 0.01f;
     if (v == _extpar.damp_bal) {
@@ -244,7 +248,7 @@ public:
     update_damp();
   }
 
-  static constexpr auto get_parameter (damp_balance_tag)
+  static constexpr auto get_parameter (damp_tap_balance_tag)
   {
     return float_param ("%", -100.f, 100.f, 0.f, 0.01f);
   }
@@ -283,12 +287,47 @@ public:
     return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
   }
   //----------------------------------------------------------------------------
+  struct transients_tag {};
+  void set (transients_tag, float v)
+  {
+    v *= 0.008f;
+    if (v == _extpar.transients) {
+      return;
+    }
+    _extpar.transients = v;
+    _transients.set (saike::transience::strength_tag {}, v);
+    _transients.set (saike::transience::strength2_tag {}, -v);
+  }
+
+  static constexpr auto get_parameter (transients_tag)
+  {
+    return float_param ("%", -100.f, 100.f, 0.f, 0.01f);
+  }
+  //----------------------------------------------------------------------------
+  struct hipass_tag {};
+  void set (hipass_tag, float v)
+  {
+    v *= 0.01f;
+    v *= v;
+    if (v == _extpar.hp) {
+      return;
+    }
+    _extpar.hp = v;
+    _filters.reset_coeffs<hp_idx> (
+      vec_set<n_taps> (4.f + v * 396.f), (float) sr_target_freq);
+  }
+
+  static constexpr auto get_parameter (hipass_tag)
+  {
+    return float_param ("%", 0.f, 100.f, 25.f, 0.01f);
+  }
+  //----------------------------------------------------------------------------
   using parameters = mp_list<
     feedback_tag,
     gain_tag,
     sixteenths_tag,
     damp_freq_tag,
-    damp_balance_tag,
+    damp_tap_balance_tag,
     tilt_db_tag,
     mode_tag,
     diffusion_tag,
@@ -297,13 +336,15 @@ public:
     mod_freq_tag,
     mod_depth_tag,
     ducking_speed_tag,
-    ducking_threshold_tag>;
+    ducking_threshold_tag,
+    transients_tag,
+    hipass_tag>;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
     constexpr uint  sr_taps_branch      = 32;
     constexpr uint  sr_taps_branch_frac = 16;
-    constexpr float sr_cutoff           = 12000;
+    constexpr float sr_cutoff           = 15000;
     constexpr float sr_kaiser_att_db    = 210;
 
     _resampler.reset (
@@ -325,13 +366,11 @@ public:
     _param.spls_x_beat = pc.get_samples_per_beat();
     initialize_buffer_related_parts();
 
-    _filters.reset_coeffs<dc_idx> (
-      vec_set<n_taps> (1.f), (float) sr_target_freq);
-
     _filters.reset_states<lp_idx>();
-    _filters.reset_states<dc_idx>();
+    _filters.reset_states<hp_idx>();
 
     _tilt.reset_states();
+    _transients.reset (sr_target_freq);
 
     using phase_type = decltype (_mod_lfo)::phase_type;
     using value_type = decltype (_mod_lfo)::value_type;
@@ -349,17 +388,20 @@ public:
       _ap_lfo[i].set_freq (
         vec_set<n_serial_diffusors> (0.247f), (float) sr_target_freq);
     }
-
-    _delay.set_resync_delta (0.0075f);
+#if DIFFUSE_DELAY_USE_THIRAN_TAPS
+    _delay.set_resync_delta (0.0);
+#endif
+#if DIFFUSE_DELAY_USE_THIRAN_DIFFUSORS
     for (uint i = 0; i < n_taps; ++i) {
       for (uint j = 0; j < n_serial_diffusors; ++j) {
-        _diffusor[i][j].set_resync_delta (0.0075f);
+        _diffusor[i][j].set_resync_delta (0.01f);
       }
     }
-
-    // hack to trigger intialization of the tilt filter before so a change is
-    // detected on "mp_for_each"
-    _extpar.tilt_db = 1.f;
+#endif
+    // hack to trigger intialization of some parameters
+    _extpar.tilt_db   = 999.f;
+    _extpar.hp        = 999.f;
+    _extpar.damp_freq = 999.f;
 
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
@@ -435,8 +477,8 @@ private:
     return {
       {{{225u, 556u, 441u, 341u}},
        {{351u, 773u, 426u, 566u}},
-       {{343u, 233u, 273u, 534u}},
-       {{161, 523u, 1171u, 1821u}}}};
+       {{343u, 233u, 922u, 534u}},
+       {{161u, 523u, 1171u, 1821u}}}};
   }
   //----------------------------------------------------------------------------
   static std::array<uint, n_taps> get_diffusor_delay_total_spls()
@@ -469,6 +511,7 @@ private:
   //----------------------------------------------------------------------------
   float get_ducker_gain (float in)
   {
+#if 1
     // https://www.musicdsp.org/en/latest/Effects/204-simple-compressor-class-c.html
     constexpr float ratio = 9.f;
 
@@ -478,7 +521,9 @@ private:
     float env   = _ducker_follow.tick (vec_set<1> (delta))[0];
     float gr    = env * (ratio - 1.f);
     return db_to_gain (-gr);
+#else
     return 1.f;
+#endif
   }
   //----------------------------------------------------------------------------
   static constexpr std::array<float, 2> get_pan (
@@ -549,7 +594,7 @@ private:
       // smoothing and clamping the delay in samples after modulation
       for (uint i = 0; i < block.size(); ++i) {
         n_spls[i] = _n_spls_smoother.tick (n_spls[i]);
-#if DIFFUSE_DELAY_USE_THIRAN2
+#if DIFFUSE_DELAY_USE_THIRAN_TAPS
         // 2 which is the number of states of a second order filter (Thiran2)
         float const interp_headroom_spls
           = _delay.n_interp_states + _delay.n_warmup_spls;
@@ -567,6 +612,8 @@ private:
           tap_tail[i][t] = _delay.get (n_spls[i][t], t)[0] * fb_gain;
         }
       }
+      // transient shaping
+      _transients.process (block);
       // tilt inputs
       for (uint i = 0; i < block.size(); ++i) {
         auto&     lr = block[i];
@@ -580,16 +627,18 @@ private:
       case m_stereo:
         stereo_interleaving<T> (tap_head.data(), block, tap_tail.data());
         break;
-      case m_stereo2:
-        stereo_2_interleaving<T> (tap_head.data(), block, tap_tail.data());
-        break;
       case m_ping_pong:
         pingpong_interleaving<T> (tap_head.data(), block, tap_tail.data());
+        break;
+      case m_ping_pong_stereo:
+        pingpong_stereo_interleaving<T> (
+          tap_head.data(), block, tap_tail.data());
         break;
       case m_123:
       case m_132:
         x3_interleaving<T> (tap_head.data(), block, tap_tail.data());
         break;
+      case m_1223:
       case m_1234:
       case m_2413:
       case m_1324:
@@ -629,39 +678,52 @@ private:
       for (uint i = 0; i < block.size(); ++i) {
         auto filt_x4 = vec_from_array (tap_head[i]);
         filt_x4      = _filters.tick<lp_idx> (filt_x4);
+        filt_x4      = _filters.tick<hp_idx> (filt_x4);
         auto filt    = vec1_array_wrap (vec_to_array (filt_x4));
         _delay.push (filt);
       }
       // specific output selection
       std::array<std::array<float, 2>, n_taps> tap_mul;
 
-      constexpr auto pan_l   = get_pan (0.f);
-      constexpr auto pan_l_2 = get_pan (0.f, 0.5f);
-      constexpr auto pan_cl  = get_pan (0.333333f);
-      constexpr auto pan_c   = get_pan (0.5f);
-      constexpr auto pan_cr  = get_pan (0.666666f);
-      constexpr auto pan_r   = get_pan (1.f);
-      // TODO: check if this is indeed constexpr
+      constexpr auto pan_l    = get_pan (0.f);
+      constexpr auto pan_l_x2 = get_pan (0.f, 2.f);
+      constexpr auto pan_cl   = get_pan (0.333333f);
+      constexpr auto pan_c    = get_pan (0.5f);
+      constexpr auto pan_cr   = get_pan (0.666666f);
+      constexpr auto pan_r    = get_pan (1.f);
+      constexpr auto pan_r_x2 = get_pan (1.f, 2.f);
+      constexpr auto zero     = get_pan (1.f, 0.f);
       switch (_extpar.mode) {
       case m_stereo:
-      case m_stereo2:
       case m_ping_pong:
         tap_mul[0] = pan_l;
         tap_mul[1] = pan_l;
         tap_mul[2] = pan_r;
         tap_mul[3] = pan_r;
         break;
+      case m_ping_pong_stereo:
+        tap_mul[0] = pan_l_x2;
+        tap_mul[1] = zero;
+        tap_mul[2] = zero;
+        tap_mul[3] = pan_r_x2;
+        break;
       case m_123:
-        tap_mul[0] = pan_l_2;
-        tap_mul[1] = pan_l_2;
+        tap_mul[0] = pan_l;
+        tap_mul[1] = zero;
         tap_mul[2] = pan_c;
         tap_mul[3] = pan_r;
         break;
       case m_132:
-        tap_mul[0] = pan_l_2;
-        tap_mul[1] = pan_l_2;
+        tap_mul[0] = pan_l;
+        tap_mul[1] = zero;
         tap_mul[2] = pan_r;
         tap_mul[3] = pan_c;
+        break;
+      case m_1223:
+        tap_mul[0] = pan_l;
+        tap_mul[1] = pan_c;
+        tap_mul[2] = pan_c;
+        tap_mul[3] = pan_r;
         break;
       case m_1234:
         tap_mul[0] = pan_l;
@@ -694,14 +756,14 @@ private:
         tap_mul[3] = pan_cr;
         break;
       case m_chorus: {
-        constexpr auto pan_l_4  = get_pan (0.f, 0.25f);
-        constexpr auto pan_cl_4 = get_pan (0.333333f, 0.25f);
-        constexpr auto pan_cr_4 = get_pan (0.666666f, 0.25f);
-        constexpr auto pan_r_4  = get_pan (1.f, 0.25f);
-        tap_mul[0]              = pan_l_4;
-        tap_mul[1]              = pan_cl_4;
-        tap_mul[2]              = pan_cr_4;
-        tap_mul[3]              = pan_r_4;
+        constexpr auto pan_l_2  = get_pan (0.f, 0.5f);
+        constexpr auto pan_cl_2 = get_pan (0.333333f, 0.5f);
+        constexpr auto pan_cr_2 = get_pan (0.666666f, 0.5f);
+        constexpr auto pan_r_2  = get_pan (1.f, 0.5f);
+        tap_mul[0]              = pan_l_2;
+        tap_mul[1]              = pan_cl_2;
+        tap_mul[2]              = pan_cr_2;
+        tap_mul[3]              = pan_r_2;
       } break;
       default:
         assert (false);
@@ -743,34 +805,10 @@ private:
     auto angle = get_fdn4_angle();
     for (uint i = 0; i < in.size(); ++i) {
       tap_head[i][0] = tap_tail[i][0];
-      tap_head[i][1] = tap_tail[i][1];
-      tap_head[i][2] = tap_tail[i][2];
-      tap_head[i][3] = tap_tail[i][3];
-      // Extra FDN diffusion. Mostly will be noticed with allpass modulation
-      tap_head[i] = rotation_matrix<4>::tick<arith_type> (tap_head[i], angle);
-      tap_head[i][0] += in[i][0];
-      tap_head[i][3] += in[i][1];
-      auto side = (arith_type) (in[i][0] - in[i][1]);
-      tap_head[i][1] += side;
-      tap_head[i][2] += side;
-    }
-  }
-  //----------------------------------------------------------------------------
-  template <class T>
-  void stereo_2_interleaving (
-    std::array<arith_type, n_taps>* tap_head, // samples that will be
-                                              // inserted
-    crange<std::array<T, 2> const>        in, // inputs
-    std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
-  {
-    // stereo with side ping pong
-    auto angle = get_fdn4_angle();
-    for (uint i = 0; i < in.size(); ++i) {
-      tap_head[i][0] = tap_tail[i][0];
       tap_head[i][1] = tap_tail[i][2];
       tap_head[i][2] = tap_tail[i][1];
       tap_head[i][3] = tap_tail[i][3];
-      // Extra FDN diffusion. Mostly will be noticed with allpass modulation
+      // Extra FDN diffusion.
       tap_head[i] = rotation_matrix<4>::tick<arith_type> (tap_head[i], angle);
       tap_head[i][0] += in[i][0];
       tap_head[i][3] += in[i][1];
@@ -799,6 +837,23 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class T>
+  void pingpong_stereo_interleaving (
+    std::array<arith_type, n_taps>* tap_head, // samples that will be
+                                              // inserted
+    crange<std::array<T, 2> const>        in, // inputs
+    std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
+  {
+    for (uint i = 0; i < in.size(); ++i) {
+      tap_head[i][0] = tap_tail[i][1];
+      tap_head[i][1] = tap_tail[i][0];
+      tap_head[i][2] = tap_tail[i][3];
+      tap_head[i][3] = tap_tail[i][2];
+      tap_head[i][0] += in[i][0];
+      tap_head[i][2] += in[i][1];
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
   void x3_interleaving (
     std::array<arith_type, n_taps>* tap_head, // samples that will be
                                               // inserted
@@ -806,14 +861,12 @@ private:
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     for (uint i = 0; i < in.size(); ++i) {
-      tap_head[i][0] = tap_tail[i][3] * 0.5f;
-      tap_head[i][1] = tap_tail[i][3] * 0.5f;
+      tap_head[i][0] = tap_tail[i][3];
+      tap_head[i][1] = 0.f; // disabled
       tap_head[i][2] = tap_tail[i][0] + tap_tail[i][1];
       tap_head[i][3] = tap_tail[i][2];
       auto mid       = (arith_type) (in[i][0] + in[i][1]);
-      auto side      = (arith_type) (in[i][0] - in[i][1]);
       tap_head[i][0] += mid;
-      tap_head[i][1] += side;
     }
   }
   //----------------------------------------------------------------------------
@@ -858,7 +911,7 @@ private:
   void update_damp()
   {
     constexpr float max_note   = 127.f; // 13289Hz
-    constexpr float min_note   = 60.f; // 261Hz
+    constexpr float min_note   = 72.f;
     constexpr float note_range = max_note - min_note;
     constexpr float bal_range  = 20.f;
 
@@ -893,6 +946,8 @@ private:
     float damp_bal;
     float tilt_db;
     float desync;
+    float transients;
+    float hp;
   };
   //----------------------------------------------------------------------------
   struct internal_parameters {
@@ -902,16 +957,16 @@ private:
     float  main_gain;
   };
 //----------------------------------------------------------------------------
-#if 0
+#if DIFFUSE_DELAY_USE_THIRAN_DIFFUSORS
   std::array<
-    std::array<
-      interpolated_delay_line<vec1_type, catmull_rom_interp>,
-      n_serial_diffusors>,
+    std::array<modulable_thiran1_delay_line<vec1_type>, n_serial_diffusors>,
     n_taps>
     _diffusor;
 #else
   std::array<
-    std::array<modulable_thiran1_delay_line<vec1_type>, n_serial_diffusors>,
+    std::array<
+      interpolated_delay_line<vec1_type, catmull_rom_interp>,
+      n_serial_diffusors>,
     n_taps>
     _diffusor;
 #endif
@@ -919,7 +974,7 @@ private:
   external_parameters            _extpar {};
   internal_parameters            _param {};
   block_resampler<arith_type, 2> _resampler {};
-#if DIFFUSE_DELAY_USE_THIRAN2
+#if DIFFUSE_DELAY_USE_THIRAN_TAPS
   modulable_thiran1_delay_line<vec1_type> _delay {};
 #else
   interpolated_delay_line<vec1_type, catmull_rom_interp> _delay {};
@@ -927,12 +982,13 @@ private:
   std::vector<vec1_type>                       _mem {};
   part_class_array<onepole_smoother, float_x4> _n_spls_smoother {};
   part_class_array<tilt_eq, double_x2>         _tilt {};
+  saike::transience                            _transients;
   lfo<n_taps>                                  _mod_lfo;
   std::array<lfo<n_serial_diffusors>, n_taps>  _ap_lfo;
   part_class_array<slew_limiter, vec1_type>    _ducker_follow;
-  enum { dc_idx, lp_idx };
+  enum { lp_idx, hp_idx };
   part_classes<
-    mp_list<mystran_dc_blocker, onepole_lowpass>,
+    mp_list<onepole_lowpass, mystran_dc_blocker>,
     vec<arith_type, n_taps>,
     false>
     _filters;
