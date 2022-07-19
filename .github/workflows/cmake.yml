@@ -55,7 +55,7 @@ jobs:
         # ccache seems to not play well on this Windows build. Not using it unfortunately.
         run: |
           cmake -B ${{github.workspace}}/build-windows -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On  -DBUILD_LV2=Off -DCMAKE_TOOLCHAIN_FILE=build/clang-cl-xwin-x86_64.toolchain.cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
-          cmake -B ${{github.workspace}}/build-windows-zen3 -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On  -DBUILD_LV2=Off -DZEN3_BUILD=On -DCMAKE_TOOLCHAIN_FILE=build/clang-cl-xwin-x86_64.toolchain.cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
+          cmake -B ${{github.workspace}}/build-windows-zen3 -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On  -DBUILD_LV2=Off -DZEN3_BUILD=Off -DCMAKE_TOOLCHAIN_FILE=build/clang-cl-xwin-x86_64.toolchain.cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
 
       - name: Build Windows
         run: |
