@@ -4,6 +4,8 @@
 
 #include <gcem.hpp>
 
+#include "artv-common/misc/simd.hpp"
+
 namespace artv {
 
 // 0Hz is equal to MIDI note -infinity. We cut at "midi_note_to_hz_min" so we
@@ -31,9 +33,25 @@ static double midi_note_to_hz (double note)
   return is_zero ? 0. : hz;
 }
 //------------------------------------------------------------------------------
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+static V midi_note_to_hz (V note)
+{
+  using T = vec_value_type_t<V>;
+  V    hz = vec_exp ((note - (T) 69) * (T) (1. / 12.) * (T) M_LN2) * (T) 440;
+  auto is_zero = hz < (T) (midi_note_to_hz_min + midi_note_to_hz_min * 0.1);
+  return is_zero ? 0. : hz;
+}
+//------------------------------------------------------------------------------
 static double hz_to_midi_note (double hz)
 {
   return (12. * log2 (hz * (1. / 440.))) + 69.;
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+static V hz_to_midi_note (V hz)
+{
+  using T = vec_value_type_t<V>;
+  return ((T) 12. * vec_log (hz * (T) (1. / 440.)) * (T) (1. / M_LN2)) + (T) 69;
 }
 //------------------------------------------------------------------------------
 constexpr std::array<char, 4> midi_note_to_str (int midi_note)
