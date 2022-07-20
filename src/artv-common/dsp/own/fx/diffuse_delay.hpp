@@ -447,7 +447,8 @@ private:
 
     for (auto& row : allpass_sizes) {
       for (auto& delay : row) {
-        delay = _diffusor[0][0].n_required_elems (pow2_round_ceil (delay), 1);
+        delay = _diffusor[0][0].n_required_elems (
+          pow2_round_ceil (delay + diffusor_mod_range), 1);
         n_samples_allpass += delay;
       }
     }
