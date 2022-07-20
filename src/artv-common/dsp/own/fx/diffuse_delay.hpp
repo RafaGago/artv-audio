@@ -11,6 +11,7 @@
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/reverb_tools.hpp"
+#include "artv-common/dsp/own/classes/rms.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/composite/tilt.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
@@ -106,10 +107,8 @@ public:
       return;
     }
     _extpar.ducking_speed = v;
-    _ducker_follow.reset_coeffs (
-      vec_set<1> (0.03f),
-      vec_set<1> (0.01f + 0.1f * v),
-      (float) sr_target_freq);
+    _ducker.reset_coeffs<duck_follow_idx> (
+      vec_set<1> (0.03), vec_set<1> (0.01 + 0.06 * v), (double) sr_target_freq);
   }
 
   static constexpr auto get_parameter (ducking_speed_tag)
@@ -225,10 +224,10 @@ public:
   void set (damp_freq_tag, float v)
   {
     v *= 0.01f;
-    if (v == _extpar.damp_freq) {
+    if (v == _extpar.damp_note_ratio) {
       return;
     }
-    _extpar.damp_freq = v;
+    _extpar.damp_note_ratio = v;
     update_damp();
   }
 
@@ -237,18 +236,19 @@ public:
     return float_param ("%", 0.f, 100.f, 75.f, 0.01f);
   }
   //----------------------------------------------------------------------------
-  struct damp_tap_balance_tag {};
-  void set (damp_tap_balance_tag, float v)
+  struct freq_spread_tag {};
+  void set (freq_spread_tag, float v)
   {
     v *= 0.01f;
-    if (v == _extpar.damp_bal) {
+    if (v == _extpar.freq_spread) {
       return;
     }
-    _extpar.damp_bal = v;
+    _extpar.freq_spread = v;
     update_damp();
+    update_peak();
   }
 
-  static constexpr auto get_parameter (damp_tap_balance_tag)
+  static constexpr auto get_parameter (freq_spread_tag)
   {
     return float_param ("%", -100.f, 100.f, 0.f, 0.01f);
   }
@@ -322,12 +322,65 @@ public:
     return float_param ("%", 0.f, 100.f, 25.f, 0.01f);
   }
   //----------------------------------------------------------------------------
+  struct peak_drive_tag {};
+  void set (peak_drive_tag, float v)
+  {
+    // -30dB to +30dB range
+    constexpr float dbrange = 30.f;
+    v *= (0.01 * dbrange * 2.f);
+    v -= dbrange;
+    if (v == _extpar.peak_drive_db) {
+      return;
+    }
+    _extpar.peak_drive_db = v;
+    _extpar.peak_drive    = db_to_gain (v);
+  }
+
+  static constexpr auto get_parameter (peak_drive_tag)
+  {
+    return float_param ("%", 0.f, 100.f, 0.f, 0.1f);
+  }
+  //----------------------------------------------------------------------------
+  struct peak_freq_tag {};
+  void set (peak_freq_tag, float v)
+  {
+    if (v == _extpar.peak_note) {
+      return;
+    }
+    _extpar.peak_note = v;
+    update_peak();
+  }
+
+  static constexpr float peak_min_hz = 100.;
+  static constexpr float peak_max_hz = 5000.;
+
+  static constexpr auto get_parameter (peak_freq_tag)
+  {
+    return frequency_parameter (peak_min_hz, peak_max_hz, 440.0);
+  }
+  //----------------------------------------------------------------------------
+  struct peak_gain_tag {};
+  void set (peak_gain_tag, float v)
+  {
+    v *= 0.01;
+    if (v == _extpar.peak_gain) {
+      return;
+    }
+    _extpar.peak_gain = v;
+    update_peak();
+  }
+
+  static constexpr auto get_parameter (peak_gain_tag)
+  {
+    return float_param ("%", -100.f, 100.f, 0.f, 0.1f);
+  }
+  //----------------------------------------------------------------------------
   using parameters = mp_list<
     feedback_tag,
     gain_tag,
     sixteenths_tag,
     damp_freq_tag,
-    damp_tap_balance_tag,
+    freq_spread_tag,
     tilt_db_tag,
     mode_tag,
     diffusion_tag,
@@ -338,7 +391,10 @@ public:
     ducking_speed_tag,
     ducking_threshold_tag,
     transients_tag,
-    hipass_tag>;
+    hipass_tag,
+    peak_drive_tag,
+    peak_freq_tag,
+    peak_gain_tag>;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -368,6 +424,12 @@ public:
 
     _filters.reset_states<lp_idx>();
     _filters.reset_states<hp_idx>();
+    _filters.reset_states<peak_idx>();
+
+    _ducker.reset_states<duck_follow_idx>();
+    _ducker.reset_states<duck_hp_idx>();
+
+    _ducker.reset_coeffs<duck_hp_idx> (vec_set<1> (110.), sr_target_freq);
 
     _tilt.reset_states();
     _transients.reset (sr_target_freq);
@@ -398,10 +460,17 @@ public:
       }
     }
 #endif
+
+    // rms reset
+    constexpr float rms_window_sec = 0.3;
+    _dry_rms.reset (vec_set<4> (rms_window_sec), sr_target_freq);
+    _wet_rms.reset (vec_set<4> (rms_window_sec), sr_target_freq);
+
     // hack to trigger intialization of some parameters
-    _extpar.tilt_db   = 999.f;
-    _extpar.hp        = 999.f;
-    _extpar.damp_freq = 999.f;
+    _extpar.tilt_db         = 999.f;
+    _extpar.peak_drive_db   = 999.f;
+    _extpar.hp              = 999.f;
+    _extpar.damp_note_ratio = 999.f;
 
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
@@ -510,17 +579,18 @@ private:
       vec_set<1> (_extpar.delay_spls > 0.f ? _extpar.delay_spls : 0.1f))[0];
   }
   //----------------------------------------------------------------------------
-  float get_ducker_gain (float in)
+  double get_ducker_gain (double in)
   {
 #if 1
     // https://www.musicdsp.org/en/latest/Effects/204-simple-compressor-class-c.html
-    constexpr float ratio = 9.f;
+    constexpr double ratio = 4.f;
 
-    in          = gain_to_db (fabs (in), -240.f); // convert linear -> dB
-    float delta = in - _extpar.ducking_threshold;
-    delta       = std::max (delta, 0.f);
-    float env   = _ducker_follow.tick (vec_set<1> (delta))[0];
-    float gr    = env * (ratio - 1.f);
+    in           = _ducker.tick<duck_hp_idx> (vec_set<1> (in))[0];
+    in           = gain_to_db (abs (in), -120.); // convert linear -> dB
+    double delta = in - _extpar.ducking_threshold;
+    delta        = std::max (delta, 0.);
+    double env   = _ducker.tick<duck_follow_idx> (vec_set<1> (delta))[0];
+    double gr    = env * (ratio - 1.f);
     return db_to_gain (-gr);
 #else
     return 1.f;
@@ -677,12 +747,35 @@ private:
       }
       // filter and feed back the samples
       for (uint i = 0; i < block.size(); ++i) {
-        auto filt_x4 = vec_from_array (tap_head[i]);
-        filt_x4      = _filters.tick<lp_idx> (filt_x4);
-        filt_x4      = _filters.tick<hp_idx> (filt_x4);
-        auto filt    = vec1_array_wrap (vec_to_array (filt_x4));
-        _delay.push (filt);
+        auto taps   = vec_from_array (tap_head[i]);
+        taps        = _filters.tick<lp_idx> (taps);
+        taps        = _filters.tick<hp_idx> (taps);
+        tap_head[i] = vec_to_array (taps);
       }
+      // Feedback FX
+      float peak_drive     = _extpar.peak_drive;
+      float peak_drive_inv = 1. / peak_drive;
+      for (uint i = 0; i < block.size(); ++i) {
+        auto taps = vec_from_array (tap_head[i]);
+        // measuring input power
+        auto dry_rms = _dry_rms.tick (taps);
+        dry_rms      = vec_max (1e-30, dry_rms);
+        // FX
+        auto wet = _filters.tick<peak_idx> (taps);
+        wet *= peak_drive;
+        wet = wet / vec_sqrt (1.f + wet * wet);
+        wet *= peak_drive_inv;
+        taps += wet;
+
+        // measuring output power and gain riding the feedback gain
+        auto wet_rms = _wet_rms.tick (taps);
+        wet_rms      = vec_max (1e-30, wet_rms);
+        auto ratio   = dry_rms / (wet_rms);
+        taps *= ratio;
+        auto arr_x1 = vec1_array_wrap (vec_to_array (taps));
+        _delay.push (arr_x1);
+      }
+
       // specific output selection
       std::array<std::array<float, 2>, n_taps> tap_mul;
 
@@ -911,24 +1004,56 @@ private:
   //----------------------------------------------------------------------------
   void update_damp()
   {
-    constexpr float max_note   = 127.f; // 13289Hz
-    constexpr float min_note   = 72.f;
-    constexpr float note_range = max_note - min_note;
-    constexpr float bal_range  = 20.f;
+    constexpr float max_note  = 127.f; // 13289Hz
+    constexpr float min_note  = 72.f;
+    constexpr float bal_range = 20.f;
 
-    float center  = min_note + _extpar.damp_freq * note_range;
-    float diff    = abs (_extpar.damp_bal) * bal_range * 0.5f;
-    bool  reverse = (_extpar.damp_bal < 0.f);
-    float note    = center + (reverse ? diff : -diff);
+    float note = min_note + _extpar.damp_note_ratio * (max_note - min_note);
+    _filters.reset_coeffs<lp_idx> (
+      note_to_hzs (note, max_note, _extpar.freq_spread, bal_range),
+      (float) sr_target_freq);
+  }
+  //----------------------------------------------------------------------------
+  void update_peak()
+  {
+    constexpr float min_note    = constexpr_hz_to_midi_note (peak_min_hz);
+    constexpr float gr_note     = constexpr_hz_to_midi_note (2000.);
+    constexpr float max_note    = constexpr_hz_to_midi_note (peak_max_hz);
+    constexpr float note_weight = 1.f / (max_note - gr_note);
+    constexpr float bal_range   = 4.f;
+
+    // don't reduce the gain at higher frequencies, it is disgusting
+    auto  note    = _extpar.peak_note;
+    auto  absgain = abs (_extpar.peak_gain);
+    float peak_reduction
+      = (note < gr_note) ? 0.f : (note - gr_note) * note_weight;
+    float max_db = (7.f - peak_reduction * absgain * 2.f);
+
+    _filters.reset_coeffs<peak_idx> (
+      note_to_hzs (note, max_note, _extpar.freq_spread, bal_range),
+      vec_set<4> (0.2f + absgain * 0.6f), // Q
+      vec_set<4> (_extpar.peak_gain * max_db), // dB
+      (float) sr_target_freq,
+      bell_bandpass_tag {});
+  }
+  //----------------------------------------------------------------------------
+  vec<arith_type, n_taps> note_to_hzs (
+    float note,
+    float max_note,
+    float spread, //-1 to 1
+    float spread_range_notes)
+  {
+    float diff    = abs (spread) * spread_range_notes * 0.5f;
+    bool  reverse = (spread < 0.f);
+    float current = note + (reverse ? diff : -diff);
     auto  step    = (diff * 2.f) / (n_taps - 1) * (reverse ? -1.f : 1.f);
 
-    std::array<float, n_taps> hz;
-    for (uint i = 0; i < hz.size(); ++i) {
-      note  = std::min (note, 127.f);
-      hz[i] = midi_note_to_hz (note);
-      note += step;
+    vec<float, n_taps> notes;
+    for (uint i = 0; i < n_taps; ++i) {
+      notes[i] = current;
+      current += step;
     }
-    _filters.reset_coeffs<lp_idx> (vec_from_array (hz), (float) sr_target_freq);
+    return midi_note_to_hz (vec_min (notes, max_note));
   }
   //----------------------------------------------------------------------------
   struct external_parameters {
@@ -943,12 +1068,17 @@ private:
     float mod_freq;
     float mod_depth;
     float mod_spread;
-    float damp_freq;
-    float damp_bal;
+    float damp_note_ratio;
+    float freq_spread;
     float tilt_db;
     float desync;
     float transients;
     float hp;
+    float peak_freq;
+    float peak_drive_db;
+    float peak_drive;
+    float peak_gain;
+    float peak_note;
   };
   //----------------------------------------------------------------------------
   struct internal_parameters {
@@ -986,10 +1116,14 @@ private:
   saike::transience                            _transients;
   lfo<n_taps>                                  _mod_lfo;
   std::array<lfo<n_serial_diffusors>, n_taps>  _ap_lfo;
-  part_class_array<slew_limiter, vec1_type>    _ducker_follow;
-  enum { lp_idx, hp_idx };
+  enum { duck_hp_idx, duck_follow_idx };
+  part_classes<mp_list<onepole_highpass, slew_limiter>, double_x1, false>
+                _ducker;
+  rms<float_x4> _dry_rms;
+  rms<float_x4> _wet_rms;
+  enum { lp_idx, hp_idx, peak_idx };
   part_classes<
-    mp_list<onepole_lowpass, mystran_dc_blocker>,
+    mp_list<onepole_lowpass, mystran_dc_blocker, andy::svf>,
     vec<arith_type, n_taps>,
     false>
     _filters;

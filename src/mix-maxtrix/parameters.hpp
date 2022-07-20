@@ -6672,7 +6672,7 @@ parameter_cpp_class_define (
   diffuse_delay_gain,
   n_stereo_busses,
   param_common (
-    "Gain",
+    "Out Gain",
     declptr<diffuse_delay>(),
     declptr<diffuse_delay::gain_tag>()),
   diffuse_delay::get_parameter (diffuse_delay::gain_tag {}),
@@ -6699,13 +6699,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  diffuse_delay_damp_tap_bal,
+  diffuse_delay_freq_spread,
   n_stereo_busses,
   param_common (
-    "Damp Tap",
+    "F Spread",
     declptr<diffuse_delay>(),
-    declptr<diffuse_delay::damp_tap_balance_tag>()),
-  diffuse_delay::get_parameter (diffuse_delay::damp_tap_balance_tag {}),
+    declptr<diffuse_delay::freq_spread_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::freq_spread_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -6817,20 +6817,54 @@ parameter_cpp_class_define (
     declptr<diffuse_delay::hipass_tag>()),
   diffuse_delay::get_parameter (diffuse_delay::hipass_tag {}),
   slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_peak_freq,
+  n_stereo_busses,
+  param_common (
+    "Peak Freq",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::peak_freq_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::peak_freq_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_peak_gain,
+  n_stereo_busses,
+  param_common (
+    "Peak Gain",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::peak_gain_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::peak_gain_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_peak_drive,
+  n_stereo_busses,
+  param_common (
+    "Peak Drv",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::peak_drive_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::peak_drive_tag {}),
+  slider_ext);
+
 using diffuse_delay_params = mp_list<
-  diffuse_delay_mode,
   diffuse_delay_sixteenths,
   diffuse_delay_feedback,
   diffuse_delay_diffusion,
-  diffuse_delay_damp,
-  diffuse_delay_damp_tap_bal,
-  diffuse_delay_tilt,
-  diffuse_delay_hipass,
-  diffuse_delay_mod_mode,
-  diffuse_delay_mod_freq,
-  diffuse_delay_mod_depth,
-  diffuse_delay_desync,
   diffuse_delay_transients,
+  diffuse_delay_mode,
+  diffuse_delay_mod_freq,
+  diffuse_delay_mod_mode,
+  diffuse_delay_mod_depth,
+  diffuse_delay_damp,
+  diffuse_delay_tilt,
+  diffuse_delay_freq_spread,
+  diffuse_peak_freq,
+  diffuse_peak_gain,
+  diffuse_peak_drive,
+  diffuse_delay_hipass,
+  diffuse_delay_desync,
   diffuse_delay_ducking_threshold,
   diffuse_delay_ducking_speed,
   diffuse_delay_gain>;
