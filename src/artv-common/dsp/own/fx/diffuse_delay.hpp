@@ -96,7 +96,7 @@ public:
 
   static constexpr auto get_parameter (ducking_threshold_tag)
   {
-    return float_param ("dB", -40.f, 20.f, 20.f, 0.1f, 1.5f);
+    return float_param ("dB", -40.f, 20.f, 20.f, 0.01f, 1.5f);
   }
   //----------------------------------------------------------------------------
   struct ducking_speed_tag {};
@@ -427,9 +427,9 @@ public:
     _filters.reset_states<peak_idx>();
 
     _ducker.reset_states<duck_follow_idx>();
-    _ducker.reset_states<duck_hp_idx>();
+    _ducker.reset_states<duck_lp_idx>();
 
-    _ducker.reset_coeffs<duck_hp_idx> (vec_set<1> (110.), sr_target_freq);
+    _ducker.reset_coeffs<duck_lp_idx> (vec_set<1> (2000.), sr_target_freq);
 
     _tilt.reset_states();
     _transients.reset (sr_target_freq);
@@ -586,7 +586,7 @@ private:
     constexpr double ratio             = 14.f;
     constexpr float  ducker_smooth_sec = 0.05f;
 
-    in           = _ducker.tick<duck_hp_idx> (vec_set<1> (in))[0];
+    in           = _ducker.tick<duck_lp_idx> (vec_set<1> (in))[0];
     in           = gain_to_db (abs (in), -120.); // convert linear -> dB
     double delta = in - _extpar.ducking_threshold;
     delta        = std::max (delta, 0.);
@@ -1120,8 +1120,8 @@ private:
   saike::transience                            _transients;
   lfo<n_taps>                                  _mod_lfo;
   std::array<lfo<n_serial_diffusors>, n_taps>  _ap_lfo;
-  enum { duck_hp_idx, duck_follow_idx };
-  part_classes<mp_list<onepole_highpass, slew_limiter>, double_x1, false>
+  enum { duck_lp_idx, duck_follow_idx };
+  part_classes<mp_list<onepole_lowpass, slew_limiter>, double_x1, false>
                 _ducker;
   rms<float_x4> _dry_rms;
   rms<float_x4> _wet_rms;
