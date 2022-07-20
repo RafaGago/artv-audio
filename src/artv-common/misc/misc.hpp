@@ -311,26 +311,27 @@ static constexpr T round_ceil (T num, T round)
 template <class T>
 static constexpr T constexpr_db_to_gain (T db, T m_inf_db = T {-130.})
 {
-  return db > m_inf_db ? gcem::pow (T {10.0}, db * T {0.05}) : T {0.};
+  return db > m_inf_db ? gcem::exp (db * (T) (M_LN10 / 20.)) : T {0.};
 }
 //------------------------------------------------------------------------------
 template <class T>
 static T db_to_gain (T db, T m_inf_db = T {-130.})
 {
-  return db > m_inf_db ? std::exp (db * T {0.05} * T {M_LN10}) : T {0.};
+  return db > m_inf_db ? exp (db * (T) (M_LN10 / 20.)) : T {0.};
 }
 //------------------------------------------------------------------------------
 template <class T>
 static constexpr T constexpr_gain_to_db (T gain, T m_inf_db = T {-130.})
 {
-  constexpr auto inv_ln10 = 1. / M_LN10;
-  return gain > T {0.} ? gcem::log (gain) * *T {20. * inv_ln10} : m_inf_db;
+  auto absval = (T) gcem::abs (gain);
+  return gain > T {0.} ? gcem::log (absval) * (T) (20. / M_LN10) : m_inf_db;
 }
 //------------------------------------------------------------------------------
 template <class T>
 static T gain_to_db (T gain, T m_inf_db = T {-130.})
 {
-  return gain > T {0.} ? std::log10 (gain) * T {20.} : m_inf_db;
+  auto absval = (T) abs (gain);
+  return gain > T {0.} ? log (absval) * (T) (20. / M_LN10) : m_inf_db;
 }
 //------------------------------------------------------------------------------
 template <class T>
