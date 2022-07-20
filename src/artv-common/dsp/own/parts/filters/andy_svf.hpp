@@ -66,11 +66,11 @@ static svf_coeffs_ext<T> get_main_coeffs (
 
   if constexpr (is_vec_v<T>) {
     ret.A = vec_exp (db * (U) (1. / 40.) * (U) M_LN10);
-    g     = vec_tan (M_PI * freq / sr);
+    g     = vec_tan ((U) M_PI * freq / sr);
   }
   else {
     ret.A = exp (db * (U) (1. / 40.) * (U) M_LN10);
-    g     = tan (M_PI * freq / sr);
+    g     = tan ((U) M_PI * freq / sr);
   }
   if ((flags & bell_flag)) {
     q *= ret.A;
