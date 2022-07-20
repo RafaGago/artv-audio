@@ -6938,18 +6938,23 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  diffuse_delay_params>;
+  diffuse_delay_params,
+  transience_params>;
 
-static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "1.FX-tested");
-
+static constexpr auto fx_choices = make_cstr_array (
+  "none",
+  "LR",
+  "Wonky",
+  "lin IIR",
+  "1.FX-tested",
+  "2.Transi");
 #else
 // clang-format off
 using all_fx_typelists = mp_list<

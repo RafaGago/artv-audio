@@ -58,7 +58,7 @@ public:
 
   static constexpr auto get_parameter (gainsmoothing_tag)
   {
-    return float_param ("", 0.0, 1.0, 0.0, 1e-05);
+    return float_param ("", 0.0, 1.0, 0., 1e-05);
   }
   //----------------------------------------------------------------------------
   struct mode_tag {};

@@ -96,7 +96,7 @@ public:
 
   static constexpr auto get_parameter (ducking_threshold_tag)
   {
-    return float_param ("dB", -90.f, 20.f, 20.f, 0.1f, 1.5f);
+    return float_param ("dB", -40.f, 20.f, 20.f, 0.1f, 1.5f);
   }
   //----------------------------------------------------------------------------
   struct ducking_speed_tag {};
@@ -108,12 +108,12 @@ public:
     }
     _extpar.ducking_speed = v;
     _ducker.reset_coeffs<duck_follow_idx> (
-      vec_set<1> (0.03), vec_set<1> (0.01 + 0.06 * v), (double) sr_target_freq);
+      vec_set<1> (0.03), vec_set<1> (0.02 + 0.15 * v), (double) sr_target_freq);
   }
 
   static constexpr auto get_parameter (ducking_speed_tag)
   {
-    return float_param ("%", 0.f, 100.f, 20.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct gain_tag {};
@@ -433,6 +433,7 @@ public:
 
     _tilt.reset_states();
     _transients.reset (sr_target_freq);
+    _transients.set (saike::transience::gainsmoothing_tag {}, 0.5f);
 
     using phase_type = decltype (_mod_lfo)::phase_type;
     using value_type = decltype (_mod_lfo)::value_type;
@@ -581,9 +582,9 @@ private:
   //----------------------------------------------------------------------------
   double get_ducker_gain (double in)
   {
-#if 1
     // https://www.musicdsp.org/en/latest/Effects/204-simple-compressor-class-c.html
-    constexpr double ratio = 4.f;
+    constexpr double ratio             = 14.f;
+    constexpr float  ducker_smooth_sec = 0.05f;
 
     in           = _ducker.tick<duck_hp_idx> (vec_set<1> (in))[0];
     in           = gain_to_db (abs (in), -120.); // convert linear -> dB
@@ -591,10 +592,12 @@ private:
     delta        = std::max (delta, 0.);
     double env   = _ducker.tick<duck_follow_idx> (vec_set<1> (delta))[0];
     double gr    = env * (ratio - 1.f);
+    // gain smoothing lowpass
+    constexpr double smooth
+      = gcem::exp (-1.f / ((float) sr_target_freq * 0.5f * ducker_smooth_sec));
+    gr       = smooth * _gr_prev + (1. - smooth) * gr;
+    _gr_prev = gr;
     return db_to_gain (-gr);
-#else
-    return 1.f;
-#endif
   }
   //----------------------------------------------------------------------------
   static constexpr std::array<float, 2> get_pan (
@@ -1102,6 +1105,7 @@ private:
     _diffusor;
 #endif
   //----------------------------------------------------------------------------
+  double                         _gr_prev {};
   external_parameters            _extpar {};
   internal_parameters            _param {};
   block_resampler<arith_type, 2> _resampler {};
