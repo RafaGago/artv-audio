@@ -24,6 +24,7 @@
 #include <array>
 #include <cmath>
 #include <immintrin.h>
+#include <limits>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -1460,6 +1461,24 @@ bool vec_is_all_ones (V v)
       return false;
     }
   }
+}
+//------------------------------------------------------------------------------
+// common functions
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+static V vec_db_to_gain (V db)
+{
+  return vec_exp (db * vec_set<V> (M_LN10 / 20.));
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+static V vec_gain_to_db (V gain)
+{
+  using T           = vec_value_type_t<V>;
+  constexpr T small = -(std::numeric_limits<T>::min() * 1e6f);
+
+  V absv = vec_abs (gain) + small; // add ultra small signal to avoid log(0);
+  return vec_log (absv) * (20. / M_LN10);
 }
 //------------------------------------------------------------------------------
 // approximations.
