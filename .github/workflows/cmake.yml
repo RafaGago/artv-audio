@@ -10,7 +10,6 @@ env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
   VST3_TARGETS: MixMaxTrix_VST3
-  LV2_TARGETS: MixMaxTrix_LV2
 
 jobs:
   build:
@@ -37,7 +36,7 @@ jobs:
           echo "deb-src http://apt.llvm.org/focal/ llvm-toolchain-focal-14 main" | sudo tee -a /etc/apt/sources.list
           wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
           sudo apt update
-          sudo apt install libasound2-dev libcurl4-openssl-dev libx11-dev libxinerama-dev libxext-dev libfreetype6-dev libwebkit2gtk-4.0-dev libglu1-mesa-dev libjack-jackd2-dev lv2-dev clang-14 clang-tools-14 lld-14
+          sudo apt install libasound2-dev libcurl4-openssl-dev libx11-dev libxinerama-dev libxext-dev libfreetype6-dev libwebkit2gtk-4.0-dev libglu1-mesa-dev libjack-jackd2-dev clang-14 clang-tools-14 lld-14
 
       - name: Get latest CMake
         uses: lukka/get-cmake@latest
@@ -65,11 +64,11 @@ jobs:
       - name: Configure Linux
         # Not using ninja. I don't remember the reason but it wasn't really running parallel builds
         run: |
-          CC=/usr/bin/clang-14 CXX=/usr/bin/clang++-14 cmake -B ${{github.workspace}}/build-linux -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_LV2=On -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
+          CC=/usr/bin/clang-14 CXX=/usr/bin/clang++-14 cmake -B ${{github.workspace}}/build-linux -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_LV2=Off-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
 
       - name: Build Linux
         run: |
-          cmake --build ${{github.workspace}}/build-linux --config ${{env.BUILD_TYPE}} --parallel --target ${{env.VST3_TARGETS}} ${{env.LV2_TARGETS}}
+          cmake --build ${{github.workspace}}/build-linux --config ${{env.BUILD_TYPE}} --parallel --target ${{env.VST3_TARGETS}}
 
       - name: Strip and create symbol files Linux
         run: |
@@ -77,31 +76,11 @@ jobs:
           objcopy --only-keep-debug MixMaxTrix.so MixMaxTrix.vst3.syms
           strip --strip-debug --strip-unneeded MixMaxTrix.so
           cd -
-          if cd "build-linux/MixMaxTrix_artefacts/Release/LV2/MixMaxTrix.lv2"; then
-            objcopy --only-keep-debug MixMaxTrix.so MixMaxTrix.lv2.syms
-            strip --strip-debug --strip-unneeded MixMaxTrix.so
-          fi
-          cd -
       - name: Test
         working-directory: ${{github.workspace}}/build-linux
         # Execute tests defined by the CMake configuration.
         # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
         run: ctest -C ${{env.BUILD_TYPE}}
-
-      # LV2 Linux
-      - uses: actions/upload-artifact@v2
-        with:
-          name: mix-maxtrix-linux-${{github.sha}}-x64-lv2
-          path: |
-            ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/LV2/MixMaxTrix*.lv2/**
-            !**/*.syms
-
-      # Symbols LV2 Linux
-      - uses: actions/upload-artifact@v2
-        with:
-          name: mix-maxtrix-linux-${{github.sha}}-x64-lv2-debug-symbols
-          path: |
-            ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/LV2/MixMaxTrix*.lv2/**/*.syms
 
       # VST3 Linux
       - uses: actions/upload-artifact@v2

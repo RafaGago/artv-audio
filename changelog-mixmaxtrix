@@ -9,6 +9,8 @@
 - Atlantis reverb: Add ducker
 - Spring box: Add ducker
 - JUCE: bump to version 7.0.1
+- LV2: Drop from GitHub build. Unfortunately the build with JUCE 7.0.1 core
+  dumps when done on the CI runners (low memory?). Not reproducible locally.
 
 1.6.0
 - sound_delay: Add mid/side time delay.
