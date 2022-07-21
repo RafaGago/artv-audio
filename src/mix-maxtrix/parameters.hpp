@@ -6861,8 +6861,8 @@ using diffuse_delay_params = mp_list<
   diffuse_delay_tilt,
   diffuse_delay_freq_spread,
   diffuse_peak_freq,
-  diffuse_peak_gain,
   diffuse_peak_drive,
+  diffuse_peak_gain,
   diffuse_delay_hipass,
   diffuse_delay_desync,
   diffuse_delay_ducking_threshold,
@@ -6938,7 +6938,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<

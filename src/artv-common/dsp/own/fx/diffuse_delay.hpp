@@ -8,6 +8,7 @@
 #include "artv-common/dsp/own/classes/block_resampler.hpp"
 #include "artv-common/dsp/own/classes/delay_line.hpp"
 #include "artv-common/dsp/own/classes/diffusion_matrix.hpp"
+#include "artv-common/dsp/own/classes/ducker.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/reverb_tools.hpp"
@@ -92,23 +93,29 @@ public:
   }
   //----------------------------------------------------------------------------
   struct ducking_threshold_tag {};
-  void set (ducking_threshold_tag, float v) { _extpar.ducking_threshold = v; }
+  void set (ducking_threshold_tag, float v)
+  {
+    if (v == _extpar.ducking_threshold) {
+      return;
+    }
+    _extpar.ducking_threshold = v;
+    _ducker.set_threshold (vec_set<2> ((double) v));
+  }
 
   static constexpr auto get_parameter (ducking_threshold_tag)
   {
-    return float_param ("dB", -40.f, 20.f, 20.f, 0.01f, 1.5f);
+    return float_param ("dB", -40.f, 12.f, 12.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct ducking_speed_tag {};
   void set (ducking_speed_tag, float v)
   {
-    v *= 0.01f;
     if (v == _extpar.ducking_speed) {
       return;
     }
     _extpar.ducking_speed = v;
-    _ducker.reset_coeffs<duck_follow_idx> (
-      vec_set<1> (0.03), vec_set<1> (0.02 + 0.15 * v), (double) sr_target_freq);
+    v *= 0.01f;
+    _ducker.set_speed (vec_set<double_x2> (v * v), tgt_srate);
   }
 
   static constexpr auto get_parameter (ducking_speed_tag)
@@ -128,7 +135,7 @@ public:
 
   static constexpr auto get_parameter (gain_tag)
   {
-    return float_param ("dB", -50.f, 12.f, -20.f, 0.2f);
+    return float_param ("dB", -50.f, 12.f, 0.f, 0.2f);
   }
   //----------------------------------------------------------------------------
   struct mode_tag {};
@@ -182,7 +189,7 @@ public:
       return;
     }
     _extpar.mod_freq = v;
-    _mod_lfo.set_freq (vec_set<n_taps> (v), (float) sr_target_freq);
+    _mod_lfo.set_freq (vec_set<n_taps> (v), (float) tgt_srate);
   }
 
   static constexpr auto get_parameter (mod_freq_tag)
@@ -264,7 +271,7 @@ public:
       vec_set<2> (330.),
       vec_set<2> (0.5),
       vec_set<2> ((double) -v),
-      (double) sr_target_freq);
+      (double) tgt_srate);
   }
 
   static constexpr auto get_parameter (tilt_db_tag)
@@ -314,7 +321,7 @@ public:
     }
     _extpar.hp = v;
     _filters.reset_coeffs<hp_idx> (
-      vec_set<n_taps> (4.f + v * 396.f), (float) sr_target_freq);
+      vec_set<n_taps> (4.f + v * 396.f), (float) tgt_srate);
   }
 
   static constexpr auto get_parameter (hipass_tag)
@@ -405,7 +412,7 @@ public:
 
     _resampler.reset (
       pc.get_sample_rate(),
-      sr_target_freq,
+      tgt_srate,
       sr_cutoff,
       sr_cutoff,
       sr_taps_branch,
@@ -415,7 +422,7 @@ public:
       blocksize,
       6 * 1024);
 
-    _n_spls_smoother.reset_coeffs (vec_set<4> (1.f), sr_target_freq);
+    _n_spls_smoother.reset_coeffs (vec_set<4> (1.f), tgt_srate);
     _n_spls_smoother.reset_states();
 
     // get time info maximum buffer sizes and allocate
@@ -426,13 +433,8 @@ public:
     _filters.reset_states<hp_idx>();
     _filters.reset_states<peak_idx>();
 
-    _ducker.reset_states<duck_follow_idx>();
-    _ducker.reset_states<duck_lp_idx>();
-
-    _ducker.reset_coeffs<duck_lp_idx> (vec_set<1> (2000.), sr_target_freq);
-
     _tilt.reset_states();
-    _transients.reset (sr_target_freq);
+    _transients.reset (tgt_srate);
     _transients.set (saike::transience::gainsmoothing_tag {}, 0.5f);
 
     using phase_type = decltype (_mod_lfo)::phase_type;
@@ -449,7 +451,7 @@ public:
       phases = vec_shuffle (phases, phases, 1, 2, 3, 0);
       phases += 0.01f;
       _ap_lfo[i].set_freq (
-        vec_set<n_serial_diffusors> (0.247f), (float) sr_target_freq);
+        vec_set<n_serial_diffusors> (0.247f), (float) tgt_srate);
     }
 #if DIFFUSE_DELAY_USE_THIRAN_TAPS
     _delay.set_resync_delta (0.0);
@@ -464,14 +466,17 @@ public:
 
     // rms reset
     constexpr float rms_window_sec = 0.3;
-    _dry_rms.reset (vec_set<4> (rms_window_sec), sr_target_freq);
-    _wet_rms.reset (vec_set<4> (rms_window_sec), sr_target_freq);
+    _dry_rms.reset (vec_set<4> (rms_window_sec), tgt_srate);
+    _wet_rms.reset (vec_set<4> (rms_window_sec), tgt_srate);
 
     // hack to trigger intialization of some parameters
-    _extpar.tilt_db         = 999.f;
-    _extpar.peak_drive_db   = 999.f;
-    _extpar.hp              = 999.f;
-    _extpar.damp_note_ratio = 999.f;
+    _extpar.tilt_db           = 999.f;
+    _extpar.peak_drive_db     = 999.f;
+    _extpar.hp                = 999.f;
+    _extpar.damp_note_ratio   = 999.f;
+    _extpar.gain              = 999.f;
+    _extpar.ducking_speed     = 999.f;
+    _extpar.ducking_threshold = 999.f;
 
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
@@ -491,7 +496,7 @@ private:
   // GCD(44100,33600) = 2100. GCD(48000,33600) = 4800
   // for lower CPU: 31500: 6300 1500
   //                21000: 2100 3000
-  static constexpr uint sr_target_freq     = 33600;
+  static constexpr uint tgt_srate          = 33600;
   static constexpr uint blocksize          = 16;
   static constexpr uint n_taps             = 4;
   static constexpr uint n_serial_diffusors = 4;
@@ -568,7 +573,7 @@ private:
   //----------------------------------------------------------------------------
   double msec_to_spls (double msec)
   {
-    return (double) sr_target_freq * msec * 0.001;
+    return (double) tgt_srate * msec * 0.001;
   }
   //----------------------------------------------------------------------------
   void delay_line_updated()
@@ -576,28 +581,8 @@ private:
     _param.fb_gain = delay_get_feedback_gain_for_time (
       _extpar.feedback * 20.f,
       -60.f,
-      (float) sr_target_freq,
+      (float) tgt_srate,
       vec_set<1> (_extpar.delay_spls > 0.f ? _extpar.delay_spls : 0.1f))[0];
-  }
-  //----------------------------------------------------------------------------
-  double get_ducker_gain (double in)
-  {
-    // https://www.musicdsp.org/en/latest/Effects/204-simple-compressor-class-c.html
-    constexpr double ratio             = 14.f;
-    constexpr float  ducker_smooth_sec = 0.05f;
-
-    in           = _ducker.tick<duck_lp_idx> (vec_set<1> (in))[0];
-    in           = gain_to_db (abs (in), -120.); // convert linear -> dB
-    double delta = in - _extpar.ducking_threshold;
-    delta        = std::max (delta, 0.);
-    double env   = _ducker.tick<duck_follow_idx> (vec_set<1> (delta))[0];
-    double gr    = env * (ratio - 1.f);
-    // gain smoothing lowpass
-    constexpr double smooth
-      = gcem::exp (-1.f / ((float) sr_target_freq * 0.5f * ducker_smooth_sec));
-    gr       = smooth * _gr_prev + (1. - smooth) * gr;
-    _gr_prev = gr;
-    return db_to_gain (-gr);
   }
   //----------------------------------------------------------------------------
   static constexpr std::array<float, 2> get_pan (
@@ -867,16 +852,20 @@ private:
         break;
       }
       // final tap acummulaton + gain
+      auto main_gain = _param.main_gain;
       for (uint i = 0; i < block.size(); ++i) {
-        block[i][0] = 0.f;
-        block[i][1] = 0.f;
+        // This is now tilted...
+        auto ducking_gain = _ducker.tick (double_x2 {block[i][0], block[i][1]});
+        block[i][0]       = 0.f;
+        block[i][1]       = 0.f;
         for (uint t = 0; t < n_taps; ++t) {
           block[i][0] += tap_tail[i][t] * tap_mul[t][0];
           block[i][1] += tap_tail[i][t] * tap_mul[t][1];
         }
-        float gr = get_ducker_gain (block[i][0] + block[i][1]);
-        block[i][0] *= _param.main_gain * gr;
-        block[i][1] *= _param.main_gain * gr;
+        auto out = double_x2 {block[i][0], block[i][1]};
+        out *= main_gain * ducking_gain;
+        block[i][0] = (T) out[0];
+        block[i][1] = (T) out[1];
       }
     }
   }
@@ -1014,7 +1003,7 @@ private:
     float note = min_note + _extpar.damp_note_ratio * (max_note - min_note);
     _filters.reset_coeffs<lp_idx> (
       note_to_hzs (note, max_note, _extpar.freq_spread, bal_range),
-      (float) sr_target_freq);
+      (float) tgt_srate);
   }
   //----------------------------------------------------------------------------
   void update_peak()
@@ -1036,7 +1025,7 @@ private:
       note_to_hzs (note, max_note, _extpar.freq_spread, bal_range),
       vec_set<4> (0.2f + absgain * 0.6f), // Q
       vec_set<4> (_extpar.peak_gain * max_db), // dB
-      (float) sr_target_freq,
+      (float) tgt_srate,
       bell_bandpass_tag {});
   }
   //----------------------------------------------------------------------------
@@ -1120,11 +1109,9 @@ private:
   saike::transience                            _transients;
   lfo<n_taps>                                  _mod_lfo;
   std::array<lfo<n_serial_diffusors>, n_taps>  _ap_lfo;
-  enum { duck_lp_idx, duck_follow_idx };
-  part_classes<mp_list<onepole_lowpass, slew_limiter>, double_x1, false>
-                _ducker;
-  rms<float_x4> _dry_rms;
-  rms<float_x4> _wet_rms;
+  ducker<double_x2>                            _ducker;
+  rms<float_x4>                                _dry_rms;
+  rms<float_x4>                                _wet_rms;
   enum { lp_idx, hp_idx, peak_idx };
   part_classes<
     mp_list<onepole_lowpass, mystran_dc_blocker, andy::svf>,
