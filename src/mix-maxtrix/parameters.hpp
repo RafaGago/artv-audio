@@ -4813,6 +4813,26 @@ parameter_cpp_class_define (
   tal::reverb2::get_parameter (tal::reverb2::stereo_width_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  tal_reverb2_ducking_speed,
+  n_stereo_busses,
+  param_common (
+    "Duck Spd",
+    declptr<tal::reverb2>(),
+    declptr<tal::reverb2::ducking_speed_tag>()),
+  tal::reverb2::get_parameter (tal::reverb2::ducking_speed_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  tal_reverb2_ducking_threshold,
+  n_stereo_busses,
+  param_common (
+    "Duck Thres",
+    declptr<tal::reverb2>(),
+    declptr<tal::reverb2::ducking_threshold_tag>()),
+  tal::reverb2::get_parameter (tal::reverb2::ducking_threshold_tag {}),
+  slider_ext);
+
 using tal_reverb2_params = mp_list<
   tal_reverb2_decay,
   tal_reverb2_stereo_width,
@@ -4823,7 +4843,9 @@ using tal_reverb2_params = mp_list<
   tal_reverb2_highshelf_frequency,
   tal_reverb2_highshelf_gain,
   tal_reverb2_predelay,
-  tal_reverb2_predelay_sync>;
+  tal_reverb2_predelay_sync,
+  tal_reverb2_ducking_threshold,
+  tal_reverb2_ducking_speed>;
 
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
@@ -6960,18 +6982,17 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  diffuse_delay_params,
-  reverb_params>;
+  tal_reverb2_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "1.FX-tested", "2.Rev");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "1.FX-tested");
 #else
 // clang-format off
 using all_fx_typelists = mp_list<

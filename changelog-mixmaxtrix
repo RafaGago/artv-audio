@@ -3,6 +3,7 @@
 - JUCE: bump to version 7.0.1
 - windows: Reverted ZEN3 compiler flags.
 - reverb: Add ducker.
+- TAL reverb 2: Add ducker.
 
 1.6.0
 - sound_delay: Add mid/side time delay.
