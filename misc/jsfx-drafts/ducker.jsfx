@@ -1,0 +1,35 @@
+desc:Ducker
+
+slider1:threshold=20<-50, 20, 0.001>Threshold(db)
+slider2:speed=20<0, 100, 0.01>hi(%)
+
+in_pin:Signal L
+in_pin:Signal R
+in_pin:Key/sidechain L
+in_pin:Key/sidechain R
+out_pin:Signal L
+out_pin:Signal R
+
+import _core.jsfx-inc
+import _dynamics.jsfx-inc
+
+@init
+
+tiny = 0.000000000000000000000000000000000000000000000000000000000000000000000001;
+
+@slider
+
+spd_fact = speed * 0.01;
+spd_fact *= spd_fact;
+key.envelope_init(0.0001 + 0.6 * spd_fact, srate);
+smooth.envelope_init (0.0001 + 0.012 * (1 - spd_fact), srate);
+
+@sample
+in = (spl2 * spl2 + spl3 * spl3) * 0.5;
+rms = sqrt (max (tiny, key.envelope_tick (in)));
+db = lin_to_db (rms);
+gr = db < threshold ? 0 : db - threshold;
+gr_smooth = smooth.envelope_tick (gr);
+gr_final = db_to_lin (-gr_smooth);
+spl0 *= gr_final;
+spl1 *= gr_final;

@@ -3,19 +3,26 @@ import _filters.jsfx-inc
 @init
 
 //------------------------------------------------------------------------------
+function envelope_init (time_sec, srate) global() (
+    this.time = (time_sec != 0) ? exp (-1 / (time_sec * srate)) : 0;
+);
+
+function envelope_tick (in) global() (
+
+    this.y1 = in + this.time * (this.y1 - in);
+    this.y1;
+);
+//------------------------------------------------------------------------------
 function slew_limiter_init (attack_sec, release_sec, srate) global() (
     this.attack = (attack_sec != 0) ? exp (-1 / (attack_sec * srate)) : 0;
     this.release = (release_sec != 0) ? exp (-1 / (release_sec * srate)) : 0;
 );
 
-function slew_limiter_tick (in)
-    local (timek) global() (
-
+function slew_limiter_tick (in) local (timek) global() (
     timek = this.y1 < in ? this.attack : this.release;
     this.y1 = in + timek * (this.y1 - in);
     this.y1;
 );
-
 //------------------------------------------------------------------------------
 DEFAULT_TGATE_K.min_decay = log (1. / 1000.);
 DEFAULT_TGATE_K.max_decay = log (2.5) - DEFAULT_TGATE_K.min_decay;
