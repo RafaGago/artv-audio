@@ -32,6 +32,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "artv-common/dsp/own/classes/add_ducker.hpp"
 #include "artv-common/dsp/own/classes/jsfx.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
@@ -46,7 +47,7 @@
 
 namespace artv { namespace geraint_luff {
 
-class atlantis_reverb {
+class atlantis_reverb : private add_ducker<double_x2> {
 public:
   //----------------------------------------------------------------------------
   static constexpr dsp_types dsp_type  = dsp_types::reverb;
@@ -124,7 +125,10 @@ private:
   { /* TODO: stub, implement */
   }
 #endif
-  double jsfx_rand (double maxv = 1.) { return jsfx_engine::rand (maxv); }
+  double jsfx_rand (double maxv = 1.)
+  {
+    return jsfx_engine::rand (maxv);
+  }
 
 public:
   //----------------------------------------------------------------------------
@@ -136,7 +140,10 @@ public:
   }
 #endif
   float  sample_rate = 0;
-  double jsfx_specialvar_get_srate() { return sample_rate; }
+  double jsfx_specialvar_get_srate()
+  {
+    return sample_rate;
+  }
 
   //----------------------------------------------------------------------------
   // stubs for sliders
@@ -716,7 +723,12 @@ public:
     return float_param ("ms", 10.0, 500.0, 200.0, 0.1, 0.8);
   }
 #endif
-
+  //----------------------------------------------------------------------------
+  using add_ducker::get_parameter;
+  using add_ducker::set;
+  using ducking_speed_tag     = add_ducker::ducking_speed_tag;
+  using ducking_threshold_tag = add_ducker::ducking_threshold_tag;
+  //----------------------------------------------------------------------------
   using parameters = mp_list<
     // release_decay_seconds_tag,
     compressor_ratio_tag,
@@ -731,7 +743,9 @@ public:
     shimmer_factor_tag,
     shimmer_tone_tag,
     wet_db_tag,
-    window_ms_tag>;
+    window_ms_tag,
+    ducking_speed_tag,
+    ducking_threshold_tag>;
 
   void set_slider_high_damping_hz (double v)
   {
@@ -794,7 +808,10 @@ private:
   // global/stateful variables for section "slider"
   double action_release;
   //----------------------------------------------------------------------------
-  void init_slider_variables() { action_release = 0; }
+  void init_slider_variables()
+  {
+    action_release = 0;
+  }
   //----------------------------------------------------------------------------
   // global/stateful variables for section "block"
   double buffer_pos;
@@ -874,6 +891,7 @@ public:
   void reset (plugin_context& pc)
   {
     sample_rate = pc.get_sample_rate();
+    add_ducker::reset (pc.get_sample_rate());
     init_init_variables();
     init_slider_variables();
     init_block_variables();
@@ -915,6 +933,18 @@ public:
 #endif
     slider();
   }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  {
+    add_ducker::process (
+      outs,
+      ins,
+      samples,
+      [=] (crange<T*> outs_fw, crange<T const*> ins_fw, uint samples_fw) {
+        this->process_intern (outs_fw, ins_fw, samples_fw);
+      });
+  }
 
 private:
   //----------------------------------------------------------------------------
@@ -925,10 +955,9 @@ private:
     }
   }
 
-public:
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process_intern (crange<T*> outs, crange<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -1064,6 +1093,8 @@ public:
       };
     }
   }
+
+public:
   // functions for section "init"
   //----------------------------------------------------------------------------
   double init$window (double r)

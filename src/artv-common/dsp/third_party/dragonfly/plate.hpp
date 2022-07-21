@@ -1,5 +1,6 @@
 #pragma once
 
+#include "artv-common/dsp/own/classes/add_ducker.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/stereo_processor.hpp"
 #include "artv-common/dsp/types.hpp"
@@ -16,7 +17,7 @@
 
 namespace artv { namespace dragonfly {
 
-class plate {
+class plate : private add_ducker<double_x2> {
 public:
   //----------------------------------------------------------------------------
   static constexpr dsp_types dsp_type  = dsp_types::reverb;
@@ -128,6 +129,11 @@ public:
     return frequency_parameter (1000.0, 16000.0, 16000.0);
   }
   //----------------------------------------------------------------------------
+  using add_ducker::get_parameter;
+  using add_ducker::set;
+  using ducking_speed_tag     = add_ducker::ducking_speed_tag;
+  using ducking_threshold_tag = add_ducker::ducking_threshold_tag;
+  //----------------------------------------------------------------------------
   using parameters = mp_list<
     dry_tag,
     wet_tag,
@@ -137,7 +143,9 @@ public:
     algorithm_tag,
     predelay_tag,
     decay_tag,
-    early_damp_tag>;
+    early_damp_tag,
+    ducking_speed_tag,
+    ducking_threshold_tag>;
   //----------------------------------------------------------------------------
   plate()
   {
@@ -146,18 +154,34 @@ public:
     });
   }
   //----------------------------------------------------------------------------
-  void reset (plugin_context& pc) { _dsp.reset (pc.get_sample_rate()); }
+  void reset (plugin_context& pc)
+  {
+    _dsp.reset (pc.get_sample_rate());
+    add_ducker::reset (pc.get_sample_rate());
+  }
   //----------------------------------------------------------------------------
   template <class T>
   void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  {
+    add_ducker::process (
+      outs,
+      ins,
+      samples,
+      [=] (crange<T*> outs_fw, crange<T const*> ins_fw, uint samples_fw) {
+        this->process_intern (outs_fw, ins_fw, samples_fw);
+      });
+  }
+  //----------------------------------------------------------------------------
+private:
+  //----------------------------------------------------------------------------
+  template <class T>
+  void process_intern (crange<T*> outs, crange<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
 
     _dsp.process (outs.data(), ins.data(), samples);
   }
-  //----------------------------------------------------------------------------
-private:
   // from dragonfly's sources
   enum Parameters {
     paramDry = 0,

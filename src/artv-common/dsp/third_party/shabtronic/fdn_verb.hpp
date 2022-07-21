@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "artv-common/dsp/own/classes/add_ducker.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/pitch_shift.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
@@ -75,7 +76,7 @@ private:
   V                                _fb {};
 };
 //------------------------------------------------------------------------------
-class fdn_verb {
+class fdn_verb : private add_ducker<double_x2> {
 public:
   static constexpr dsp_types dsp_type  = dsp_types::reverb;
   static constexpr bus_types bus_type  = bus_types::stereo;
@@ -314,7 +315,12 @@ public:
     // Original slider line: slider13:0<-12,12>-Post Shift
     return float_param ("Semitones", -12.0, 12.0, 0.0, 1.);
   }
-  //--------------------------------------------------------------------------
+  //----------------------------------------------------------------------------
+  using add_ducker::get_parameter;
+  using add_ducker::set;
+  using ducking_speed_tag     = add_ducker::ducking_speed_tag;
+  using ducking_threshold_tag = add_ducker::ducking_threshold_tag;
+  //----------------------------------------------------------------------------
   using parameters = mp_list<
     time_tag,
     feedback_tag,
@@ -328,7 +334,9 @@ public:
     lopass_tag,
     mix_tag,
     pre_shift_tag,
-    post_shift_tag>;
+    post_shift_tag,
+    ducking_speed_tag,
+    ducking_threshold_tag>;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -339,6 +347,7 @@ public:
     _lfo.reset();
     _out_prev  = vec_set<1> (0.f);
     _pre_shift = _post_shift = -999999.;
+    add_ducker::reset (pc.get_sample_rate());
     mp11::mp_for_each<parameters> ([=] (auto param) {
       set (param, get_parameter (param).defaultv);
     });
@@ -346,6 +355,20 @@ public:
   //----------------------------------------------------------------------------
   template <class T>
   void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  {
+    add_ducker::process (
+      outs,
+      ins,
+      samples,
+      [=] (crange<T*> outs_fw, crange<T const*> ins_fw, uint samples_fw) {
+        this->process_intern (outs_fw, ins_fw, samples_fw);
+      });
+  }
+  //----------------------------------------------------------------------------
+private:
+  //----------------------------------------------------------------------------
+  template <class T>
+  void process_intern (crange<T*> outs, crange<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -379,8 +402,6 @@ public:
       outs[1][i] = ins[1][i] * (1. - _mix) + out[1] * _dlevel * _mix;
     }
   }
-  //----------------------------------------------------------------------------
-private:
   //----------------------------------------------------------------------------
   void reset_mod()
   {

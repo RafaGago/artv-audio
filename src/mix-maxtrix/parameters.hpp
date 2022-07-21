@@ -1817,6 +1817,28 @@ parameter_cpp_class_define (
     geraint_luff::atlantis_reverb::high_damping_hz_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  atlantis_ducking_speed,
+  n_stereo_busses,
+  param_common (
+    "Duck Spd",
+    declptr<geraint_luff::atlantis_reverb>(),
+    declptr<geraint_luff::atlantis_reverb::ducking_speed_tag>()),
+  geraint_luff::atlantis_reverb::get_parameter (
+    geraint_luff::atlantis_reverb::ducking_speed_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  atlantis_ducking_threshold,
+  n_stereo_busses,
+  param_common (
+    "Duck Thres",
+    declptr<geraint_luff::atlantis_reverb>(),
+    declptr<geraint_luff::atlantis_reverb::ducking_threshold_tag>()),
+  geraint_luff::atlantis_reverb::get_parameter (
+    geraint_luff::atlantis_reverb::ducking_threshold_tag {}),
+  slider_ext);
+
 using atlantis_reverb_params = mp_list<
   // atlantis_dry,
   // atlantis_wet,
@@ -1824,10 +1846,15 @@ using atlantis_reverb_params = mp_list<
   atlantis_window,
   atlantis_shimmer,
   atlantis_shimmer_tone,
+
   atlantis_detune_shift,
   atlantis_detune_spd,
   atlantis_compressor_threshold,
   atlantis_compressor_ratio,
+
+  atlantis_ducking_threshold,
+  atlantis_ducking_speed,
+
   atlantis_damping,
   atlantis_damping_low,
   atlantis_damping_high>;
@@ -1975,6 +2002,27 @@ parameter_cpp_class_define (
     geraint_luff::echo_cycles::rotation_mode_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  echo_cycles_ducking_speed,
+  n_stereo_busses,
+  param_common (
+    "Duck Spd",
+    declptr<geraint_luff::echo_cycles>(),
+    declptr<geraint_luff::echo_cycles::ducking_speed_tag>()),
+  geraint_luff::echo_cycles::get_parameter (
+    geraint_luff::echo_cycles::ducking_speed_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  echo_cycles_ducking_threshold,
+  n_stereo_busses,
+  param_common (
+    "Duck Thres",
+    declptr<geraint_luff::echo_cycles>(),
+    declptr<geraint_luff::echo_cycles::ducking_threshold_tag>()),
+  geraint_luff::echo_cycles::get_parameter (
+    geraint_luff::echo_cycles::ducking_threshold_tag {}),
+  slider_ext);
 using echo_cycles_params = mp_list<
   // echo_cycles_output_dry,
   // echo_cycles_output_wet,
@@ -1982,10 +2030,14 @@ using echo_cycles_params = mp_list<
   echo_cycles_delay_beats,
   echo_cycles_feedback_ratio,
   echo_cycles_feedback_rotation,
+
   echo_cycles_input_rotation_initial,
   echo_cycles_rotation_mode,
   echo_cycles_input_width,
   echo_cycles_output_variation,
+
+  echo_cycles_ducking_threshold,
+  echo_cycles_ducking_speed,
   echo_cycles_filter_freq,
   echo_cycles_filter_db,
   echo_cycles_filter_bandwidth>;
@@ -2233,13 +2285,39 @@ parameter_cpp_class_define (
     geraint_luff::spring_box::chorus_alignment_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  spring_box_ducking_speed,
+  n_stereo_busses,
+  param_common (
+    "Duck Spd",
+    declptr<geraint_luff::spring_box>(),
+    declptr<geraint_luff::spring_box::ducking_speed_tag>()),
+  geraint_luff::spring_box::get_parameter (
+    geraint_luff::spring_box::ducking_speed_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  spring_box_ducking_threshold,
+  n_stereo_busses,
+  param_common (
+    "Duck Thres",
+    declptr<geraint_luff::spring_box>(),
+    declptr<geraint_luff::spring_box::ducking_threshold_tag>()),
+  geraint_luff::spring_box::get_parameter (
+    geraint_luff::spring_box::ducking_threshold_tag {}),
+  slider_ext);
+
 using spring_box_params = mp_list<
   spring_box_density,
   spring_box_density_sync,
   spring_box_feedback,
   spring_box_late_bias,
+
   spring_box_shape,
   spring_box_filter,
+  spring_box_ducking_threshold,
+  spring_box_ducking_speed,
+
   spring_box_detune,
   spring_box_speed,
   spring_box_chorus_alignment>;
@@ -2513,6 +2591,28 @@ parameter_cpp_class_define (
     witti::bbd_echo_stereo::decalibration_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  bbd_echo_ducking_speed,
+  n_stereo_busses,
+  param_common (
+    "Duck Spd",
+    declptr<witti::bbd_echo_stereo>(),
+    declptr<witti::bbd_echo_stereo::ducking_speed_tag>()),
+  witti::bbd_echo_stereo::get_parameter (
+    witti::bbd_echo_stereo::ducking_speed_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  bbd_echo_ducking_threshold,
+  n_stereo_busses,
+  param_common (
+    "Duck Thres",
+    declptr<witti::bbd_echo_stereo>(),
+    declptr<witti::bbd_echo_stereo::ducking_threshold_tag>()),
+  witti::bbd_echo_stereo::get_parameter (
+    witti::bbd_echo_stereo::ducking_threshold_tag {}),
+  slider_ext);
+
 using bbd_echo_params = mp_list<
 // bbd_echo_dry_wet,
 #if 0
@@ -2522,18 +2622,24 @@ using bbd_echo_params = mp_list<
   bbd_echo_feedback,
   bbd_echo_delay_sync_l,
   bbd_echo_delay_sync_r,
+
   bbd_echo_delay,
   bbd_echo_clock_scale,
   bbd_echo_clock_curve,
   bbd_echo_clock_offset,
+
   bbd_echo_lfo_depth,
   bbd_echo_lfo_speed,
   bbd_echo_hp_filter,
   bbd_echo_hp_res,
+
   bbd_echo_lp_filter,
   bbd_echo_lp_res,
   bbd_echo_hiss,
-  bbd_echo_age>;
+  bbd_echo_age,
+
+  bbd_echo_ducking_threshold,
+  bbd_echo_ducking_speed>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   df_er_dry,
@@ -2699,6 +2805,26 @@ parameter_cpp_class_define (
   dragonfly::plate::get_parameter (dragonfly::plate::early_damp_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  df_plate_ducking_speed,
+  n_stereo_busses,
+  param_common (
+    "Duck Spd",
+    declptr<dragonfly::plate>(),
+    declptr<dragonfly::plate::ducking_speed_tag>()),
+  dragonfly::plate::get_parameter (dragonfly::plate::ducking_speed_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  df_plate_ducking_threshold,
+  n_stereo_busses,
+  param_common (
+    "Duck Thres",
+    declptr<dragonfly::plate>(),
+    declptr<dragonfly::plate::ducking_threshold_tag>()),
+  dragonfly::plate::get_parameter (dragonfly::plate::ducking_threshold_tag {}),
+  slider_ext);
+
 using df_plate_params = mp_list<
   // df_plate_dry,
   // df_plate_wet,
@@ -2706,9 +2832,11 @@ using df_plate_params = mp_list<
   df_plate_predelay,
   df_plate_decay,
   df_plate_early_damp,
-  df_plate_width,
   df_plate_low_cut,
-  df_plate_high_cut>;
+  df_plate_high_cut,
+  df_plate_ducking_threshold,
+  df_plate_ducking_speed,
+  df_plate_width>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   df_hall_dry,
@@ -2890,16 +3018,38 @@ parameter_cpp_class_define (
   dragonfly::hall::get_parameter (dragonfly::hall::modulation_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  df_hall_ducking_speed,
+  n_stereo_busses,
+  param_common (
+    "Duck Spd",
+    declptr<dragonfly::hall>(),
+    declptr<dragonfly::hall::ducking_speed_tag>()),
+  dragonfly::hall::get_parameter (dragonfly::hall::ducking_speed_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  df_hall_ducking_threshold,
+  n_stereo_busses,
+  param_common (
+    "Duck Thres",
+    declptr<dragonfly::hall>(),
+    declptr<dragonfly::hall::ducking_threshold_tag>()),
+  dragonfly::hall::get_parameter (dragonfly::hall::ducking_threshold_tag {}),
+  slider_ext);
+
 using df_hall_params = mp_list<
   // df_hall_dry,
   df_hall_early,
   df_hall_early_send,
   df_hall_late,
   df_hall_predelay,
+
   df_hall_decay,
   df_hall_size,
   df_hall_diffuse,
   df_hall_spin,
+
   df_hall_wander,
   df_hall_modulation,
   df_hall_low_cut,
@@ -2908,6 +3058,9 @@ using df_hall_params = mp_list<
   df_hall_high_x_over,
   df_hall_low_mult,
   df_hall_high_mult,
+
+  df_hall_ducking_threshold,
+  df_hall_ducking_speed,
   df_hall_width>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
@@ -3080,24 +3233,50 @@ parameter_cpp_class_define (
   dragonfly::room::get_parameter (dragonfly::room::late_damp_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  df_room_ducking_speed,
+  n_stereo_busses,
+  param_common (
+    "Duck Spd",
+    declptr<dragonfly::room>(),
+    declptr<dragonfly::room::ducking_speed_tag>()),
+  dragonfly::room::get_parameter (dragonfly::room::ducking_speed_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  df_room_ducking_threshold,
+  n_stereo_busses,
+  param_common (
+    "Duck Thres",
+    declptr<dragonfly::room>(),
+    declptr<dragonfly::room::ducking_threshold_tag>()),
+  dragonfly::room::get_parameter (dragonfly::room::ducking_threshold_tag {}),
+  slider_ext);
+
 using df_room_params = mp_list<
   // df_room_dry,
   df_room_early,
   df_room_early_send,
   df_room_late,
   df_room_predelay,
+
   df_room_decay,
   df_room_size,
   df_room_early_damp,
   df_room_late_damp,
+
   df_room_low_cut,
   df_room_high_cut,
   df_room_low_boost_freq,
   df_room_low_boost,
+
   df_room_diffuse,
   df_room_spin,
   df_room_wander,
-  df_room_width>;
+  df_room_width,
+
+  df_room_ducking_threshold,
+  df_room_ducking_speed>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   _4x4_low_drive,
@@ -5070,19 +5249,46 @@ parameter_cpp_class_define (
   shabtronic::fdn_verb::get_parameter (shabtronic::fdn_verb::post_shift_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  fdnverb_ducking_speed,
+  n_stereo_busses,
+  param_common (
+    "Duck Spd",
+    declptr<shabtronic::fdn_verb>(),
+    declptr<shabtronic::fdn_verb::ducking_speed_tag>()),
+  shabtronic::fdn_verb::get_parameter (
+    shabtronic::fdn_verb::ducking_speed_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  fdnverb_ducking_threshold,
+  n_stereo_busses,
+  param_common (
+    "Duck Thres",
+    declptr<shabtronic::fdn_verb>(),
+    declptr<shabtronic::fdn_verb::ducking_threshold_tag>()),
+  shabtronic::fdn_verb::get_parameter (
+    shabtronic::fdn_verb::ducking_threshold_tag {}),
+  slider_ext);
+
 using fdnverb_params = mp_list<
   fdnverb_time,
   fdnverb_feedback,
   fdnverb_density,
   fdnverb_cascade,
+
   fdnverb_mod_rate,
   fdnverb_mod_depth,
   fdnverb_pre_shift,
   fdnverb_post_shift,
+
   fdnverb_stereo,
   fdnverb_smooth,
   fdnverb_hipass,
-  fdnverb_lopass>;
+  fdnverb_lopass,
+
+  fdnverb_ducking_threshold,
+  fdnverb_ducking_speed>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   myphaser_stages,
@@ -6982,7 +7188,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<

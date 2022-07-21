@@ -13,6 +13,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "artv-common/dsp/own/classes/add_ducker.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/third_party/jsfx_engine/jsfx_engine.hpp"
 #include "artv-common/dsp/types.hpp"
@@ -26,7 +27,7 @@
 
 namespace artv { namespace geraint_luff {
 
-class spring_box {
+class spring_box : private add_ducker<double_x2> {
 public:
   //----------------------------------------------------------------------------
   static constexpr dsp_types dsp_type  = dsp_types::delay;
@@ -434,6 +435,13 @@ public:
   }
 
 #endif
+
+  //----------------------------------------------------------------------------
+  using add_ducker::get_parameter;
+  using add_ducker::set;
+  using ducking_speed_tag     = add_ducker::ducking_speed_tag;
+  using ducking_threshold_tag = add_ducker::ducking_threshold_tag;
+  //----------------------------------------------------------------------------
   using parameters = mp_list<
     density_tag,
     density_sync_tag,
@@ -445,7 +453,9 @@ public:
     filter_tag,
     detune_tag,
     speed_tag,
-    chorus_alignment_tag>;
+    chorus_alignment_tag,
+    ducking_speed_tag,
+    ducking_threshold_tag>;
 
 private:
   //----------------------------------------------------------------------------
@@ -793,6 +803,8 @@ public:
   void reset (plugin_context& pc)
   {
     plugcontext = &pc;
+
+    add_ducker::reset (pc.get_sample_rate());
     init_init_variables();
     init_block_variables();
     _current_block_samples = pc.get_max_block_samples();
@@ -962,17 +974,35 @@ public:
     init_update();
     init_smoother_init (wet_value, wet, wet_step);
     init_smoother_init (dry_value, dry, dry_step);
-    ;
   }
   //----------------------------------------------------------------------------
 private:
-  void slider() { init_update(); }
+  void slider()
+  {
+    init_update();
+  }
   uint _current_block_samples = 0;
-
+  //----------------------------------------------------------------------------
 public:
+  template <class T>
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  {
+    add_ducker::process (
+      outs,
+      ins,
+      samples,
+      [=] (crange<T*> outs_fw, crange<T const*> ins_fw, uint samples_fw) {
+        this->process_intern (outs_fw, ins_fw, samples_fw);
+      });
+  }
+  //----------------------------------------------------------------------------
+private:
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
+  void process_intern (
+    crange<T*>       outs,
+    crange<T const*> ins,
+    uint             block_samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -1424,7 +1454,10 @@ private:
     return _value;
   }
   //----------------------------------------------------------------------------
-  double init_smoother_value (double& _value) { return _value; }
+  double init_smoother_value (double& _value)
+  {
+    return _value;
+  }
   //----------------------------------------------------------------------------
   double init_update()
   {

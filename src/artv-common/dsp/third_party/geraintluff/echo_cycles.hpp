@@ -14,6 +14,7 @@
 #include <cstring>
 #include <vector>
 
+#include "artv-common/dsp/own/classes/add_ducker.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"
@@ -26,7 +27,7 @@
 
 namespace artv { namespace geraint_luff {
 
-class echo_cycles {
+class echo_cycles : private add_ducker<double_x2> {
 public:
   //----------------------------------------------------------------------------
   static constexpr dsp_types dsp_type  = dsp_types::delay;
@@ -131,8 +132,8 @@ public:
 
   void set (output_variation_tag, float v)
   {
-    // Original slider line: slider2:output_variation=0.5<0,1>-Output variation
-    // Range: min:0.0, max:1.0, default: 0.5, step: None
+    // Original slider line: slider2:output_variation=0.5<0,1>-Output
+    // variation Range: min:0.0, max:1.0, default: 0.5, step: None
     v /= 100.;
 #if 0
     if (v == output_variation) {
@@ -147,7 +148,8 @@ public:
 
   static constexpr auto get_parameter (output_variation_tag)
   {
-    // Original slider line: slider2:output_variation=0.5<0,1>-Output variation
+    // Original slider line: slider2:output_variation=0.5<0,1>-Output
+    // variation
     return float_param ("%", 0.0, 100.0, 50, 0.1);
   }
 #endif
@@ -321,8 +323,9 @@ public:
   void set (input_rotation_initial_tag, float v)
   {
     // Original slider line:
-    // slider7:input_rotation_initial=2.776<0,6.283185307179586>-Input rotation
-    // Range: min:0.0, max:6.283185307179586, default: 2.776, step: None
+    // slider7:input_rotation_initial=2.776<0,6.283185307179586>-Input
+    // rotation Range: min:0.0, max:6.283185307179586, default: 2.776, step:
+    // None
     v *= (6.283185307179586 / 360.);
 #if 0
     if (v == input_rotation_initial) {
@@ -338,7 +341,8 @@ public:
   static constexpr auto get_parameter (input_rotation_initial_tag)
   {
     // Original slider line:
-    // slider7:input_rotation_initial=2.776<0,6.283185307179586>-Input rotation
+    // slider7:input_rotation_initial=2.776<0,6.283185307179586>-Input
+    // rotation
     return float_param ("deg", 0.0, 360, 2., 0.1);
   }
 #endif
@@ -534,7 +538,8 @@ public:
 
   static constexpr auto get_parameter (filter_bandwidth_tag)
   {
-    // Original slider line: slider12:filter_bandwidth=2<0.1,5>-Filter bandwidth
+    // Original slider line: slider12:filter_bandwidth=2<0.1,5>-Filter
+    // bandwidth
     return float_param ("", 0.1, 5.0, 2.0, 0.05);
   }
 
@@ -571,12 +576,17 @@ public:
 
   static constexpr auto get_parameter (rotation_mode_tag)
   {
-    // Original slider line: slider13:rotation_mode=0<0,1,1{fixed,LFO}>-Rotation
-    // mode
+    // Original slider line:
+    // slider13:rotation_mode=0<0,1,1{fixed,LFO}>-Rotation mode
     return choice_param (0, make_cstr_array ("Fixed", "LFO"));
   }
 
 #endif
+  //----------------------------------------------------------------------------
+  using add_ducker::get_parameter;
+  using add_ducker::set;
+  using ducking_speed_tag     = add_ducker::ducking_speed_tag;
+  using ducking_threshold_tag = add_ducker::ducking_threshold_tag;
   //----------------------------------------------------------------------------
   using parameters = mp_list<
     input_width_tag,
@@ -591,7 +601,9 @@ public:
     filter_freq_tag,
     filter_db_tag,
     filter_bandwidth_tag,
-    rotation_mode_tag>;
+    rotation_mode_tag,
+    ducking_speed_tag,
+    ducking_threshold_tag>;
 
 private:
   //----------------------------------------------------------------------------
@@ -787,6 +799,7 @@ private:
 public:
   void reset (plugin_context& pc)
   {
+    add_ducker::reset (pc.get_sample_rate());
     plugcontext = &pc;
     init_init_variables();
     init_block_variables();
@@ -898,13 +911,26 @@ public:
         return 0.;
       }
     }();
-    ;
   }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  {
+    add_ducker::process (
+      outs,
+      ins,
+      samples,
+      [=] (crange<T*> outs_fw, crange<T const*> ins_fw, uint samples_fw) {
+        this->process_intern (outs_fw, ins_fw, samples_fw);
+      });
+  }
+  //----------------------------------------------------------------------------
+private:
   //----------------------------------------------------------------------------
   uint samples_block = 512;
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process_intern (crange<T*> outs, crange<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -1075,8 +1101,6 @@ public:
       };
     }
   }
-
-private:
   // functions for section "init"
   //----------------------------------------------------------------------------
   double init$filter_bandpass_2 (
@@ -1325,7 +1349,10 @@ private:
     return this$value;
   }
   //----------------------------------------------------------------------------
-  double init$smoother_value (double& this$value) { return this$value; }
+  double init$smoother_value (double& this$value)
+  {
+    return this$value;
+  }
 }; /* jsfx_process */
 }} // namespace artv::geraint_luff
 

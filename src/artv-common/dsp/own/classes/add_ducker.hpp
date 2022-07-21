@@ -81,13 +81,22 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  void reset (float samplerate) { _samplerate = samplerate; }
+  void reset (float samplerate)
+  {
+    _samplerate        = samplerate;
+    _ducking_threshold = 2000.f;
+    _ducking_speed     = 2000.f;
+    set (
+      ducking_threshold_tag {},
+      get_parameter (ducking_threshold_tag {}).defaultv);
+    set (ducking_speed_tag {}, get_parameter (ducking_speed_tag {}).defaultv);
+  }
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
   ducker<V> _ducker;
-  float     _ducking_threshold = 999.f;
-  float     _ducking_speed     = 999.f;
+  float     _ducking_threshold {};
+  float     _ducking_speed {};
   float     _samplerate {};
 };
 //------------------------------------------------------------------------------

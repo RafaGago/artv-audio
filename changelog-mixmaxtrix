@@ -1,9 +1,15 @@
 1.7.0
-- diffuse_delay: Add diffuse delay. Can go from echos to sparse reverbs.
-- JUCE: bump to version 7.0.1
-- windows: Reverted ZEN3 compiler flags.
-- reverb: Add ducker.
+- Artv DelayVerb: Add delay that can go from echoes to sparse reverbs.
+- Artv Reverb: Add ducker.
 - TAL reverb 2: Add ducker.
+- BBD echo: Add ducker
+- fdnverb: Add ducker
+- Dragongfly hall/room/plate: Add ducker
+- Echo cycles: Add ducker
+- Atlantis reverb: Add ducker
+- Spring box: Add ducker
+- JUCE: bump to version 7.0.1
+- compilation: windows: Revert ZEN3 cmake option.
 
 1.6.0
 - sound_delay: Add mid/side time delay.
