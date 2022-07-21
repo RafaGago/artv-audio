@@ -16,7 +16,6 @@ namespace artv {
 // tick (fabs (in)): peak follower
 // tick (in * in): mean abs
 // sqrt (tick (in * in)): instant RMS
-//
 struct slew_limiter {
   //----------------------------------------------------------------------------
   enum coeffs { attack, release, n_coeffs };
