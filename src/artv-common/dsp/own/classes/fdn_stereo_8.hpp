@@ -13,6 +13,7 @@
 #include "artv-common/dsp/own/classes/block_resampler.hpp"
 #include "artv-common/dsp/own/classes/delay_line.hpp"
 #include "artv-common/dsp/own/classes/diffusion_matrix.hpp"
+#include "artv-common/dsp/own/classes/ducker.hpp"
 #include "artv-common/dsp/own/classes/reverb_tools.hpp"
 #include "artv-common/dsp/own/parts/interpolation/stateless.hpp"
 
@@ -407,6 +408,18 @@ public:
     _stereo = sqrt (factor);
   }
   //----------------------------------------------------------------------------
+  void set_ducker_speed (float factor)
+  {
+    assert (factor >= 0.f && factor <= 1.f);
+    _ducker.set_speed (
+      vec_set<double_x2> (factor * factor), (float) _cfg.src.srate);
+  }
+  //----------------------------------------------------------------------------
+  void set_ducker_threshold (float db)
+  {
+    _ducker.set_threshold (vec_set<2> ((double) db));
+  }
+  //----------------------------------------------------------------------------
   void set_test_param (uint v) { _test = v; }
   //----------------------------------------------------------------------------
   void reset (uint samplerate, float bpm, cfg const& cfg)
@@ -461,6 +474,7 @@ private:
     // don't require persistency.
     array2d<float, 2, blocksize> tmp;
     array2d<float, 2, blocksize> pre_dif;
+    array2d<float, 2, blocksize> er;
 
     static_assert (early_cfg::n_channels == 4); // hardcoding for readability
     array2d<float, 4, blocksize> early_mtx;
@@ -521,8 +535,8 @@ private:
         early_mtx[i][2] = (early_mtx[i][0] + early_mtx[i][1]) * 0.5f; // mid
         early_mtx[i][3] = early_mtx[i][2];
 
-        block[i][0] = 0.f;
-        block[i][1] = 0.f;
+        er[i][0] = 0.f;
+        er[i][1] = 0.f;
       }
 
       if (_early_gain != 0.f || _er_2_late != 0.f) {
@@ -551,8 +565,8 @@ private:
               early_mtx[i].begin(),
               early_mtx[i].begin() + 1,
               early_mtx[i].end());
-            block[i][(stage & 1) == 0] += early_mtx[i][0] * stage_gain;
-            block[i][(stage & 1) == 1] += early_mtx[i][1] * stage_gain;
+            er[i][(stage & 1) == 0] += early_mtx[i][0] * stage_gain;
+            er[i][(stage & 1) == 1] += early_mtx[i][1] * stage_gain;
           }
           stage_gain *= stage_gain;
         }
@@ -565,9 +579,8 @@ private:
         uint gap_spls = _gap_spls - _gap_lat_spls;
 
         for (uint i = 0; i < block.size(); ++i) {
-          // reminder block[i][0/1] contains the unscaled early reflections
           std::array<float, 4> gap_spl {
-            pre_dif[i][0], pre_dif[i][1], block[i][0], block[i][1]};
+            pre_dif[i][0], pre_dif[i][1], er[i][0], er[i][1]};
 
           _gap.push (gap_spl);
 
@@ -740,11 +753,17 @@ private:
         for (uint i = 0; i < block.size(); ++i) {
           // previously early had no gain scaling (optimization to remove the
           // need for an intermediate buffer)
-          block[i][0] *= _early_gain;
-          block[i][1] *= _early_gain;
+          er[i][0] *= _early_gain;
+          er[i][1] *= _early_gain;
 
-          block[i][0] += early_then_late[i][0] * _late_gain;
-          block[i][1] += early_then_late[i][1] * _late_gain;
+          auto gain_duck = _ducker.tick (double_x2 {block[i][0], block[i][1]});
+
+          block[i][0] = er[i][0];
+          block[i][1] = er[i][1];
+
+          // only ducking the tail, not er...
+          block[i][0] += early_then_late[i][0] * _late_gain * gain_duck[0];
+          block[i][1] += early_then_late[i][1] * _late_gain * gain_duck[1];
 
           block[i][1] = block[i][1] * _stereo + block[i][0] * (1.f - _stereo);
         }
@@ -752,10 +771,10 @@ private:
       else {
         // scale the early reflections + stereo
         for (uint i = 0; i < block.size(); ++i) {
-          block[i][0] *= _early_gain;
-          block[i][1] *= _early_gain;
+          er[i][0] *= _early_gain;
+          er[i][1] *= _early_gain;
 
-          block[i][1] = block[i][1] * _stereo + block[i][0] * (1.f - _stereo);
+          block[i][1] = er[i][1] * _stereo + er[i][0] * (1.f - _stereo);
         }
       }
     }
@@ -1179,6 +1198,8 @@ private:
     vec<float, 16>,
     false>
     _filters;
+
+  ducker<double_x2> _ducker;
 
   float _lf_rt60_factor;
   float _filter_hp_att;

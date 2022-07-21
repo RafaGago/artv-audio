@@ -6623,6 +6623,26 @@ parameter_cpp_class_define (
   reverb::get_parameter (reverb::stereo_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  reverb_ducking_speed,
+  n_stereo_busses,
+  param_common (
+    "Duck Spd",
+    declptr<reverb>(),
+    declptr<reverb::ducking_speed_tag>()),
+  reverb::get_parameter (reverb::ducking_speed_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  reverb_ducking_threshold,
+  n_stereo_busses,
+  param_common (
+    "Duck Thres",
+    declptr<reverb>(),
+    declptr<reverb::ducking_threshold_tag>()),
+  reverb::get_parameter (reverb::ducking_threshold_tag {}),
+  slider_ext);
+
 #if 0
 parameter_cpp_class_define (
   reverb_test,
@@ -6656,7 +6676,9 @@ using reverb_params = mp_list<
   reverb_l_sparseness,
   reverb_r_sparseness,
   reverb_lr_sparseness,
-  reverb_stereo>;
+  reverb_stereo,
+  reverb_ducking_threshold,
+  reverb_ducking_speed>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   diffuse_delay_sixteenths,
@@ -6946,15 +6968,10 @@ using all_fx_typelists = mp_list<
   wonky_crossv_params,
   lin_iir_crossv_params,
   diffuse_delay_params,
-  transience_params>;
+  reverb_params>;
 
-static constexpr auto fx_choices = make_cstr_array (
-  "none",
-  "LR",
-  "Wonky",
-  "lin IIR",
-  "1.FX-tested",
-  "2.Transi");
+static constexpr auto fx_choices
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "1.FX-tested", "2.Rev");
 #else
 // clang-format off
 using all_fx_typelists = mp_list<

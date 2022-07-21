@@ -332,7 +332,7 @@ public:
 
   static constexpr auto get_parameter (gap_tag)
   {
-    return float_param ("sixteenths", 0.f, 16.f, 3.f, 0.001f);
+    return float_param ("sixteenths", 0.f, 16.f, 1.f, 0.001f);
   }
   //----------------------------------------------------------------------------
   struct stereo_tag {};
@@ -349,6 +349,37 @@ public:
   {
     return float_param ("%", 0.f, 100.f, 100.f, 0.01f);
   }
+  //----------------------------------------------------------------------------
+  struct ducking_threshold_tag {};
+  void set (ducking_threshold_tag, float v)
+  {
+    if (v == _ducking_threshold) {
+      return;
+    }
+    _ducking_threshold = v;
+    _impl.set_ducker_threshold (v);
+  }
+
+  static constexpr auto get_parameter (ducking_threshold_tag)
+  {
+    return float_param ("dB", -40.f, 12.f, 12.f, 0.01f);
+  }
+  //----------------------------------------------------------------------------
+  struct ducking_speed_tag {};
+  void set (ducking_speed_tag, float v)
+  {
+    if (v == _ducking_speed) {
+      return;
+    }
+    _ducking_speed = v;
+    _impl.set_ducker_speed (v * 0.01f);
+  }
+
+  static constexpr auto get_parameter (ducking_speed_tag)
+  {
+    return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
+  }
+
 #if 0
   //----------------------------------------------------------------------------
   struct test_param_tag {};
@@ -426,6 +457,8 @@ public:
     _predelay                          = invalid_val;
     _gap                               = invalid_val;
     _stereo                            = invalid_val;
+    _ducking_threshold                 = invalid_val;
+    _ducking_speed                     = invalid_val;
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -458,6 +491,8 @@ private:
   float _predelay;
   float _gap;
   float _stereo;
+  float _ducking_threshold;
+  float _ducking_speed;
   uint  _mod_mode;
 };
 //------------------------------------------------------------------------------
