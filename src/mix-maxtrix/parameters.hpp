@@ -7284,7 +7284,8 @@ using all_fx_typelists = mp_list<
   naive_pitch_params,
   rubberband_params,
   soundtouch_params,
-  reverb_params>;
+  reverb_params,
+  diffuse_delay_params>;
 // clang-format on
 //------------------------------------------------------------------------------
 // ordering between "fx_choices" and "all_fx_params_typelists" MUST match!
@@ -7295,7 +7296,7 @@ static constexpr auto fx_choices = make_cstr_array (
   "-none-",
   ":Compand/Expand Aw Consoles",
   ":Delay BBD",
-  ":Delay Delay Utility",
+  ":Delay Sample Delay",
   ":Delay Echo Cycles",
   ":Delay Spring Box",
   ":Distortion Busscolors4",
@@ -7342,7 +7343,8 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Pitch Naive",
   ":Pitch Rubberband",
   ":Pitch Soundtouch",
-  ":Reverb Artv Reverb");
+  ":Reverb Artv Reverb",
+  ":Delay Artv DelayVerb");
 
 #endif // #if TWEAK_BUILD
 
