@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cassert>
+#include <limits>
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/range.hpp"
@@ -50,6 +51,15 @@ struct envelope {
 
     s[prev] = in + c[time_k] * (s[prev] - in);
     return s[prev];
+  }
+  //----------------------------------------------------------------------------
+  struct rms_tag {};
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (crange<const V> c, crange<V> s, V in, rms_tag)
+  {
+    using T = vec_value_type_t<V>;
+    auto v  = tick (c, s, in * in);
+    return vec_sqrt (vec_max ((T) 0, v));
   }
 };
 //------------------------------------------------------------------------------

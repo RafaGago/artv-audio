@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cassert>
+#include <limits>
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/range.hpp"

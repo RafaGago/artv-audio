@@ -6849,16 +6849,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 using diffuse_delay_params = mp_list<
-  diffuse_delay_sixteenths,
-  diffuse_delay_feedback,
-  diffuse_delay_diffusion,
-  diffuse_delay_transients,
   diffuse_delay_mode,
+  diffuse_delay_sixteenths,
+  diffuse_delay_diffusion,
+  diffuse_delay_feedback,
+  diffuse_delay_transients,
   diffuse_delay_mod_freq,
   diffuse_delay_mod_mode,
   diffuse_delay_mod_depth,
-  diffuse_delay_damp,
   diffuse_delay_tilt,
+  diffuse_delay_damp,
   diffuse_delay_freq_spread,
   diffuse_peak_freq,
   diffuse_peak_drive,

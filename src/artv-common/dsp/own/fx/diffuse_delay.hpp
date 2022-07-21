@@ -12,7 +12,6 @@
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/reverb_tools.hpp"
-#include "artv-common/dsp/own/classes/rms.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/composite/tilt.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
@@ -466,8 +465,8 @@ public:
 
     // rms reset
     constexpr float rms_window_sec = 0.3;
-    _dry_rms.reset (vec_set<4> (rms_window_sec), tgt_srate);
-    _wet_rms.reset (vec_set<4> (rms_window_sec), tgt_srate);
+    _rms.reset_coeffs<rms_dry_idx> (vec_set<4> (rms_window_sec), tgt_srate);
+    _rms.reset_coeffs<rms_wet_idx> (vec_set<4> (rms_window_sec), tgt_srate);
 
     // hack to trigger intialization of some parameters
     _extpar.tilt_db           = 999.f;
@@ -746,7 +745,7 @@ private:
       for (uint i = 0; i < block.size(); ++i) {
         auto taps = vec_from_array (tap_head[i]);
         // measuring input power
-        auto dry_rms = _dry_rms.tick (taps);
+        auto dry_rms = _rms.tick<rms_dry_idx> (taps, envelope::rms_tag {});
         dry_rms      = vec_max (1e-30, dry_rms);
         // FX
         auto wet = _filters.tick<peak_idx> (taps);
@@ -756,7 +755,7 @@ private:
         taps += wet;
 
         // measuring output power and gain riding the feedback gain
-        auto wet_rms = _wet_rms.tick (taps);
+        auto wet_rms = _rms.tick<rms_wet_idx> (taps, envelope::rms_tag {});
         wet_rms      = vec_max (1e-30, wet_rms);
         auto ratio   = dry_rms / (wet_rms);
         taps *= ratio;
@@ -1110,8 +1109,8 @@ private:
   lfo<n_taps>                                  _mod_lfo;
   std::array<lfo<n_serial_diffusors>, n_taps>  _ap_lfo;
   ducker<double_x2>                            _ducker;
-  rms<float_x4>                                _dry_rms;
-  rms<float_x4>                                _wet_rms;
+  enum { rms_dry_idx, rms_wet_idx };
+  part_classes<mp_list<envelope, envelope>, float_x4, false> _rms;
   enum { lp_idx, hp_idx, peak_idx };
   part_classes<
     mp_list<onepole_lowpass, mystran_dc_blocker, andy::svf>,
