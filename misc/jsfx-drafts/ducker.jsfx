@@ -22,14 +22,14 @@ tiny = 0.00000000000000000000000000000000000000000000000000000000000000000000000
 spd_fact = speed * 0.01;
 spd_fact *= spd_fact;
 key.envelope_init(0.0001 + 0.6 * spd_fact, srate);
-smooth.envelope_init (0.0001 + 0.012 * (1 - spd_fact), srate);
+smooth.envelope_init (0.0001 + 0.025 * (1 - spd_fact), srate);
+threshold_lin = db_to_lin (threshold);
 
 @sample
 in = (spl2 * spl2 + spl3 * spl3) * 0.5;
 rms = sqrt (max (tiny, key.envelope_tick (in)));
-db = lin_to_db (rms);
-gr = db < threshold ? 0 : db - threshold;
+rms = max (tiny, rms);
+gr = rms < threshold_lin ? 1. : threshold_lin / rms;
 gr_smooth = smooth.envelope_tick (gr);
-gr_final = db_to_lin (-gr_smooth);
-spl0 *= gr_final;
-spl1 *= gr_final;
+spl0 *= gr_smooth;
+spl1 *= gr_smooth;
