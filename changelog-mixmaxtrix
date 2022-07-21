@@ -9,7 +9,6 @@
 - Atlantis reverb: Add ducker
 - Spring box: Add ducker
 - JUCE: bump to version 7.0.1
-- compilation: windows: Revert ZEN3 cmake option.
 
 1.6.0
 - sound_delay: Add mid/side time delay.
