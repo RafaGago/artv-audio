@@ -193,7 +193,7 @@ public:
 
   static constexpr auto get_parameter (mod_freq_tag)
   {
-    return float_param ("Hz", 0.f, 4.f, 0.17f, 0.01f, 0.5f);
+    return float_param ("Hz", 0.f, 24.f, 0.17f, 0.001f, 0.35f);
   }
   //----------------------------------------------------------------------------
   struct mod_depth_tag {};
@@ -732,13 +732,6 @@ private:
           }
         }
       }
-      // filter and feed back the samples
-      for (uint i = 0; i < block.size(); ++i) {
-        auto taps   = vec_from_array (tap_head[i]);
-        taps        = _filters.tick<lp_idx> (taps);
-        taps        = _filters.tick<hp_idx> (taps);
-        tap_head[i] = vec_to_array (taps);
-      }
       // Feedback FX
       float peak_drive     = _extpar.peak_drive;
       float peak_drive_inv = 1. / peak_drive;
@@ -747,13 +740,15 @@ private:
         // measuring input power
         auto dry_rms = _rms.tick<rms_dry_idx> (taps, envelope::rms_tag {});
         dry_rms      = vec_max (1e-30, dry_rms);
-        // FX
+        // Damp + HP/DC
+        taps = _filters.tick<lp_idx> (taps);
+        taps = _filters.tick<hp_idx> (taps);
+        // Peaking EQ FX
         auto wet = _filters.tick<peak_idx> (taps);
         wet *= peak_drive;
         wet = wet / vec_sqrt (1.f + wet * wet);
         wet *= peak_drive_inv;
         taps += wet;
-
         // measuring output power and gain riding the feedback gain
         auto wet_rms = _rms.tick<rms_wet_idx> (taps, envelope::rms_tag {});
         wet_rms      = vec_max (1e-30, wet_rms);
