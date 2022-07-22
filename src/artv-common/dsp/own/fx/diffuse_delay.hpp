@@ -331,8 +331,8 @@ public:
   struct peak_drive_tag {};
   void set (peak_drive_tag, float v)
   {
-    // -30dB to +30dB range
-    constexpr float dbrange = 30.f;
+    // -40dB to +40dB range
+    constexpr float dbrange = 40.f;
     v *= (0.01 * dbrange * 2.f);
     v -= dbrange;
     if (v == _extpar.peak_drive_db) {
@@ -1008,16 +1008,15 @@ private:
     constexpr float note_weight = 1.f / (max_note - gr_note);
     constexpr float bal_range   = 4.f;
 
-    // don't reduce the gain at higher frequencies, it is disgusting
     auto  note    = _extpar.peak_note;
     auto  absgain = abs (_extpar.peak_gain);
     float peak_reduction
       = (note < gr_note) ? 0.f : (note - gr_note) * note_weight;
-    float max_db = (7.f - peak_reduction * absgain * 2.f);
+    float max_db = (12.f - peak_reduction * absgain * 2.f);
 
     _filters.reset_coeffs<peak_idx> (
       note_to_hzs (note, max_note, _extpar.freq_spread, bal_range),
-      vec_set<4> (0.2f + absgain * 0.6f), // Q
+      vec_set<4> (0.3f + absgain * 0.2f), // Q
       vec_set<4> (_extpar.peak_gain * max_db), // dB
       (float) tgt_srate,
       bell_bandpass_tag {});
