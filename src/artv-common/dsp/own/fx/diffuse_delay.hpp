@@ -410,8 +410,8 @@ public:
     constexpr float sr_kaiser_att_db    = 210;
 
     _resampler.reset (
-      pc.get_sample_rate(),
       tgt_srate,
+      pc.get_sample_rate(),
       sr_cutoff,
       sr_cutoff,
       sr_taps_branch,
