@@ -134,7 +134,7 @@ public:
 
   static constexpr auto get_parameter (gain_tag)
   {
-    return float_param ("dB", -50.f, 12.f, 0.f, 0.2f);
+    return float_param ("dB", -50.f, 12.f, -10.f, 0.2f);
   }
   //----------------------------------------------------------------------------
   struct mode_tag {};
