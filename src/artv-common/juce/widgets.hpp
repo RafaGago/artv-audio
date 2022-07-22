@@ -448,7 +448,7 @@ struct combobox_ext
     juce::AudioProcessorValueTreeState& params)
   {
     assert (default_index < (n_choices + n_future_choices));
-    _default_id = default_index + 1;
+    _default_id = default_index;
 
     combo.setLookAndFeel (&parent.getLookAndFeel());
     init_combobox_items (choices, n_choices, n_future_choices, item_sort);
