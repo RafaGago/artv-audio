@@ -40,7 +40,7 @@ public:
   static constexpr uint      n_inputs  = 1;
   static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
-  static constexpr uint max_t_beats = 2;
+  static constexpr uint max_t_beats = 1;
   //----------------------------------------------------------------------------
   struct sixteenths_tag {};
   void set (sixteenths_tag, float v)
@@ -55,7 +55,7 @@ public:
 
   static constexpr auto get_parameter (sixteenths_tag)
   {
-    return float_param ("sixteenths", 0.1f, max_t_beats * 16, 6.f, 0.01f);
+    return float_param ("sixteenths", 0.1f, max_t_beats * 16, 6.f, 0.001f);
   }
   //----------------------------------------------------------------------------
   struct feedback_tag {};
