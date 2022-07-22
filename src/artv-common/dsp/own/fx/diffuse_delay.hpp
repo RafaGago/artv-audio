@@ -453,7 +453,7 @@ public:
         vec_set<n_serial_diffusors> (0.247f), (float) tgt_srate);
     }
 #if DIFFUSE_DELAY_USE_THIRAN_TAPS
-    _delay.set_resync_delta (0.0);
+    _delay.set_resync_delta (10.0);
 #endif
 #if DIFFUSE_DELAY_USE_THIRAN_DIFFUSORS
     for (uint i = 0; i < n_taps; ++i) {
@@ -1093,7 +1093,7 @@ private:
   internal_parameters            _param {};
   block_resampler<arith_type, 2> _resampler {};
 #if DIFFUSE_DELAY_USE_THIRAN_TAPS
-  modulable_thiran1_delay_line<vec1_type> _delay {};
+  modulable_thiran1_delay_line<vec1_type, 2> _delay {};
 #else
   interpolated_delay_line<vec1_type, catmull_rom_interp> _delay {};
 #endif
