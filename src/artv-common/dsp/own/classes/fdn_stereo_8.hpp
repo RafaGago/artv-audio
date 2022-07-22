@@ -17,6 +17,8 @@
 #include "artv-common/dsp/own/classes/reverb_tools.hpp"
 #include "artv-common/dsp/own/parts/interpolation/stateless.hpp"
 
+#define ARTV_FDNST8_USE_THIRAN 0
+
 namespace artv {
 
 //------------------------------------------------------------------------------
@@ -623,9 +625,33 @@ private:
           for (uint j = 0; j < 16; ++j) {
             assert (n_spls[j] >= 0.f);
           }
-          late_mtx[i] = vec_to_array (n_spls - (float) i);
+#if !ARTV_FDNST8_USE_THIRAN
+          n_spls -= (float) i;
+#endif
+          late_mtx[i] = vec_to_array (n_spls);
         }
 
+#if ARTV_FDNST8_USE_THIRAN
+        array2d<float, late_cfg::n_channels, blocksize> past_spls;
+        for (uint c = 0; c < late_cfg::n_channels; ++c) {
+          for (uint i = 0; i < block.size(); ++i) {
+            past_spls[i][c] = _late[c].get (late_mtx[i][c], 0, i)[0];
+          }
+        }
+        for (uint i = 0; i < block.size(); ++i) {
+          auto spls = vec_from_array (past_spls[i]);
+          auto lp   = _filters.tick<lp_idx> (spls);
+          lp        = _filters.tick<dc_idx> (lp);
+          auto hp   = (spls - lp) * _filter_hp_att;
+
+          // Final attenuation
+          lp *= _rt60_att_l;
+          hp *= _rt60_att_h;
+
+          auto join   = lp + hp;
+          late_mtx[i] = vec_to_array (join);
+        }
+#else
         // chorus + dc + filtering in one stage to avoid multiple vector to
         // array conversions
         for (uint i = 0; i < block.size(); ++i) {
@@ -641,13 +667,10 @@ private:
           lp *= _rt60_att_l;
           hp *= _rt60_att_h;
 
-          auto join = lp + hp;
-#if 0 // Not sure if it contributes positively a lot, but it adds CPU.
-      // sigmoid
-          join = join / vec_sqrt (join * join + 1.f);
-#endif
+          auto join   = lp + hp;
           late_mtx[i] = vec_to_array (join);
         }
+#endif
         // internal diffusor lfo.
         mod_g = make_crange (tmp);
         for (uint i = 0; i < block.size(); ++i) {
@@ -709,7 +732,14 @@ private:
             late_mtx[i].begin() + 6,
             late_mtx[i].begin() + 11);
 
+#if ARTV_FDNST8_USE_THIRAN
+          for (uint c = 0; c < late_cfg::n_channels; ++c) {
+            auto vec_x1 = make_array (make_vec (late_mtx[i][c]));
+            _late[c].push (vec_x1);
+          }
+#else
           _late.push (late_mtx[i]);
+#endif
         }
         // stereo comb
         // ---------------------------------------------------------------------
@@ -852,9 +882,9 @@ private:
     for (uint i = 0; i < _cfg.late.n_samples.size(); ++i) {
       _late_n_spls_master[i] = (float) (_cfg.late.n_samples[i]);
     }
-#if 0
+#if ARTV_FDNST8_USE_THIRAN
     for (auto& dl : _late) {
-      dl.set_resync_delta (20.f);
+      dl.set_resync_delta (50.f);
     }
 #endif
   }
@@ -990,15 +1020,26 @@ private:
       spls += 1.f; // before casting
     }
     auto late_sizes = array_cast<u32> (late_sizes_tmp);
+#if ARTV_FDNST8_USE_THIRAN
+    uint late_thiran_n_spls = 0;
+    for (auto& size : late_sizes) {
+      size += (u32) (_cfg.late.max_chorus_depth_spls) + 1;
+      size = _late[0].n_required_elems (pow2_round_ceil (size), 1);
+      late_thiran_n_spls += size;
+    }
+#endif
 
     // computing.
     uint mem_total = 0;
     mem_total += convert_to_max_sizes (pre_dif_sizes);
     mem_total += convert_to_max_sizes (early_sizes);
+#if ARTV_FDNST8_USE_THIRAN
+    mem_total += late_thiran_n_spls;
+#else
     mem_total += convert_to_max_sizes (
       late_sizes,
       (u32) (_cfg.late.max_chorus_depth_spls + delay_line_type::interp::n_points));
-
+#endif
     mem_total += convert_to_max_sizes (int_dif_sizes);
     mem_total += convert_to_max_sizes (out_dif_sizes);
 
@@ -1042,8 +1083,14 @@ private:
         _early[i][j].reset (mem.cut_head (early_sizes[i][j]));
       }
     }
-    // late
+// late
+#if ARTV_FDNST8_USE_THIRAN
+    for (uint i = 0; i < _late.size(); ++i) {
+      _late[i].reset (mem.cut_head (late_sizes[i]).cast<float_x1>(), 1);
+    }
+#else
     mem = _late.reset<u32> (mem.cast<float>(), late_sizes).cast<float_x1>();
+#endif
     // internal diffusor
     for (uint i = 0; i < int_dif_sizes.size(); ++i) {
       for (uint j = 0; j < int_dif_sizes[0].size(); ++j) {
@@ -1167,12 +1214,17 @@ private:
   vec<float, late_cfg::n_channels>        _late_n_spls;
   uint                                    _late_wave = 0;
 
+#if ARTV_FDNST8_USE_THIRAN
+  using delay_line_type = modulable_thiran1_delay_line<float_x1, 2, false>;
+  std::array<delay_line_type, late_cfg::n_channels> _late;
+#else
   using delay_line_type = interpolated_multisized_delay_line<
     float,
     late_cfg::n_channels,
     catmull_rom_interp,
     true>;
   delay_line_type _late;
+#endif
 
   float _size             = 1.f;
   float _in_2_late        = 1.f;
