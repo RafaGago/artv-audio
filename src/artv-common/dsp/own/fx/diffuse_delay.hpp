@@ -434,7 +434,7 @@ public:
     _n_spls_smoother.reset_states();
 
     // get time info maximum buffer sizes and allocate
-    _param.spls_x_beat = pc.get_samples_per_beat();
+    _param.spls_x_beat = (60.f / pc.get_play_state().bpm) * (float) tgt_srate;
     initialize_buffer_related_parts();
 
     _filters.reset_states<lp_idx>();
