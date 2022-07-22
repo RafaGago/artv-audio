@@ -331,8 +331,7 @@ public:
   struct peak_drive_tag {};
   void set (peak_drive_tag, float v)
   {
-    // -40dB to +40dB range
-    constexpr float dbrange = 40.f;
+    constexpr float dbrange = 30.f;
     v *= (0.01 * dbrange * 2.f);
     v -= dbrange;
     if (v == _extpar.peak_drive_db) {
@@ -364,6 +363,15 @@ public:
   {
     return frequency_parameter (peak_min_hz, peak_max_hz, 440.0);
   }
+  //----------------------------------------------------------------------------
+  struct peak_envfollow_tag {};
+  void set (peak_envfollow_tag, float v) { _extpar.peak_envfollow = v * 0.01; }
+
+  static constexpr auto get_parameter (peak_envfollow_tag)
+  {
+    return float_param ("%", -100.f, 100.f, 0.f, 0.1f);
+  }
+
   //----------------------------------------------------------------------------
   struct peak_gain_tag {};
   void set (peak_gain_tag, float v)
@@ -400,7 +408,8 @@ public:
     hipass_tag,
     peak_drive_tag,
     peak_freq_tag,
-    peak_gain_tag>;
+    peak_gain_tag,
+    peak_envfollow_tag>;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -464,9 +473,10 @@ public:
 #endif
 
     // rms reset
-    constexpr float rms_window_sec = 0.3;
-    _rms.reset_coeffs<rms_dry_idx> (vec_set<4> (rms_window_sec), tgt_srate);
-    _rms.reset_coeffs<rms_wet_idx> (vec_set<4> (rms_window_sec), tgt_srate);
+    constexpr float rms_window_sec = 0.3f;
+    _env.reset_coeffs<rms_dry_idx> (vec_set<4> (rms_window_sec), tgt_srate);
+    _env.reset_coeffs<rms_wet_idx> (vec_set<4> (rms_window_sec), tgt_srate);
+    _env.reset_coeffs<peakfollow_idx> (vec_set<4> (0.05f), tgt_srate);
 
     // hack to trigger intialization of some parameters
     _extpar.tilt_db           = 999.f;
@@ -737,12 +747,33 @@ private:
       float peak_drive_inv = 1. / peak_drive;
       for (uint i = 0; i < block.size(); ++i) {
         auto taps = vec_from_array (tap_head[i]);
-        // measuring input power
-        auto dry_rms = _rms.tick<rms_dry_idx> (taps, envelope::rms_tag {});
+        // measuring feedback input power
+        auto dry_rms = _env.tick<rms_dry_idx> (taps, envelope::rms_tag {});
         dry_rms      = vec_max (1e-30, dry_rms);
+
+        // filter cutoff modulation by signal
+        auto l     = block[i][0];
+        auto r     = block[i][1];
+        auto input = float_x4 {(float) l, (float) r, (float) r, (float) r};
+        auto input_env
+          = _env.tick<peakfollow_idx> (input, envelope::rms_tag {});
+        if ((_peak_update_spls & 15) == 0) {
+          auto freq = _param.peak_freqs;
+          freq *= vec_exp (input_env * _extpar.peak_envfollow * 16.f);
+          freq = vec_min (freq, (float) ((tgt_srate / 2) - 1));
+          _filters.reset_coeffs<peak_idx> (
+            freq,
+            _param.peak_qs,
+            _param.peak_dbs,
+            (float) tgt_srate,
+            bell_bandpass_tag {});
+        }
+        ++_peak_update_spls;
+
         // Damp + HP/DC
         taps = _filters.tick<lp_idx> (taps);
         taps = _filters.tick<hp_idx> (taps);
+
         // Peaking EQ FX
         auto wet = _filters.tick<peak_idx> (taps);
         wet *= peak_drive;
@@ -750,7 +781,7 @@ private:
         wet *= peak_drive_inv;
         taps += wet;
         // measuring output power and gain riding the feedback gain
-        auto wet_rms = _rms.tick<rms_wet_idx> (taps, envelope::rms_tag {});
+        auto wet_rms = _env.tick<rms_wet_idx> (taps, envelope::rms_tag {});
         wet_rms      = vec_max (1e-30, wet_rms);
         auto ratio   = dry_rms / (wet_rms);
         taps *= ratio;
@@ -1003,7 +1034,7 @@ private:
   void update_peak()
   {
     constexpr float min_note    = constexpr_hz_to_midi_note (peak_min_hz);
-    constexpr float gr_note     = constexpr_hz_to_midi_note (2000.);
+    constexpr float gr_note     = constexpr_hz_to_midi_note (3000.);
     constexpr float max_note    = constexpr_hz_to_midi_note (peak_max_hz);
     constexpr float note_weight = 1.f / (max_note - gr_note);
     constexpr float bal_range   = 4.f;
@@ -1014,12 +1045,13 @@ private:
       = (note < gr_note) ? 0.f : (note - gr_note) * note_weight;
     float max_db = (12.f - peak_reduction * absgain * 2.f);
 
-    _filters.reset_coeffs<peak_idx> (
-      note_to_hzs (note, max_note, _extpar.freq_spread, bal_range),
-      vec_set<4> (0.3f + absgain * 0.2f), // Q
-      vec_set<4> (_extpar.peak_gain * max_db), // dB
-      (float) tgt_srate,
-      bell_bandpass_tag {});
+    _param.peak_freqs
+      = note_to_hzs (note, max_note, _extpar.freq_spread, bal_range);
+    _param.peak_qs  = vec_set<4> (0.3f + absgain * 0.2f);
+    _param.peak_dbs = vec_set<4> (_extpar.peak_gain * max_db);
+
+    // update the peak filter on the next block (it is done at mod rate)
+    _peak_update_spls = 0;
   }
   //----------------------------------------------------------------------------
   vec<arith_type, n_taps> note_to_hzs (
@@ -1060,6 +1092,7 @@ private:
     float transients;
     float hp;
     float peak_freq;
+    float peak_envfollow;
     float peak_drive_db;
     float peak_drive;
     float peak_gain;
@@ -1067,10 +1100,13 @@ private:
   };
   //----------------------------------------------------------------------------
   struct internal_parameters {
-    double delay_spls_max;
-    double spls_x_beat;
-    float  fb_gain;
-    float  main_gain;
+    float_x4 peak_freqs;
+    float_x4 peak_qs;
+    float_x4 peak_dbs;
+    double   delay_spls_max;
+    double   spls_x_beat;
+    float    fb_gain;
+    float    main_gain;
   };
 //----------------------------------------------------------------------------
 #if DIFFUSE_DELAY_USE_THIRAN_DIFFUSORS
@@ -1087,6 +1123,7 @@ private:
     _diffusor;
 #endif
   //----------------------------------------------------------------------------
+  uint                           _peak_update_spls {};
   double                         _gr_prev {};
   external_parameters            _extpar {};
   internal_parameters            _param {};
@@ -1103,8 +1140,8 @@ private:
   lfo<n_taps>                                  _mod_lfo;
   std::array<lfo<n_serial_diffusors>, n_taps>  _ap_lfo;
   ducker<double_x2>                            _ducker;
-  enum { rms_dry_idx, rms_wet_idx };
-  part_classes<mp_list<envelope, envelope>, float_x4, false> _rms;
+  enum { rms_dry_idx, rms_wet_idx, peakfollow_idx };
+  part_classes<mp_list<envelope, envelope, envelope>, float_x4, false> _env;
   enum { lp_idx, hp_idx, peak_idx };
   part_classes<
     mp_list<onepole_lowpass, mystran_dc_blocker, andy::svf>,

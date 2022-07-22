@@ -7098,6 +7098,16 @@ parameter_cpp_class_define (
   diffuse_delay::get_parameter (diffuse_delay::peak_drive_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  diffuse_peak_envfollow,
+  n_stereo_busses,
+  param_common (
+    "Peak EF",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::peak_envfollow_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::peak_envfollow_tag {}),
+  slider_ext);
+
 using diffuse_delay_params = mp_list<
   diffuse_delay_mode,
   diffuse_delay_sixteenths,
@@ -7107,16 +7117,19 @@ using diffuse_delay_params = mp_list<
   diffuse_delay_mod_freq,
   diffuse_delay_mod_mode,
   diffuse_delay_mod_depth,
-  diffuse_delay_tilt,
+
   diffuse_delay_damp,
+  diffuse_delay_hipass,
+  diffuse_delay_tilt,
   diffuse_delay_freq_spread,
+  diffuse_peak_gain,
   diffuse_peak_freq,
   diffuse_peak_drive,
-  diffuse_peak_gain,
-  diffuse_delay_hipass,
-  diffuse_delay_desync,
+  diffuse_peak_envfollow,
+
   diffuse_delay_ducking_threshold,
   diffuse_delay_ducking_speed,
+  diffuse_delay_desync,
   diffuse_delay_gain>;
 
 //------------------------------------------------------------------------------
