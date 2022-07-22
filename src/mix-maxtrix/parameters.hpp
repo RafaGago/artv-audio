@@ -7062,7 +7062,7 @@ parameter_cpp_class_define (
   diffuse_delay_hipass,
   n_stereo_busses,
   param_common (
-    "HP Filt",
+    "Hipass",
     declptr<diffuse_delay>(),
     declptr<diffuse_delay::hipass_tag>()),
   diffuse_delay::get_parameter (diffuse_delay::hipass_tag {}),
