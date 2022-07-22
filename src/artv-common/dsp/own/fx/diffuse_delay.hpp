@@ -671,13 +671,12 @@ private:
 #endif
         auto min_spls = vec_set<n_taps> (interp_headroom_spls + blocksize);
         n_spls[i]     = n_spls[i] >= min_spls ? n_spls[i] : min_spls;
-        n_spls[i] -= vec_set<n_taps> ((arith_type) i);
       }
       // fill the tail samples, with feedback gain applied
       auto fb_gain = _param.fb_gain;
       for (uint t = 0; t < n_taps; ++t) {
         for (uint i = 0; i < block.size(); ++i) {
-          tap_tail[i][t] = _delay.get (n_spls[i][t], t)[0] * fb_gain;
+          tap_tail[i][t] = _delay.get (n_spls[i][t], t, i)[0] * fb_gain;
         }
       }
       // transient shaping
@@ -1129,7 +1128,7 @@ private:
   internal_parameters            _param {};
   block_resampler<arith_type, 2> _resampler {};
 #if DIFFUSE_DELAY_USE_THIRAN_TAPS
-  modulable_thiran1_delay_line<vec1_type, 2> _delay {};
+  modulable_thiran1_delay_line<vec1_type, 4> _delay {};
 #else
   interpolated_delay_line<vec1_type, catmull_rom_interp> _delay {};
 #endif

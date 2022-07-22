@@ -888,13 +888,22 @@ public:
   static constexpr uint n_interp_states = base::n_interp_states;
   static constexpr uint n_warmup_spls   = Allpass_warmup_spls;
   //----------------------------------------------------------------------------
+  // Not so sure of the resync feature, on delays with low modulation it has
+  // been good enough to set this value high and only run with recomputation of
+  // coefficients.
   void set_resync_delta (float spls) { _resync_delta = spls; }
   //----------------------------------------------------------------------------
-  value_type get (float delay_spls, uint channel)
+  // when calling blockwise a block of samples is fetched, processed, stored
+  // and then a block of the same size is inserted.
+  //
+  // As the interpolators may reset each time "delay_spls" changes, the
+  // "delay_spls_offset" allows distinguishing between modulation and block
+  // access and allows the function to act accordingly.
+  value_type get (float delay_spls, uint channel, uint delay_spls_offset = 0)
   {
     assert (channel < n_channels());
 
-    auto diff     = delay_spls - this->get_delay_spls (channel);
+    auto diff = delay_spls - this->get_delay_spls (channel) - delay_spls_offset;
     auto diff_abs = abs (diff);
     if (unlikely (diff_abs == 0.f)) {
       // no modulation, not the main use case for this...
@@ -904,6 +913,8 @@ public:
     uint  spls = (uint) delay_spls;
     float frac = delay_spls - (float) spls;
     this->reset_interpolator (delay_spls, frac, channel, false);
+    spls -= delay_spls_offset;
+    assert (spls >= interp::n_points - 1);
 
     if (diff_abs >= _resync_delta) {
       // hack the previous states to linear interpolation as a starting point
