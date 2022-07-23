@@ -7114,9 +7114,9 @@ using diffuse_delay_params = mp_list<
   diffuse_delay_diffusion,
   diffuse_delay_feedback,
   diffuse_delay_transients,
-  diffuse_delay_mod_freq,
-  diffuse_delay_mod_mode,
-  diffuse_delay_mod_depth,
+  diffuse_delay_gain,
+  diffuse_delay_ducking_threshold,
+  diffuse_delay_ducking_speed,
 
   diffuse_delay_damp,
   diffuse_delay_hipass,
@@ -7127,10 +7127,10 @@ using diffuse_delay_params = mp_list<
   diffuse_peak_drive,
   diffuse_peak_envfollow,
 
-  diffuse_delay_ducking_threshold,
-  diffuse_delay_ducking_speed,
+  diffuse_delay_mod_mode,
+  diffuse_delay_mod_freq,
   diffuse_delay_desync,
-  diffuse_delay_gain>;
+  diffuse_delay_mod_depth>;
 
 //------------------------------------------------------------------------------
 #if 0
@@ -7201,17 +7201,23 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  reverb_params>;
+  diffuse_delay_params,
+  filter2x_params>;
 
-static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "1.FX-tested");
+static constexpr auto fx_choices = make_cstr_array (
+  "none",
+  "LR",
+  "Wonky",
+  "lin IIR",
+  "1.FX-tested",
+  "Filters");
 #else
 // clang-format off
 using all_fx_typelists = mp_list<
