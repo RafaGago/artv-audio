@@ -612,10 +612,11 @@ private:
 
     auto const allpass_sizes = get_diffusor_delay_spls();
 
-    std::array<vec_type, blocksize>                              n_spls;
-    std::array<std::array<arith_type, n_taps>, blocksize>        tap_tail;
-    std::array<std::array<arith_type, n_taps>, blocksize>        tap_head;
-    std::array<std::array<float, n_serial_diffusors>, blocksize> ap_spls;
+    std::array<vec_type, blocksize>               n_spls;
+    array2d<arith_type, n_taps, blocksize>        tap_tail;
+    array2d<arith_type, n_taps, blocksize>        tap_head;
+    array2d<arith_type, 2, blocksize>             ducker_gain;
+    array2d<float, n_serial_diffusors, blocksize> ap_spls;
 
     while (io.size()) {
       auto block = io.cut_head (std::min<uint> (io.size(), blocksize));
@@ -679,16 +680,20 @@ private:
           tap_tail[i][t] = _delay.get (n_spls[i][t], t, i)[0] * fb_gain;
         }
       }
-      // transient shaping
-      _transients.process (block);
       // tilt inputs
       for (uint i = 0; i < block.size(); ++i) {
         auto&     lr = block[i];
-        double_x2 tilted {lr[0], lr[1]};
-        tilted = _tilt.tick (tilted);
-        lr[0]  = (arith_type) tilted[0];
-        lr[1]  = (arith_type) tilted[1];
+        double_x2 ins {lr[0], lr[1]};
+        auto      gain    = _ducker.tick (ins);
+        ins               = _tilt.tick (ins);
+        ducker_gain[i][0] = (arith_type) gain[0];
+        ducker_gain[i][1] = (arith_type) gain[1];
+        lr[0]             = (arith_type) ins[0];
+        lr[1]             = (arith_type) ins[1];
       }
+
+      // transient shaping
+      _transients.process (block);
       // specific interleaving
       switch (_extpar.mode) {
       case m_stereo:
@@ -879,17 +884,14 @@ private:
       auto main_gain = _param.main_gain;
       for (uint i = 0; i < block.size(); ++i) {
         // This is now tilted...
-        auto ducking_gain = _ducker.tick (double_x2 {block[i][0], block[i][1]});
-        block[i][0]       = 0.f;
-        block[i][1]       = 0.f;
+        block[i][0] = 0.f;
+        block[i][1] = 0.f;
         for (uint t = 0; t < n_taps; ++t) {
           block[i][0] += tap_tail[i][t] * tap_mul[t][0];
           block[i][1] += tap_tail[i][t] * tap_mul[t][1];
         }
-        auto out = double_x2 {block[i][0], block[i][1]};
-        out *= main_gain * ducking_gain;
-        block[i][0] = (T) out[0];
-        block[i][1] = (T) out[1];
+        block[i][0] *= main_gain * ducker_gain[i][0];
+        block[i][1] *= main_gain * ducker_gain[i][1];
       }
     }
   }
