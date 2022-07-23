@@ -485,9 +485,14 @@ struct combobox_ext
         combo.setSelectedItemIndex (id);
       }
     };
-    combo.setSelectedItemIndex (_default_id);
     next.setConnectedEdges (juce::TextButton::ConnectedOnLeft);
     parent.addAndMakeVisible (next);
+
+    int id = combo.getSelectedItemIndex();
+    if (id == -1) {
+      // only overwrite if the attachment didn't set a value
+      combo.setSelectedItemIndex (_default_id);
+    }
   }
 
   void clear()
