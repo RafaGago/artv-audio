@@ -193,7 +193,7 @@ public:
 
   static constexpr auto get_parameter (mod_freq_tag)
   {
-    return float_param ("Hz", 0.f, 24.f, 0.17f, 0.001f, 0.35f);
+    return float_param ("Hz", 0.f, 12.f, 0.17f, 0.001f, 0.4f);
   }
   //----------------------------------------------------------------------------
   struct mod_depth_tag {};
