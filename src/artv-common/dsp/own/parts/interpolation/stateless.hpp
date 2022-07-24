@@ -1,5 +1,6 @@
 #pragma once
 
+#include "artv-common/dsp/own/classes/windowed_sync.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
@@ -233,5 +234,62 @@ struct catmull_rom_interp {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
+template <uint N, uint N_tables>
+struct sinc_interp {
+  //----------------------------------------------------------------------------
+  static constexpr uint   n_coeffs     = N * (N_tables + 1);
+  static constexpr uint   n_coeffs_int = 0;
+  static constexpr uint   n_states     = 0;
+  static constexpr uint   n_points     = N;
+  static constexpr uint   x_offset     = N / 2;
+  static constexpr double n_tables     = N_tables;
+  static constexpr double mu           = 1. / n_tables;
+  //----------------------------------------------------------------------------
+  template <class T> // fc 0 to 0.5
+  static void reset_coeffs (crange<T> co, float fc, float kaiser_att_db)
+  {
+    static_assert (!is_vec_v<T>);
+    assert (co.size() >= n_coeffs);
 
+    auto mem = co;
+    for (uint tbl = 0; tbl < N_tables; ++tbl) {
+      kaiser_lp_kernel (
+        mem.cut_head (n_points), fc, kaiser_att_db, mu * tbl, false);
+    }
+    crange_memcpy (co, mem.cut_head (n_points));
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  static void reset_states (crange<T>)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (crange<const V> co, crange<V>, std::array<V, n_points> y, V x)
+  {
+    using T = vec_value_type_t<V>;
+    for (uint i = 1; i < vec_traits_t<vec_type>::size; ++i) {
+      // this interpolation method doesn't support multiple lookup points.
+      assert (x[0] == x[i]);
+    }
+    // there are other implentations that use more memory at the expense of less
+    // calculations. This is the "naive" way, going for more locality and half
+    // the table size at the expense of more muls and additions (almost free on
+    // a modern CPU). For float and N up to 8 it only touches one cache line.
+    T    frac     = x[0];
+    uint tbl      = frac * (n_tables);
+    T    co_lerp1 = (frac - ((T) tbl * mu)) * n_tables;
+    T    co_lerp2 = 1.f - co_lerp1;
+
+    auto dotprod = vec_set<V> (0);
+    for (uint i = 0; i < n_points; ++i) {
+      // table interpolation
+      T sinc_lerp = co[tbl * n_points + i] * co_lerp1;
+      sinc_lerp += co[(tbl + 1) * n_points + i] * co_lerp2;
+      dotprod += y[i] * sinc_lerp;
+    }
+    return dotprod;
+  }
+  //----------------------------------------------------------------------------
+};
+//------------------------------------------------------------------------------
 } // namespace artv
