@@ -78,7 +78,7 @@ protected:
     T oversampling = (sr * (T) (1. / 44100.));
     V norm_freq    = (freq * (T) (1. / 20000.));
 
-    V f0  = norm_freq * M_PI / oversampling;
+    V f0  = norm_freq * (T) M_PI / oversampling;
     V hv  = vec_tan (f0 / ((T) 2.1 * oversampling)) * (T) 2.1 * oversampling;
     c[hh] = hv * (T) 0.5;
     c[k]  = reso * (T) 2.;

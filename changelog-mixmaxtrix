@@ -1,5 +1,8 @@
 1.7.0
-- Artv DelayVerb: Add delay that can go from echoes to sparse reverbs.
+- Artv DelayVerb: Features include different tap configurations, diffusion,
+  ducking, transient control, multiple delay line length modulation modes, input
+  tilt filter and Joep Vanlier's K35 bandpass/peaking filter on the feedback
+  path with an envelope follower.
 - Artv Reverb: Add ducker.
 - TAL reverb 2: Add ducker.
 - BBD echo: Add ducker

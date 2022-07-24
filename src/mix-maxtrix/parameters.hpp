@@ -7069,43 +7069,53 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  diffuse_peak_freq,
+  diffuse_bp_freq,
   n_stereo_busses,
   param_common (
-    "Peak Freq",
+    "BP Freq",
     declptr<diffuse_delay>(),
-    declptr<diffuse_delay::peak_freq_tag>()),
-  diffuse_delay::get_parameter (diffuse_delay::peak_freq_tag {}),
+    declptr<diffuse_delay::bp_freq_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::bp_freq_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  diffuse_peak_gain,
+  diffuse_bp_wet_dry,
   n_stereo_busses,
   param_common (
-    "Peak Gain",
+    "BP WetDry",
     declptr<diffuse_delay>(),
-    declptr<diffuse_delay::peak_gain_tag>()),
-  diffuse_delay::get_parameter (diffuse_delay::peak_gain_tag {}),
+    declptr<diffuse_delay::bp_wet_dry_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::bp_wet_dry_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  diffuse_peak_drive,
+  diffuse_bp_drive,
   n_stereo_busses,
   param_common (
-    "Peak Drv",
+    "BP Drv",
     declptr<diffuse_delay>(),
-    declptr<diffuse_delay::peak_drive_tag>()),
-  diffuse_delay::get_parameter (diffuse_delay::peak_drive_tag {}),
+    declptr<diffuse_delay::bp_drive_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::bp_drive_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  diffuse_peak_envfollow,
+  diffuse_bp_envfollow,
   n_stereo_busses,
   param_common (
-    "Peak EF",
+    "BP EnvF",
     declptr<diffuse_delay>(),
-    declptr<diffuse_delay::peak_envfollow_tag>()),
-  diffuse_delay::get_parameter (diffuse_delay::peak_envfollow_tag {}),
+    declptr<diffuse_delay::bp_envfollow_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::bp_envfollow_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  diffuse_bp_reso,
+  n_stereo_busses,
+  param_common (
+    "BP Reso",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::bp_reso_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::bp_reso_tag {}),
   slider_ext);
 
 using diffuse_delay_params = mp_list<
@@ -7122,16 +7132,16 @@ using diffuse_delay_params = mp_list<
   diffuse_delay_hipass,
   diffuse_delay_tilt,
   diffuse_delay_freq_spread,
-  diffuse_peak_gain,
-  diffuse_peak_freq,
-  diffuse_peak_drive,
-  diffuse_peak_envfollow,
-
   diffuse_delay_mod_mode,
   diffuse_delay_mod_freq,
   diffuse_delay_desync,
-  diffuse_delay_mod_depth>;
+  diffuse_delay_mod_depth,
 
+  diffuse_bp_wet_dry,
+  diffuse_bp_freq,
+  diffuse_bp_drive,
+  diffuse_bp_reso,
+  diffuse_bp_envfollow>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
@@ -7201,7 +7211,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<

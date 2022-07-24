@@ -12,9 +12,9 @@
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/reverb_tools.hpp"
-#include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/composite/tilt.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
+#include "artv-common/dsp/own/parts/filters/saike.hpp"
 #include "artv-common/dsp/own/parts/interpolation/stateless.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/third_party/saike/transience.hpp"
@@ -251,7 +251,7 @@ public:
     }
     _extpar.freq_spread = v;
     update_damp();
-    update_peak();
+    update_bp();
   }
 
   static constexpr auto get_parameter (freq_spread_tag)
@@ -328,65 +328,75 @@ public:
     return float_param ("%", 0.f, 100.f, 25.f, 0.01f);
   }
   //----------------------------------------------------------------------------
-  struct peak_drive_tag {};
-  void set (peak_drive_tag, float v)
+  struct bp_drive_tag {};
+  void set (bp_drive_tag, float v)
   {
-    constexpr float dbrange = 30.f;
-    v *= (0.01 * dbrange * 2.f);
-    v -= dbrange;
-    if (v == _extpar.peak_drive_db) {
+    constexpr float dbrange = 11.f;
+    v *= (0.01 * dbrange);
+    if (v == _extpar.bp_drive_db) {
       return;
     }
-    _extpar.peak_drive_db = v;
-    _extpar.peak_drive    = db_to_gain (v);
+    _extpar.bp_drive_db = v;
+    _extpar.bp_drive    = db_to_gain (v);
   }
 
-  static constexpr auto get_parameter (peak_drive_tag)
-  {
-    return float_param ("%", 0.f, 100.f, 0.f, 0.1f);
-  }
-  //----------------------------------------------------------------------------
-  struct peak_freq_tag {};
-  void set (peak_freq_tag, float v)
-  {
-    if (v == _extpar.peak_note) {
-      return;
-    }
-    _extpar.peak_note = v;
-    update_peak();
-  }
-
-  static constexpr float peak_min_hz = 100.;
-  static constexpr float peak_max_hz = 5000.;
-
-  static constexpr auto get_parameter (peak_freq_tag)
-  {
-    return frequency_parameter (peak_min_hz, peak_max_hz, 440.0);
-  }
-  //----------------------------------------------------------------------------
-  struct peak_envfollow_tag {};
-  void set (peak_envfollow_tag, float v) { _extpar.peak_envfollow = v * 0.01; }
-
-  static constexpr auto get_parameter (peak_envfollow_tag)
+  static constexpr auto get_parameter (bp_drive_tag)
   {
     return float_param ("%", -100.f, 100.f, 0.f, 0.1f);
   }
-
   //----------------------------------------------------------------------------
-  struct peak_gain_tag {};
-  void set (peak_gain_tag, float v)
+  struct bp_freq_tag {};
+  void set (bp_freq_tag, float v)
+  {
+    if (v == _extpar.bp_note) {
+      return;
+    }
+    _extpar.bp_note = v;
+    update_bp();
+  }
+
+  static constexpr float bp_min_hz = 100.;
+  static constexpr float bp_max_hz = 3500.;
+
+  static constexpr auto get_parameter (bp_freq_tag)
+  {
+    return frequency_parameter (bp_min_hz, bp_max_hz, 440.0);
+  }
+  //----------------------------------------------------------------------------
+  struct bp_envfollow_tag {};
+  void set (bp_envfollow_tag, float v) { _extpar.bp_envfollow = v * 0.01; }
+
+  static constexpr auto get_parameter (bp_envfollow_tag)
+  {
+    return float_param ("%", -100.f, 100.f, 0.f, 0.1f);
+  }
+  //----------------------------------------------------------------------------
+  struct bp_wet_dry_tag {};
+  void set (bp_wet_dry_tag, float v)
   {
     v *= 0.01;
-    if (v == _extpar.peak_gain) {
+    if (v == _extpar.bp_wetdry) {
       return;
     }
-    _extpar.peak_gain = v;
-    update_peak();
+    _extpar.bp_wetdry = v;
+    update_bp();
   }
 
-  static constexpr auto get_parameter (peak_gain_tag)
+  static constexpr auto get_parameter (bp_wet_dry_tag)
   {
-    return float_param ("%", -100.f, 100.f, 0.f, 0.1f);
+    return float_param ("%", -100.f, 100.f, 0.f, 0.01f);
+  }
+  //----------------------------------------------------------------------------
+  struct bp_reso_tag {};
+  void set (bp_reso_tag, float v)
+  {
+    v *= 0.01;
+    _extpar.bp_reso = 0.0001f + v * 0.9999f;
+  }
+
+  static constexpr auto get_parameter (bp_reso_tag)
+  {
+    return float_param ("%", 0.f, 100.f, 0.f, 0.001f);
   }
   //----------------------------------------------------------------------------
   using parameters = mp_list<
@@ -406,10 +416,11 @@ public:
     ducking_threshold_tag,
     transients_tag,
     hipass_tag,
-    peak_drive_tag,
-    peak_freq_tag,
-    peak_gain_tag,
-    peak_envfollow_tag>;
+    bp_drive_tag,
+    bp_freq_tag,
+    bp_reso_tag,
+    bp_wet_dry_tag,
+    bp_envfollow_tag>;
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
@@ -439,7 +450,7 @@ public:
 
     _filters.reset_states<lp_idx>();
     _filters.reset_states<hp_idx>();
-    _filters.reset_states<peak_idx>();
+    _filters.reset_states<bp_idx>();
 
     _tilt.reset_states();
     _transients.reset (tgt_srate);
@@ -480,7 +491,7 @@ public:
 
     // hack to trigger intialization of some parameters
     _extpar.tilt_db           = 999.f;
-    _extpar.peak_drive_db     = 999.f;
+    _extpar.bp_drive_db       = 999.f;
     _extpar.hp                = 999.f;
     _extpar.damp_note_ratio   = 999.f;
     _extpar.gain              = 999.f;
@@ -620,12 +631,10 @@ private:
 
     while (io.size()) {
       auto block = io.cut_head (std::min<uint> (io.size(), blocksize));
-
       // delay samples smoothed
       auto n_spls_readonce = vec_set<n_taps> (_extpar.delay_spls);
       auto desync          = _extpar.desync;
       for (uint i = 0; i < block.size(); ++i) {
-
         n_spls[i] = n_spls_readonce;
         n_spls[i] -= diffusor_correction;
         float_x4 const desync_spls_max {0.f, 161.803398f, 261.803f, 423.606f};
@@ -747,8 +756,10 @@ private:
         }
       }
       // Feedback FX
-      float peak_drive     = _extpar.peak_drive;
-      float peak_drive_inv = 1. / peak_drive;
+      float bp_drive = _extpar.bp_drive;
+      float bp_wet   = _param.bp_wetdry;
+      float bp_dry   = 1.f - abs (_param.bp_wetdry);
+
       for (uint i = 0; i < block.size(); ++i) {
         auto taps = vec_from_array (tap_head[i]);
         // measuring feedback input power
@@ -761,29 +772,28 @@ private:
         auto input = float_x4 {(float) l, (float) r, (float) r, (float) r};
         auto input_env
           = _env.tick<peakfollow_idx> (input, envelope::rms_tag {});
-        if ((_peak_update_spls & 15) == 0) {
-          auto freq = _param.peak_freqs;
-          freq *= vec_exp (input_env * _extpar.peak_envfollow * 16.f);
-          freq = vec_min (freq, (float) ((tgt_srate / 2) - 1));
-          _filters.reset_coeffs<peak_idx> (
-            freq,
-            _param.peak_qs,
-            _param.peak_dbs,
-            (float) tgt_srate,
-            bell_bandpass_tag {});
+        if ((bp_wet != 0.f) && ((_bp_update_spls & 15) == 0)) {
+          auto freq = _param.bp_freqs;
+          freq *= vec_exp (input_env * _extpar.bp_envfollow * 12.f);
+          constexpr float filt_stability = 0.27f;
+          freq
+            = vec_min (freq, (float) (((tgt_srate / 2) - 1)) * filt_stability);
+          _filters.reset_coeffs<bp_idx> (
+            freq, get_scaled_reso (freq), (float) tgt_srate);
         }
-        ++_peak_update_spls;
-
+        ++_bp_update_spls;
         // Damp + HP/DC
         taps = _filters.tick<lp_idx> (taps);
         taps = _filters.tick<hp_idx> (taps);
-
-        // Peaking EQ FX
-        auto wet = _filters.tick<peak_idx> (taps);
-        wet *= peak_drive;
-        wet = wet / vec_sqrt (1.f + wet * wet);
-        wet *= peak_drive_inv;
-        taps += wet;
+        // bping EQ FX
+        if (bp_wet != 0.f) {
+          auto wet = taps;
+          wet *= bp_drive;
+          wet = _filters.tick<bp_idx> (wet);
+          wet *= bp_wet;
+          taps *= bp_dry;
+          taps += wet;
+        }
         // measuring output power and gain riding the feedback gain
         auto wet_rms = _env.tick<rms_wet_idx> (taps, envelope::rms_tag {});
         wet_rms      = vec_max (1e-30, wet_rms);
@@ -1032,27 +1042,32 @@ private:
       (float) tgt_srate);
   }
   //----------------------------------------------------------------------------
-  void update_peak()
+  void update_bp()
   {
-    constexpr float min_note    = constexpr_hz_to_midi_note (peak_min_hz);
-    constexpr float gr_note     = constexpr_hz_to_midi_note (3000.);
-    constexpr float max_note    = constexpr_hz_to_midi_note (peak_max_hz);
-    constexpr float note_weight = 1.f / (max_note - gr_note);
-    constexpr float bal_range   = 4.f;
+    constexpr float max_note  = constexpr_hz_to_midi_note (bp_max_hz);
+    constexpr float bal_range = 6.f;
+    constexpr float gain_mul  = 12.f;
 
-    auto  note    = _extpar.peak_note;
-    auto  absgain = abs (_extpar.peak_gain);
-    float peak_reduction
-      = (note < gr_note) ? 0.f : (note - gr_note) * note_weight;
-    float max_db = (12.f - peak_reduction * absgain * 2.f);
+    _param.bp_freqs
+      = note_to_hzs (_extpar.bp_note, max_note, _extpar.freq_spread, bal_range);
+    _param.bp_wetdry = _extpar.bp_wetdry * _extpar.bp_wetdry;
+    _param.bp_wetdry *= _extpar.bp_wetdry >= 0.f ? 1.f : -1.f;
+    // update the bp filter on the next block (it is done at mod rate)
 
-    _param.peak_freqs
-      = note_to_hzs (note, max_note, _extpar.freq_spread, bal_range);
-    _param.peak_qs  = vec_set<4> (0.3f + absgain * 0.2f);
-    _param.peak_dbs = vec_set<4> (_extpar.peak_gain * max_db);
+    _bp_update_spls = 0;
+  }
+  //----------------------------------------------------------------------------
+  float_x4 get_scaled_reso (float_x4 freq)
+  {
+    // high reso at high frequencies sounds ear pearcing, especially at this low
+    // samplerate and low datatype resolution (for a nonlinear filter)
+    constexpr float max_freq    = (float) ((tgt_srate - 1) / 2);
+    constexpr float reso_att_hz = 1.f / max_freq;
 
-    // update the peak filter on the next block (it is done at mod rate)
-    _peak_update_spls = 0;
+    auto max_reso = vec_set<float_x4> (_extpar.bp_reso);
+    auto ratio    = freq * reso_att_hz;
+    ratio         = vec_exp (-ratio * 2.f);
+    return max_reso * ratio;
   }
   //----------------------------------------------------------------------------
   vec<arith_type, n_taps> note_to_hzs (
@@ -1092,20 +1107,20 @@ private:
     float desync;
     float transients;
     float hp;
-    float peak_freq;
-    float peak_envfollow;
-    float peak_drive_db;
-    float peak_drive;
-    float peak_gain;
-    float peak_note;
+    float bp_freq;
+    float bp_envfollow;
+    float bp_drive_db;
+    float bp_drive;
+    float bp_wetdry;
+    float bp_note;
+    float bp_reso;
   };
   //----------------------------------------------------------------------------
   struct internal_parameters {
-    float_x4 peak_freqs;
-    float_x4 peak_qs;
-    float_x4 peak_dbs;
+    float_x4 bp_freqs;
     double   delay_spls_max;
     double   spls_x_beat;
+    float    bp_wetdry;
     float    fb_gain;
     float    main_gain;
   };
@@ -1124,7 +1139,7 @@ private:
     _diffusor;
 #endif
   //----------------------------------------------------------------------------
-  uint                           _peak_update_spls {};
+  uint                           _bp_update_spls {};
   double                         _gr_prev {};
   external_parameters            _extpar {};
   internal_parameters            _param {};
@@ -1143,9 +1158,9 @@ private:
   ducker<double_x2>                            _ducker;
   enum { rms_dry_idx, rms_wet_idx, peakfollow_idx };
   part_classes<mp_list<envelope, envelope, envelope>, float_x4, false> _env;
-  enum { lp_idx, hp_idx, peak_idx };
+  enum { lp_idx, hp_idx, bp_idx };
   part_classes<
-    mp_list<onepole_lowpass, mystran_dc_blocker, andy::svf>,
+    mp_list<onepole_lowpass, mystran_dc_blocker, saike::ms20_bandpass>,
     vec<arith_type, n_taps>,
     false>
     _filters;
