@@ -783,7 +783,7 @@ private:
           = _env.tick<peakfollow_idx> (input, envelope::rms_tag {});
         if ((bp_wet != 0.f) && ((_bp_update_spls & 15) == 0)) {
           auto freq = _param.bp_freqs;
-          freq *= vec_exp (input_env * _extpar.bp_envfollow * 12.f);
+          freq *= vec_exp (input_env * _extpar.bp_envfollow * 14.f);
           constexpr float filt_stability = 0.27f;
           freq
             = vec_min (freq, (float) (((tgt_srate / 2) - 1)) * filt_stability);
