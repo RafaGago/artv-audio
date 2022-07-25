@@ -46,7 +46,7 @@ public:
   static constexpr uint      n_inputs  = 1;
   static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
-  static constexpr uint max_t_beats = 1;
+  static constexpr uint max_t_beats = 2;
   //----------------------------------------------------------------------------
   struct sixteenths_tag {};
   void set (sixteenths_tag, float v)
