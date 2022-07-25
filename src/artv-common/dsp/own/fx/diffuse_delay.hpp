@@ -61,7 +61,8 @@ public:
 
   static constexpr auto get_parameter (sixteenths_tag)
   {
-    return float_param ("sixteenths", 0.1f, max_t_beats * 16, 6.f, 0.001f);
+    return float_param (
+      "sixteenths", 0.01f, max_t_beats * 16, 6.f, 0.05f, 0.5f);
   }
   //----------------------------------------------------------------------------
   struct feedback_tag {};
@@ -611,9 +612,9 @@ private:
   void delay_line_updated()
   {
     _param.fb_gain = delay_get_feedback_gain_for_rt60_time (
-      _extpar.feedback * 20.f, // to 20 sec
+      0.001f + _extpar.feedback * 20.f, // to 20 sec
       (float) tgt_srate,
-      vec_set<1> (_extpar.delay_spls > 0.f ? _extpar.delay_spls : 0.01f))[0];
+      vec_set<1> (_extpar.delay_spls))[0];
   }
   //----------------------------------------------------------------------------
   static constexpr std::array<float, 2> get_pan (
