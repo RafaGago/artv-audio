@@ -23,11 +23,17 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
+#include "artv-common/misc/overaligned_allocator.hpp"
 #include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 
+// Both thiran and sinc of different sizes consume the same CPU, the sound
+// is not that bad on the Thiran ones and they don't require tables, so favoring
+// those.
+
 #define DIFFUSE_DELAY_USE_THIRAN_TAPS 1
+#define DIFFUSE_DELAY_USE_SINC_TAPS 0
 #define DIFFUSE_DELAY_USE_THIRAN_DIFFUSORS 1
 namespace artv {
 
@@ -475,6 +481,9 @@ public:
 #if DIFFUSE_DELAY_USE_THIRAN_TAPS
     _delay.set_resync_delta (10.0);
 #endif
+#if DIFFUSE_DELAY_USE_SINC_TAPS
+    _delay.reset_interpolator (0, false, 0.45f, 140.f);
+#endif
 #if DIFFUSE_DELAY_USE_THIRAN_DIFFUSORS
     for (uint i = 0; i < n_taps; ++i) {
       for (uint j = 0; j < n_serial_diffusors; ++j) {
@@ -529,7 +538,8 @@ private:
   void initialize_buffer_related_parts()
   {
     // compute memory requirements
-    double max_spls = max_mod_samples + diffusor_mod_range;
+    double max_spls
+      = max_mod_samples + diffusor_mod_range + _delay.min_size_spls();
     max_spls += _param.spls_x_beat * max_t_beats;
     auto fdn_size         = pow2_round_ceil ((uint) std::ceil (max_spls));
     _param.delay_spls_max = (double) (fdn_size);
@@ -543,7 +553,9 @@ private:
     for (auto& row : allpass_sizes) {
       for (auto& delay : row) {
         delay = _diffusor[0][0].n_required_elems (
-          pow2_round_ceil (delay + diffusor_mod_range), 1);
+          pow2_round_ceil (
+            delay + diffusor_mod_range + _diffusor[0][0].min_size_spls()),
+          1);
         n_samples_allpass += delay;
       }
     }
@@ -671,22 +683,19 @@ private:
       };
       // smoothing and clamping the delay in samples after modulation
       for (uint i = 0; i < block.size(); ++i) {
-        n_spls[i] = _n_spls_smoother.tick (n_spls[i]);
-#if DIFFUSE_DELAY_USE_THIRAN_TAPS
-        // 2 which is the number of states of a second order filter (Thiran2)
-        float const interp_headroom_spls
-          = _delay.n_interp_states + _delay.n_warmup_spls;
-#else
-        float const interp_headroom_spls = catmull_rom_interp::n_points;
-#endif
-        auto min_spls = vec_set<n_taps> (interp_headroom_spls + blocksize);
-        n_spls[i]     = n_spls[i] >= min_spls ? n_spls[i] : min_spls;
+        n_spls[i]     = _n_spls_smoother.tick (n_spls[i]);
+        auto min_spls = vec_set<float_x4> (_delay.min_delay_spls() + blocksize);
+        n_spls[i]     = vec_max (n_spls[i], min_spls);
       }
       // fill the tail samples, with feedback gain applied
       auto fb_gain = _param.fb_gain;
       for (uint t = 0; t < n_taps; ++t) {
         for (uint i = 0; i < block.size(); ++i) {
+#if DIFFUSE_DELAY_USE_THIRAN_TAPS
           tap_tail[i][t] = _delay.get (n_spls[i][t], t, i)[0] * fb_gain;
+#else
+          tap_tail[i][t] = _delay.get (n_spls[i][t] - i, t)[0] * fb_gain;
+#endif
         }
       }
       // tilt inputs
@@ -1139,6 +1148,11 @@ private:
     _diffusor;
 #endif
   //----------------------------------------------------------------------------
+  // in case sinc interpolation is enabled, it is nice to have the tables
+  // aligned to cache line boundaries.
+  template <class T>
+  using mem_vector = std::vector<T, overaligned_allocator<T, 128>>;
+
   uint                           _bp_update_spls {};
   double                         _gr_prev {};
   external_parameters            _extpar {};
@@ -1146,10 +1160,12 @@ private:
   block_resampler<arith_type, 2> _resampler {};
 #if DIFFUSE_DELAY_USE_THIRAN_TAPS
   modulable_thiran1_delay_line<vec1_type, 4> _delay {};
+#elif DIFFUSE_DELAY_USE_SINC_TAPS
+  interpolated_delay_line<vec1_type, sinc_interp<16, 128>> _delay {};
 #else
   interpolated_delay_line<vec1_type, catmull_rom_interp> _delay {};
 #endif
-  std::vector<vec1_type>                       _mem {};
+  mem_vector<vec1_type>                        _mem {};
   part_class_array<onepole_smoother, float_x4> _n_spls_smoother {};
   part_class_array<tilt_eq, double_x2>         _tilt {};
   saike::transience                            _transients;
