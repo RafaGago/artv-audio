@@ -10,11 +10,13 @@ namespace artv {
 //------------------------------------------------------------------------------
 struct zero_order_hold {
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs     = 0;
-  static constexpr uint n_coeffs_int = 0;
-  static constexpr uint n_states     = 0;
-  static constexpr uint n_points     = 1;
-  static constexpr uint x_offset     = 0;
+  static constexpr uint n_coeffs          = 0;
+  static constexpr uint n_states          = 0;
+  static constexpr uint n_points          = 1;
+  static constexpr uint x_offset          = 0;
+  static constexpr bool coeffs_are_vec    = true;
+  static constexpr bool coeffs_are_global = true;
+  static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T>
   static void reset_coeffs (crange<T>)
@@ -40,11 +42,13 @@ struct zero_order_hold {
 //------------------------------------------------------------------------------
 struct linear_interp {
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs     = 0;
-  static constexpr uint n_coeffs_int = 0;
-  static constexpr uint n_states     = 0;
-  static constexpr uint n_points     = 2;
-  static constexpr uint x_offset     = 0;
+  static constexpr uint n_coeffs          = 0;
+  static constexpr uint n_states          = 0;
+  static constexpr uint n_points          = 2;
+  static constexpr uint x_offset          = 0;
+  static constexpr bool coeffs_are_vec    = true;
+  static constexpr bool coeffs_are_global = true;
+  static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T>
   static void reset_coeffs (crange<T>)
@@ -75,11 +79,13 @@ struct lagrange_interp;
 template <>
 struct lagrange_interp<2> {
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs     = 0;
-  static constexpr uint n_coeffs_int = 0;
-  static constexpr uint n_states     = 0;
-  static constexpr uint n_points     = 3;
-  static constexpr uint x_offset     = 0;
+  static constexpr uint n_coeffs          = 0;
+  static constexpr uint n_states          = 0;
+  static constexpr uint n_points          = 3;
+  static constexpr uint x_offset          = 0;
+  static constexpr bool coeffs_are_vec    = true;
+  static constexpr bool coeffs_are_global = true;
+  static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T>
   static void reset_coeffs (crange<T>)
@@ -118,11 +124,13 @@ struct lagrange_interp<2> {
 template <>
 struct lagrange_interp<3> {
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs     = 0;
-  static constexpr uint n_coeffs_int = 0;
-  static constexpr uint n_states     = 0;
-  static constexpr uint n_points     = 4;
-  static constexpr uint x_offset     = 0;
+  static constexpr uint n_coeffs          = 0;
+  static constexpr uint n_states          = 0;
+  static constexpr uint n_points          = 4;
+  static constexpr uint x_offset          = 0;
+  static constexpr bool coeffs_are_vec    = true;
+  static constexpr bool coeffs_are_global = true;
+  static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T>
   static void reset_coeffs (crange<T>)
@@ -161,11 +169,13 @@ struct lagrange_interp<3> {
 //------------------------------------------------------------------------------
 struct hermite_interp {
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs     = 0;
-  static constexpr uint n_coeffs_int = 0;
-  static constexpr uint n_states     = 0;
-  static constexpr uint n_points     = 4;
-  static constexpr uint x_offset     = 1;
+  static constexpr uint n_coeffs          = 0;
+  static constexpr uint n_states          = 0;
+  static constexpr uint n_points          = 4;
+  static constexpr uint x_offset          = 1;
+  static constexpr bool coeffs_are_vec    = true;
+  static constexpr bool coeffs_are_global = true;
+  static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T>
   static void reset_coeffs (crange<T>)
@@ -196,11 +206,13 @@ struct hermite_interp {
 //------------------------------------------------------------------------------
 struct catmull_rom_interp {
   //----------------------------------------------------------------------------
-  static constexpr uint n_coeffs     = 0;
-  static constexpr uint n_coeffs_int = 0;
-  static constexpr uint n_states     = 0;
-  static constexpr uint n_points     = 4;
-  static constexpr uint x_offset     = 1; // interpolates between y[1] and y[2]
+  static constexpr uint n_coeffs = 0;
+  static constexpr uint n_states = 0;
+  static constexpr uint n_points = 4;
+  static constexpr uint x_offset = 1; // interpolates between y[1] and y[2]
+  static constexpr bool coeffs_are_vec    = true;
+  static constexpr bool coeffs_are_global = true;
+  static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T>
   static void reset_coeffs (crange<T>)
@@ -237,13 +249,15 @@ struct catmull_rom_interp {
 template <uint N, uint N_tables>
 struct sinc_interp {
   //----------------------------------------------------------------------------
-  static constexpr uint   n_coeffs     = N * (N_tables + 1);
-  static constexpr uint   n_coeffs_int = 0;
-  static constexpr uint   n_states     = 0;
-  static constexpr uint   n_points     = N;
-  static constexpr uint   x_offset     = N / 2;
-  static constexpr double n_tables     = N_tables;
-  static constexpr double mu           = 1. / n_tables;
+  static constexpr uint   n_coeffs          = N * (N_tables + 1);
+  static constexpr uint   n_states          = 0;
+  static constexpr uint   n_points          = N;
+  static constexpr uint   x_offset          = N / 2;
+  static constexpr double n_tables          = N_tables;
+  static constexpr double mu                = 1. / n_tables;
+  static constexpr bool   coeffs_are_vec    = false;
+  static constexpr bool   coeffs_are_global = true;
+  static constexpr bool   states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T> // fc 0 to 0.5
   static void reset_coeffs (crange<T> co, float fc, float kaiser_att_db)
@@ -251,12 +265,23 @@ struct sinc_interp {
     static_assert (!is_vec_v<T>);
     assert (co.size() >= n_coeffs);
 
+    constexpr auto k_mu = N % 2 ? 0. : 0.5;
+
     auto mem = co;
-    for (uint tbl = 0; tbl < N_tables; ++tbl) {
+    for (uint tbl = 0; tbl < (N_tables + 1); ++tbl) {
+      auto tblm = mem.cut_head (n_points);
       kaiser_lp_kernel (
-        mem.cut_head (n_points), fc, kaiser_att_db, mu * tbl, false);
+        tblm, (T) fc, (T) kaiser_att_db, (T) (-mu * tbl + k_mu), false);
+
+      constexpr bool tbl_debug = false;
+      if constexpr (tbl_debug) {
+        printf ("tbl %u: ", tbl);
+        for (float v : tblm) {
+          printf ("%f ", v);
+        }
+        puts ("");
+      }
     }
-    crange_memcpy (co, mem.cut_head (n_points));
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -264,10 +289,14 @@ struct sinc_interp {
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V> co, crange<V>, std::array<V, n_points> y, V x)
+  static V tick (
+    crange<const vec_value_type_t<V>> co,
+    crange<V>,
+    std::array<V, n_points> y,
+    V                       x)
   {
     using T = vec_value_type_t<V>;
-    for (uint i = 1; i < vec_traits_t<vec_type>::size; ++i) {
+    for (uint i = 1; i < vec_traits_t<V>::size; ++i) {
       // this interpolation method doesn't support multiple lookup points.
       assert (x[0] == x[i]);
     }
@@ -277,8 +306,8 @@ struct sinc_interp {
     // a modern CPU). For float and N up to 8 it only touches one cache line.
     T    frac     = x[0];
     uint tbl      = frac * (n_tables);
-    T    co_lerp1 = (frac - ((T) tbl * mu)) * n_tables;
-    T    co_lerp2 = 1.f - co_lerp1;
+    T    co_lerp2 = (frac - ((T) tbl * mu)) * n_tables;
+    T    co_lerp1 = 1.f - co_lerp2;
 
     auto dotprod = vec_set<V> (0);
     for (uint i = 0; i < n_points; ++i) {

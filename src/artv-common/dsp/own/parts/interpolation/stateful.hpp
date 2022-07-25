@@ -24,10 +24,12 @@ struct thiran_interp<1> {
 #else
   enum coeffs { a1, frac, n_coeffs };
 #endif
-  enum coeffs_int { n_coeffs_int };
   enum state { y1, n_states };
-  static constexpr uint n_points = 1;
-  static constexpr uint x_offset = 0;
+  static constexpr uint n_points          = 1;
+  static constexpr uint x_offset          = 0;
+  static constexpr bool coeffs_are_vec    = true;
+  static constexpr bool coeffs_are_global = false; // 1 set per channel
+  static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> co, V fractional)
@@ -70,10 +72,12 @@ struct thiran_interp<2> {
 #else
   enum coeffs { frac = biquad::n_coeffs, n_coeffs };
 #endif
-  enum coeffs_int { n_coeffs_int };
   enum state { n_states = biquad::n_states };
-  static constexpr uint n_points = 1;
-  static constexpr uint x_offset = 0;
+  static constexpr uint n_points          = 1;
+  static constexpr uint x_offset          = 0;
+  static constexpr bool coeffs_are_vec    = true;
+  static constexpr bool coeffs_are_global = false; // 1 set per channel
+  static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> co, V fractional)

@@ -7211,23 +7211,25 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
+  reverb_params,
   diffuse_delay_params,
-  filter2x_params>;
+  fdnverb_params>;
 
 static constexpr auto fx_choices = make_cstr_array (
   "none",
   "LR",
   "Wonky",
   "lin IIR",
-  "1.FX-tested",
-  "Filters");
+  "1. Reverb",
+  "2. DiffuseDelay",
+  "3. FDNVERB");
 #else
 // clang-format off
 using all_fx_typelists = mp_list<
