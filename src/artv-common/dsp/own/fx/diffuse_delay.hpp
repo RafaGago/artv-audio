@@ -61,8 +61,7 @@ public:
 
   static constexpr auto get_parameter (sixteenths_tag)
   {
-    return float_param (
-      "sixteenths", 0.01f, max_t_beats * 16, 6.f, 0.05f, 0.5f);
+    return float_param ("sixteenths", 0.1f, max_t_beats * 16, 6.f, 0.01f, 0.5f);
   }
   //----------------------------------------------------------------------------
   struct feedback_tag {};
@@ -448,7 +447,7 @@ public:
       blocksize,
       6 * 1024);
 
-    _n_spls_smoother.reset_coeffs (vec_set<4> (1.f), tgt_srate);
+    _n_spls_smoother.reset_coeffs (vec_set<4> (3.f), tgt_srate);
     _n_spls_smoother.reset_states();
 
     // get time info maximum buffer sizes and allocate
@@ -511,6 +510,8 @@ public:
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
     });
+    // avoid most of the initial smoother starting from time 0
+    _n_spls_smoother.get_states()[0] = vec_set<n_taps> (_extpar.delay_spls);
   }
   //----------------------------------------------------------------------------
   template <class T>
