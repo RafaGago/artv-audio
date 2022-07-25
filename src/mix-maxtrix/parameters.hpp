@@ -1,5 +1,7 @@
 #pragma once
 
+#define ARTV_FDNST8_USE_BROKEN_DELAY_TIME_BEHAVIOR 1
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>

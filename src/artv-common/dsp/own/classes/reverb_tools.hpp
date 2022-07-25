@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <gcem.hpp>
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/primes.hpp"
@@ -158,17 +159,32 @@ private:
 };
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-static constexpr V delay_get_feedback_gain_for_time (
+static V delay_get_feedback_gain_for_time (
   vec_value_type_t<V> time_sec, // desired
-  vec_value_type_t<V> att, // -60. for RT60
+  vec_value_type_t<V> gain, // db_to_gain (-60). for RT60
   vec_value_type_t<V> srate,
-  V                   delays_spls)
+  V                   delay_spls) // delay line length
 {
   using T = vec_value_type_t<V>;
 
-  auto rate = srate / delays_spls;
-  return vec_exp ((T) M_LN10 * ((T) 1 / (T) 20) * att / (rate * time_sec));
+  // n_cycles = (time_sec * srate) / delay_spls;
+  // x^n_cycles = att_lin, x = pow(att_lin, 1/n_cycles)
+  return vec_pow (gain, delay_spls / (time_sec * srate));
 }
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+static V delay_get_feedback_gain_for_rt60_time (
+  vec_value_type_t<V> time_sec, // desired
+  vec_value_type_t<V> srate,
+  V                   delay_spls) // delay line length
+{
+  using T                          = vec_value_type_t<V>;
+  static constexpr auto rt_60_gain = (T) constexpr_db_to_gain (-60.);
+  static constexpr auto ln_rt_60   = (T) gcem::log (rt_60_gain);
+
+  return vec_exp (ln_rt_60 * (delay_spls / (time_sec * srate)));
+}
+
 // a namespace class...
 struct delay_length {
   //----------------------------------------------------------------------------

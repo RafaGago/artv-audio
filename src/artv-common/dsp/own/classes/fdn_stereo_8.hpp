@@ -18,7 +18,6 @@
 #include "artv-common/dsp/own/parts/interpolation/stateless.hpp"
 
 #define ARTV_FDNST8_USE_THIRAN 0
-
 namespace artv {
 
 //------------------------------------------------------------------------------
@@ -1149,15 +1148,25 @@ private:
     _gap_lat_spls = (uint) -1;
 
     for (uint i = 0; i < late_cfg::n_channels; ++i) {
-      _rt60_att_h[i] = delay_get_feedback_gain_for_time (
+#ifdef ARTV_FDNST8_USE_BROKEN_DELAY_TIME_BEHAVIOR
+      // to keep existing patches sounding the same
+      _rt60_att_h[i] = delay_get_feedback_gain_for_time_broken (
         _seconds, -60.f, _cfg.src.srate, vec_set<1> (_late_n_spls[i]))[0];
 
-      _rt60_att_l[i] = delay_get_feedback_gain_for_time (
+      _rt60_att_l[i] = delay_get_feedback_gain_for_time_broken (
         _seconds * _lf_rt60_factor,
         -60.f,
         _cfg.src.srate,
         vec_set<1> (_late_n_spls[i]))[0];
+#else
+      _rt60_att_h[i] = delay_get_feedback_gain_for_rt60_time (
+        _seconds, _cfg.src.srate, vec_set<1> (_late_n_spls[i]))[0];
 
+      _rt60_att_l[i] = delay_get_feedback_gain_for_rt60_time (
+        _seconds * _lf_rt60_factor,
+        _cfg.src.srate,
+        vec_set<1> (_late_n_spls[i]))[0];
+#endif
       _gap_lat_spls = std::min<uint> (_late_n_spls[i], _gap_lat_spls);
     }
   }
@@ -1176,6 +1185,20 @@ private:
     _mod_depth_spls = std::min<float> (spls, max_spls);
     _mod_depth_spls
       = std::min<float> (_mod_depth_spls, _cfg.late.max_chorus_depth_spls);
+  }
+  //----------------------------------------------------------------------------
+  // This is wrong! not updated to keep some existing patches sounding the same
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V delay_get_feedback_gain_for_time_broken (
+    vec_value_type_t<V> time_sec, // desired
+    vec_value_type_t<V> gain, // -60. for RT60
+    vec_value_type_t<V> srate,
+    V                   delay_spls) // delay line length
+  {
+    using T = vec_value_type_t<V>;
+
+    auto rate = srate / delay_spls;
+    return vec_exp ((T) M_LN10 * ((T) 1 / (T) 20) * gain / (rate * time_sec));
   }
   //----------------------------------------------------------------------------
   template <class T, class Cfg>
