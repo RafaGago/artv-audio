@@ -392,6 +392,9 @@ public:
   // for bulk coefficient smoothing
   crange<value_type> get_all_coeffs() { return _mem.get_all_coeffs(); }
   //----------------------------------------------------------------------------
+  // for initial conditions setup
+  crange<value_type> get_states (uint idx = 0) { return _mem.get_states (idx); }
+  //----------------------------------------------------------------------------
   void zero_all_states() { crange_memset (_mem.get_all_states(), 0); }
   //----------------------------------------------------------------------------
 private:
@@ -524,6 +527,7 @@ public:
   crange<builtin> get_coeffs() { return _mem.get_coeffs(); }
   crange<builtin> get_all_coeffs() { return _mem.get_all_coeffs(); }
   //----------------------------------------------------------------------------
+  crange<value_type> get_states (uint idx = 0) { return _mem.get_states (idx); }
   void zero_all_states() { crange_memset (_mem.get_all_states(), 0); }
   //----------------------------------------------------------------------------
 private:
@@ -911,6 +915,7 @@ public:
   // for bulk coefficient smoothing
   crange<coeff_type> get_all_coeffs() { return _mem.get_all_coeffs(); }
   //----------------------------------------------------------------------------
+  crange<coeff_type> get_states (uint idx = 0) { return _mem.get_states (idx); }
   void zero_all_states() { crange_memset (_mem.get_all_states(), 0); }
   //----------------------------------------------------------------------------
 private:
