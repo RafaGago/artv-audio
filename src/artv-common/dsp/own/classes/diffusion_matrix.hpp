@@ -216,6 +216,8 @@ struct rotation_matrix<4> {
     // 3 | + + - -
     // 4 | + + + +
 
+    // !This had the outputs rearanged to match the inputs
+
     std::array<V, N> y;
 
     auto w1 = w[0][0];
@@ -228,9 +230,8 @@ struct rotation_matrix<4> {
     auto y4 = w2 * x[2] + w1 * x[3];
 
     y[0] = w1 * y1 - w2 * y3;
-    y[1] = w2 * y1 + w1 * y3;
-
-    y[2] = w1 * y2 - w2 * y4;
+    y[1] = w1 * y2 - w2 * y4;
+    y[2] = w2 * y1 + w1 * y3;
     y[3] = w2 * y2 + w1 * y4;
 
     return y;
@@ -276,6 +277,8 @@ struct rotation_matrix<8> {
     // 7 | + + - -
     // 8 | + + + +
 
+    // !This had the outputs rearanged to match the inputs
+
     //     1 2 3 4 5 6 7 8
     // ---------------------
     // 1 | + - - + - + + -
@@ -307,12 +310,12 @@ struct rotation_matrix<8> {
     auto w2b = w[1][1];
 
     y[0] = w1a * y1 - w2a * y5;
-    y[1] = w2a * y1 + w1a * y5;
-    y[2] = w1a * y2 - w2a * y6;
-    y[3] = w2a * y2 + w1a * y6;
-    y[4] = w1b * y3 - w2b * y7;
-    y[5] = w2b * y3 + w1b * y7;
-    y[6] = w1b * y4 - w2b * y8;
+    y[1] = w1a * y2 - w2a * y6;
+    y[2] = w1b * y3 - w2b * y7;
+    y[3] = w1b * y4 - w2b * y8;
+    y[4] = w2a * y1 + w1a * y5;
+    y[5] = w2a * y2 + w1a * y6;
+    y[6] = w2b * y3 + w1b * y7;
     y[7] = w2b * y4 + w1b * y8;
 
     return y;
@@ -343,6 +346,8 @@ struct rotation_matrix<16> {
   {
     assert (x.size() >= N);
     assert (w.size() >= N / 4);
+
+    // !This had the outputs rearanged to match the inputs
 
     //     1 2 3 4 5 6 7 8
     // ---------------------
@@ -417,20 +422,20 @@ struct rotation_matrix<16> {
     auto w2d = w[3][1];
 
     y[0]  = w1a * y1 - w2a * y9;
-    y[1]  = w2a * y1 + w1a * y9;
-    y[2]  = w1a * y2 - w2a * ya;
-    y[3]  = w2a * y2 + w1a * ya;
-    y[4]  = w1b * y3 - w2b * yb;
-    y[5]  = w2b * y3 + w1b * yb;
-    y[6]  = w1b * y4 - w2b * yc;
-    y[7]  = w2b * y4 + w1b * yc;
-    y[8]  = w1c * y5 - w2c * yd;
-    y[9]  = w2c * y5 + w1c * yd;
-    y[10] = w1c * y6 - w2c * ye;
-    y[11] = w2c * y6 + w1c * ye;
-    y[12] = w1d * y7 - w2d * yf;
-    y[13] = w2d * y7 + w1d * yf;
-    y[14] = w1d * y8 - w2d * yg;
+    y[1]  = w1a * y2 - w2a * ya;
+    y[2]  = w1b * y3 - w2b * yb;
+    y[3]  = w1b * y4 - w2b * yc;
+    y[4]  = w1c * y5 - w2c * yd;
+    y[5]  = w1c * y6 - w2c * ye;
+    y[6]  = w1d * y7 - w2d * yf;
+    y[7]  = w1d * y8 - w2d * yg;
+    y[8]  = w2a * y1 + w1a * y9;
+    y[9]  = w2a * y2 + w1a * ya;
+    y[10] = w2b * y3 + w1b * yb;
+    y[11] = w2b * y4 + w1b * yc;
+    y[12] = w2c * y5 + w1c * yd;
+    y[13] = w2c * y6 + w1c * ye;
+    y[14] = w2d * y7 + w1d * yf;
     y[15] = w2d * y8 + w1d * yg;
 
     return y;

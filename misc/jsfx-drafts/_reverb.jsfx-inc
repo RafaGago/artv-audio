@@ -136,9 +136,8 @@ function rot_matrix_4 (y_ptr, x_ptr, w1, w2)
   y4 = w2 * x_ptr[2] + w1 * x_ptr[3];
 
   y_ptr[0] = w1 * y1 - w2 * y3;
-  y_ptr[1] = w2 * y1 + w1 * y3;
-
-  y_ptr[2] = w1 * y2 - w2 * y4;
+  y_ptr[1] = w1 * y2 - w2 * y4;
+  y_ptr[2] = w2 * y1 + w1 * y3;
   y_ptr[3] = w2 * y2 + w1 * y4;
 );
 
@@ -186,12 +185,12 @@ function rot_matrix_8 (y_ptr, x_ptr, w1a, w2a, w1b, w2b)
   y8 = y_ptr[7];
 
   y_ptr[0] = w1a * y1 - w2a * y5;
-  y_ptr[1] = w2a * y1 + w1a * y5;
-  y_ptr[2] = w1a * y2 - w2a * y6;
-  y_ptr[3] = w2a * y2 + w1a * y6;
-  y_ptr[4] = w1b * y3 - w2b * y7;
-  y_ptr[5] = w2b * y3 + w1b * y7;
-  y_ptr[6] = w1b * y4 - w2b * y8;
+  y_ptr[1] = w1a * y2 - w2a * y6;
+  y_ptr[2] = w1b * y3 - w2b * y7;
+  y_ptr[3] = w1b * y4 - w2b * y8;
+  y_ptr[4] = w2a * y1 + w1a * y5;
+  y_ptr[5] = w2a * y2 + w1a * y6;
+  y_ptr[6] = w2b * y3 + w1b * y7;
   y_ptr[7] = w2b * y4 + w1b * y8;
 );
 
@@ -269,20 +268,20 @@ function rot_matrix_16 (y_ptr, x_ptr, w1a, w2a, w1b, w2b, w1c, w2c, w1d, w2d)
   yg = y_ptr[15];
 
   y_ptr[0]  = w1a * y1 - w2a * y9;
-  y_ptr[1]  = w2a * y1 + w1a * y9;
-  y_ptr[2]  = w1a * y2 - w2a * ya;
-  y_ptr[3]  = w2a * y2 + w1a * ya;
-  y_ptr[4]  = w1b * y3 - w2b * yb;
-  y_ptr[5]  = w2b * y3 + w1b * yb;
-  y_ptr[6]  = w1b * y4 - w2b * yc;
-  y_ptr[7]  = w2b * y4 + w1b * yc;
-  y_ptr[8]  = w1c * y5 - w2c * yd;
-  y_ptr[9]  = w2c * y5 + w1c * yd;
-  y_ptr[10] = w1c * y6 - w2c * ye;
-  y_ptr[11] = w2c * y6 + w1c * ye;
-  y_ptr[12] = w1d * y7 - w2d * yf;
-  y_ptr[13] = w2d * y7 + w1d * yf;
-  y_ptr[14] = w1d * y8 - w2d * yg;
+  y_ptr[1]  = w1a * y2 - w2a * ya;
+  y_ptr[2]  = w1b * y3 - w2b * yb;
+  y_ptr[3]  = w1b * y4 - w2b * yc;
+  y_ptr[4]  = w1c * y5 - w2c * yd;
+  y_ptr[5]  = w1c * y6 - w2c * ye;
+  y_ptr[6]  = w1d * y7 - w2d * yf;
+  y_ptr[7]  = w1d * y8 - w2d * yg;
+  y_ptr[8]  = w2a * y1 + w1a * y9;
+  y_ptr[9]  = w2a * y2 + w1a * ya;
+  y_ptr[10] = w2b * y3 + w1b * yb;
+  y_ptr[11] = w2b * y4 + w1b * yc;
+  y_ptr[12] = w2c * y5 + w1c * yd;
+  y_ptr[13] = w2c * y6 + w1c * ye;
+  y_ptr[14] = w2d * y7 + w1d * yf;
   y_ptr[15] = w2d * y8 + w1d * yg;
 );
 
