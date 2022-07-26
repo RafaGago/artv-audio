@@ -866,11 +866,10 @@ function conference_20 (y_ptr, x_ptr)
 );
 
 
-function get_rt60_gain (rt60sec, delays_spls, srate) local (rate) global ()(
-    rate = srate / delays_spls;
-    pow (10, (-60/20) * (1 / (rate * rt60sec)));
-    //pow (10, (-3 * fb_delay_samples) / (rt60sec * srate));
-   // TODO: has JSFX M_LN_10 ?
+function get_rt60_gain (rt60sec, delay_spls, srate) local (rate) global ()(
+    rate = srate / delay_spls;
+    // -6.907755278982137 = log(-60dB), log(pow(10,-60/20))
+    exp (-6.907755278982137 * (delay_spls / (rt60sec * srate)));
 );
 
 function get_rt60_gain(
