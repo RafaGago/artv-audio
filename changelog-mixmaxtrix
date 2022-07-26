@@ -2,7 +2,8 @@
 - Artv DelayVerb: Features include different tap configurations, diffusion,
   ducking, transient control, multiple delay line length modulation modes, input
   tilt filter and Joep Vanlier's K35 bandpass/peaking filter on the feedback
-  path with an envelope follower.
+  path with an envelope follower. It can go from Delay to Reverb and can also do
+  a bit of flanging and chorusing.
 - Artv Reverb: Add ducker.
 - TAL reverb 2: Add ducker.
 - BBD echo: Add ducker

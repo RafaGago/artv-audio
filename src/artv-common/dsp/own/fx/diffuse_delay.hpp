@@ -86,14 +86,11 @@ public:
   void set (diffusion_tag, float v)
   {
     v *= 0.01f;
-    // v *= v;
-    v *= -0.5f; // cut at 0.5f for the allpass
     if (v == _extpar.diffusion) {
       return;
     }
-    _extpar.diffusion = v;
-    // _extpar.diffusion goes from 0 to 0.5
-    float weight           = cosf (v * (float) (2. * (M_PI / 4.)));
+    _extpar.diffusion      = v;
+    float weight           = cosf (v * (float) (M_PI / 4.));
     _param.mtx_angle[0][0] = weight;
     _param.mtx_angle[0][1] = sqrt (1.f - weight * weight);
   }
@@ -620,10 +617,11 @@ private:
     desync_spls -= spl_budget;
     // diffusors
     _param.diffusor_enable = 0;
+    _param.diffusor_range  = sqrt (_extpar.diffusion);
     auto diffusor_n_spls   = get_diffusor_delay_spls();
     for (uint t = 0; t < n_taps; ++t) {
       for (uint d = 0; d < n_serial_diffusors; ++d) {
-        float n_spls = diffusor_n_spls[t][d];
+        float n_spls = diffusor_n_spls[t][d] * _param.diffusor_range;
         if (n_spls > spl_budget[t]) {
           continue;
         }
@@ -760,15 +758,18 @@ private:
         break;
       }
       // diffusion by allpass
-      auto gain            = make_vec (_extpar.diffusion);
+      auto gain            = make_vec (_extpar.diffusion * -0.5f);
       auto diffusor_enable = _param.diffusor_enable;
+      auto diffusor_range  = _param.diffusor_range;
+
       for (uint t = 0; t < n_taps; ++t) {
         std::array<std::array<float, n_serial_diffusors>, blocksize> ap_spls;
 
         auto ap_spls_f = vec_cast<float> (vec_from_array (allpass_sizes[t]));
         for (uint i = 0; i < block.size(); ++i) {
           auto ap_lfo_f = _ap_lfo[t].tick_sine() * diffusor_mod_range;
-          ap_spls[i]    = vec_to_array (ap_spls_f - ap_lfo_f);
+          ap_lfo_f *= diffusor_range;
+          ap_spls[i] = vec_to_array (ap_spls_f - ap_lfo_f);
         }
 
         for (uint d = 0; d < n_serial_diffusors; ++d) {
@@ -1151,6 +1152,7 @@ private:
     double               delay_spls_max;
     double               spls_x_beat;
     float                bp_wetdry;
+    float                diffusor_range;
     float                main_gain;
     float                max_hp_mod;
     u16                  diffusor_enable;
