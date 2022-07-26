@@ -238,20 +238,21 @@ public:
       0, make_cstr_array ("Random", "Sine", "Triangle", "Trapezoid"), 10);
   }
   //----------------------------------------------------------------------------
-  struct damp_freq_tag {};
-  void set (damp_freq_tag, float v)
+  struct damp_tag {};
+  void set (damp_tag, float v)
   {
     v *= 0.01f;
-    if (v == _extpar.damp_note_ratio) {
+    v = 1.f - v;
+    if (v == _extpar.damp_ratio) {
       return;
     }
-    _extpar.damp_note_ratio = v;
+    _extpar.damp_ratio = v;
     update_damp();
   }
 
-  static constexpr auto get_parameter (damp_freq_tag)
+  static constexpr auto get_parameter (damp_tag)
   {
-    return float_param ("%", 0.f, 100.f, 75.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 15.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct freq_spread_tag {};
@@ -416,7 +417,7 @@ public:
     feedback_tag,
     gain_tag,
     sixteenths_tag,
-    damp_freq_tag,
+    damp_tag,
     freq_spread_tag,
     tilt_db_tag,
     mode_tag,
@@ -509,7 +510,7 @@ public:
     _extpar.tilt_db           = 999.f;
     _extpar.bp_drive_db       = 999.f;
     _extpar.hp                = 999.f;
-    _extpar.damp_note_ratio   = 999.f;
+    _extpar.damp_ratio        = 999.f;
     _extpar.gain              = 999.f;
     _extpar.ducking_speed     = 999.f;
     _extpar.ducking_threshold = 999.f;
@@ -636,6 +637,7 @@ private:
       0.001f + _extpar.feedback * max_delay_sec,
       (float) tgt_srate,
       delay_spls - desync_spls);
+    _param.max_hp_mod = log (1.f / _param.fb_gain[0]);
   }
   //----------------------------------------------------------------------------
   static constexpr std::array<float, 2> get_pan (
@@ -792,6 +794,8 @@ private:
       float bp_drive = _extpar.bp_drive;
       float bp_wet   = _param.bp_wetdry;
       float bp_dry   = 1.f - abs (_param.bp_wetdry);
+      float hp_gain  = fb_gain[0];
+      hp_gain *= exp (_param.max_hp_mod * ((3.f * _extpar.damp_ratio) - 2.f));
 
       for (uint i = 0; i < block.size(); ++i) {
         auto taps = vec_from_array (tap_head[i]);
@@ -816,8 +820,11 @@ private:
         }
         ++_bp_update_spls;
         // Damp + HP/DC
-        taps = _filters.tick<lp_idx> (taps);
-        taps = _filters.tick<hp_idx> (taps);
+        taps    = _filters.tick<hp_idx> (taps);
+        auto lp = _filters.tick<lp_idx> (taps);
+        auto hp = (taps - lp) * hp_gain; // hishelf
+        taps    = lp + hp;
+
         // bping EQ FX
         if (bp_wet != 0.f) {
           auto wet = taps;
@@ -1056,7 +1063,7 @@ private:
     constexpr float min_note  = 72.f;
     constexpr float bal_range = 20.f;
 
-    float note = min_note + _extpar.damp_note_ratio * (max_note - min_note);
+    float note = min_note + _extpar.damp_ratio * (max_note - min_note);
     _filters.reset_coeffs<lp_idx> (
       note_to_hzs (note, max_note, _extpar.freq_spread, bal_range),
       (float) tgt_srate);
@@ -1121,7 +1128,7 @@ private:
     float mod_freq;
     float mod_depth;
     float mod_spread;
-    float damp_note_ratio;
+    float damp_ratio;
     float freq_spread;
     float tilt_db;
     float desync;
@@ -1145,6 +1152,7 @@ private:
     double               spls_x_beat;
     float                bp_wetdry;
     float                main_gain;
+    float                max_hp_mod;
     u16                  diffusor_enable;
   };
 //----------------------------------------------------------------------------

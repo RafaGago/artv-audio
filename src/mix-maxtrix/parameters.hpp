@@ -6946,8 +6946,8 @@ parameter_cpp_class_define (
   param_common (
     "Damp",
     declptr<diffuse_delay>(),
-    declptr<diffuse_delay::damp_freq_tag>()),
-  diffuse_delay::get_parameter (diffuse_delay::damp_freq_tag {}),
+    declptr<diffuse_delay::damp_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::damp_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
