@@ -56,23 +56,25 @@ public:
       return;
     }
     _extpar.delay_spls = v;
-    delay_line_updated();
+    update_taps();
   }
 
   static constexpr auto get_parameter (sixteenths_tag)
   {
-    return float_param ("sixteenths", 0.1f, max_t_beats * 16, 6.f, 0.01f, 0.5f);
+    return float_param ("sixteenths", 0.5f, max_t_beats * 16, 6.f, 0.01f, 0.5f);
   }
   //----------------------------------------------------------------------------
   struct feedback_tag {};
   void set (feedback_tag, float v)
   {
     v = v * 0.01f;
+    v *= v;
+    v = 0.004f + v * 0.996f;
     if (v == _extpar.feedback) {
       return;
     }
     _extpar.feedback = v;
-    delay_line_updated();
+    update_taps();
   }
 
   static constexpr auto get_parameter (feedback_tag)
@@ -292,6 +294,7 @@ public:
       return;
     }
     _extpar.desync = v;
+    update_taps();
   }
 
   static constexpr auto get_parameter (desync_tag)
@@ -531,8 +534,8 @@ private:
   static constexpr uint blocksize          = 16;
   static constexpr uint n_taps             = 4;
   static constexpr uint n_serial_diffusors = 4;
-  static constexpr uint max_mod_samples    = 192; // unipolar
-  static constexpr uint diffusor_mod_range = 48; // bipolar
+  static constexpr uint main_mod_samples   = 160; // bipolar (excursion 320)
+  static constexpr uint diffusor_mod_range = 48; // bipolar (excursion 96)
   using arith_type                         = float;
   using vec1_type                          = vec<arith_type, 1>;
   using vec_type                           = vec<arith_type, n_taps>;
@@ -540,10 +543,10 @@ private:
   void initialize_buffer_related_parts()
   {
     // compute memory requirements
-    double max_spls
-      = max_mod_samples + diffusor_mod_range + _delay.min_size_spls();
-    max_spls += _param.spls_x_beat * max_t_beats;
-    auto fdn_size         = pow2_round_ceil ((uint) std::ceil (max_spls));
+    // the headroom upwards is the minimum size of the delay (for)
+    uint   headroom       = main_mod_samples + _delay.min_size_spls();
+    double max_spls       = headroom + _param.spls_x_beat * max_t_beats;
+    auto   fdn_size       = pow2_round_ceil ((uint) std::ceil (max_spls));
     _param.delay_spls_max = (double) (fdn_size);
     uint n_samples_delay  = _delay.n_required_elems (fdn_size, n_taps);
 
@@ -554,10 +557,9 @@ private:
 
     for (auto& row : allpass_sizes) {
       for (auto& delay : row) {
-        delay = _diffusor[0][0].n_required_elems (
-          pow2_round_ceil (
-            delay + diffusor_mod_range + _diffusor[0][0].min_size_spls()),
-          1);
+        headroom = diffusor_mod_range + _diffusor[0][0].min_size_spls();
+        delay    = _diffusor[0][0].n_required_elems (
+          pow2_round_ceil (delay + headroom), 1);
         n_samples_allpass += delay;
       }
     }
@@ -583,7 +585,7 @@ private:
     // some lines have the values of the Freeverb diffusor. Others come from
     // a schematic on the Gearslutz reverb subculture thread. Both work with
     // the allpasses at a gain of 0.5. Those were meant to be a starting point
-    // but I already liked them from the start.
+    // but they already work due to the heavy modulation.
     return {
       {{{225u, 556u, 441u, 341u}},
        {{351u, 773u, 426u, 566u}},
@@ -591,31 +593,45 @@ private:
        {{161u, 523u, 1171u, 1821u}}}};
   }
   //----------------------------------------------------------------------------
-  static std::array<uint, n_taps> get_diffusor_delay_total_spls()
-  {
-    auto                     spls = get_diffusor_delay_spls();
-    std::array<uint, n_taps> ret;
-    for (uint i = 0; i < ret.size(); ++i) {
-      uint sum = 0;
-      for (auto v : spls[i]) {
-        sum += v;
-      }
-      ret[i] = sum;
-    }
-    return ret;
-  }
-  //----------------------------------------------------------------------------
   double msec_to_spls (double msec)
   {
     return (double) tgt_srate * msec * 0.001;
   }
   //----------------------------------------------------------------------------
-  void delay_line_updated()
+  void update_taps()
   {
-    _param.fb_gain = delay_get_feedback_gain_for_rt60_time (
-      0.001f + _extpar.feedback * 20.f, // to 20 sec
+    // main_mod samples wouldn't be necessary but this sets a minimum to have
+    // the feedback time more or less stable.
+    uint min_main_delay_spls
+      = _delay.min_delay_spls() + blocksize + main_mod_samples;
+    constexpr float max_delay_sec = 20.f;
+    float_x4        desync_spls_max {0.f, 161.803398f, 261.803f, 423.606f};
+
+    auto delay_spls = std::max<float> (_extpar.delay_spls, min_main_delay_spls);
+    float_x4 spl_budget = vec_set<n_taps> (delay_spls - min_main_delay_spls);
+    // desync
+    auto desync_spls = spl_budget;
+    spl_budget = vec_max (spl_budget - (desync_spls_max * _extpar.desync), 0.f);
+    desync_spls -= spl_budget;
+    // diffusors
+    _param.diffusor_enable = 0;
+    auto diffusor_n_spls   = get_diffusor_delay_spls();
+    for (uint t = 0; t < n_taps; ++t) {
+      for (uint d = 0; d < n_serial_diffusors; ++d) {
+        float n_spls = diffusor_n_spls[t][d];
+        if (n_spls > spl_budget[t]) {
+          continue;
+        }
+        spl_budget[t] -= n_spls;
+        _param.diffusor_enable |= bit<u16> (t * n_taps + d);
+      }
+    }
+    // main computation
+    _param.delay_spls = spl_budget + (float) min_main_delay_spls;
+    _param.fb_gain    = delay_get_feedback_gain_for_rt60_time (
+      0.001f + _extpar.feedback * max_delay_sec,
       (float) tgt_srate,
-      vec_set<1> (_extpar.delay_spls))[0];
+      delay_spls - desync_spls);
   }
   //----------------------------------------------------------------------------
   static constexpr std::array<float, 2> get_pan (
@@ -631,9 +647,6 @@ private:
   template <class T>
   void process_block (crange<std::array<T, 2>> io)
   {
-    auto const diffusor_correction
-      = vec_cast<arith_type> (vec_from_array (get_diffusor_delay_total_spls()));
-
     auto const allpass_sizes = get_diffusor_delay_spls();
 
     std::array<vec_type, blocksize>               n_spls;
@@ -644,36 +657,32 @@ private:
 
     while (io.size()) {
       auto block = io.cut_head (std::min<uint> (io.size(), blocksize));
-      // delay samples smoothed
-      auto n_spls_readonce = vec_set<n_taps> (_extpar.delay_spls);
-      auto desync          = _extpar.desync;
-      for (uint i = 0; i < block.size(); ++i) {
-        n_spls[i] = n_spls_readonce;
-        n_spls[i] -= diffusor_correction;
-        float_x4 const desync_spls_max {0.f, 161.803398f, 261.803f, 423.606f};
-        n_spls[i] -= desync_spls_max * desync;
-      }
       // delay samples lfo
-      auto depth = (arith_type) (max_mod_samples * _extpar.mod_depth);
+      auto depth      = (arith_type) (main_mod_samples * _extpar.mod_depth);
+      auto delay_spls = _param.delay_spls;
       switch (_extpar.mod_mode) {
       // TODO enum instead of magic nums
       case 0:
         for (uint i = 0; i < block.size(); ++i) {
+          n_spls[i] = delay_spls;
           n_spls[i] += _mod_lfo.tick_filt_sample_and_hold() * depth;
         }
         break;
       case 1:
         for (uint i = 0; i < block.size(); ++i) {
+          n_spls[i] = delay_spls;
           n_spls[i] += _mod_lfo.tick_sine() * depth;
         }
         break;
       case 2:
         for (uint i = 0; i < block.size(); ++i) {
+          n_spls[i] = delay_spls;
           n_spls[i] += _mod_lfo.tick_triangle() * depth;
         }
         break;
       case 3:
         for (uint i = 0; i < block.size(); ++i) {
+          n_spls[i] = delay_spls;
           n_spls[i]
             += _mod_lfo.tick_trapezoid (vec_set<n_taps> (0.75f)) * depth;
         }
@@ -683,19 +692,19 @@ private:
         break;
       };
       // smoothing and clamping the delay in samples after modulation
+      auto min_spls = vec_set<float_x4> (_delay.min_delay_spls() + blocksize);
       for (uint i = 0; i < block.size(); ++i) {
-        n_spls[i]     = _n_spls_smoother.tick (n_spls[i]);
-        auto min_spls = vec_set<float_x4> (_delay.min_delay_spls() + blocksize);
-        n_spls[i]     = vec_max (n_spls[i], min_spls);
+        n_spls[i] = _n_spls_smoother.tick (n_spls[i]);
+        n_spls[i] = vec_max (n_spls[i], min_spls);
       }
       // fill the tail samples, with feedback gain applied
       auto fb_gain = _param.fb_gain;
       for (uint t = 0; t < n_taps; ++t) {
         for (uint i = 0; i < block.size(); ++i) {
 #if DIFFUSE_DELAY_USE_THIRAN_TAPS
-          tap_tail[i][t] = _delay.get (n_spls[i][t], t, i)[0] * fb_gain;
+          tap_tail[i][t] = _delay.get (n_spls[i][t], t, i)[0] * fb_gain[t];
 #else
-          tap_tail[i][t] = _delay.get (n_spls[i][t] - i, t)[0] * fb_gain;
+          tap_tail[i][t] = _delay.get (n_spls[i][t] - i, t)[0] * fb_gain[t];
 #endif
         }
       }
@@ -745,7 +754,8 @@ private:
         break;
       }
       // diffusion
-      auto gain = make_vec (_extpar.diffusion);
+      auto gain            = make_vec (_extpar.diffusion);
+      auto diffusor_enable = _param.diffusor_enable;
       for (uint t = 0; t < n_taps; ++t) {
         std::array<std::array<float, n_serial_diffusors>, blocksize> ap_spls;
 
@@ -756,12 +766,16 @@ private:
         }
 
         for (uint d = 0; d < n_serial_diffusors; ++d) {
+          bool enabled = !!(diffusor_enable & bit<u16> (t * n_taps + d));
+          // As of now this is still run when disabled to ensure smooth
+          // transitions, it might not be necessary.
           for (uint i = 0; i < block.size(); ++i) {
-            tap_head[i][t] = allpass_fn::tick<vec1_type, float> (
+            auto v = allpass_fn::tick<vec1_type, float> (
               make_vec (tap_head[i][t]),
               ap_spls[i][d],
               gain,
               _diffusor[t][d])[0];
+            tap_head[i][t] = enabled ? v : tap_head[i][t];
           }
         }
       }
@@ -1128,11 +1142,13 @@ private:
   //----------------------------------------------------------------------------
   struct internal_parameters {
     float_x4 bp_freqs;
+    float_x4 delay_spls;
+    float_x4 fb_gain;
     double   delay_spls_max;
     double   spls_x_beat;
     float    bp_wetdry;
-    float    fb_gain;
     float    main_gain;
+    u16      diffusor_enable;
   };
 //----------------------------------------------------------------------------
 #if DIFFUSE_DELAY_USE_THIRAN_DIFFUSORS
