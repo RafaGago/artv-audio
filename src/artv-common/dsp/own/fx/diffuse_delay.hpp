@@ -92,6 +92,10 @@ public:
       return;
     }
     _extpar.diffusion = v;
+    // _extpar.diffusion goes from 0 to 0.5
+    float weight           = cosf (v * (float) (2. * (M_PI / 4.)));
+    _param.mtx_angle[0][0] = weight;
+    _param.mtx_angle[0][1] = sqrt (1.f - weight * weight);
   }
 
   static constexpr auto get_parameter (diffusion_tag)
@@ -753,7 +757,7 @@ private:
         assert (false);
         break;
       }
-      // diffusion
+      // diffusion by allpass
       auto gain            = make_vec (_extpar.diffusion);
       auto diffusor_enable = _param.diffusor_enable;
       for (uint t = 0; t < n_taps; ++t) {
@@ -778,6 +782,11 @@ private:
             tap_head[i][t] = enabled ? v : tap_head[i][t];
           }
         }
+      }
+      // diffusion by a 4-wide rotation matrix between taps
+      for (uint i = 0; i < block.size(); ++i) {
+        tap_head[i] = rotation_matrix<4>::tick<arith_type> (
+          tap_head[i], _param.mtx_angle);
       }
       // Feedback FX
       float bp_drive = _extpar.bp_drive;
@@ -930,16 +939,6 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  auto get_fdn4_angle()
-  {
-    // _extpar.diffusion goes from 0 to 0.5
-    float weight = _extpar.diffusion * (2. * (M_PI / 4));
-    std::array<std::array<float, 2>, 1> angle;
-    angle[0][0] = cos (weight);
-    angle[0][1] = sqrt (1.f - angle[0][0] * angle[0][0]);
-    return angle;
-  }
-  //----------------------------------------------------------------------------
   template <class T>
   void stereo_interleaving (
     std::array<arith_type, n_taps>* tap_head, // samples that will be
@@ -948,14 +947,11 @@ private:
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     // stereo with side ping pong
-    auto angle = get_fdn4_angle();
     for (uint i = 0; i < in.size(); ++i) {
       tap_head[i][0] = tap_tail[i][0];
       tap_head[i][1] = tap_tail[i][2];
       tap_head[i][2] = tap_tail[i][1];
       tap_head[i][3] = tap_tail[i][3];
-      // Extra FDN diffusion.
-      tap_head[i] = rotation_matrix<4>::tick<arith_type> (tap_head[i], angle);
       tap_head[i][0] += in[i][0];
       tap_head[i][3] += in[i][1];
       auto side = (arith_type) (in[i][0] - in[i][1]);
@@ -1008,8 +1004,8 @@ private:
   {
     for (uint i = 0; i < in.size(); ++i) {
       tap_head[i][0] = tap_tail[i][3];
-      tap_head[i][1] = 0.f; // disabled
-      tap_head[i][2] = tap_tail[i][0] + tap_tail[i][1];
+      tap_head[i][1] = tap_tail[i][1];
+      tap_head[i][2] = tap_tail[i][0];
       tap_head[i][3] = tap_tail[i][2];
       auto mid       = (arith_type) (in[i][0] + in[i][1]);
       tap_head[i][0] += mid;
@@ -1028,8 +1024,10 @@ private:
       tap_head[i][1] = tap_tail[i][0];
       tap_head[i][2] = tap_tail[i][1];
       tap_head[i][3] = tap_tail[i][2];
-      auto mid       = (arith_type) (in[i][0] + in[i][1]);
-      auto side      = (arith_type) (in[i][0] - in[i][1]);
+      tap_head[i]
+        = rotation_matrix<4>::tick<arith_type> (tap_head[i], _param.mtx_angle);
+      auto mid  = (arith_type) (in[i][0] + in[i][1]);
+      auto side = (arith_type) (in[i][0] - in[i][1]);
       tap_head[i][0] += mid + side;
     }
   }
@@ -1041,13 +1039,11 @@ private:
     crange<std::array<T, 2> const>        in, // inputs
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
-    auto angle = get_fdn4_angle();
     for (uint i = 0; i < in.size(); ++i) {
       auto mid = (arith_type) (in[i][0] + in[i][1]);
       for (uint j = 0; j < n_taps; ++j) {
         tap_head[i][j] = tap_tail[i][j];
       }
-      tap_head[i] = rotation_matrix<4>::tick<arith_type> (tap_head[i], angle);
       for (uint j = 0; j < n_taps; ++j) {
         tap_head[i][j] += mid;
       }
@@ -1141,14 +1137,15 @@ private:
   };
   //----------------------------------------------------------------------------
   struct internal_parameters {
-    float_x4 bp_freqs;
-    float_x4 delay_spls;
-    float_x4 fb_gain;
-    double   delay_spls_max;
-    double   spls_x_beat;
-    float    bp_wetdry;
-    float    main_gain;
-    u16      diffusor_enable;
+    float_x4             bp_freqs;
+    float_x4             delay_spls;
+    float_x4             fb_gain;
+    array2d<float, 2, 1> mtx_angle;
+    double               delay_spls_max;
+    double               spls_x_beat;
+    float                bp_wetdry;
+    float                main_gain;
+    u16                  diffusor_enable;
   };
 //----------------------------------------------------------------------------
 #if DIFFUSE_DELAY_USE_THIRAN_DIFFUSORS
