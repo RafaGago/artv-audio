@@ -1,7 +1,7 @@
 desc:Spectral tilt filter
 slider1:freq=  1000 <20, 16000, 1> Frequency (Hz)
 slider2:bw=    1    <0, 12, 0.01> Bandwidth (Oct)
-slider3:alpha= 0.3  <-1, 1, 0.0001> Alpha
+slider3:alpha= 0.3  <-2, 2, 0.0001> Alpha
 
 in_pin:left input
 in_pin:right input

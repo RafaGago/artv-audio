@@ -79,7 +79,7 @@ public:
 
   static constexpr auto get_parameter (feedback_tag)
   {
-    return float_param ("%", 0.f, 100.f, 25.f, 0.001f);
+    return float_param ("%", 0.f, 100.f, 30.f, 0.001f);
   }
   //----------------------------------------------------------------------------
   struct diffusion_tag {};
@@ -97,7 +97,7 @@ public:
 
   static constexpr auto get_parameter (diffusion_tag)
   {
-    return float_param ("%", 0.f, 100.f, 20.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 10.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct ducking_threshold_tag {};
@@ -128,7 +128,7 @@ public:
 
   static constexpr auto get_parameter (ducking_speed_tag)
   {
-    return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 10.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct gain_tag {};
@@ -285,7 +285,7 @@ public:
 
   static constexpr auto get_parameter (tilt_db_tag)
   {
-    return float_param ("dB", -16.f, 16.f, 0.f, 0.1f);
+    return float_param ("dB", -14.f, 14.f, 0.f, 0.1f);
   }
   //----------------------------------------------------------------------------
   struct desync_tag {};
@@ -796,7 +796,7 @@ private:
       float bp_wet   = _param.bp_wetdry;
       float bp_dry   = 1.f - abs (_param.bp_wetdry);
       float hp_gain  = fb_gain[0];
-      hp_gain *= exp (_param.max_hp_mod * ((3.f * _extpar.damp_ratio) - 2.f));
+      hp_gain *= exp (_param.max_hp_mod * ((3.5f * _extpar.damp_ratio) - 2.5f));
 
       for (uint i = 0; i < block.size(); ++i) {
         auto taps = vec_from_array (tap_head[i]);

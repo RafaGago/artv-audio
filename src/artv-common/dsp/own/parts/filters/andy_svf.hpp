@@ -87,6 +87,45 @@ static svf_coeffs_ext<T> get_main_coeffs (
   ret.a3 = g * ret.a2;
   return ret;
 }
+
+// https://cytomic.com/files/dsp/SvfLinearTrapezoidalSin.pdf
+template <class T, class U>
+static svf_coeffs_ext<T> get_main_coeffs_precise (
+  T    freq,
+  T    q,
+  T    db,
+  U    sr,
+  uint flags = 0)
+{
+  // "U" should always be a builtin type.
+  static_assert (std::is_floating_point<U>::value, "");
+
+  svf_coeffs_ext<T> ret;
+  T                 s1, s2;
+
+  T w = (U) M_PI * freq / sr;
+  if constexpr (is_vec_v<T>) {
+    ret.A = vec_exp (db * (U) (1. / 40.) * (U) M_LN10);
+    s1    = vec_sin (w);
+    // sometimes sin and cos can be returned on the same op.
+    // sin(2x) = 2*cos(x)*sin(x)
+    s2 = (U) 2 * vec_cos (w) * s1;
+  }
+  else {
+    ret.A = exp (db * (U) (1. / 40.) * (U) M_LN10);
+    s1    = vec_sin (w);
+    // sometimes sin and cos can be returned on the same op.
+    // sin(2x) = 2*cos(x)*sin(x)
+    s2 = (U) 2 * vec_cos (w) * s1;
+  }
+  T nrm = (U) 1 / ((U) 2 * s2);
+
+  ret.k  = (U) 1 / q;
+  ret.a1 = s2 * nrm;
+  ret.a2 = ((U) -2 * s1 * s1 - ret.k * s2) * nrm;
+  ret.a3 = ((U) 2 * s1 * s1) * nrm;
+  return ret;
+}
 //------------------------------------------------------------------------------
 template <class T>
 struct svf_tick_result {
