@@ -110,7 +110,7 @@ jobs:
         with:
           name: mix-maxtrix-windows-${{github.sha}}-x64-debug-symbols
           path: |
-            ${{github.workspace}}/build-windows/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**/*.pdb
+            ${{github.workspace}}/build-windows/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix.pdb
 
       # VST3 Windows Zen3
       - uses: actions/upload-artifact@v2
@@ -125,4 +125,4 @@ jobs:
         with:
           name: mix-maxtrix-windows-${{github.sha}}-zen3-debug-symbols
           path: |
-            ${{github.workspace}}/build-windows-zen3/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**/*.pdb
+            ${{github.workspace}}/build-windows-zen3/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix.pdb
