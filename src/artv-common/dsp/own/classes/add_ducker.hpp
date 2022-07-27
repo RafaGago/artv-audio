@@ -44,7 +44,7 @@ public:
 
   static constexpr auto get_parameter (ducking_speed_tag)
   {
-    return float_param ("%", 0.f, 100.f, 0.f, 0.01f);
+    return float_param ("%", 0.f, 100.f, 10.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   template <class T, class F>
