@@ -1155,6 +1155,59 @@ static constexpr preset presets[] = {
     <gui_data bus1_text="-12" bus2_text="+12" bus3_text="Dry Passthrough" bus4_text="" bus5_text="Pre-filter" bus6_text="Wet" bus7_text="Dry" bus8_text="" />
 </params>
      )END"},
+  {.name = "FX: Phaser DDL (kinda)",
+   .xml = R"END(
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
+<params plugin_version="1007000">
+    <PARAM id="in_selection_01" value="1.0" />
+    <PARAM id="out_selection_01" value="0.0" />
+    <PARAM id="channel_modifs_01" value="0.0" />
+    <PARAM id="fx_mix_01" value="100.0" />
+    <PARAM id="fx_mix_02" value="13.60000038146973" />
+    <PARAM id="fx_type_01" value="25.0" />
+    <PARAM id="fx_type_02" value="51.0" />
+    <PARAM id="global_volume" value="0.0" />
+    <PARAM id="in_selection_02" value="0.0" />
+    <PARAM id="in_selection_03" value="1.0" />
+    <PARAM id="mixer_sends" value="1.0" />
+    <PARAM id="out_selection_02" value="1.0" />
+    <PARAM id="out_selection_03" value="1.0" />
+    <PARAM id="pan_01" value="-5.860000610351562" />
+    <PARAM id="routing" />
+    <PARAM id="volume_01" value="0.0" />
+    <PARAM id="volume_02" value="4.30999755859375" />
+    <PARAM id="volume_03" value="0.0" />
+    <PARAM id="wet_balance_02" value="-53.06000137329102" />
+    <PARAM id="myphaser_feedback_01" value="23.20000457763672" />
+    <PARAM id="myphaser_high_freq_01" value="123.0762329101562" />
+    <PARAM id="myphaser_lfo_depth_01" value="56.0" />
+    <PARAM id="myphaser_lfo_rate_01" value="-65.88099670410156" />
+    <PARAM id="myphaser_lfo_stereo_01" value="184.3000030517578" />
+    <PARAM id="myphaser_lfo_wave_01" value="0.0" />
+    <PARAM id="myphaser_low_freq_01" value="117.8646545410156" />
+    <PARAM id="myphaser_q_01" value="0.02099999971687794" />
+    <PARAM id="myphaser_stages_01" value="10.0" />
+    <PARAM id="myphaser_stages_mode_01" value="14.0" />
+    <PARAM id="myphaser_parallel_mix_01" value="77.30000305175781" />
+    <PARAM id="myphaser_topology_01" value="1.0" />
+    <PARAM id="myphaser_delay_feedback_01" value="50.39999389648438" />
+    <PARAM id="myphaser_delay_time_01" value="32.40000152587891" />
+    <PARAM id="myphaser_delay_lfo_01" value="100.0" />
+    <PARAM id="diffuse_delay_damp_02" value="0.0" />
+    <PARAM id="diffuse_delay_desync_02" value="14.0" />
+    <PARAM id="diffuse_delay_diffusion_02" value="0.0" />
+    <PARAM id="diffuse_delay_feedback_02" value="30.93000221252441" />
+    <PARAM id="diffuse_delay_freq_spread_02" value="0.7999954223632812" />
+    <PARAM id="diffuse_delay_hipass_02" value="7.399999618530273" />
+    <PARAM id="diffuse_delay_mod_depth_02" value="0.0" />
+    <PARAM id="diffuse_delay_mode_02" value="2.0" />
+    <PARAM id="diffuse_delay_sixteenths_02" value="6.039999961853027" />
+    <PARAM id="diffuse_delay_tilt_02" value="6.700000762939453" />
+    <PARAM id="diffuse_delay_transients_02" value="-52.0" />
+    <gui_data bus1_text="" bus2_text="Wet" bus3_text="Dry" bus4_text="" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
+</params>
+     )END"},
 };
 
 // clang-format on

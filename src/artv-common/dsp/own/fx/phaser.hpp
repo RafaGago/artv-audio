@@ -2,7 +2,9 @@
 
 #include <array>
 #include <cstdint>
+#include <vector>
 
+#include "artv-common/dsp/own/classes/delay_line.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
@@ -212,7 +214,7 @@ public:
   void set (feedback_tag, float v)
   {
     bool neg = v < 0.f;
-    v *= 0.00995;
+    v *= 0.01 * 0.995;
     v = sqrt (abs (v));
     v = neg ? -v : v;
 
@@ -251,6 +253,52 @@ public:
     return choice_param (1, make_cstr_array ("1 pole", "2 poles"), 16);
   }
   //----------------------------------------------------------------------------
+  struct delay_feedback_tag {};
+  void set (delay_feedback_tag, float v)
+  {
+    bool neg = v < 0.f;
+    v *= 0.01;
+    v = sqrt (abs (v));
+    v = neg ? -v : v;
+
+    _params.smooth_target.value.delay_feedback = v;
+  }
+
+  static constexpr auto get_parameter (delay_feedback_tag)
+  {
+    return float_param ("%", -100., 100, 0., 0.01);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr float max_delay_sec = 0.0015f;
+
+  struct delay_time_tag {};
+  void set (delay_time_tag, float v)
+  {
+    v *= 0.01f;
+    v *= _plugcontext->get_sample_rate() * max_delay_sec;
+    _params.smooth_target.value.delay_spls = v;
+  }
+
+  static constexpr auto get_parameter (delay_time_tag)
+  {
+    return float_param ("%", 0., 100, 33., 0.001);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr float max_delay_factor    = 4.f;
+  static constexpr float ln_max_delay_factor = M_LN2 * 2.f;
+
+  struct delay_lfo_tag {};
+  void set (delay_lfo_tag, float v)
+  {
+    v *= 0.01f;
+    _params.smooth_target.value.delay_lfo = v;
+  }
+
+  static constexpr auto get_parameter (delay_lfo_tag)
+  {
+    return float_param ("%", -100., 100, 0., 0.001);
+  }
+  //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
     _plugcontext = &pc;
@@ -272,7 +320,11 @@ public:
       = get_parameter (lfo_start_phase_tag {}).defaultv;
     _params.smooth_target.value.feedback
       = get_parameter (feedback_tag {}).defaultv;
-    _params.smooth_target.value.q = get_parameter (q_tag {}).defaultv;
+    _params.smooth_target.value.q          = get_parameter (q_tag {}).defaultv;
+    _params.smooth_target.value.delay_spls = 0.f;
+    _params.smooth_target.value.delay_feedback = 0.f;
+    _params.smooth_target.value.delay_lfo      = 0.f;
+    _params.smooth_target.value.lfo_last       = 0.f;
 
     _params.unsmoothed.lfo_hz_user = get_parameter (lfo_rate_tag {}).defaultv;
     _params.unsmoothed.lfo_eights
@@ -301,6 +353,14 @@ public:
     uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
     _feedback_samples[0] = _feedback_samples[1] = 0.;
+
+    // setting up delay
+    auto delay_size = pow2_round_ceil (
+      (uint) (pc.get_sample_rate() * max_delay_sec * max_delay_factor));
+    _delay_mem.clear();
+    _delay_mem.resize (_delay.n_required_elems (delay_size, 1));
+    _delay.reset (make_crange (_delay_mem), 1);
+    _delay.set_resync_delta (10.0);
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -327,9 +387,7 @@ public:
             .cast (float_x4 {}),
           vec_load<float_x4> (in));
       }
-      // from now on access parameters without caring if they are smoothed or
-      // not. This copy also has the aditional advantage of telling the compiler
-      // that it can keep parameters on registers.
+
       all_parameters pars;
       static_assert (
         onepole_smoother::n_states == 1,
@@ -382,7 +440,7 @@ public:
           lfov = _lfos.tick_saw (n_samples);
           break;
         }
-
+        _params.smooth_target.value.lfo_last = lfov[0];
         auto interp_stages = (double) (pars.n_allpasses / 2) - 1;
         std::array<double, 2> fconstant;
 
@@ -489,6 +547,12 @@ public:
         ins[0][i] + (_feedback_samples[0] * pars.feedback),
         ins[1][i] + (_feedback_samples[1] * pars.feedback)};
 
+      auto n_spls = pars.delay_spls;
+      n_spls *= exp (ln_max_delay_factor * pars.lfo_last * pars.delay_lfo);
+      auto delayed = _delay.get (n_spls, 0);
+      out *= 1.f - abs (pars.delay_feedback);
+      out += delayed * pars.delay_feedback;
+
       if (pars.single_pole) {
         for (uint g = 0; g < (pars.n_allpasses / vec_size); ++g) {
           // as of now this processes both in parallel and in series.
@@ -502,6 +566,9 @@ public:
         }
       }
 
+      out = _dc_blocker.tick (out);
+      _delay.push (make_crange (out));
+
       assert (
         (pars.n_allpasses % vec_size) == 0
         && "there are unprocessed allpasses");
@@ -510,10 +577,9 @@ public:
       double_x2 parallel = {(double) out[2], (double) out[3]};
       outx2 += _params.unsmoothed.parallel_mix * parallel;
       outx2 *= -0.5;
+
       outs[0][i] = outx2[0];
       outs[1][i] = outx2[1];
-
-      outx2 = _dc_blocker.tick (outx2);
 
       _feedback_samples[0] = outx2[0];
       _feedback_samples[1] = outx2[1];
@@ -532,7 +598,10 @@ public:
     high_freq_tag,
     feedback_tag,
     q_tag,
-    parallel_mix_tag>;
+    parallel_mix_tag,
+    delay_feedback_tag,
+    delay_time_tag,
+    delay_lfo_tag>;
   //----------------------------------------------------------------------------
 private:
   void refresh_lfo_hz()
@@ -566,6 +635,11 @@ private:
     float lfo_depth;
     float lfo_start_phase;
     float feedback;
+
+    float delay_spls;
+    float delay_feedback;
+    float delay_lfo;
+    float lfo_last;
   };
   //----------------------------------------------------------------------------
   struct all_parameters : public unsmoothed_parameters,
@@ -588,9 +662,12 @@ private:
   std::array<float, n_channels> _feedback_samples;
   parameter_values              _params;
 
+  std::vector<float_x4> _delay_mem;
+
   part_class_array<andy::svf_allpass, float_x4, 16> _allpass2p;
   part_class_array<onepole_allpass, float_x4, 16>   _allpass1p;
-  part_class_array<mystran_dc_blocker, double_x2>   _dc_blocker;
+  modulable_thiran1_delay_line<float_x4, 1>         _delay {};
+  part_class_array<mystran_dc_blocker, float_x4>    _dc_blocker;
 
   lfo<n_channels> _lfos; // 0 = L, 1 = R
   uint            _n_processed_samples;

@@ -8,6 +8,8 @@
   Disabling is also interesting for the use case of using the phaser as a phase
   rotator (lfo freq set to 0, controlling offset with the LFO phase knob).
 - Artv Phaser: Add single pole mode.
+- Artv Phaser: Add second feedback delay line. This delay line enables flanging.
+  As seen on the Ensoniq DP4.
 
 1.7.0
 - Artv DelayVerb: Features include different tap configurations, diffusion,

@@ -5423,10 +5423,40 @@ parameter_cpp_class_define (
   myphaser_parallel_mix,
   n_stereo_busses,
   param_common (
-    "Parallel Amt",
+    "Parallel",
     declptr<upsampled<phaser>>(),
     declptr<phaser::parallel_mix_tag>()),
   phaser::get_parameter (phaser::parallel_mix_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  myphaser_delay_feedback,
+  n_stereo_busses,
+  param_common (
+    "Del Fback",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::delay_feedback_tag>()),
+  phaser::get_parameter (phaser::delay_feedback_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  myphaser_delay_time,
+  n_stereo_busses,
+  param_common (
+    "Del Time",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::delay_time_tag>()),
+  phaser::get_parameter (phaser::delay_time_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  myphaser_delay_lfo,
+  n_stereo_busses,
+  param_common (
+    "Del LFO",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::delay_lfo_tag>()),
+  phaser::get_parameter (phaser::delay_lfo_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -5447,14 +5477,18 @@ using myphaser_params = mp_list<
   myphaser_low_freq,
   myphaser_high_freq,
   myphaser_q,
-  myphaser_feedback,
-
-  myphaser_lfo_stereo,
-  myphaser_lfo_wave,
-  myphaser_lfo_start_phase,
-  myphaser_parallel_mix,
-  myphaser_stages_mode,
   myphaser_topology,
+
+  myphaser_stages_mode,
+  myphaser_lfo_wave,
+  myphaser_lfo_stereo,
+  myphaser_feedback,
+  myphaser_delay_feedback,
+  myphaser_delay_time,
+  myphaser_delay_lfo,
+  myphaser_parallel_mix,
+
+  myphaser_lfo_start_phase,
   myphaser_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
@@ -7236,7 +7270,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
