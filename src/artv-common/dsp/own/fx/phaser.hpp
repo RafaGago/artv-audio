@@ -69,7 +69,7 @@ public:
   void set (stages_mode_tag, int v)
   {
     bool lin                       = v < m_total_modes;
-    _params.unsmoothed.lin_flo_mod = lin;
+    _params.unsmoothed.lin_lfo_mod = lin;
     _params.unsmoothed.mode        = v - (!lin * m_total_modes);
   }
 
@@ -243,10 +243,19 @@ public:
     return float_param ("%", -100., 100, 100., 0.1);
   }
   //----------------------------------------------------------------------------
+  struct topology_tag {};
+  void set (topology_tag, int v) { _params.unsmoothed.single_pole = v == 0; }
+
+  static constexpr auto get_parameter (topology_tag)
+  {
+    return choice_param (1, make_cstr_array ("1 pole", "2 poles"), 16);
+  }
+  //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
     _plugcontext = &pc;
-    _allpass.reset_states_cascade();
+    _allpass1p.reset_states_cascade();
+    _allpass2p.reset_states_cascade();
     memset (&_feedback_samples, 0, sizeof _feedback_samples);
 
     _lfos.reset();
@@ -417,7 +426,7 @@ public:
 
           // fill freqs
           for (uint ap = 0; ap < (vec_size / 2); ++ap) {
-            float max_depth = pars.lin_flo_mod ? 0.6 : 1.7;
+            float max_depth = pars.lin_lfo_mod ? 0.6 : 1.7;
             float k;
             uint  stage = (s * 4) + ap;
 
@@ -451,7 +460,7 @@ public:
               }
             }
 
-            if (pars.lin_flo_mod) {
+            if (pars.lin_lfo_mod) {
               freqs[ap * 2] = fs[0] + (lfov[0] * pars.lfo_depth * fs[0] * k);
               freqs[ap * 2 + 1]
                 = fs[1] + (lfov[1] * pars.lfo_depth * fs[1] * k);
@@ -462,8 +471,14 @@ public:
             }
           }
           freqs = vec_min (20000.f, freqs);
-          _allpass.reset_coeffs_on_idx (
-            s, freqs, qs, _plugcontext->get_sample_rate());
+          if (pars.single_pole) {
+            _allpass1p.reset_coeffs_on_idx (
+              s, freqs, _plugcontext->get_sample_rate());
+          }
+          else {
+            _allpass2p.reset_coeffs_on_idx (
+              s, freqs, qs, _plugcontext->get_sample_rate());
+          }
         }
       }
 
@@ -474,10 +489,19 @@ public:
         ins[0][i] + (_feedback_samples[0] * pars.feedback),
         ins[1][i] + (_feedback_samples[1] * pars.feedback)};
 
-      for (uint g = 0; g < (pars.n_allpasses / vec_size); ++g) {
-        // as of now this processes both in parallel and in series.
-        out = _allpass.tick_on_idx (g, out);
+      if (pars.single_pole) {
+        for (uint g = 0; g < (pars.n_allpasses / vec_size); ++g) {
+          // as of now this processes both in parallel and in series.
+          out = _allpass1p.tick_on_idx (g, out);
+        }
       }
+      else {
+        for (uint g = 0; g < (pars.n_allpasses / vec_size); ++g) {
+          // as of now this processes both in parallel and in series.
+          out = _allpass2p.tick_on_idx (g, out);
+        }
+      }
+
       assert (
         (pars.n_allpasses % vec_size) == 0
         && "there are unprocessed allpasses");
@@ -529,7 +553,8 @@ private:
     uint  lfo_wave;
     uint  n_allpasses;
     uint  mode;
-    bool  lin_flo_mod;
+    bool  lin_lfo_mod;
+    bool  single_pole;
   };
   //----------------------------------------------------------------------------
   struct smoothed_parameters {
@@ -563,7 +588,8 @@ private:
   std::array<float, n_channels> _feedback_samples;
   parameter_values              _params;
 
-  part_class_array<andy::svf_allpass, float_x4, 16> _allpass;
+  part_class_array<andy::svf_allpass, float_x4, 16> _allpass2p;
+  part_class_array<onepole_allpass, float_x4, 16>   _allpass1p;
   part_class_array<mystran_dc_blocker, double_x2>   _dc_blocker;
 
   lfo<n_channels> _lfos; // 0 = L, 1 = R

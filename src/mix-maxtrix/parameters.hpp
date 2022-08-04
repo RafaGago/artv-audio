@@ -5410,6 +5410,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  myphaser_topology,
+  n_stereo_busses,
+  param_common (
+    "Topology",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::topology_tag>()),
+  phaser::get_parameter (phaser::topology_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   myphaser_parallel_mix,
   n_stereo_busses,
   param_common (
@@ -5441,9 +5451,10 @@ using myphaser_params = mp_list<
 
   myphaser_lfo_stereo,
   myphaser_lfo_wave,
-  myphaser_stages_mode,
   myphaser_lfo_start_phase,
   myphaser_parallel_mix,
+  myphaser_stages_mode,
+  myphaser_topology,
   myphaser_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
