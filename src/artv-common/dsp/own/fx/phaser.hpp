@@ -66,21 +66,34 @@ public:
   }
   //----------------------------------------------------------------------------
   struct stages_mode_tag {};
-  void set (stages_mode_tag, int v) { _params.unsmoothed.mode = v; }
+  void set (stages_mode_tag, int v)
+  {
+    bool lin                       = v < m_total_modes;
+    _params.unsmoothed.lin_flo_mod = lin;
+    _params.unsmoothed.mode        = v - (!lin * m_total_modes);
+  }
 
   static constexpr auto get_parameter (stages_mode_tag)
   {
     return choice_param (
-      0,
+      8,
       make_cstr_array (
-        "Exponential",
-        "Exp Spread",
-        "Exp Alternate",
-        "Exp Stereo",
-        "Linear",
-        "Lin Spread",
-        "Lin Alternate",
-        "Lin Stereo"),
+        "Lin Mod Exp F",
+        "Lin Mod Exp F Spread",
+        "Lin Mod Exp F Alternate",
+        "Lin Mod Exp F Stereo",
+        "Lin Mod Lin F",
+        "Lin Mod Lin F Spread",
+        "Lin Mod Lin F Alternate",
+        "Lin Mod Lin F Stereo",
+        "Exp Mod Exp F",
+        "Exp Mod Exp F Spread",
+        "Exp Mod Exp F Alternate",
+        "Exp Mod Exp F Stereo",
+        "Exp Mod Lin F",
+        "Exp Mod Lin F Spread",
+        "Exp Mod Lin F Alternate",
+        "Exp Mod Lin F Stereo"),
       16);
   }
 
@@ -93,6 +106,7 @@ public:
     m_lin_spread,
     m_lin_alternate,
     m_lin_stereo,
+    m_total_modes,
   };
 
   static constexpr bool mode_is_exponential (uint v) { return v < m_lin; }
@@ -349,39 +363,38 @@ public:
           break;
         }
 
-        auto   interp_stages = (double) (pars.n_allpasses / 2) - 1;
-        double fconstant_even;
-        double fconstant_odd;
+        auto interp_stages = (double) (pars.n_allpasses / 2) - 1;
+        std::array<double, 2> fconstant;
 
-        auto freq_hi = pars.freq_hi;
-        auto freq_lo = pars.freq_lo;
+        auto freq_hi = std::max (pars.freq_hi, pars.freq_lo);
+        auto freq_lo = std::min (pars.freq_hi, pars.freq_lo);
 
         switch (pars.mode) {
         case m_exp:
         case m_exp_spread:
         case m_exp_alternate:
-          fconstant_even = pow (freq_hi / freq_lo, 1. / interp_stages);
-          fconstant_odd  = 1.;
+          fconstant[0] = pow (freq_hi / freq_lo, 1. / interp_stages);
+          fconstant[1] = 1.;
           break;
         case m_exp_stereo:
           interp_stages *= 2;
-          fconstant_even = pow (freq_hi / freq_lo, 1. / interp_stages);
-          fconstant_odd  = fconstant_even;
+          fconstant[0] = pow (freq_hi / freq_lo, 1. / interp_stages);
+          fconstant[1] = fconstant[0];
           break;
         case m_lin:
         case m_lin_spread:
         case m_lin_alternate:
-          fconstant_even = abs (freq_hi - freq_lo) / interp_stages;
-          fconstant_odd  = 0.;
+          fconstant[0] = (freq_hi - freq_lo) / interp_stages;
+          fconstant[1] = 0.;
           break;
         case m_lin_stereo:
           interp_stages *= 2;
-          fconstant_even = abs (freq_hi - freq_lo) / interp_stages;
-          fconstant_odd  = fconstant_even;
+          fconstant[0] = (freq_hi - freq_lo) / interp_stages;
+          fconstant[1] = fconstant[0];
           break;
         default:
-          fconstant_even = 0;
-          fconstant_odd  = 0.;
+          fconstant[0] = 0.;
+          fconstant[1] = 0.;
           break;
         }
         auto f = freq_lo;
@@ -393,9 +406,9 @@ public:
 
           // fill freqs
           for (uint ap = 0; ap < (vec_size / 2); ++ap) {
-            constexpr float max_depth = 0.6;
-            float           k;
-            uint            stage = (s * 4) + ap;
+            float max_depth = pars.lin_flo_mod ? 0.6 : 1.7;
+            float k;
+            uint  stage = (s * 4) + ap;
 
             switch (pars.mode) {
             case m_exp:
@@ -416,25 +429,28 @@ public:
               break;
             }
 
-            freqs[ap * 2] = f + (lfov[0] * pars.lfo_depth * f * k);
+            std::array<decltype (f), 2> fs;
+            for (uint iv = 0; iv < fs.size(); ++iv) {
+              fs[iv] = f;
+              if (mode_is_exponential (pars.mode)) {
+                f *= fconstant[iv];
+              }
+              else {
+                f += fconstant[iv];
+              }
+            }
 
-            if (mode_is_exponential (pars.mode)) {
-              f *= fconstant_odd;
+            if (pars.lin_flo_mod) {
+              freqs[ap * 2] = fs[0] + (lfov[0] * pars.lfo_depth * fs[0] * k);
+              freqs[ap * 2 + 1]
+                = fs[1] + (lfov[1] * pars.lfo_depth * fs[1] * k);
             }
             else {
-              f += fconstant_odd;
-            }
-
-            freqs[(ap * 2) + 1] = f + (lfov[1] * pars.lfo_depth * f * k);
-
-            if (mode_is_exponential (pars.mode)) {
-              f *= fconstant_even;
-            }
-            else {
-              f += fconstant_even;
+              freqs[ap * 2]     = fs[0] * exp (lfov[0] * pars.lfo_depth * k);
+              freqs[ap * 2 + 1] = fs[1] * exp (lfov[1] * pars.lfo_depth * k);
             }
           }
-
+          freqs = vec_min (20000.f, freqs);
           _allpass.reset_coeffs_on_idx (
             s, freqs, qs, _plugcontext->get_sample_rate());
         }
@@ -499,6 +515,7 @@ private:
     uint  lfo_wave;
     uint  n_allpasses;
     uint  mode;
+    bool  lin_flo_mod;
   };
   //----------------------------------------------------------------------------
   struct smoothed_parameters {

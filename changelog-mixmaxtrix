@@ -1,3 +1,8 @@
+1.8.0
+- Artv Phaser: Add exponential frequency modulation: Now the LFO frequency
+  modulation is exponential which is what is normally expected. The previous
+  linear modes have been kept for legacy patches to keep sounding as they did.
+
 1.7.0
 - Artv DelayVerb: Features include different tap configurations, diffusion,
   ducking, transient control, multiple delay line length modulation modes, input
