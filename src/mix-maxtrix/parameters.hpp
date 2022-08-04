@@ -5410,6 +5410,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  myphaser_parallel_mix,
+  n_stereo_busses,
+  param_common (
+    "Parallel Amt",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::parallel_mix_tag>()),
+  phaser::get_parameter (phaser::parallel_mix_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   myphaser_oversampling,
   n_stereo_busses,
   param_common (
@@ -5428,10 +5438,12 @@ using myphaser_params = mp_list<
   myphaser_high_freq,
   myphaser_q,
   myphaser_feedback,
+
   myphaser_lfo_stereo,
   myphaser_lfo_wave,
   myphaser_stages_mode,
   myphaser_lfo_start_phase,
+  myphaser_parallel_mix,
   myphaser_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (

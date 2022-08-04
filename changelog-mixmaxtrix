@@ -2,6 +2,11 @@
 - Artv Phaser: Add exponential frequency modulation: Now the LFO frequency
   modulation is exponential which is what is normally expected. The previous
   linear modes have been kept for legacy patches to keep sounding as they did.
+- Artv Phaser: Add parallel mix amount. This phaser is the sum of two stereo
+  channels (4 channels total) of N/2 stages. A pameter is added to control the
+  amount of mixing, so the flanging effects can be controlled or disabled.
+  Disabling is also interesting for the use case of using the phaser as a phase
+  rotator (lfo freq set to 0, controlling offset with the LFO phase knob).
 
 1.7.0
 - Artv DelayVerb: Features include different tap configurations, diffusion,

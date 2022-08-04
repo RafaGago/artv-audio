@@ -232,6 +232,17 @@ public:
     return float_param ("", 0.02, 3.5, 0.18, 0.001, 0.4);
   }
   //----------------------------------------------------------------------------
+  struct parallel_mix_tag {};
+  void set (parallel_mix_tag, float v)
+  {
+    _params.unsmoothed.parallel_mix = v * 0.01f;
+  }
+
+  static constexpr auto get_parameter (parallel_mix_tag)
+  {
+    return float_param ("%", -100., 100, 100., 0.1);
+  }
+  //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
     _plugcontext = &pc;
@@ -471,8 +482,9 @@ public:
         (pars.n_allpasses % vec_size) == 0
         && "there are unprocessed allpasses");
 
-      double_x2 outx2 = {
-        (double) out[0] + (double) out[2], (double) out[1] + (double) out[3]};
+      double_x2 outx2    = {(double) out[0], (double) out[1]};
+      double_x2 parallel = {(double) out[2], (double) out[3]};
+      outx2 += _params.unsmoothed.parallel_mix * parallel;
       outx2 *= -0.5;
       outs[0][i] = outx2[0];
       outs[1][i] = outx2[1];
@@ -495,7 +507,8 @@ public:
     low_freq_tag,
     high_freq_tag,
     feedback_tag,
-    q_tag>;
+    q_tag,
+    parallel_mix_tag>;
   //----------------------------------------------------------------------------
 private:
   void refresh_lfo_hz()
@@ -512,6 +525,7 @@ private:
   struct unsmoothed_parameters {
     float lfo_eights;
     float lfo_hz_user;
+    float parallel_mix;
     uint  lfo_wave;
     uint  n_allpasses;
     uint  mode;
