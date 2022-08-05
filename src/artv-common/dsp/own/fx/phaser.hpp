@@ -34,12 +34,7 @@ public:
   static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   struct stages_tag {};
-  void set (stages_tag, int v)
-  {
-    static_assert (vec_traits<float_x4>().size == 4, "Refactor this...");
-    auto stages                    = (v + 1) * vec_traits<float_x4>().size;
-    _params.unsmoothed.n_allpasses = stages;
-  }
+  void set (stages_tag, int v) { _params.unsmoothed.n_stages = v + 1; }
 
   static constexpr auto get_parameter (stages_tag)
   {
@@ -48,22 +43,22 @@ public:
     return choice_param (
       6,
       make_cstr_array (
+        "1",
         "2",
+        "3",
         "4",
+        "5",
         "6",
+        "7",
         "8",
+        "9",
         "10",
+        "11",
         "12",
+        "13",
         "14",
-        "16",
-        "18",
-        "20",
-        "22",
-        "24",
-        "26",
-        "28",
-        "30",
-        "32"),
+        "15",
+        "16"),
       32);
   }
   //----------------------------------------------------------------------------
@@ -329,9 +324,9 @@ public:
     _params.unsmoothed.lfo_hz_user = get_parameter (lfo_rate_tag {}).defaultv;
     _params.unsmoothed.lfo_eights
       = get_parameter (lfo_rate_sync_tag {}).defaultv;
-    _params.unsmoothed.lfo_wave    = get_parameter (lfo_wave_tag {}).defaultv;
-    _params.unsmoothed.n_allpasses = get_parameter (stages_tag {}).defaultv;
-    _params.unsmoothed.mode = get_parameter (stages_mode_tag {}).defaultv;
+    _params.unsmoothed.lfo_wave = get_parameter (lfo_wave_tag {}).defaultv;
+    _params.unsmoothed.n_stages = get_parameter (stages_tag {}).defaultv;
+    _params.unsmoothed.mode     = get_parameter (stages_mode_tag {}).defaultv;
 
     refresh_lfo_hz();
 
@@ -441,7 +436,7 @@ public:
           break;
         }
         _params.smooth_target.value.lfo_last = lfov[0];
-        auto interp_stages = (double) (pars.n_allpasses / 2) - 1;
+        auto                  interp_stages  = (double) (pars.n_stages * 2) - 1;
         std::array<double, 2> fconstant;
 
         auto freq_hi = std::max (pars.freq_hi, pars.freq_lo);
@@ -477,8 +472,7 @@ public:
         }
         auto f = freq_lo;
 
-        assert ((pars.n_allpasses % vec_size) == 0 && "bug!");
-        for (uint s = 0; s < (pars.n_allpasses / vec_size); ++s) {
+        for (uint s = 0; s < pars.n_stages; ++s) {
           float_x4 freqs {};
           float_x4 qs = vec_set<float_x4> (pars.q); // Q's don't oscilate (yet)
 
@@ -497,7 +491,7 @@ public:
               break;
             case m_exp_spread:
             case m_lin_spread:
-              k = (stage < (pars.n_allpasses / 2)) ? max_depth : -max_depth;
+              k = (stage < (pars.n_stages * 2)) ? max_depth : -max_depth;
               break;
             case m_exp_alternate:
             case m_lin_alternate:
@@ -554,13 +548,13 @@ public:
       out += delayed * pars.delay_feedback;
 
       if (pars.single_pole) {
-        for (uint g = 0; g < (pars.n_allpasses / vec_size); ++g) {
+        for (uint g = 0; g < pars.n_stages; ++g) {
           // as of now this processes both in parallel and in series.
           out = _allpass1p.tick_on_idx (g, out);
         }
       }
       else {
-        for (uint g = 0; g < (pars.n_allpasses / vec_size); ++g) {
+        for (uint g = 0; g < pars.n_stages; ++g) {
           // as of now this processes both in parallel and in series.
           out = _allpass2p.tick_on_idx (g, out);
         }
@@ -568,10 +562,6 @@ public:
 
       out = _dc_blocker.tick (out);
       _delay.push (make_crange (out));
-
-      assert (
-        (pars.n_allpasses % vec_size) == 0
-        && "there are unprocessed allpasses");
 
       double_x2 outx2    = {(double) out[0], (double) out[1]};
       double_x2 parallel = {(double) out[2], (double) out[3]};
@@ -620,7 +610,7 @@ private:
     float lfo_hz_user;
     float parallel_mix;
     uint  lfo_wave;
-    uint  n_allpasses;
+    uint  n_stages;
     uint  mode;
     bool  lin_lfo_mod;
     bool  single_pole;
