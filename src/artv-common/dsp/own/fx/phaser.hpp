@@ -348,6 +348,7 @@ public:
     uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
     _feedback_samples[0] = _feedback_samples[1] = 0.;
+    _lfo_srate = pc.get_sample_rate() / (_control_rate_mask + 1);
 
     // setting up delay
     auto delay_size = pow2_round_ceil (
@@ -392,8 +393,7 @@ public:
 
       // control rate refresh block
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        _lfos.set_freq (
-          vec_set<2> (pars.lfo_hz_final), _plugcontext->get_sample_rate());
+        _lfos.set_freq (vec_set<2> (pars.lfo_hz_final), _lfo_srate);
         auto stereo_ph
           = phase<1> {vec_set<1> (pars.lfo_stereo), phase<1>::degrees {}}
               .get_raw (0);
@@ -410,29 +410,28 @@ public:
           start_ph.set_raw (start_ph.get_raw (0) + stereo_ph, 1);
           _lfos.set_phase (start_ph);
         }
-        auto          n_samples = _control_rate_mask + 1;
         vec<float, 2> lfov;
         switch (pars.lfo_wave) {
         case 0:
-          lfov = _lfos.tick_sine (n_samples);
+          lfov = _lfos.tick_sine();
           break;
         case 1:
-          lfov = _lfos.tick_triangle (n_samples);
+          lfov = _lfos.tick_triangle();
           break;
         case 2:
-          lfov = _lfos.tick_sample_hold (n_samples);
+          lfov = _lfos.tick_sample_hold();
           break;
         case 3:
-          lfov = _lfos.tick_filt_sample_and_hold (n_samples);
+          lfov = _lfos.tick_filt_sample_and_hold();
           break;
         case 4:
-          lfov = _lfos.tick_trapezoid (vec_set<2> (0.3f), n_samples);
+          lfov = _lfos.tick_trapezoid (vec_set<2> (0.3f));
           break;
         case 5:
-          lfov = _lfos.tick_square (n_samples);
+          lfov = _lfos.tick_square();
           break;
         case 6:
-          lfov = _lfos.tick_saw (n_samples);
+          lfov = _lfos.tick_saw();
           break;
         }
         _params.smooth_target.value.lfo_last = lfov[0];
@@ -662,6 +661,7 @@ private:
   lfo<n_channels> _lfos; // 0 = L, 1 = R
   uint            _n_processed_samples;
   uint            _control_rate_mask;
+  float           _lfo_srate;
 
   float _lp_smooth_coeff;
 
