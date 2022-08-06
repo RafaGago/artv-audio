@@ -1,3 +1,6 @@
+1.9.0
+- Artv Phaser: Add three pole mode.
+
 1.8.1
 - Artv Phaser: Label the amount of stages by number of stages on the serial
   path. Previously it was labeled by the number of stages on both paths.

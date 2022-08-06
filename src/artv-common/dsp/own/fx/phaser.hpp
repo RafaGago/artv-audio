@@ -241,12 +241,15 @@ public:
   }
   //----------------------------------------------------------------------------
   struct topology_tag {};
-  void set (topology_tag, int v) { _params.unsmoothed.single_pole = v == 0; }
+  void set (topology_tag, int v) { _params.unsmoothed.topology = v; }
 
   static constexpr auto get_parameter (topology_tag)
   {
-    return choice_param (1, make_cstr_array ("1 pole", "2 poles"), 16);
+    return choice_param (
+      1, make_cstr_array ("1 pole", "2 poles", "3 poles"), 16);
   }
+
+  enum topologies { t_1_pole, t_2_pole, t_3_pole };
   //----------------------------------------------------------------------------
   struct delay_feedback_tag {};
   void set (delay_feedback_tag, float v)
@@ -522,11 +525,11 @@ public:
             }
           }
           freqs = vec_min (20000.f, freqs);
-          if (pars.single_pole) {
+          if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
             _allpass1p.reset_coeffs_on_idx (
               s, freqs, _plugcontext->get_sample_rate());
           }
-          else {
+          if (pars.topology == t_2_pole || pars.topology == t_3_pole) {
             _allpass2p.reset_coeffs_on_idx (
               s, freqs, qs, _plugcontext->get_sample_rate());
           }
@@ -546,13 +549,13 @@ public:
       out *= 1.f - abs (pars.delay_feedback);
       out += delayed * pars.delay_feedback;
 
-      if (pars.single_pole) {
+      if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
         for (uint g = 0; g < pars.n_stages; ++g) {
           // as of now this processes both in parallel and in series.
           out = _allpass1p.tick_on_idx (g, out);
         }
       }
-      else {
+      if (pars.topology == t_2_pole || pars.topology == t_3_pole) {
         for (uint g = 0; g < pars.n_stages; ++g) {
           // as of now this processes both in parallel and in series.
           out = _allpass2p.tick_on_idx (g, out);
@@ -610,9 +613,9 @@ private:
     float parallel_mix;
     uint  lfo_wave;
     uint  n_stages;
+    uint  topology;
     uint  mode;
     bool  lin_lfo_mod;
-    bool  single_pole;
   };
   //----------------------------------------------------------------------------
   struct smoothed_parameters {
