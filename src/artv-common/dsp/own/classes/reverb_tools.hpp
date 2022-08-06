@@ -20,17 +20,28 @@ namespace artv {
 class allpass_fn {
 public:
   //----------------------------------------------------------------------------
+  template <class T>
+  struct result {
+    T out;
+    T to_push;
+  };
+  //----------------------------------------------------------------------------
+  // index 0 is the result, 1 the value to push to a delay line, yn is the
+  // delayed sample fetched from the queue
+  template <class T>
+  static result<T> tick (T in, T yn, T gain)
+  {
+    T y = in + yn * gain;
+    return {yn - y * gain, y};
+  }
+  //----------------------------------------------------------------------------
   // tick all delay line channels in parallel
-  template <
-    class V,
-    class Time_type,
-    class Delay_line,
-    enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class T, class Time_type, class Delay_line>
   static void tick (
-    crange<V>               out,
-    crange<const V>         in,
+    crange<T>               out,
+    crange<const T>         in,
     crange<const Time_type> delay,
-    crange<const V>         gain,
+    crange<const T>         gain,
     Delay_line&             dl)
   {
     assert (out.size() >= dl.n_channels());
@@ -39,59 +50,48 @@ public:
     assert (gain.size() >= dl.n_channels());
 
     assert (dl.n_channels() <= 512); // limit VLA range
-    V to_push[dl.n_channels()];
+    T to_push[dl.n_channels()];
 
     for (uint i = 0; i < dl.n_channels(); ++i) {
-      V yn       = dl.get (delay[i], i);
-      V y        = in[i] + yn * gain[i];
-      to_push[i] = y;
-      out[i]     = yn - y * gain[i];
+      auto r     = tick (in[i], dl.get (delay[i], i), gain[i]);
+      out[i]     = r.out;
+      to_push[i] = r.to_push;
     }
     dl.push (make_crange (&to_push[0], dl.n_channels()));
   }
   //----------------------------------------------------------------------------
   // tick all delay line channels in serial
-  template <
-    class V,
-    class Time_type,
-    class Delay_line,
-    enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (
-    V                       in,
+  template <class T, class Time_type, class Delay_line>
+  static T tick (
+    T                       in,
     crange<const Time_type> delay,
-    crange<const V>         gain,
+    crange<const T>         gain,
     Delay_line&             dl)
   {
     assert (delay.size() >= dl.n_channels());
     assert (gain.size() >= dl.n_channels());
 
     assert (dl.n_channels() <= 512); // limit VLA range
-    V to_push[dl.n_channels()];
+    T to_push[dl.n_channels()];
 
-    V out = in;
+    T out = in;
     for (uint i = 0; i < dl.n_channels(); ++i) {
-      V yn       = dl.get (delay[i], i);
-      V y        = out + yn * gain[i];
-      to_push[i] = y;
-      out        = yn - y * gain[i];
+      auto r     = tick (out, dl.get (delay[i], i), gain[i]);
+      out        = r.out;
+      to_push[i] = r.to_push;
     }
     dl.push (make_crange (&to_push[0], dl.n_channels()));
     return out;
   }
   //----------------------------------------------------------------------------
   // special-casing the case of 1 channel to remove the loop
-  template <
-    class V,
-    class Time_type,
-    class Delay_line,
-    enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (V in, Time_type delay, V gain, Delay_line& dl)
+  template <class T, class Time_type, class Delay_line>
+  static T tick (T in, Time_type delay, T gain, Delay_line& dl)
   {
     assert (dl.n_channels() == 1);
-    V yn = dl.get (delay, 0);
-    V y  = in + yn * gain;
-    dl.push (make_crange (&y, 1));
-    return yn - y * gain;
+    auto r = tick (in, dl.get (delay, 0), gain);
+    dl.push (make_crange (&r.to_push, 1));
+    return r.out;
   }
   //----------------------------------------------------------------------------
 };
@@ -106,10 +106,9 @@ public:
   //----------------------------------------------------------------------------
   V tick (V in, uint delay, V gain)
   {
-    V yn = _mem[delay];
-    V y  = in + yn * gain;
-    _mem.push (y);
-    return yn - y * gain;
+    auto r = allpass_fn::tick<V> (in, _mem[delay], gain);
+    _mem.push (r.to_push);
+    return r.out;
   }
   //----------------------------------------------------------------------------
   V tick (V in, uint delay, V gain_forward, V gain_backward)
