@@ -1,5 +1,6 @@
 1.9.0
 - Artv Phaser: Add three pole mode.
+- Artv Phaser: Add Schroeder allpass mode (experimental).
 
 1.8.1
 - Artv Phaser: Label the amount of stages by number of stages on the serial

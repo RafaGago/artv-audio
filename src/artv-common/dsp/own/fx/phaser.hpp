@@ -190,7 +190,7 @@ public:
 
   static constexpr auto get_parameter (low_freq_tag)
   {
-    return frequency_parameter (20., 10000., 225.);
+    return frequency_parameter (min_ap_freq, 10000., 225.);
   }
   //----------------------------------------------------------------------------
   struct high_freq_tag {};
@@ -202,7 +202,7 @@ public:
 
   static constexpr auto get_parameter (high_freq_tag)
   {
-    return frequency_parameter (20., 10000., 3300.);
+    return frequency_parameter (min_ap_freq, 10000., 3300.);
   }
   //----------------------------------------------------------------------------
   struct feedback_tag {};
@@ -246,10 +246,10 @@ public:
   static constexpr auto get_parameter (topology_tag)
   {
     return choice_param (
-      1, make_cstr_array ("1 pole", "2 poles", "3 poles"), 16);
+      1, make_cstr_array ("1 pole", "2 poles", "3 poles", "Schroeder"), 16);
   }
 
-  enum topologies { t_1_pole, t_2_pole, t_3_pole };
+  enum topologies { t_1_pole, t_2_pole, t_3_pole, t_schroeder };
   //----------------------------------------------------------------------------
   struct delay_feedback_tag {};
   void set (delay_feedback_tag, float v)
@@ -354,11 +354,7 @@ public:
     _lfo_srate = pc.get_sample_rate() / (_control_rate_mask + 1);
 
     // setting up delay
-    auto delay_size = pow2_round_ceil (
-      (uint) (pc.get_sample_rate() * max_delay_sec * max_delay_factor));
-    _delay_mem.clear();
-    _delay_mem.resize (_delay.n_required_elems (delay_size, 1));
-    _delay.reset (make_crange (_delay_mem), 1);
+    reset_memory_parts();
     _delay.set_resync_delta (10.0);
   }
   //----------------------------------------------------------------------------
@@ -524,7 +520,7 @@ public:
               freqs[ap * 2 + 1] = fs[1] * exp (lfov[1] * pars.lfo_depth * k);
             }
           }
-          freqs = vec_min (20000.f, freqs);
+          freqs = vec_clamp (freqs, min_ap_freq, 20000.f);
           if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
             _allpass1p.reset_coeffs_on_idx (
               s, freqs, _plugcontext->get_sample_rate());
@@ -532,6 +528,9 @@ public:
           if (pars.topology == t_2_pole || pars.topology == t_3_pole) {
             _allpass2p.reset_coeffs_on_idx (
               s, freqs, qs, _plugcontext->get_sample_rate());
+          }
+          if (pars.topology == t_schroeder) {
+            _allpassdl_spls[s] = vec_to_array (freq_to_delay_spls (freqs));
           }
         }
       }
@@ -549,17 +548,40 @@ public:
       out *= 1.f - abs (pars.delay_feedback);
       out += delayed * pars.delay_feedback;
 
-      if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
-        for (uint g = 0; g < pars.n_stages; ++g) {
-          // as of now this processes both in parallel and in series.
-          out = _allpass1p.tick_on_idx (g, out);
+      if (pars.topology != t_schroeder) {
+        if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
+          for (uint g = 0; g < pars.n_stages; ++g) {
+            // as of now this processes both in parallel and in series.
+            out = _allpass1p.tick_on_idx (g, out);
+          }
+        }
+        if (pars.topology == t_2_pole || pars.topology == t_3_pole) {
+          for (uint g = 0; g < pars.n_stages; ++g) {
+            // as of now this processes both in parallel and in series.
+            out = _allpass2p.tick_on_idx (g, out);
+          }
         }
       }
-      if (pars.topology == t_2_pole || pars.topology == t_3_pole) {
+      else {
+        constexpr float q_scale = 0.99f / get_parameter (q_tag {}).max;
+
+        std::array<float_x1, n_ap_channels>              acum {};
+        std::array<float_x1, n_ap_channels * max_stages> to_push {};
+
+        float_x1 gain {pars.q * q_scale};
+        acum = vec1_array_wrap (vec_to_array (out));
+
         for (uint g = 0; g < pars.n_stages; ++g) {
-          // as of now this processes both in parallel and in series.
-          out = _allpass2p.tick_on_idx (g, out);
+          for (uint c = 0; c < n_ap_channels; ++c) {
+            uint dl_channel = g * n_ap_channels + c;
+            auto yn = _allpassdl.get (_allpassdl_spls[g][c], dl_channel);
+            auto r  = allpass_fn::tick<float_x1> (acum[c], yn, gain);
+            acum[c] = r.out;
+            to_push[dl_channel] = r.to_push;
+          }
         }
+        _allpassdl.push (to_push);
+        out = vec_from_array (vec1_array_unwrap (acum));
       }
 
       out = _dc_blocker.tick (out);
@@ -596,6 +618,26 @@ public:
     delay_lfo_tag>;
   //----------------------------------------------------------------------------
 private:
+  static constexpr uint max_stages = 16;
+  //----------------------------------------------------------------------------
+  void reset_memory_parts()
+  {
+    auto ap_size
+      = pow2_round_ceil ((uint) ceil (freq_to_delay_spls (min_ap_freq)));
+    ap_size = _allpassdl.n_required_elems (ap_size, n_ap_channels * max_stages);
+
+    auto delay_size = pow2_round_ceil ((
+      uint) (_plugcontext->get_sample_rate() * max_delay_sec * max_delay_factor));
+    delay_size      = _delay.n_required_elems (delay_size, 1);
+
+    _delay_mem.clear();
+    _delay_mem.resize (delay_size + ap_size);
+    auto mem = make_crange (_delay_mem);
+    _allpassdl.reset (
+      mem.cut_head (ap_size).cast<float_x1>(), n_ap_channels * max_stages);
+    _delay.reset (mem.cut_head (delay_size), 1);
+  }
+  //----------------------------------------------------------------------------
   void refresh_lfo_hz()
   {
     float hz = 0.f;
@@ -605,6 +647,20 @@ private:
     }
     hz += _params.unsmoothed.lfo_hz_user;
     _params.smooth_target.value.lfo_hz_final = hz;
+  }
+  //----------------------------------------------------------------------------
+  static constexpr float min_ap_freq = 20.f;
+
+  template <class T>
+  T freq_to_delay_spls (T freq)
+  {
+    if constexpr (is_vec_v<T>) {
+      using VT = vec_value_type_t<T>;
+      return (VT) _plugcontext->get_sample_rate() / ((VT) 2 * freq);
+    }
+    else {
+      return (T) _plugcontext->get_sample_rate() / ((T) 2 * freq);
+    }
   }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
@@ -649,17 +705,20 @@ private:
     unsmoothed_parameters unsmoothed;
   };
   //----------------------------------------------------------------------------
-  static constexpr uint n_channels = 2;
+  static constexpr uint n_channels    = 2;
+  static constexpr uint n_ap_channels = 4;
 
   std::array<float, n_channels> _feedback_samples;
   parameter_values              _params;
 
   std::vector<float_x4> _delay_mem;
 
-  part_class_array<andy::svf_allpass, float_x4, 16> _allpass2p;
-  part_class_array<onepole_allpass, float_x4, 16>   _allpass1p;
-  modulable_thiran1_delay_line<float_x4, 1>         _delay {};
-  part_class_array<mystran_dc_blocker, float_x4>    _dc_blocker;
+  part_class_array<andy::svf_allpass, float_x4, max_stages>     _allpass2p;
+  part_class_array<onepole_allpass, float_x4, max_stages>       _allpass1p;
+  interpolated_delay_line<float_x1, linear_interp, true, false> _allpassdl;
+  array2d<float, n_ap_channels, max_stages>      _allpassdl_spls {};
+  modulable_thiran1_delay_line<float_x4, 1>      _delay {};
+  part_class_array<mystran_dc_blocker, float_x4> _dc_blocker;
 
   lfo<n_channels> _lfos; // 0 = L, 1 = R
   uint            _n_processed_samples;
