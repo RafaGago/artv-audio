@@ -597,6 +597,7 @@ public:
       _feedback_samples[1] = feedback[1];
 
       outx2 *= 2.f - _params.unsmoothed.parallel_mix;
+      outx2 *= 1.f + abs (pars.delay_feedback);
       outs[0][i] = outx2[0];
       outs[1][i] = outx2[1];
     }

@@ -2,6 +2,7 @@
 - Artv Phaser: Add three pole mode.
 - Artv Phaser: Add Schroeder allpass mode (experimental).
 - Artv Phaser: Gain compensate "parallel" knob/parameter.
+- Artv Phaser: Gain compensate "delay feedback" knob/parameter.
 
 1.8.1
 - Artv Phaser: Label the amount of stages by number of stages on the serial
