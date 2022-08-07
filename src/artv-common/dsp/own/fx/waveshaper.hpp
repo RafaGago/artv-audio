@@ -13,7 +13,6 @@
 #include "artv-common/dsp/own/parts/filters/dc_blocker.hpp"
 #include "artv-common/dsp/own/parts/filters/moving_average.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
-#include "artv-common/dsp/own/parts/misc/interpolators.hpp"
 #include "artv-common/dsp/own/parts/misc/slew_limiter.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/own/parts/waveshapers/adaa/compand1.hpp"

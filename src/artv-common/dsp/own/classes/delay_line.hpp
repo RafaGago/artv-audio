@@ -877,13 +877,21 @@ struct thiran_interp_1 {
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> srate)
+  {
+    using T = vec_value_type_t<V>;
+    auto d  = vec_tan (M_PI * freq / srate);
+    co[a]   = (1 - d) / (1 + d);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> co, V fractional)
   {
     using T = vec_value_type_t<V>;
     // D parameter between 0.418 and 1.418
     V d = fractional + (T) 0.418;
 #if 1
-    co[a] = (1 - d) / (1 + d);
+    co[a] = ((T) 1 - d) / ((T) 1 + d);
 #else
     // See https://dafx09.como.polimi.it/proceedings/papers/paper_72.pdf
     // chapter 6.
@@ -934,11 +942,19 @@ struct thiran_interp_2_df1 {
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> srate)
+  {
+    using T = vec_value_type_t<V>;
+    auto d  = vec_tan (M_PI * freq / srate);
+    co[a1]  = (1 - d) / (1 + d);
+    co[a2]  = ((d - 1) * (d - 2)) / ((d + 1) * (d + 2));
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> co, V fractional)
   {
     using T = vec_value_type_t<V>;
-    // D parameter between 1.5 and 2.5
-    V d = fractional + (T) 1.5;
+    V d     = fractional + (T) 1.403;
 #if 1
     co[a1] = -(d - 2) / (d + 1);
     co[a2] = ((d - 1) * (d - 2)) / ((d + 1) * (d + 2));

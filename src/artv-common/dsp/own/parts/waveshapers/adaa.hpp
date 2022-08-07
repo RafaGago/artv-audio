@@ -6,7 +6,7 @@
 #include <cmath>
 
 #include "artv-common/dsp/own/parts/filters/moving_average.hpp"
-#include "artv-common/dsp/own/parts/misc/interpolators.hpp"
+#include "artv-common/dsp/own/parts/filters/thiran.hpp"
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/range.hpp"
@@ -190,14 +190,14 @@ class fix_eq_and_delay<1, Impl, Ts...> {
 public:
   enum coeffs {
     allpass_coeffs_idx,
-    boxcar_coeffs_idx = allpass_coeffs_idx + allpass_interpolator::n_coeffs,
+    boxcar_coeffs_idx = allpass_coeffs_idx + thiran<1>::n_coeffs,
     impl_coeffs_idx   = boxcar_coeffs_idx + moving_average<2>::n_coeffs,
     n_coeffs          = impl_coeffs_idx + Impl<1, Ts...>::n_coeffs
   };
   enum coeffs_int { n_coeffs_int };
   enum state {
     allpass_states_idx,
-    boxcar_states_idx = allpass_states_idx + allpass_interpolator::n_states,
+    boxcar_states_idx = allpass_states_idx + thiran<1>::n_states,
     impl_states_idx   = boxcar_states_idx + moving_average<2>::n_states,
     n_states          = impl_states_idx + Impl<1, Ts...>::n_states
   };
@@ -212,7 +212,7 @@ public:
     static_assert (moving_average<2>::n_coeffs == 0, "Add initialization!");
     static_assert (Impl<1, Ts...>::n_coeffs == 0, "Add initialization!");
 
-    allpass_interpolator::reset_coeffs (c, vec_set<V> ((T) 0.5));
+    thiran<1>::reset_coeffs (c, vec_set<V> ((T) 0.5));
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -229,8 +229,8 @@ public:
     assert (st.size() >= n_states);
 
     // comments on the non-vectorized version
-    V delayed = allpass_interpolator::tick (c, st, x);
-    st.cut_head (allpass_interpolator::n_states);
+    V delayed = thiran<1>::tick (c, st, x);
+    st.cut_head (thiran<1>::n_states);
 
     V filtered = moving_average<2>::tick ({}, st, x);
     st.cut_head (moving_average<2>::n_states);

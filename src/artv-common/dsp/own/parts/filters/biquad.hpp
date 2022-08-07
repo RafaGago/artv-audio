@@ -169,13 +169,8 @@ struct biquad {
   {
     using T = vec_value_type_t<V>;
 
-    // according to this. Table 3.2:
     // http://users.spa.aalto.fi/vpv/publications/vesan_vaitos/ch3_pt3_allpass.pdf
-    // The point minimizing the average error for D0 (D0 < D < D0 +1) is 1.403,
-    // but it broke when modulating.
-
-    d += (T) 2; // d = delta
-    d      = vec_max ((T) 2.001, d); // finite precision correction
+    d += (T) 1.403;
     co[a1] = (T) -2 * (d - (T) 2) / (d + (T) 1); // a1
     co[a2] = ((d - (T) 1) * (d - (T) 2)) / ((d + (T) 1) * (d + (T) 2)); // a2
     co[b0] = co[a2];

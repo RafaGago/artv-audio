@@ -268,13 +268,8 @@ struct onepole_tdf2 {
   {
     using T = vec_value_type_t<V>;
 
-    // according to this. Table 3.2:
     // http://users.spa.aalto.fi/vpv/publications/vesan_vaitos/ch3_pt3_allpass.pdf
-    // The point minimizing the average error for D0 (D0 < D < D0 +1) is 0.418
-    // but it broke when modulating.
-
-    d += (T) 1; // d = delta
-    d      = vec_max ((T) 1.001, d); // finite precision correction
+    d += (T) 0.418;
     co[a1] = ((T) 1 - d) / ((T) 1 + d);
     co[b0] = co[a1];
     co[b1] = vec_set<V> ((T) 0);
