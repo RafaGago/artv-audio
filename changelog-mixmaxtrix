@@ -1,6 +1,7 @@
 1.9.0
 - Artv Phaser: Add three pole mode.
 - Artv Phaser: Add Schroeder allpass mode (experimental).
+- Artv Phaser: Add Thiran1 and Thiran 2 modes.
 - Artv Phaser: Gain compensate "parallel" knob/parameter.
 - Artv Phaser: Gain compensate "delay feedback" knob/parameter.
 

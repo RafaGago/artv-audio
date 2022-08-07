@@ -8,8 +8,10 @@
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
+#include "artv-common/dsp/own/parts/filters/biquad.hpp"
 #include "artv-common/dsp/own/parts/filters/dc_blocker.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
+#include "artv-common/dsp/own/parts/filters/thiran.hpp"
 #include "artv-common/dsp/own/parts/oscillators/lfo.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/types.hpp"
@@ -246,10 +248,20 @@ public:
   static constexpr auto get_parameter (topology_tag)
   {
     return choice_param (
-      1, make_cstr_array ("1 pole", "2 poles", "3 poles", "Schroeder"), 16);
+      1,
+      make_cstr_array (
+        "1 pole", "2 poles", "3 poles", "Schroeder", "Thiran 1", "Thiran 2"),
+      16);
   }
 
-  enum topologies { t_1_pole, t_2_pole, t_3_pole, t_schroeder };
+  enum topologies {
+    t_1_pole,
+    t_2_pole,
+    t_3_pole,
+    t_schroeder,
+    t_thiran1,
+    t_thiran2,
+  };
   //----------------------------------------------------------------------------
   struct delay_feedback_tag {};
   void set (delay_feedback_tag, float v)
@@ -521,16 +533,26 @@ public:
             }
           }
           freqs = vec_clamp (freqs, min_ap_freq, 20000.f);
-          if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
-            _allpass1p.reset_coeffs_on_idx (
-              s, freqs, _plugcontext->get_sample_rate());
-          }
-          if (pars.topology == t_2_pole || pars.topology == t_3_pole) {
-            _allpass2p.reset_coeffs_on_idx (
-              s, freqs, qs, _plugcontext->get_sample_rate());
-          }
           if (pars.topology == t_schroeder) {
             _allpassdl_spls[s] = vec_to_array (freq_to_delay_spls (freqs));
+          }
+          else if (pars.topology == t_thiran1) {
+            _allpasst1.reset_coeffs_on_idx (
+              s, freqs, _plugcontext->get_sample_rate());
+          }
+          else if (pars.topology == t_thiran2) {
+            _allpasst2.reset_coeffs_on_idx (
+              s, freqs, _plugcontext->get_sample_rate());
+          }
+          else {
+            if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
+              _allpass1p.reset_coeffs_on_idx (
+                s, freqs, _plugcontext->get_sample_rate());
+            }
+            if (pars.topology == t_2_pole || pars.topology == t_3_pole) {
+              _allpass2p.reset_coeffs_on_idx (
+                s, freqs, qs, _plugcontext->get_sample_rate());
+            }
           }
         }
       }
@@ -548,21 +570,7 @@ public:
       out *= 1.f - abs (pars.delay_feedback);
       out += delayed * pars.delay_feedback;
 
-      if (pars.topology != t_schroeder) {
-        if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
-          for (uint g = 0; g < pars.n_stages; ++g) {
-            // as of now this processes both in parallel and in series.
-            out = _allpass1p.tick_on_idx (g, out);
-          }
-        }
-        if (pars.topology == t_2_pole || pars.topology == t_3_pole) {
-          for (uint g = 0; g < pars.n_stages; ++g) {
-            // as of now this processes both in parallel and in series.
-            out = _allpass2p.tick_on_idx (g, out);
-          }
-        }
-      }
-      else {
+      if (pars.topology == t_schroeder) {
         constexpr float q_scale = 0.99f / get_parameter (q_tag {}).max;
 
         std::array<float_x1, n_ap_channels>              acum {};
@@ -582,6 +590,28 @@ public:
         }
         _allpassdl.push (to_push);
         out = vec_from_array (vec1_array_unwrap (acum));
+      }
+      else if (pars.topology == t_thiran1) {
+        for (uint g = 0; g < pars.n_stages; ++g) {
+          out = _allpasst1.tick_on_idx (g, out);
+        }
+      }
+      else if (pars.topology == t_thiran2) {
+        for (uint g = 0; g < pars.n_stages; ++g) {
+          out = _allpasst2.tick_on_idx (g, out);
+        }
+      }
+      else {
+        if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
+          for (uint g = 0; g < pars.n_stages; ++g) {
+            out = _allpass1p.tick_on_idx (g, out);
+          }
+        }
+        if (pars.topology == t_2_pole || pars.topology == t_3_pole) {
+          for (uint g = 0; g < pars.n_stages; ++g) {
+            out = _allpass2p.tick_on_idx (g, out);
+          }
+        }
       }
 
       out = _dc_blocker.tick (out);
@@ -716,9 +746,13 @@ private:
 
   std::vector<float_x4> _delay_mem;
 
+  // TODO: use a variant?
   part_class_array<andy::svf_allpass, float_x4, max_stages>     _allpass2p;
   part_class_array<onepole_allpass, float_x4, max_stages>       _allpass1p;
+  part_class_array<thiran<1>, float_x4, max_stages>             _allpasst1;
+  part_class_array<thiran<2>, float_x4, max_stages>             _allpasst2;
   interpolated_delay_line<float_x1, linear_interp, true, false> _allpassdl;
+
   array2d<float, n_ap_channels, max_stages>      _allpassdl_spls {};
   modulable_thiran1_delay_line<float_x4, 1>      _delay {};
   part_class_array<mystran_dc_blocker, float_x4> _dc_blocker;
