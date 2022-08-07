@@ -255,7 +255,7 @@ public:
   void set (delay_feedback_tag, float v)
   {
     bool neg = v < 0.f;
-    v *= 0.01;
+    v *= 0.01 * 0.96;
     v = sqrt (abs (v));
     v = neg ? -v : v;
 
@@ -537,10 +537,10 @@ public:
 
       // regular processing
       float_x4 out {
-        ins[0][i] + (_feedback_samples[0] * pars.feedback),
-        ins[1][i] + (_feedback_samples[1] * pars.feedback),
-        ins[0][i] + (_feedback_samples[0] * pars.feedback),
-        ins[1][i] + (_feedback_samples[1] * pars.feedback)};
+        ins[0][i] + (_feedback_samples[0]),
+        ins[1][i] + (_feedback_samples[1]),
+        ins[0][i] + (_feedback_samples[0]),
+        ins[1][i] + (_feedback_samples[1])};
 
       auto n_spls = pars.delay_spls;
       n_spls *= exp (ln_max_delay_factor * pars.lfo_last * pars.delay_lfo);
@@ -591,12 +591,14 @@ public:
       double_x2 parallel = {(double) out[2], (double) out[3]};
       outx2 += _params.unsmoothed.parallel_mix * parallel;
       outx2 *= -0.5;
+      auto feedback = outx2 * pars.feedback;
 
+      _feedback_samples[0] = feedback[0];
+      _feedback_samples[1] = feedback[1];
+
+      outx2 *= 2.f - _params.unsmoothed.parallel_mix;
       outs[0][i] = outx2[0];
       outs[1][i] = outx2[1];
-
-      _feedback_samples[0] = outx2[0];
-      _feedback_samples[1] = outx2[1];
     }
   }
   //----------------------------------------------------------------------------
