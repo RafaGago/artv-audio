@@ -1,6 +1,6 @@
 desc:Rafa random test
 
-slider1:freq=20<20, 20000, 1>freq
+slider1:freq=20<-0.997, 0.577735, 0.001>freq
 
 in_pin:left input
 in_pin:right input
@@ -12,6 +12,11 @@ import _filters.jsfx-inc
 import _reverb.jsfx-inc
 
 @init
+
+function thiran1_init_raw (c) global() (
+  this.c = c;
+);
+
 
 function thiran1_init (d) global() (
   this.c = (1 - d) / (1 + d);
@@ -30,8 +35,8 @@ function thiran1_tick (in) global() local (out) (
 
 @slider
 
-l.thiran1_init (freq, srate);
-r.thiran1_init (freq, srate);
+l.thiran1_init_raw (freq);
+r.thiran1_init_raw (freq);
 
 @sample
 

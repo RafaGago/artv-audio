@@ -314,6 +314,8 @@ public:
     _plugcontext = &pc;
     _allpass1p.reset_states_cascade();
     _allpass2p.reset_states_cascade();
+    _allpasst1.reset_states_cascade();
+    _allpasst2.reset_states_cascade();
     memset (&_feedback_samples, 0, sizeof _feedback_samples);
 
     _lfos.reset();
@@ -456,8 +458,8 @@ public:
         case m_exp:
         case m_exp_spread:
         case m_exp_alternate:
-          fconstant[0] = pow (freq_hi / freq_lo, 1. / interp_stages);
-          fconstant[1] = 1.;
+          fconstant[0] = 1.;
+          fconstant[1] = pow (freq_hi / freq_lo, 1. / interp_stages);
           break;
         case m_exp_stereo:
           interp_stages *= 2;
@@ -467,8 +469,8 @@ public:
         case m_lin:
         case m_lin_spread:
         case m_lin_alternate:
-          fconstant[0] = (freq_hi - freq_lo) / interp_stages;
-          fconstant[1] = 0.;
+          fconstant[0] = 0.f;
+          fconstant[1] = (freq_hi - freq_lo) / interp_stages;
           break;
         case m_lin_stereo:
           interp_stages *= 2;
