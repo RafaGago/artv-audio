@@ -540,20 +540,20 @@ public:
           }
           else if (pars.topology == t_thiran1) {
             _allpasst1.reset_coeffs_on_idx (
-              s, freqs, _plugcontext->get_sample_rate());
+              s, freqs, (float) _plugcontext->get_sample_rate());
           }
           else if (pars.topology == t_thiran2) {
             _allpasst2.reset_coeffs_on_idx (
-              s, freqs, _plugcontext->get_sample_rate());
+              s, freqs, (float) _plugcontext->get_sample_rate());
           }
           else {
             if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
               _allpass1p.reset_coeffs_on_idx (
-                s, freqs, _plugcontext->get_sample_rate());
+                s, freqs, (float) _plugcontext->get_sample_rate());
             }
             if (pars.topology == t_2_pole || pars.topology == t_3_pole) {
               _allpass2p.reset_coeffs_on_idx (
-                s, freqs, qs, _plugcontext->get_sample_rate());
+                s, freqs, qs, (float) _plugcontext->get_sample_rate());
             }
           }
         }
@@ -595,12 +595,12 @@ public:
       }
       else if (pars.topology == t_thiran1) {
         for (uint g = 0; g < pars.n_stages; ++g) {
-          out = _allpasst1.tick_on_idx (g, out);
+          out = _allpasst1.tick_on_idx (g, -out);
         }
       }
       else if (pars.topology == t_thiran2) {
         for (uint g = 0; g < pars.n_stages; ++g) {
-          out = _allpasst2.tick_on_idx (g, out);
+          out = _allpasst2.tick_on_idx (g, -out);
         }
       }
       else {
