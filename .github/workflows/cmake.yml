@@ -108,7 +108,7 @@ jobs:
       # Symbols VST3 Windows
       - uses: actions/upload-artifact@v2
         with:
-          name: mix-maxtrix-windows-${{github.sha}}-x64-debug-symbols
+          name: mix-maxtrix-windows-${{github.sha}}-x64-vst3-debug-symbols
           path: |
             ${{github.workspace}}/build-windows/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix.pdb
 
@@ -123,6 +123,6 @@ jobs:
       # Symbols Windows Zen3
       - uses: actions/upload-artifact@v2
         with:
-          name: mix-maxtrix-windows-${{github.sha}}-zen3-debug-symbols
+          name: mix-maxtrix-windows-${{github.sha}}-zen3-vst3-debug-symbols
           path: |
             ${{github.workspace}}/build-windows-zen3/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix.pdb
