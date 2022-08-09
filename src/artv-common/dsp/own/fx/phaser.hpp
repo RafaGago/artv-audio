@@ -249,8 +249,7 @@ public:
   {
     return choice_param (
       1,
-      make_cstr_array (
-        "1 pole", "2 poles", "3 poles", "Schroeder", "Thiran 1", "Thiran 2"),
+      make_cstr_array ("1 pole", "2 poles", "3 poles", "Schroeder", "Thiran 1"),
       16);
   }
 
@@ -260,7 +259,6 @@ public:
     t_3_pole,
     t_schroeder,
     t_thiran1,
-    t_thiran2,
   };
   //----------------------------------------------------------------------------
   struct delay_feedback_tag {};
@@ -314,8 +312,8 @@ public:
     _plugcontext = &pc;
     _allpass1p.reset_states_cascade();
     _allpass2p.reset_states_cascade();
-    _allpasst1.reset_states_cascade();
-    _allpasst2.reset_states_cascade();
+    _allpassth.reset_states_cascade();
+
     memset (&_feedback_samples, 0, sizeof _feedback_samples);
 
     _lfos.reset();
@@ -539,12 +537,11 @@ public:
             _allpassdl_spls[s] = vec_to_array (freq_to_delay_spls (freqs));
           }
           else if (pars.topology == t_thiran1) {
-            _allpasst1.reset_coeffs_on_idx (
-              s, freqs, (float) _plugcontext->get_sample_rate());
-          }
-          else if (pars.topology == t_thiran2) {
-            _allpasst2.reset_coeffs_on_idx (
-              s, freqs, (float) _plugcontext->get_sample_rate());
+            _allpassth.reset_coeffs_on_idx (
+              s,
+              freqs,
+              (float) _plugcontext->get_sample_rate(),
+              quality_tag<0> {});
           }
           else {
             if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
@@ -595,12 +592,7 @@ public:
       }
       else if (pars.topology == t_thiran1) {
         for (uint g = 0; g < pars.n_stages; ++g) {
-          out = _allpasst1.tick_on_idx (g, -out);
-        }
-      }
-      else if (pars.topology == t_thiran2) {
-        for (uint g = 0; g < pars.n_stages; ++g) {
-          out = _allpasst2.tick_on_idx (g, -out);
+          out = _allpassth.tick_on_idx (g, -out);
         }
       }
       else {
@@ -751,8 +743,7 @@ private:
   // TODO: use a variant?
   part_class_array<andy::svf_allpass, float_x4, max_stages>     _allpass2p;
   part_class_array<onepole_allpass, float_x4, max_stages>       _allpass1p;
-  part_class_array<thiran<1>, float_x4, max_stages>             _allpasst1;
-  part_class_array<thiran<2>, float_x4, max_stages>             _allpasst2;
+  part_class_array<thiran<1>, float_x4, max_stages>             _allpassth;
   interpolated_delay_line<float_x1, linear_interp, true, false> _allpassdl;
 
   array2d<float, n_ap_channels, max_stages>      _allpassdl_spls {};

@@ -36,4 +36,10 @@ struct part_reset_coeffs_tag {};
 template <uint n>
 struct part_tick_tag {};
 
+template <uint n>
+struct quality_tag {};
+
+template <uint n>
+struct mode_tag {};
+
 }; // namespace artv

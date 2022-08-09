@@ -25,16 +25,31 @@ public:
   enum state { y1, x1, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<V>           co,
+    V                   freq,
+    vec_value_type_t<V> srate,
+    quality_tag<0>) // no frequency prewarp
+  {
+    // as allpass filter (negative coeff)
+    using T = vec_value_type_t<V>;
+    auto d  = (T) 2 * freq / srate;
+    co[a]   = (d - (T) 1) / (d + (T) 1);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> srate)
   {
+    // as allpass filter (negative coeff)
     using T = vec_value_type_t<V>;
     auto d  = vec_tan ((T) M_PI * freq / srate);
-    co[a]   = ((T) 1 - d) / ((T) 1 + d);
+    co[a]   = (d - (T) 1) / (d + (T) 1);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> co, V fractional)
   {
+    // as interpolator
     using T = vec_value_type_t<V>;
     // D parameter between 0.418 and 1.418
     V d = fractional + (T) 0.418;
@@ -90,17 +105,9 @@ public:
   enum state { y1, y2, x1, x2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> srate)
-  {
-    using T = vec_value_type_t<V>;
-    auto d  = vec_tan ((T) M_PI * freq / srate);
-    co[a1]  = ((T) 1 - d) / ((T) 1 + d);
-    co[a2]  = ((d - (T) 1) * (d - (T) 2)) / ((d + (T) 1) * (d + (T) 2));
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> co, V fractional)
   {
+    // as interpolator
     using T = vec_value_type_t<V>;
     V d     = fractional + (T) 1.403;
 #if 1

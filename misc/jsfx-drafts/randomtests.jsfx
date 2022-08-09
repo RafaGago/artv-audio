@@ -11,34 +11,13 @@ import _core.jsfx-inc
 import _filters.jsfx-inc
 import _reverb.jsfx-inc
 
-@init
-
-function thiran1_init_raw (c) global() (
-  this.c = c;
-);
-
-
-function thiran1_init (d) global() (
-  this.c = (1 - d) / (1 + d);
-);
-
-function thiran1_init (freq, srate) local (d) global() (
-  d = tan ($pi * freq / srate);
-  this.c = (d - 1) / (d + 1);
-);
-
-function thiran1_tick (in) global() local (out) (
-  this.y = this.c * in + this.x - this.c * this.y;
-  this.x = in;
-  this.y;
-);
 
 @slider
 
-l.thiran1_init (freq, srate);
-r.thiran1_init (freq, srate);
+l.thiran1_reset (freq, srate);
+r.tpt_1p_reset (freq, srate);
 
 @sample
 
-spl0 = l.thiran1_tick (spl0);
-spl1 = r.thiran1_tick (spl1);
+spl1 = l.thiran1_tick (spl1);
+spl0 = r.tpt_1p_tick_ap (spl0);

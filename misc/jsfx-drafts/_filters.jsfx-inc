@@ -359,7 +359,7 @@ function _sptilt_mzh (w0, ratio, alpha, t, i) global() (
 function _sptilt_mph (w0, ratio, t, i) global() (
    _sptilt_prewarp (_sptilt_mp (w0, ratio, i), w0, t);
 );
-//------------------------------------------------------------------------------
+
 // spectral tilt, from faust code, but tweaked to use bandwidth in octaves instead
 // of. Useful to e.g
 // get 3dB/oct filters.
@@ -399,7 +399,7 @@ function sptilt_init (order)
     this.filt.array2d_init (order, tdf2_mem_size());
     this.g.array_init (order);
 );
-//------------------------------------------------------------------------------
+
 // spectral tilt filter from faust
 function sptilt_reset (f0, bw_oct, alpha, samplerate)
     local(i, t, w, ratio, fptr, c, d, b1d, b0d, a1d, mzh, mph, g, order, f1)
@@ -447,7 +447,7 @@ function sptilt_reset_as_tilt_eq (fc, bw_oct, alpha, samplerate)
     db = bw_oct * -alpha * (6 + 6 / (order - 1)) * 0.5;
     this.g.ptr[order - 1] *= pow (10, db * (1/20));
 );
-//------------------------------------------------------------------------------
+
 function sptilt_tick (in)
     local(i, out) global(_2_DBG)(
 
@@ -458,5 +458,47 @@ function sptilt_tick (in)
         i += 1;
     );
     out;
+);
+//------------------------------------------------------------------------------
+// as an interpolator
+function thiran1_reset (d) global() (
+  this.c = (1 - d) / (1 + d);
+);
+
+// as an allpass
+function thiran1_reset(freq, srate) local (d) global() (
+  d = tan ($pi * freq / srate);
+  this.c = (1 - d) / (1 + d);
+  this.c = -this.c;
+);
+
+// as an allpass
+function thiran1_reset_no_prewarp  (freq, srate) local (d) global() (
+  d = 2 * freq / srate;
+  this.c = (1 - d) / (1 + d);
+  this.c = -this.c;
+);
+
+function thiran1_tick (in) global() (
+  this.y = this.c * in + this.x - this.c * this.y;
+  this.x = in;
+  this.y;
+);
+//------------------------------------------------------------------------------
+// as an interpolator
+function thiran2_reset (d) global() (
+  this.c1 = (1 - d) / (1 + d);
+  this.c2 = ((d - 1) * (d - 2)) / ((d + 1) * (d + 2));
+  this.c1 = this.c1;
+  this.c2 = this.c2;
+);
+
+function thiran2_tick (in) global() local (y) (
+    y  = this.c2 * in + this.c1 * this.x1 + this.x2;
+    y -= this.c1 * this.y1 + this.c2 * this.y2;
+    this.x2 = this.x1;
+    this.x1 = in;
+    this.y2 = this.y1;
+    this.y1 = y;
 );
 //------------------------------------------------------------------------------
