@@ -283,7 +283,7 @@ public:
   void set (delay_time_tag, float v)
   {
     v *= 0.01f;
-    v *= _plugcontext->get_sample_rate() * max_delay_sec;
+    v *= _srate * max_delay_sec;
     _params.smooth_target.value.delay_spls = v;
   }
 
@@ -310,6 +310,7 @@ public:
   void reset (plugin_context& pc)
   {
     _plugcontext = &pc;
+    _srate       = pc.get_sample_rate();
     _allpass1p.reset_states_cascade();
     _allpass2p.reset_states_cascade();
     _allpassth.reset_states_cascade();
@@ -363,7 +364,7 @@ public:
     uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
     _feedback_samples[0] = _feedback_samples[1] = 0.;
-    _lfo_srate = pc.get_sample_rate() / (_control_rate_mask + 1);
+    _lfo_srate = _srate / (_control_rate_mask + 1);
 
     // setting up delay
     reset_memory_parts();
@@ -532,25 +533,20 @@ public:
               freqs[ap * 2 + 1] = fs[1] * exp (lfov[1] * pars.lfo_depth * k);
             }
           }
-          freqs = vec_clamp (freqs, min_ap_freq, 20000.f);
+          freqs = vec_clamp (
+            freqs, min_ap_freq, std::min (_srate * 0.4999f, 22000.f));
           if (pars.topology == t_schroeder) {
             _allpassdl_spls[s] = vec_to_array (freq_to_delay_spls (freqs));
           }
           else if (pars.topology == t_thiran1) {
-            _allpassth.reset_coeffs_on_idx (
-              s,
-              freqs,
-              (float) _plugcontext->get_sample_rate(),
-              quality_tag<0> {});
+            _allpassth.reset_coeffs_on_idx (s, freqs, _srate);
           }
           else {
             if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
-              _allpass1p.reset_coeffs_on_idx (
-                s, freqs, (float) _plugcontext->get_sample_rate());
+              _allpass1p.reset_coeffs_on_idx (s, freqs, _srate);
             }
             if (pars.topology == t_2_pole || pars.topology == t_3_pole) {
-              _allpass2p.reset_coeffs_on_idx (
-                s, freqs, qs, (float) _plugcontext->get_sample_rate());
+              _allpass2p.reset_coeffs_on_idx (s, freqs, qs, _srate);
             }
           }
         }
@@ -621,7 +617,7 @@ public:
       _feedback_samples[1] = feedback[1];
 
       outx2 *= 2.f - _params.unsmoothed.parallel_mix;
-      outx2 *= 1.f + abs (pars.delay_feedback);
+      outx2 *= 1.f + pars.delay_feedback * pars.delay_feedback * 2.3f;
       outs[0][i] = outx2[0];
       outs[1][i] = outx2[1];
     }
@@ -653,9 +649,9 @@ private:
       = pow2_round_ceil ((uint) ceil (freq_to_delay_spls (min_ap_freq)));
     ap_size = _allpassdl.n_required_elems (ap_size, n_ap_channels * max_stages);
 
-    auto delay_size = pow2_round_ceil ((
-      uint) (_plugcontext->get_sample_rate() * max_delay_sec * max_delay_factor));
-    delay_size      = _delay.n_required_elems (delay_size, 1);
+    auto delay_size
+      = pow2_round_ceil ((uint) (_srate * max_delay_sec * max_delay_factor));
+    delay_size = _delay.n_required_elems (delay_size, 1);
 
     _delay_mem.clear();
     _delay_mem.resize (delay_size + ap_size);
@@ -683,10 +679,10 @@ private:
   {
     if constexpr (is_vec_v<T>) {
       using VT = vec_value_type_t<T>;
-      return (VT) _plugcontext->get_sample_rate() / ((VT) 2 * freq);
+      return (VT) _srate / ((VT) 2 * freq);
     }
     else {
-      return (T) _plugcontext->get_sample_rate() / ((T) 2 * freq);
+      return (T) _srate / ((T) 2 * freq);
     }
   }
   //----------------------------------------------------------------------------
@@ -754,6 +750,7 @@ private:
   uint            _n_processed_samples;
   uint            _control_rate_mask;
   float           _lfo_srate;
+  float           _srate;
 
   float _lp_smooth_coeff;
 

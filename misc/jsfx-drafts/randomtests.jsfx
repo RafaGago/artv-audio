@@ -15,9 +15,9 @@ import _reverb.jsfx-inc
 @slider
 
 l.thiran1_reset (freq, srate);
-r.tpt_1p_reset (freq, srate);
+r.thiran1_reset (freq, srate);
 
 @sample
 
-spl1 = l.thiran1_tick (spl1);
-spl0 = r.tpt_1p_tick_ap (spl0);
+spl0 = l.thiran1_tick (spl0);
+//spl1 = r.thiran1_tick (spl1);
