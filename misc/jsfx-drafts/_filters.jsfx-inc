@@ -34,6 +34,17 @@ function svf_ap(freq, q, sr) local (k, g) global()(
   this.m2 = 0;
 );
 
+function svf_notch(freq, q, sr) local (k, g) global()(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 1;
+  this.m1 = -k;
+  this.m2 = 0;
+);
+
 function svf_bell(freq, q, g_db, sr) local (k, g, A) global()(
   A = pow (10, g_db * (1. / 40.));
   k = 1.0 / (q  * A);

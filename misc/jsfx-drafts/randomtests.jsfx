@@ -1,6 +1,7 @@
 desc:Rafa random test
 
 slider1:freq=20<20, 20000, 0.001>freq
+slider2:q=1<0.1, 1400, 0.001>mix
 
 in_pin:left input
 in_pin:right input
@@ -14,10 +15,11 @@ import _reverb.jsfx-inc
 
 @slider
 
-l.thiran1_reset (freq, srate);
-r.thiran1_reset (freq, srate);
+l.svf_notch (freq, q, srate);
+r.svf_notch (freq, q, srate);
 
 @sample
 
-spl0 = l.thiran1_tick (spl0);
-//spl1 = r.thiran1_tick (spl1);
+spl0 = r.svf_tick (spl0);
+spl1 = l.svf_tick(spl0);
+
