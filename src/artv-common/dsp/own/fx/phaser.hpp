@@ -255,8 +255,7 @@ public:
   {
     return choice_param (
       1,
-      make_cstr_array (
-        "1 pole", "2 poles", "3 poles", "Notch", "Schroeder", "FF Comb"),
+      make_cstr_array ("1 pole", "2 poles", "3 poles", "Notch", "Schroeder"),
       16);
   }
 
@@ -266,7 +265,6 @@ public:
     t_3_pole,
     t_notch,
     t_schroeder,
-    t_ff_comb,
   };
   //----------------------------------------------------------------------------
   struct delay_feedback_tag {};
@@ -542,7 +540,7 @@ public:
           }
           freqs = vec_clamp (
             freqs, min_ap_freq, std::min (_srate * 0.4999f, 22000.f));
-          if (pars.topology == t_schroeder || pars.topology == t_ff_comb) {
+          if (pars.topology == t_schroeder) {
             _stagesdl_spls[s] = vec_to_array (freq_to_delay_spls (freqs));
           }
           else if (pars.topology == t_notch) {
@@ -580,7 +578,7 @@ public:
       out *= 1.f - abs (pars.delay_feedback);
       out += delayed * pars.delay_feedback;
 
-      if (pars.topology == t_schroeder || pars.topology == t_ff_comb) {
+      if (pars.topology == t_schroeder) {
         constexpr float q_scale = 0.99f / get_parameter (q_tag {}).max;
 
         std::array<float_x1, n_ap_channels>              acum {};
@@ -588,42 +586,16 @@ public:
         acum = vec1_array_wrap (vec_to_array (out));
 
         float_x1 gain {pars.q * q_scale};
-
-        if (pars.topology == t_schroeder) {
-          for (uint g = 0; g < pars.n_stages; ++g) {
-            for (uint c = 0; c < n_ap_channels; ++c) {
-              uint dl_channel = g * n_ap_channels + c;
-              auto yn = _stagesdl.get (_stagesdl_spls[g][c], dl_channel);
-              auto r  = allpass_fn::tick<float_x1> (acum[c], yn, gain);
-              acum[c] = r.out;
-              to_push[dl_channel] = r.to_push;
-            }
+        for (uint g = 0; g < pars.n_stages; ++g) {
+          for (uint c = 0; c < n_ap_channels; ++c) {
+            uint dl_channel = g * n_ap_channels + c;
+            auto yn         = _stagesdl.get (_stagesdl_spls[g][c], dl_channel);
+            auto r          = allpass_fn::tick<float_x1> (acum[c], yn, gain);
+            acum[c]         = r.out;
+            to_push[dl_channel] = r.to_push;
           }
-          out = vec_from_array (vec1_array_unwrap (acum));
         }
-        else {
-          // Feedforward combs
-          gain              = 0.5f + vec_sqrt (gain) * 0.5f;
-          auto  direct_gain = 1.f - gain;
-          auto  compgain    = 1.f;
-          float tz_delay    = 0.00004f * _srate;
-          float delay       = tz_delay;
-
-          for (uint g = 0; g < pars.n_stages; ++g) {
-            gain *= -1.f;
-            for (uint c = 0; c < n_ap_channels; ++c) {
-              uint dl_channel     = g * n_ap_channels + c;
-              to_push[dl_channel] = acum[c];
-              auto xn1 = _stagesdl.get (_stagesdl_spls[g][c], dl_channel);
-              auto xn2 = _stagesdl.get (delay, dl_channel);
-              acum[c] += (xn1 * gain + xn2 * direct_gain);
-            }
-            delay += tz_delay;
-            compgain *= 0.5f;
-          }
-          out = vec_from_array (vec1_array_unwrap (acum));
-          out *= compgain;
-        }
+        out = vec_from_array (vec1_array_unwrap (acum));
         _stagesdl.push (to_push);
       }
       else if (pars.topology == t_notch) {
