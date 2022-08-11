@@ -11,7 +11,6 @@
 #include "artv-common/dsp/own/parts/filters/biquad.hpp"
 #include "artv-common/dsp/own/parts/filters/dc_blocker.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
-#include "artv-common/dsp/own/parts/filters/thiran.hpp"
 #include "artv-common/dsp/own/parts/oscillators/lfo.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/types.hpp"
@@ -257,13 +256,7 @@ public:
     return choice_param (
       1,
       make_cstr_array (
-        "1 pole",
-        "2 poles",
-        "3 poles",
-        "Thiran 1",
-        "Notch",
-        "Schroeder",
-        "FF Comb"),
+        "1 pole", "2 poles", "3 poles", "Notch", "Schroeder", "FF Comb"),
       16);
   }
 
@@ -271,7 +264,6 @@ public:
     t_1_pole,
     t_2_pole,
     t_3_pole,
-    t_thiran1,
     t_notch,
     t_schroeder,
     t_ff_comb,
@@ -329,7 +321,6 @@ public:
     _srate       = pc.get_sample_rate();
     _allpass1p.reset_states_cascade();
     _allpass2p.reset_states_cascade();
-    _allpassth.reset_states_cascade();
 
     memset (&_feedback_samples, 0, sizeof _feedback_samples);
 
@@ -554,9 +545,6 @@ public:
           if (pars.topology == t_schroeder || pars.topology == t_ff_comb) {
             _stagesdl_spls[s] = vec_to_array (freq_to_delay_spls (freqs));
           }
-          else if (pars.topology == t_thiran1) {
-            _allpassth.reset_coeffs_on_idx (s, freqs, _srate);
-          }
           else if (pars.topology == t_notch) {
             constexpr float q_scale = 0.99999f / get_parameter (q_tag {}).max;
             qs *= q_scale; // 0 to 1
@@ -637,11 +625,6 @@ public:
           out *= compgain;
         }
         _stagesdl.push (to_push);
-      }
-      else if (pars.topology == t_thiran1) {
-        for (uint g = 0; g < pars.n_stages; ++g) {
-          out = _allpassth.tick_on_idx (g, -out);
-        }
       }
       else if (pars.topology == t_notch) {
         for (uint g = 0; g < pars.n_stages; ++g) {
@@ -796,7 +779,6 @@ private:
   // TODO: use a variant?
   part_class_array<andy::svf_allpass, float_x4, max_stages>     _allpass2p;
   part_class_array<onepole_allpass, float_x4, max_stages>       _allpass1p;
-  part_class_array<thiran<1>, float_x4, max_stages>             _allpassth;
   part_class_array<andy::svf_bandpass, float_x4, max_stages>    _allpassnt;
   interpolated_delay_line<float_x1, linear_interp, true, false> _stagesdl;
 

@@ -2,7 +2,6 @@
 - Artv Phaser: Add notch mode.
 - Artv Phaser: Add three pole mode.
 - Artv Phaser: Add Schroeder allpass mode (experimental).
-- Artv Phaser: Add Thiran1 modes.
 - Artv Phaser: Gain compensate "parallel" knob/parameter.
 - Artv Phaser: Gain compensate "delay feedback" knob/parameter.
 - Artv Phaser: Normal, Alternate and Spread frequency distribution modes had
