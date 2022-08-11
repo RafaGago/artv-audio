@@ -319,6 +319,7 @@ public:
     _srate       = pc.get_sample_rate();
     _allpass1p.reset_states_cascade();
     _allpass2p.reset_states_cascade();
+    _bandpass.reset_states_cascade();
 
     memset (&_feedback_samples, 0, sizeof _feedback_samples);
 
@@ -552,7 +553,7 @@ public:
             qs += 2.f;
             auto correct = 1.f - (freqs * (1.f / 22000.f) * 0.1f);
             qs *= correct;
-            _allpassnt.reset_coeffs_on_idx (s, freqs, qs, _srate);
+            _bandpass.reset_coeffs_on_idx (s, freqs, qs, _srate);
           }
           else {
             if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
@@ -600,7 +601,7 @@ public:
       }
       else if (pars.topology == t_notch) {
         for (uint g = 0; g < pars.n_stages; ++g) {
-          out -= _allpassnt.tick_on_idx (g, out);
+          out -= _bandpass.tick_on_idx (g, out);
         }
       }
       else {
@@ -751,7 +752,7 @@ private:
   // TODO: use a variant?
   part_class_array<andy::svf_allpass, float_x4, max_stages>     _allpass2p;
   part_class_array<onepole_allpass, float_x4, max_stages>       _allpass1p;
-  part_class_array<andy::svf_bandpass, float_x4, max_stages>    _allpassnt;
+  part_class_array<andy::svf_bandpass, float_x4, max_stages>    _bandpass;
   interpolated_delay_line<float_x1, linear_interp, true, false> _stagesdl;
 
   array2d<float, n_ap_channels, max_stages>      _stagesdl_spls {};
