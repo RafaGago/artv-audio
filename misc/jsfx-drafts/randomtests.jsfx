@@ -1,7 +1,7 @@
 desc:Rafa random test
 
 slider1:freq=20<20, 20000, 0.001>freq
-slider2:q=1<0.1, 1400, 0.001>mix
+slider2:g=1<0, 0.999, 0.001>g
 
 in_pin:left input
 in_pin:right input
@@ -12,14 +12,24 @@ import _core.jsfx-inc
 import _filters.jsfx-inc
 import _reverb.jsfx-inc
 
+@init
+
+function ap_init(g) local(in) global()(
+  this.g = g;
+);
+
+function ap_tick(in) global()(
+  this.mid = in + this.g * this.mid;
+  ((1 / this.g)  - this.g) * this.mid - (1 / this.g) * in;
+);
 
 @slider
 
-l.svf_notch (freq, q, srate);
-r.svf_notch (freq, q, srate);
+l.ap_init (g);
+r.ap_init (g);
 
 @sample
 
-spl0 = r.svf_tick (spl0);
-spl1 = l.svf_tick(spl0);
+spl0 = r.ap_tick (spl0);
+spl1 = l.ap_tick (spl1);
 

@@ -222,6 +222,17 @@ public:
     return float_param ("%", -100., 100, 0., 0.1);
   }
   //----------------------------------------------------------------------------
+  struct feedback_hp_tag {};
+  void set (feedback_hp_tag, float v)
+  {
+    _params.unsmoothed.feedback_hp = v * 0.01f;
+  }
+
+  static constexpr auto get_parameter (feedback_hp_tag)
+  {
+    return float_param ("%", 0., 100, 0., 0.1);
+  }
+  //----------------------------------------------------------------------------
   struct q_tag {};
   void set (q_tag, float v) { _params.smooth_target.value.q = v; }
 
@@ -320,8 +331,8 @@ public:
     _allpass1p.reset_states_cascade();
     _allpass2p.reset_states_cascade();
     _bandpass.reset_states_cascade();
-
-    memset (&_feedback_samples, 0, sizeof _feedback_samples);
+    _feedback_shelf.reset_states_cascade();
+    _feedback_delay_shelf.reset_states_cascade();
 
     _lfos.reset();
 
@@ -349,6 +360,8 @@ public:
     _params.unsmoothed.lfo_wave = get_parameter (lfo_wave_tag {}).defaultv;
     _params.unsmoothed.n_stages = get_parameter (stages_tag {}).defaultv;
     _params.unsmoothed.mode     = get_parameter (stages_mode_tag {}).defaultv;
+    _params.unsmoothed.feedback_hp
+      = get_parameter (feedback_hp_tag {}).defaultv;
 
     refresh_lfo_hz();
 
@@ -367,10 +380,10 @@ public:
     _n_processed_samples = 0;
 
     // Sample rates 44100 multiples update every 362.811us
-    uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
-    _control_rate_mask   = lsb_mask<uint> (sr_order);
-    _feedback_samples[0] = _feedback_samples[1] = 0.;
-    _lfo_srate = _srate / (_control_rate_mask + 1);
+    uint sr_order      = get_samplerate_order (pc.get_sample_rate()) + 3;
+    _control_rate_mask = lsb_mask<uint> (sr_order);
+    _feedback_samples  = vec_set<double_x2> (0.);
+    _lfo_srate         = _srate / (_control_rate_mask + 1);
 
     // setting up delay
     reset_memory_parts();
@@ -563,15 +576,37 @@ public:
               _allpass2p.reset_coeffs_on_idx (s, freqs, qs, _srate);
             }
           }
+          if (s == 1) {
+            constexpr float cut_ratio = 0.3f;
+            constexpr float gain_db   = -20.f;
+
+            auto cutfreq = double_x2 {freqs[0], freqs[1]};
+            cutfreq -= pars.feedback_hp * cutfreq * cut_ratio;
+            _feedback_shelf.reset_coeffs (
+              vec_max (210., cutfreq),
+              vec_set<double_x2> (0.35),
+              vec_set<double_x2> (pars.feedback_hp * gain_db),
+              _srate,
+              lowshelf_tag {});
+
+            auto del_cutfreq = freqs;
+            del_cutfreq -= pars.feedback_hp * freqs * cut_ratio;
+            _feedback_delay_shelf.reset_coeffs (
+              vec_max (210.f, del_cutfreq),
+              vec_set<float_x4> (0.35),
+              vec_set<float_x4> (pars.feedback_hp * gain_db),
+              _srate,
+              lowshelf_tag {});
+          }
         }
       }
 
       // regular processing
       float_x4 out {
-        ins[0][i] + (_feedback_samples[0]),
-        ins[1][i] + (_feedback_samples[1]),
-        ins[0][i] + (_feedback_samples[0]),
-        ins[1][i] + (_feedback_samples[1])};
+        ins[0][i] + (float) _feedback_samples[0],
+        ins[1][i] + (float) _feedback_samples[1],
+        ins[0][i] + (float) _feedback_samples[0],
+        ins[1][i] + (float) _feedback_samples[1]};
 
       auto n_spls = pars.delay_spls;
       n_spls *= exp (ln_max_delay_factor * pars.lfo_last * pars.delay_lfo);
@@ -617,17 +652,15 @@ public:
         }
       }
 
-      out = _dc_blocker.tick (out);
-      _delay.push (make_crange (out));
+      out         = _dc_blocker.tick (out);
+      auto del_fb = _feedback_delay_shelf.tick (out);
+      _delay.push (make_crange (del_fb));
 
       double_x2 outx2    = {(double) out[0], (double) out[1]};
       double_x2 parallel = {(double) out[2], (double) out[3]};
       outx2 += _params.unsmoothed.parallel_mix * parallel;
       outx2 *= -0.5;
-      auto feedback = outx2 * pars.feedback;
-
-      _feedback_samples[0] = feedback[0];
-      _feedback_samples[1] = feedback[1];
+      _feedback_samples = _feedback_shelf.tick (outx2 * pars.feedback);
 
       outx2 *= 2.f - _params.unsmoothed.parallel_mix;
       outx2 *= 1.f + pars.delay_feedback * pars.delay_feedback * 2.3f;
@@ -703,6 +736,7 @@ private:
     float lfo_eights;
     float lfo_hz_user;
     float parallel_mix;
+    float feedback_hp;
     uint  lfo_wave;
     uint  n_stages;
     uint  topology;
@@ -715,6 +749,7 @@ private:
     float freq_hi;
     float q;
     float lfo_hz_final;
+
     float lfo_stereo;
     float lfo_depth;
     float lfo_start_phase;
@@ -744,8 +779,8 @@ private:
   static constexpr uint n_channels    = 2;
   static constexpr uint n_ap_channels = 4;
 
-  std::array<float, n_channels> _feedback_samples;
-  parameter_values              _params;
+  double_x2        _feedback_samples;
+  parameter_values _params;
 
   std::vector<float_x4> _delay_mem;
 
@@ -754,6 +789,8 @@ private:
   part_class_array<onepole_allpass, float_x4, max_stages>       _allpass1p;
   part_class_array<andy::svf_bandpass, float_x4, max_stages>    _bandpass;
   interpolated_delay_line<float_x1, linear_interp, true, false> _stagesdl;
+  part_class_array<andy::svf, double_x2>                        _feedback_shelf;
+  part_class_array<andy::svf, float_x4> _feedback_delay_shelf;
 
   array2d<float, n_ap_channels, max_stages>      _stagesdl_spls {};
   modulable_thiran1_delay_line<float_x4, 1>      _delay {};

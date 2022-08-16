@@ -89,6 +89,7 @@ static svf_coeffs_ext<T> get_main_coeffs (
 }
 
 // https://cytomic.com/files/dsp/SvfLinearTrapezoidalSin.pdf
+// UNTESTED!
 template <class T, class U>
 static svf_coeffs_ext<T> get_main_coeffs_precise (
   T    freq,
