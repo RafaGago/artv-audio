@@ -3,7 +3,8 @@
 - Artv Phaser: Add Schroeder allpass mode (experimental).
 - Artv Phaser: Gain compensate "parallel" knob/parameter.
 - Artv Phaser: Gain compensate "delay feedback" knob/parameter.
-- Artv Phaser: Add Hipass.
+- Artv Phaser: Add feedback Hipass (to tame low frequencies).
+- Artv Phaser: Add feedback Saturation (to tame low frequencies).
 - Artv Phaser: Normal, Alternate and Spread frequency distribution modes had
   one of the frequencies on the parallel path out ofrenge and the groupings were
   wrong. Unfortunately this changes the sound of the phaser (for good). Be sure
