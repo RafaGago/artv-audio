@@ -5453,7 +5453,7 @@ parameter_cpp_class_define (
   myphaser_delay_feedback,
   n_stereo_busses,
   param_common (
-    "Del Fback",
+    "Flan Fback",
     declptr<upsampled<phaser>>(),
     declptr<phaser::delay_feedback_tag>()),
   phaser::get_parameter (phaser::delay_feedback_tag {}),
@@ -5463,7 +5463,7 @@ parameter_cpp_class_define (
   myphaser_delay_time,
   n_stereo_busses,
   param_common (
-    "Del Time",
+    "Flan Del",
     declptr<upsampled<phaser>>(),
     declptr<phaser::delay_time_tag>()),
   phaser::get_parameter (phaser::delay_time_tag {}),
@@ -5473,7 +5473,7 @@ parameter_cpp_class_define (
   myphaser_delay_lfo,
   n_stereo_busses,
   param_common (
-    "Del LFO",
+    "Flan LFO",
     declptr<upsampled<phaser>>(),
     declptr<phaser::delay_lfo_tag>()),
   phaser::get_parameter (phaser::delay_lfo_tag {}),
@@ -7292,7 +7292,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<

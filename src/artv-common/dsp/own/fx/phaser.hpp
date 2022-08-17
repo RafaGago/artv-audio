@@ -206,15 +206,19 @@ public:
     return frequency_parameter (min_ap_freq, 10000., 3300.);
   }
   //----------------------------------------------------------------------------
+  static constexpr float max_feedback = 0.995;
   struct feedback_tag {};
   void set (feedback_tag, float v)
   {
     bool neg = v < 0.f;
-    v *= 0.01 * 0.995;
+    v *= 0.01 * max_feedback;
     v = sqrt (abs (v));
     v = neg ? -v : v;
 
     _params.smooth_target.value.feedback = v;
+    scale_feedbacks (
+      _params.smooth_target.value.feedback,
+      _params.smooth_target.value.delay_feedback);
   }
 
   static constexpr auto get_parameter (feedback_tag)
@@ -258,7 +262,7 @@ public:
   struct parallel_mix_tag {};
   void set (parallel_mix_tag, float v)
   {
-    _params.smooth_target.value.parallel_mix = v * 0.01f;
+    _params.smooth_target.value.parallel_mix = v * 0.005f;
   }
 
   static constexpr auto get_parameter (parallel_mix_tag)
@@ -267,28 +271,18 @@ public:
   }
   //----------------------------------------------------------------------------
   struct topology_tag {};
-  void set (topology_tag, int v)
-  {
-    if (v != _params.unsmoothed.topology && v == t_schroeder) {
-      // The feedforward combs have a different gain structure.
-      memset (&_delay_mem[0], 0, _delay_mem.size() * sizeof _delay_mem[0]);
-    }
-    _params.unsmoothed.topology = v;
-  }
+  void set (topology_tag, int v) { _params.unsmoothed.topology = v; }
 
   static constexpr auto get_parameter (topology_tag)
   {
     return choice_param (
-      1,
-      make_cstr_array ("1 pole", "2 poles", "3 poles", "Notch", "Schroeder"),
-      16);
+      1, make_cstr_array ("1 pole", "2 poles", "3 poles", "Schroeder"), 16);
   }
 
   enum topologies {
     t_1_pole,
     t_2_pole,
     t_3_pole,
-    t_notch,
     t_schroeder,
   };
   //----------------------------------------------------------------------------
@@ -301,6 +295,9 @@ public:
     v = neg ? -v : v;
 
     _params.smooth_target.value.delay_feedback = v;
+    scale_feedbacks (
+      _params.smooth_target.value.feedback,
+      _params.smooth_target.value.delay_feedback);
   }
 
   static constexpr auto get_parameter (delay_feedback_tag)
@@ -344,17 +341,8 @@ public:
     _srate       = pc.get_sample_rate();
     _allpass1p.reset_states_cascade();
     _allpass2p.reset_states_cascade();
-    _bandpass.reset_states_cascade();
     _feedback_shelf.reset_states_cascade();
     _feedback_delay_shelf.reset_states_cascade();
-#if 0 // TODO broken at srate>48KHz. why?
-    _env.reset_states_cascade();
-
-    // rms reset
-    constexpr double rms_window_sec = 0.3f;
-    _env.reset_coeffs<rms_fb_pre_idx> (vec_set<2> (rms_window_sec), _srate);
-    _env.reset_coeffs<rms_fb_post_idx> (vec_set<2> (rms_window_sec), _srate);
-#endif
     _lfos.reset();
 
     _params.smooth_target.value.freq_lo
@@ -582,17 +570,6 @@ public:
           if (pars.topology == t_schroeder) {
             _stagesdl_spls[s] = vec_to_array (freq_to_delay_spls (freqs));
           }
-          else if (pars.topology == t_notch) {
-            constexpr float q_scale = 0.99999f / get_parameter (q_tag {}).max;
-            qs *= q_scale; // 0 to 1
-            qs = 1.f - qs; // 1 to 0
-            qs *= qs * qs; // skewed towards 0
-            qs *= 14.f;
-            qs += 2.f;
-            auto correct = 1.f - (freqs * (1.f / 22000.f) * 0.1f);
-            qs *= correct;
-            _bandpass.reset_coeffs_on_idx (s, freqs, qs, _srate);
-          }
           else {
             if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
               _allpass1p.reset_coeffs_on_idx (s, freqs, _srate);
@@ -625,18 +602,18 @@ public:
           }
         }
       }
-
+      float_x4 fb = {
+        (float) _feedback_samples[0],
+        (float) _feedback_samples[1],
+        (float) _feedback_samples[0],
+        (float) _feedback_samples[1]};
       // regular processing
-      float_x4 out {
-        ins[0][i] + (float) _feedback_samples[0],
-        ins[1][i] + (float) _feedback_samples[1],
-        ins[0][i] + (float) _feedback_samples[0],
-        ins[1][i] + (float) _feedback_samples[1]};
+      float_x4 out {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
+      out += fb * pars.feedback;
 
       auto n_spls = pars.delay_spls;
       n_spls *= exp (ln_max_delay_factor * pars.lfo_last * pars.delay_lfo);
       auto delayed = _delay.get (n_spls, 0);
-      out *= 1.f - abs (pars.delay_feedback);
       out += delayed * pars.delay_feedback;
 
       if (pars.topology == t_schroeder) {
@@ -659,11 +636,6 @@ public:
         out = vec_from_array (vec1_array_unwrap (acum));
         _stagesdl.push (to_push);
       }
-      else if (pars.topology == t_notch) {
-        for (uint g = 0; g < pars.n_stages; ++g) {
-          out -= _bandpass.tick_on_idx (g, out);
-        }
-      }
       else {
         if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
           for (uint g = 0; g < pars.n_stages; ++g) {
@@ -683,28 +655,16 @@ public:
 
       double_x2 outx2    = {(double) out[0], (double) out[1]};
       double_x2 parallel = {(double) out[2], (double) out[3]};
+      outx2 *= 0.5f + (0.5f - abs (pars.parallel_mix));
       outx2 += pars.parallel_mix * parallel;
-      outx2 *= -0.5;
+      // outx2 *= -0.5;
 
-#if 0 // TODO broken at srate>48KHz. why? Even with DC blocker (unstable poles?)
-      // power compensating the feedback LP filter losses.
-      auto main_fb = outx2 * pars.feedback;
-      auto hs      = _feedback_shelf.tick (main_fb);
-      auto dry_rms = _env.tick<rms_fb_pre_idx> (main_fb, envelope::rms_tag {});
-      auto wet_rms = _env.tick<rms_fb_post_idx> (hs, envelope::rms_tag {});
-      auto ratio   = vec_max (1e-230, dry_rms) / vec_max (1e-230, wet_rms);
-      main_fb      = hs * ratio;
-      main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_sat + 1.);
-      _feedback_samples = main_fb;
-#else
-      auto main_fb = outx2 * pars.feedback;
+      auto main_fb = outx2;
       main_fb      = _feedback_shelf.tick (main_fb);
       main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_sat + 1.);
       _feedback_samples = main_fb;
-#endif
 
-      outx2 *= 2.f - pars.parallel_mix;
-      outx2 *= 1.f + pars.delay_feedback * pars.delay_feedback * 2.3f;
+      // outx2 *= 2.f - pars.parallel_mix;
       outs[0][i] = outx2[0];
       outs[1][i] = outx2[1];
     }
@@ -731,6 +691,16 @@ public:
   //----------------------------------------------------------------------------
 private:
   static constexpr uint max_stages = 16;
+  //----------------------------------------------------------------------------
+  // As feedbacks are smoothed, this might need to be done sample-wise.
+  void scale_feedbacks (float& g1, float& g2)
+  {
+    // keep the sum of both feebacks below unity
+    float fb_gain = abs (g1) + abs (g2);
+    float att     = (fb_gain <= max_feedback) ? 1.f : (max_feedback / fb_gain);
+    g1 *= att;
+    g2 *= att;
+  }
   //----------------------------------------------------------------------------
   void reset_memory_parts()
   {
@@ -833,13 +803,8 @@ private:
   // TODO: use a variant?
   part_class_array<andy::svf_allpass, float_x4, max_stages>     _allpass2p;
   part_class_array<onepole_allpass, float_x4, max_stages>       _allpass1p;
-  part_class_array<andy::svf_bandpass, float_x4, max_stages>    _bandpass;
   interpolated_delay_line<float_x1, linear_interp, true, false> _stagesdl;
   part_class_array<andy::svf, double_x2>                        _feedback_shelf;
-#if 0 // TODO broken at srate>48KHz. why?
-  enum { rms_fb_pre_idx, rms_fb_post_idx };
-  part_classes<mp_list<envelope, envelope>, double_x2, false> _env;
-#endif
   part_class_array<andy::svf, float_x4> _feedback_delay_shelf;
 
   array2d<float, n_ap_channels, max_stages>      _stagesdl_spls {};

@@ -5,10 +5,14 @@
 - Artv Phaser: Gain compensate "delay feedback" knob/parameter.
 - Artv Phaser: Add feedback Hipass (to tame low frequencies).
 - Artv Phaser: Add feedback Saturation (to tame low frequencies).
-- Artv Phaser: Normal, Alternate and Spread frequency distribution modes had
-  one of the frequencies on the parallel path out ofrenge and the groupings were
-  wrong. Unfortunately this changes the sound of the phaser (for good). Be sure
-  to render old projects.
+- Artv Phaser: (sound might change) Better grain structure for the feedback
+  delay (Flanger). Not it can be pushed more near the stability limit depending
+  on the regular feedback values.
+- Artv Phaser: Feedback delay renamed to Flanger on the UI.
+- Artv Phaser: (sound might change) Normal, Alternate and Spread frequency
+  distribution modes had one of the frequencies on the parallel path out of
+  range and the groupings were wrong. Unfortunately this changes the sound of
+  the phaser (for good). Be sure to render old projects.
 
 1.8.1
 - Artv Phaser: Label the amount of stages by number of stages on the serial
