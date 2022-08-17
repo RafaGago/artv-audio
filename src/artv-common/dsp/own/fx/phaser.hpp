@@ -225,10 +225,24 @@ public:
   struct feedback_hp_tag {};
   void set (feedback_hp_tag, float v)
   {
-    _params.unsmoothed.feedback_hp = v * 0.01f;
+    _params.smooth_target.value.feedback_hp = v * 0.01f;
   }
 
   static constexpr auto get_parameter (feedback_hp_tag)
+  {
+    return float_param ("%", 0., 100, 0., 0.1);
+  }
+  //----------------------------------------------------------------------------
+  struct feedback_sat_tag {};
+  void set (feedback_sat_tag, float v)
+  {
+    v *= 0.01f;
+    v = v * v * v;
+    v *= 100.f;
+    _params.smooth_target.value.feedback_sat = v;
+  }
+
+  static constexpr auto get_parameter (feedback_sat_tag)
   {
     return float_param ("%", 0., 100, 0., 0.1);
   }
@@ -244,7 +258,7 @@ public:
   struct parallel_mix_tag {};
   void set (parallel_mix_tag, float v)
   {
-    _params.unsmoothed.parallel_mix = v * 0.01f;
+    _params.smooth_target.value.parallel_mix = v * 0.01f;
   }
 
   static constexpr auto get_parameter (parallel_mix_tag)
@@ -333,7 +347,14 @@ public:
     _bandpass.reset_states_cascade();
     _feedback_shelf.reset_states_cascade();
     _feedback_delay_shelf.reset_states_cascade();
+#if 0 // TODO broken at srate>48KHz. why?
+    _env.reset_states_cascade();
 
+    // rms reset
+    constexpr double rms_window_sec = 0.3f;
+    _env.reset_coeffs<rms_fb_pre_idx> (vec_set<2> (rms_window_sec), _srate);
+    _env.reset_coeffs<rms_fb_post_idx> (vec_set<2> (rms_window_sec), _srate);
+#endif
     _lfos.reset();
 
     _params.smooth_target.value.freq_lo
@@ -353,6 +374,12 @@ public:
     _params.smooth_target.value.delay_feedback = 0.f;
     _params.smooth_target.value.delay_lfo      = 0.f;
     _params.smooth_target.value.lfo_last       = 0.f;
+    _params.smooth_target.value.feedback_hp
+      = get_parameter (feedback_hp_tag {}).defaultv;
+    _params.smooth_target.value.feedback_sat
+      = get_parameter (feedback_sat_tag {}).defaultv;
+    _params.smooth_target.value.parallel_mix
+      = get_parameter (parallel_mix_tag {}).defaultv;
 
     _params.unsmoothed.lfo_hz_user = get_parameter (lfo_rate_tag {}).defaultv;
     _params.unsmoothed.lfo_eights
@@ -360,8 +387,6 @@ public:
     _params.unsmoothed.lfo_wave = get_parameter (lfo_wave_tag {}).defaultv;
     _params.unsmoothed.n_stages = get_parameter (stages_tag {}).defaultv;
     _params.unsmoothed.mode     = get_parameter (stages_mode_tag {}).defaultv;
-    _params.unsmoothed.feedback_hp
-      = get_parameter (feedback_hp_tag {}).defaultv;
 
     refresh_lfo_hz();
 
@@ -658,11 +683,27 @@ public:
 
       double_x2 outx2    = {(double) out[0], (double) out[1]};
       double_x2 parallel = {(double) out[2], (double) out[3]};
-      outx2 += _params.unsmoothed.parallel_mix * parallel;
+      outx2 += pars.parallel_mix * parallel;
       outx2 *= -0.5;
-      _feedback_samples = _feedback_shelf.tick (outx2 * pars.feedback);
 
-      outx2 *= 2.f - _params.unsmoothed.parallel_mix;
+#if 0 // TODO broken at srate>48KHz. why? Even with DC blocker (unstable poles?)
+      // power compensating the feedback LP filter losses.
+      auto main_fb = outx2 * pars.feedback;
+      auto hs      = _feedback_shelf.tick (main_fb);
+      auto dry_rms = _env.tick<rms_fb_pre_idx> (main_fb, envelope::rms_tag {});
+      auto wet_rms = _env.tick<rms_fb_post_idx> (hs, envelope::rms_tag {});
+      auto ratio   = vec_max (1e-230, dry_rms) / vec_max (1e-230, wet_rms);
+      main_fb      = hs * ratio;
+      main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_sat + 1.);
+      _feedback_samples = main_fb;
+#else
+      auto main_fb = outx2 * pars.feedback;
+      main_fb      = _feedback_shelf.tick (main_fb);
+      main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_sat + 1.);
+      _feedback_samples = main_fb;
+#endif
+
+      outx2 *= 2.f - pars.parallel_mix;
       outx2 *= 1.f + pars.delay_feedback * pars.delay_feedback * 2.3f;
       outs[0][i] = outx2[0];
       outs[1][i] = outx2[1];
@@ -683,6 +724,8 @@ public:
     q_tag,
     parallel_mix_tag,
     delay_feedback_tag,
+    feedback_hp_tag,
+    feedback_sat_tag,
     delay_time_tag,
     delay_lfo_tag>;
   //----------------------------------------------------------------------------
@@ -735,8 +778,6 @@ private:
   struct unsmoothed_parameters {
     float lfo_eights;
     float lfo_hz_user;
-    float parallel_mix;
-    float feedback_hp;
     uint  lfo_wave;
     uint  n_stages;
     uint  topology;
@@ -759,6 +800,11 @@ private:
     float delay_feedback;
     float delay_lfo;
     float lfo_last;
+
+    float parallel_mix;
+    float feedback_hp;
+    float feedback_sat;
+    float _free_dummy;
   };
   //----------------------------------------------------------------------------
   struct all_parameters : public unsmoothed_parameters,
@@ -790,6 +836,10 @@ private:
   part_class_array<andy::svf_bandpass, float_x4, max_stages>    _bandpass;
   interpolated_delay_line<float_x1, linear_interp, true, false> _stagesdl;
   part_class_array<andy::svf, double_x2>                        _feedback_shelf;
+#if 0 // TODO broken at srate>48KHz. why?
+  enum { rms_fb_pre_idx, rms_fb_post_idx };
+  part_classes<mp_list<envelope, envelope>, double_x2, false> _env;
+#endif
   part_class_array<andy::svf, float_x4> _feedback_delay_shelf;
 
   array2d<float, n_ap_channels, max_stages>      _stagesdl_spls {};
