@@ -5296,7 +5296,7 @@ parameter_cpp_class_define (
   myphaser_stages,
   n_stereo_busses,
   param_common (
-    "Stages",
+    "N Stages",
     declptr<upsampled<phaser>>(),
     declptr<phaser::stages_tag>()),
   phaser::get_parameter (phaser::stages_tag {}),
@@ -5346,7 +5346,7 @@ parameter_cpp_class_define (
   myphaser_lfo_stereo,
   n_stereo_busses,
   param_common (
-    "LFO St",
+    "LFO Ster",
     declptr<upsampled<phaser>>(),
     declptr<phaser::lfo_stereo_tag>()),
   phaser::get_parameter (phaser::lfo_stereo_tag {}),
@@ -5366,7 +5366,7 @@ parameter_cpp_class_define (
   myphaser_low_freq,
   n_stereo_busses,
   param_common (
-    "Low Freq",
+    "Low Freq/T",
     declptr<upsampled<phaser>>(),
     declptr<phaser::low_freq_tag>()),
   phaser::get_parameter (phaser::low_freq_tag {}),
@@ -5376,7 +5376,7 @@ parameter_cpp_class_define (
   myphaser_high_freq,
   n_stereo_busses,
   param_common (
-    "High Freq",
+    "High Freq/T",
     declptr<upsampled<phaser>>(),
     declptr<phaser::high_freq_tag>()),
   phaser::get_parameter (phaser::high_freq_tag {}),
@@ -5396,7 +5396,7 @@ parameter_cpp_class_define (
   myphaser_feedback_hp,
   n_stereo_busses,
   param_common (
-    "Feedb HP",
+    "Feedbk HP",
     declptr<upsampled<phaser>>(),
     declptr<phaser::feedback_hp_tag>()),
   phaser::get_parameter (phaser::feedback_hp_tag {}),
@@ -5406,7 +5406,7 @@ parameter_cpp_class_define (
   myphaser_feedback_sat,
   n_stereo_busses,
   param_common (
-    "Feedb Sat",
+    "Feedbk Sat",
     declptr<upsampled<phaser>>(),
     declptr<phaser::feedback_sat_tag>()),
   phaser::get_parameter (phaser::feedback_sat_tag {}),
@@ -5415,7 +5415,10 @@ parameter_cpp_class_define (
 parameter_cpp_class_define (
   myphaser_q,
   n_stereo_busses,
-  param_common ("Q", declptr<upsampled<phaser>>(), declptr<phaser::q_tag>()),
+  param_common (
+    "Q/Special",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::q_tag>()),
   phaser::get_parameter (phaser::q_tag {}),
   slider_ext);
 
@@ -5443,7 +5446,7 @@ parameter_cpp_class_define (
   myphaser_parallel_mix,
   n_stereo_busses,
   param_common (
-    "Parallel",
+    "Parallel Mix",
     declptr<upsampled<phaser>>(),
     declptr<phaser::parallel_mix_tag>()),
   phaser::get_parameter (phaser::parallel_mix_tag {}),
@@ -5499,14 +5502,14 @@ using myphaser_params = mp_list<
   myphaser_q,
   myphaser_topology,
 
-  myphaser_lfo_stereo,
   myphaser_parallel_mix,
   myphaser_feedback,
   myphaser_feedback_hp,
   myphaser_feedback_sat,
-  myphaser_delay_lfo,
   myphaser_delay_feedback,
   myphaser_delay_time,
+  myphaser_delay_lfo,
+  myphaser_lfo_stereo,
 
   myphaser_stages_mode,
   myphaser_lfo_wave,
@@ -7292,7 +7295,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<

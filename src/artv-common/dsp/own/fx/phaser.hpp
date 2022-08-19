@@ -279,11 +279,11 @@ public:
     return choice_param (
       1,
       make_cstr_array (
-        "Phaser 1",
-        "Phaser 2",
-        "Phaser 3",
-        "Chorus/Flanger 1",
-        "Chorus/Flanger 2"),
+        "Phaser 1 pole",
+        "Phaser 2 pole",
+        "Phaser 3 pole",
+        "Serial Schroeder AP",
+        "Parallel Feedforward Combs"),
       16);
   }
 
@@ -447,7 +447,7 @@ public:
       *((smoothed_parameters*) &pars)   = _params.smooth_state.value;
       *((unsmoothed_parameters*) &pars) = _params.unsmoothed;
 
-      // control rate refresh block
+      // control rate/mdoulation block -----------------------------------------
       if ((_n_processed_samples & _control_rate_mask) == 0) {
         _lfos.set_freq (vec_set<2> (pars.lfo_hz_final), _lfo_srate);
         auto stereo_ph
@@ -626,8 +626,7 @@ public:
           }
         }
       }
-
-      // sample-wise processing block
+      // sample-wise processing block ------------------------------------------
       float_x4 fb = {
         (float) _feedback_samples[0],
         (float) _feedback_samples[1],
@@ -727,7 +726,6 @@ public:
           }
         }
       }
-
       out         = _dc_blocker.tick (out);
       auto del_fb = _feedback_delay_shelf.tick (out);
       _delay.push (make_crange (del_fb));
@@ -736,14 +734,12 @@ public:
       double_x2 parallel = {(double) out[2], (double) out[3]};
       outx2 *= 0.5f + (0.5f - abs (pars.parallel_mix));
       outx2 += pars.parallel_mix * parallel;
-      // outx2 *= -0.5;
 
       auto main_fb = outx2;
       main_fb      = _feedback_shelf.tick (main_fb);
       main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_sat + 1.);
       _feedback_samples = main_fb;
 
-      // outx2 *= 2.f - pars.parallel_mix;
       outs[0][i] = outx2[0];
       outs[1][i] = outx2[1];
     }
