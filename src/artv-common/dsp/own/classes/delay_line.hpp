@@ -409,6 +409,11 @@ public:
   //----------------------------------------------------------------------------
   static constexpr uint min_delay_spls() { return interp::x_offset; };
   //----------------------------------------------------------------------------
+  uint max_delay_spls()
+  {
+    return size() - (interp::n_points + interp::x_offset);
+  };
+  //----------------------------------------------------------------------------
   static constexpr uint min_size_spls() { return interp::n_points; };
   //----------------------------------------------------------------------------
   // allows querying how many elements of the "value_type" type have to be
@@ -497,7 +502,7 @@ public:
       std::clamp<float> (
         delay_spls_frac + (float) delay_spls_int,
         min_delay_spls(),
-        size() - (interp::n_points + interp::x_offset))
+        max_delay_spls())
       == (delay_spls_frac + (float) delay_spls_int));
 
     // e.g. Catmull-Rom interpolates between the 2 central points of 4. Sinc
@@ -507,11 +512,9 @@ public:
     for (uint i = 0; i < y.size(); ++i) {
       y[i] = get_raw (delay_spls_int + i, channel);
     }
-    return interp::template tick<value_type> (
+    auto ret = interp::template tick<value_type> (
       coeffs, states, y, make_vec<value_type> (delay_spls_frac));
-    return get (
-
-      delay_spls_int, delay_spls_frac, channel);
+    return ret;
   }
   //----------------------------------------------------------------------------
   void get (crange<value_type> out, crange<float> n_spls)
@@ -640,6 +643,7 @@ public:
   using interp     = Interpolation;
   //----------------------------------------------------------------------------
   static constexpr uint min_delay_spls() { return base::min_delay_spls(); };
+  static constexpr uint max_delay_spls() { return base::max_delay_spls(); };
   //----------------------------------------------------------------------------
   // this is for thiran interpolators, which take the previous inputs from the
   // delay line itself, so the minimum size has to account for the states
