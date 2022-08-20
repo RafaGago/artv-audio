@@ -1186,7 +1186,8 @@ static constexpr preset presets[] = {
     <PARAM id="myphaser_delay_feedback_01" value="-33.86000061035156" />
     <PARAM id="myphaser_delay_time_01" value="43.20000076293945" />
     <PARAM id="myphaser_delay_lfo_01" value="-73.59999847412109" />
-    <PARAM id="myphaser_feedback_hp_01" value="58.0" />
+    <PARAM id="myphaser_feedback_hp_01" value="50.8" />
+    <PARAM id="myphaser_feedback_lp_01" value="38.4" />
     <PARAM id="diffuse_delay_damp_02" value="0.0" />
     <PARAM id="diffuse_delay_desync_02" value="64.79999542236328" />
     <PARAM id="diffuse_delay_diffusion_02" value="10.0" />

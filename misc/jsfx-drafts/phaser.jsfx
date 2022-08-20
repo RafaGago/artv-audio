@@ -1,15 +1,21 @@
 desc:Artv phaser
 slider1:f_center=0.4<0, 1, 0.001>Freq Center(%)
-slider2:f_spread=0.5<0, 1, 0.001>Freq Spread(%)
-slider3:depth=0.8<0, 1, 0.001>Depth(%)
-slider5:lfo_freq=0.5<0, 1, 0.001>Lfo Freq(%)
-slider6:lfo_depth=0.5<0, 1, 0.001>Lfo Depth(%)
-slider7:lfo_phase_diff=0<0, 1, 0.001>Lfo St Diff(%)
-slider9:feedback=1<-1, 1, 0.001>Feedback(%)
-slider10:hp=0<0, 1, 0.001>Feedback HP(%)
-slider11:n_stages=12<1, 16, 1>N Stages
-slider13:nonlin=0<0, 1, 0.0001>NonLin
-slider14:mix=0.5<0, 1, 0.0001>Mix
+slider2:f_width=0.5<0, 1, 0.001>Freq Width(%)
+slider3:f_detune=0.9<0, 1, 0.001>Freq Detune(%)
+slider4:depth=0.21<0, 1, 0.001>Depth(%)
+slider5:depth_spread=0.5<0, 1, 0.001>Depth Spread(%)
+slider6:f_mode=2<0, 10, 1>Range Curve
+
+slider10:lfo_freq=0.25<0, 1, 0.001>Lfo Freq(%)
+slider11:lfo_depth=0.75<0, 1, 0.001>Lfo Depth(%)
+slider12:lfo_phase_diff=0<0, 1, 0.001>Lfo St Diff(%)
+slider20:feedback=0.9<-1, 1, 0.001>Feedback(%)
+slider21:hp=0<0, 1, 0.001>Feedback HP(%)
+slider22:lp=0<0, 1, 0.001>Feedback LP(%)
+slider33:n_stages=6<1, 16, 1>N Stages
+slider35:nonlin=0<0, 1, 0.0001>NonLin
+slider36:mix=0.5<0, 1, 0.0001>Mix
+slider37:trim_db=0<0, 30, 0.1>Trim(dB)
 
 in_pin:left input
 in_pin:right input
@@ -68,14 +74,14 @@ function svf_ap_bank_tick(stage_idx, in, drv) local(v3, out) global() local(v3, 
 );
 
 
-k.n_stages = 32;
+k.n_stages = 16;
 k.n_channels = 2;
 
 lfo.lfo_bank_init (k.n_channels, 1);
 lfov.array_init (k.n_channels);
 
-l_ap.svf_ap_bank_init (16);
-r_ap.svf_ap_bank_init (16);
+l_ap.svf_ap_bank_init (k.n_stages);
+r_ap.svf_ap_bank_init (k.n_stages);
 
 @slider
 
@@ -88,66 +94,81 @@ lfo_phase_diff != lfo_phase_diff_prev ? (
   lfo.lfo_bank_reset_phase (0, 1, lfo_phase_diff);
 );
 
-freq_hz = 10 + 20000 * f_center * f_center * f_center * f_center * f_center;
+norm_center = f_center * f_center * f_center * f_center;
+loop(f_mode,
+  norm_center *= f_center;
+);
+
+freq_hz = 40 + 20000 * norm_center;
 // spread of 4 octaves maximum
-freq_hi = exp (log(2) * 2 * f_spread);
+freq_hi = exp (log(2) * 2 * f_width);
 freq_lo = 1 / freq_hi;
 freq_lo *= freq_hz;
 freq_hi *= freq_hz;
 
 factor = pow (freq_hi / freq_lo, 1. / n_stages);
 
-q = 0.00001 + depth * 5;
+q = 0.00002 + ((depth * depth * depth) * 3.5);
 
 drive = nonlin * nonlin * nonlin * 0.18;
-
-//l_hp.tpt_1p_reset (130 + hp * hp * 120, srate);
-//r_hp.tpt_1p_reset (130 + hp * hp * 120, srate);
-//lp_fact = exp (hp * -18 * (log (10) / 20)); // -12dB
+trim = exp(-trim_db * log(10)/20);
 
 @sample
 
 lfo.lfo_bank_tick_tri (lfov.ptr, 0);
-// 1.1 = 3 octaves range
-lfov.ptr[0] = exp (lfov.ptr[0] * lfo_depth * 2.7);
-lfov.ptr[1] = exp (lfov.ptr[1] * lfo_depth * 2.7);
+lfov.ptr[0] = exp (lfov.ptr[0] * lfo_depth * 3.);
+lfov.ptr[1] = exp (lfov.ptr[1] * lfo_depth * 3.);
 
 freq = freq_lo;
-i = 0;
 
-detune_add = (factor - 1) * 0.2;
-detune = 1 + detune_add * 0.5;
+detune = 0.3444 * f_detune;
+detune_mul = -1 - 0.09 * f_detune;
+
+q_detune = 0.3 * depth_spread;
+q_detune_mul = -1 - 0.07 * f_detune;
 
 out0 = spl0;
 out1 = spl1;
 out0 += l_feedback * feedback * 0.99;
 out1 += r_feedback * feedback * 0.99;
 
+q_inc = (q * 0.5) / n_stages;
+qv = q - n_stages * q_inc;
+
+i = 0;
 loop (n_stages,
   freql = freq * lfov.ptr[0];
-  freql = max(freql, 8);
-  freql = min(freql, 22000);
+  freql *= 1 + detune;
+  freql = max(freql, 1);
+  freql = min(freql, 20000);
   freqr = freq * lfov.ptr[1];
-  freqr = max(freqr, 8);
-  freqr = min(freqr, 22000);
+  freqr *= 1 + detune;
+  freqr = max(freqr, 1);
+  freqr = min(freqr, 20000);
   freq *= factor;
-  freq *= detune;
-  detune -= detune_add;
-  detune_add *= -0.976543;
-  l_ap.svf_ap_bank_reset (i, freql, q, srate);
-  r_ap.svf_ap_bank_reset (i, freqr, q, srate);
+  detune *= detune_mul;
+  
+  qv += q_inc;
+  qs = qv * (1 + q_detune);
+  q_detune *= q_detune_mul;
+
+  l_ap.svf_ap_bank_reset (i, freql, qs, srate);
+  r_ap.svf_ap_bank_reset (i, freqr, qs, srate);
   out0 = l_ap.svf_ap_bank_tick (i, out0, drive);
   out1 = r_ap.svf_ap_bank_tick (i, out1, drive);
   i += 1;
 );
 
-l_hp.svf_lshelf (max (freq_lo, 160), 0.35, hp * -18, srate);
-r_hp.svf_lshelf (max (freq_lo, 160), 0.35, hp * -18, srate);
 
-l_feedback = l_hp.svf_tick (out0);
-r_feedback = r_hp.svf_tick (out1);
-//l_feedback = out0 - l_hp.tpt_1p_tick_lp (out0) * lp_fact;
-//r_feedback = out1 - l_hp.tpt_1p_tick_lp (out1) * lp_fact;
+l_hp.svf_lshelf (max (freq_lo, 260), 0.25, hp * -18, srate);
+r_hp.svf_lshelf (max (freq_lo, 260), 0.25, hp * -18, srate);
+l_lp.svf_hshelf (max (freq_hi, 17000), 0.25, lp * -9, srate);
+r_lp.svf_hshelf (max (freq_hi, 17000), 0.25, lp * -9, srate);
+
+l_feedback = l_lp.svf_tick (l_hp.svf_tick (out0));
+r_feedback = r_lp.svf_tick (r_hp.svf_tick (out1));
 spl0 = out0 * mix + spl0 * (1 - mix);
 spl1 = out1 * mix + spl1 * (1 - mix);
+spl0 *= trim;
+spl1 *= trim;Q
 

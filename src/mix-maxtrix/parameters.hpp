@@ -5403,6 +5403,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  myphaser_feedback_lp,
+  n_stereo_busses,
+  param_common (
+    "Feedbk LP",
+    declptr<upsampled<phaser>>(),
+    declptr<phaser::feedback_lp_tag>()),
+  phaser::get_parameter (phaser::feedback_lp_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   myphaser_feedback_sat,
   n_stereo_busses,
   param_common (
@@ -5502,17 +5512,18 @@ using myphaser_params = mp_list<
   myphaser_q,
   myphaser_topology,
 
-  myphaser_parallel_mix,
   myphaser_feedback,
-  myphaser_feedback_hp,
   myphaser_feedback_sat,
+  myphaser_feedback_hp,
+  myphaser_feedback_lp,
   myphaser_delay_feedback,
   myphaser_delay_time,
   myphaser_delay_lfo,
-  myphaser_lfo_stereo,
+  myphaser_parallel_mix,
 
   myphaser_stages_mode,
   myphaser_lfo_wave,
+  myphaser_lfo_stereo,
   myphaser_lfo_start_phase,
   myphaser_oversampling>;
 //------------------------------------------------------------------------------

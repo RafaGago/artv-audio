@@ -238,6 +238,17 @@ public:
     return float_param ("%", 0., 100, 0., 0.1);
   }
   //----------------------------------------------------------------------------
+  struct feedback_lp_tag {};
+  void set (feedback_lp_tag, float v)
+  {
+    _params.smooth_target.value.feedback_lp = v * 0.01f;
+  }
+
+  static constexpr auto get_parameter (feedback_lp_tag)
+  {
+    return float_param ("%", 0., 100, 0., 0.1);
+  }
+  //----------------------------------------------------------------------------
   struct feedback_sat_tag {};
   void set (feedback_sat_tag, float v)
   {
@@ -373,6 +384,8 @@ public:
     _params.smooth_target.value.lfo_last       = 0.f;
     _params.smooth_target.value.feedback_hp
       = get_parameter (feedback_hp_tag {}).defaultv;
+    _params.smooth_target.value.feedback_hp
+      = get_parameter (feedback_lp_tag {}).defaultv;
     _params.smooth_target.value.feedback_sat
       = get_parameter (feedback_sat_tag {}).defaultv;
     _params.smooth_target.value.parallel_mix
@@ -608,7 +621,8 @@ public:
 
             auto cutfreq = double_x2 {freqs[0], freqs[1]};
             cutfreq -= pars.feedback_hp * cutfreq * cut_ratio;
-            _feedback_shelf.reset_coeffs (
+            _feedback_shelf.reset_coeffs_on_idx (
+              k_shelf_lo,
               vec_max (210., cutfreq),
               vec_set<double_x2> (0.35),
               vec_set<double_x2> (pars.feedback_hp * gain_db),
@@ -617,12 +631,37 @@ public:
 
             auto del_cutfreq = freqs;
             del_cutfreq -= pars.feedback_hp * freqs * cut_ratio;
-            _feedback_delay_shelf.reset_coeffs (
+            _feedback_delay_shelf.reset_coeffs_on_idx (
+              k_shelf_lo,
               vec_max (210.f, del_cutfreq),
               vec_set<float_x4> (0.35),
               vec_set<float_x4> (pars.feedback_hp * gain_db),
               _srate,
               lowshelf_tag {});
+          }
+          if (s == (pars.n_stages - 1)) {
+            constexpr float cut_ratio = 0.3f;
+            constexpr float gain_db   = -6.f;
+
+            auto cutfreq = double_x2 {freqs[0], freqs[1]};
+            cutfreq += pars.feedback_lp * cutfreq * cut_ratio;
+            _feedback_shelf.reset_coeffs_on_idx (
+              k_shelf_hi,
+              vec_max (4000., cutfreq),
+              vec_set<double_x2> (0.35),
+              vec_set<double_x2> (pars.feedback_lp * gain_db),
+              _srate,
+              highshelf_tag {});
+
+            auto del_cutfreq = freqs;
+            del_cutfreq -= pars.feedback_hp * freqs * cut_ratio;
+            _feedback_delay_shelf.reset_coeffs_on_idx (
+              k_shelf_hi,
+              vec_max (4000.f, del_cutfreq),
+              vec_set<float_x4> (0.35),
+              vec_set<float_x4> (pars.feedback_lp * gain_db),
+              _srate,
+              highshelf_tag {});
           }
         }
       }
@@ -727,7 +766,8 @@ public:
         }
       }
       out         = _dc_blocker.tick (out);
-      auto del_fb = _feedback_delay_shelf.tick (out);
+      auto del_fb = _feedback_delay_shelf.tick_on_idx (k_shelf_lo, out);
+      del_fb      = _feedback_delay_shelf.tick_on_idx (k_shelf_hi, out);
       _delay.push (make_crange (del_fb));
 
       double_x2 outx2    = {(double) out[0], (double) out[1]};
@@ -736,7 +776,8 @@ public:
       outx2 += pars.parallel_mix * parallel;
 
       auto main_fb = outx2;
-      main_fb      = _feedback_shelf.tick (main_fb);
+      main_fb      = _feedback_shelf.tick_on_idx (k_shelf_lo, main_fb);
+      main_fb      = _feedback_shelf.tick_on_idx (k_shelf_hi, main_fb);
       main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_sat + 1.);
       _feedback_samples = main_fb;
 
@@ -862,8 +903,8 @@ private:
 
     float parallel_mix;
     float feedback_hp;
+    float feedback_lp;
     float feedback_sat;
-    float _free_dummy;
   };
   //----------------------------------------------------------------------------
   struct all_parameters : public unsmoothed_parameters,
@@ -903,8 +944,9 @@ private:
   part_class_array<onepole_allpass, float_x4, max_stages>       _allpass1p;
   interpolated_delay_line<float_x1, linear_interp, true, false> _stagesdl;
   interpolated_delay_line<float_x1, sinc_interp<8, 64>, false, false> _ff_comb;
-  part_class_array<andy::svf, double_x2> _feedback_shelf;
-  part_class_array<andy::svf, float_x4>  _feedback_delay_shelf;
+  enum { k_shelf_lo, k_shelf_hi };
+  part_class_array<andy::svf, double_x2, 2> _feedback_shelf;
+  part_class_array<andy::svf, float_x4, 2>  _feedback_delay_shelf;
 
   stages_delay_samples                           _stagesdl_spls {};
   modulable_thiran1_delay_line<float_x4, 1>      _delay {};

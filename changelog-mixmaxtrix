@@ -4,11 +4,11 @@
 - Artv Phaser: Add Feedforward comb mode (Flanger and Chorus).
 - Artv Phaser: Gain compensate "parallel" knob/parameter.
 - Artv Phaser: Gain compensate "delay feedback" knob/parameter.
-- Artv Phaser: Add feedback Hipass (to tame low frequencies).
-- Artv Phaser: Add feedback Saturation (to tame low frequencies).
-- Artv Phaser: (sound might change) Better grain structure for the feedback
-  delay (Flanger). Not it can be pushed more near the stability limit depending
-  on the regular feedback values.
+- Artv Phaser: Add feedback Lowpass/Hipass.
+- Artv Phaser: Add feedback Saturation.
+- Artv Phaser: (sound might change for presets using the feedback delay/flanger)
+  Better grain structure for the feedback delay/flanger. Now it can be pushed
+  more when the regular feedback (for the  allpasses) has low values.
 - Artv Phaser: Feedback delay renamed to Flanger on the UI.
 - Artv Phaser: (sound might change) Normal, Alternate and Spread frequency
   distribution modes had one of the frequencies on the parallel path out of
