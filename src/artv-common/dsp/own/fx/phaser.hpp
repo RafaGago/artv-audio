@@ -837,17 +837,20 @@ private:
       fconstant[1] = 0.;
       break;
     }
-    auto f         = freq_lo;
-    auto lfo_depth = pars.lfo_depth;
+    auto     f         = freq_lo;
+    auto     lfo_depth = pars.lfo_depth;
+    float_x4 q_fact {lfov[0], lfov[1], lfov[1], lfov[0]};
+    q_fact = vec_exp (q_fact * -lfo_depth * 0.23f);
     if (pars.topology == t_schroeder || pars.topology == t_comb) {
       // favor the lower range
       lfo_depth *= lfo_depth;
     }
-
     for (uint s = 0; s < pars.n_stages; ++s) {
       float_x4 freqs {};
-      float_x4 qs = vec_set<float_x4> (pars.q); // Q's don't oscilate (yet)
-
+      float_x4 qs = vec_set<float_x4> (pars.q);
+      if (pars.topology >= t_2_pole_legacy) {
+        qs *= q_fact;
+      }
       // fill freqs
       for (uint ap = 0; ap < (vec_size / 2); ++ap) {
         float max_depth = pars.lin_lfo_mod ? 0.6 : 1.7;
@@ -919,12 +922,12 @@ private:
       else if (pars.topology == t_hybrid_1) {
         _stagesdl_spls.target.spls[s]
           = vec_to_array (freq_to_delay_spls (freqs * 2));
-        _allpass2p.reset_coeffs_on_idx (s, freqs, 0.2f + qs * 0.3f, _srate);
+        _allpass2p.reset_coeffs_on_idx (s, freqs, 0.05f + qs * 0.3f, _srate);
       }
       else if (pars.topology == t_hybrid_2) {
         _stagesdl_spls.target.spls[s]
           = vec_to_array (freq_to_delay_spls (freqs));
-        _allpass2p.reset_coeffs_on_idx (s, freqs, 0.2f + qs * 0.5f, _srate);
+        _allpass2p.reset_coeffs_on_idx (s, freqs, 0.05f + qs * 0.5f, _srate);
       }
       if (s == 0) {
         constexpr float cut_ratio = 0.3f;
