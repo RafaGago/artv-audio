@@ -23,6 +23,17 @@ function svf_hp(freq, q, sr) local (k, g) global()(
   this.m2 = -1;
 );
 
+function svf_bp(freq, q, sr) local (k, g) global()(
+  k = 1.0 / q;
+  g = tan ($pi * freq / sr);
+  this.a1 = 1.0 / (1.0 + g * (g + k));
+  this.a2 = g * this.a1;
+  this.a3 = g * this.a2;
+  this.m0 = 0;
+  this.m1 = k;
+  this.m2 = 0;
+);
+
 function svf_ap(freq, q, sr) local (k, g) global()(
   k = 1.0 / q;
   g = tan ($pi * freq / sr);
@@ -505,11 +516,49 @@ function thiran2_reset (d) global() (
 );
 
 function thiran2_tick (in) global() local (y) (
-    y  = this.c2 * in + this.c1 * this.x1 + this.x2;
-    y -= this.c1 * this.y1 + this.c2 * this.y2;
-    this.x2 = this.x1;
-    this.x1 = in;
-    this.y2 = this.y1;
-    this.y1 = y;
+  y  = this.c2 * in + this.c1 * this.x1 + this.x2;
+  y -= this.c1 * this.y1 + this.c2 * this.y2;
+  this.x2 = this.x1;
+  this.x1 = in;
+  this.y2 = this.y1;
+  this.y1 = y;
+);
+//------------------------------------------------------------------------------
+// Nested Schroeder Allpass cascade with unit delays. Also called lattice it
+// seems (but in this case each section has equal gains)
+function nested_ap_init(size) global() (
+  this.g.array_init (size);
+  this.z.array_init (size);
+  this.size = size;
+);
+
+function nested_ap_set_gain(g, idx) global() (
+  this.g.ptr[idx] = 0;
+);
+
+function nested_ap_set_gains(g_ptr) global() (
+  memcpy (this.g.ptr, g_ptr, this.size);
+);
+
+function nested_ap_get_gains_ptr() global() (
+  this.g.ptr;
+);
+
+function nested_ap_size() global() (
+  this.size;
+);
+
+function nested_ap_tick(in) global() local (fwd, bwd, out, i)(
+  fwd = in + this.z.ptr[0] * -this.g.ptr[0];
+  out = this.z.ptr[0] + fwd * this.g.ptr[0];
+  i = 1;
+  loop(this.size - 1,
+    fwd += this.z.ptr[i] * -this.g.ptr[i];
+    bwd  = this.z.ptr[i] + fwd * this.g.ptr[i];
+    this.z.ptr[i - 1] = bwd;
+    i += 1;
+  );
+  this.z.ptr[i - 1] = fwd;
+  out;
 );
 //------------------------------------------------------------------------------

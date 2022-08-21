@@ -877,7 +877,9 @@ function conference_20 (y_ptr, x_ptr)
 function get_rt60_gain (rt60sec, delay_spls, srate) local (rate) global ()(
     rate = srate / delay_spls;
     // -6.907755278982137 = log(-60dB), log(pow(10,-60/20))
-    exp (-6.907755278982137 * (delay_spls / (rt60sec * srate)));
+    rt60sec != 0 ?
+      exp (-6.907755278982137 * (delay_spls / (rt60sec * srate))) :
+      0;
 );
 
 function get_rt60_gain(

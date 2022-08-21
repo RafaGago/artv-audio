@@ -288,8 +288,10 @@ public:
   static constexpr auto get_parameter (topology_tag)
   {
     return choice_param (
-      1,
+      3,
       make_cstr_array (
+        "Phaser 1 pole (legacy)",
+        "Phaser 2 pole (legacy)",
         "Phaser 1 pole",
         "Phaser 2 pole",
         "Phaser 3 pole",
@@ -299,6 +301,8 @@ public:
   }
 
   enum topologies {
+    t_1_pole_legacy,
+    t_2_pole_legacy,
     t_1_pole,
     t_2_pole,
     t_3_pole,
@@ -437,7 +441,7 @@ public:
 
       constexpr uint vec_size = vec_traits<float_x4>().size;
 
-      // parameter smoothing.
+      // parameter smoothing (could be done at a subblock size).
       auto smooth_iter = _params.smooth_target.arr.size() / vec_size;
       for (uint j = 0; j < smooth_iter; ++j) {
         // HACKish encapsulation violation: this one isn't assigning the result,
@@ -462,210 +466,9 @@ public:
 
       // control rate/mdoulation block -----------------------------------------
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        _lfos.set_freq (vec_set<2> (pars.lfo_hz_final), _lfo_srate);
-        auto stereo_ph
-          = phase<1> {vec_set<1> (pars.lfo_stereo), phase<1>::degrees {}}
-              .get_raw (0);
-        if (pars.lfo_hz_final != 0.f) {
-          // updating stereo phase diff.
-          auto ph = _lfos.get_phase();
-          ph.set_raw (ph.get_raw (0) + stereo_ph, 1);
-          _lfos.set_phase (ph);
-        }
-        else {
-          auto start_ph = phase<n_channels> {
-            vec_set<n_channels> (pars.lfo_start_phase),
-            phase<n_channels>::degrees {}};
-          start_ph.set_raw (start_ph.get_raw (0) + stereo_ph, 1);
-          _lfos.set_phase (start_ph);
-        }
-        vec<float, 2> lfov;
-        switch (pars.lfo_wave) {
-        case 0:
-          lfov = _lfos.tick_sine();
-          break;
-        case 1:
-          lfov = _lfos.tick_triangle();
-          break;
-        case 2:
-          lfov = _lfos.tick_sample_hold();
-          break;
-        case 3:
-          lfov = _lfos.tick_filt_sample_and_hold();
-          break;
-        case 4:
-          lfov = _lfos.tick_trapezoid (vec_set<2> (0.3f));
-          break;
-        case 5:
-          lfov = _lfos.tick_square();
-          break;
-        case 6:
-          lfov = _lfos.tick_saw();
-          break;
-        }
-        _params.smooth_target.value.lfo_last = lfov[0];
-        auto                  interp_stages  = (double) (pars.n_stages * 2) - 1;
-        std::array<double, 2> fconstant;
-
-        auto freq_hi = std::max (pars.freq_hi, pars.freq_lo);
-        auto freq_lo = std::min (pars.freq_hi, pars.freq_lo);
-
-        switch (pars.mode) {
-        case m_exp:
-        case m_exp_spread:
-        case m_exp_alternate:
-          fconstant[0] = 1.;
-          fconstant[1] = pow (freq_hi / freq_lo, 1. / interp_stages);
-          break;
-        case m_exp_stereo:
-          interp_stages *= 2;
-          fconstant[0] = pow (freq_hi / freq_lo, 1. / interp_stages);
-          fconstant[1] = fconstant[0];
-          break;
-        case m_lin:
-        case m_lin_spread:
-        case m_lin_alternate:
-          fconstant[0] = 0.f;
-          fconstant[1] = (freq_hi - freq_lo) / interp_stages;
-          break;
-        case m_lin_stereo:
-          interp_stages *= 2;
-          fconstant[0] = (freq_hi - freq_lo) / interp_stages;
-          fconstant[1] = fconstant[0];
-          break;
-        default:
-          fconstant[0] = 0.;
-          fconstant[1] = 0.;
-          break;
-        }
-        auto f = freq_lo;
-        if (pars.topology == t_schroeder || pars.topology == t_comb) {
-          // favor the lower range
-          pars.lfo_depth *= pars.lfo_depth;
-        }
-
-        for (uint s = 0; s < pars.n_stages; ++s) {
-          float_x4 freqs {};
-          float_x4 qs = vec_set<float_x4> (pars.q); // Q's don't oscilate (yet)
-
-          // fill freqs
-          for (uint ap = 0; ap < (vec_size / 2); ++ap) {
-            float max_depth = pars.lin_lfo_mod ? 0.6 : 1.7;
-            float k;
-            uint  stage = (s * 4) + ap;
-
-            switch (pars.mode) {
-            case m_exp:
-            case m_lin:
-            case m_exp_stereo:
-            case m_lin_stereo:
-              k = max_depth;
-              break;
-            case m_exp_spread:
-            case m_lin_spread:
-              k = (stage < (pars.n_stages * 2)) ? max_depth : -max_depth;
-              break;
-            case m_exp_alternate:
-            case m_lin_alternate:
-              k = ((stage / 2) & 1) ? max_depth : -max_depth;
-              break;
-            default:
-              break;
-            }
-
-            std::array<decltype (f), 2> fs;
-            for (uint iv = 0; iv < fs.size(); ++iv) {
-              fs[iv] = f;
-              if (mode_is_exponential (pars.mode)) {
-                f *= fconstant[iv];
-              }
-              else {
-                f += fconstant[iv];
-              }
-            }
-
-            if (pars.lin_lfo_mod) {
-              freqs[ap * 2] = fs[0] + (lfov[0] * pars.lfo_depth * fs[0] * k);
-              freqs[ap * 2 + 1]
-                = fs[1] + (lfov[1] * pars.lfo_depth * fs[1] * k);
-            }
-            else {
-              freqs[ap * 2]     = fs[0] * exp (lfov[0] * pars.lfo_depth * k);
-              freqs[ap * 2 + 1] = fs[1] * exp (lfov[1] * pars.lfo_depth * k);
-            }
-          }
-          freqs = vec_clamp (
-            freqs, min_ap_freq, std::min (_srate * 0.4999f, 22000.f));
-          if (pars.topology == t_schroeder) {
-            _stagesdl_spls.target.spls[s]
-              = vec_to_array (freq_to_delay_spls (freqs));
-          }
-          else if (pars.topology == t_comb) {
-            _stagesdl_spls.target.spls[s]
-              = vec_to_array (freq_to_delay_spls (freqs));
-            if (s == 0) {
-              _allpass1p.reset_coeffs_on_idx (0, freqs, _srate);
-            }
-          }
-          else {
-            if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
-              _allpass1p.reset_coeffs_on_idx (s, freqs, _srate);
-            }
-            if (pars.topology == t_2_pole || pars.topology == t_3_pole) {
-              _allpass2p.reset_coeffs_on_idx (s, freqs, qs, _srate);
-            }
-          }
-          if (s == 0) {
-            constexpr float cut_ratio = 0.3f;
-            constexpr float gain_db   = -20.f;
-
-            auto cutfreq = double_x2 {freqs[0], freqs[1]};
-            cutfreq -= pars.feedback_hp * cutfreq * cut_ratio;
-            _feedback_shelf.reset_coeffs_on_idx (
-              k_shelf_lo,
-              vec_max (210., cutfreq),
-              vec_set<double_x2> (0.35),
-              vec_set<double_x2> (pars.feedback_hp * gain_db),
-              _srate,
-              lowshelf_tag {});
-
-            auto del_cutfreq = freqs;
-            del_cutfreq -= pars.feedback_hp * freqs * cut_ratio;
-            _feedback_delay_shelf.reset_coeffs_on_idx (
-              k_shelf_lo,
-              vec_max (210.f, del_cutfreq),
-              vec_set<float_x4> (0.35),
-              vec_set<float_x4> (pars.feedback_hp * gain_db),
-              _srate,
-              lowshelf_tag {});
-          }
-          if (s == (pars.n_stages - 1)) {
-            constexpr float cut_ratio = 0.3f;
-            constexpr float gain_db   = -6.f;
-
-            auto cutfreq = double_x2 {freqs[0], freqs[1]};
-            cutfreq += pars.feedback_lp * cutfreq * cut_ratio;
-            _feedback_shelf.reset_coeffs_on_idx (
-              k_shelf_hi,
-              vec_max (4000., cutfreq),
-              vec_set<double_x2> (0.35),
-              vec_set<double_x2> (pars.feedback_lp * gain_db),
-              _srate,
-              highshelf_tag {});
-
-            auto del_cutfreq = freqs;
-            del_cutfreq -= pars.feedback_hp * freqs * cut_ratio;
-            _feedback_delay_shelf.reset_coeffs_on_idx (
-              k_shelf_hi,
-              vec_max (4000.f, del_cutfreq),
-              vec_set<float_x4> (0.35),
-              vec_set<float_x4> (pars.feedback_lp * gain_db),
-              _srate,
-              highshelf_tag {});
-          }
-        }
+        run_control_rate (pars);
       }
-      // sample-wise processing block ------------------------------------------
+      // sample-wise processing block (unbreakable, it has 1 sample delays) ----
       float_x4 fb = {
         (float) _feedback_samples[0],
         (float) _feedback_samples[1],
@@ -674,6 +477,7 @@ public:
       // regular processing
       float_x4 out {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
       out += fb * pars.feedback;
+      float_x4 feedforward = out;
 
       auto n_spls = pars.delay_spls;
       n_spls *= exp (ln_max_delay_factor * pars.lfo_last * pars.delay_lfo);
@@ -719,8 +523,24 @@ public:
             to_push[dl_channel] = r.to_push;
           }
         }
-        out = vec_from_array (vec1_array_unwrap (acum));
         _stagesdl.push (to_push);
+        if (pars.topology == t_schroeder) {
+          out = vec_from_array (vec1_array_unwrap (acum));
+          out += feedforward;
+          out *= 0.5f;
+        }
+        else {
+          out = vec_set<4> (0.f);
+          for (uint g = 0; g < pars.n_stages; ++g) {
+            auto p = g * n_ap_channels;
+            out += float_x4 {
+              to_push[p][0],
+              to_push[p + 1][0],
+              to_push[p + 2][0],
+              to_push[p + 3][0]};
+          }
+          out /= (float) pars.n_stages;
+        }
       }
       else if (pars.topology == t_comb) {
         constexpr float q_scale = 0.99f / get_parameter (q_tag {}).max;
@@ -753,17 +573,33 @@ public:
         out = vec_from_array (acum);
         out /= (float) pars.n_stages;
       }
-      else {
-        if (pars.topology == t_1_pole || pars.topology == t_3_pole) {
-          for (uint g = 0; g < pars.n_stages; ++g) {
-            out = _allpass1p.tick_on_idx (g, out);
-          }
+      else if (pars.topology == t_1_pole_legacy || pars.topology == t_1_pole) {
+        for (uint g = 0; g < pars.n_stages; ++g) {
+          out = _allpass1p.tick_on_idx (g, out);
         }
-        if (pars.topology == t_2_pole || pars.topology == t_3_pole) {
-          for (uint g = 0; g < pars.n_stages; ++g) {
-            out = _allpass2p.tick_on_idx (g, out);
-          }
+        if (pars.topology == t_1_pole) {
+          out += feedforward;
+          out *= 0.5f;
         }
+      }
+      else if (pars.topology == t_2_pole_legacy || pars.topology == t_2_pole) {
+        for (uint g = 0; g < pars.n_stages; ++g) {
+          out = _allpass2p.tick_on_idx (g, out);
+        }
+        if (pars.topology == t_2_pole) {
+          out += feedforward;
+          out *= 0.5f;
+        }
+      }
+      else if (pars.topology == t_3_pole) {
+        for (uint g = 0; g < pars.n_stages; ++g) {
+          out = _allpass1p.tick_on_idx (g, out);
+        }
+        for (uint g = 0; g < pars.n_stages; ++g) {
+          out = _allpass2p.tick_on_idx (g, out);
+        }
+        out += feedforward;
+        out *= 0.5f;
       }
       out         = _dc_blocker.tick (out);
       auto del_fb = _feedback_delay_shelf.tick_on_idx (k_shelf_lo, out);
@@ -875,6 +711,220 @@ private:
     }
   }
   //----------------------------------------------------------------------------
+  struct all_parameters;
+  void run_control_rate (all_parameters const& pars)
+  {
+    // this is very naive, note that we could e.g. be interpolating SVF
+    // coefficients internally.
+    constexpr uint vec_size = vec_traits<float_x4>().size;
+
+    _lfos.set_freq (vec_set<2> (pars.lfo_hz_final), _lfo_srate);
+    auto stereo_ph
+      = phase<1> {vec_set<1> (pars.lfo_stereo), phase<1>::degrees {}}.get_raw (
+        0);
+    if (pars.lfo_hz_final != 0.f) {
+      // updating stereo phase diff.
+      auto ph = _lfos.get_phase();
+      ph.set_raw (ph.get_raw (0) + stereo_ph, 1);
+      _lfos.set_phase (ph);
+    }
+    else {
+      auto start_ph = phase<n_channels> {
+        vec_set<n_channels> (pars.lfo_start_phase),
+        phase<n_channels>::degrees {}};
+      start_ph.set_raw (start_ph.get_raw (0) + stereo_ph, 1);
+      _lfos.set_phase (start_ph);
+    }
+    vec<float, 2> lfov;
+    switch (pars.lfo_wave) {
+    case 0:
+      lfov = _lfos.tick_sine();
+      break;
+    case 1:
+      lfov = _lfos.tick_triangle();
+      break;
+    case 2:
+      lfov = _lfos.tick_sample_hold();
+      break;
+    case 3:
+      lfov = _lfos.tick_filt_sample_and_hold();
+      break;
+    case 4:
+      lfov = _lfos.tick_trapezoid (vec_set<2> (0.3f));
+      break;
+    case 5:
+      lfov = _lfos.tick_square();
+      break;
+    case 6:
+      lfov = _lfos.tick_saw();
+      break;
+    }
+    _params.smooth_target.value.lfo_last = lfov[0];
+    auto                  interp_stages  = (double) (pars.n_stages * 2) - 1;
+    std::array<double, 2> fconstant;
+
+    auto freq_hi = std::max (pars.freq_hi, pars.freq_lo);
+    auto freq_lo = std::min (pars.freq_hi, pars.freq_lo);
+
+    switch (pars.mode) {
+    case m_exp:
+    case m_exp_spread:
+    case m_exp_alternate:
+      fconstant[0] = 1.;
+      fconstant[1] = pow (freq_hi / freq_lo, 1. / interp_stages);
+      break;
+    case m_exp_stereo:
+      interp_stages *= 2;
+      fconstant[0] = pow (freq_hi / freq_lo, 1. / interp_stages);
+      fconstant[1] = fconstant[0];
+      break;
+    case m_lin:
+    case m_lin_spread:
+    case m_lin_alternate:
+      fconstant[0] = 0.f;
+      fconstant[1] = (freq_hi - freq_lo) / interp_stages;
+      break;
+    case m_lin_stereo:
+      interp_stages *= 2;
+      fconstant[0] = (freq_hi - freq_lo) / interp_stages;
+      fconstant[1] = fconstant[0];
+      break;
+    default:
+      fconstant[0] = 0.;
+      fconstant[1] = 0.;
+      break;
+    }
+    auto f         = freq_lo;
+    auto lfo_depth = pars.lfo_depth;
+    if (pars.topology == t_schroeder || pars.topology == t_comb) {
+      // favor the lower range
+      lfo_depth *= lfo_depth;
+    }
+
+    for (uint s = 0; s < pars.n_stages; ++s) {
+      float_x4 freqs {};
+      float_x4 qs = vec_set<float_x4> (pars.q); // Q's don't oscilate (yet)
+
+      // fill freqs
+      for (uint ap = 0; ap < (vec_size / 2); ++ap) {
+        float max_depth = pars.lin_lfo_mod ? 0.6 : 1.7;
+        float k;
+        uint  stage = (s * 4) + ap;
+
+        switch (pars.mode) {
+        case m_exp:
+        case m_lin:
+        case m_exp_stereo:
+        case m_lin_stereo:
+          k = max_depth;
+          break;
+        case m_exp_spread:
+        case m_lin_spread:
+          k = (stage < (pars.n_stages * 2)) ? max_depth : -max_depth;
+          break;
+        case m_exp_alternate:
+        case m_lin_alternate:
+          k = ((stage / 2) & 1) ? max_depth : -max_depth;
+          break;
+        default:
+          break;
+        }
+
+        std::array<decltype (f), 2> fs;
+        for (uint iv = 0; iv < fs.size(); ++iv) {
+          fs[iv] = f;
+          if (mode_is_exponential (pars.mode)) {
+            f *= fconstant[iv];
+          }
+          else {
+            f += fconstant[iv];
+          }
+        }
+
+        if (pars.lin_lfo_mod) {
+          freqs[ap * 2]     = fs[0] + (lfov[0] * lfo_depth * fs[0] * k);
+          freqs[ap * 2 + 1] = fs[1] + (lfov[1] * lfo_depth * fs[1] * k);
+        }
+        else {
+          freqs[ap * 2]     = fs[0] * exp (lfov[0] * lfo_depth * k);
+          freqs[ap * 2 + 1] = fs[1] * exp (lfov[1] * lfo_depth * k);
+        }
+      }
+      freqs
+        = vec_clamp (freqs, min_ap_freq, std::min (_srate * 0.4999f, 22000.f));
+      if (pars.topology == t_schroeder) {
+        _stagesdl_spls.target.spls[s]
+          = vec_to_array (freq_to_delay_spls (freqs));
+      }
+      else if (pars.topology == t_comb) {
+        _stagesdl_spls.target.spls[s]
+          = vec_to_array (freq_to_delay_spls (freqs));
+        if (s == 0) {
+          _allpass1p.reset_coeffs_on_idx (0, freqs, _srate);
+        }
+      }
+      else {
+        if (
+          pars.topology == t_1_pole || pars.topology == t_1_pole_legacy
+          || pars.topology == t_3_pole) {
+          _allpass1p.reset_coeffs_on_idx (s, freqs, _srate);
+        }
+        if (
+          pars.topology == t_2_pole || pars.topology == t_2_pole_legacy
+          || pars.topology == t_3_pole) {
+          _allpass2p.reset_coeffs_on_idx (s, freqs, qs, _srate);
+        }
+      }
+      if (s == 0) {
+        constexpr float cut_ratio = 0.3f;
+        constexpr float gain_db   = -20.f;
+
+        auto cutfreq = double_x2 {freqs[0], freqs[1]};
+        cutfreq -= pars.feedback_hp * cutfreq * cut_ratio;
+        _feedback_shelf.reset_coeffs_on_idx (
+          k_shelf_lo,
+          vec_max (210., cutfreq),
+          vec_set<double_x2> (0.35),
+          vec_set<double_x2> (pars.feedback_hp * gain_db),
+          _srate,
+          lowshelf_tag {});
+
+        auto del_cutfreq = freqs;
+        del_cutfreq -= pars.feedback_hp * freqs * cut_ratio;
+        _feedback_delay_shelf.reset_coeffs_on_idx (
+          k_shelf_lo,
+          vec_max (210.f, del_cutfreq),
+          vec_set<float_x4> (0.35),
+          vec_set<float_x4> (pars.feedback_hp * gain_db),
+          _srate,
+          lowshelf_tag {});
+      }
+      if (s == (pars.n_stages - 1)) {
+        constexpr float cut_ratio = 0.3f;
+        constexpr float gain_db   = -6.f;
+
+        auto cutfreq = double_x2 {freqs[0], freqs[1]};
+        cutfreq += pars.feedback_lp * cutfreq * cut_ratio;
+        _feedback_shelf.reset_coeffs_on_idx (
+          k_shelf_hi,
+          vec_max (4000., cutfreq),
+          vec_set<double_x2> (0.35),
+          vec_set<double_x2> (pars.feedback_lp * gain_db),
+          _srate,
+          highshelf_tag {});
+
+        auto del_cutfreq = freqs;
+        del_cutfreq -= pars.feedback_hp * freqs * cut_ratio;
+        _feedback_delay_shelf.reset_coeffs_on_idx (
+          k_shelf_hi,
+          vec_max (4000.f, del_cutfreq),
+          vec_set<float_x4> (0.35),
+          vec_set<float_x4> (pars.feedback_lp * gain_db),
+          _srate,
+          highshelf_tag {});
+      }
+    }
+  }
   struct unsmoothed_parameters {
     float lfo_eights;
     float lfo_hz_user;

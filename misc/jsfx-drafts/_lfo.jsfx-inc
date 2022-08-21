@@ -79,7 +79,8 @@ function lfo_bank_reset_phase (stage_idx, channel_idx, phase)
     local (ptr) global()(
     // ptr[0] = phase delta, ptr[1] = current phase
     ptr = this.ptr + stage_idx * this.n_channels * this.lfo_sizeof;
-    ptr[channel_idx] = phase;
+    ptr += channel_idx * this.lfo_sizeof;
+    ptr[1] = phase;
 );
 
 function lfo_bank_reset_freq (stage_idx, channel_idx, freq_hz, srate)

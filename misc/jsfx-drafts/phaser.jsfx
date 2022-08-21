@@ -7,15 +7,25 @@ slider5:depth_spread=0.5<0, 1, 0.001>Depth Spread(%)
 slider6:f_mode=2<0, 10, 1>Range Curve
 
 slider10:lfo_freq=0.25<0, 1, 0.001>Lfo Freq(%)
-slider11:lfo_depth=0.75<0, 1, 0.001>Lfo Depth(%)
+slider11:lfo_depth=0.85<0, 1, 0.001>Lfo Depth(%)
 slider12:lfo_phase_diff=0<0, 1, 0.001>Lfo St Diff(%)
+slider13:lfo_sh=0<0, 1, 0.001>Lfo S/H(%)
+
 slider20:feedback=0.9<-1, 1, 0.001>Feedback(%)
-slider21:hp=0<0, 1, 0.001>Feedback HP(%)
-slider22:lp=0<0, 1, 0.001>Feedback LP(%)
-slider33:n_stages=6<1, 16, 1>N Stages
-slider35:nonlin=0<0, 1, 0.0001>NonLin
-slider36:mix=0.5<0, 1, 0.0001>Mix
-slider37:trim_db=0<0, 30, 0.1>Trim(dB)
+slider21:hp=0.05<0, 1, 0.001>Feedback HP(%)
+slider22:lp=0.1<0, 1, 0.001>Feedback LP(%)
+slider23:bp=0.15<0, 1, 0.001>Feedback BP(%)
+
+slider30:delay_l=0.25<0, 1, 0.0001>Delay L
+slider31:delay_r=0.33<0, 1, 0.0001>Delay R
+slider32:delay_feedback=0<-1, 1, 0.0001>Delay Feedback
+
+slider40:n_stages=6<1, 16, 1>N Stages
+slider41:nonlin=0<0, 1, 0.0001>NonLin
+slider42:invert=0<0, 1, 1>Invert(Off/On)
+
+slider50:mix=0.5<0, 1, 0.0001>Mix
+slider51:trim_db=9<0, 30, 0.1>Att(dB)
 
 in_pin:left input
 in_pin:right input
@@ -23,6 +33,7 @@ out_pin:left output
 out_pin:right output
 
 import _delay-line.jsfx-inc
+import _reverb.jsfx-inc
 import _lfo.jsfx-inc
 import _filters.jsfx-inc
 
@@ -66,10 +77,10 @@ function svf_ap_bank_tick(stage_idx, in, drv) local(v3, out) global() local(v3, 
   ptr[6/*ic1eq*/] = (ptr[4/*v1*/] * 2.) - ptr[6/*ic1eq*/];
   ptr[7/*ic2eq*/] = (ptr[5/*v2*/] * 2.) - ptr[7/*ic2eq*/];
   out = in - 2 * ptr[0/*k*/] * ptr[4/*v1*/];
-//  ptr[4/*v1*/] = sigmoid (ptr[4/*v1*/], drv);
-//  ptr[5/*v2*/] = sigmoid (ptr[5/*v2*/], drv);
-  ptr[6/*ic1eq*/] = sigmoid (ptr[6/*ic1eq*/], drv);
-  ptr[7/*ic2eq*/] = sigmoid (ptr[7/*ic2eq*/], drv);
+  ptr[4/*v1*/] = sigmoid (ptr[4/*v1*/], drv);
+  ptr[5/*v2*/] = sigmoid (ptr[5/*v2*/], drv);
+//  ptr[6/*ic1eq*/] = sigmoid (ptr[6/*ic1eq*/], drv);
+//  ptr[7/*ic2eq*/] = sigmoid (ptr[7/*ic2eq*/], drv);
   out;
 );
 
@@ -82,6 +93,9 @@ lfov.array_init (k.n_channels);
 
 l_ap.svf_ap_bank_init (k.n_stages);
 r_ap.svf_ap_bank_init (k.n_stages);
+
+// 1.6 sec delay
+delay.delay_line_init (round_next_pow2 (srate * 1.6), 1);
 
 @slider
 
@@ -113,11 +127,43 @@ q = 0.00002 + ((depth * depth * depth) * 3.5);
 drive = nonlin * nonlin * nonlin * 0.18;
 trim = exp(-trim_db * log(10)/20);
 
+invert_gain = invert ? -1 : 1;
+
+lfo_sh_period = srate * lfo_sh * 0.3;
+lfo_sh_next   = lfo_sh_period;
+spls_counter  = 0;
+
+del_l_spls = delay_l * 1.6 * srate; // 1.6 sec delay
+del_r_spls = delay_r * 1.6 * srate; // 1.6 sec delay
+del_l_spls += 1; //lerp
+del_r_spls += 1; //lerp
+del_time = delay_feedback * delay_feedback * 10;
+del_fb = get_rt60_gain (del_time, del_l_spls, srate); // 10 sec decay
+
+main_fb = feedback;
+
+delay_mix = 0.20 * (1 - del_fb);
+
+combined_fb = (del_fb * delay_mix) + abs (feedback);
+combined_fb  > 0.97 ? (
+  fac = 0.97 / combined_fb;
+  main_fb *= fac; 
+  del_fb *= fac;
+);
+
 @sample
 
 lfo.lfo_bank_tick_tri (lfov.ptr, 0);
+
 lfov.ptr[0] = exp (lfov.ptr[0] * lfo_depth * 3.);
 lfov.ptr[1] = exp (lfov.ptr[1] * lfo_depth * 3.);
+(spls_counter >= lfo_sh_next) ? (
+  lfo_l = lfov.ptr[0];
+  lfo_r = lfov.ptr[1];
+  lfo_sh_next += lfo_sh_period;
+);
+
+spls_counter += 1;
 
 freq = freq_lo;
 
@@ -127,27 +173,34 @@ detune_mul = -1 - 0.09 * f_detune;
 q_detune = 0.3 * depth_spread;
 q_detune_mul = -1 - 0.07 * f_detune;
 
-out0 = spl0;
+del_l = delay.delay_line_get_linterp (del_l_spls, 0) * delay_mix;
+out0 = spl0 + del_l;
 out1 = spl1;
-out0 += l_feedback * feedback * 0.99;
-out1 += r_feedback * feedback * 0.99;
+
+out0 += l_feedback * main_fb * 0.99;
+out1 += r_feedback * main_fb * 0.99;
+feedforward_l = out0;
+feedforward_r = out1;
 
 q_inc = (q * 0.5) / n_stages;
 qv = q - n_stages * q_inc;
 
+f_center_l = freq_hz * lfo_l;
+f_center_r = freq_hz * lfo_r;
+
 i = 0;
 loop (n_stages,
-  freql = freq * lfov.ptr[0];
+  freql = freq * lfo_l;
   freql *= 1 + detune;
   freql = max(freql, 1);
   freql = min(freql, 20000);
-  freqr = freq * lfov.ptr[1];
+  freqr = freq * lfo_r;
   freqr *= 1 + detune;
   freqr = max(freqr, 1);
   freqr = min(freqr, 20000);
   freq *= factor;
   detune *= detune_mul;
-  
+
   qv += q_inc;
   qs = qv * (1 + q_detune);
   q_detune *= q_detune_mul;
@@ -156,19 +209,41 @@ loop (n_stages,
   r_ap.svf_ap_bank_reset (i, freqr, qs, srate);
   out0 = l_ap.svf_ap_bank_tick (i, out0, drive);
   out1 = r_ap.svf_ap_bank_tick (i, out1, drive);
+  out0 *= invert_gain;
+  out1 *= invert_gain;
   i += 1;
 );
-
-
+ 
 l_hp.svf_lshelf (max (freq_lo, 260), 0.25, hp * -18, srate);
 r_hp.svf_lshelf (max (freq_lo, 260), 0.25, hp * -18, srate);
 l_lp.svf_hshelf (max (freq_hi, 17000), 0.25, lp * -9, srate);
 r_lp.svf_hshelf (max (freq_hi, 17000), 0.25, lp * -9, srate);
+peak_db = (bp * bp) * 5;
+peak_gain = exp (-peak_db * log(10)/20);
+l_pk.svf_bell (f_center_l, 0.02 + 2.7 * bp, peak_db, srate);
+r_pk.svf_bell (f_center_r, 0.02 + 2.7 * bp, peak_db, srate);
 
 l_feedback = l_lp.svf_tick (l_hp.svf_tick (out0));
 r_feedback = r_lp.svf_tick (r_hp.svf_tick (out1));
+l_feedback = l_pk.svf_tick (l_feedback);
+r_feedback = r_pk.svf_tick (r_feedback);
+l_feedback *= peak_gain;
+r_feedback *= peak_gain;
+
+(1) ? (
+  out0 += feedforward_l;
+  out1 += feedforward_r;
+  out0 *= 0.5;
+  out1 *= 0.5;
+);
+
+delay.delay_line_advance();
+delay.delay_line_set (out0 * del_fb, 0, 0);
+del_r = delay.delay_line_get_linterp (del_r_spls, 0) * delay_mix;
+out1 += del_r;
+
 spl0 = out0 * mix + spl0 * (1 - mix);
 spl1 = out1 * mix + spl1 * (1 - mix);
 spl0 *= trim;
-spl1 *= trim;Q
-
+spl1 *= trim;
+ 
