@@ -296,7 +296,9 @@ public:
         "Phaser 2 pole",
         "Phaser 3 pole",
         "Serial Schroeder AP",
-        "Parallel Feedforward Combs"),
+        "Parallel Feedforward Combs",
+        "Hybrid 1",
+        "Hybrid 2"),
       16);
   }
 
@@ -308,6 +310,8 @@ public:
     t_3_pole,
     t_schroeder,
     t_comb,
+    t_hybrid_1,
+    t_hybrid_2,
   };
   //----------------------------------------------------------------------------
   struct delay_feedback_tag {};
@@ -502,7 +506,35 @@ public:
             vec_load<float_x4> (in));
         }
       }
-      if (pars.topology == t_schroeder) {
+      if (pars.topology == t_2_pole_legacy || pars.topology == t_2_pole) {
+        for (uint g = 0; g < pars.n_stages; ++g) {
+          out = _allpass2p.tick_on_idx (g, out);
+        }
+        if (pars.topology == t_2_pole) {
+          out += feedforward;
+          out *= 0.5f;
+        }
+      }
+      else if (pars.topology == t_3_pole) {
+        for (uint g = 0; g < pars.n_stages; ++g) {
+          out = _allpass1p.tick_on_idx (g, out);
+        }
+        for (uint g = 0; g < pars.n_stages; ++g) {
+          out = _allpass2p.tick_on_idx (g, out);
+        }
+        out += feedforward;
+        out *= 0.5f;
+      }
+      else if (pars.topology == t_1_pole_legacy || pars.topology == t_1_pole) {
+        for (uint g = 0; g < pars.n_stages; ++g) {
+          out = _allpass1p.tick_on_idx (g, out);
+        }
+        if (pars.topology == t_1_pole) {
+          out += feedforward;
+          out *= 0.5f;
+        }
+      }
+      else if (pars.topology == t_schroeder) {
         constexpr float q_scale = 0.99f / get_parameter (q_tag {}).max;
 
         std::array<float_x1, n_ap_channels>              acum {};
@@ -514,8 +546,8 @@ public:
           for (uint c = 0; c < n_ap_channels; ++c) {
             auto n_spls = std::clamp (
               _stagesdl_spls.state.spls[g][c],
-              (float) _ff_comb.min_delay_spls(),
-              (float) _ff_comb.max_delay_spls());
+              (float) _stagesdl.min_delay_spls(),
+              (float) _stagesdl.max_delay_spls());
             uint dl_channel = g * n_ap_channels + c;
             auto yn         = _stagesdl.get (n_spls, dl_channel);
             auto r          = allpass_fn::tick<float_x1> (acum[c], yn, gain);
@@ -524,23 +556,9 @@ public:
           }
         }
         _stagesdl.push (to_push);
-        if (pars.topology == t_schroeder) {
-          out = vec_from_array (vec1_array_unwrap (acum));
-          out += feedforward;
-          out *= 0.5f;
-        }
-        else {
-          out = vec_set<4> (0.f);
-          for (uint g = 0; g < pars.n_stages; ++g) {
-            auto p = g * n_ap_channels;
-            out += float_x4 {
-              to_push[p][0],
-              to_push[p + 1][0],
-              to_push[p + 2][0],
-              to_push[p + 3][0]};
-          }
-          out /= (float) pars.n_stages;
-        }
+        out = vec_from_array (vec1_array_unwrap (acum));
+        out += feedforward;
+        out *= 0.5f;
       }
       else if (pars.topology == t_comb) {
         constexpr float q_scale = 0.99f / get_parameter (q_tag {}).max;
@@ -573,28 +591,53 @@ public:
         out = vec_from_array (acum);
         out /= (float) pars.n_stages;
       }
-      else if (pars.topology == t_1_pole_legacy || pars.topology == t_1_pole) {
-        for (uint g = 0; g < pars.n_stages; ++g) {
-          out = _allpass1p.tick_on_idx (g, out);
-        }
-        if (pars.topology == t_1_pole) {
-          out += feedforward;
-          out *= 0.5f;
-        }
-      }
-      else if (pars.topology == t_2_pole_legacy || pars.topology == t_2_pole) {
+      else if (pars.topology == t_hybrid_1) {
         for (uint g = 0; g < pars.n_stages; ++g) {
           out = _allpass2p.tick_on_idx (g, out);
         }
-        if (pars.topology == t_2_pole) {
-          out += feedforward;
-          out *= 0.5f;
+
+        auto            stage   = pars.n_stages - 1;
+        constexpr float q_scale = 0.19f / get_parameter (q_tag {}).max;
+
+        std::array<float_x1, n_ap_channels>              acum {};
+        std::array<float_x1, n_ap_channels * max_stages> to_push {};
+        acum = vec1_array_wrap (vec_to_array (out));
+
+        float_x1 gain {0.8f + pars.q * q_scale};
+        for (uint c = 0; c < n_ap_channels; ++c) {
+          auto n_spls = std::clamp (
+            _stagesdl_spls.state.spls[stage][c],
+            (float) _stagesdl.min_delay_spls(),
+            (float) _stagesdl.max_delay_spls());
+          uint dl_channel     = stage * n_ap_channels + c;
+          auto yn             = _stagesdl.get (n_spls, dl_channel);
+          auto r              = allpass_fn::tick<float_x1> (acum[c], yn, gain);
+          acum[c]             = r.out;
+          to_push[dl_channel] = r.to_push;
         }
+        _stagesdl.push (to_push);
+        out = vec_from_array (vec1_array_unwrap (acum));
+        out += feedforward;
+        out *= 0.5f;
       }
-      else if (pars.topology == t_3_pole) {
-        for (uint g = 0; g < pars.n_stages; ++g) {
-          out = _allpass1p.tick_on_idx (g, out);
+      else if (pars.topology == t_hybrid_2) {
+        std::array<float, n_ap_channels> acum {};
+        auto to_push = vec1_array_wrap (vec_to_array (out));
+        _ff_comb.push (to_push);
+
+        for (uint c = 0; c < n_ap_channels; ++c) {
+          auto n_spls = std::clamp (
+            _stagesdl_spls.state.spls[0][c],
+            (float) _ff_comb.min_delay_spls(),
+            (float) _ff_comb.max_delay_spls());
+          auto spl = _ff_comb.get (n_spls, c);
+          acum[c]  = spl[0];
         }
+
+        constexpr float q_scale = 0.3f / get_parameter (q_tag {}).max;
+        float           gain {0.3f + pars.q * q_scale};
+        out += vec_from_array (acum) * gain;
+        out /= 1.f + gain;
         for (uint g = 0; g < pars.n_stages; ++g) {
           out = _allpass2p.tick_on_idx (g, out);
         }
@@ -863,17 +906,25 @@ private:
           _allpass1p.reset_coeffs_on_idx (0, freqs, _srate);
         }
       }
-      else {
-        if (
-          pars.topology == t_1_pole || pars.topology == t_1_pole_legacy
-          || pars.topology == t_3_pole) {
-          _allpass1p.reset_coeffs_on_idx (s, freqs, _srate);
-        }
-        if (
-          pars.topology == t_2_pole || pars.topology == t_2_pole_legacy
-          || pars.topology == t_3_pole) {
-          _allpass2p.reset_coeffs_on_idx (s, freqs, qs, _srate);
-        }
+      else if (
+        pars.topology == t_1_pole || pars.topology == t_1_pole_legacy
+        || pars.topology == t_3_pole) {
+        _allpass1p.reset_coeffs_on_idx (s, freqs, _srate);
+      }
+      else if (
+        pars.topology == t_2_pole || pars.topology == t_2_pole_legacy
+        || pars.topology == t_3_pole) {
+        _allpass2p.reset_coeffs_on_idx (s, freqs, qs, _srate);
+      }
+      else if (pars.topology == t_hybrid_1) {
+        _stagesdl_spls.target.spls[s]
+          = vec_to_array (freq_to_delay_spls (freqs * 2));
+        _allpass2p.reset_coeffs_on_idx (s, freqs, 0.2f + qs * 0.3f, _srate);
+      }
+      else if (pars.topology == t_hybrid_2) {
+        _stagesdl_spls.target.spls[s]
+          = vec_to_array (freq_to_delay_spls (freqs));
+        _allpass2p.reset_coeffs_on_idx (s, freqs, 0.2f + qs * 0.5f, _srate);
       }
       if (s == 0) {
         constexpr float cut_ratio = 0.3f;
