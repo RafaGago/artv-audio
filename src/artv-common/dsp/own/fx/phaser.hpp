@@ -418,7 +418,7 @@ public:
       pc.get_sample_rate());
 
     _dc_blocker.reset_states();
-    _dc_blocker.reset_coeffs (vec_set<double_x2> (2.), pc.get_sample_rate());
+    _dc_blocker.reset_coeffs (vec_set<4> (2.f), pc.get_sample_rate());
 
     _n_processed_samples = 0;
 
@@ -481,7 +481,7 @@ public:
       // regular processing
       float_x4 out {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
       out += fb * pars.feedback;
-      float_x4 feedforward = out;
+      double_x2 feedforward {out[0], out[1]};
 
       auto n_spls = pars.delay_spls;
       n_spls *= exp (ln_max_delay_factor * pars.lfo_last * pars.delay_lfo);
@@ -510,10 +510,6 @@ public:
         for (uint g = 0; g < pars.n_stages; ++g) {
           out = _allpass2p.tick_on_idx (g, out);
         }
-        if (pars.topology == t_2_pole) {
-          out += feedforward;
-          out *= 0.5f;
-        }
       }
       else if (pars.topology == t_3_pole) {
         for (uint g = 0; g < pars.n_stages; ++g) {
@@ -522,16 +518,10 @@ public:
         for (uint g = 0; g < pars.n_stages; ++g) {
           out = _allpass2p.tick_on_idx (g, out);
         }
-        out += feedforward;
-        out *= 0.5f;
       }
       else if (pars.topology == t_1_pole_legacy || pars.topology == t_1_pole) {
         for (uint g = 0; g < pars.n_stages; ++g) {
           out = _allpass1p.tick_on_idx (g, out);
-        }
-        if (pars.topology == t_1_pole) {
-          out += feedforward;
-          out *= 0.5f;
         }
       }
       else if (pars.topology == t_schroeder) {
@@ -557,8 +547,6 @@ public:
         }
         _stagesdl.push (to_push);
         out = vec_from_array (vec1_array_unwrap (acum));
-        out += feedforward;
-        out *= 0.5f;
       }
       else if (pars.topology == t_comb) {
         constexpr float q_scale = 0.99f / get_parameter (q_tag {}).max;
@@ -617,8 +605,6 @@ public:
         }
         _stagesdl.push (to_push);
         out = vec_from_array (vec1_array_unwrap (acum));
-        out += feedforward;
-        out *= 0.5f;
       }
       else if (pars.topology == t_hybrid_2) {
         std::array<float, n_ap_channels> acum {};
@@ -641,16 +627,15 @@ public:
         for (uint g = 0; g < pars.n_stages; ++g) {
           out = _allpass2p.tick_on_idx (g, out);
         }
-        out += feedforward;
-        out *= 0.5f;
       }
-      out         = _dc_blocker.tick (out);
+      auto out    = _dc_blocker.tick (out);
       auto del_fb = _feedback_delay_shelf.tick_on_idx (k_shelf_lo, out);
       del_fb      = _feedback_delay_shelf.tick_on_idx (k_shelf_hi, out);
       _delay.push (make_crange (del_fb));
 
       double_x2 outx2    = {(double) out[0], (double) out[1]};
       double_x2 parallel = {(double) out[2], (double) out[3]};
+
       outx2 *= 0.5f + (0.5f - abs (pars.parallel_mix));
       outx2 += pars.parallel_mix * parallel;
 
@@ -660,6 +645,11 @@ public:
       main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_sat + 1.);
       _feedback_samples = main_fb;
 
+      // feedforward outside the feedback loop
+      if (pars.topology > t_2_pole_legacy && pars.topology != t_comb) {
+        outx2 += feedforward * pars.feedback;
+        outx2 *= 0.5f;
+      }
       outs[0][i] = outx2[0];
       outs[1][i] = outx2[1];
     }
