@@ -1,0 +1,241 @@
+desc:Artv phaser 1p (ZDF)
+
+
+
+slider1:f_center=0.4<0, 1, 0.001>Freq Center(%)
+slider2:f_width=0.5<0, 1, 0.001>Freq Width(%)
+slider3:f_detune=0.9<0, 1, 0.001>Freq Detune(%)
+slider6:f_mode=2<0, 10, 1>Range Curve
+
+slider10:lfo_freq=0.25<0, 1, 0.001>Lfo Freq(%)
+slider11:lfo_depth=0.85<0, 1, 0.001>Lfo Depth(%)
+slider12:lfo_phase_diff=0<0, 1, 0.001>Lfo St Diff(%)
+slider20:feedback=0.9<-1, 1, 0.001>Feedback(%)
+slider21:hp=0.05<0, 1, 0.001>Feedback HP(%)
+slider22:lp=0.1<0, 1, 0.001>Feedback LP(%)
+slider23:bp=0.15<0, 1, 0.001>Feedback BP(%)
+
+slider33:n_stages=6<1, 16, 1>N Stages
+slider36:mix=0.5<0, 1, 0.0001>Mix
+slider37:trim_db=0<0, 30, 0.1>Trim(dB)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+import _delay-line.jsfx-inc
+import _lfo.jsfx-inc
+import _filters.jsfx-inc
+
+@init
+
+k.n_stages = 16;
+k.n_channels = 2;
+
+function ap_1p_cascade_init (n_items) local() global() (
+  this.array_init(n_items * 4);
+  this.n_items = n_items;
+);
+
+function ap_1p_cascade_reset_no_prewarp (idx, freq, srate) local (ptr, g, igp1) global() (
+  ptr = this.ptr + idx * 4;
+  g = $pi * freq / srate;
+  igp1 = 1 / (g + 1);
+  ptr[0/*G*/] = (2 * g) * igp1;
+  ptr[2/*g-1*/] = (g - 1);
+  ptr[3/*1/g+1*/] = igp1;
+);
+
+function ap_1p_cascade_reset (idx, freq, srate) local (ptr, g, igp1) global() (
+  ptr = this.ptr + idx * 4;
+  g = tan ($pi * freq / srate);
+  igp1 = 1 / (g + 1);
+  ptr[0/*G*/] = (2 * g) * igp1;
+  ptr[2/*g-1*/] = (g - 1);
+  ptr[3/*1/g+1*/] = igp1;
+);
+
+function ap_1p_cascade_tick (idx, in) local (ptr, xs, s) global() (
+  ptr = this.ptr + idx * 4;
+  xs = in - ptr[1/*S*/];
+  s = ptr[1/*S*/] + xs * ptr[0/*G*/];
+  ptr[1/*S*/] = s;
+  s - xs;
+);
+
+function ap_1p_cascade_tick_cascade (in, count) local (i, out) global() (
+  out = in;
+  i = 0;
+  loop(count,
+    out = ap_1p_cascade_tick (out, i);
+    i += 1;
+  );
+  out;
+);
+
+// The ART ov VA filter (Vadim Zabalishin) design 3.10
+//
+// y = yLP - yHP
+//
+//     x(g-1)+2s      g-1      2s
+// y = ---------  G = ---  S = ---
+//        1+g         g+1      1+g
+//
+// Get G and S for zero delay feedback computations
+//
+// Not stored, optimized for sample rate modulation.
+
+function ap_1p_cascade_get_g (idx) local (ptr) global() (
+  ptr = this.ptr + idx * 4;
+  ptr[2/*g-1*/] * ptr[3/*1/g+1*/];
+);
+
+function ap_1p_cascade_get_s (idx) local (ptr) global() (
+  ptr = this.ptr + idx * 4;
+  2 * ptr[1/*s*/] * ptr[3/*1/g+1*/];
+);
+
+function ap_cascade_get_fb (in, k, enabled_count) local (i, out, gv, sv, G, S) global() (
+  // The ART ov VA filter (Vadim Zabalishin) design 5.3
+  G = 1;
+  S = 0;
+  i = 0;
+  loop (enabled_count,
+    gv = this.ap_1p_cascade_get_g (i);
+    sv = this.ap_1p_cascade_get_s (i);
+    G *= gv; 
+    S *= gv;
+    S += sv;
+    i += 1;
+  );
+  this.gv = gv;
+  this.sv = sv;
+  this.G = G;
+  this.S = S;
+  (in - k * S) / (1 + k * G);
+);
+
+
+lfo.lfo_bank_init (k.n_channels, 1);
+lfov.array_init (k.n_channels);
+
+l_ap.ap_1p_cascade_init (16);
+r_ap.ap_1p_cascade_init (16);
+
+@slider
+
+lfo_hz = lfo_freq * lfo_freq * lfo_freq * 10;
+lfo.lfo_bank_reset_freq (0, lfo_hz, srate);
+
+lfo_phase_diff != lfo_phase_diff_prev ? (
+  lfo_phase_diff_prev = lfo_phase_diff;
+//  lfo.lfo_bank_reset_phase (0, 0, 0);
+  lfo.lfo_bank_reset_phase (0, 1, lfo_phase_diff);
+);
+
+norm_center = f_center * f_center * f_center * f_center;
+loop(f_mode,
+  norm_center *= f_center;
+);
+
+freq_hz = 40 + 20000 * norm_center;
+// spread of 4 octaves maximum
+freq_hi = exp (log(2) * 2 * f_width);
+freq_lo = 1 / freq_hi;
+freq_lo *= freq_hz;
+freq_hi *= freq_hz;
+
+factor = pow (freq_hi / freq_lo, 1. / n_stages);
+trim = exp(-trim_db * log(10)/20);
+
+fb_scaled = sqrt (abs (feedback));
+fb_scaled = (feedback < 0) ? -fb_scaled;
+
+@sample
+
+out0 = spl0;
+out1 = spl1;
+
+lfo.lfo_bank_tick_tri (lfov.ptr, 0);
+
+lfov.ptr[0] = exp (lfov.ptr[0] * lfo_depth * 3.);
+lfov.ptr[1] = exp (lfov.ptr[1] * lfo_depth * 3.);
+(spls_counter >= lfo_sh_next) ? (
+  lfo_l = lfov.ptr[0];
+  lfo_r = lfov.ptr[1];
+  lfo_sh_next += lfo_sh_period; 
+);
+
+spls_counter += 1;
+
+detune = 0.3444 * f_detune;
+detune_mul = -1 - 0.09 * f_detune;
+freq = freq_lo;
+
+(1) ? (
+out0 = l_ap.ap_cascade_get_fb (out0, fb_scaled * 0.995, n_stages);
+out1 = r_ap.ap_cascade_get_fb (out1, fb_scaled * 0.995, n_stages);
+l_feedforward = out0;
+r_feedforward = out1;
+);
+
+i = 0;
+loop (n_stages,
+  freql = freq * lfo_l;
+  freql *= 1 + detune;
+  freql = max(freql, 1);
+  freql = min(freql, 20000);
+  freqr = freq * lfo_r;
+  freqr *= 1 + detune;
+  freqr = max(freqr, 1);
+  freqr = min(freqr, 20000);
+  freq *= factor;
+  detune *= detune_mul;
+
+  l_ap.ap_1p_cascade_reset_no_prewarp (i, freql, srate);
+  r_ap.ap_1p_cascade_reset_no_prewarp (i, freqr, srate);
+  (1) ? (
+  out0 = l_ap.ap_1p_cascade_tick (i, out0);
+  out1 = r_ap.ap_1p_cascade_tick (i, out1); 
+  ) : (
+  l_ap.ap_1p_cascade_tick (i, out0);
+  r_ap.ap_1p_cascade_tick (i, out1););
+  i += 1;
+);
+
+(0) ? (
+// TODO: shelves on the analytical feedback loop
+l_hp.svf_lshelf (max (freq_lo, 260), 0.25, hp * -18, srate);
+r_hp.svf_lshelf (max (freq_lo, 260), 0.25, hp * -18, srate);
+l_lp.svf_hshelf (max (freq_hi, 17000), 0.25, lp * -9, srate);
+r_lp.svf_hshelf (max (freq_hi, 17000), 0.25, lp * -9, srate);
+peak_db = (bp * bp) * 5;
+peak_gain = exp (-peak_db * log(10)/20);
+l_pk.svf_bell (f_center_l, 0.02 + 2.7 * bp, peak_db, srate);
+r_pk.svf_bell (f_center_r, 0.02 + 2.7 * bp, peak_db, srate);
+
+l_feedback = l_lp.svf_tick (l_hp.svf_tick (out0));
+r_feedback = r_lp.svf_tick (r_hp.svf_tick (out1));
+l_feedback = l_pk.svf_tick (l_feedback);
+r_feedback = r_pk.svf_tick (r_feedback);
+l_feedback *= peak_gain;
+r_feedback *= peak_gain;
+);
+ 
+(1) ? (
+out0 += l_feedforward;
+out1 += r_feedforward;
+out0 *= 0.5;
+out1 *= 0.5;
+);
+
+spl0 = out0 * mix + spl0 * (1 - mix);
+spl1 = out1 * mix + spl1 * (1 - mix);
+spl0 *= trim;
+spl1 *= trim;
+
+spl0 = min (spl0, 6);
+spl1 = min (spl1, 6);
+spl0 = max (spl0, -6);
+spl1 = max (spl1, -6);
