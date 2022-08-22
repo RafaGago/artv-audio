@@ -87,12 +87,8 @@ struct onepole {
   {
     using T = vec_value_type_t<V>;
     assert (co.size() >= n_coeffs);
-
-    T inv_sr_div_2 = (T) 0.5 / (srate);
-    V wd           = (T) (M_PI * 2.) * freq;
-    V wa           = (T) 2. * srate * vec_tan (wd * inv_sr_div_2);
-    V g            = wa * inv_sr_div_2;
-    co[G]          = g / ((T) 1.0 + g);
+    V g   = vec_tan ((T) M_PI * freq / srate);
+    co[G] = g / ((T) 1.0 + g);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
