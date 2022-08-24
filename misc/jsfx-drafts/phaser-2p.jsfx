@@ -1,11 +1,10 @@
-desc:Artv phaser 1p (ZDF)
-
-
+desc:Artv phaser 2p (ZDF)
 
 slider1:f_center=0.4<0, 1, 0.001>Freq Center(%)
 slider2:f_width=0.5<0, 1, 0.001>Freq Width(%)
-slider3:f_detune=0.9<0, 1, 0.001>Freq Detune(%)
-slider6:f_mode=2<0, 10, 1>Range Curve
+slider3:depth=0.5<0, 1, 0.001>Depth(%)
+slider4:f_detune=0.9<0, 1, 0.001>Freq Detune(%)
+slider5:f_mode=2<0, 10, 1>Range Curve
 
 slider10:lfo_freq=0.25<0, 1, 0.001>Lfo Freq(%)
 slider11:lfo_depth=0.85<0, 1, 0.001>Lfo Depth(%)
@@ -33,67 +32,74 @@ import _filters.jsfx-inc
 k.n_stages = 16;
 k.n_channels = 2;
 
-function ap_1p_cascade_init (n_items) local() global() (
-  this.array_init(n_items * 4);
+function ap_2p_cascade_init (n_items) local() global() (
+  this.array_init(n_items * 5);
   this.n_items = n_items;
 );
 
-function ap_1p_cascade_reset_no_prewarp (idx, freq, srate) local (ptr, g, igp1) global() (
-  ptr = this.ptr + idx * 4;
-  g = $pi * freq / srate;
-  igp1 = 1 / (g + 1);
-  ptr[0/*G*/] = (2 * g) * igp1;
-  ptr[2/*g-1*/] = (g - 1);
-  ptr[3/*1/g+1*/] = igp1;
+function ap_2p_cascade_reset_no_prewarp (idx, freq, q, srate) local (ptr, g, k) global() (
+  ptr = this.ptr + idx * 5;
+  g = ($pi * freq / srate);
+  k = 1 / q;
+  ptr[0/*g*/] = g;
+  ptr[1/*k*/] = k;
+  ptr[2/*2*den*/] = 1 / (g * (g + k) + 1);
 );
 
-function ap_1p_cascade_reset (idx, freq, srate) local (ptr, g, igp1) global() (
-  ptr = this.ptr + idx * 4;
+function ap_2p_cascade_reset (idx, freq, q, srate) local (ptr, g, k) global() (
+  ptr = this.ptr + idx * 5;
   g = tan ($pi * freq / srate);
-  igp1 = 1 / (g + 1);
-  ptr[0/*G*/] = (2 * g) * igp1;
-  ptr[2/*g-1*/] = (g - 1);
-  ptr[3/*1/g+1*/] = igp1;
+  k = 1 / q;
+  ptr[0/*g*/] = g;
+  ptr[1/*k*/] = k;
+  ptr[2/*2*den*/] = 1 / (g * (g + k) + 1);
 );
 
-function ap_1p_cascade_tick (idx, in) local (ptr, xs, s) global() (
-  ptr = this.ptr + idx * 4;
-  xs = in - ptr[1/*S*/];
-  s = ptr[1/*S*/] + xs * ptr[0/*G*/];
-  ptr[1/*S*/] = s;
-  s - xs;
+function ap_2p_cascade_tick (idx, in) local (ptr, bp, bp2, v22) global() (
+  ptr = this.ptr + idx * 5;
+  bp = (ptr[0/*g*/] * (in - ptr[4/*s2*/]) + ptr[3/*s1*/]) * ptr[2/*2*den*/];
+  bp2 = 2 * bp;
+  ptr[3/*s1*/] = bp2 - ptr[3/*s1*/];
+  v22 = ptr[0/*g*/] * bp2;
+  ptr[4/*s2*/] += v22;
+  in - ptr[1/*k*/] * bp2;
 );
 
-function ap_1p_cascade_tick_cascade (in, count) local (i, out) global() (
+function ap_2p_cascade_tick_cascade (in, count) local (i, out) global() (
   out = in;
   i = 0;
   loop(count,
-    out = ap_1p_cascade_tick (out, i);
+    out = ap_2p_cascade_tick (out, i);
     i += 1;
   );
   out;
 );
 
-// The ART ov VA filter (Vadim Zabalishin) design 3.10
+// The ART ov VA filter design (Vadim Zabalishin). chapter 4.4
 //
-// y = yLP - yHP
+// yAP = 1 - 2 k * yBP
 //
-//     x(g-1)+2s      g-1      2s
-// y = ---------  G = ---  S = ---
-//        1+g         g+1      1+g
+// expanded
+//
+//        2 g k s2 - 2 g k in - 2 k s1              -2 g k            2 k (g s2 - s1)
+// yAP = ---------------------------- + 1    G = --------------  S = ----------------- + 1
+//             g^2 + g k + 1                      g^2 + g k + 1        g^2 + g k + 1
 //
 // Get G and S for zero delay feedback computations
 //
-// Not stored, optimized for sample rate modulation.
+// For some reason both G and S have to be divided by 2 (TODO: Why? I guess it has to do
+// with how the "tick" function is implemented).
 
-function ap_1p_cascade_get_g (idx) local (ptr) global() (
-  ptr = this.ptr + idx * 4;
-  ptr[2/*g-1*/] * ptr[3/*1/g+1*/];
+function ap_2p_cascade_get_g (idx) local (ptr) global() (
+  ptr = this.ptr + idx * 5;
+  -1 * ptr[0/*g*/] * ptr[1/*k*/] * ptr[2/*2*den*/];
 );
 
-function ap_1p_cascade_get_s (idx) local (ptr) global() (
-  ptr = this.ptr + idx * 4;
-  2 * ptr[1/*s*/] * ptr[3/*1/g+1*/];
+function ap_2p_cascade_get_s (idx) local (ptr, r) global()(
+  ptr = this.ptr + idx * 5;
+  r = 1 * ptr[1/*k*/] * (ptr[0/*g*/] * ptr[4/*s2*/] - ptr[3/*s1*/]);
+  r *= ptr[2/*2*den*/];
+  r + 1;
 );
 
 // If first on the delay loop, G_init = 1, S_init = 0
@@ -104,8 +110,27 @@ function ap_1p_cascade_append_G_and_S (dst*, G_init, S_init, enabled_count)
   G = G_init;
   S = S_init;
   loop (enabled_count,
-    gv = this.ap_1p_cascade_get_g (i);
-    sv = this.ap_1p_cascade_get_s (i);
+    gv = this.ap_2p_cascade_get_g (i);
+    sv = this.ap_2p_cascade_get_s (i);
+    G *= gv;
+    S *= gv;
+    S += sv;
+    i += 1;
+  );
+  dst.G = G;
+  dst.S = S;
+);
+
+// If first on the delay loop, G_init = 1, S_init = 0
+function ap_2p_cascade_append_G_and_S (dst*, G_init, S_init, enabled_count)
+  local (i, out, gv, sv, G, S) global() (
+  // The ART ov VA filter (Vadim Zabalishin) design 5.3
+  i = 0;
+  G = G_init;
+  S = S_init;
+  loop (enabled_count,
+    gv = this.ap_2p_cascade_get_g (i);
+    sv = this.ap_2p_cascade_get_s (i);
     G *= gv;
     S *= gv;
     S += sv;
@@ -123,8 +148,8 @@ function get_zero_delay_feedback (in, k, G, S) global() local() (
 lfo.lfo_bank_init (k.n_channels, 1);
 lfov.array_init (k.n_channels);
 
-l_ap.ap_1p_cascade_init (16);
-r_ap.ap_1p_cascade_init (16);
+l_ap.ap_2p_cascade_init (16);
+r_ap.ap_2p_cascade_init (16);
 
 @slider
 
@@ -133,7 +158,7 @@ lfo.lfo_bank_reset_freq (0, lfo_hz, srate);
 
 lfo_phase_diff != lfo_phase_diff_prev ? (
   lfo_phase_diff_prev = lfo_phase_diff;
-//  lfo.lfo_bank_reset_phase (0, 0, 0);
+  lfo.lfo_bank_reset_phase (0, 0, 0);
   lfo.lfo_bank_reset_phase (0, 1, lfo_phase_diff);
 );
 
@@ -176,8 +201,8 @@ detune = 0.3444 * f_detune;
 detune_mul = -1 - 0.09 * f_detune;
 freq = freq_lo;
 
-l_ap.ap_1p_cascade_append_G_and_S (l_ir, 1, 0, n_stages);
-l_ap.ap_1p_cascade_append_G_and_S (r_ir, 1, 0, n_stages);
+l_ap.ap_2p_cascade_append_G_and_S (l_ir, 1, 0, n_stages);
+l_ap.ap_2p_cascade_append_G_and_S (r_ir, 1, 0, n_stages);
 out0 = get_zero_delay_feedback (out0, fb_scaled * 0.995, l_ir.G, l_ir.S);
 out1 = get_zero_delay_feedback (out1, fb_scaled * 0.995, r_ir.G, r_ir.S);
 l_feedforward = out0;
@@ -196,10 +221,10 @@ loop (n_stages,
   freq *= factor;
   detune *= detune_mul;
 
-  l_ap.ap_1p_cascade_reset_no_prewarp (i, freql, srate);
-  r_ap.ap_1p_cascade_reset_no_prewarp (i, freqr, srate);
-  out0 = l_ap.ap_1p_cascade_tick (i, out0);
-  out1 = r_ap.ap_1p_cascade_tick (i, out1);
+  l_ap.ap_2p_cascade_reset_no_prewarp (i, freql, 0.001 + depth * 1.5, srate);
+  r_ap.ap_2p_cascade_reset_no_prewarp (i, freqr, 0.001 + depth * 1.5, srate);
+  out0 = l_ap.ap_2p_cascade_tick (i, out0);
+  out1 = r_ap.ap_2p_cascade_tick (i, out1);
   i += 1;
 );
 
