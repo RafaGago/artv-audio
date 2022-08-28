@@ -9,10 +9,12 @@ slider5:f_mode=2<0, 10, 1>Range Curve
 slider10:lfo_freq=0.25<0, 1, 0.001>Lfo Freq(%)
 slider11:lfo_depth=0.85<0, 1, 0.001>Lfo Depth(%)
 slider12:lfo_phase_diff=0<0, 1, 0.001>Lfo St Diff(%)
+
 slider20:feedback=0.9<-1, 1, 0.001>Feedback(%)
 slider21:hp=0.05<0, 1, 0.001>Feedback HP(%)
 slider22:lp=0.1<0, 1, 0.001>Feedback LP(%)
 slider23:bp=0.15<0, 1, 0.001>Feedback BP(%)
+slider23:hardness=0.15<0, 15, 0.001>Hardness
 
 slider33:n_stages=6<1, 16, 1>N Stages
 slider36:mix=0.5<0, 1, 0.0001>Mix
@@ -32,124 +34,13 @@ import _filters.jsfx-inc
 k.n_stages = 16;
 k.n_channels = 2;
 
-function ap_2p_cascade_init (n_items) local() global() (
-  this.array_init(n_items * 5);
-  this.n_items = n_items;
-);
-
-function ap_2p_cascade_reset_no_prewarp (idx, freq, q, srate) local (ptr, g, k) global() (
-  ptr = this.ptr + idx * 5;
-  g = ($pi * freq / srate);
-  k = 1 / q;
-  ptr[0/*g*/] = g;
-  ptr[1/*k*/] = k;
-  ptr[2/*2*den*/] = 1 / (g * (g + k) + 1);
-);
-
-function ap_2p_cascade_reset (idx, freq, q, srate) local (ptr, g, k) global() (
-  ptr = this.ptr + idx * 5;
-  g = tan ($pi * freq / srate);
-  k = 1 / q;
-  ptr[0/*g*/] = g;
-  ptr[1/*k*/] = k;
-  ptr[2/*2*den*/] = 1 / (g * (g + k) + 1);
-);
-
-function ap_2p_cascade_tick (idx, in) local (ptr, bp, bp2, v22) global() (
-  ptr = this.ptr + idx * 5;
-  bp = (ptr[0/*g*/] * (in - ptr[4/*s2*/]) + ptr[3/*s1*/]) * ptr[2/*2*den*/];
-  bp2 = 2 * bp;
-  ptr[3/*s1*/] = bp2 - ptr[3/*s1*/];
-  v22 = ptr[0/*g*/] * bp2;
-  ptr[4/*s2*/] += v22;
-  in - ptr[1/*k*/] * bp2;
-);
-
-function ap_2p_cascade_tick_cascade (in, count) local (i, out) global() (
-  out = in;
-  i = 0;
-  loop(count,
-    out = ap_2p_cascade_tick (out, i);
-    i += 1;
-  );
-  out;
-);
-
-// The ART ov VA filter design (Vadim Zabalishin). chapter 4.4
-//
-// yAP = 1 - 2 k * yBP
-//
-// expanded
-//
-//        2 g k s2 - 2 g k in - 2 k s1              -2 g k            2 k (g s2 - s1)
-// yAP = ---------------------------- + 1    G = --------------  S = ----------------- + 1
-//             g^2 + g k + 1                      g^2 + g k + 1        g^2 + g k + 1
-//
-// Get G and S for zero delay feedback computations
-//
-// For some reason both G and S have to be divided by 2 (TODO: Why? I guess it has to do
-// with how the "tick" function is implemented).
-
-function ap_2p_cascade_get_g (idx) local (ptr) global() (
-  ptr = this.ptr + idx * 5;
-  -1 * ptr[0/*g*/] * ptr[1/*k*/] * ptr[2/*2*den*/];
-);
-
-function ap_2p_cascade_get_s (idx) local (ptr, r) global()(
-  ptr = this.ptr + idx * 5;
-  r = 1 * ptr[1/*k*/] * (ptr[0/*g*/] * ptr[4/*s2*/] - ptr[3/*s1*/]);
-  r *= ptr[2/*2*den*/];
-  r + 1;
-);
-
-// If first on the delay loop, G_init = 1, S_init = 0
-function ap_1p_cascade_append_G_and_S (dst*, G_init, S_init, enabled_count)
-  local (i, out, gv, sv, G, S) global() (
-  // The ART ov VA filter (Vadim Zabalishin) design 5.3
-  i = 0;
-  G = G_init;
-  S = S_init;
-  loop (enabled_count,
-    gv = this.ap_2p_cascade_get_g (i);
-    sv = this.ap_2p_cascade_get_s (i);
-    G *= gv;
-    S *= gv;
-    S += sv;
-    i += 1;
-  );
-  dst.G = G;
-  dst.S = S;
-);
-
-// If first on the delay loop, G_init = 1, S_init = 0
-function ap_2p_cascade_append_G_and_S (dst*, G_init, S_init, enabled_count)
-  local (i, out, gv, sv, G, S) global() (
-  // The ART ov VA filter (Vadim Zabalishin) design 5.3
-  i = 0;
-  G = G_init;
-  S = S_init;
-  loop (enabled_count,
-    gv = this.ap_2p_cascade_get_g (i);
-    sv = this.ap_2p_cascade_get_s (i);
-    G *= gv;
-    S *= gv;
-    S += sv;
-    i += 1;
-  );
-  dst.G = G;
-  dst.S = S;
-);
-
-function get_zero_delay_feedback (in, k, G, S) global() local() (
-  // The ART ov VA filter (Vadim Zabalishin) design 5.3
-  (in - k * S) / (k * G + 1);
-);
-
 lfo.lfo_bank_init (k.n_channels, 1);
 lfov.array_init (k.n_channels);
 
 l_ap.ap_2p_cascade_init (16);
 r_ap.ap_2p_cascade_init (16);
+
+GS.array_init((k.n_stages + 2) * k.n_channels);
 
 @slider
 
@@ -178,8 +69,12 @@ factor = pow (freq_hi / freq_lo, 1. / n_stages);
 trim = exp(-trim_db * log(10)/20);
 
 fb_scaled = sqrt (abs (feedback));
+lim_hardness = 1 / sqrt (hardness);
+// the sigmoid is applying gain reduction. Compensate
+g_hardness = (fb_scaled > lim_hardness) ? fb_scaled / lim_hardness : 1;
 fb_scaled = (feedback < 0) ? -fb_scaled : fb_scaled;
 
+s_depth = 0.008 + depth * depth * 18;
 @sample
 
 out0 = spl0;
@@ -189,24 +84,49 @@ lfo.lfo_bank_tick_tri (lfov.ptr, 0);
 
 lfov.ptr[0] = exp (lfov.ptr[0] * lfo_depth * 3.);
 lfov.ptr[1] = exp (lfov.ptr[1] * lfo_depth * 3.);
-(spls_counter >= lfo_sh_next) ? (
-  lfo_l = lfov.ptr[0];
-  lfo_r = lfov.ptr[1];
-  lfo_sh_next += lfo_sh_period;
-);
-
-spls_counter += 1;
+lfo_l = lfov.ptr[0];
+lfo_r = lfov.ptr[1];
 
 detune = 0.3444 * f_detune;
 detune_mul = -1 - 0.09 * f_detune;
 freq = freq_lo;
 
-l_ap.ap_2p_cascade_append_G_and_S (l_ir, 1, 0, n_stages);
-l_ap.ap_2p_cascade_append_G_and_S (r_ir, 1, 0, n_stages);
-out0 = get_zero_delay_feedback (out0, fb_scaled * 0.995, l_ir.G, l_ir.S);
-out1 = get_zero_delay_feedback (out1, fb_scaled * 0.995, r_ir.G, r_ir.S);
-l_feedforward = out0;
-r_feedforward = out1;
+//n_stages = 0;
+
+// Compute feedback loop L
+i = 0;
+j = 0;
+loop(n_stages,
+    GS.ptr[j]     = l_ap.ap_2p_cascade_get_g (i);
+    GS.ptr[j + 1] = l_ap.ap_2p_cascade_get_s (i);
+    j += 2;
+    i += 1;
+);
+
+GS.ptr[n_stages * 2 + 0] = l_lshelf.lshelf_1p_get_g();
+GS.ptr[n_stages * 2 + 1] = l_lshelf.lshelf_1p_get_s();
+GS.ptr[n_stages * 2 + 2] = l_hshelf.hshelf_1p_get_g();
+GS.ptr[n_stages * 2 + 3] = l_hshelf.hshelf_1p_get_s();
+out0 = l_zdf.get_zdf_sqrt_sigmoid_before_fb_junction(
+  out0, fb_scaled * 0.995, hardness, GS.ptr, n_stages + 2
+  );
+
+// Compute feedback loop R
+i = 0;
+j = 0;
+loop(n_stages,
+    GS.ptr[j]     = r_ap.ap_2p_cascade_get_g (i);
+    GS.ptr[j + 1] = r_ap.ap_2p_cascade_get_s (i);
+    j += 2;
+    i += 1;
+);
+GS.ptr[n_stages * 2 + 0] = r_lshelf.lshelf_1p_get_g();
+GS.ptr[n_stages * 2 + 1] = r_lshelf.lshelf_1p_get_s();
+GS.ptr[n_stages * 2 + 2] = r_hshelf.hshelf_1p_get_g();
+GS.ptr[n_stages * 2 + 3] = r_hshelf.hshelf_1p_get_s();
+out1 = r_zdf.get_zdf_sqrt_sigmoid_before_fb_junction(
+  out1, fb_scaled * 0.995, hardness, GS.ptr, n_stages + 2
+  );
 
 i = 0;
 loop (n_stages,
@@ -221,41 +141,37 @@ loop (n_stages,
   freq *= factor;
   detune *= detune_mul;
 
-  l_ap.ap_2p_cascade_reset_no_prewarp (i, freql, 0.001 + depth * 1.5, srate);
-  r_ap.ap_2p_cascade_reset_no_prewarp (i, freqr, 0.001 + depth * 1.5, srate);
+  l_ap.ap_2p_cascade_reset_no_prewarp (i, freql, s_depth, srate);
+  r_ap.ap_2p_cascade_reset_no_prewarp (i, freqr, s_depth, srate);
   out0 = l_ap.ap_2p_cascade_tick (i, out0);
   out1 = r_ap.ap_2p_cascade_tick (i, out1);
   i += 1;
 );
 
-(0) ? (
-// TODO: shelves on the analytical feedback loop
-l_hp.svf_lshelf (max (freq_lo, 260), 0.25, hp * -18, srate);
-r_hp.svf_lshelf (max (freq_lo, 260), 0.25, hp * -18, srate);
-l_lp.svf_hshelf (max (freq_hi, 17000), 0.25, lp * -9, srate);
-r_lp.svf_hshelf (max (freq_hi, 17000), 0.25, lp * -9, srate);
-peak_db = (bp * bp) * 5;
-peak_gain = exp (-peak_db * log(10)/20);
-l_pk.svf_bell (f_center_l, 0.02 + 2.7 * bp, peak_db, srate);
-r_pk.svf_bell (f_center_r, 0.02 + 2.7 * bp, peak_db, srate);
+(1) ? (
+// modulate shelves on the feedback path
+g_db = hp * -8;
+fshelf = max (freq_lo, 160);
+l_lshelf.lshelf_1p_reset_no_prewarp (fshelf, g_db, srate);
+r_lshelf.lshelf_1p_reset_no_prewarp (fshelf, g_db, srate);
 
-l_feedback = l_lp.svf_tick (l_hp.svf_tick (out0));
-r_feedback = r_lp.svf_tick (r_hp.svf_tick (out1));
-l_feedback = l_pk.svf_tick (l_feedback);
-r_feedback = r_pk.svf_tick (r_feedback);
-l_feedback *= peak_gain;
-r_feedback *= peak_gain;
+g_db = lp * -1.3;
+fshelf = max (freq_hi * 2, 3700);
+l_hshelf.hshelf_1p_reset_no_prewarp (fshelf, g_db, srate);
+r_hshelf.hshelf_1p_reset_no_prewarp (fshelf, g_db, srate);
+
+// tick shelves on the feedback path to update the states.
+l_hshelf.hshelf_1p_tick (l_lshelf.lshelf_1p_tick (out0));
+r_hshelf.hshelf_1p_tick (r_lshelf.lshelf_1p_tick (out1));
+
+// TODO: BP?
 );
 
-(0) ? (
-out0 += l_feedforward;
-out1 += r_feedforward;
-out0 *= 0.5;
-out1 *= 0.5;
-);
+g_wet = mix * g_hardness;
+g_dry = (1 - mix) * (1 + abs (fb_scaled));
 
-spl0 = out0 * mix + spl0 * (1 - mix);
-spl1 = out1 * mix + spl1 * (1 - mix);
+spl0 = out0 * g_wet + spl0 * g_dry;
+spl1 = out1 * g_wet + spl1 * g_dry;
 spl0 *= trim;
 spl1 *= trim;
 

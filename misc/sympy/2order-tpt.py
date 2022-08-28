@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from sympy import *
+from sympy.plotting import plot
 
 init_printing(use_latex="mathjax")
 
@@ -45,3 +46,16 @@ vaneev_u = (x  * ( 2.45550750702956 +  2.45550750702956 * abs(u) +
     abs (u +  0.814642734961073 * u * abs(u))))
 fback_sigmoid = Eq ((x-k*S)-u, k*G*vaneev_u)
 pprint(solve(fback_sigmoid, u))
+
+# parabola (axis reversed)
+var ("xv yv y1")
+
+yparab = solve (Eq(0, (2 * y1 - 1) / (y1**2) * y**2 - x * y + x - y), x)
+
+
+
+print (yparab[0])
+pprint (simplify (yparab[0]))
+pprint (simplify (yparab[1]))
+#p1 = plot(yparab, show=False)
+#p1.show()
