@@ -35,35 +35,35 @@ public:
   {
     _cfg                          = decltype (_cfg) {};
     _plugcontext                  = &pc;
-    auto                   sr     = pc.get_sample_rate();
+    _t_spl                        = 1.f / pc.get_sample_rate();
     static constexpr float snr_db = 120;
 
     // Ultra Bad SNR
-    _q_n_stages[0] = _crossv.get_n_stages (15000.f, sr, snr_db - 60.);
+    _q_n_stages[0] = _crossv.get_n_stages (15000.f, _t_spl, snr_db - 60.);
     // Bad SNR
-    _q_n_stages[1] = _crossv.get_n_stages (15000.f, sr, snr_db - 30.);
+    _q_n_stages[1] = _crossv.get_n_stages (15000.f, _t_spl, snr_db - 30.);
     // Ultra treble
-    _q_n_stages[2] = _crossv.get_n_stages (15000.f, sr, snr_db);
+    _q_n_stages[2] = _crossv.get_n_stages (15000.f, _t_spl, snr_db);
     // Treble
-    _q_n_stages[3] = _crossv.get_n_stages (5000.f, sr, snr_db);
+    _q_n_stages[3] = _crossv.get_n_stages (5000.f, _t_spl, snr_db);
     // High mids
-    _q_n_stages[4] = _crossv.get_n_stages (2500.f, sr, snr_db);
+    _q_n_stages[4] = _crossv.get_n_stages (2500.f, _t_spl, snr_db);
     // Mids
-    _q_n_stages[5] = _crossv.get_n_stages (1000.f, sr, snr_db);
+    _q_n_stages[5] = _crossv.get_n_stages (1000.f, _t_spl, snr_db);
     // Low Mids
-    _q_n_stages[6] = _crossv.get_n_stages (400.f, sr, snr_db);
+    _q_n_stages[6] = _crossv.get_n_stages (400.f, _t_spl, snr_db);
     // High Lows
-    _q_n_stages[7] = _crossv.get_n_stages (180.f, sr, snr_db);
+    _q_n_stages[7] = _crossv.get_n_stages (180.f, _t_spl, snr_db);
     // Lows
-    _q_n_stages[8] = _crossv.get_n_stages (100.f, sr, snr_db);
+    _q_n_stages[8] = _crossv.get_n_stages (100.f, _t_spl, snr_db);
     // Ultra Lows
-    _q_n_stages[9] = _crossv.get_n_stages (50.f, sr, snr_db);
+    _q_n_stages[9] = _crossv.get_n_stages (50.f, _t_spl, snr_db);
     // High quality
-    _q_n_stages[10] = _crossv.get_n_stages (20.f, sr, snr_db);
+    _q_n_stages[10] = _crossv.get_n_stages (20.f, _t_spl, snr_db);
     // Ultra quality
-    _q_n_stages[11] = _crossv.get_n_stages (20.f, sr, snr_db + 40.);
+    _q_n_stages[11] = _crossv.get_n_stages (20.f, _t_spl, snr_db + 40.);
     // Insane
-    _q_n_stages[12] = _crossv.get_n_stages (20.f, sr, snr_db + 180.);
+    _q_n_stages[12] = _crossv.get_n_stages (20.f, _t_spl, snr_db + 180.);
 
     for (auto& bcfg : _cfg) {
       bcfg.n_stages = _q_n_stages[0]; // temporary setting
@@ -296,7 +296,8 @@ private:
   //----------------------------------------------------------------------------
   std::array<bandcfg, n_crossovers> _cfg;
   linphase_iir_crossover<3>         _crossv;
-  float                             _snr_db      = 120.;
+  float                             _snr_db = 120.;
+  float                             _t_spl;
   plugin_context*                   _plugcontext = nullptr;
   std::array<uint, n_quality_steps> _q_n_stages;
 };

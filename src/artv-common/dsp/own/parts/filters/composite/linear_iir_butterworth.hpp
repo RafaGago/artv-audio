@@ -1,3 +1,4 @@
+// Linear-phase IIR butterworth based on a time reversed IIR
 #pragma once
 
 #include <cmath>
@@ -41,18 +42,18 @@ public:
   static constexpr uint get_latency (uint n_stages) { return 1 << n_stages; }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> sr)
+  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> t_spl)
   {
     vec_complex<V> poles, zeros;
-    butterworth_lp_complex::poles (make_crange (poles), freq, sr, 1);
-    butterworth_lp_complex::zeros (make_crange (zeros), freq, sr, 1);
+    butterworth_lp_complex::poles (make_crange (poles), freq, t_spl, 1);
+    butterworth_lp_complex::zeros (make_crange (zeros), freq, t_spl, 1);
     // gain is last, storing before moving "co"
     co[gain] = butterworth_lp_complex::gain (make_crange (poles), 1);
 
     rev_1pole::reset_coeffs (co, vec_real (poles), vec_real (zeros));
     co.cut_head (rev_1pole::n_coeffs);
 
-    fwd_1pole::reset_coeffs (co, freq, sr);
+    fwd_1pole::reset_coeffs (co, freq, t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -149,7 +150,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
   static void reset_coeffs (
     crange<V>           co,
     V                   freq,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     uint                order)
   {
     assert ((order % 4) == 0);
@@ -157,8 +158,8 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
     std::array<vec_complex<V>, 1>             zeros;
     std::array<vec_complex<V>, max_order / 2> poles;
 
-    butterworth_lp_complex::zeros (make_crange (zeros), freq, sr, 1);
-    butterworth_lp_complex::poles (make_crange (poles), freq, sr, order / 2);
+    butterworth_lp_complex::zeros (make_crange (zeros), freq, t_spl, 1);
+    butterworth_lp_complex::poles (make_crange (poles), freq, t_spl, order / 2);
 
     co[gain] = butterworth_lp_complex::gain (make_crange (poles), order / 2);
     co.cut_head (1); // advance the gain coefficient
@@ -167,7 +168,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
       rev_2pole::reset_coeffs (co, poles[i], vec_real (zeros[0]));
       co.cut_head (rev_2pole::n_coeffs);
     }
-    fwd_2pole::reset_coeffs (co, freq, sr, order / 2);
+    fwd_2pole::reset_coeffs (co, freq, t_spl, order / 2);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -263,12 +264,12 @@ struct linear_iir_butterworth_lowpass_any_order {
                         : any::get_latency (order, n_stages);
   }
   //----------------------------------------------------------------------------
-  static uint get_n_stages (float freq, float samplerate, float snr_db)
+  static uint get_n_stages (float freq, float t_spl, float snr_db)
   {
     vec_complex<double_x2> pole;
     // worst case, 1 pole.
     butterworth_lp_complex::poles (
-      make_crange (pole), vec_set<double_x2> (freq), (double) samplerate, 1);
+      make_crange (pole), vec_set<double_x2> (freq), (double) t_spl, 1);
     return get_reversed_pole_n_stages (
       {vec_real (pole)[0], vec_imag (pole)[0]}, snr_db);
   }
@@ -277,16 +278,16 @@ struct linear_iir_butterworth_lowpass_any_order {
   static void reset_coeffs (
     crange<V>           co, // coeffs (interleaved, SIMD aligned)
     V                   freq,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     uint                order)
   {
     assert ((order % 2) == 0);
     assert (order <= max_order);
     if (order == 2) {
-      two::reset_coeffs<V> (co, freq, sr);
+      two::reset_coeffs<V> (co, freq, t_spl);
     }
     else {
-      any::reset_coeffs<V> (co, freq, sr, order);
+      any::reset_coeffs<V> (co, freq, t_spl, order);
     }
   }
   //----------------------------------------------------------------------------

@@ -28,21 +28,21 @@ public:
   static void reset_coeffs (
     crange<V>           co,
     V                   freq,
-    vec_value_type_t<V> srate,
+    vec_value_type_t<V> t_spl,
     quality_tag<0>) // no frequency prewarp
   {
     // as allpass filter (negative coeff)
     using T = vec_value_type_t<V>;
-    auto d  = (T) 2 * freq / srate;
+    auto d  = (T) 2 * freq * t_spl;
     co[a]   = (d - (T) 1) / (d + (T) 1);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> srate)
+  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> t_spl)
   {
     // as allpass filter (negative coeff)
     using T = vec_value_type_t<V>;
-    auto d  = vec_tan ((T) M_PI * freq / srate);
+    auto d  = vec_tan ((T) M_PI * freq * t_spl);
     co[a]   = (d - (T) 1) / (d + (T) 1);
   }
   //----------------------------------------------------------------------------

@@ -28,12 +28,12 @@ public:
     V                   freq,
     V                   q,
     V                   gain_db,
-    vec_value_type_t<V> sr)
+    vec_value_type_t<V> t_spl)
   {
     assert (co.size() >= n_coeffs);
-    andy::svf::reset_coeffs (co, freq, q, gain_db, sr, lowshelf_tag {});
+    andy::svf::reset_coeffs (co, freq, q, gain_db, t_spl, lowshelf_tag {});
     co.cut_head (andy::svf::n_coeffs);
-    andy::svf::reset_coeffs (co, freq, q, -gain_db, sr, highshelf_tag {});
+    andy::svf::reset_coeffs (co, freq, q, -gain_db, t_spl, highshelf_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -95,19 +95,20 @@ public:
     V                   f0,
     V                   bw_oct,
     V                   alpha,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     raw_tag)
   {
     using T = vec_value_type_t<V>;
 
     assert (co.size() >= n_coeffs);
 
-    V t     = vec_set<V> ((T) 1 / sr);
+    V t     = vec_set<V> (t_spl);
     V w     = (T) 2 * (T) M_PI * f0;
     V f1    = f0 * vec_exp (bw_oct * (T) M_LN2);
-    f1      = vec_min (f1, (sr * (T) 0.5) - (T) 10); // 10 Hz margin ont Nyquist
+    V srate = (T) 1 / t_spl;
+    f1 = vec_min (f1, (srate * (T) 0.5) - (T) 10); // 10 Hz margin ont Nyquist
     V ratio = vec_pow (f1 / f0, vec_set<V> ((T) 1 / (T) (N - 1)));
-    T c     = (T) 1 / tan ((T) 1 * (T) 0.5 / sr); // 1 = wd
+    T c     = (T) 1 / tan ((T) 1 * (T) 0.5 * t_spl); // 1 = wd
 
     V* gains = &co[N * onepole_tdf2::n_coeffs];
 
@@ -136,12 +137,12 @@ public:
     V                   fc,
     V                   bw_oct,
     V                   alpha,
-    vec_value_type_t<V> sr)
+    vec_value_type_t<V> t_spl)
   {
     using T = vec_value_type_t<V>;
     // move back half number of octaves
     V f0 = fc * vec_exp (bw_oct * (T) -0.5 * (T) M_LN2);
-    reset_coeffs (co, fc, bw_oct, alpha, sr, raw_tag {});
+    reset_coeffs (co, fc, bw_oct, alpha, t_spl, raw_tag {});
 
     V* gains = &co[N * onepole_tdf2::n_coeffs];
 

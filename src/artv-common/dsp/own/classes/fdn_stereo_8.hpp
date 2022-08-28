@@ -358,7 +358,7 @@ public:
     assert (factor >= -1.f && factor <= 1.f);
     vec<float, 16> freqs = vec_cast<float> (vec_from_array (_cfg.filter.freqs));
     freqs *= (float) std::exp (factor * _cfg.filter.freq_factor);
-    _filters.reset_coeffs<lp_idx> (freqs, (float) _cfg.src.srate);
+    _filters.reset_coeffs<lp_idx> (freqs, (float) 1.f / _cfg.src.srate);
   }
   //----------------------------------------------------------------------------
   void set_damp_factor (float factor)
@@ -373,7 +373,7 @@ public:
     assert (factor >= 0.f && factor <= 1.f);
     float hp_freq = exp (factor * 4.1f); // TODO: make variables
     _filters.reset_coeffs<dc_idx> (
-      vec_set<16> (hp_freq), (float) _cfg.src.srate);
+      vec_set<16> (hp_freq), (float) 1.f / _cfg.src.srate);
   }
   //----------------------------------------------------------------------------
   void set_lf_time_factor (float factor)
@@ -413,7 +413,7 @@ public:
   {
     assert (factor >= 0.f && factor <= 1.f);
     _ducker.set_speed (
-      vec_set<double_x2> (factor * factor), (float) _cfg.src.srate);
+      vec_set<double_x2> (factor * factor), (float) 1.f / _cfg.src.srate);
   }
   //----------------------------------------------------------------------------
   void set_ducker_threshold (float db)
@@ -923,15 +923,16 @@ private:
       }
     }
 
-    _late_lfo.set_freq (vfreq, _cfg.src.srate);
+    auto t_spl = 1.f / _cfg.src.srate;
+    _late_lfo.set_freq (vfreq, t_spl);
 
     vec<float, 2> dif_freq {freq_r, freq_l};
-    _int_dif_lfo.set_freq (dif_freq, _cfg.src.srate);
+    _int_dif_lfo.set_freq (dif_freq, t_spl);
 
-    _pre_dif_lfo.set_freq (dif_freq, _cfg.src.srate);
+    _pre_dif_lfo.set_freq (dif_freq, t_spl);
 
     _stereo_lfo.set_freq (
-      make_vec (freq_r + freq_l * _cfg.stereo.freq_factor), _cfg.src.srate);
+      make_vec (freq_r + freq_l * _cfg.stereo.freq_factor), t_spl);
   }
   //----------------------------------------------------------------------------
   void reset_mod_stereo()

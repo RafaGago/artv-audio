@@ -26,14 +26,14 @@ struct svf_coeffs {
 };
 
 template <class T, class U>
-static svf_coeffs<T> get_main_coeffs (T freq, T q, U sr)
+static svf_coeffs<T> get_main_coeffs (T freq, T q, U t_spl)
 {
   // "U" should always be a builtin type.
   static_assert (std::is_floating_point<U>::value, "");
 
   svf_coeffs<T> ret;
 
-  T g    = vec_tan ((U) M_PI * freq / sr);
+  T g    = vec_tan ((U) M_PI * freq * t_spl);
   ret.k  = (U) 1.0 / q;
   ret.a1 = (U) 1.0 / ((U) 1.0 + g * (g + ret.k));
   ret.a2 = g * ret.a1;
@@ -55,7 +55,7 @@ static svf_coeffs_ext<T> get_main_coeffs (
   T    freq,
   T    q,
   T    db,
-  U    sr,
+  U    t_spl,
   uint flags = 0)
 {
   // "U" should always be a builtin type.
@@ -66,11 +66,11 @@ static svf_coeffs_ext<T> get_main_coeffs (
 
   if constexpr (is_vec_v<T>) {
     ret.A = vec_exp (db * (U) (1. / 40.) * (U) M_LN10);
-    g     = vec_tan ((U) M_PI * freq / sr);
+    g     = vec_tan ((U) M_PI * freq * t_spl);
   }
   else {
     ret.A = exp (db * (U) (1. / 40.) * (U) M_LN10);
-    g     = tan ((U) M_PI * freq / sr);
+    g     = tan ((U) M_PI * freq * t_spl);
   }
   if ((flags & bell_flag)) {
     q *= ret.A;
@@ -95,7 +95,7 @@ static svf_coeffs_ext<T> get_main_coeffs_precise (
   T    freq,
   T    q,
   T    db,
-  U    sr,
+  U    t_spl,
   uint flags = 0)
 {
   // "U" should always be a builtin type.
@@ -104,7 +104,7 @@ static svf_coeffs_ext<T> get_main_coeffs_precise (
   svf_coeffs_ext<T> ret;
   T                 s1, s2;
 
-  T w = (U) M_PI * freq / sr;
+  T w = (U) M_PI * freq * t_spl;
   if constexpr (is_vec_v<T>) {
     ret.A = vec_exp (db * (U) (1. / 40.) * (U) M_LN10);
     s1    = vec_sin (w);
@@ -185,11 +185,11 @@ struct svf_multimode {
   enum state { ic1eq, ic2eq, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, V q, vec_value_type_t<V> sr)
+  static void reset_coeffs (crange<V> c, V freq, V q, vec_value_type_t<V> t_spl)
   {
     assert (c.size() >= n_coeffs);
 
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
+    auto coeffs = detail::get_main_coeffs (freq, q, t_spl);
 
     c[a1] = coeffs.a1;
     c[a2] = coeffs.a2;
@@ -319,11 +319,11 @@ struct svf {
     crange<V>           c,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     lowpass_tag)
   {
     using T     = vec_value_type_t<V>;
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
+    auto coeffs = detail::get_main_coeffs (freq, q, t_spl);
 
     assert (c.size() >= n_coeffs);
     c[a1] = coeffs.a1;
@@ -339,11 +339,11 @@ struct svf {
     crange<V>           c,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     highpass_tag)
   {
     using T     = vec_value_type_t<V>;
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
+    auto coeffs = detail::get_main_coeffs (freq, q, t_spl);
 
     assert (c.size() >= n_coeffs);
     c[a1] = coeffs.a1;
@@ -359,11 +359,11 @@ struct svf {
     crange<V>           c,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     bandpass_tag)
   {
     using T     = vec_value_type_t<V>;
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
+    auto coeffs = detail::get_main_coeffs (freq, q, t_spl);
 
     assert (c.size() >= n_coeffs);
 
@@ -380,11 +380,11 @@ struct svf {
     crange<V>           c,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     bandpass_q_gain_tag)
   {
     using T     = vec_value_type_t<V>;
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
+    auto coeffs = detail::get_main_coeffs (freq, q, t_spl);
 
     assert (c.size() >= n_coeffs);
 
@@ -401,11 +401,11 @@ struct svf {
     crange<V>           c,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     peak_tag)
   {
     using T     = vec_value_type_t<V>;
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
+    auto coeffs = detail::get_main_coeffs (freq, q, t_spl);
 
     assert (c.size() >= n_coeffs);
 
@@ -422,11 +422,11 @@ struct svf {
     crange<V>           c,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     allpass_tag)
   {
     using T     = vec_value_type_t<V>;
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
+    auto coeffs = detail::get_main_coeffs (freq, q, t_spl);
 
     assert (c.size() >= n_coeffs);
     c[a1] = coeffs.a1;
@@ -442,11 +442,11 @@ struct svf {
     crange<V>           c,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     notch_tag)
   {
     using T     = vec_value_type_t<V>;
-    auto coeffs = detail::get_main_coeffs (freq, q, sr);
+    auto coeffs = detail::get_main_coeffs (freq, q, t_spl);
 
     assert (c.size() >= n_coeffs);
     c[a1] = coeffs.a1;
@@ -463,11 +463,12 @@ struct svf {
     V                   freq,
     V                   q,
     V                   db,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     bell_tag)
   {
-    using T     = vec_value_type_t<V>;
-    auto coeffs = detail::get_main_coeffs (freq, q, db, sr, detail::bell_flag);
+    using T = vec_value_type_t<V>;
+    auto coeffs
+      = detail::get_main_coeffs (freq, q, db, t_spl, detail::bell_flag);
 
     assert (c.size() >= n_coeffs);
     c[a1] = coeffs.a1;
@@ -484,11 +485,12 @@ struct svf {
     V                   freq,
     V                   q,
     V                   db,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     bell_bandpass_tag)
   {
-    using T     = vec_value_type_t<V>;
-    auto coeffs = detail::get_main_coeffs (freq, q, db, sr, detail::bell_flag);
+    using T = vec_value_type_t<V>;
+    auto coeffs
+      = detail::get_main_coeffs (freq, q, db, t_spl, detail::bell_flag);
 
     assert (c.size() >= n_coeffs);
     c[a1] = coeffs.a1;
@@ -505,12 +507,12 @@ struct svf {
     V                   freq,
     V                   q,
     V                   db,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     lowshelf_tag)
   {
     using T = vec_value_type_t<V>;
     auto coeffs
-      = detail::get_main_coeffs (freq, q, db, sr, detail::lshelf_flag);
+      = detail::get_main_coeffs (freq, q, db, t_spl, detail::lshelf_flag);
 
     assert (c.size() >= n_coeffs);
     c[a1] = coeffs.a1;
@@ -527,12 +529,12 @@ struct svf {
     V                   freq,
     V                   q,
     V                   db,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     highshelf_tag)
   {
     using T = vec_value_type_t<V>;
     auto coeffs
-      = detail::get_main_coeffs (freq, q, db, sr, detail::hshelf_flag);
+      = detail::get_main_coeffs (freq, q, db, t_spl, detail::hshelf_flag);
 
     assert (c.size() >= n_coeffs);
     c[a1] = coeffs.a1;

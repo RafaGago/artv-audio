@@ -341,14 +341,15 @@ public:
     _quality   = 0;
 
     _plugcontext = &pc;
+    _t_spl       = 1.f / pc.get_sample_rate();
     _cfg         = decltype (_cfg) {};
 
-    reset_quality_settings (pc.get_sample_rate());
+    reset_quality_settings (_t_spl);
 
     smoother::reset_coeffs (
       make_crange (_smooth_coeff).cast (x1_t {}),
       vec_set<x1_t> (1 / 0.001),
-      pc.get_sample_rate());
+      _t_spl);
 
     mp11::mp_for_each<parameters> ([=] (auto param) {
       set (param, get_parameter (param).defaultv);
@@ -451,7 +452,6 @@ private:
   {
     auto& b             = _cfg[band];
     auto  bandtype_prev = b.type;
-    auto  sr            = (float) _plugcontext->get_sample_rate();
 
     auto freq = vec_set<double_x2> (midi_note_to_hz (b.freq_note));
     freq[1] *= exp2 (b.diff);
@@ -480,33 +480,33 @@ private:
       q *= sqrt (gain);
       if (high_srate) {
         _eq[band].reset_coeffs_ext<fwd_idx> (
-          co_biquad, freq, q, sr, bandpass_tag {});
+          co_biquad, freq, q, _t_spl, bandpass_tag {});
       }
       else {
         _eq[band].reset_coeffs_ext<fwd_idx> (
-          co_biquad, freq, q, sr, biquad::mvic_bandpass_hq_tag {});
+          co_biquad, freq, q, _t_spl, biquad::mvic_bandpass_hq_tag {});
       }
       break;
     case bandtype::lshelf:
     case bandtype::lp:
       if (high_srate) {
         _eq[band].reset_coeffs_ext<fwd_idx> (
-          co_biquad, freq, q, sr, lowpass_tag {});
+          co_biquad, freq, q, _t_spl, lowpass_tag {});
       }
       else {
         _eq[band].reset_coeffs_ext<fwd_idx> (
-          co_biquad, freq, q, sr, biquad::mvic_lowpass_hq_tag {});
+          co_biquad, freq, q, _t_spl, biquad::mvic_lowpass_hq_tag {});
       }
       break;
     case bandtype::hshelf:
     case bandtype::hp:
       if (high_srate) {
         _eq[band].reset_coeffs_ext<fwd_idx> (
-          co_biquad, freq, q, sr, highpass_tag {});
+          co_biquad, freq, q, _t_spl, highpass_tag {});
       }
       else {
         _eq[band].reset_coeffs_ext<fwd_idx> (
-          co_biquad, freq, q, sr, biquad::mvic_highpass_hq_tag {});
+          co_biquad, freq, q, _t_spl, biquad::mvic_highpass_hq_tag {});
       }
       break;
     default:
@@ -516,7 +516,7 @@ private:
     crange_memcpy (co_bwd_zeros, co_biquad);
 
     std::array<vec_complex<double_x2>, 2> poles;
-    biquad::get_poles<double_x2> (co_biquad, poles);
+    biquad::get_poles<double_x2> (poles, co_biquad);
 
     _eq[band].reset_coeffs_ext<bckwd_poles_idx> (
       co_bwd_poles, poles[0], poles[1]);
@@ -536,21 +536,17 @@ private:
   static constexpr uint n_bands    = 4;
   static constexpr uint n_channels = 2;
   //----------------------------------------------------------------------------
-  static uint get_n_stages (
-    double freq,
-    double q,
-    double samplerate,
-    double snr_db)
+  static uint get_n_stages (double freq, double q, double t_spl, double snr_db)
   {
     std::array<double_x1, biquad::n_coeffs> co;
     biquad::reset_coeffs<double_x1> (
-      co, vec_set<1> (freq), vec_set<1> (q), samplerate, bandpass_tag {});
+      co, vec_set<1> (freq), vec_set<1> (q), t_spl, bandpass_tag {});
     std::array<vec_complex<double_x1>, 2> poles;
-    biquad::get_poles<double_x1> (co, poles);
+    biquad::get_poles<double_x1> (poles, co);
     return get_reversed_pole_n_stages (poles[0].to_std (0), snr_db);
   }
   //----------------------------------------------------------------------------
-  void reset_quality_settings (double samplerate)
+  void reset_quality_settings (double t_spl)
   {
     std::array<double, n_bands> freq, gain, q;
 
@@ -569,7 +565,7 @@ private:
       // Tuning was 11 stages on normal quality for the two first bands and 10
       // stages for the other two, both at 48000KHz. The lowest quality has a
       // truncation noise SNR of 90dB. The medium 180dB and the higher 360dB.
-      _n_stages[b][0] = get_n_stages (freq[b], q[b], samplerate, 90.);
+      _n_stages[b][0] = get_n_stages (freq[b], q[b], t_spl, 90.);
       _n_stages[b][1] = _n_stages[b][0] + 1;
       _n_stages[b][2] = _n_stages[b][1] + 1;
       static_assert (n_quality_steps == 3, "Update this!");
@@ -658,6 +654,7 @@ private:
   std::array<std::array<uint, n_quality_steps>, n_bands> _n_stages;
   uint                                                   _latency     = 0;
   plugin_context*                                        _plugcontext = nullptr;
+  float                                                  _t_spl;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

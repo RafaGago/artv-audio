@@ -22,15 +22,12 @@ struct envelope {
   enum state { prev, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (
-    crange<V>           c,
-    V                   time_sec,
-    vec_value_type_t<V> samplerate)
+  static void reset_coeffs (crange<V> c, V time_sec, vec_value_type_t<V> t_spl)
   {
     using T = vec_value_type_t<V>;
     assert (c.size() >= n_coeffs);
 
-    V    k    = vec_exp ((T) -1. / (time_sec * samplerate));
+    V    k    = vec_exp ((T) -t_spl / time_sec);
     auto zero = vec_set<V> ((T) 0);
     c[time_k] = k != zero ? k : zero;
   }

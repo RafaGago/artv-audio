@@ -24,15 +24,13 @@ public:
   using vec_type                  = vec<T, simd_size / sizeof (T)>;
   static constexpr uint vec_size  = vec_traits_t<vec_type>::size;
   //----------------------------------------------------------------------------
-  void reset (T samplerate)
+  void reset (T t_spl)
   {
     memset (&_target, 0, sizeof _target);
     memset (&_current, 0, sizeof _current);
     using x1_t = vec<T, 1>;
     onepole_smoother::reset_coeffs (
-      make_crange (_coeff).cast (x1_t {}),
-      vec_set<x1_t> (1. / 0.1),
-      samplerate);
+      make_crange (_coeff).cast (x1_t {}), vec_set<x1_t> (1. / 0.1), t_spl);
   }
   //----------------------------------------------------------------------------
   void set_to_target() { _current = _target; }

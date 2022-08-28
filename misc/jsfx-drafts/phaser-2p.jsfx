@@ -117,7 +117,7 @@ lim_hardness = 1 / sqrt (hardness);
 g_hardness = (fb_scaled > lim_hardness) ? fb_scaled / lim_hardness : 1;
 fb_scaled = (feedback < 0) ? -fb_scaled : fb_scaled;
 
-s_depth = 0.008 + depth * depth * 18;
+s_depth = 0.008 + depth * depth * 10;
 @sample
 
 out0 = spl0;

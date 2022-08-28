@@ -50,7 +50,7 @@ public:
     crange<V>                   co, // coeffs interleaved
     V                           freq,
     crange<vec_value_type_t<V>> q_list, // one Q for each cascaded SVF
-    vec_value_type_t<V>         sr,
+    vec_value_type_t<V>         t_spl,
     uint                        order)
   {
     using T               = vec_value_type_t<V>;
@@ -62,11 +62,11 @@ public:
     assert (q_list.size() >= n_svfs);
 
     if (order & 1) {
-      onepole_type::reset_coeffs (co, freq, sr);
+      onepole_type::reset_coeffs (co, freq, t_spl);
       co.cut_head (onepole_type::n_coeffs);
     }
     for (uint i = 0; i < n_svfs; ++i) {
-      svf_type::reset_coeffs (co, freq, vec_set<V> (q_list[i]), sr);
+      svf_type::reset_coeffs (co, freq, vec_set<V> (q_list[i]), t_spl);
       co.cut_head (svf_type::n_coeffs);
     }
   }
@@ -154,9 +154,9 @@ public:
     crange<V>                   co, // coeffs (interleaved, SIMD aligned)
     V                           freq,
     crange<vec_value_type_t<V>> q_list, // one Q for each cascaded SVF
-    vec_value_type_t<V>         sr)
+    vec_value_type_t<V>         t_spl)
   {
-    cascade_type::reset_coeffs (co, freq, q_list, sr, order);
+    cascade_type::reset_coeffs (co, freq, q_list, t_spl, order);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

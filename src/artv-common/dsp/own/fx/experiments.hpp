@@ -509,16 +509,18 @@ public:
     std::array<vec_complex<double_x2>, 2> poles;
     std::array<vec_complex<double_x2>, 2> zeros;
 
+    double t_spl =  1. / (double) pc.get_sample_rate();
+
     butterworth_lp_complex::poles (
       make_crange (poles),
       vec_set<double_x2> (660),
-      (double) pc.get_sample_rate(),
+      t_spl,
       2);
 
     butterworth_lp_complex::zeros (
       make_crange (zeros),
       vec_set<double_x2> (660),
-      (double) pc.get_sample_rate(),
+      t_spl,
       2);
 
     _gain = butterworth_lp_complex::gain (make_crange (poles), 2);
@@ -644,16 +646,18 @@ public:
     std::array<vec_complex<double_x2>, 1> poles;
     std::array<vec_complex<double_x2>, 1> zeros;
 
+    double t_spl =  1. / (double) pc.get_sample_rate();
+
     butterworth_lp_complex::poles (
       make_crange (poles),
       vec_set<double_x2> (660),
-      (double) pc.get_sample_rate(),
+      t_spl,
       1);
 
     butterworth_lp_complex::zeros (
       make_crange (zeros),
       vec_set<double_x2> (660),
-      (double) pc.get_sample_rate(),
+      t_spl,
       1);
 
     _gain = butterworth_lp_complex::gain (make_crange (poles), 1);

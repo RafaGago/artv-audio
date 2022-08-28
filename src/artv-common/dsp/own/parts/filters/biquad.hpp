@@ -62,10 +62,10 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     lowpass_tag)
   {
-    reset_coeffs<V> (co, freq, q, sr, rbj_lowpass_tag {});
+    reset_coeffs<V> (co, freq, q, t_spl, rbj_lowpass_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V>
@@ -73,10 +73,10 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     highpass_tag)
   {
-    reset_coeffs<V> (co, freq, q, sr, rbj_highpass_tag {});
+    reset_coeffs<V> (co, freq, q, t_spl, rbj_highpass_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V>
@@ -84,10 +84,10 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     bandpass_tag)
   {
-    reset_coeffs<V> (co, freq, q, sr, rbj_bandpass_tag {});
+    reset_coeffs<V> (co, freq, q, t_spl, rbj_bandpass_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V>
@@ -95,10 +95,10 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     notch_tag)
   {
-    reset_coeffs<V> (co, freq, q, sr, rbj_notch_tag {});
+    reset_coeffs<V> (co, freq, q, t_spl, rbj_notch_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V>
@@ -106,10 +106,10 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     peak_tag)
   {
-    reset_coeffs<V> (co, freq, q, sr, rbj_peak_tag {});
+    reset_coeffs<V> (co, freq, q, t_spl, rbj_peak_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V>
@@ -117,10 +117,10 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     allpass_tag)
   {
-    reset_coeffs<V> (co, freq, q, sr, rbj_allpass_tag {});
+    reset_coeffs<V> (co, freq, q, t_spl, rbj_allpass_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V>
@@ -129,10 +129,10 @@ struct biquad {
     V                   freq,
     V                   q,
     V                   gain_db,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     bell_tag)
   {
-    reset_coeffs<V> (co, freq, q, gain_db, sr, rbj_bell_tag {});
+    reset_coeffs<V> (co, freq, q, gain_db, t_spl, rbj_bell_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V>
@@ -141,10 +141,10 @@ struct biquad {
     V                   freq,
     V                   q,
     V                   gain_db,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     lowshelf_tag)
   {
-    reset_coeffs<V> (co, freq, q, gain_db, sr, rbj_lowshelf_tag {});
+    reset_coeffs<V> (co, freq, q, gain_db, t_spl, rbj_lowshelf_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V>
@@ -153,10 +153,10 @@ struct biquad {
     V                   freq,
     V                   q,
     V                   gain_db,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     highshelf_tag)
   {
-    reset_coeffs<V> (co, freq, q, gain_db, sr, rbj_highshelf_tag {});
+    reset_coeffs<V> (co, freq, q, gain_db, t_spl, rbj_highshelf_tag {});
   }
   //----------------------------------------------------------------------------
   // thiran interpolator of order 2, wastes memory and ops on unrequired
@@ -186,7 +186,7 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     rbj_lowpass_tag)
   {
     // RBJ's
@@ -194,7 +194,7 @@ struct biquad {
 
     assert (co.size() >= n_coeffs);
 
-    V w0    = (T) 2. * (T) M_PI * freq / sr;
+    V w0    = (T) 2. * (T) M_PI * freq * t_spl;
     V cosw0 = vec_cos (w0);
     V alpha = vec_sin (w0) / ((T) 2. * q);
 
@@ -212,7 +212,7 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     rbj_highpass_tag)
   {
     // RBJ's
@@ -220,7 +220,7 @@ struct biquad {
 
     assert (co.size() >= n_coeffs);
 
-    V w0    = (T) 2. * (T) M_PI * freq / sr;
+    V w0    = (T) 2. * (T) M_PI * freq * t_spl;
     V cosw0 = vec_cos (w0);
     V alpha = vec_sin (w0) / ((T) 2. * q);
 
@@ -238,7 +238,7 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     rbj_bandpass_tag)
   {
     // RBJ's
@@ -246,7 +246,7 @@ struct biquad {
 
     assert (co.size() >= n_coeffs);
 
-    V w0    = (T) 2. * (T) M_PI * freq / sr;
+    V w0    = (T) 2. * (T) M_PI * freq * t_spl;
     V cosw0 = vec_cos (w0);
     V alpha = vec_sin (w0) / ((T) 2. * q);
 
@@ -265,7 +265,7 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     rbj_notch_tag)
   {
     // RBJ's
@@ -273,7 +273,7 @@ struct biquad {
 
     assert (co.size() >= n_coeffs);
 
-    V w0    = (T) 2. * (T) M_PI * freq / sr;
+    V w0    = (T) 2. * (T) M_PI * freq * t_spl;
     V cosw0 = vec_cos (w0);
     V alpha = vec_sin (w0) / ((T) 2. * q);
 
@@ -290,7 +290,7 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     rbj_allpass_tag)
   {
     // RBJ's
@@ -298,7 +298,7 @@ struct biquad {
 
     assert (co.size() >= n_coeffs);
 
-    V w0    = (T) 2. * (T) M_PI * freq / sr;
+    V w0    = (T) 2. * (T) M_PI * freq * t_spl;
     V cosw0 = vec_cos (w0);
     V alpha = vec_sin (w0) / ((T) 2. * q);
 
@@ -316,7 +316,7 @@ struct biquad {
     V                   freq,
     V                   q,
     V                   gain_db,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     rbj_bell_tag)
   {
     // RBJ's
@@ -325,7 +325,7 @@ struct biquad {
     assert (co.size() >= n_coeffs);
 
     V A     = vec_exp (gain_db * T {1. / 40.} * T {M_LN10});
-    V w0    = (T) 2. * (T) M_PI * freq / sr;
+    V w0    = (T) 2. * (T) M_PI * freq * t_spl;
     V cosw0 = vec_cos (w0);
     V alpha = vec_sin (w0) / ((T) 2. * q);
 
@@ -345,7 +345,7 @@ struct biquad {
     V                   freq,
     V                   q,
     V                   gain_db,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     rbj_lowshelf_tag)
   {
     // RBJ's
@@ -354,7 +354,7 @@ struct biquad {
     assert (co.size() >= n_coeffs);
 
     V A     = vec_exp (gain_db * T {1. / 40.} * T {M_LN10});
-    V w0    = (T) 2. * (T) M_PI * freq / sr;
+    V w0    = (T) 2. * (T) M_PI * freq * t_spl;
     V cosw0 = vec_cos (w0);
     V alpha = vec_sin (w0) / ((T) 2. * q);
 
@@ -375,7 +375,7 @@ struct biquad {
     V                   freq,
     V                   q,
     V                   gain_db,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     rbj_highshelf_tag)
   {
     // RBJ's
@@ -384,7 +384,7 @@ struct biquad {
     assert (co.size() >= n_coeffs);
 
     V A     = vec_exp (gain_db * T {1. / 40.} * T {M_LN10});
-    V w0    = (T) 2. * (T) M_PI * freq / sr;
+    V w0    = (T) 2. * (T) M_PI * freq * t_spl;
     V cosw0 = vec_cos (w0);
     V alpha = vec_sin (w0) / ((T) 2. * q);
 
@@ -407,14 +407,14 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     mvic_lowpass_tag)
   {
     using T = vec_value_type_t<V>;
 
     assert (co.size() >= n_coeffs);
 
-    V f0 = (T) 2. * freq / sr; // normalized freq 0-1
+    V f0 = (T) 2. * freq * t_spl; // normalized freq 0-1
     get_impulse_invariance_poles (co[a1], co[a2], f0, q);
 
     V r0    = (T) 1.0 + co[a1] + co[a2];
@@ -433,7 +433,7 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     mvic_highpass_tag)
   {
 
@@ -441,7 +441,7 @@ struct biquad {
 
     assert (co.size() >= n_coeffs);
 
-    V f0 = (T) 2. * freq / sr; // normalized freq 0-1
+    V f0 = (T) 2. * freq * t_spl; // normalized freq 0-1
     get_impulse_invariance_poles (co[a1], co[a2], f0, q);
 
     V f02   = f0 * f0;
@@ -459,7 +459,7 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     mvic_bandpass_tag)
   {
     // At first sight, this one seems to be breaking at low Q.
@@ -467,7 +467,7 @@ struct biquad {
 
     assert (co.size() >= n_coeffs);
 
-    V f0 = (T) 2. * freq / sr; // normalized freq 0-1
+    V f0 = (T) 2. * freq * t_spl; // normalized freq 0-1
     get_impulse_invariance_poles (co[a1], co[a2], f0, q);
 
     V r0 = ((T) 1.0 + co[a1] + co[a2]) / ((T) M_PI * f0 * q);
@@ -491,14 +491,14 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     mvic_lowpass_hq_tag)
   {
     using T = vec_value_type_t<V>;
 
     assert (co.size() >= n_coeffs);
 
-    V f0 = (T) 2. * freq / sr; // normalized freq 0-1
+    V f0 = (T) 2. * freq * t_spl; // normalized freq 0-1
     get_impulse_invariance_poles (co[a1], co[a2], f0, q);
     auto m = get_mvic_matched (co[a1], co[a2], f0 * (T) M_PI);
 
@@ -518,14 +518,14 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     mvic_highpass_hq_tag)
   {
     using T = vec_value_type_t<V>;
 
     assert (co.size() >= n_coeffs);
 
-    V f0 = (T) 2. * freq / sr; // normalized freq 0-1
+    V f0 = (T) 2. * freq * t_spl; // normalized freq 0-1
     get_impulse_invariance_poles (co[a1], co[a2], f0, q);
     auto m = get_mvic_matched (co[a1], co[a2], f0 * (T) M_PI);
 
@@ -543,14 +543,14 @@ struct biquad {
     crange<V>           co,
     V                   freq,
     V                   q,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     mvic_bandpass_hq_tag)
   {
     using T = vec_value_type_t<V>;
 
     assert (co.size() >= n_coeffs);
 
-    V f0 = (T) 2. * freq / sr; // normalized freq 0-1
+    V f0 = (T) 2. * freq * t_spl; // normalized freq 0-1
     get_impulse_invariance_poles (co[a1], co[a2], f0, q);
     auto m = get_mvic_matched (co[a1], co[a2], f0 * (T) M_PI);
 
@@ -574,14 +574,14 @@ struct biquad {
     V                   freq,
     V                   q,
     V                   gain_db,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     mvic_bell_hq_tag)
   {
     using T = vec_value_type_t<V>;
 
     assert (co.size() >= n_coeffs);
 
-    V f0 = ((T) 2. * freq) / sr; // normalized freq 0-1
+    V f0 = (T) 2. * freq * t_spl; // normalized freq 0-1
     get_impulse_invariance_poles (co[a1], co[a2], f0, q);
     auto m = get_mvic_matched (co[a1], co[a2], f0 * (T) M_PI);
 
@@ -652,7 +652,7 @@ struct biquad {
     zeros_gain = co[b0];
   } //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void get_poles (crange<const V> co, crange<vec_complex<V>> poles)
+  static void get_poles (crange<vec_complex<V>> poles, crange<const V> co)
   {
     assert (poles.size() >= 2);
 

@@ -19,12 +19,12 @@ struct onepole_smoother {
   enum state { y1, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> srate)
+  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> t_spl)
   {
     using T              = vec_value_type_t<V>;
     constexpr auto pi_x2 = (T) (2. * M_PI);
 
-    c[b1] = vec_exp (-pi_x2 * freq / srate);
+    c[b1] = vec_exp (-pi_x2 * freq * t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -83,11 +83,24 @@ struct onepole {
   enum state { s, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> srate)
+  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> t_spl)
   {
     using T = vec_value_type_t<V>;
     assert (co.size() >= n_coeffs);
-    V g   = vec_tan ((T) M_PI * freq / srate);
+    V g   = vec_tan ((T) M_PI * freq * t_spl);
+    co[G] = g / ((T) 1.0 + g);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<V>           co,
+    V                   freq,
+    vec_value_type_t<V> t_spl,
+    quality_tag<0>)
+  {
+    using T = vec_value_type_t<V>;
+    assert (co.size() >= n_coeffs);
+    V g   = vec_tan ((T) M_PI * freq * t_spl);
     co[G] = g / ((T) 1.0 + g);
   }
   //----------------------------------------------------------------------------
@@ -161,6 +174,8 @@ private:
   }
 };
 //------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
 using onepole_lowpass  = onepole<lowpass_tag>;
 using onepole_highpass = onepole<highpass_tag>;
 using onepole_allpass  = onepole<allpass_tag>;
@@ -179,14 +194,14 @@ struct onepole_tdf2 {
   };
   //----------------------------------------------------------------------------
   template <class T, class U>
-  static sub_coeffs<T> get_sub_coeffs (T freq, U srate)
+  static sub_coeffs<T> get_sub_coeffs (T freq, U t_spl)
   {
     sub_coeffs<T> r;
     if constexpr (is_vec_v<T>) {
-      r.w = vec_tan ((U) M_PI * freq / srate);
+      r.w = vec_tan ((U) M_PI * freq * t_spl);
     }
     else {
-      r.w = tan (M_PI * freq / srate);
+      r.w = tan (M_PI * freq * t_spl);
     }
     r.n = (U) 1. / ((U) 1. + r.w);
     return r;
@@ -230,30 +245,30 @@ struct onepole_tdf2 {
   static void reset_coeffs (
     crange<V>           co,
     V                   freq,
-    vec_value_type_t<V> srate,
+    vec_value_type_t<V> t_spl,
     lowpass_tag         t)
   {
-    reset_coeffs (co, get_sub_coeffs (freq, srate), t);
+    reset_coeffs (co, get_sub_coeffs (freq, t_spl), t);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<V>           co,
     V                   freq,
-    vec_value_type_t<V> srate,
+    vec_value_type_t<V> t_spl,
     highpass_tag        t)
   {
-    reset_coeffs (co, get_sub_coeffs (freq, srate), t);
+    reset_coeffs (co, get_sub_coeffs (freq, t_spl), t);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
     crange<V>           co,
     V                   freq,
-    vec_value_type_t<V> srate,
+    vec_value_type_t<V> t_spl,
     allpass_tag         t)
   {
-    reset_coeffs (co, get_sub_coeffs (freq, srate), t);
+    reset_coeffs (co, get_sub_coeffs (freq, t_spl), t);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

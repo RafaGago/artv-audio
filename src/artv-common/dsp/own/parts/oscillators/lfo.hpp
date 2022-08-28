@@ -29,11 +29,11 @@ public:
     _smooth_state = vec_set<N> (0.f);
   }
   //----------------------------------------------------------------------------
-  void set_freq (value_type f, float samplerate)
+  void set_freq (value_type f, float t_spl)
   {
-    _phasor.set_freq (f, samplerate);
+    _phasor.set_freq (f, t_spl);
     onepole_smoother::reset_coeffs (
-      make_crange (_smooth_coeff), f * 2.f, samplerate);
+      make_crange (_smooth_coeff), f * 2.f, t_spl);
   }
   //----------------------------------------------------------------------------
   void set_phase (phase_type p) { _phasor.set_phase (p); }

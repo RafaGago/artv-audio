@@ -154,7 +154,7 @@ public:
   //----------------------------------------------------------------------------
   void reset (double sample_rate)
   {
-    _sample_rate  = sample_rate;
+    _srate        = sample_rate;
     _db_gain_prev = 0;
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
@@ -231,24 +231,24 @@ private:
     auto attack = exp (atk_alpha * _sattackp + atk_beta) - 1.f;
     auto decay  = exp (dec_alpha * _sdecayp + dec_beta) - 1.f;
     // Max gain smoothing is 15 ms;_sample_rate
-    _alpha_gain = exp (-1 / (.5 * .015 * _gainsmoothingp * _sample_rate));
+    _alpha_gain = exp (-1 / (.5 * .015 * _gainsmoothingp * _srate));
 
     // notice, all the envelope followers on the original multiply the sample
     // rate by 0.5 mine dont.
     //
     // To pass to msec a factor of 0.001 is added too,
-    constexpr float sr_correct = 0.5 * 0.001;
-    auto            srate      = _sample_rate * sr_correct;
+    constexpr float sr_correct = (0.5 * 0.001);
+    auto            t_spl      = 1.f / (_srate * sr_correct);
 
     /* 20 Hz => ~50 ms period */
     _followers.reset_coeffs<flw_main> (
-      vec_set<V> (follow_attack), vec_set<V> (120.), srate);
+      vec_set<V> (follow_attack), vec_set<V> (120.), t_spl);
 
     _followers.reset_coeffs<flw_attack> (
-      vec_set<V> (attack), vec_set<V> (150.), srate);
+      vec_set<V> (attack), vec_set<V> (150.), t_spl);
 
     _followers.reset_coeffs<flw_decay> (
-      vec_set<V> (follow_attack), vec_set<V> (decay), srate);
+      vec_set<V> (follow_attack), vec_set<V> (decay), t_spl);
   }
   //----------------------------------------------------------------------------
   // ported parameters from the old generated JSFX, names come from there too
@@ -266,7 +266,7 @@ private:
 
   enum followers { flw_main, flw_attack, flw_decay, n_flw };
   part_class_array<slew_limiter, V, n_flw> _followers;
-  float                                    _sample_rate = 0;
+  float                                    _srate = 0;
 };
 }} // namespace artv::saike
 //------------------------------------------------------------------------------

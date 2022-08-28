@@ -310,13 +310,13 @@ public:
   {
     using x1_t = vec<double, 1>;
 
-    _plugcontext = &pc;
-    _cfg         = decltype (_cfg) {};
+    _t_spl = 1.f / pc.get_sample_rate();
+    _cfg   = decltype (_cfg) {};
 
     smoother::reset_coeffs (
       make_crange (_smooth_coeff).cast (x1_t {}),
       vec_set<x1_t> (1. / 0.08),
-      pc.get_sample_rate());
+      _t_spl);
 
     memset (&_smooth_pars, 0, sizeof _smooth_pars);
     memset (&_last_sample, 0, sizeof _last_sample);
@@ -324,8 +324,7 @@ public:
     _filter.zero_all_states();
     _proc.reset_states<proc_envfollow>();
     _proc.reset_states<proc_dc_block>();
-    _proc.reset_coeffs<proc_dc_block> (
-      vec_set<double_x2> (1.), pc.get_sample_rate());
+    _proc.reset_coeffs<proc_dc_block> (vec_set<double_x2> (1.), _t_spl);
 
     _ef_value = vec_set<double_x2> (0.);
 
@@ -624,8 +623,7 @@ private:
     constexpr double min_reso = get_parameter (band1_reso_tag {}).min;
     constexpr double max_reso = get_parameter (band1_reso_tag {}).max;
 
-    auto& b  = _cfg[band];
-    auto  sr = (float) _plugcontext->get_sample_rate();
+    auto& b = _cfg[band];
 
     auto ef_mod = double_x2 {};
     if (b.ef_to_freq != 0.f || b.ef_to_reso != 0.f) {
@@ -649,96 +647,100 @@ private:
       _filter.reset_states_on_idx (band);
       break;
     case bandtype::ms20_lp:
-      _filter.reset_coeffs_ext<saike::ms20_lowpass> (band, co, freq, reso, sr);
+      _filter.reset_coeffs_ext<saike::ms20_lowpass> (
+        band, co, freq, reso, _t_spl);
       break;
     case bandtype::ms20_hp:
-      _filter.reset_coeffs_ext<saike::ms20_highpass> (band, co, freq, reso, sr);
+      _filter.reset_coeffs_ext<saike::ms20_highpass> (
+        band, co, freq, reso, _t_spl);
       break;
     case bandtype::ms20_bp:
-      _filter.reset_coeffs_ext<saike::ms20_bandpass> (band, co, freq, reso, sr);
+      _filter.reset_coeffs_ext<saike::ms20_bandpass> (
+        band, co, freq, reso, _t_spl);
       break;
     case bandtype::ms20_br:
-      _filter.reset_coeffs_ext<saike::ms20_notch> (band, co, freq, reso, sr);
+      _filter.reset_coeffs_ext<saike::ms20_notch> (
+        band, co, freq, reso, _t_spl);
       break;
     case bandtype::ms20_asym_lp:
       _filter.reset_coeffs_ext<saike::ms20_asym_lowpass> (
-        band, co, freq, reso, sr);
+        band, co, freq, reso, _t_spl);
       break;
     case bandtype::ms20_asym_hp:
       _filter.reset_coeffs_ext<saike::ms20_asym_highpass> (
-        band, co, freq, reso, sr);
+        band, co, freq, reso, _t_spl);
       break;
     case bandtype::ms20_asym_bp:
       _filter.reset_coeffs_ext<saike::ms20_asym_bandpass> (
-        band, co, freq, reso, sr);
+        band, co, freq, reso, _t_spl);
       break;
     case bandtype::ms20_asym_br:
       _filter.reset_coeffs_ext<saike::ms20_asym_notch> (
-        band, co, freq, reso, sr);
+        band, co, freq, reso, _t_spl);
       break;
     case bandtype::steiner_1_lp:
       _filter.reset_coeffs_ext<saike::steiner_1> (
-        band, co, freq, reso, sr, lowpass_tag {});
+        band, co, freq, reso, _t_spl, lowpass_tag {});
       break;
     case bandtype::steiner_1_hp:
       _filter.reset_coeffs_ext<saike::steiner_1> (
-        band, co, freq, reso, sr, highpass_tag {});
+        band, co, freq, reso, _t_spl, highpass_tag {});
       break;
     case bandtype::steiner_1_bp:
       _filter.reset_coeffs_ext<saike::steiner_1> (
-        band, co, freq, reso, sr, bandpass_tag {});
+        band, co, freq, reso, _t_spl, bandpass_tag {});
       break;
     case bandtype::steiner_1_br:
       _filter.reset_coeffs_ext<saike::steiner_1> (
-        band, co, freq, reso, sr, notch_tag {});
+        band, co, freq, reso, _t_spl, notch_tag {});
       break;
     case bandtype::steiner_2_lp:
       _filter.reset_coeffs_ext<saike::steiner_2> (
-        band, co, freq, reso, sr, lowpass_tag {});
+        band, co, freq, reso, _t_spl, lowpass_tag {});
       break;
     case bandtype::steiner_2_hp:
       _filter.reset_coeffs_ext<saike::steiner_2> (
-        band, co, freq, reso, sr, highpass_tag {});
+        band, co, freq, reso, _t_spl, highpass_tag {});
       break;
     case bandtype::steiner_2_bp:
       _filter.reset_coeffs_ext<saike::steiner_2> (
-        band, co, freq, reso, sr, bandpass_tag {});
+        band, co, freq, reso, _t_spl, bandpass_tag {});
       break;
     case bandtype::steiner_2_br:
       _filter.reset_coeffs_ext<saike::steiner_2> (
-        band, co, freq, reso, sr, notch_tag {});
+        band, co, freq, reso, _t_spl, notch_tag {});
       break;
     case bandtype::moog_1_lp:
       _filter.reset_coeffs_ext<saike::moog_1> (
-        band, co, freq, reso, sr, lowpass_tag {});
+        band, co, freq, reso, _t_spl, lowpass_tag {});
       break;
     case bandtype::moog_1_hp:
       _filter.reset_coeffs_ext<saike::moog_1> (
-        band, co, freq, reso, sr, highpass_tag {});
+        band, co, freq, reso, _t_spl, highpass_tag {});
       break;
     case bandtype::moog_1_bp:
       _filter.reset_coeffs_ext<saike::moog_1> (
-        band, co, freq, reso, sr, bandpass_tag {});
+        band, co, freq, reso, _t_spl, bandpass_tag {});
       break;
     case bandtype::moog_1_br:
       _filter.reset_coeffs_ext<saike::moog_1> (
-        band, co, freq, reso, sr, notch_tag {});
+        band, co, freq, reso, _t_spl, notch_tag {});
       break;
     case bandtype::moog_2_lp:
       _filter.reset_coeffs_ext<saike::moog_2> (
-        band, co, freq, reso, sr, lowpass_tag {});
+        band, co, freq, reso, _t_spl, lowpass_tag {});
       break;
     case bandtype::moog_2_hp:
       _filter.reset_coeffs_ext<saike::moog_2> (
-        band, co, freq, reso, sr, highpass_tag {});
+        band, co, freq, reso, _t_spl, highpass_tag {});
       break;
     case bandtype::moog_2_bp:
       _filter.reset_coeffs_ext<saike::moog_2> (
-        band, co, freq, reso, sr, bandpass_tag {});
+        band, co, freq, reso, _t_spl, bandpass_tag {});
       break;
     case bandtype::moog_2_br:
       _filter.reset_coeffs_ext<saike::moog_2> (
-        band, co, freq, reso, sr, notch_tag {});
+        band, co, freq, reso, _t_spl, notch_tag {});
       break;
     default:
       jassert (false);
@@ -789,7 +791,7 @@ private:
     _proc.reset_coeffs<proc_envfollow> (
       vec_set<double_x2> (_ef.attack),
       vec_set<double_x2> (_ef.release),
-      _plugcontext->get_sample_rate() / (float) _control.get_period());
+      _t_spl * (float) _control.get_period());
   }
   //----------------------------------------------------------------------------
   static constexpr uint blocksize = 32;
@@ -881,7 +883,7 @@ private:
 
   double _smooth_coeff;
 
-  plugin_context* _plugcontext = nullptr;
+  float _t_spl;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

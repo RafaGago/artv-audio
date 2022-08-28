@@ -20,14 +20,14 @@ template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 class ducker {
 public:
   //----------------------------------------------------------------------------
-  void set_speed (V factor, vec_value_type_t<V> samplerate)
+  void set_speed (V factor, vec_value_type_t<V> t_spl)
   {
     using T = vec_value_type_t<V>;
     // 1us to 600.1ms
     V t = (T) 0.0001 + (T) 0.6 * factor;
-    _env.template reset_coeffs<ducker_idx> (t, (T) samplerate);
+    _env.template reset_coeffs<ducker_idx> (t, (T) t_spl);
     t = (T) 0.0001 + (T) 0.025 * ((T) 1. - factor);
-    _env.template reset_coeffs<smooth_idx> (t, (T) samplerate);
+    _env.template reset_coeffs<smooth_idx> (t, (T) t_spl);
   }
   //----------------------------------------------------------------------------
   void set_threshold (V db) { _threshold_lin = vec_db_to_gain (db); }

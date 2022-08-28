@@ -34,7 +34,7 @@ public:
   //----------------------------------------------------------------------------
   void set_detector_hipass (float hz)
   {
-    _in_filter.reset_coeffs (vec_set<vec_type> (hz), _sample_rate);
+    _in_filter.reset_coeffs (vec_set<vec_type> (hz), _t_spl);
   }
   //----------------------------------------------------------------------------
   void set_detector_recovery (float ratio)
@@ -47,14 +47,12 @@ public:
     double release_sec = exp (maxv * ratio + minv);
 
     _followers.reset_coeffs<flw_slow> (
-      vec_set<vec_type> (attack_sec),
-      vec_set<vec_type> (release_sec),
-      _sample_rate);
+      vec_set<vec_type> (attack_sec), vec_set<vec_type> (release_sec), _t_spl);
 
     _followers.reset_coeffs<flw_fast> (
       vec_set<vec_type> (attack_sec * 0.1),
       vec_set<vec_type> (release_sec),
-      _sample_rate);
+      _t_spl);
   }
   //----------------------------------------------------------------------------
   void set_detector_channels (uint m)
@@ -73,9 +71,7 @@ public:
     double release_sec = exp (maxv * ratio + minv);
 
     _followers.reset_coeffs<flw_gate> (
-      vec_set<vec_type> (1. / 2000.),
-      vec_set<vec_type> (release_sec),
-      _sample_rate);
+      vec_set<vec_type> (1. / 2000.), vec_set<vec_type> (release_sec), _t_spl);
   }
   //----------------------------------------------------------------------------
   void set_curve_decay_shape (uint v)
@@ -92,7 +88,7 @@ public:
   //----------------------------------------------------------------------------
   void reset (uint sample_rate)
   {
-    _sample_rate = sample_rate;
+    _t_spl       = 1.f / sample_rate;
     _det_mode    = detector_stereo;
     _det_shape   = 0;
     _curve_shape = 0;
@@ -100,7 +96,7 @@ public:
     _followers.reset_states_cascade();
     _in_filter.reset_states();
     _gate_filter.reset_states();
-    _gate_filter.reset_coeffs (vec_set<vec_type> (250.), _sample_rate);
+    _gate_filter.reset_coeffs (vec_set<vec_type> (250.), _t_spl);
   };
   //----------------------------------------------------------------------------
   vec_type tick (vec_type in)
@@ -175,7 +171,7 @@ private:
   part_class_array<onepole_highpass, vec_type>    _in_filter;
   part_class_array<onepole_lowpass, vec_type>     _gate_filter;
 
-  double _sample_rate;
+  double _t_spl;
   uint   _det_shape;
   uint   _curve_shape;
 

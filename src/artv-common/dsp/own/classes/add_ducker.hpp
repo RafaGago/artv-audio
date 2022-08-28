@@ -39,7 +39,7 @@ public:
     }
     _ducking_speed = v;
     v *= 0.01f;
-    _ducker.set_speed (vec_set<V> (v * v), (vec_value_type_t<V>) _samplerate);
+    _ducker.set_speed (vec_set<V> (v * v), (vec_value_type_t<V>) _t_spl);
   }
 
   static constexpr auto get_parameter (ducking_speed_tag)
@@ -83,7 +83,7 @@ public:
   //----------------------------------------------------------------------------
   void reset (float samplerate)
   {
-    _samplerate        = samplerate;
+    _t_spl             = 1. / samplerate;
     _ducking_threshold = 2000.f;
     _ducking_speed     = 2000.f;
     set (
@@ -97,7 +97,7 @@ private:
   ducker<V> _ducker;
   float     _ducking_threshold {};
   float     _ducking_speed {};
-  float     _samplerate {};
+  float     _t_spl {};
 };
 //------------------------------------------------------------------------------
 } // namespace artv

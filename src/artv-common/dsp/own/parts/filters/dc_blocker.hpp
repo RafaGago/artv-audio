@@ -23,12 +23,12 @@ struct iir_dc_blocker {
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> sr)
+  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> t_spl)
   {
     using T = vec_value_type_t<V>;
     assert (c.size() >= n_coeffs);
 
-    c[R] = (T) 1. - ((T) M_PI * (T) 2. * freq / sr);
+    c[R] = (T) 1. - ((T) M_PI * (T) 2. * freq * t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -74,9 +74,9 @@ struct mystran_dc_blocker {
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> sr)
+  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> t_spl)
   {
-    onepole_smoother::reset_coeffs (c, freq, sr);
+    onepole_smoother::reset_coeffs (c, freq, t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -125,12 +125,13 @@ struct mystran_dc_blocker_2pole {
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> sr)
+  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> t_spl)
   {
     using T                   = vec_value_type_t<V>;
     constexpr T butterworth_q = M_SQRT1_2;
 
-    andy::svf_lowpass::reset_coeffs (c, freq, vec_set<V> (butterworth_q), sr);
+    andy::svf_lowpass::reset_coeffs (
+      c, freq, vec_set<V> (butterworth_q), t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

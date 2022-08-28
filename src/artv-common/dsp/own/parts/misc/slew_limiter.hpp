@@ -27,21 +27,17 @@ struct slew_limiter {
     crange<V>           c,
     V                   attack_sec,
     V                   release_sec,
-    vec_value_type_t<V> samplerate)
+    vec_value_type_t<V> t_spl)
   {
     using T = vec_value_type_t<V>;
     assert (c.size() >= n_coeffs);
 
     auto zero = vec_set<V> ((T) 0);
 
-    V atk = attack_sec;
-    atk *= samplerate;
-    atk       = vec_exp ((T) -1. / atk);
+    V atk     = vec_exp ((T) -t_spl / attack_sec);
     c[attack] = attack_sec != zero ? atk : zero;
 
-    V rel = release_sec;
-    rel *= samplerate;
-    rel        = vec_exp ((T) -1. / rel);
+    V rel      = vec_exp ((T) -t_spl / release_sec);
     c[release] = release_sec != zero ? rel : zero;
   }
   //----------------------------------------------------------------------------

@@ -66,7 +66,11 @@ struct ms20_base {
 protected:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, V reso, vec_value_type_t<V> sr)
+  static void reset_coeffs (
+    crange<V>           c,
+    V                   freq,
+    V                   reso,
+    vec_value_type_t<V> t_spl)
   {
     // The original filter freq seems to be off by 10% 22000 vs 20000kHz.
     // It also doesn't respect the frequency.
@@ -74,12 +78,12 @@ protected:
 
     assert (c.size() >= n_coeffs);
 
-    freq           = vec_min (sr < (T) 80000. ? (T) 14000. : (T) 20000., freq);
-    T oversampling = (sr * (T) (1. / 44100.));
-    V norm_freq    = (freq * (T) (1. / 20000.));
+    freq = vec_min (t_spl >= (T) (1. / 80000.) ? (T) 14000. : (T) 20000., freq);
+    T w_factor  = t_spl * (T) 44100.; // 1 at 44k1, 0.5 at 88k2
+    V norm_freq = (freq * (T) (1. / 20000.));
 
-    V f0  = norm_freq * (T) M_PI / oversampling;
-    V hv  = vec_tan (f0 / ((T) 2.1 * oversampling)) * (T) 2.1 * oversampling;
+    V f0  = norm_freq * (T) M_PI * w_factor;
+    V hv  = vec_tan (f0 * (T) (1. / 2.1) * w_factor) * (T) 2.1 / w_factor;
     c[hh] = hv * (T) 0.5;
     c[k]  = reso * (T) 2.;
   }
@@ -94,9 +98,13 @@ protected:
 struct ms20_lowpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, V reso, vec_value_type_t<V> sr)
+  static void reset_coeffs (
+    crange<V>           c,
+    V                   freq,
+    V                   reso,
+    vec_value_type_t<V> t_spl)
   {
-    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, t_spl);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -165,9 +173,13 @@ struct ms20_lowpass : public detail::ms20_base {
 struct ms20_highpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, V reso, vec_value_type_t<V> sr)
+  static void reset_coeffs (
+    crange<V>           c,
+    V                   freq,
+    V                   reso,
+    vec_value_type_t<V> t_spl)
   {
-    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, t_spl);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -237,9 +249,13 @@ struct ms20_highpass : public detail::ms20_base {
 struct ms20_bandpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, V reso, vec_value_type_t<V> sr)
+  static void reset_coeffs (
+    crange<V>           c,
+    V                   freq,
+    V                   reso,
+    vec_value_type_t<V> t_spl)
   {
-    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, t_spl);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -309,9 +325,13 @@ struct ms20_bandpass : public detail::ms20_base {
 struct ms20_notch : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, V reso, vec_value_type_t<V> sr)
+  static void reset_coeffs (
+    crange<V>           c,
+    V                   freq,
+    V                   reso,
+    vec_value_type_t<V> t_spl)
   {
-    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, t_spl);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -383,9 +403,13 @@ struct ms20_notch : public detail::ms20_base {
 struct ms20_asym_lowpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, V reso, vec_value_type_t<V> sr)
+  static void reset_coeffs (
+    crange<V>           c,
+    V                   freq,
+    V                   reso,
+    vec_value_type_t<V> t_spl)
   {
-    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, t_spl);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -460,9 +484,13 @@ struct ms20_asym_lowpass : public detail::ms20_base {
 struct ms20_asym_highpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, V reso, vec_value_type_t<V> sr)
+  static void reset_coeffs (
+    crange<V>           c,
+    V                   freq,
+    V                   reso,
+    vec_value_type_t<V> t_spl)
   {
-    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, t_spl);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -532,9 +560,13 @@ struct ms20_asym_highpass : public detail::ms20_base {
 struct ms20_asym_bandpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, V reso, vec_value_type_t<V> sr)
+  static void reset_coeffs (
+    crange<V>           c,
+    V                   freq,
+    V                   reso,
+    vec_value_type_t<V> t_spl)
   {
-    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, t_spl);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -609,9 +641,13 @@ struct ms20_asym_bandpass : public detail::ms20_base {
 struct ms20_asym_notch : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, V reso, vec_value_type_t<V> sr)
+  static void reset_coeffs (
+    crange<V>           c,
+    V                   freq,
+    V                   reso,
+    vec_value_type_t<V> t_spl)
   {
-    detail::ms20_base::reset_coeffs (c, freq, reso, sr);
+    detail::ms20_base::reset_coeffs (c, freq, reso, t_spl);
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
@@ -695,10 +731,10 @@ struct steiner_base {
     crange<V>           co,
     V                   freq,
     V                   reso,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     lowpass_tag)
   {
-    reset_coeffs (co, freq, reso, 0., sr);
+    reset_coeffs (co, freq, reso, 0., t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -706,10 +742,10 @@ struct steiner_base {
     crange<V>           co,
     V                   freq,
     V                   reso,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     bandpass_tag)
   {
-    reset_coeffs (co, freq, reso, 0.25, sr);
+    reset_coeffs (co, freq, reso, 0.25, t_spl);
   }
 
   //----------------------------------------------------------------------------
@@ -718,10 +754,10 @@ struct steiner_base {
     crange<V>           co,
     V                   freq,
     V                   reso,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     highpass_tag)
   {
-    reset_coeffs (co, freq, reso, 0.5, sr);
+    reset_coeffs (co, freq, reso, 0.5, t_spl);
   }
 
   //----------------------------------------------------------------------------
@@ -730,10 +766,10 @@ struct steiner_base {
     crange<V>           co,
     V                   freq,
     V                   reso,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     notch_tag)
   {
-    reset_coeffs (co, freq, reso, 0.75, sr);
+    reset_coeffs (co, freq, reso, 0.75, t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -751,7 +787,7 @@ protected:
     V                   freq,
     V                   reso,
     vec_value_type_t<V> morph,
-    vec_value_type_t<V> sr)
+    vec_value_type_t<V> t_spl)
   {
     // The original filter freq seems to be off by 10% 22000 vs 20000kHz.
     // It also doesn't respect the frequency.
@@ -759,11 +795,11 @@ protected:
 
     assert (co.size() >= n_coeffs);
 
-    freq           = vec_min (sr < (T) 80000. ? (T) 14000. : (T) 20000., freq);
-    T oversampling = (sr * (T) (1. / 44100.));
-    V norm_freq    = (freq * (T) (1. / 20000.));
+    freq = vec_min (t_spl >= (T) (1. / 80000.) ? (T) 14000. : (T) 20000., freq);
+    T w_factor  = t_spl * (T) 44100.; // 1 at 44k1, 0.5 at 88k2
+    V norm_freq = (freq * (T) (1. / 20000.));
 
-    V f0 = norm_freq / oversampling;
+    V f0 = norm_freq * w_factor;
 
     V h_v   = vec_tan ((T) 0.5 * M_PI * f0);
     V k_v   = (T) 3.98 * reso;
@@ -1012,10 +1048,10 @@ struct moog_1 {
     crange<V>           co_int,
     V                   freq,
     V                   reso,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     lowpass_tag)
   {
-    reset_coeffs (co, co_int, freq, reso, 0, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 0, vec_set<V> (0.), t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -1024,10 +1060,10 @@ struct moog_1 {
     crange<V>           co_int,
     V                   freq,
     V                   reso,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     bandpass_tag)
   {
-    reset_coeffs (co, co_int, freq, reso, 1, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 1, vec_set<V> (0.), t_spl);
   }
 
   //----------------------------------------------------------------------------
@@ -1037,10 +1073,10 @@ struct moog_1 {
     crange<V>           co_int,
     V                   freq,
     V                   reso,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     highpass_tag)
   {
-    reset_coeffs (co, co_int, freq, reso, 2, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 2, vec_set<V> (0.), t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -1049,10 +1085,10 @@ struct moog_1 {
     crange<V>           co_int,
     V                   freq,
     V                   reso,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     notch_tag)
   {
-    reset_coeffs (co, co_int, freq, reso, 3, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 3, vec_set<V> (0.), t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -1190,7 +1226,7 @@ private:
     V                   reso,
     uint                filter_type, // choice on the original code
     V                   fraction, // frac on the original code
-    vec_value_type_t<V> sr)
+    vec_value_type_t<V> t_spl)
   {
     using T = vec_value_type_t<V>;
 
@@ -1199,18 +1235,18 @@ private:
     // It also doesn't respect the frequency.
 
     // needs generous sample/rate oversampling
-    freq = vec_min (sr < (T) 176200. ? (T) 12000. : (T) 20000., freq);
-    freq = vec_min (sr < (T) 96000. ? (T) 11000. : (T) 20000., freq);
-    freq = vec_min (sr < (T) 88200. ? (T) 6000. : (T) 20000., freq);
-    freq = vec_min (sr < (T) 48000. ? (T) 5500. : (T) 20000., freq);
+    freq
+      = vec_min (t_spl >= (T) (1. / 176200.) ? (T) 12000. : (T) 20000., freq);
+    freq = vec_min (t_spl >= (T) (1. / 96000.) ? (T) 11000. : (T) 20000., freq);
+    freq = vec_min (t_spl >= (T) (1. / 88200.) ? (T) 6000. : (T) 20000., freq);
+    freq = vec_min (t_spl >= (T) (1. / 48000.) ? (T) 5500. : (T) 20000., freq);
 
     V fc = freq;
-    T fs = sr;
 
     V k_v = reso * (T) 3.9999999999999987;
     co[k] = k_v;
 
-    V g = vec_tan ((T) M_PI * fc / fs)
+    V g = vec_tan ((T) M_PI * fc * t_spl)
       / vec_sqrt (
             (T) 1.0 + vec_sqrt (k_v)
             - (T) 2. * vec_pow (k_v, (T) 0.25) * (T) M_SQRT1_2);
@@ -1264,10 +1300,10 @@ struct moog_2 {
     crange<V>           co_int,
     V                   freq,
     V                   reso,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     lowpass_tag)
   {
-    reset_coeffs (co, co_int, freq, reso, 0, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 0, vec_set<V> (0.), t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -1276,10 +1312,10 @@ struct moog_2 {
     crange<V>           co_int,
     V                   freq,
     V                   reso,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     bandpass_tag)
   {
-    reset_coeffs (co, co_int, freq, reso, 1, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 1, vec_set<V> (0.), t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -1288,10 +1324,10 @@ struct moog_2 {
     crange<V>           co_int,
     V                   freq,
     V                   reso,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     highpass_tag)
   {
-    reset_coeffs (co, co_int, freq, reso, 2, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 2, vec_set<V> (0.), t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -1300,10 +1336,10 @@ struct moog_2 {
     crange<V>           co_int,
     V                   freq,
     V                   reso,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     notch_tag)
   {
-    reset_coeffs (co, co_int, freq, reso, 3, vec_set<V> (0.), sr);
+    reset_coeffs (co, co_int, freq, reso, 3, vec_set<V> (0.), t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -1407,7 +1443,7 @@ private:
     V                   reso,
     uint                filter_type, // choice on the original code
     V                   fraction, // frac on the original code
-    vec_value_type_t<V> sr)
+    vec_value_type_t<V> t_spl)
   {
     using T = vec_value_type_t<V>;
 
@@ -1416,16 +1452,15 @@ private:
     // It also doesn't respect the frequency.
 
     // needs generous sample/rate oversampling
-    freq = vec_min (sr < (T) 176200. ? (T) 12000. : (T) 20000., freq);
-    freq = vec_min (sr < (T) 96000. ? (T) 11000. : (T) 20000., freq);
-    freq = vec_min (sr < (T) 88200. ? (T) 6000. : (T) 20000., freq);
-    freq = vec_min (sr < (T) 48000. ? (T) 5500. : (T) 20000., freq);
+    freq = vec_min (t_spl > (T) (1. / 176200.) ? (T) 12000. : (T) 20000., freq);
+    freq = vec_min (t_spl > (T) (1. / 96000.) ? (T) 11000. : (T) 20000., freq);
+    freq = vec_min (t_spl > (T) (1. / 88200.) ? (T) 6000. : (T) 20000., freq);
+    freq = vec_min (t_spl > (T) (1. / 48000.) ? (T) 5500. : (T) 20000., freq);
 
     V fc = freq;
-    T fs = sr;
 
     V k_v   = reso * 120.;
-    V g     = vec_tan (3.141592653589793 / fs * fc) / vec_sqrt (1. + k_v);
+    V g     = vec_tan ((T) M_PI * fc * t_spl) / vec_sqrt (1. + k_v);
     V p0s   = 1.0 / (1.0 + g);
     V q0s_v = 1.0 - g;
     V r1s_v = -g;

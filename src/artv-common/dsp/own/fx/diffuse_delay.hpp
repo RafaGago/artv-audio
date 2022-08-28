@@ -123,7 +123,7 @@ public:
     }
     _extpar.ducking_speed = v;
     v *= 0.01f;
-    _ducker.set_speed (vec_set<double_x2> (v * v), tgt_srate);
+    _ducker.set_speed (vec_set<double_x2> (v * v), t_spl);
   }
 
   static constexpr auto get_parameter (ducking_speed_tag)
@@ -197,7 +197,7 @@ public:
       return;
     }
     _extpar.mod_freq = v;
-    _mod_lfo.set_freq (vec_set<n_taps> (v), (float) tgt_srate);
+    _mod_lfo.set_freq (vec_set<n_taps> (v), t_spl);
   }
 
   static constexpr auto get_parameter (mod_freq_tag)
@@ -280,7 +280,7 @@ public:
       vec_set<2> (330.),
       vec_set<2> (0.5),
       vec_set<2> ((double) -v),
-      (double) tgt_srate);
+      (double) t_spl);
   }
 
   static constexpr auto get_parameter (tilt_db_tag)
@@ -330,8 +330,7 @@ public:
       return;
     }
     _extpar.hp = v;
-    _filters.reset_coeffs<hp_idx> (
-      vec_set<n_taps> (4.f + v * 396.f), (float) tgt_srate);
+    _filters.reset_coeffs<hp_idx> (vec_set<n_taps> (4.f + v * 396.f), t_spl);
   }
 
   static constexpr auto get_parameter (hipass_tag)
@@ -452,7 +451,7 @@ public:
       blocksize,
       6 * 1024);
 
-    _n_spls_smoother.reset_coeffs (vec_set<4> (3.f), tgt_srate);
+    _n_spls_smoother.reset_coeffs (vec_set<4> (3.f), t_spl);
     _n_spls_smoother.reset_states();
 
     // get time info maximum buffer sizes and allocate
@@ -480,8 +479,7 @@ public:
       _ap_lfo[i].set_phase (phase_type {phases, phase_type::normalized {}});
       phases = vec_shuffle (phases, phases, 1, 2, 3, 0);
       phases += 0.01f;
-      _ap_lfo[i].set_freq (
-        vec_set<n_serial_diffusors> (0.247f), (float) tgt_srate);
+      _ap_lfo[i].set_freq (vec_set<n_serial_diffusors> (0.247f), t_spl);
     }
 #if DIFFUSE_DELAY_USE_THIRAN_TAPS
     _delay.set_resync_delta (10.0);
@@ -499,9 +497,9 @@ public:
 
     // rms reset
     constexpr float rms_window_sec = 0.3f;
-    _env.reset_coeffs<rms_dry_idx> (vec_set<4> (rms_window_sec), tgt_srate);
-    _env.reset_coeffs<rms_wet_idx> (vec_set<4> (rms_window_sec), tgt_srate);
-    _env.reset_coeffs<peakfollow_idx> (vec_set<4> (0.05f), tgt_srate);
+    _env.reset_coeffs<rms_dry_idx> (vec_set<4> (rms_window_sec), t_spl);
+    _env.reset_coeffs<rms_wet_idx> (vec_set<4> (rms_window_sec), t_spl);
+    _env.reset_coeffs<peakfollow_idx> (vec_set<4> (0.05f), t_spl);
 
     // hack to trigger intialization of some parameters
     _extpar.tilt_db           = 999.f;
@@ -532,15 +530,16 @@ private:
   // GCD(44100,33600) = 2100. GCD(48000,33600) = 4800
   // for lower CPU: 31500: 6300 1500
   //                21000: 2100 3000
-  static constexpr uint tgt_srate          = 33600;
-  static constexpr uint blocksize          = 16;
-  static constexpr uint n_taps             = 4;
-  static constexpr uint n_serial_diffusors = 4;
-  static constexpr uint main_mod_samples   = 160; // bipolar (excursion 320)
-  static constexpr uint diffusor_mod_range = 48; // bipolar (excursion 96)
-  using arith_type                         = float;
-  using vec1_type                          = vec<arith_type, 1>;
-  using vec_type                           = vec<arith_type, n_taps>;
+  static constexpr uint  tgt_srate          = 33600;
+  static constexpr float t_spl              = 1.f / tgt_srate;
+  static constexpr uint  blocksize          = 16;
+  static constexpr uint  n_taps             = 4;
+  static constexpr uint  n_serial_diffusors = 4;
+  static constexpr uint  main_mod_samples   = 160; // bipolar (excursion 320)
+  static constexpr uint  diffusor_mod_range = 48; // bipolar (excursion 96)
+  using arith_type                          = float;
+  using vec1_type                           = vec<arith_type, 1>;
+  using vec_type                            = vec<arith_type, n_taps>;
   //----------------------------------------------------------------------------
   void initialize_buffer_related_parts()
   {
@@ -816,8 +815,7 @@ private:
           constexpr float filt_stability = 0.27f;
           freq
             = vec_min (freq, (float) (((tgt_srate / 2) - 1)) * filt_stability);
-          _filters.reset_coeffs<bp_idx> (
-            freq, get_scaled_reso (freq), (float) tgt_srate);
+          _filters.reset_coeffs<bp_idx> (freq, get_scaled_reso (freq), t_spl);
         }
         ++_bp_update_spls;
         // Damp + HP/DC
@@ -1066,8 +1064,7 @@ private:
 
     float note = min_note + _extpar.damp_ratio * (max_note - min_note);
     _filters.reset_coeffs<lp_idx> (
-      note_to_hzs (note, max_note, _extpar.freq_spread, bal_range),
-      (float) tgt_srate);
+      note_to_hzs (note, max_note, _extpar.freq_spread, bal_range), t_spl);
   }
   //----------------------------------------------------------------------------
   void update_bp()

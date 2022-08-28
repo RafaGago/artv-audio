@@ -45,7 +45,7 @@ public:
     : _v {from_bipolar_normalized (norm)}
   {}
   //----------------------------------------------------------------------------
-  phase (phase const& other) = default;
+  phase (phase const& other)            = default;
   phase& operator= (phase const& other) = default;
   ~phase()                              = default;
   //----------------------------------------------------------------------------
@@ -204,11 +204,11 @@ public:
   //----------------------------------------------------------------------------
   void set_increment (phase<N> p) { _increment = p; }
   //----------------------------------------------------------------------------
-  void set_freq (vec<float, N> f, float samplerate)
+  void set_freq (vec<float, N> f, float t_spl)
   {
     constexpr auto pmax
       = (float) std::numeric_limits<typename phase<N>::raw_uint>::max();
-    set_increment (phase<N> {vec_cast<u32> (pmax / samplerate * f)});
+    set_increment (phase<N> {vec_cast<u32> (pmax * t_spl * f)});
   }
   //----------------------------------------------------------------------------
   void     set_phase (phase<N> p) { _phase = p; }

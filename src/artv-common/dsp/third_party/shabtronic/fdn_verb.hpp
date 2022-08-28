@@ -240,9 +240,7 @@ public:
     }
     _hp = f;
     _filters.reset_coeffs<filter_hp> (
-      vec_set<1> (f),
-      vec_set<1> (0.25f),
-      (float) _plugcontext->get_sample_rate());
+      vec_set<1> (f), vec_set<1> (0.25f), _t_spl);
   }
 
   static constexpr auto get_parameter (hipass_tag)
@@ -261,9 +259,7 @@ public:
     }
     _lp = f;
     _filters.reset_coeffs<filter_lp> (
-      vec_set<1> (f),
-      vec_set<1> (0.25f),
-      (float) _plugcontext->get_sample_rate());
+      vec_set<1> (f), vec_set<1> (0.25f), _t_spl);
   }
 
   static constexpr auto get_parameter (lopass_tag)
@@ -341,6 +337,7 @@ public:
   void reset (plugin_context& pc)
   {
     _plugcontext = &pc;
+    _t_spl       = 1.f / pc.get_sample_rate();
     reinitialize (true);
     _filters.reset_states<filter_lp>();
     _filters.reset_states<filter_hp>();
@@ -409,7 +406,7 @@ private:
     _mod_delay_spls  = srate * (1. / 75.);
     float hz_correct = std::min (1.0 / (2.0 * _mod_hz), 1.);
     _mod_depth_spls  = hz_correct * _mod_depth * _mod_delay_spls * (0.5f);
-    _lfo.set_freq (make_vec (_mod_hz), srate);
+    _lfo.set_freq (make_vec (_mod_hz), _t_spl);
   }
   //----------------------------------------------------------------------------
   void reinitialize (bool reallocate = false)
@@ -525,6 +522,7 @@ private:
   float           _pre_shift; //  slider12
   float           _post_shift; // slider13
   plugin_context* _plugcontext;
+  float           _t_spl;
 };
 //------------------------------------------------------------------------------
 

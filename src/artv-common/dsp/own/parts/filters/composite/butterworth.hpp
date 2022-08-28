@@ -99,7 +99,7 @@ public:
   static void reset_coeffs (
     crange<V>           co, // coeffs interleaved
     V                   freq,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     uint                order)
   {
     using T                 = vec_value_type_t<V>;
@@ -109,7 +109,7 @@ public:
     std::array<double, max_size> q_list_mem {};
     auto q_list = butterworth_2p_cascade_q_list::get (q_list_mem, order);
     if constexpr (std::is_same_v<T, double>) {
-      cascade_type::reset_coeffs (co, freq, q_list, sr, order);
+      cascade_type::reset_coeffs (co, freq, q_list, t_spl, order);
     }
     else {
       std::array<T, max_size> q_list_cast_mem;
@@ -117,7 +117,7 @@ public:
         q_list_cast_mem[i] = (T) q_list[i];
       }
       auto q_list_cast = make_crange (q_list_cast_mem.data(), q_list.size());
-      cascade_type::reset_coeffs (co, freq, q_list_cast, sr, order);
+      cascade_type::reset_coeffs (co, freq, q_list_cast, t_spl, order);
     }
   }
   //----------------------------------------------------------------------------
@@ -170,10 +170,10 @@ public:
   static void reset_coeffs (
     crange<V>           co, // coeffs (interleaved, SIMD aligned)
     V                   freq,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     lowpass_tag)
   {
-    butterworth_type::reset_coeffs (co, freq, sr, order);
+    butterworth_type::reset_coeffs (co, freq, t_spl, order);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -218,7 +218,7 @@ struct butterworth_lp_complex {
   static void poles (
     crange<vec_complex<V>> poles,
     V                      freq,
-    vec_value_type_t<V>    srate,
+    vec_value_type_t<V>    t_spl,
     uint                   order)
   {
     /*
@@ -244,7 +244,7 @@ struct butterworth_lp_complex {
 
     assert (poles.size() >= order);
 
-    V w         = freq / srate;
+    V w         = freq * t_spl;
     V w_prewarp = vec_tan ((T) M_PI * w);
 
     T poles_angle = (T) M_PI / (T) order;

@@ -21,13 +21,13 @@ public:
   static void reset_coeffs (
     crange<V>           c,
     V                   freq,
-    vec_value_type_t<V> sr,
+    vec_value_type_t<V> t_spl,
     highpass_tag)
   {
     using T = vec_value_type_t<V>;
     assert (c.size() >= n_coeffs);
 
-    c[a] = (T) 2. * vec_sin ((T) M_PI * freq / srate);
+    c[a] = (T) 2. * vec_sin ((T) M_PI * freq * t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>

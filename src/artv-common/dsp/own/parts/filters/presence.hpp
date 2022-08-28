@@ -27,7 +27,7 @@ struct presence_high_shelf {
     V                   freq,
     V                   bogus_q,
     V                   gain_db,
-    vec_value_type_t<V> sr)
+    vec_value_type_t<V> t_spl)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
@@ -62,7 +62,7 @@ struct presence_high_shelf {
     freq = vec_max (freq, 3100.);
     freq = vec_min (freq, 18500.);
 
-    cf    = freq / sr;
+    cf    = freq * t_spl;
     boost = gain_db;
 
     // scaling to the orignal range

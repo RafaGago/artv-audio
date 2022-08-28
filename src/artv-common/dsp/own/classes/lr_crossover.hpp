@@ -32,7 +32,7 @@ public:
   void reset (float samplerate)
   {
     memset (this, 0, sizeof *this);
-    _samplerate = samplerate;
+    _t_spl = 1.f / samplerate;
   }
   //----------------------------------------------------------------------------
   void set_crossover_point (
@@ -54,7 +54,7 @@ public:
 
     if (order != 0) {
       double_x2 f = {freq_l, freq_r};
-      lr::reset_coeffs<double_x2> (_coeffs[idx], f, _samplerate, order);
+      lr::reset_coeffs<double_x2> (_coeffs[idx], f, _t_spl, order);
     }
 
     if (order == _order[idx]) {
@@ -306,7 +306,7 @@ private:
 
   std::array<uint, n_crossovers>                 _order {};
   std::array<std::array<float, 2>, n_crossovers> _freq {};
-  float                                          _samplerate;
+  float                                          _t_spl;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

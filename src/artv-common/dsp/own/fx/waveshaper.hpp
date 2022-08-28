@@ -468,6 +468,7 @@ public:
   void reset (plugin_context& pc)
   {
     _plugcontext = &pc;
+    _t_spl       = 1.f / pc.get_sample_rate();
 
     _envfollow.reset_states();
     _pre_emphasis.reset_states();
@@ -483,11 +484,11 @@ public:
     // this DC blocker at a very low frequency is critical for the sound of
     // the companded modes to be acceptable. Unfortunately it causes DC itself
     // when the sound is muted. I didn't find a solution.
-    _dc_block.reset_coeffs (make_vec (1.), pc.get_sample_rate());
+    _dc_block.reset_coeffs (make_vec (1.), _t_spl);
 
     _p = params {};
 
-    _sparams.reset ((float) pc.get_sample_rate());
+    _sparams.reset (_t_spl);
 
     mp11::mp_for_each<parameters> ([&] (auto type) {
       set (type, get_parameter (type).defaultv);
@@ -819,11 +820,11 @@ private:
     auto f = double_x2 {_p.crossv_hz[idx], _p.crossv_hz[idx] * 1.009};
     if (_p.crossv_is_lp[idx]) {
       _crossv.reset_coeffs_on_idx<lp_type> (
-        idx, f, _plugcontext->get_sample_rate(), _p.crossv_order[idx]);
+        idx, f, _t_spl, _p.crossv_order[idx]);
     }
     else {
       _crossv.reset_coeffs_on_idx<hp_type> (
-        idx, f, _plugcontext->get_sample_rate(), _p.crossv_order[idx]);
+        idx, f, _t_spl, _p.crossv_order[idx]);
     }
 
     if (reset_states) {
@@ -859,11 +860,9 @@ private:
     f += freq_offset;
     db += amt_offset;
 
-    _pre_emphasis.reset_coeffs (
-      f, q, db, _plugcontext->get_sample_rate(), bell_tag {});
+    _pre_emphasis.reset_coeffs (f, q, db, _t_spl, bell_tag {});
 
-    _post_emphasis.reset_coeffs (
-      f, q, -db, _plugcontext->get_sample_rate(), bell_tag {});
+    _post_emphasis.reset_coeffs (f, q, -db, _t_spl, bell_tag {});
   }
   //----------------------------------------------------------------------------
   void update_envelope_follower()
@@ -871,7 +870,7 @@ private:
     _envfollow.reset_coeffs (
       vec_set<double_x2> (_p.ef_attack),
       vec_set<double_x2> (_p.ef_release),
-      _plugcontext->get_sample_rate());
+      _t_spl);
   }
   //----------------------------------------------------------------------------
   enum sat_type {
@@ -998,6 +997,7 @@ private:
   uint                                      _control_rate_mask;
 
   plugin_context* _plugcontext = nullptr;
+  float           _t_spl;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

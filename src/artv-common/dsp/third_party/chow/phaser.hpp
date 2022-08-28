@@ -172,7 +172,7 @@ public:
     // DC blockers, could be only done once...
     c.cut_head (n_own_coeffs);
     mystran_dc_blocker::reset_coeffs<x1_vec> (
-      c.cast (x1_vec {}), make_vec (2.), fs);
+      c.cast (x1_vec {}), make_vec (2.), 1. / fs);
   }
   //----------------------------------------------------------------------------
   static void reset_states (crange<value_type> s)
@@ -348,11 +348,12 @@ public:
     using x1_t = vec<decltype (_smooth_coeff), 1>;
 
     _plugcontext = &pc;
+    _t_spl       = 1.f / pc.get_sample_rate();
 
     smoother::reset_coeffs (
       make_crange (_smooth_coeff).cast (x1_t {}),
       vec_set<x1_t> (1. / 0.1),
-      pc.get_sample_rate());
+      _t_spl);
 
     memset (&_ph_coeffs, 0, sizeof _ph_coeffs);
     memset (&_fb_coeffs, 0, sizeof _fb_coeffs);
@@ -499,8 +500,7 @@ private:
   {
     // the LFO coefficient is placed with the parameter smoothing....
     float mult = _params.freq_mult ? 10.f : 1.f;
-    _lfo.set_freq (
-      vec_set<1> (_params.lfo_freq * mult), _plugcontext->get_sample_rate());
+    _lfo.set_freq (vec_set<1> (_params.lfo_freq * mult), _t_spl);
   }
   //----------------------------------------------------------------------------
   inline float light_shape (float x, float skewpow) noexcept
@@ -520,6 +520,7 @@ private:
   float           _smooth_coeff;
   all_params      _params;
   plugin_context* _plugcontext = nullptr;
+  float           _t_spl;
 };
 //------------------------------------------------------------------------------
 }} // namespace artv::chow

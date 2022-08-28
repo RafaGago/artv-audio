@@ -339,7 +339,7 @@ public:
   void set (delay_time_tag, float v)
   {
     v *= 0.01f;
-    v *= _srate * max_delay_sec;
+    v *= max_delay_sec * _srate;
     _params.smooth_target.value.delay_spls = v;
   }
 
@@ -367,6 +367,7 @@ public:
   {
     _plugcontext = &pc;
     _srate       = pc.get_sample_rate();
+    _t_spl       = 1.f / _srate;
     _allpass1p.reset_states_cascade();
     _allpass2p.reset_states_cascade();
     _feedback_shelf.reset_states_cascade();
@@ -415,10 +416,10 @@ public:
     onepole_smoother::reset_coeffs (
       make_crange (_lp_smooth_coeff).cast (x1_type {}),
       vec_set<x1_type> (1. / 0.01),
-      pc.get_sample_rate());
+      _t_spl);
 
     _dc_blocker.reset_states();
-    _dc_blocker.reset_coeffs (vec_set<4> (2.f), pc.get_sample_rate());
+    _dc_blocker.reset_coeffs (vec_set<4> (2.f), _t_spl);
 
     _n_processed_samples = 0;
 
@@ -426,7 +427,7 @@ public:
     uint sr_order      = get_samplerate_order (pc.get_sample_rate()) + 3;
     _control_rate_mask = lsb_mask<uint> (sr_order);
     _feedback_samples  = vec_set<double_x2> (0.);
-    _lfo_srate         = _srate / (_control_rate_mask + 1);
+    _lfo_t_spl         = _t_spl * (_control_rate_mask + 1);
 
     // setting up delay
     reset_memory_parts();
@@ -628,7 +629,7 @@ public:
           out = _allpass2p.tick_on_idx (g, out);
         }
       }
-      auto out    = _dc_blocker.tick (out);
+      out         = _dc_blocker.tick (out);
       auto del_fb = _feedback_delay_shelf.tick_on_idx (k_shelf_lo, out);
       del_fb      = _feedback_delay_shelf.tick_on_idx (k_shelf_hi, out);
       _delay.push (make_crange (del_fb));
@@ -751,7 +752,7 @@ private:
     // coefficients internally.
     constexpr uint vec_size = vec_traits<float_x4>().size;
 
-    _lfos.set_freq (vec_set<2> (pars.lfo_hz_final), _lfo_srate);
+    _lfos.set_freq (vec_set<2> (pars.lfo_hz_final), _lfo_t_spl);
     auto stereo_ph
       = phase<1> {vec_set<1> (pars.lfo_stereo), phase<1>::degrees {}}.get_raw (
         0);
@@ -896,28 +897,28 @@ private:
         _stagesdl_spls.target.spls[s]
           = vec_to_array (freq_to_delay_spls (freqs));
         if (s == 0) {
-          _allpass1p.reset_coeffs_on_idx (0, freqs, _srate);
+          _allpass1p.reset_coeffs_on_idx (0, freqs, _t_spl);
         }
       }
       else if (
         pars.topology == t_1_pole || pars.topology == t_1_pole_legacy
         || pars.topology == t_3_pole) {
-        _allpass1p.reset_coeffs_on_idx (s, freqs, _srate);
+        _allpass1p.reset_coeffs_on_idx (s, freqs, _t_spl);
       }
       else if (
         pars.topology == t_2_pole || pars.topology == t_2_pole_legacy
         || pars.topology == t_3_pole) {
-        _allpass2p.reset_coeffs_on_idx (s, freqs, qs, _srate);
+        _allpass2p.reset_coeffs_on_idx (s, freqs, qs, _t_spl);
       }
       else if (pars.topology == t_hybrid_1) {
         _stagesdl_spls.target.spls[s]
           = vec_to_array (freq_to_delay_spls (freqs * 2));
-        _allpass2p.reset_coeffs_on_idx (s, freqs, 0.05f + qs * 0.3f, _srate);
+        _allpass2p.reset_coeffs_on_idx (s, freqs, 0.05f + qs * 0.3f, _t_spl);
       }
       else if (pars.topology == t_hybrid_2) {
         _stagesdl_spls.target.spls[s]
           = vec_to_array (freq_to_delay_spls (freqs));
-        _allpass2p.reset_coeffs_on_idx (s, freqs, 0.05f + qs * 0.5f, _srate);
+        _allpass2p.reset_coeffs_on_idx (s, freqs, 0.05f + qs * 0.5f, _t_spl);
       }
       if (s == 0) {
         constexpr float cut_ratio = 0.3f;
@@ -930,7 +931,7 @@ private:
           vec_max (210., cutfreq),
           vec_set<double_x2> (0.35),
           vec_set<double_x2> (pars.feedback_hp * gain_db),
-          _srate,
+          _t_spl,
           lowshelf_tag {});
 
         auto del_cutfreq = freqs;
@@ -940,7 +941,7 @@ private:
           vec_max (210.f, del_cutfreq),
           vec_set<float_x4> (0.35),
           vec_set<float_x4> (pars.feedback_hp * gain_db),
-          _srate,
+          _t_spl,
           lowshelf_tag {});
       }
       if (s == (pars.n_stages - 1)) {
@@ -954,7 +955,7 @@ private:
           vec_max (4000., cutfreq),
           vec_set<double_x2> (0.35),
           vec_set<double_x2> (pars.feedback_lp * gain_db),
-          _srate,
+          _t_spl,
           highshelf_tag {});
 
         auto del_cutfreq = freqs;
@@ -964,7 +965,7 @@ private:
           vec_max (4000.f, del_cutfreq),
           vec_set<float_x4> (0.35),
           vec_set<float_x4> (pars.feedback_lp * gain_db),
-          _srate,
+          _t_spl,
           highshelf_tag {});
       }
     }
@@ -1049,10 +1050,10 @@ private:
   lfo<n_channels> _lfos; // 0 = L, 1 = R
   uint            _n_processed_samples;
   uint            _control_rate_mask;
-  float           _lfo_srate;
+  float           _lfo_t_spl;
+  float           _t_spl;
   float           _srate;
-
-  float _lp_smooth_coeff;
+  float           _lp_smooth_coeff;
 
   plugin_context* _plugcontext = nullptr;
 };

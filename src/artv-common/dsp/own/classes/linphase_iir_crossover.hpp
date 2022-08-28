@@ -36,8 +36,8 @@ public:
     crange_memset (make_crange (_in_delcomp), 0);
     crange_memset (make_crange (_out_delcomp), 0);
 
-    _samplerate = samplerate;
-    _n_stages   = n_stages;
+    _t_spl    = 1.f / samplerate;
+    _n_stages = n_stages;
 
     // compute max requirements for crossovers
     std::array<uint, n_crossovers> stage_state; // states (samples)
@@ -101,9 +101,9 @@ public:
     return 0;
   }
   //----------------------------------------------------------------------------
-  static uint get_n_stages (float freq, float samplerate, float snr_db)
+  static uint get_n_stages (float freq, float t_spl, float snr_db)
   {
-    return lp_type::get_n_stages (freq, samplerate, snr_db);
+    return lp_type::get_n_stages (freq, t_spl, snr_db);
   }
   //----------------------------------------------------------------------------
   void set_crossover_point (
@@ -125,7 +125,7 @@ public:
 
     if (order != 0) {
       double_x2 f = {freq_l, freq_r};
-      lp_type::reset_coeffs<double_x2> (_coeffs[idx], f, _samplerate, order);
+      lp_type::reset_coeffs<double_x2> (_coeffs[idx], f, _t_spl, order);
     }
 
     if (order == _order[idx]) {
@@ -294,7 +294,7 @@ private:
   std::array<uint, n_crossovers>                       _order {};
   std::array<uint, n_crossovers>                       _n_stages;
   std::array<std::array<float, n_chnls>, n_crossovers> _freq {};
-  float                                                _samplerate;
+  float                                                _t_spl;
   uint                                                 _sample_idx;
 };
 //------------------------------------------------------------------------------

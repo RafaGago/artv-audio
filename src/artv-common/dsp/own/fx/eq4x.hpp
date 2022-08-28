@@ -38,13 +38,13 @@ public:
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
-    using x1_t   = vec<decltype (_smooth_coeff), 1>;
-    _plugcontext = &pc;
-    _cfg         = decltype (_cfg) {};
+    using x1_t = vec<decltype (_smooth_coeff), 1>;
+    _t_spl     = 1.f / pc.get_sample_rate();
+    _cfg       = decltype (_cfg) {};
     smoother::reset_coeffs (
       make_crange (_smooth_coeff).cast (x1_t {}),
       vec_set<x1_t> (1. / 0.02),
-      pc.get_sample_rate());
+      _t_spl);
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -360,7 +360,6 @@ private:
 
     auto& b             = _cfg[band];
     auto  bandtype_prev = b.type;
-    auto  sr            = (float) _plugcontext->get_sample_rate();
 
     auto freq = vec_set<double_x2> (midi_note_to_hz (b.freq_note));
     freq[1] *= exp2 (b.diff);
@@ -374,45 +373,51 @@ private:
       break;
     case bandtype::svf_bell:
       _eq.reset_coeffs_ext<andy::svf> (
-        band, _target_coeffs[band], freq, q, gain, sr, bell_tag {});
+        band, _target_coeffs[band], freq, q, gain, _t_spl, bell_tag {});
       break;
     case bandtype::svf_lshelf:
       _eq.reset_coeffs_ext<andy::svf> (
-        band, _target_coeffs[band], freq, q, gain, sr, lowshelf_tag {});
+        band, _target_coeffs[band], freq, q, gain, _t_spl, lowshelf_tag {});
       break;
     case bandtype::svf_hshelf:
       _eq.reset_coeffs_ext<andy::svf> (
-        band, _target_coeffs[band], freq, q, gain, sr, highshelf_tag {});
+        band, _target_coeffs[band], freq, q, gain, _t_spl, highshelf_tag {});
       break;
     case bandtype::svf_allpass:
       _eq.reset_coeffs_ext<andy::svf> (
-        band, _target_coeffs[band], freq, q, sr, allpass_tag {});
+        band, _target_coeffs[band], freq, q, _t_spl, allpass_tag {});
       break;
     case bandtype::butterworth_lp:
       _eq.reset_coeffs_ext<btw_lp> (
-        band, _target_coeffs[band], freq, sr, q_to_butterworth_order (b.q));
+        band, _target_coeffs[band], freq, _t_spl, q_to_butterworth_order (b.q));
       break;
     case bandtype::butterworth_hp:
       _eq.reset_coeffs_ext<btw_hp> (
-        band, _target_coeffs[band], freq, sr, q_to_butterworth_order (b.q));
+        band, _target_coeffs[band], freq, _t_spl, q_to_butterworth_order (b.q));
       break;
     case bandtype::svf_tilt:
       _eq.reset_coeffs_ext<tilt_eq> (
-        band, _target_coeffs[band], freq, q, gain, sr);
+        band, _target_coeffs[band], freq, q, gain, _t_spl);
       break;
     case bandtype::presence: {
       q[1]              = q[0]; // undo diff
       auto qnorm_0_to_1 = q / get_parameter (band1_q_tag {}).max;
       _eq.reset_coeffs_ext<liteon::presence_high_shelf> (
-        band, _target_coeffs[band], freq, qnorm_0_to_1, gain, sr);
+        band, _target_coeffs[band], freq, qnorm_0_to_1, gain, _t_spl);
     } break;
     case bandtype::onepole_allpass: {
       _eq.reset_coeffs_ext<onepole_allpass> (
-        band, _target_coeffs[band], freq, sr);
+        band, _target_coeffs[band], freq, _t_spl);
     } break;
     case bandtype::svf_bell_bandpass: {
       _eq.reset_coeffs_ext<andy::svf> (
-        band, _target_coeffs[band], freq, q, gain, sr, bell_bandpass_tag {});
+        band,
+        _target_coeffs[band],
+        freq,
+        q,
+        gain,
+        _t_spl,
+        bell_bandpass_tag {});
       break;
     } break;
     default:
@@ -491,7 +496,7 @@ private:
   double   _smooth_coeff;
   topology _topology;
 
-  plugin_context* _plugcontext = nullptr;
+  float _t_spl;
 };
 //------------------------------------------------------------------------------
 } // namespace artv
