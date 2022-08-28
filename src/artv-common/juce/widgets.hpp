@@ -469,8 +469,17 @@ struct combobox_ext
     prev.setName (juce::String {text} + " Prev");
     prev.onClick = [this] {
       int id = combo.getSelectedItemIndex() - 1;
-      if (id >= 0) {
+      // wraparound.
+      if (id < 0) {
+        id = combo.getNumItems();
+      }
+      while (id >= 0) {
+        if (!combo.isItemEnabled (id + 1)) {
+          --id;
+          continue;
+        }
         combo.setSelectedItemIndex (id);
+        break;
       }
     };
     prev_next_grid_width_factor (0.f);
@@ -481,8 +490,17 @@ struct combobox_ext
     next.setName (juce::String {text} + " Next");
     next.onClick = [this] {
       int id = combo.getSelectedItemIndex() + 1;
-      if (id < combo.getNumItems()) {
+      // wraparound.
+      if (id == combo.getNumItems()) {
+        id = 0;
+      }
+      while (id < combo.getNumItems()) {
+        if (!combo.isItemEnabled (id + 1)) {
+          ++id;
+          continue;
+        }
         combo.setSelectedItemIndex (id);
+        break;
       }
     };
     next.setConnectedEdges (juce::TextButton::ConnectedOnLeft);

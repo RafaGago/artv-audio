@@ -15,6 +15,9 @@
   distribution modes had one of the frequencies on the parallel path out of
   range and the groupings were wrong. Unfortunately this changes the sound of
   the phaser (for good). Be sure to render old projects.
+- Editor: Comboboxes: Fix arrow buttons behavior when some items are disabled.
+  Now disabled items are skipped.
+- Editor: Comboboxes: Wrap around the list.
 
 1.8.1
 - Artv Phaser: Label the amount of stages by number of stages on the serial
