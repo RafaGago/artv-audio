@@ -126,14 +126,13 @@ function svf_tick(in) local (v1, v2, v3) global()(
 // Vadim Zavalishin
 // https://www.native-instruments.com/fileadmin/ni_media/downloads/pdf/VAFilterDesign_2.1.0.pdf
 
-function tpt_1p_reset (freq, samplerate) local(inv_sr_d2, wd, wa) global()(
-    inv_sr_d2 = 0.5 / samplerate;
-    wd = 2 * $pi * freq;
-    wa = 2 * samplerate * tan (wd * inv_sr_d2);
-    this.g = wa * inv_sr_d2;
-    this.g = this.g / (1 + this.g);
-);
+function tpt_1p_reset (freq, samplerate) local(g) global()(
+    g = tan ($pi * freq / samplerate);
+    this.g1 = 1 / (1 + g);
+    this.g_ap =  (1 + g) * this.g1;
+    this.g = g * this.g1;
 
+);
 
 function tpt_1p_tick_lp (in) local(v, lp) global()(
     v      = (in - this.s) * this.g;
@@ -150,6 +149,31 @@ function tpt_1p_tick_ap (in) local(lp, hp)(
     lp = this.tpt_1p_tick_lp (in);
     lp - (in - lp);
 );
+
+function tpt_1p_get_g_lp (in) local(v, lp) global()(
+  this.g;
+);
+
+function tpt_1p_get_g_hp (in) local(v, lp) global()(
+  1 - this.g;
+);
+
+function tpt_1p_get_g_ap (in) local(v, lp) global()(
+  2 * this.g - 1;
+);
+
+function tpt_1p_get_s_lp (in) local(v, lp) global()(
+  this.g1 * this.s;
+);
+
+function tpt_1p_get_s_hp (in) local(v, lp) global()(
+  -this.g1 * this.s;
+);
+
+function tpt_1p_get_s_ap (in) local(v, lp) global()(
+  2 * this.g1 * this.s;
+);
+
 //------------------------------------------------------------------------------
 // 1 pole no zero LP for smoothing
 function smooth_lp_1p_0z_init (freq, samplerate)  global()(
