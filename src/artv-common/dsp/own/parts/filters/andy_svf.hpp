@@ -2,10 +2,12 @@
 
 /* Fiters from: https://cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf*/
 
+#include <array>
 #include <cmath>
 #include <gcem.hpp>
 #include <type_traits>
 
+#include "artv-common/dsp/own/parts/filters/zdf.hpp"
 #include "artv-common/dsp/own/parts/traits.hpp"
 
 #include "artv-common/misc/misc.hpp"
@@ -132,25 +134,22 @@ template <class T>
 struct svf_tick_result {
   T v1;
   T v2;
-  T ic1eq;
-  T ic2eq;
+  T s1;
+  T s2;
 };
 
 template <class T>
-static svf_tick_result<T> svf_tick (T ic1eq, T ic2eq, T a1, T a2, T a3, T v0)
+static svf_tick_result<T> svf_tick (T s1, T s2, T a1, T a2, T a3, T v0)
 {
   svf_tick_result<T> ret;
 
-  T v3      = v0 - ic2eq;
-  ret.v1    = a1 * ic1eq + a2 * v3;
-  ret.v2    = ic2eq + a2 * ic1eq + a3 * v3;
-  ret.ic1eq = (ret.v1 * 2.) - ic1eq;
-  ret.ic2eq = (ret.v2 * 2.) - ic2eq;
+  T v3   = v0 - s2;
+  ret.v1 = a1 * s1 + a2 * v3;
+  ret.v2 = s2 + a2 * s1 + a3 * v3;
+  ret.s1 = (ret.v1 * 2.) - s1;
+  ret.s2 = (ret.v2 * 2.) - s2;
   return ret;
 }
-
-//------------------------------------------------------------------------------
-} // namespace detail
 
 //------------------------------------------------------------------------------
 // Enables the SVF multimode output. It is compile-time optimized depending on
@@ -159,30 +158,33 @@ static svf_tick_result<T> svf_tick (T ic1eq, T ic2eq, T a1, T a2, T a3, T v0)
 // order on which the tags appear (natural order, left to right). If only one
 // tag is passed the output is returned as a single value instead of an array.
 //------------------------------------------------------------------------------
-//------------------------------------------------------------------------------
-template <class... Tags>
+template <class Derived, class... Tags>
 struct svf_multimode {
 
   // maybe do tag validation, (things won't compile anyways).
   using enabled_modes = mp11::mp_unique<mp11::mp_list<Tags...>>;
 
-  static constexpr bool needs_k_coeff
-    = mp11::mp_contains<enabled_modes, highpass_tag>::value
-    || mp11::mp_contains<enabled_modes, notch_tag>::value
-    || mp11::mp_contains<enabled_modes, peak_tag>::value
-    || mp11::mp_contains<enabled_modes, bandpass_tag>::value
-    || mp11::mp_contains<enabled_modes, allpass_tag>::value;
+  template <class tag>
+  static constexpr bool contains = mp11::mp_contains<enabled_modes, tag>::value;
+
+  // clang-format off
+  static constexpr bool needs_k_coeff =
+    contains<highpass_tag> ||
+    contains<notch_tag> ||
+    contains<peak_tag> ||
+    contains<bandpass_tag> ||
+    contains<allpass_tag>;
+  // clang-format on
 
   static constexpr bool returns_array = mp11::mp_size<enabled_modes>::value > 1;
 
   static_assert (
     mp11::mp_size<enabled_modes>::value >= 1,
     "One mode needs to be enabled");
-
   //----------------------------------------------------------------------------
   enum coeffs { a1, a2, a3, k, n_coeffs = k + (uint) needs_k_coeff };
   enum coeffs_int { n_coeffs_int };
-  enum state { ic1eq, ic2eq, n_states };
+  enum state { s1, s2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> c, V freq, V q, vec_value_type_t<V> t_spl)
@@ -197,6 +199,9 @@ struct svf_multimode {
     if constexpr (needs_k_coeff) {
       c[k] = coeffs.k;
     }
+    if constexpr (!std::is_same_v<Derived, void>) {
+      Derived::template after_reset_coeffs (c, coeffs);
+    }
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -207,61 +212,54 @@ struct svf_multimode {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static auto tick (
-    crange<const V> c, // coeffs (interleaved, SIMD aligned)
-    crange<V>       s, // states (interleaved, SIMD aligned)
-    V               v0)
+  static auto tick (crange<const V> co, crange<V> st, V in)
   {
-    assert (c.size() >= n_coeffs);
-
-    if constexpr (needs_k_coeff) {
-      return tick (s, v0, c[a1], c[a2], c[a3], c[k]);
-    }
-    else {
-      return tick (s, v0, c[a1], c[a2], c[a3]);
-    }
+    return tick_impl<V, V> (co, st, in);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static auto tick (
-    crange<const vec_value_type_t<V>> c, // coeffs (single set)
-    crange<V>                         s, // states (interleaved, SIMD aligned)
-    V                                 v0)
+  static auto tick (crange<const vec_value_type_t<V>> co, crange<V> st, V in)
   {
-    assert (c.size() >= n_coeffs);
-
-    if constexpr (needs_k_coeff) {
-      return tick (
-        s,
-        v0,
-        vec_set<V> (c[a1]),
-        vec_set<V> (c[a2]),
-        vec_set<V> (c[a3]),
-        vec_set<V> (c[k]));
-    }
-    else {
-      return tick (
-        s, v0, vec_set<V> (c[a1]), vec_set<V> (c[a2]), vec_set<V> (c[a3]));
-    }
+    return tick_impl<V, vec_value_type_t<V>> (co, st, in);
   }
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static auto tick (
-    crange<V>          s,
-    V                  v0,
-    V                  a1_v,
-    V                  a2_v,
-    V                  a3_v,
-    [[maybe_unused]] V k_v = vec_set<V> (0.))
+  template <class V, class VT, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static auto tick_impl (
+    crange<const VT> co, // coeffs (V builtin type (single set) or V (SIMD))
+    crange<V>        st, // states (interleaved, SIMD aligned)
+    V                v0)
   {
     using T = vec_value_type_t<V>;
-    assert (s.size() >= n_states);
+    assert (st.size() >= n_states);
+    assert (co.size() >= n_coeffs);
 
-    auto tick_r = detail::svf_tick (s[ic1eq], s[ic2eq], a1_v, a2_v, a3_v, v0);
-    s[ic1eq]    = tick_r.ic1eq;
-    s[ic2eq]    = tick_r.ic2eq;
+    V a1_, a2_, a3_, k_;
+    if constexpr (std::is_same_v<std::remove_const_t<VT>, V>) {
+      a1_ = co[a1];
+      a2_ = co[a2];
+      a3_ = co[a3];
+      if constexpr (needs_k_coeff) {
+        k_ = co[k];
+      }
+    }
+    else if constexpr (std::is_same_v<std::remove_const_t<VT>, T>) {
+      a1_ = vec_set<V> (co[a1]);
+      a2_ = vec_set<V> (co[a2]);
+      a3_ = vec_set<V> (co[a3]);
+      if constexpr (needs_k_coeff) {
+        k_ = vec_set<V> (co[k]);
+      }
+    }
+    else {
+      static_assert (
+        sizeof (V) == 0, "T type must be either V or V's builtin type");
+    }
+
+    auto tick_r = detail::svf_tick (st[s1], st[s2], a1_, a2_, a3_, v0);
+    st[s1]      = tick_r.s1;
+    st[s2]      = tick_r.s2;
 
     std::array<V, mp11::mp_size<enabled_modes>::value> ret;
 
@@ -272,22 +270,22 @@ private:
         ret[index.value] = tick_r.v2;
       }
       else if constexpr (std::is_same_v<tag, highpass_tag>) {
-        ret[index.value] = v0 - k_v * tick_r.v1 - tick_r.v2;
+        ret[index.value] = v0 - k_ * tick_r.v1 - tick_r.v2;
       }
       else if constexpr (std::is_same_v<tag, bandpass_q_gain_tag>) {
         ret[index.value] = tick_r.v1;
       }
       else if constexpr (std::is_same_v<tag, bandpass_tag>) {
-        ret[index.value] = tick_r.v1 * k_v;
+        ret[index.value] = tick_r.v1 * k_;
       }
       else if constexpr (std::is_same_v<tag, notch_tag>) {
-        ret[index.value] = v0 - k_v * tick_r.v1;
+        ret[index.value] = v0 - k_ * tick_r.v1;
       }
       else if constexpr (std::is_same_v<tag, peak_tag>) {
-        ret[index.value] = v0 - k_v * tick_r.v1 - (T) 2. * tick_r.v2;
+        ret[index.value] = v0 - k_ * tick_r.v1 - (T) 2. * tick_r.v2;
       }
       else if constexpr (std::is_same_v<tag, allpass_tag>) {
-        ret[index.value] = v0 - (T) 2. * k_v * tick_r.v1;
+        ret[index.value] = v0 - (T) 2. * k_ * tick_r.v1;
       }
     });
 
@@ -301,6 +299,11 @@ private:
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
+} // namespace detail
+//------------------------------------------------------------------------------
+template <class... Tags>
+using svf_multimode = detail::svf_multimode<void, Tags...>;
+
 using svf_lowpass  = svf_multimode<lowpass_tag>;
 using svf_highpass = svf_multimode<highpass_tag>;
 using svf_allpass  = svf_multimode<allpass_tag>;
@@ -308,11 +311,300 @@ using svf_bandpass = svf_multimode<bandpass_tag>;
 using svf_notch    = svf_multimode<notch_tag>;
 using svf_peak     = svf_multimode<peak_tag>;
 //------------------------------------------------------------------------------
+// 1 pole adding the ability to get the S and G parameters for zdf feedback
+// calculations. Using a separate class because it needs some extra coefficient
+// memory to avoid divisions
+template <class... Tags>
+class svf_multimode_zdf
+  : private detail::svf_multimode<svf_multimode_zdf<Tags...>, Tags...> {
+public:
+  using base = detail::svf_multimode<svf_multimode_zdf<Tags...>, Tags...>;
+
+  template <class Tag>
+  static constexpr bool contains = base::template contains<Tag>;
+
+  // clang-format off
+  static constexpr bool needs_b1_coeff =
+    contains<highpass_tag> ||
+    contains<bandpass_tag> ||
+    contains<notch_tag> ||
+    contains<peak_tag> ||
+    contains<allpass_tag>;
+
+  static constexpr bool needs_b2_coeff =
+    contains<lowpass_tag> ||
+    contains<bandpass_tag> ||
+    contains<notch_tag> ||
+    contains<peak_tag> ||
+    contains<allpass_tag>;
+  // clang-format on
+
+  enum coeffs {
+    b1       = base::n_coeffs,
+    b2       = base::n_coeffs + (int) needs_b1_coeff,
+    n_coeffs = b2 + (int) needs_b2_coeff
+  };
+  enum coeffs_int { n_coeffs_int = base::n_coeffs_int };
+  enum state { n_states = base::n_states };
+
+  static constexpr uint n_modes_enabled
+    = mp11::mp_size<typename base::enabled_modes>::value;
+  // coeffs are G and S pairs
+  static constexpr uint n_zdf_coeffs = n_modes_enabled * 2;
+  //----------------------------------------------------------------------------
+  using base::reset_coeffs;
+  using base::reset_states;
+  using base::tick;
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static auto tick (crange<const V> co, crange<V> st, zdf::coeffs_tag)
+  {
+    std::array<V, n_zdf_coeffs> ret;
+    tick_impl<V, V> (co, st, ret, zdf::coeffs_tag {});
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static auto tick (
+    crange<const vec_value_type_t<V>> co,
+    crange<V>                         st,
+    zdf::coeffs_tag)
+  {
+    std::array<V, n_zdf_coeffs> ret;
+    tick_impl<V, vec_value_type_t<V>> (co, st, ret, zdf::coeffs_tag {});
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void tick (
+    crange<const V> co,
+    crange<V>       st,
+    crange<V>       G_S,
+    zdf::coeffs_tag)
+  {
+    tick_impl<V, V> (co, st, G_S, zdf::coeffs_tag {});
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void tick (
+    crange<const vec_value_type_t<V>> co,
+    crange<V>                         st,
+    crange<V>                         G_S,
+    zdf::coeffs_tag)
+  {
+    tick_impl<V, vec_value_type_t<V>> (co, st, G_S, zdf::coeffs_tag {});
+  }
+  //----------------------------------------------------------------------------
+private:
+  // return G and S for each mode
+  template <class V, class VT, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void tick_impl (
+    crange<const VT> co, // coeffs (V builtin type (single set) or V (SIMD))
+    crange<const V>  st, // states (interleaved, SIMD aligned)
+    crange<V>        G_S,
+    zdf::coeffs_tag)
+  {
+    using T = vec_value_type_t<V>;
+    assert (G_S.size() >= n_zdf_coeffs);
+    assert (co.size() >= n_coeffs);
+    assert (st.size() >= n_states);
+
+    V a1_, a2_, a3_, b1_, b2_;
+    if constexpr (std::is_same_v<VT, V>) {
+      a1_ = co[base::a1];
+      a2_ = co[base::a2];
+      a3_ = co[base::a3];
+      if constexpr (needs_b1_coeff) {
+        b1_ = co[b1];
+      }
+      if constexpr (needs_b2_coeff) {
+        b2_ = co[b2];
+      }
+    }
+    else if constexpr (std::is_same_v<VT, T>) {
+      a1_ = vec_set<V> (co[base::a1]);
+      a2_ = vec_set<V> (co[base::a2]);
+      a3_ = vec_set<V> (co[base::a3]);
+      if constexpr (needs_b1_coeff) {
+        b1_ = vec_set<V> (co[b1]);
+      }
+      if constexpr (needs_b2_coeff) {
+        b2_ = vec_set<V> (co[b2]);
+      }
+    }
+    else {
+      static_assert (
+        sizeof (V) == 0, "T type must be either V or V's builtin type");
+    }
+
+    mp_foreach_idx (
+      typename base::enabled_modes {}, [&] (auto index, auto mode) {
+        using tag    = decltype (mode);
+        uint const i = index.value * 2;
+
+        // b1 = k * a1, b2 = gk * a1 = k * a2
+        // formulas below computed with
+        // misc/sympy/2order-tpt.py
+
+        if constexpr (std::is_same_v<tag, lowpass_tag>) {
+          //         2
+          //        g ⋅x + g⋅k⋅s₂ + g⋅s₁ + s₂
+          // LP_y = ─────────────────────────
+          //                2
+          //               g  + g⋅k + 1
+          //              2
+          //             g
+          // LP_G = ────────────
+          //         2
+          //        g  + g⋅k + 1
+          //        g⋅k⋅s₂ + g⋅s₁ + s₂
+          // LP_S = ──────────────────
+          //            2
+          //           g  + g⋅k + 1
+
+          G_S[i + 0] = a3_; // G
+          G_S[i + 1] = st[base::s1] * a2_ + st[base::s2] * (a1_ + b2_); // S
+        }
+        else if constexpr (std::is_same_v<tag, highpass_tag>) {
+          //        -s₁⋅(g + k) - s₂ + x
+          // HP_y = ────────────────────
+          //             2
+          //            g  + g⋅k + 1
+          //             1
+          // HP_G = ────────────
+          //         2
+          //        g  + g⋅k + 1
+          //        -(g⋅s₁ + k⋅s₁ + s₂)
+          // HP_S = ────────────────────
+          //             2
+          //            g  + g⋅k + 1
+
+          G_S[i + 0] = a1_; // G
+          G_S[i + 1] = st[base::s1] * (a2_ + b1_) + st[base::s2] * a1_;
+          G_S[i + 1] = -G_S[i + 1]; // S
+        }
+        else if constexpr (std::is_same_v<tag, bandpass_q_gain_tag>) {
+          //            -g⋅(s₂ - x) + s₁
+          // BP_raw_y = ────────────────
+          //               2
+          //              g  + g⋅k + 1
+          //                 g
+          // BP_raw_G = ────────────
+          //             2
+          //            g  + g⋅k + 1
+          //             -g⋅s₂ + s₁
+          // BP_raw_S = ────────────
+          //             2
+          //            g  + g⋅k + 1
+          G_S[i + 0] = a2_; // G
+          G_S[i + 1] = st[base::s1] * a1_ - st[base::s2] * a2_; // S
+        }
+        else if constexpr (std::is_same_v<tag, bandpass_tag>) {
+          //        -k⋅(g⋅(s₂ - x) - s₁)
+          // BP_y = ─────────────────────
+          //              2
+          //             g  + g⋅k + 1
+          //            g⋅k
+          // BP_G = ────────────
+          //         2
+          //        g  + g⋅k + 1
+          //        k⋅(-g⋅s₂ + s₁)
+          // BP_S = ──────────────
+          //          2
+          //         g  + g⋅k + 1
+          G_S[i + 0] = b2_; // G
+          G_S[i + 1] = st[base::s1] * b1_ - st[base::s2] * b2_; // S
+        }
+        else if constexpr (std::is_same_v<tag, notch_tag>) {
+          //            2
+          //           g ⋅x + g⋅k⋅s₂ - k⋅s₁ + x
+          // Notch_y = ────────────────────────
+          //                  2
+          //                 g  + g⋅k + 1
+          //               2
+          //              g  + 1
+          // Notch_G = ────────────
+          //            2
+          //           g  + g⋅k + 1
+          //           k⋅(g⋅s₂ - s₁)
+          // Notch_S = ─────────────
+          //             2
+          //            g  + g⋅k + 1
+          G_S[i + 0] = a3_ + a1_; // G
+          G_S[i + 1] = st[base::s2] * b2_ - st[base::s1] * b1_; // S
+        }
+        else if constexpr (std::is_same_v<tag, peak_tag>) {
+          //           2
+          //          g ⋅x + g⋅k⋅s₂ + 2⋅g⋅s₁ + k⋅s₁ + 2⋅s₂ - x
+          // Peak_y = ────────────────────────────────────────
+          //                         2
+          //                        g  + g⋅k + 1
+          //              2
+          //             g  - 1
+          // Peak_G = ────────────
+          //           2
+          //          g  + g⋅k + 1
+          //          g⋅k⋅s₂ + 2⋅g⋅s₁ + k⋅s₁ + 2⋅s₂
+          // Peak_S = ─────────────────────────────
+          //                    2
+          //                   g  + g⋅k + 1
+          G_S[i + 0] = a3_ - a1_; // G
+          G_S[i + 1] = st[base::s1] * ((T) 2 * a2_ + b1_);
+          G_S[i + 1] += st[base::s2] * ((T) 2 * a1_ + b2_);
+        }
+        else if constexpr (std::is_same_v<tag, allpass_tag>) {
+          //                                 ⎛ 2          ⎞
+          //        2⋅k⋅(g⋅(s₂ - x) - s₁) + x⋅⎝g  + g⋅k + 1⎠
+          // AP_y = ────────────────────────────────────────
+          //                       2
+          //                      g  + g⋅k + 1
+          //         2
+          //        g  - g⋅k + 1
+          // AP_G = ────────────
+          //         2
+          //        g  + g⋅k + 1
+          //        2⋅k⋅(g⋅s₂ - s₁)
+          // AP_S = ───────────────
+          //           2
+          //          g  + g⋅k + 1
+          G_S[i + 0] = a3_ - b2_ + a1_; // G
+          G_S[i + 1] = st[base::s2] * b2_ - st[base::s1] * b1_;
+          G_S[i + 1] *= (T) 2; // S
+        }
+      });
+  }
+  //----------------------------------------------------------------------------
+  friend class detail::svf_multimode<svf_multimode_zdf<Tags...>, Tags...>;
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static inline void after_reset_coeffs (crange<V> co, detail::svf_coeffs<V> c)
+  {
+    assert (co.size() >= n_coeffs);
+    if constexpr (needs_b1_coeff) {
+      //             k
+      // b1 = ──────────────
+      //        2
+      //       g  + g⋅k + 1
+      co[b1] = c.a1 * c.k;
+    }
+
+    if constexpr (needs_b2_coeff) {
+      //         g * k
+      // b2 = ──────────────
+      //       2
+      //      g  + g⋅k + 1
+      co[b2] = c.a2 * c.k;
+    }
+  }
+  //----------------------------------------------------------------------------
+};
+//------------------------------------------------------------------------------
+// less eficient version that can switch modes on the fly. Useful for e.g. EQs.
 struct svf {
   //----------------------------------------------------------------------------
   enum coeffs { a1, a2, a3, m0, m1, m2, n_coeffs };
   enum coeffs_int { n_coeffs_int };
-  enum state { ic1eq, ic2eq, n_states };
+  enum state { s1, s2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
@@ -564,8 +856,8 @@ struct svf {
     assert (s.size() >= n_states);
 
     V out = calc<V> (
-      s[ic1eq],
-      s[ic2eq],
+      s[s1],
+      s[s2],
       vec_set<V> (c[m0]),
       vec_set<V> (c[m1]),
       vec_set<V> (c[m2]),
@@ -587,8 +879,8 @@ struct svf {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
 
-    V out = calc<V> (
-      s[ic1eq], s[ic2eq], c[m0], c[m1], c[m2], c[a1], c[a2], c[a3], v0);
+    V out
+      = calc<V> (s[s1], s[s2], c[m0], c[m1], c[m2], c[a1], c[a2], c[a3], v0);
 
     return out;
   }
@@ -596,8 +888,8 @@ struct svf {
 private:
   template <class T>
   static T calc (
-    T& ic1eq_v,
-    T& ic2eq_v,
+    T& s1_v,
+    T& s2_v,
     T  m0_v,
     T  m1_v,
     T  m2_v,
@@ -606,12 +898,14 @@ private:
     T  a3_v,
     T  v0)
   {
-    auto tick_r = detail::svf_tick (ic1eq_v, ic2eq_v, a1_v, a2_v, a3_v, v0);
+    auto tick_r = detail::svf_tick (s1_v, s2_v, a1_v, a2_v, a3_v, v0);
     T    out    = m0_v * v0 + m1_v * tick_r.v1 + m2_v * tick_r.v2;
-    ic1eq_v     = tick_r.ic1eq;
-    ic2eq_v     = tick_r.ic2eq;
+    s1_v        = tick_r.s1;
+    s2_v        = tick_r.s2;
     return out;
   }
+  //----------------------------------------------------------------------------
+
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------

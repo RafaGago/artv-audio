@@ -45,47 +45,146 @@ r_ap.ap_2p_cascade_init (16);
 l_ap1.ap_1p_cascade_init (16);
 r_ap1.ap_1p_cascade_init (16);
 
-GS.array_init((k.n_stages + 3) * k.n_channels);
-GS.array_init((k.n_stages + 3) * k.n_channels);
+GS1.array_init(k.n_stages * k.n_channels);
+GS2.array_init(3 * k.n_channels);
 
-l_dc.tpt_1p_reset (20., srate);
-r_dc.tpt_1p_reset (20., srate);
+freqs_l.array_init(k.n_stages);
+freqs_r.array_init(k.n_stages);
+
+l_dc.tpt_1p_reset (6., srate);
+r_dc.tpt_1p_reset (6., srate);
+
+// initial/old implementation
+function get_freqs_legacy(
+  ptr, lfo, lfo_depth, n_stages, f_center, f_width, f_mode, f_detune, depth
+  )
+  global()
+  local (norm_center, freq_lo, freq_hi, freq_hz, detune, detune_mul, freq, freqv, factor i) (
+
+  norm_center = f_center * f_center * f_center * f_center;
+  loop(f_mode,
+    norm_center *= f_center;
+  );
+
+  lfo = exp (lfo * lfo_depth * 3.);
+
+  freq_hz = 40 + 20000 * norm_center;
+  // spread of 4 octaves maximum
+  freq_hi = exp (log(2) * 2 * f_width);
+  freq_lo = 1 / freq_hi;
+  freq_lo *= freq_hz;
+  freq_hi *= freq_hz;
+  factor = pow (freq_hi / freq_lo, 1. / n_stages);
+
+  detune = 0.3444 * f_detune;
+  detune_mul = -1 - 0.09 * f_detune;
+  freq = freq_lo;
+
+  i = 0;
+  loop(n_stages,
+    freqv = freq * lfo;
+    freqv *= 1 + detune;
+    freqv = max(freqv, 1);
+    freqv -= max(freqv - 17000, 0);
+    freq *= factor;
+    detune *= detune_mul;
+    ptr[i] = freqv;
+    i += 1;
+  );
+);
+
+// run modulation from 0 to 1 in linear scale, then whaveshape.
+function get_freqs_ws(
+  ptr, lfo, lfo_depth, n_stages, f_center, f_width, f_mode, f_detune, depth
+  )
+  global()
+  local (i, f, fv, minv, maxv, lfo_lim, rangered, max_excur) (
+
+  f_center *= 0.3;
+  f_center += 0.3;
+  lfo *= 0.5 * lfo_depth;
+  f_width *= 0.2 / n_stages;
+  f_detune = 1 - f_detune * 0.005;
+
+  f = f_center - lfo -  max_excur;
+
+  i = 0;
+  loop (n_stages,
+   f_ptr[i] = f * 19000;
+   q_ptr[i] = 0.06 + q * q * 5;
+   f += f_det;
+   q += q_det;
+   i += 1;
+  );
+);
 
 function get_zdf_sample(
-  in, ap2*, ap1*, lshelf*, hshelf*, dc*, zdf*, k, h, dc_block, onepole, n_stages
-  ) local (i, j, stages) global (GS.ptr)
+  in,
+  ap2*,
+  ap1*,
+  lshelf*,
+  hshelf*,
+  dc*,
+  zdf*,
+  k,
+  h,
+  dc_block,
+  onepole,
+  n_stages,
+  n_invert
+  )
+  local (i, j, stages)
+  global (GS1.ptr, GS2.ptr)
 (
-  (dc_block == 1) ? (
-    GS.ptr[0] = dc.tpt_1p_get_g_hp();
-    GS.ptr[1] = dc.tpt_1p_get_s_hp();
-  );
   i = 0;
-  j = dc_block * 2;
+  j = 0;
   (onepole == 1) ? (
     loop(n_stages,
-        GS.ptr[j]     = ap1.ap_1p_cascade_get_g (i);
-        GS.ptr[j + 1] = ap1.ap_1p_cascade_get_s (i);
+        GS1.ptr[j]     = ap1.ap_1p_cascade_get_g (i);
+        GS1.ptr[j + 1] = ap1.ap_1p_cascade_get_s (i);
+        (i < n_invert) ? (
+          GS1.ptr[j] = -GS1.ptr[j];
+          GS1.ptr[j + 1] = -GS1.ptr[j + 1];
+        );
         j += 2;
         i += 1;
     );
   ) : (
     loop(n_stages,
-        GS.ptr[j]     = ap2.ap_2p_cascade_get_g (i);
-        GS.ptr[j + 1] = ap2.ap_2p_cascade_get_s (i);
+        GS1.ptr[j]     = ap2.ap_2p_cascade_get_g (i);
+        GS1.ptr[j + 1] = ap2.ap_2p_cascade_get_s (i);
+        (i < n_invert) ? (
+          GS1.ptr[j] = -GS1.ptr[j];
+          GS1.ptr[j + 1] = -GS1.ptr[j + 1];
+        );
         j += 2;
         i += 1;
     );
-  ); 
-  GS.ptr[j + 0] = lshelf.lshelf_1p_get_g();
-  GS.ptr[j + 1] = lshelf.lshelf_1p_get_s();
-  GS.ptr[j + 2] = hshelf.hshelf_1p_get_g();
-  GS.ptr[j + 3] = hshelf.hshelf_1p_get_s();
-  zdf.get_zdf_sqrt_sigmoid_before_fb_junction(
-    in, k * 0.995, h, GS.ptr, n_stages + 2 + dc_block
+  );
+  (lshelf.k != 0) ? (
+    GS2.ptr[0] = lshelf.lshelf_1p_get_g();
+    GS2.ptr[1] = lshelf.lshelf_1p_get_s();
+  ) : (
+    GS2.ptr[0] = 1;
+    GS2.ptr[1] = 0;
+  );
+  (hshelf.k != 0) ? (
+    GS2.ptr[2] = hshelf.hshelf_1p_get_g();
+    GS2.ptr[3] = hshelf.hshelf_1p_get_s();
+  ) : (
+    GS2.ptr[2] = 1;
+    GS2.ptr[3] = 0;
+  );
+  (dc_block == 1) ? (
+    GS2.ptr[4] = dc.tpt_1p_get_g_hp();
+    GS2.ptr[5] = dc.tpt_1p_get_s_hp();
+  );
+ zdf.get_zdf_sqrt_sigmoid_before_fb_junction_pp(
+    in, k * 0.995, h, GS1.ptr, GS2.ptr, n_stages, 2 + dc_block
     );
 );
 
-@slider 
+@slider
 
 lfo_hz = lfo_freq * lfo_freq * lfo_freq * 10;
 lfo.lfo_bank_reset_freq (0, lfo_hz, srate);
@@ -124,15 +223,14 @@ out0 = spl0;
 out1 = spl1;
 
 lfo.lfo_bank_tick_tri (lfov.ptr, 0);
+get_freqs_ws(
+  freqs_l.ptr, lfov.ptr[0], lfo_depth, n_stages, f_center, f_width, f_mode, f_detune, depth
+  );
+get_freqs_ws(
+  freqs_r.ptr, lfov.ptr[1], lfo_depth, n_stages, f_center, f_width, f_mode, f_detune, depth
+);
 
-lfov.ptr[0] = exp (lfov.ptr[0] * lfo_depth * 3.);
-lfov.ptr[1] = exp (lfov.ptr[1] * lfo_depth * 3.);
-lfo_l = lfov.ptr[0];
-lfo_r = lfov.ptr[1];
-
-detune = 0.3444 * f_detune;
-detune_mul = -1 - 0.09 * f_detune;
-freq = freq_lo;
+freqdbg.debug_16(freqs_l);
 
 out0 = get_zdf_sample(
   out0,
@@ -159,55 +257,52 @@ out1 = get_zdf_sample(
   fb_scaled,
   hardness,
   dc_block,
-  onepole,  
+  onepole,
   n_stages);
 
-(dc_block == 1) ? (
-  out0 = l_dc.tpt_1p_tick_hp (out0);
-  out1 = l_dc.tpt_1p_tick_hp (out1);
-);
+phased0 = out0;
+phased1 = out1;
 
 i = 0;
 loop (n_stages,
-  freql = freq * lfo_l;
-  freql *= 1 + detune;
-  freql = max(freql, 1);
-  freql = min(freql, 20000);
-  freqr = freq * lfo_r;
-  freqr *= 1 + detune;
-  freqr = max(freqr, 1);
-  freqr = min(freqr, 20000);
-  freq *= factor;
-  detune *= detune_mul;
-
-  (onepole == 1) ? (
-    l_ap1.ap_1p_cascade_reset_no_prewarp (i, freql, srate);
-    r_ap1.ap_1p_cascade_reset_no_prewarp (i, freqr, srate);
-    out0 = l_ap1.ap_1p_cascade_tick (i, out0);
-    out1 = r_ap1.ap_1p_cascade_tick (i, out1);
+ (onepole == 1) ? (
+    l_ap1.ap_1p_cascade_reset_no_prewarp(i, freqs_l.ptr[i], srate);
+    r_ap1.ap_1p_cascade_reset_no_prewarp(i, freqs_r.ptr[i], srate);
+    phased0 = l_ap1.ap_1p_cascade_tick (i, phased0);
+    phased1 = r_ap1.ap_1p_cascade_tick (i, phased1);
   ) : (
-    l_ap.ap_2p_cascade_reset_no_prewarp (i, freql, s_depth, srate);
-    r_ap.ap_2p_cascade_reset_no_prewarp (i, freqr, s_depth, srate);
-    out0 = l_ap.ap_2p_cascade_tick (i, out0);
-    out1 = r_ap.ap_2p_cascade_tick (i, out1);
+    l_ap.ap_2p_cascade_reset_no_prewarp(i, freqs_l.ptr[i], s_depth, srate);
+    r_ap.ap_2p_cascade_reset_no_prewarp(i, freqs_r.ptr[i], s_depth, srate);
+    phased0 = l_ap.ap_2p_cascade_tick (i, phased0);
+    phased1 = r_ap.ap_2p_cascade_tick (i, phased1);
+  );
+  (i < n_invert) ? (
+    phased0 = -phased0;
+    phased1 = -phased1;
   );
   i += 1;
 );
 
 // modulate shelves on the feedback path
 g_db = hp * -8;
-fshelf = max (freq_lo, 160);
-l_lshelf.lshelf_1p_reset_no_prewarp (fshelf, g_db, srate);
-r_lshelf.lshelf_1p_reset_no_prewarp (fshelf, g_db, srate);
+fshelf = max (freqs_l.ptr[0], 160);
+l_lshelf.lshelf_1p_reset_no_prewarp(fshelf, g_db, srate);
+r_lshelf.lshelf_1p_reset_no_prewarp(fshelf, g_db, srate);
 
 g_db = lp * -1.3;
-fshelf = max (freq_hi * 2, 3700);
-l_hshelf.hshelf_1p_reset_no_prewarp (fshelf, g_db, srate);
-r_hshelf.hshelf_1p_reset_no_prewarp (fshelf, g_db, srate);
+fshelf = max (freqs_l.ptr[n_stages - 1] * 2, 3700);
+l_hshelf.hshelf_1p_reset_no_prewarp(fshelf, g_db, srate);
+r_hshelf.hshelf_1p_reset_no_prewarp(fshelf, g_db, srate);
 
-// tick shelves on the feedback path to update the states.
-l_hshelf.hshelf_1p_tick (l_lshelf.lshelf_1p_tick (out0));
-r_hshelf.hshelf_1p_tick (r_lshelf.lshelf_1p_tick (out1)); 
+(dc_block == 1) ? (
+  l_dc.tpt_1p_tick_hp (l_hshelf.hshelf_1p_tick (l_lshelf.lshelf_1p_tick (out0)));
+  r_dc.tpt_1p_tick_hp (r_hshelf.hshelf_1p_tick (r_lshelf.lshelf_1p_tick (out1)));
+) : (
+// tick shelves and DC on the feedback path to update the states.
+  l_hshelf.hshelf_1p_tick (l_lshelf.lshelf_1p_tick (out0));
+  r_hshelf.hshelf_1p_tick (r_lshelf.lshelf_1p_tick (out1));
+);
+
 
 g_wet = mix * g_hardness;
 g_dry = (1 - mix) * (1 + abs (fb_scaled));

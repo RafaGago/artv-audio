@@ -7403,7 +7403,7 @@ static constexpr auto fx_choices = make_cstr_array (
   ":EQ Luftikus",
   ":EQ 4-band",
   ":Modulation: Chow Phaser",
-  ":Modulation: ArtV Phaser",
+  ":Modulation: ArtV Phaser (legacy)",
   ":Modulation: Ripple Phaser",
   ":Modulation: Ze Big Chorus",
   ":Modulation: Ze Little Chorus",

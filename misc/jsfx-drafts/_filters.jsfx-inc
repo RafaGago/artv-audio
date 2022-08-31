@@ -129,7 +129,7 @@ function svf_tick(in) local (v1, v2, v3) global()(
 function tpt_1p_reset (freq, samplerate) local(g) global()(
     g = tan ($pi * freq / samplerate);
     this.g1 = 1 / (1 + g);
-    this.g_ap =  (1 + g) * this.g1;
+    this.g_ap =  (1 - g) * this.g1;
     this.g = g * this.g1;
 
 );
@@ -155,23 +155,23 @@ function tpt_1p_get_g_lp (in) local(v, lp) global()(
 );
 
 function tpt_1p_get_g_hp (in) local(v, lp) global()(
-  1 - this.g;
+  this.g1;
 );
 
 function tpt_1p_get_g_ap (in) local(v, lp) global()(
-  2 * this.g - 1;
+  this.g_ap;
 );
 
 function tpt_1p_get_s_lp (in) local(v, lp) global()(
-  this.g1 * this.s;
+  -this.g * this.s;
 );
 
 function tpt_1p_get_s_hp (in) local(v, lp) global()(
-  -this.g1 * this.s;
+  this.g * this.s;
 );
 
 function tpt_1p_get_s_ap (in) local(v, lp) global()(
-  2 * this.g1 * this.s;
+  -2 * this.g * this.s;
 );
 
 //------------------------------------------------------------------------------
@@ -743,25 +743,28 @@ function lshelf_1p_reset_no_prewarp (freq, db, srate)
 );
 
 function lshelf_1p_tick (in) global() local (v, y, x)(
-  x = in * this.k;
-  v = (x - this.s) * this.g1;
+  v = (in - this.s) * this.g1;
   y = v + this.s;
   this.s = y + v;
-  in + y;
+  in + this.k * y;
 );
 
-//            gx+s           kg       ks
-// y = x + k  ---- = G = x + ---  S = ---
-//             1+g           1+g      1+g
+//          -g⋅k⋅(s₁ - x) + x⋅(g + 1)
+// LS_1_y = ─────────────────────────
+//                    g + 1
+//          g⋅k + g + 1
+// LS_1_G = ───────────
+//             g + 1
+//          -g⋅k⋅s₁
+// LS_1_S = ────────
+//           g + 1
 
 function lshelf_1p_get_g () global() (
-  1 + this.g1 * this.k;
+  (1 + this.k)  * this.g1 + this.g0;
 );
 
 function lshelf_1p_get_s () global() (
- // not multiplying by k because the tick function scales the
- // input.
- this.s * this.g0;
+  -this.s * this.k * this.g1;
 );
 
 //------------------------------------------------------------------------------
@@ -775,31 +778,34 @@ function hshelf_1p_reset_no_prewarp (freq, db, srate) global() (
 );
 
 function hshelf_1p_tick (in) global() local (v, y, x)(
-  x = in * this.k;
-  v = (x - this.s) * this.g1;
+  v = (in - this.s) * this.g1;
   y = v + this.s;
   this.s = y + v;
-  in + (x - y); // x - y = from lp to hp
+  in + this.k * (in - y); // x - y = from lp to hp
 );
 
-//                 gx+s                     kg       ks
-// y = x + k ( x - ---- ) = G = x + kx - x ---  S = ---
-//                 1+g                     1+g      1+g
+//          g⋅k⋅s₁ + g⋅x + k⋅x + x
+// HS_1_y = ──────────────────────
+//                  g + 1
+//          g + k + 1
+// HS_1_G = ─────────
+//            g + 1
+//          g⋅k⋅s₁
+// HS_1_S = ──────
+//          g + 1
 
 function hshelf_1p_get_g () global() (
-  1 + this.k + this.k * this.g1;
+  (1 + this.k)  * this.g0 + this.g1;
 );
 
 function hshelf_1p_get_s () global() (
- // not multiplying by k because the tick function scales at the
- // input.
- this.s * this.g0;
+  this.s * this.k * this.g1;
 );
 //------------------------------------------------------------------------------
 // global ZDF feedback loop
 function get_zdf (in, k, G_S_ptr, n_elems)
   global() local (i, G, S, gv , sv) (
-  // The ART ov VA filter design (Vadim Zabalishin) 5.3
+
   i = 0;
   G = 1;
   S = 0;
@@ -898,6 +904,71 @@ function get_zdf_sqrt_sigmoid_before_fb_junction (in, k, h, G_S_ptr, n_elems)
   u *= 0.5;
   l_in = k * (G * u + S);
   this.linramp = 1 / sqrt (l_in * l_in * h + 1);
+  u;
+);
+//------------------------------------------------------------------------------
+// global ZDF feedback loop with "x/sqrt(x**2*h + 1)" sigmoid with variable
+// hardness (h parameter) solved with 2 rounds Mystran's linearization. See Urs
+// Heckmann and Mystran's comments on this thread page:
+//
+// https://www.kvraudio.com/forum/viewtopic.php?start=375&t=350246&sid=eb35460aab9d1bda3038aa78018b5182
+//
+// Topology:
+//         __________
+//      u |          |
+// x -----| G1*_x+S1 |---------------------------- y
+//    |-  |__________|                          |
+//    |    __________   ________    ________    |
+//    |   |          |  |        |  |        |  |
+//    ----| G2*_x+S2 |--|  f(x)  |--|  * k   |--
+//        |__________|  |________|  |________|
+//
+// where:
+// u = x - (G2 (linramp * k * (G1 u + S1)) + S2)
+// u = (-G2 S1 k linramp - S2 + in) / (G1 G2 k linramp + 1)
+
+function get_zdf_sqrt_sigmoid_before_fb_junction_pp(
+  in, k, h, G_S1_ptr, G_S2_ptr, n_elems1, n_elems2
+  ) global() local (i, G1, S1, G2, S2, gv, sv, u, l_in) (
+  // The ART ov VA filter design (Vadim Zabalishin) 5.3
+  i = 0;
+  G1 = 1;
+  S1 = 0;
+  loop (n_elems1,
+    gv = G_S1_ptr[i];
+    sv = G_S1_ptr[i + 1];
+    G1 *= gv;
+    S1 *= gv;
+    S1 += sv;
+    i += 2;
+  );
+  i = 0;
+  G2 = 1;
+  S2 = 0;
+  loop (n_elems2,
+    gv = G_S2_ptr[i];
+    sv = G_S2_ptr[i + 1];
+    G2 *= gv;
+    S2 *= gv;
+    S2 += sv;
+    i += 2;
+  );
+  // 1 st round
+  u = (in - G2 * S1 * k * this.linramp - S2) /
+    (G1 * G2 * k * this.linramp + 1);
+  (h != 0) ? (
+    l_in = k * (G1 * u + S1);
+    this.linramp = 1 / sqrt (l_in * l_in * h + 1); // sqrt_sigmoid (u) / u
+
+    // 2 st round (compensation)
+    u += (in - G2 * S1 * k * this.linramp - S2) /
+      (G1 * G2 * k * this.linramp + 1);
+    u *= 0.5;
+    l_in = k * (G1 * u + S1);
+    this.linramp = 1 / sqrt (l_in * l_in * h + 1); // sqrt_sigmoid (u) / u
+  ) : (
+    this.linramp = 1;
+  );
   u;
 );
 //------------------------------------------------------------------------------

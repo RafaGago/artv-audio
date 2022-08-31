@@ -28,6 +28,8 @@ using lowshelf_tag        = tag<filter_type_tag, 9>;
 using highshelf_tag       = tag<filter_type_tag, 10>;
 using thiran_tag          = tag<filter_type_tag, 11>;
 using raw_tag             = tag<filter_type_tag, 12>;
+using lowshelf_naive_tag  = tag<filter_type_tag, 13>;
+using highshelf_naive_tag = tag<filter_type_tag, 14>;
 
 // Random tags used elsewhere.
 template <uint n>
