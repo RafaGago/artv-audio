@@ -150,30 +150,28 @@ static constexpr auto array_flatten (std::array<std::array<T, N2>, N1> v)
 namespace detail {
 
 template <uint Offset, class T, size_t N_dst, size_t... N>
-static constexpr void array_join (std::array<T, N_dst>& dst)
+static constexpr void array_cat (std::array<T, N_dst>& dst)
 {}
 
 template <uint Offset, class T, size_t N_dst, size_t N_src, size_t... N>
-static constexpr void array_join (
+static constexpr void array_cat (
   std::array<T, N_dst>&  dst,
   std::array<T, N_src>&& src,
   std::array<T, N>&&... arrs)
 {
-  for (uint i = 0; i < N_src; ++i) {
-    dst[Offset + i] = src[i];
-  }
-  array_join<Offset + N_src> (dst, std::forward<std::array<T, N>> (arrs)...);
+  memcpy (&dst[Offset], src.data(), sizeof src);
+  array_cat<Offset + N_src> (dst, std::forward<std::array<T, N>> (arrs)...);
 }
 
 }; // namespace detail
 
 template <class T, size_t... N>
-static constexpr auto array_join (std::array<T, N>&&... arrs)
+static constexpr auto array_cat (std::array<T, N>&&... arrs)
 {
   constexpr size_t size = (N + ...);
 
   std::array<T, size> ret;
-  detail::array_join<0> (ret, std::forward<std::array<T, N>> (arrs)...);
+  detail::array_cat<0> (ret, std::forward<std::array<T, N>> (arrs)...);
   return ret;
 }
 

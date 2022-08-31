@@ -84,7 +84,7 @@ private:
       constexpr int half_n = N / 2;
       // all this superfluous array copying stuff should be removed by the
       // optimizer.
-      auto y = array_join (
+      auto y = array_cat (
         hadamard_matrix<half_n>::template tick_raw<V> (x.get_head (half_n)),
         hadamard_matrix<half_n>::template tick_raw<V> (x.advanced (half_n)));
 
