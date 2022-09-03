@@ -1407,6 +1407,7 @@ bool vec_is_all_zeros (V v)
 {
   using Vv              = std::remove_reference_t<std::remove_cv_t<V>>;
   constexpr auto traits = vec_traits<Vv>();
+  static_assert (std::is_integral_v<vec_value_type_t<Vv>>, "");
 
   if constexpr (traits.size == 1) {
     // scalar, vector of size 1. Fast case
@@ -1438,6 +1439,7 @@ bool vec_is_all_ones (V v)
 {
   using Vv              = std::remove_reference_t<std::remove_cv_t<V>>;
   constexpr auto traits = vec_traits<Vv>();
+  static_assert (std::is_integral_v<vec_value_type_t<Vv>>, "");
 
   if constexpr (traits.size == 1) {
     // scalar, vector of size 1. Fast case
