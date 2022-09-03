@@ -399,17 +399,17 @@ private:
         uint const i = index.value * 2;
 
         if constexpr (std::is_same_v<tag, lowpass_tag>) {
-          //          g⋅(-s₁ + x)
+          //          g⋅(s₁ + x)
           // LP_1_y = ───────────
           //             g + 1
           //            g
           // LP_1_G = ─────
           //          g + 1
-          //          -g⋅s₁
+          //          g⋅s₁
           // LP_1_S = ──────
           //          g + 1
           G_S[i + 0] = G_; // G
-          G_S[i + 1] = -st[base::s] * G_; // S
+          G_S[i + 1] = st[base::s] * G_; // S
         }
         else if constexpr (std::is_same_v<tag, highpass_tag>) {
           //          g⋅s₁ + x
@@ -418,11 +418,11 @@ private:
           //            1
           // HP_1_G = ─────
           //          g + 1
-          //           g⋅s₁
+          //           -g⋅s₁
           // HP_1_S = ─────
           //          g + 1
           G_S[i + 0] = g0_; // G
-          G_S[i + 1] = st[base::s] * G_; // S
+          G_S[i + 1] = -st[base::s] * G_; // S
         }
         else if constexpr (std::is_same_v<tag, allpass_tag>) {
           //          -2⋅g⋅s₁ + g⋅x - x
@@ -444,11 +444,11 @@ private:
           //          g⋅k + g + 1
           // LS_1_G = ───────────
           //             g + 1
-          //          -g⋅k⋅s₁
+          //          g⋅k⋅s₁
           // LS_1_S = ────────
           //           g + 1
           G_S[i + 0] = G_ * ((T) 1 + k_) + g0_; // G
-          G_S[i + 1] = -st[base::s] * k_ * G_; // S
+          G_S[i + 1] = st[base::s] * k_ * G_; // S
         }
         else if constexpr (std::is_same_v<tag, highshelf_naive_tag>) {
           // y = x + k * yHP
@@ -458,11 +458,11 @@ private:
           //          g + k + 1
           // HS_1_G = ─────────
           //            g + 1
-          //          g⋅k⋅s₁
+          //          -g⋅k⋅s₁
           // HS_1_S = ──────
           //          g + 1
           G_S[i + 0] = g0_ * ((T) 1 + k_) + G_; // G
-          G_S[i + 1] = st[base::s] * k_ * G_; // S
+          G_S[i + 1] = -st[base::s] * k_ * G_; // S
         }
       });
   }

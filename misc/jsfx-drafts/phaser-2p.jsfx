@@ -57,7 +57,10 @@ l_dc.tpt_1p_reset (20., srate);
 r_dc.tpt_1p_reset (20., srate);
 
 // initial/old implementation
-function get_freqs_legacy(ptr, lfo, lfo_depth, n_stages, f_center, f_width, f_mode, f_detune) global()
+function get_freqs_legacy(
+  ptr, lfo, lfo_depth, n_stages, f_center, f_width, f_mode, f_detune, depth
+  )
+  global()
   local (norm_center, freq_lo, freq_hi, freq_hz, detune, detune_mul, freq, freqv, factor i) (
 
   norm_center = f_center * f_center * f_center * f_center;
@@ -92,10 +95,53 @@ function get_freqs_legacy(ptr, lfo, lfo_depth, n_stages, f_center, f_width, f_mo
   );
 );
 
+// run modulation from 0 to 1 in linear scale, then whaveshape.
+function get_freqs_ws(
+  ptr, lfo, lfo_depth, n_stages, f_center, f_width, f_mode, f_detune, depth
+  )
+  global()
+  local (i, f, fv, minv, maxv, lfo_lim, rangered, max_excur) (
+
+  f_center *= 0.3;
+  f_center += 0.3;
+  lfo *= 0.5 * lfo_depth;
+  f_width *= 0.2 / n_stages;
+  f_detune = 1 - f_detune * 0.005;
+
+  f = f_center - lfo -  max_excur;
+
+  i = 0;
+  loop (n_stages,
+    fv = f * f_detune;
+    f_detune *= 0.999999;
+    fv = (fv < 0) ? 0 : fv;
+    fv = (fv > 1) ? 1 : fv;
+    loop (f_mode,
+      fv *= fv;
+    );
+   ptr[i] = 10 + fv * (1200 + depth * 17500);
+   f += f_width;
+   i += 1;
+  );
+);
 
 function get_zdf_sample(
-  in, ap2*, ap1*, lshelf*, hshelf*, dc*, zdf*, k, h, dc_block, onepole, n_stages, n_invert
-  ) local (i, j, stages) global (GS.ptr)
+  in,
+  ap2*,
+  ap1*,
+  lshelf*,
+  hshelf*,
+  dc*,
+  zdf*,
+  k,
+  h,
+  dc_block,
+  onepole,
+  n_stages,
+  n_invert
+  )
+  local (i, j, stages)
+  global (GS1.ptr, GS2.ptr)
 (
   i = 0;
   j = 0;
