@@ -45,6 +45,7 @@ print_fun (yHP1, "HP1")
 print_fun (yAP1, "AP1")
 print_fun (yLS1, "LS1")
 print_fun (yHS1, "HS1")
+
 ##sqrt sig
 ##unsolvable
 #var("x k S G u", real=True)
