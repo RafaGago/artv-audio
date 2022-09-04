@@ -1,12 +1,8 @@
 1.9.0
-- Artv Phaser: Add three pole mode.
-- Artv Phaser: Add Schroeder allpass mode (Flanger and Chorus).
-- Artv Phaser: Add Feedforward comb mode (Flanger and Chorus).
 - Artv Phaser: Gain compensate "parallel" knob/parameter.
 - Artv Phaser: Gain compensate "delay feedback" knob/parameter.
 - Artv Phaser: Add feedback Lowpass/Hipass.
 - Artv Phaser: Add feedback Saturation.
-- Artv Phaser: Add hybrid modes.
 - Artv Phaser: (sound might change for presets using the feedback delay/flanger)
   Better grain structure for the feedback delay/flanger. Now it can be pushed
   more when the regular feedback (for the  allpasses) has low values.

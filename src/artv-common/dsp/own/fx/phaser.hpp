@@ -1,5 +1,8 @@
 #pragma once
 
+// A very naive nonsense phaser. Still useful for phase rotation duties without
+// modulation and feedback.
+
 #include <array>
 #include <cstdint>
 #include <vector>
@@ -287,32 +290,10 @@ public:
 
   static constexpr auto get_parameter (topology_tag)
   {
-    return choice_param (
-      3,
-      make_cstr_array (
-        "Phaser 1 pole (legacy)",
-        "Phaser 2 pole (legacy)",
-        "Phaser 1 pole",
-        "Phaser 2 pole",
-        "Phaser 3 pole",
-        "Serial Schroeder AP",
-        "Parallel Feedforward Combs",
-        "Hybrid 1",
-        "Hybrid 2"),
-      16);
+    return choice_param (3, make_cstr_array ("1 pole", "2 pole"), 16);
   }
 
-  enum topologies {
-    t_1_pole_legacy,
-    t_2_pole_legacy,
-    t_1_pole,
-    t_2_pole,
-    t_3_pole,
-    t_schroeder,
-    t_comb,
-    t_hybrid_1,
-    t_hybrid_2,
-  };
+  enum topologies { t_1_pole, t_2_pole };
   //----------------------------------------------------------------------------
   struct delay_feedback_tag {};
   void set (delay_feedback_tag, float v)
@@ -432,9 +413,6 @@ public:
     // setting up delay
     reset_memory_parts();
     _delay.set_resync_delta (10.0);
-
-    // initialize windowed sinc table
-    _ff_comb.reset_interpolator (0, false, 0.45f, 140.f);
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -489,144 +467,14 @@ public:
       auto delayed = _delay.get (n_spls, 0);
       out += delayed * pars.delay_feedback;
 
-      if (pars.topology == t_schroeder || pars.topology == t_comb) {
-        // smooth delay times calculated at control-rate
-        auto smooth_iter = _stagesdl_spls.target.raw.size() / vec_size;
-        for (uint j = 0; j < smooth_iter; ++j) {
-          // HACKish encapsulation violation: this one isn't assigning the
-          // result, but getting the -1 state from the one pole filter directly
-          // (copied by value). See "static_assert" on the code below. 1-pole
-          // digital filters are NEVER going to change so this is IMO
-          // acceptable.
-          auto in
-            = make_crange (_stagesdl_spls.target.raw, vec_size, vec_size * j);
-          onepole_smoother::tick (
-            make_crange (_lp_smooth_coeff),
-            make_crange (_stagesdl_spls.state.raw, vec_size, vec_size * j)
-              .cast (float_x4 {}),
-            vec_load<float_x4> (in));
-        }
-      }
-      if (pars.topology == t_2_pole_legacy || pars.topology == t_2_pole) {
+      if (t_2_pole) {
         for (uint g = 0; g < pars.n_stages; ++g) {
           out = _allpass2p.tick_on_idx (g, out);
         }
       }
-      else if (pars.topology == t_3_pole) {
+      else {
         for (uint g = 0; g < pars.n_stages; ++g) {
           out = _allpass1p.tick_on_idx (g, out);
-        }
-        for (uint g = 0; g < pars.n_stages; ++g) {
-          out = _allpass2p.tick_on_idx (g, out);
-        }
-      }
-      else if (pars.topology == t_1_pole_legacy || pars.topology == t_1_pole) {
-        for (uint g = 0; g < pars.n_stages; ++g) {
-          out = _allpass1p.tick_on_idx (g, out);
-        }
-      }
-      else if (pars.topology == t_schroeder) {
-        constexpr float q_scale = 0.99f / get_parameter (q_tag {}).max;
-
-        std::array<float_x1, n_ap_channels>              acum {};
-        std::array<float_x1, n_ap_channels * max_stages> to_push {};
-        acum = vec1_array_wrap (vec_to_array (out));
-
-        float_x1 gain {pars.q * q_scale};
-        for (uint g = 0; g < pars.n_stages; ++g) {
-          for (uint c = 0; c < n_ap_channels; ++c) {
-            auto n_spls = std::clamp (
-              _stagesdl_spls.state.spls[g][c],
-              (float) _stagesdl.min_delay_spls(),
-              (float) _stagesdl.max_delay_spls());
-            uint dl_channel = g * n_ap_channels + c;
-            auto yn         = _stagesdl.get (n_spls, dl_channel);
-            auto r          = allpass_fn::tick<float_x1> (acum[c], yn, gain);
-            acum[c]         = r.out;
-            to_push[dl_channel] = r.to_push;
-          }
-        }
-        _stagesdl.push (to_push);
-        out = vec_from_array (vec1_array_unwrap (acum));
-      }
-      else if (pars.topology == t_comb) {
-        constexpr float q_scale = 0.99f / get_parameter (q_tag {}).max;
-        std::array<float, n_ap_channels> acum {};
-        float                            spice_mix {pars.q * q_scale};
-        spice_mix *= spice_mix;
-
-        auto     spice = _allpass1p.tick_on_idx (0, out);
-        float_x4 spice_mul {0.f, 0.f, spice_mix, spice_mix};
-        out          = spice * spice_mul + out * (1.f - spice_mul);
-        auto to_push = vec1_array_wrap (vec_to_array (out));
-        _ff_comb.push (to_push);
-
-        auto pan_start = make_array (
-          0.999f, 0.95f, 0.98f, -0.942f, 0.999f, -0.921f, 0.98f, 0.952f);
-
-        for (uint c = 0; c < n_ap_channels; ++c) {
-          auto pans = pan_start;
-          for (uint g = 0; g < pars.n_stages; ++g) {
-            auto n_spls = std::clamp (
-              _stagesdl_spls.state.spls[g][c],
-              (float) _ff_comb.min_delay_spls(),
-              (float) _ff_comb.max_delay_spls());
-            auto  spl  = _ff_comb.get (n_spls, c);
-            auto& panc = pans[(c + g) % pans.size()];
-            acum[c] += spl[0] * panc;
-            panc *= -panc;
-          }
-        }
-        out = vec_from_array (acum);
-        out /= (float) pars.n_stages;
-      }
-      else if (pars.topology == t_hybrid_1) {
-        for (uint g = 0; g < pars.n_stages; ++g) {
-          out = _allpass2p.tick_on_idx (g, out);
-        }
-
-        auto            stage   = pars.n_stages - 1;
-        constexpr float q_scale = 0.19f / get_parameter (q_tag {}).max;
-
-        std::array<float_x1, n_ap_channels>              acum {};
-        std::array<float_x1, n_ap_channels * max_stages> to_push {};
-        acum = vec1_array_wrap (vec_to_array (out));
-
-        float_x1 gain {0.8f + pars.q * q_scale};
-        for (uint c = 0; c < n_ap_channels; ++c) {
-          auto n_spls = std::clamp (
-            _stagesdl_spls.state.spls[stage][c],
-            (float) _stagesdl.min_delay_spls(),
-            (float) _stagesdl.max_delay_spls());
-          uint dl_channel     = stage * n_ap_channels + c;
-          auto yn             = _stagesdl.get (n_spls, dl_channel);
-          auto r              = allpass_fn::tick<float_x1> (acum[c], yn, gain);
-          acum[c]             = r.out;
-          to_push[dl_channel] = r.to_push;
-        }
-        _stagesdl.push (to_push);
-        out = vec_from_array (vec1_array_unwrap (acum));
-      }
-      else if (pars.topology == t_hybrid_2) {
-        std::array<float, n_ap_channels> acum {};
-        auto to_push = vec1_array_wrap (vec_to_array (out));
-        _ff_comb.push (to_push);
-
-        for (uint c = 0; c < n_ap_channels; ++c) {
-          auto n_spls = std::clamp (
-            _stagesdl_spls.state.spls[0][c],
-            (float) _ff_comb.min_delay_spls(),
-            (float) _ff_comb.max_delay_spls());
-          auto spl = _ff_comb.get (n_spls, c);
-          acum[c]  = spl[0];
-        }
-
-        constexpr float q_scale = 0.3f / get_parameter (q_tag {}).max;
-        float           gain {0.3f + pars.q * q_scale};
-        out += vec_from_array (acum) * gain;
-        out /= 1.f + gain;
-        for (uint g = 0; g < pars.n_stages; ++g) {
-          out = _allpass2p.tick_on_idx (g, out);
         }
       }
       out         = _dc_blocker.tick (out);
@@ -646,11 +494,6 @@ public:
       main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_sat + 1.);
       _feedback_samples = main_fb;
 
-      // feedforward outside the feedback loop
-      if (pars.topology > t_2_pole_legacy && pars.topology != t_comb) {
-        outx2 += feedforward * pars.feedback;
-        outx2 *= 0.5f;
-      }
       outs[0][i] = outx2[0];
       outs[1][i] = outx2[1];
     }
@@ -693,19 +536,6 @@ private:
   //----------------------------------------------------------------------------
   void reset_memory_parts()
   {
-    uint headroom  = _ff_comb.min_size_spls();
-    auto comb_size = pow2_round_ceil (
-      (uint) ceil (freq_to_delay_spls (min_ap_freq)) + headroom);
-    comb_size = _ff_comb.n_required_elems (comb_size, n_ap_channels);
-    comb_size = div_ceil<unsigned> (
-      comb_size, sizeof _delay_mem[0] / sizeof _ff_comb.get (0.f, 0));
-
-    auto ap_size
-      = pow2_round_ceil ((uint) ceil (freq_to_delay_spls (min_ap_freq)));
-    ap_size = _stagesdl.n_required_elems (ap_size, n_ap_channels * max_stages);
-    ap_size = div_ceil<unsigned> (
-      ap_size, sizeof _delay_mem[0] / sizeof _stagesdl.get (0.f, 0));
-
     auto delay_size
       = pow2_round_ceil ((uint) (_srate * max_delay_sec * max_delay_factor));
     delay_size = _delay.n_required_elems (delay_size, 1);
@@ -713,13 +543,9 @@ private:
       delay_size, sizeof _delay_mem[0] / sizeof _delay.get (0.f, 0));
 
     _delay_mem.clear();
-    _delay_mem.resize (comb_size + delay_size + ap_size);
+    _delay_mem.resize (delay_size);
     auto mem = make_crange (_delay_mem);
-
-    _ff_comb.reset (mem.cut_head (comb_size).cast<float_x1>(), n_ap_channels);
-    _stagesdl.reset (
-      mem.cut_head (ap_size).cast<float_x1>(), n_ap_channels * max_stages);
-    _delay.reset (mem.cut_head (delay_size), 1);
+    _delay.reset (mem, 1);
   }
   //----------------------------------------------------------------------------
   void refresh_lfo_hz()
@@ -832,16 +658,10 @@ private:
     auto     lfo_depth = pars.lfo_depth;
     float_x4 q_fact {lfov[0], lfov[1], lfov[1], lfov[0]};
     q_fact = vec_exp (q_fact * -lfo_depth * 0.23f);
-    if (pars.topology == t_schroeder || pars.topology == t_comb) {
-      // favor the lower range
-      lfo_depth *= lfo_depth;
-    }
+
     for (uint s = 0; s < pars.n_stages; ++s) {
       float_x4 freqs {};
       float_x4 qs = vec_set<float_x4> (pars.q);
-      if (pars.topology >= t_2_pole_legacy) {
-        qs *= q_fact;
-      }
       // fill freqs
       for (uint ap = 0; ap < (vec_size / 2); ++ap) {
         float max_depth = pars.lin_lfo_mod ? 0.6 : 1.7;
@@ -889,36 +709,11 @@ private:
       }
       freqs
         = vec_clamp (freqs, min_ap_freq, std::min (_srate * 0.4999f, 22000.f));
-      if (pars.topology == t_schroeder) {
-        _stagesdl_spls.target.spls[s]
-          = vec_to_array (freq_to_delay_spls (freqs));
-      }
-      else if (pars.topology == t_comb) {
-        _stagesdl_spls.target.spls[s]
-          = vec_to_array (freq_to_delay_spls (freqs));
-        if (s == 0) {
-          _allpass1p.reset_coeffs_on_idx (0, freqs, _t_spl);
-        }
-      }
-      else if (
-        pars.topology == t_1_pole || pars.topology == t_1_pole_legacy
-        || pars.topology == t_3_pole) {
+      if (pars.topology == t_1_pole) {
         _allpass1p.reset_coeffs_on_idx (s, freqs, _t_spl);
       }
-      else if (
-        pars.topology == t_2_pole || pars.topology == t_2_pole_legacy
-        || pars.topology == t_3_pole) {
+      else if (pars.topology == t_2_pole) {
         _allpass2p.reset_coeffs_on_idx (s, freqs, qs, _t_spl);
-      }
-      else if (pars.topology == t_hybrid_1) {
-        _stagesdl_spls.target.spls[s]
-          = vec_to_array (freq_to_delay_spls (freqs * 2));
-        _allpass2p.reset_coeffs_on_idx (s, freqs, 0.05f + qs * 0.3f, _t_spl);
-      }
-      else if (pars.topology == t_hybrid_2) {
-        _stagesdl_spls.target.spls[s]
-          = vec_to_array (freq_to_delay_spls (freqs));
-        _allpass2p.reset_coeffs_on_idx (s, freqs, 0.05f + qs * 0.5f, _t_spl);
       }
       if (s == 0) {
         constexpr float cut_ratio = 0.3f;
@@ -1035,15 +830,12 @@ private:
   std::vector<float_x4, overaligned_allocator<float_x4, 128>> _delay_mem;
 
   // TODO: use a variant?
-  part_class_array<andy::svf_allpass, float_x4, max_stages>     _allpass2p;
-  part_class_array<onepole_allpass, float_x4, max_stages>       _allpass1p;
-  interpolated_delay_line<float_x1, linear_interp, true, false> _stagesdl;
-  interpolated_delay_line<float_x1, sinc_interp<8, 64>, false, false> _ff_comb;
+  part_class_array<andy::svf_allpass, float_x4, max_stages> _allpass2p;
+  part_class_array<onepole_allpass, float_x4, max_stages>   _allpass1p;
   enum { k_shelf_lo, k_shelf_hi };
   part_class_array<andy::svf, double_x2, 2> _feedback_shelf;
   part_class_array<andy::svf, float_x4, 2>  _feedback_delay_shelf;
 
-  stages_delay_samples                           _stagesdl_spls {};
   modulable_thiran1_delay_line<float_x4, 1>      _delay {};
   part_class_array<mystran_dc_blocker, float_x4> _dc_blocker;
 
