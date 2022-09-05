@@ -11,56 +11,72 @@
 #include "artv-common/misc/simd.hpp"
 
 namespace artv {
+
 //------------------------------------------------------------------------------
 // bulk SIMD smoothing of many parameters of the same floating point type via a
-// 1 pole lowpass. Values accessed by index.
-template <class T, uint N, uint Simd_size = sse_bytes>
+// 1 pole lowpass.
+//
+// T = arithmetic type
+// T_struct, struct only containing members of the T type (unverifiable)
+//
+// Notice that this was previously not using structs, but indexes. It wasn't
+// very convenient, so this was deemed as the lesser evil.
+
+template <class T, class T_struct, uint Simd_size = sse_bytes>
 class value_smoother {
 public:
   //----------------------------------------------------------------------------
-  using value_type                = T;
+  static_assert (std::is_floating_point_v<T>);
+  static_assert (std::is_standard_layout_v<T_struct>);
+  static_assert (!std::is_arithmetic_v<T_struct>);
+  // That the struct contains only T's can't be validated, just trying...
+  static_assert ((sizeof (T_struct) % sizeof (T)) == 0);
+  //----------------------------------------------------------------------------
+  using value_type                = T_struct;
+  using arith_type                = T;
   static constexpr uint simd_size = Simd_size;
-  static constexpr uint size      = N;
+  static constexpr uint size      = sizeof (T_struct) / sizeof (T);
   using vec_type                  = vec<T, simd_size / sizeof (T)>;
   static constexpr uint vec_size  = vec_traits_t<vec_type>::size;
   //----------------------------------------------------------------------------
-  void reset (T t_spl)
+  void reset (T t_spl, T hz = 10.f)
   {
     memset (&_target, 0, sizeof _target);
     memset (&_current, 0, sizeof _current);
     using x1_t = vec<T, 1>;
     onepole_smoother::reset_coeffs (
-      make_crange (_coeff).cast (x1_t {}), vec_set<x1_t> (1. / 0.1), t_spl);
+      make_crange (_smoother_coeff).cast (x1_t {}), vec_set<x1_t> (hz), t_spl);
   }
   //----------------------------------------------------------------------------
-  void set_to_target() { _current = _target; }
+  void set_all_from_target() { _current = _target; }
   //----------------------------------------------------------------------------
-  void set (T v, uint idx)
-  {
-    assert (idx < N);
-    _target[idx / vec_size][idx % vec_size] = v; // vec_size is a power of 2
-  }
+  value_type const& get() const { return _current.value; }
   //----------------------------------------------------------------------------
-  T get (uint idx) const
-  {
-    assert (idx < N);
-    return _current[idx / vec_size][idx % vec_size]; // vec_size is a power of 2
-  }
+  value_type& target() { return _target.value; }
   //----------------------------------------------------------------------------
   void tick (uint samples = 1)
   {
-    for (uint j = 0; j < _target.size(); ++j) {
-      for (uint i = 0; i < samples; ++i) {
-        _current[j] = onepole_smoother::tick<vec_type> (
-          make_crange (_coeff), make_crange (_current[j]), _target[j]);
+    for (uint i = 0; i < samples; ++i) {
+      for (uint j = 0; j < _target.mem.size(); ++j) {
+        _current.mem[j] = onepole_smoother::tick<vec_type> (
+          make_crange (_smoother_coeff),
+          make_crange (_current.mem[j]),
+          _target.mem[j]);
       }
     }
   }
   //----------------------------------------------------------------------------
 private:
-  alignas (sse_bytes) simd_vec_array<T, N, sse_bytes> _target;
-  alignas (sse_bytes) simd_vec_array<T, N, sse_bytes> _current;
-  T _coeff;
+  //----------------------------------------------------------------------------
+  union values_union {
+    value_type value;
+    alignas (sse_bytes) simd_vec_array<T, size, sse_bytes> mem;
+  };
+  //----------------------------------------------------------------------------
+  values_union _target;
+  values_union _current;
+  T            _smoother_coeff;
 };
 //------------------------------------------------------------------------------
+
 } // namespace artv

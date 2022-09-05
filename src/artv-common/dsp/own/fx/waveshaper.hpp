@@ -102,7 +102,7 @@ public:
 
   void set (saturated_out_tag, float v)
   {
-    _sparams.set (db_to_gain (v), sm_out);
+    _sparams.target().out = db_to_gain (v);
   }
 
   static constexpr auto get_parameter (saturated_out_tag)
@@ -112,7 +112,7 @@ public:
   //----------------------------------------------------------------------------
   struct trim_tag {};
 
-  void set (trim_tag, float v) { _sparams.set (db_to_gain (v), sm_trim); }
+  void set (trim_tag, float v) { _sparams.target().trim = db_to_gain (v); }
 
   static constexpr auto get_parameter (trim_tag)
   {
@@ -290,8 +290,8 @@ public:
     v *= 0.01;
     v = sqrtf (fabs (v));
     v *= 0.9f;
-    v = neg ? -v : v;
-    _sparams.set (v, sm_feedback);
+    v                          = neg ? -v : v;
+    _sparams.target().feedback = v;
   }
 
   static constexpr auto get_parameter (feedback_tag)
@@ -303,7 +303,7 @@ public:
 
   void set (emphasis_freq_tag, float v)
   {
-    _sparams.set (midi_note_to_hz (v), sm_emphasis_freq);
+    _sparams.target().emphasis_freq = midi_note_to_hz (v);
   }
 
   static constexpr auto get_parameter (emphasis_freq_tag)
@@ -315,7 +315,7 @@ public:
 
   void set (emphasis_amount_tag, float v)
   {
-    _sparams.set (midi_note_to_hz (v), sm_emphasis_amt);
+    _sparams.target().emphasis_amt = midi_note_to_hz (v);
   }
 
   static constexpr auto get_parameter (emphasis_amount_tag)
@@ -325,7 +325,7 @@ public:
   //----------------------------------------------------------------------------
   struct emphasis_q_tag {};
 
-  void set (emphasis_q_tag, float v) { _sparams.set (v, sm_emphasis_q); }
+  void set (emphasis_q_tag, float v) { _sparams.target().emphasis_q = v; }
 
   static constexpr auto get_parameter (emphasis_q_tag)
   {
@@ -394,7 +394,7 @@ public:
 
     auto efdrv = sqrt (abs (v) * 0.01); // max 1
     efdrv *= sgn_no_zero (v, -max_db, max_db);
-    _sparams.set (efdrv, sm_ef_to_drive);
+    _sparams.target().ef_to_drive = efdrv;
   }
 
   static constexpr auto get_parameter (envfollow_to_drive_tag)
@@ -407,7 +407,7 @@ public:
   void set (envfollow_to_emphasis_freq_tag, float v)
   {
     // max = 2, 2 octaves up and down
-    _sparams.set (v * (0.01 * 2.), sm_ef_to_emphasis_freq);
+    _sparams.target().ef_to_emphasis_freq = v * (0.01 * 2.);
   }
 
   static constexpr auto get_parameter (envfollow_to_emphasis_freq_tag)
@@ -422,7 +422,7 @@ public:
     auto amt = v * 0.01f; // max 1
     amt      = sqrt (fabs (amt));
     amt *= sgn_no_zero (v, -30.f, 30.f);
-    _sparams.set (amt, sm_ef_to_emphasis_amt);
+    _sparams.target().ef_to_emphasis_amt = amt;
   }
 
   static constexpr auto get_parameter (envfollow_to_emphasis_amount_tag)
@@ -436,7 +436,7 @@ public:
   {
     auto amt = sqrt (fabs (v * 0.01));
     amt *= sgn_no_zero (v);
-    _sparams.set (amt, sm_ef_to_dc);
+    _sparams.target().ef_to_dc = amt;
   }
 
   static constexpr auto get_parameter (envfollow_to_dc_tag)
@@ -502,7 +502,7 @@ public:
       = double_x2 {};
 
     update_emphasis();
-    _sparams.set_to_target();
+    _sparams.set_all_from_target();
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -631,9 +631,9 @@ public:
         // smoothing some params
         _sparams.tick();
 
-        double_x2 drive {_sparams.get (sm_drive_l), _sparams.get (sm_drive_r)};
+        double_x2 drive {_sparams.get().drive_l, _sparams.get().drive_r};
         double_x2 inv_drive = 1. / drive;
-        inv_drive *= _sparams.get (sm_trim);
+        inv_drive *= _sparams.get().trim;
 
         // Envelope follower/modulation
         double_x2 follow = _envfollow.tick (sat[i]);
@@ -660,12 +660,12 @@ public:
         if ((_n_processed_samples & _control_rate_mask) == 0) {
           // expensive stuff at lower than audio rate
           update_emphasis (
-            vec_exp2 (follow * _sparams.get (sm_ef_to_emphasis_freq))
-              * _sparams.get (sm_emphasis_freq),
-            follow * _sparams.get (sm_ef_to_emphasis_amt));
+            vec_exp2 (follow * _sparams.get().ef_to_emphasis_freq)
+              * _sparams.get().emphasis_freq,
+            follow * _sparams.get().ef_to_emphasis_amt);
         }
 
-        float ef_to_drive = _sparams.get (sm_ef_to_drive);
+        float ef_to_drive = _sparams.get().ef_to_drive;
 
         if (ef_to_drive != 0.f) {
           // gain modulation. Audio rate.
@@ -689,7 +689,7 @@ public:
         static constexpr auto fb_att = constexpr_db_to_gain (
           -constexpr_db_to_gain (envfollow_max_db) - 1.);
 
-        auto feedback = _sat_prev * _sparams.get (sm_feedback);
+        auto feedback = _sat_prev * _sparams.get().feedback;
 
         double_x2 feedback_follow = follow * ef_to_drive * fb_att;
 
@@ -698,7 +698,7 @@ public:
         feedback += feedback * feedback_follow;
 
         sat[i] += feedback;
-        auto ef2dc = _sparams.get (sm_ef_to_dc);
+        auto ef2dc = _sparams.get().ef_to_dc;
         auto amt   = fabs (ef2dc) * 0.40;
         auto dcmod = follow * amt;
         dcmod += _dcmod_prev;
@@ -748,7 +748,7 @@ public:
 
         _dcmod_prev = dcmod;
         // gain and crossover join
-        sat[i] *= inv_drive * _sparams.get (sm_out);
+        sat[i] *= inv_drive * _sparams.get().out;
         sat[i] += lo[i] + hi[i];
       }
       // post process / restore if required
@@ -796,25 +796,6 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  enum smoothed_state {
-    sm_drive_l,
-    sm_drive_r,
-    sm_feedback,
-    sm_out,
-
-    sm_trim,
-    sm_emphasis_freq,
-    sm_emphasis_amt,
-    sm_emphasis_q,
-
-    sm_ef_to_drive,
-    sm_ef_to_emphasis_freq,
-    sm_ef_to_emphasis_amt,
-    sm_ef_to_dc,
-
-    sm_count,
-  };
-  //----------------------------------------------------------------------------
   void update_crossover (uint idx, bool reset_states)
   {
     auto f = double_x2 {_p.crossv_hz[idx], _p.crossv_hz[idx] * 1.009};
@@ -835,8 +816,8 @@ private:
   //----------------------------------------------------------------------------
   void update_drive()
   {
-    _sparams.set (_p.drive * (2. - _p.drive_bal), sm_drive_l);
-    _sparams.set (_p.drive * (_p.drive_bal), sm_drive_r);
+    _sparams.target().drive_l = _p.drive * (2. - _p.drive_bal);
+    _sparams.target().drive_r = _p.drive * (_p.drive_bal);
   }
   //----------------------------------------------------------------------------
   static constexpr bool waveshaper_type_is_adaa (char mode)
@@ -853,9 +834,9 @@ private:
     double_x2 freq_offset = double_x2 {},
     double_x2 amt_offset  = double_x2 {})
   {
-    double_x2 f  = vec_set<double_x2> (_sparams.get (sm_emphasis_freq));
-    double_x2 q  = vec_set<double_x2> (_sparams.get (sm_emphasis_q));
-    double_x2 db = vec_set<double_x2> (_sparams.get (sm_emphasis_amt));
+    double_x2 f  = vec_set<double_x2> (_sparams.get().emphasis_freq);
+    double_x2 q  = vec_set<double_x2> (_sparams.get().emphasis_q);
+    double_x2 db = vec_set<double_x2> (_sparams.get().emphasis_amt);
 
     f += freq_offset;
     db += amt_offset;
@@ -942,6 +923,23 @@ private:
     std::array<bool, n_crossv>  crossv_enabled;
   };
 
+  struct smoothed_params {
+    float drive_l;
+    float drive_r;
+    float feedback;
+    float out;
+
+    float trim;
+    float emphasis_freq;
+    float emphasis_amt;
+    float emphasis_q;
+
+    float ef_to_drive;
+    float ef_to_emphasis_freq;
+    float ef_to_emphasis_amt;
+    float ef_to_dc;
+  };
+
   static constexpr uint adaa_order = 1;
 
   using sqrt_sigmoid_aa = adaa::fix_eq_and_delay<adaa_order, sqrt_sigmoid_adaa>;
@@ -983,7 +981,7 @@ private:
     dc_block_count>;
 
   params                                    _p;
-  value_smoother<float, sm_count>           _sparams;
+  value_smoother<float, smoothed_params>    _sparams;
   part_class_array<andy::svf, double_x2>    _pre_emphasis;
   crossv                                    _crossv;
   waveshapers                               _wvsh;

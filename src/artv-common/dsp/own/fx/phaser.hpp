@@ -10,6 +10,7 @@
 #include "artv-common/dsp/own/classes/delay_line.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
+#include "artv-common/dsp/own/classes/value_smoother.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/biquad.hpp"
 #include "artv-common/dsp/own/parts/filters/dc_blocker.hpp"
@@ -39,7 +40,7 @@ public:
   static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
   struct stages_tag {};
-  void set (stages_tag, int v) { _params.unsmoothed.n_stages = v + 1; }
+  void set (stages_tag, int v) { _pars.n_stages = v + 1; }
 
   static constexpr auto get_parameter (stages_tag)
   {
@@ -70,9 +71,9 @@ public:
   struct stages_mode_tag {};
   void set (stages_mode_tag, int v)
   {
-    bool lin                       = v < m_total_modes;
-    _params.unsmoothed.lin_lfo_mod = lin;
-    _params.unsmoothed.mode        = v - (!lin * m_total_modes);
+    bool lin          = v < m_total_modes;
+    _pars.lin_lfo_mod = lin;
+    _pars.mode        = v - (!lin * m_total_modes);
   }
 
   static constexpr auto get_parameter (stages_mode_tag)
@@ -116,8 +117,8 @@ public:
   struct lfo_rate_tag {};
   void set (lfo_rate_tag, float v)
   {
-    v                              = midi_note_to_hz (v);
-    _params.unsmoothed.lfo_hz_user = v;
+    v                 = midi_note_to_hz (v);
+    _pars.lfo_hz_user = v;
     refresh_lfo_hz();
   }
 
@@ -129,7 +130,7 @@ public:
   struct lfo_rate_sync_tag {};
   void set (lfo_rate_sync_tag, float v)
   {
-    _params.unsmoothed.lfo_eights = v;
+    _pars.lfo_eights = v;
     refresh_lfo_hz();
   }
 
@@ -144,7 +145,7 @@ public:
   void set (lfo_depth_tag, float v)
   {
     v *= 0.01;
-    _params.smooth_target.value.lfo_depth = v;
+    _pars_smooth.target().lfo_depth = v;
   }
 
   static constexpr auto get_parameter (lfo_depth_tag)
@@ -153,7 +154,7 @@ public:
   }
   //----------------------------------------------------------------------------
   struct lfo_wave_tag {};
-  void set (lfo_wave_tag, int v) { _params.unsmoothed.lfo_wave = v; }
+  void set (lfo_wave_tag, int v) { _pars.lfo_wave = v; }
 
   static constexpr auto get_parameter (lfo_wave_tag)
   {
@@ -167,7 +168,7 @@ public:
   struct lfo_start_phase_tag {};
   void set (lfo_start_phase_tag, float v)
   {
-    _params.smooth_target.value.lfo_start_phase = v;
+    _pars_smooth.target().lfo_start_phase = v;
   }
 
   static constexpr auto get_parameter (lfo_start_phase_tag)
@@ -176,10 +177,7 @@ public:
   }
   //----------------------------------------------------------------------------
   struct lfo_stereo_tag {};
-  void set (lfo_stereo_tag, float v)
-  {
-    _params.smooth_target.value.lfo_stereo = v;
-  }
+  void set (lfo_stereo_tag, float v) { _pars_smooth.target().lfo_stereo = v; }
 
   static constexpr auto get_parameter (lfo_stereo_tag)
   {
@@ -189,8 +187,8 @@ public:
   struct low_freq_tag {};
   void set (low_freq_tag, float v)
   {
-    v                                   = midi_note_to_hz (v);
-    _params.smooth_target.value.freq_lo = v;
+    v                             = midi_note_to_hz (v);
+    _pars_smooth.target().freq_lo = v;
   }
 
   static constexpr auto get_parameter (low_freq_tag)
@@ -201,8 +199,8 @@ public:
   struct high_freq_tag {};
   void set (high_freq_tag, float v)
   {
-    v                                   = midi_note_to_hz (v);
-    _params.smooth_target.value.freq_hi = v;
+    v                             = midi_note_to_hz (v);
+    _pars_smooth.target().freq_hi = v;
   }
 
   static constexpr auto get_parameter (high_freq_tag)
@@ -219,10 +217,9 @@ public:
     v = sqrt (abs (v));
     v = neg ? -v : v;
 
-    _params.smooth_target.value.feedback = v;
+    _pars_smooth.target().feedback = v;
     scale_feedbacks (
-      _params.smooth_target.value.feedback,
-      _params.smooth_target.value.delay_feedback);
+      _pars_smooth.target().feedback, _pars_smooth.target().delay_feedback);
   }
 
   static constexpr auto get_parameter (feedback_tag)
@@ -233,7 +230,7 @@ public:
   struct feedback_hp_tag {};
   void set (feedback_hp_tag, float v)
   {
-    _params.smooth_target.value.feedback_hp = v * 0.01f;
+    _pars_smooth.target().feedback_hp = v * 0.01f;
   }
 
   static constexpr auto get_parameter (feedback_hp_tag)
@@ -244,7 +241,7 @@ public:
   struct feedback_lp_tag {};
   void set (feedback_lp_tag, float v)
   {
-    _params.smooth_target.value.feedback_lp = v * 0.01f;
+    _pars_smooth.target().feedback_lp = v * 0.01f;
   }
 
   static constexpr auto get_parameter (feedback_lp_tag)
@@ -258,7 +255,7 @@ public:
     v *= 0.01f;
     v = v * v * v;
     v *= 100.f;
-    _params.smooth_target.value.feedback_sat = v;
+    _pars_smooth.target().feedback_sat = v;
   }
 
   static constexpr auto get_parameter (feedback_sat_tag)
@@ -267,7 +264,7 @@ public:
   }
   //----------------------------------------------------------------------------
   struct q_tag {};
-  void set (q_tag, float v) { _params.smooth_target.value.q = v; }
+  void set (q_tag, float v) { _pars_smooth.target().q = v; }
 
   static constexpr auto get_parameter (q_tag)
   {
@@ -277,7 +274,7 @@ public:
   struct parallel_mix_tag {};
   void set (parallel_mix_tag, float v)
   {
-    _params.smooth_target.value.parallel_mix = v * 0.005f;
+    _pars_smooth.target().parallel_mix = v * 0.005f;
   }
 
   static constexpr auto get_parameter (parallel_mix_tag)
@@ -286,11 +283,11 @@ public:
   }
   //----------------------------------------------------------------------------
   struct topology_tag {};
-  void set (topology_tag, int v) { _params.unsmoothed.topology = v; }
+  void set (topology_tag, int v) { _pars.topology = v; }
 
   static constexpr auto get_parameter (topology_tag)
   {
-    return choice_param (3, make_cstr_array ("1 pole", "2 pole"), 16);
+    return choice_param (1, make_cstr_array ("1 pole", "2 pole"), 16);
   }
 
   enum topologies { t_1_pole, t_2_pole };
@@ -303,10 +300,9 @@ public:
     v = sqrt (abs (v));
     v = neg ? -v : v;
 
-    _params.smooth_target.value.delay_feedback = v;
+    _pars_smooth.target().delay_feedback = v;
     scale_feedbacks (
-      _params.smooth_target.value.feedback,
-      _params.smooth_target.value.delay_feedback);
+      _pars_smooth.target().feedback, _pars_smooth.target().delay_feedback);
   }
 
   static constexpr auto get_parameter (delay_feedback_tag)
@@ -321,7 +317,7 @@ public:
   {
     v *= 0.01f;
     v *= max_delay_sec * _srate;
-    _params.smooth_target.value.delay_spls = v;
+    _pars_smooth.target().delay_spls = v;
   }
 
   static constexpr auto get_parameter (delay_time_tag)
@@ -336,7 +332,7 @@ public:
   void set (delay_lfo_tag, float v)
   {
     v *= 0.01f;
-    _params.smooth_target.value.delay_lfo = v;
+    _pars_smooth.target().delay_lfo = v;
   }
 
   static constexpr auto get_parameter (delay_lfo_tag)
@@ -354,50 +350,35 @@ public:
     _feedback_shelf.reset_states_cascade();
     _feedback_delay_shelf.reset_states_cascade();
     _lfos.reset();
+    _pars_smooth.reset (_t_spl, 1.f / 0.01f);
 
-    _params.smooth_target.value.freq_lo
-      = get_parameter (low_freq_tag {}).defaultv;
-    _params.smooth_target.value.freq_hi
-      = get_parameter (high_freq_tag {}).defaultv;
-    _params.smooth_target.value.lfo_stereo
-      = get_parameter (lfo_stereo_tag {}).defaultv;
-    _params.smooth_target.value.lfo_depth
-      = get_parameter (lfo_depth_tag {}).defaultv;
-    _params.smooth_target.value.lfo_start_phase
-      = get_parameter (lfo_start_phase_tag {}).defaultv;
-    _params.smooth_target.value.feedback
-      = get_parameter (feedback_tag {}).defaultv;
-    _params.smooth_target.value.q          = get_parameter (q_tag {}).defaultv;
-    _params.smooth_target.value.delay_spls = 0.f;
-    _params.smooth_target.value.delay_feedback = 0.f;
-    _params.smooth_target.value.delay_lfo      = 0.f;
-    _params.smooth_target.value.lfo_last       = 0.f;
-    _params.smooth_target.value.feedback_hp
-      = get_parameter (feedback_hp_tag {}).defaultv;
-    _params.smooth_target.value.feedback_hp
-      = get_parameter (feedback_lp_tag {}).defaultv;
-    _params.smooth_target.value.feedback_sat
-      = get_parameter (feedback_sat_tag {}).defaultv;
-    _params.smooth_target.value.parallel_mix
-      = get_parameter (parallel_mix_tag {}).defaultv;
+    auto& ptarget = _pars_smooth.target();
 
-    _params.unsmoothed.lfo_hz_user = get_parameter (lfo_rate_tag {}).defaultv;
-    _params.unsmoothed.lfo_eights
-      = get_parameter (lfo_rate_sync_tag {}).defaultv;
-    _params.unsmoothed.lfo_wave = get_parameter (lfo_wave_tag {}).defaultv;
-    _params.unsmoothed.n_stages = get_parameter (stages_tag {}).defaultv;
-    _params.unsmoothed.mode     = get_parameter (stages_mode_tag {}).defaultv;
+    ptarget.freq_lo         = get_parameter (low_freq_tag {}).defaultv;
+    ptarget.freq_hi         = get_parameter (high_freq_tag {}).defaultv;
+    ptarget.lfo_stereo      = get_parameter (lfo_stereo_tag {}).defaultv;
+    ptarget.lfo_depth       = get_parameter (lfo_depth_tag {}).defaultv;
+    ptarget.lfo_start_phase = get_parameter (lfo_start_phase_tag {}).defaultv;
+    ptarget.feedback        = get_parameter (feedback_tag {}).defaultv;
+    ptarget.q               = get_parameter (q_tag {}).defaultv;
+    ptarget.delay_spls      = 0.f;
+    ptarget.delay_feedback  = 0.f;
+    ptarget.delay_lfo       = 0.f;
+    ptarget.lfo_last        = 0.f;
+    ptarget.feedback_hp     = get_parameter (feedback_hp_tag {}).defaultv;
+    ptarget.feedback_hp     = get_parameter (feedback_lp_tag {}).defaultv;
+    ptarget.feedback_sat    = get_parameter (feedback_sat_tag {}).defaultv;
+    ptarget.parallel_mix    = get_parameter (parallel_mix_tag {}).defaultv;
+
+    _pars.lfo_hz_user = get_parameter (lfo_rate_tag {}).defaultv;
+    _pars.lfo_eights  = get_parameter (lfo_rate_sync_tag {}).defaultv;
+    _pars.lfo_wave    = get_parameter (lfo_wave_tag {}).defaultv;
+    _pars.n_stages    = get_parameter (stages_tag {}).defaultv;
+    _pars.mode        = get_parameter (stages_mode_tag {}).defaultv;
+
+    _pars_smooth.set_all_from_target();
 
     refresh_lfo_hz();
-
-    memset (&_params.smooth_state, 0, sizeof _params.smooth_state);
-
-    using x1_type = vec<decltype (_lp_smooth_coeff), 1>;
-
-    onepole_smoother::reset_coeffs (
-      make_crange (_lp_smooth_coeff).cast (x1_type {}),
-      vec_set<x1_type> (1. / 0.01),
-      _t_spl);
 
     _dc_blocker.reset_states();
     _dc_blocker.reset_coeffs (vec_set<4> (2.f), _t_spl);
@@ -424,28 +405,15 @@ public:
 
       constexpr uint vec_size = vec_traits<float_x4>().size;
 
-      // parameter smoothing (could be done at a subblock size).
-      auto smooth_iter = _params.smooth_target.arr.size() / vec_size;
-      for (uint j = 0; j < smooth_iter; ++j) {
-        // HACKish encapsulation violation: this one isn't assigning the result,
-        // but getting the -1 state from the one pole filter directly (copied by
-        // value). See "static_assert" on the code below. 1-pole digital filters
-        // are NEVER going to change so this is IMO acceptable.
-        auto in
-          = make_crange (_params.smooth_target.arr, vec_size, vec_size * j);
-        onepole_smoother::tick (
-          make_crange (_lp_smooth_coeff),
-          make_crange (_params.smooth_state.arr, vec_size, vec_size * j)
-            .cast (float_x4 {}),
-          vec_load<float_x4> (in));
-      }
+      // parameter smoothing (could be done at a subblock/control rate).
+      _pars_smooth.tick();
 
       all_parameters pars;
       static_assert (
         onepole_smoother::n_states == 1,
         "For the assignment below to work only the Z-1 state has to exist");
-      *((smoothed_parameters*) &pars)   = _params.smooth_state.value;
-      *((unsmoothed_parameters*) &pars) = _params.unsmoothed;
+      *((smoothed_parameters*) &pars)   = _pars_smooth.get();
+      *((unsmoothed_parameters*) &pars) = _pars;
 
       // control rate/mdoulation block -----------------------------------------
       if ((_n_processed_samples & _control_rate_mask) == 0) {
@@ -467,7 +435,7 @@ public:
       auto delayed = _delay.get (n_spls, 0);
       out += delayed * pars.delay_feedback;
 
-      if (t_2_pole) {
+      if (pars.topology == t_2_pole) {
         for (uint g = 0; g < pars.n_stages; ++g) {
           out = _allpass2p.tick_on_idx (g, out);
         }
@@ -551,12 +519,11 @@ private:
   void refresh_lfo_hz()
   {
     float hz = 0.f;
-    if (_params.unsmoothed.lfo_eights != 0.f) {
-      hz = (8. * _plugcontext->get_play_state().bpm)
-        / (60. * _params.unsmoothed.lfo_eights);
+    if (_pars.lfo_eights != 0.f) {
+      hz = (8. * _plugcontext->get_play_state().bpm) / (60. * _pars.lfo_eights);
     }
-    hz += _params.unsmoothed.lfo_hz_user;
-    _params.smooth_target.value.lfo_hz_final = hz;
+    hz += _pars.lfo_hz_user;
+    _pars_smooth.target().lfo_hz_final = hz;
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -619,8 +586,8 @@ private:
       lfov = _lfos.tick_saw();
       break;
     }
-    _params.smooth_target.value.lfo_last = lfov[0];
-    auto                  interp_stages  = (double) (pars.n_stages * 2) - 1;
+    _pars_smooth.target().lfo_last      = lfov[0];
+    auto                  interp_stages = (double) (pars.n_stages * 2) - 1;
     std::array<double, 2> fconstant;
 
     auto freq_hi = std::max (pars.freq_hi, pars.freq_lo);
@@ -765,6 +732,7 @@ private:
       }
     }
   }
+  //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
     float lfo_eights;
     float lfo_hz_user;
@@ -800,35 +768,12 @@ private:
   struct all_parameters : public unsmoothed_parameters,
                           public smoothed_parameters {};
   //----------------------------------------------------------------------------
-  union smoothed_parameter_union {
-    smoothed_parameters value;
-    simd_array<float, sizeof (smoothed_parameters) / sizeof (float), sse_bytes>
-      arr;
-  };
-  //----------------------------------------------------------------------------
-  struct parameter_values {
-    alignas (sse_bytes) smoothed_parameter_union smooth_target;
-    alignas (sse_bytes) smoothed_parameter_union smooth_state;
-    unsmoothed_parameters unsmoothed;
-  };
-  //----------------------------------------------------------------------------
-  //
-  union smoothed_stages_delay_samples {
-    using array_type = array2d<float, n_ap_channels, max_stages>;
-    array_type                                                         spls;
-    simd_array<float, sizeof (array_type) / sizeof (float), sse_bytes> raw;
-  };
-  //----------------------------------------------------------------------------
-  struct stages_delay_samples {
-    alignas (sse_bytes) smoothed_stages_delay_samples target;
-    alignas (sse_bytes) smoothed_stages_delay_samples state;
-  };
-  //----------------------------------------------------------------------------
-  double_x2        _feedback_samples;
-  parameter_values _params;
+  double_x2             _feedback_samples;
+  unsmoothed_parameters _pars;
 
   std::vector<float_x4, overaligned_allocator<float_x4, 128>> _delay_mem;
 
+  value_smoother<float, smoothed_parameters> _pars_smooth;
   // TODO: use a variant?
   part_class_array<andy::svf_allpass, float_x4, max_stages> _allpass2p;
   part_class_array<onepole_allpass, float_x4, max_stages>   _allpass1p;
@@ -845,7 +790,6 @@ private:
   float           _lfo_t_spl;
   float           _t_spl;
   float           _srate;
-  float           _lp_smooth_coeff;
 
   plugin_context* _plugcontext = nullptr;
 };
