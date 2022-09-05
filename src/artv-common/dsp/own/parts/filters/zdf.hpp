@@ -61,7 +61,7 @@ struct lin_mystran_2_tag {};
 // struct runge_kutta_tag {};
 
 //------------------------------------------------------------------------------
-template <class V, class Topology_tag, class Numerical_method_tag>
+template <class Topology_tag, class Numerical_method_tag>
 struct feedback;
 //------------------------------------------------------------------------------
 // Solve zdf feedback loop. Linear case. "k" is the feedback ratio.
@@ -79,16 +79,28 @@ struct feedback;
 // where:
 // u = x - k * (G * u + S)
 
-template <class V, class Any>
-struct feedback<V, linear_tag, Any> {
-
-  static_assert (is_vec_v<V>);
-
-  static V solve (response<V> resp, V k, V in)
+template <class Any>
+struct feedback<linear_tag, Any> {
+  //----------------------------------------------------------------------------
+  enum coeffs { n_coeffs };
+  enum coeffs_int { n_coeffs_int };
+  enum state { n_states };
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (crange<V> c)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<V> st)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (crange<const V>, crange<V>, response<V> resp, V k, V in)
   {
     using T = vec_value_type_t<V>;
     return (in - k * resp.S) / (k * resp.G + (T) 1);
   }
+  //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
 // global ZDF feedback loop with "x/sqrt(x**2*h + 1)" sigmoid with variable
@@ -108,35 +120,57 @@ struct feedback<V, linear_tag, Any> {
 // where:
 // u = x - k * (G * linramp * u + S)
 
-template <class V>
-class feedback<V, sqrt_sig_after_fb_juction_tag, lin_mystran_2_tag> {
+template <>
+class feedback<sqrt_sig_after_fb_juction_tag, lin_mystran_2_tag> {
 public:
   //----------------------------------------------------------------------------
-  V solve (response<V> resp, V k, V h, V in)
+  enum coeffs { n_coeffs };
+  enum coeffs_int { n_coeffs_int };
+  enum state { lin, n_states };
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (crange<V> c)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<V> st)
   {
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const V>,
+    crange<V>   st,
+    response<V> resp,
+    V           k,
+    V           h,
+    V           in)
+  {
+    using T = vec_value_type_t<V>;
     // 1st round
     auto scaled = resp;
-    scaled.G *= _lin;
-    V u = feedback<V, linear_tag, void>::solve (scaled, k, in);
+    scaled.G *= st[lin];
+    V u = feedback<linear_tag, void>::tick<V> ({}, {}, scaled, k, in);
     if (vec_is_all_ones (h == vec_set<V> (0))) {
       // linear, fast-path
-      _lin = vec_set<V> (1);
+      st[lin] = vec_set<V> (1);
       return u;
     }
-    _lin = (T) 1 / vec_sqrt (u * u * h + (T) 1); // sqrt_sigmoid (u) / u
+    st[lin] = (T) 1 / vec_sqrt (u * u * h + (T) 1); // sqrt_sigmoid (u) / u
     // 2 st round (compensation)
     scaled = resp;
-    scaled.G *= _lin;
-    u += feedback<V, linear_tag, void>::solve (scaled, k, in);
+    scaled.G *= st[lin];
+    u += feedback<linear_tag, void>::tick<V> ({}, {}, scaled, k, in);
     u *= (T) 0.5;
-    _lin = (T) 1 / vec_sqrt (u * u * h + (T) 1); // sqrt_sigmoid (u) / u
+    st[lin] = (T) 1 / vec_sqrt (u * u * h + (T) 1); // sqrt_sigmoid (u) / u
     return u;
   }
   //----------------------------------------------------------------------------
-private:
-  using T = vec_value_type_t<V>;
-  V _lin {vec_set<V> ((T) 1)};
 };
+//----------------------------------------------------------------------------
+
 //------------------------------------------------------------------------------
 // global ZDF feedback loop with "x/sqrt(x**2*h + 1)" sigmoid with variable
 // hardness (h parameter) solved/approximated with 2 rounds Mystran's
@@ -155,41 +189,62 @@ private:
 // where:
 // u = x - linramp * k * (Gu + S)
 
-template <class V>
-class feedback<V, sqrt_sig_before_fb_juction_tag, lin_mystran_2_tag> {
+template <>
+class feedback<sqrt_sig_before_fb_juction_tag, lin_mystran_2_tag> {
 public:
   //----------------------------------------------------------------------------
-  V solve (response<V> resp, V k, V h, V in)
+  enum coeffs { n_coeffs };
+  enum coeffs_int { n_coeffs_int };
+  enum state { lin, n_states };
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (crange<V> c)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<V> st)
   {
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const V>,
+    crange<V>   st,
+    response<V> resp,
+    V           k,
+    V           h,
+    V           in)
+  {
+    using T = vec_value_type_t<V>;
     // 1st round
     auto scaled = resp;
-    scaled.G *= _lin;
-    scaled.S *= _lin;
-    V u = feedback<V, linear_tag, void>::solve (scaled, k, in);
+    scaled.G *= st[lin];
+    scaled.S *= st[lin];
+    V u = feedback<linear_tag, void>::tick<V> ({}, {}, scaled, k, in);
     if (vec_is_all_ones (h == vec_set<V> (0))) {
       // linear, fast-path
-      _lin = vec_set<V> (1);
+      st[lin] = vec_set<V> (1);
       return u;
     }
     V sig_in = k * (resp.G * u + resp.S);
     // sqrt_sigmoid (u) / u
-    _lin = (T) 1 / vec_sqrt (sig_in * sig_in * h + (T) 1);
+    st[lin] = (T) 1 / vec_sqrt (sig_in * sig_in * h + (T) 1);
     // 2 st round (compensation)
     scaled = resp;
-    scaled.G *= _lin;
-    scaled.S *= _lin;
-    u += feedback<V, linear_tag, void>::solve (scaled, k, in);
+    scaled.G *= st[lin];
+    scaled.S *= st[lin];
+    u += feedback<linear_tag, void>::tick<V> ({}, {}, scaled, k, in);
     u *= (T) 0.5;
     sig_in = k * (resp.G * u + resp.S);
     // sqrt_sigmoid (u) / u
-    _lin = (T) 1 / vec_sqrt (sig_in * sig_in * h + (T) 1);
+    st[lin] = (T) 1 / vec_sqrt (sig_in * sig_in * h + (T) 1);
     return u;
   }
   //----------------------------------------------------------------------------
-private:
-  using T = vec_value_type_t<V>;
-  V _lin {vec_set<V> ((T) 1)};
 };
+
 //------------------------------------------------------------------------------
 // global ZDF feedback loop with "x/sqrt(x**2*h + 1)" sigmoid with variable
 // hardness (h parameter) solved/approximated with 2 rounds Mystran's
@@ -210,37 +265,58 @@ private:
 // u = x - (G2 (linramp * k * (G1 u + S1)) + S2)
 // u = (-G2 S1 k linramp - S2 + in) / (G1 G2 k linramp + 1)
 
-template <class V>
-class feedback<V, sqrt_sig_before_fb_juction_pp_tag, lin_mystran_2_tag> {
+template <>
+class feedback<sqrt_sig_before_fb_juction_pp_tag, lin_mystran_2_tag> {
 public:
   //----------------------------------------------------------------------------
-  V solve (response<V> r1, response<V> r2, V k, V h, V in)
+  enum coeffs { n_coeffs };
+  enum coeffs_int { n_coeffs_int };
+  enum state { lin, n_states };
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (crange<V> c)
+  {}
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_states (crange<V> st)
   {
+    assert (st.size() >= n_states);
+    memset (st.data(), 0, sizeof (V) * n_states);
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static V tick (
+    crange<const V>,
+    crange<V>   st,
+    response<V> r1,
+    response<V> r2,
+    V           k,
+    V           h,
+    V           in)
+  {
+    using T = vec_value_type_t<V>;
     // 1st round
-    V u = -r2.G * r1.S * k * _lin - r2.S + in;
-    u /= r1.G * r2.G * k * _lin + (T) 1;
+    V u = -r2.G * r1.S * k * st[lin] - r2.S + in;
+    u /= r1.G * r2.G * k * st[lin] + (T) 1;
 
     if (vec_is_all_ones (h == vec_set<V> (0))) {
       // linear, fast-path
-      _lin = vec_set<V> (1);
+      st[lin] = vec_set<V> (1);
       return u;
     }
     V sig_in = k * (r1.G * u + r1.S);
     // sqrt_sigmoid (u) / u
-    _lin = (T) 1 / vec_sqrt (sig_in * sig_in * h + (T) 1);
+    st[lin] = (T) 1 / vec_sqrt (sig_in * sig_in * h + (T) 1);
     // 2 st round (compensation)
-    V u2 = -r2.G * r1.S * k * _lin - r2.S + in;
-    u2 /= r1.G * r2.G * k * _lin + (T) 1;
+    V u2 = -r2.G * r1.S * k * st[lin] - r2.S + in;
+    u2 /= r1.G * r2.G * k * st[lin] + (T) 1;
     u += u2 * (T) 0.5;
     sig_in = k * (r1.G * u + r1.S);
     // sqrt_sigmoid (u) / u
-    _lin = (T) 1 / vec_sqrt (sig_in * sig_in * h + (T) 1);
+    st[lin] = (T) 1 / vec_sqrt (sig_in * sig_in * h + (T) 1);
     return u;
   }
   //----------------------------------------------------------------------------
-private:
-  using T = vec_value_type_t<V>;
-  V _lin {vec_set<V> ((T) 1)};
 };
 //------------------------------------------------------------------------------
 
