@@ -630,6 +630,12 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class... Ts>
+  auto tick (Ts&&... args)
+  {
+    return tick<0> (std::forward<Ts> (args)...);
+  }
+  //----------------------------------------------------------------------------
+  template <class... Ts>
   void reset_coeffs_cascade (Ts&&... args)
   {
     mp11::mp_for_each<mp11::mp_iota_c<sizeof...(Parts)>> ([&, this] (auto val) {
@@ -692,28 +698,42 @@ private:
   template <uint Idx, uint N_states>
   crange<value_type> get_states()
   {
-    constexpr auto offset = get_offset<n_states_list, Idx>();
-
-    auto st = _mem.get_states (0);
-    return {&st[offset], N_states};
+    if constexpr (N_states > 0) {
+      constexpr auto offset = get_offset<n_states_list, Idx>();
+      auto           st     = _mem.get_states (0);
+      return {&st[offset], N_states};
+    }
+    else {
+      return {};
+    }
   }
   //----------------------------------------------------------------------------
   template <uint Idx, uint N_coeffs>
   crange<value_type> get_coeffs_int()
   {
-    constexpr auto offset = get_offset<n_coeffs_int_list, Idx>();
+    if constexpr (N_coeffs > 0) {
+      constexpr auto offset = get_offset<n_coeffs_int_list, Idx>();
 
-    auto co = _mem.get_coeffs_int (0);
-    return {&co[offset], N_coeffs};
+      auto co = _mem.get_coeffs_int (0);
+      return {&co[offset], N_coeffs};
+    }
+    else {
+      return {};
+    }
   }
   //----------------------------------------------------------------------------
   template <uint Idx, uint N_coeffs>
   crange<value_type> get_coeffs()
   {
-    constexpr auto offset = get_coeff_offset<Idx>();
+    if constexpr (N_coeffs > 0) {
+      constexpr auto offset = get_coeff_offset<Idx>();
 
-    auto co = _mem.get_coeffs (0);
-    return {&co[offset], N_coeffs};
+      auto co = _mem.get_coeffs (0);
+      return {&co[offset], N_coeffs};
+    }
+    else {
+      return {};
+    }
   }
   //----------------------------------------------------------------------------
   template <class SizeList, uint End>
