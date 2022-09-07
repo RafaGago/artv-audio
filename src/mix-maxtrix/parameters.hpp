@@ -83,6 +83,7 @@
 #include "artv-common/dsp/own/fx/eq4x.hpp"
 #include "artv-common/dsp/own/fx/filter2x.hpp"
 #include "artv-common/dsp/own/fx/lin_eq4x.hpp"
+#include "artv-common/dsp/own/fx/mod.hpp"
 #include "artv-common/dsp/own/fx/phaser.hpp"
 #include "artv-common/dsp/own/fx/pitch_shifter.hpp"
 #include "artv-common/dsp/own/fx/reverb.hpp"
@@ -7238,6 +7239,187 @@ using diffuse_delay_params = mp_list<
   diffuse_bp_reso,
   diffuse_bp_envfollow>;
 //------------------------------------------------------------------------------
+parameter_cpp_class_define (
+  mod_order,
+  n_stereo_busses,
+  param_common ("Order", declptr<upsampled<mod>>(), declptr<mod::order_tag>()),
+  mod::get_parameter (mod::order_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_lfo_rate,
+  n_stereo_busses,
+  param_common (
+    "LFO Rate",
+    declptr<upsampled<mod>>(),
+    declptr<mod::lfo_rate_tag>()),
+  mod::get_parameter (mod::lfo_rate_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_lfo_time_base,
+  n_stereo_busses,
+  param_common (
+    "LFO Clock",
+    declptr<upsampled<mod>>(),
+    declptr<mod::lfo_time_base_tag>()),
+  mod::get_parameter (mod::lfo_time_base_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_lfo_depth,
+  n_stereo_busses,
+  param_common (
+    "LFO Amt",
+    declptr<upsampled<mod>>(),
+    declptr<mod::lfo_depth_tag>()),
+  mod::get_parameter (mod::lfo_depth_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_lfo_wave,
+  n_stereo_busses,
+  param_common (
+    "LFO Wave",
+    declptr<upsampled<mod>>(),
+    declptr<mod::lfo_wave_tag>()),
+  mod::get_parameter (mod::lfo_wave_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_lfo_start_phase,
+  n_stereo_busses,
+  param_common (
+    "LFO Phase",
+    declptr<upsampled<mod>>(),
+    declptr<mod::lfo_start_phase_tag>()),
+  mod::get_parameter (mod::lfo_start_phase_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_lfo_stereo,
+  n_stereo_busses,
+  param_common (
+    "LFO Stereo",
+    declptr<upsampled<mod>>(),
+    declptr<mod::lfo_stereo_tag>()),
+  mod::get_parameter (mod::lfo_stereo_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_center,
+  n_stereo_busses,
+  param_common (
+    "Center",
+    declptr<upsampled<mod>>(),
+    declptr<mod::center_tag>()),
+  mod::get_parameter (mod::center_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_width,
+  n_stereo_busses,
+  param_common ("Width", declptr<upsampled<mod>>(), declptr<mod::width_tag>()),
+  mod::get_parameter (mod::width_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_feedback,
+  n_stereo_busses,
+  param_common (
+    "Feedback",
+    declptr<upsampled<mod>>(),
+    declptr<mod::feedback_tag>()),
+  mod::get_parameter (mod::feedback_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_feedback_locut,
+  n_stereo_busses,
+  param_common (
+    "Fb LoCut",
+    declptr<upsampled<mod>>(),
+    declptr<mod::feedback_locut_tag>()),
+  mod::get_parameter (mod::feedback_locut_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_feedback_hicut,
+  n_stereo_busses,
+  param_common (
+    "Fb HiCut",
+    declptr<upsampled<mod>>(),
+    declptr<mod::feedback_hicut_tag>()),
+  mod::get_parameter (mod::feedback_hicut_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_feedback_sat,
+  n_stereo_busses,
+  param_common (
+    "Fb Sat",
+    declptr<upsampled<mod>>(),
+    declptr<mod::feedback_sat_tag>()),
+  mod::get_parameter (mod::feedback_sat_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_special,
+  n_stereo_busses,
+  param_common (
+    "Special",
+    declptr<upsampled<mod>>(),
+    declptr<mod::special_tag>()),
+  mod::get_parameter (mod::special_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_detune,
+  n_stereo_busses,
+  param_common (
+    "Detune",
+    declptr<upsampled<mod>>(),
+    declptr<mod::detune_tag>()),
+  mod::get_parameter (mod::detune_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_depth,
+  n_stereo_busses,
+  param_common ("Depth", declptr<upsampled<mod>>(), declptr<mod::depth_tag>()),
+  mod::get_parameter (mod::depth_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_oversampling,
+  n_stereo_busses,
+  param_common (
+    "Upsample",
+    declptr<upsampled<mod>>(),
+    declptr<oversampled_amount_tag>()),
+  upsampled<mod>::get_parameter (oversampled_amount_tag {}),
+  slider_ext);
+
+using mod_params = mp_list<
+  mod_lfo_rate,
+  mod_lfo_depth,
+  mod_order,
+  mod_depth,
+  mod_center,
+  mod_width,
+  mod_detune,
+  mod_special,
+  mod_feedback,
+  mod_feedback_sat,
+  mod_feedback_locut,
+  mod_feedback_hicut,
+  mod_lfo_time_base,
+  mod_lfo_wave,
+  mod_lfo_start_phase,
+  mod_lfo_stereo,
+  mod_oversampling>;
+//------------------------------------------------------------------------------
+
 #if 0
 parameter_cpp_class_define (
   polyphase_fir_test_gain,
@@ -7313,10 +7495,10 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  myphaser_params>;
+  mod_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "1. Phaser");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "1. Mod");
 #else
 // clang-format off
 using all_fx_typelists = mp_list<
