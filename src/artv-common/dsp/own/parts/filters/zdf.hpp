@@ -11,29 +11,32 @@
 
 namespace artv { namespace zdf {
 
-// tag to select overloads giving back the zdf coefficients
-struct coeffs_tag {};
+// tag to select overloads giving back the G and S zdf coefficients
+// See "The ART ov VA filter design" (Vadim Zabalishin) for what G and S are.
+struct gs_coeffs_tag {};
 
 template <class T>
 struct response {
   T G;
   T S;
 };
+
+static constexpr uint n_gs_coeffs = 2;
 //------------------------------------------------------------------------------
 // Accumulates the linear response of a number of elements connected in series.
 // G_S contains a list of G and S values
 //
 // See "The ART ov VA filter design" (Vadim Zabalishin) 5.3
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-struct response<V> get_response_series (crange<const V> G_S) {
+struct response<V> combine_response (crange<const V> G_S) {
   using T = vec_value_type_t<V>;
-  assert ((G_S.size() % 2) == 0);
+  assert ((G_S.size() % n_gs_coeffs) == 0);
 
   response<V> ret;
   ret.G = vec_set<V> ((T) 1);
   ret.S = vec_set<V> ((T) 0);
 
-  for (uint i = 0; i < G_S.size(); i += 2) {
+  for (uint i = 0; i < G_S.size(); i += n_gs_coeffs) {
     ret.G *= G_S[i];
     ret.S *= G_S[i];
     ret.S += G_S[i + 1];
@@ -143,10 +146,10 @@ public:
   static V tick (
     crange<const V>,
     crange<V>   st,
+    V           in,
     response<V> resp,
     V           k,
-    V           h,
-    V           in)
+    V           h)
   {
     using T = vec_value_type_t<V>;
     // 1st round
@@ -212,10 +215,10 @@ public:
   static V tick (
     crange<const V>,
     crange<V>   st,
+    V           in,
     response<V> resp,
     V           k,
-    V           h,
-    V           in)
+    V           h)
   {
     using T = vec_value_type_t<V>;
     // 1st round
@@ -288,11 +291,11 @@ public:
   static V tick (
     crange<const V>,
     crange<V>   st,
+    V           in,
     response<V> r1,
     response<V> r2,
     V           k,
-    V           h,
-    V           in)
+    V           h)
   {
     using T = vec_value_type_t<V>;
     // 1st round
@@ -310,7 +313,7 @@ public:
     // 2 st round (compensation)
     V u2 = -r2.G * r1.S * k * st[lin] - r2.S + in;
     u2 /= r1.G * r2.G * k * st[lin] + (T) 1;
-    u += u2 * (T) 0.5;
+    u      = (u + u2) * (T) 0.5;
     sig_in = k * (r1.G * u + r1.S);
     // sqrt_sigmoid (u) / u
     st[lin] = (T) 1 / vec_sqrt (sig_in * sig_in * h + (T) 1);

@@ -27,52 +27,57 @@ struct svf_coeffs {
   T k;
 };
 
-template <class T, class U>
-static svf_coeffs<T> get_main_coeffs (T freq, T q, U t_spl)
+template <class V>
+static svf_coeffs<V> get_main_coeffs (V g, V q)
 {
-  // "U" should always be a builtin type.
-  static_assert (std::is_floating_point<U>::value, "");
+  // "T" should always be a builtin type.
+  using T = vec_value_type_t<V>;
 
-  svf_coeffs<T> ret;
-
-  T g    = vec_tan ((U) M_PI * freq * t_spl);
-  ret.k  = (U) 1.0 / q;
-  ret.a1 = (U) 1.0 / ((U) 1.0 + g * (g + ret.k));
+  svf_coeffs<V> ret;
+  ret.k  = (T) 1.0 / q;
+  ret.a1 = (T) 1.0 / ((T) 1.0 + g * (g + ret.k));
   ret.a2 = g * ret.a1;
   ret.a3 = g * ret.a2;
   return ret;
 }
+
+template <class V, class T>
+static svf_coeffs<V> get_main_coeffs (V freq, V q, T t_spl)
+{
+  // "T" should always be a builtin type.
+  return get_main_coeffs (vec_tan ((T) M_PI * freq * t_spl), q);
+}
 //------------------------------------------------------------------------------
-template <class T>
-struct svf_coeffs_ext : public svf_coeffs<T> {
-  T A;
+template <class V>
+struct svf_coeffs_ext : public svf_coeffs<V> {
+  V A;
 };
 
 static constexpr uint bell_flag   = 1 << 0;
 static constexpr uint lshelf_flag = 1 << 1;
 static constexpr uint hshelf_flag = 1 << 2;
 
-template <class T, class U>
-static svf_coeffs_ext<T> get_main_coeffs (
-  T    freq,
-  T    q,
-  T    db,
-  U    t_spl,
+template <class V, class T>
+static svf_coeffs_ext<V> get_main_coeffs (
+  V    freq,
+  V    q,
+  V    db,
+  T    t_spl,
   uint flags = 0)
 {
-  // "U" should always be a builtin type.
-  static_assert (std::is_floating_point<U>::value, "");
+  // "T" should always be a builtin type.
+  static_assert (std::is_floating_point<T>::value, "");
 
-  svf_coeffs_ext<T> ret;
-  T                 g;
+  svf_coeffs_ext<V> ret;
+  V                 g;
 
-  if constexpr (is_vec_v<T>) {
-    ret.A = vec_exp (db * (U) (1. / 40.) * (U) M_LN10);
-    g     = vec_tan ((U) M_PI * freq * t_spl);
+  if constexpr (is_vec_v<V>) {
+    ret.A = vec_exp (db * (T) (1. / 40.) * (T) M_LN10);
+    g     = vec_tan ((T) M_PI * freq * t_spl);
   }
   else {
-    ret.A = exp (db * (U) (1. / 40.) * (U) M_LN10);
-    g     = tan ((U) M_PI * freq * t_spl);
+    ret.A = exp (db * (T) (1. / 40.) * (T) M_LN10);
+    g     = tan ((T) M_PI * freq * t_spl);
   }
   if ((flags & bell_flag)) {
     q *= ret.A;
@@ -83,8 +88,8 @@ static svf_coeffs_ext<T> get_main_coeffs (
   if ((flags & hshelf_flag)) {
     g *= vec_sqrt (ret.A);
   }
-  ret.k  = (U) 1.0 / q;
-  ret.a1 = (U) 1.0 / ((U) 1.0 + g * (g + ret.k));
+  ret.k  = (T) 1.0 / q;
+  ret.a1 = (T) 1.0 / ((T) 1.0 + g * (g + ret.k));
   ret.a2 = g * ret.a1;
   ret.a3 = g * ret.a2;
   return ret;
@@ -92,41 +97,41 @@ static svf_coeffs_ext<T> get_main_coeffs (
 
 // https://cytomic.com/files/dsp/SvfLinearTrapezoidalSin.pdf
 // UNTESTED!
-template <class T, class U>
-static svf_coeffs_ext<T> get_main_coeffs_precise (
-  T    freq,
-  T    q,
-  T    db,
-  U    t_spl,
+template <class V, class T>
+static svf_coeffs_ext<V> get_main_coeffs_precise (
+  V    freq,
+  V    q,
+  V    db,
+  T    t_spl,
   uint flags = 0)
 {
-  // "U" should always be a builtin type.
-  static_assert (std::is_floating_point<U>::value, "");
+  // "T" should always be a builtin type.
+  static_assert (std::is_floating_point<T>::value, "");
 
-  svf_coeffs_ext<T> ret;
-  T                 s1, s2;
+  svf_coeffs_ext<V> ret;
+  V                 s1, s2;
 
-  T w = (U) M_PI * freq * t_spl;
-  if constexpr (is_vec_v<T>) {
-    ret.A = vec_exp (db * (U) (1. / 40.) * (U) M_LN10);
+  V w = (T) M_PI * freq * t_spl;
+  if constexpr (is_vec_v<V>) {
+    ret.A = vec_exp (db * (T) (1. / 40.) * (T) M_LN10);
     s1    = vec_sin (w);
     // sometimes sin and cos can be returned on the same op.
     // sin(2x) = 2*cos(x)*sin(x)
-    s2 = (U) 2 * vec_cos (w) * s1;
+    s2 = (T) 2 * vec_cos (w) * s1;
   }
   else {
-    ret.A = exp (db * (U) (1. / 40.) * (U) M_LN10);
+    ret.A = exp (db * (T) (1. / 40.) * (T) M_LN10);
     s1    = vec_sin (w);
     // sometimes sin and cos can be returned on the same op.
     // sin(2x) = 2*cos(x)*sin(x)
-    s2 = (U) 2 * vec_cos (w) * s1;
+    s2 = (T) 2 * vec_cos (w) * s1;
   }
-  T nrm = (U) 1 / ((U) 2 * s2);
+  V nrm = (T) 1 / ((T) 2 * s2);
 
-  ret.k  = (U) 1 / q;
+  ret.k  = (T) 1 / q;
   ret.a1 = s2 * nrm;
-  ret.a2 = ((U) -2 * s1 * s1 - ret.k * s2) * nrm;
-  ret.a3 = ((U) 2 * s1 * s1) * nrm;
+  ret.a2 = ((T) -2 * s1 * s1 - ret.k * s2) * nrm;
+  ret.a3 = ((T) 2 * s1 * s1) * nrm;
   return ret;
 }
 //------------------------------------------------------------------------------
@@ -192,6 +197,30 @@ struct svf_multimode {
     assert (c.size() >= n_coeffs);
 
     auto coeffs = detail::get_main_coeffs (freq, q, t_spl);
+
+    c[a1] = coeffs.a1;
+    c[a2] = coeffs.a2;
+    c[a3] = coeffs.a3;
+    if constexpr (needs_k_coeff) {
+      c[k] = coeffs.k;
+    }
+    if constexpr (!std::is_same_v<Derived, void>) {
+      Derived::template after_reset_coeffs (c, coeffs);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  static void reset_coeffs (
+    crange<V>           c,
+    V                   freq,
+    V                   q,
+    vec_value_type_t<V> t_spl,
+    no_prewarp)
+  {
+    assert (c.size() >= n_coeffs);
+    using T = vec_value_type_t<V>;
+
+    auto coeffs = detail::get_main_coeffs ((T) M_PI * freq * t_spl, q);
 
     c[a1] = coeffs.a1;
     c[a2] = coeffs.a2;
@@ -357,10 +386,10 @@ public:
   using base::tick;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static auto tick (crange<const V> co, crange<V> st, zdf::coeffs_tag)
+  static auto tick (crange<const V> co, crange<V> st, zdf::gs_coeffs_tag)
   {
     std::array<V, n_zdf_coeffs> ret;
-    tick_impl<V, V> (co, st, ret, zdf::coeffs_tag {});
+    tick_impl<V, V> (co, st, ret, zdf::gs_coeffs_tag {});
     return ret;
   }
   //----------------------------------------------------------------------------
@@ -368,10 +397,10 @@ public:
   static auto tick (
     crange<const vec_value_type_t<V>> co,
     crange<V>                         st,
-    zdf::coeffs_tag)
+    zdf::gs_coeffs_tag)
   {
     std::array<V, n_zdf_coeffs> ret;
-    tick_impl<V, vec_value_type_t<V>> (co, st, ret, zdf::coeffs_tag {});
+    tick_impl<V, vec_value_type_t<V>> (co, st, ret, zdf::gs_coeffs_tag {});
     return ret;
   }
   //----------------------------------------------------------------------------
@@ -380,9 +409,9 @@ public:
     crange<const V> co,
     crange<V>       st,
     crange<V>       G_S,
-    zdf::coeffs_tag)
+    zdf::gs_coeffs_tag)
   {
-    tick_impl<V, V> (co, st, G_S, zdf::coeffs_tag {});
+    tick_impl<V, V> (co, st, G_S, zdf::gs_coeffs_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -390,9 +419,9 @@ public:
     crange<const vec_value_type_t<V>> co,
     crange<V>                         st,
     crange<V>                         G_S,
-    zdf::coeffs_tag)
+    zdf::gs_coeffs_tag)
   {
-    tick_impl<V, vec_value_type_t<V>> (co, st, G_S, zdf::coeffs_tag {});
+    tick_impl<V, vec_value_type_t<V>> (co, st, G_S, zdf::gs_coeffs_tag {});
   }
   //----------------------------------------------------------------------------
 private:
@@ -402,7 +431,7 @@ private:
     crange<const VT> co, // coeffs (V builtin type (single set) or V (SIMD))
     crange<const V>  st, // states (interleaved, SIMD aligned)
     crange<V>        G_S,
-    zdf::coeffs_tag)
+    zdf::gs_coeffs_tag)
   {
     using T = vec_value_type_t<V>;
     assert (G_S.size() >= n_zdf_coeffs);

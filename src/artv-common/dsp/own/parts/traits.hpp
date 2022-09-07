@@ -41,6 +41,7 @@ struct part_tick_tag {};
 template <uint n>
 struct quality_tag {};
 
+struct no_prewarp {};
 template <uint n>
 struct mode_tag {};
 

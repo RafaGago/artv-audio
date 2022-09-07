@@ -125,7 +125,7 @@ struct onepole {
     crange<V>           co,
     V                   freq,
     vec_value_type_t<V> t_spl,
-    quality_tag<0>) // no prewarp
+    no_prewarp)
   {
     static_assert (!has_shelves);
     using T = vec_value_type_t<V>;
@@ -152,7 +152,7 @@ struct onepole {
     V                   freq,
     V                   db,
     vec_value_type_t<V> t_spl,
-    quality_tag<0>) // no prewarp
+    no_prewarp)
   {
     static_assert (has_shelves);
     using T = vec_value_type_t<V>;
@@ -312,10 +312,10 @@ public:
   using base::tick;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static auto tick (crange<const V> co, crange<V> st, zdf::coeffs_tag)
+  static auto tick (crange<const V> co, crange<V> st, zdf::gs_coeffs_tag)
   {
     std::array<V, n_zdf_coeffs> ret;
-    tick_impl<V, V> (co, st, ret, zdf::coeffs_tag {});
+    tick_impl<V, V> (co, st, ret, zdf::gs_coeffs_tag {});
     return ret;
   }
   //----------------------------------------------------------------------------
@@ -323,10 +323,10 @@ public:
   static auto tick (
     crange<const vec_value_type_t<V>> co,
     crange<V>                         st,
-    zdf::coeffs_tag)
+    zdf::gs_coeffs_tag)
   {
     std::array<V, n_zdf_coeffs> ret;
-    tick_impl<V, vec_value_type_t<V>> (co, st, ret, zdf::coeffs_tag {});
+    tick_impl<V, vec_value_type_t<V>> (co, st, ret, zdf::gs_coeffs_tag {});
     return ret;
   }
   //----------------------------------------------------------------------------
@@ -335,9 +335,9 @@ public:
     crange<const V> co,
     crange<V>       st,
     crange<V>       G_S,
-    zdf::coeffs_tag)
+    zdf::gs_coeffs_tag)
   {
-    tick_impl<V, V> (co, st, G_S, zdf::coeffs_tag {});
+    tick_impl<V, V> (co, st, G_S, zdf::gs_coeffs_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -345,9 +345,9 @@ public:
     crange<const vec_value_type_t<V>> co,
     crange<V>                         st,
     crange<V>                         G_S,
-    zdf::coeffs_tag)
+    zdf::gs_coeffs_tag)
   {
-    tick_impl<V, vec_value_type_t<V>> (co, st, G_S, zdf::coeffs_tag {});
+    tick_impl<V, vec_value_type_t<V>> (co, st, G_S, zdf::gs_coeffs_tag {});
   }
   //----------------------------------------------------------------------------
 private:
@@ -358,7 +358,7 @@ private:
     crange<const VT> co, // coeffs (V builtin type (single set) or V (SIMD))
     crange<V>        st, // states (interleaved, SIMD aligned)
     crange<V>        G_S,
-    zdf::coeffs_tag)
+    zdf::gs_coeffs_tag)
   {
     using T = vec_value_type_t<V>;
     assert (G_S.size() >= n_zdf_coeffs);
