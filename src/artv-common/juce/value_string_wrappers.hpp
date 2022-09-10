@@ -81,13 +81,18 @@ struct frequency {
   struct value_from_string {
     static auto get()
     {
-      return [] (juce::String const& s) {
-        auto end = s.indexOfChar ('H');
-        assert (end > 0);
-        bool is_khz = s[end - 1] == 'k';
-        end -= is_khz;
-        float v = s.substring (0, end).getFloatValue();
-        return v * ((is_khz) ? 1000.f : 1.f);
+      return [] (juce::String const& str) {
+        auto s   = str.toLowerCase();
+        auto end = s.indexOfChar ('h');
+        if (end > 0) {
+          s = s.substring (0, end);
+        }
+        float fac = 1.f;
+        if (s.endsWith ("k")) {
+          fac = 1000.f;
+          s   = s.substring (0, s.length() - 1);
+        }
+        return hz_to_midi_note (s.getFloatValue() * fac);
       };
     }
   };
