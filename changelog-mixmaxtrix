@@ -14,6 +14,7 @@
 - Editor: Comboboxes: Fix arrow buttons behavior when some items are disabled.
   Now disabled items are skipped.
 - Editor: Comboboxes: Wrap around the list.
+- Editor: Knobs: Add keyboard data entry when pressing the Right mouse button.
 
 1.8.1
 - Artv Phaser: Label the amount of stages by number of stages on the serial

@@ -7675,6 +7675,7 @@ static constexpr char const* about_text =
 "\"LMB\"= Left Mouse Button. \"RMB\"= Right Mouse Button.\n"
 "\n"
 "-Double click a knob/slider: Set to default value.\n"
+"-RMB on a knob/slider: Keyboard data entry.\n"
 "-Ctrl + Dragging a knob/slider: Precise knob/slider adjustment.\n"
 "-Mouse Wheel: Same as dragging a knob/slider.\n"
 "-RMB drag and drop on FX comboboxes: FX parameters Swap.\n"

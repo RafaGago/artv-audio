@@ -268,6 +268,86 @@ struct widget_base {
   }
 };
 // -----------------------------------------------------------------------------
+// having to inherit everything feels so 90's...
+// A window that when modal gets destroyed by clicking outside
+class resizable_win_destroyed_clicking : public juce::ResizableWindow {
+public:
+  using ResizableWindow::ResizableWindow;
+
+  virtual void inputAttemptWhenModal() override
+  {
+    setVisible (false);
+    exitModalState (0);
+  }
+};
+// A slider that allows data entry on the center of the slider and doesn't have
+// the with limited to the actual component (unused by now).
+class slider_w_data_entry : public juce::Slider {
+public:
+  template <class... Ts>
+  slider_w_data_entry (Ts&&... args) : _edit_win {"", true}
+  {
+    _edit.setScrollbarsShown (false);
+    _edit.setReadOnly (false);
+    _edit.onEscapeKey = [this]() {
+      _edit_win.setVisible (false);
+      _edit_win.exitModalState (0);
+    };
+    _edit.onReturnKey = [this]() {
+      setValue (getValueFromText (_edit.getText()));
+      _edit.onEscapeKey();
+    };
+    _edit.onFocusLost = [this]() { _edit.onEscapeKey(); };
+  }
+
+  ~slider_w_data_entry()
+  {
+    _edit_win.setLookAndFeel (nullptr);
+    _edit.setLookAndFeel (nullptr);
+  }
+
+  void lookAndFeelChanged() override
+  {
+    Slider::lookAndFeelChanged();
+    _edit_win.setLookAndFeel (&getLookAndFeel());
+    _edit.setLookAndFeel (&getLookAndFeel());
+  }
+
+  void parentHierarchyChanged() override
+  {
+    // make the window be children of the main window
+    Slider::parentHierarchyChanged();
+    auto top = getTopLevelComponent();
+    if (top) {
+      top->addChildComponent (_edit_win);
+    }
+  }
+
+  void mouseDown (juce::MouseEvent const& e) override
+  {
+    juce::ModifierKeys mods = juce::ModifierKeys::getCurrentModifiersRealtime();
+    if (mods.isRightButtonDown() && isEnabled()) {
+      auto b = getBounds();
+      _edit.setText (getTextFromValue (getValue()), juce::dontSendNotification);
+      b = b.withSizeKeepingCentre (b.getWidth(), _edit.getTextHeight());
+      _edit_win.setBounds (b);
+      _edit.setBounds (b);
+      _edit_win.setContentNonOwned (&_edit, true);
+      _edit_win.setVisible (true);
+      _edit_win.enterModalState (true, nullptr, false);
+      _edit.grabKeyboardFocus();
+    }
+    else {
+      Slider::mouseDown (e);
+    }
+  }
+
+private:
+  resizable_win_destroyed_clicking _edit_win;
+  juce::TextEditor                 _edit;
+};
+
+// -----------------------------------------------------------------------------
 } // namespace detail
 // -----------------------------------------------------------------------------
 struct slider_ext
@@ -313,8 +393,8 @@ struct slider_ext
 
   std::array<juce::Component*, 2> get_components() { return {&slider, &label}; }
 
-  add_juce_callbacks<juce::Slider> slider;
-  juce::Label                      label;
+  add_juce_callbacks<detail::slider_w_data_entry> slider;
+  juce::Label                                     label;
 
 private:
   void sliderValueChanged (juce::Slider* ptr) final
@@ -348,6 +428,7 @@ private:
     slider.setTextValueSuffix (suffix);
     slider.setSliderStyle (juce::Slider::RotaryVerticalDrag);
     slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+
     // slider.setPopupDisplayEnabled (true, true, &parent);
     slider.setLookAndFeel (&parent.getLookAndFeel());
 
