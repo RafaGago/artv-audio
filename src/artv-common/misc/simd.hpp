@@ -647,49 +647,12 @@ static constexpr auto vec_from_array (std::array<T, Size> arr)
   return v;
 }
 //------------------------------------------------------------------------------
-#if 0
-// Clang doesn't support "__builtin_shuffle".
-template <class V, class IV>
-static inline V vec_shuffle (V a, IV mask)
-{
-  constexpr auto traits      = vec_traits<V>();
-  constexpr auto mask_traits = vec_traits<IV>();
-
-  static_assert (traits.size == mask_traits.size, "sizes must match");
-  static_assert (
-    std::is_integral_v<typename decltype (mask_traits)::value_type>,
-    "the mask vector must contain integrals");
-
-  for (uint i = 0; i < traits.size; ++i) {
-    assert (mask[i] >= 0 && mask[i] < traits.size);
-  }
-  return __builtin_shuffle (a, mask);
-}
-
-template <class V, class IV>
-static inline V vec_shuffle (V a, V b, IV mask)
-{
-  constexpr auto traits      = vec_traits<V>();
-  constexpr auto mask_traits = vec_traits<IV>();
-
-  static_assert (traits.size == mask_traits.size, "sizes must match");
-  static_assert (
-    std::is_integral_v<typename decltype (mask_traits)::value_type>,
-    "the mask vector must contain integrals");
-
-  for (uint i = 0; i < traits.size; ++i) {
-    assert (mask[i] >= 0 && mask[i] < (traits.size * 2));
-  }
-
-  return __builtin_shuffle (a, b, mask);
-}
-#endif
-
 #if 1
 // This is the best implementation, as "__builtin_shufflevector" requires
 // constants as the indexes. This means that a function would require passing
 // std::integral_constant and a lot uglyness to just achieve the same that this
-// macro. The ifdefed function below doesn't work.
+// macro. The ifdefed function (under #else) below doesn't work. Kept for
+// ilustration purposes
 #define vec_shuffle __builtin_shufflevector
 #else
 template <class V, class... Ts>
@@ -728,6 +691,7 @@ auto vec_cat (V a, V b)
   return vec_load<V_dst> (dst);
 }
 //------------------------------------------------------------------------------
+// init a vector from scalars, type deduced from the first element
 template <class T, class... Ts>
 auto vec_init (T&& a, Ts&&... b)
 {
@@ -1443,66 +1407,46 @@ static inline auto vec_sgn_no_zero (
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
+auto vec_inner_and (V v)
+{
+  using Vv              = std::decay_t<V>;
+  constexpr auto traits = vec_traits<Vv>();
+  using T               = vec_value_type_t<Vv>;
+  static_assert (std::is_integral_v<T>);
+
+  T r {};
+  r = ~r;
+  for (uint i = 0; i < traits.size; ++i) {
+    r &= v[i];
+  }
+  return r;
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_t<V>* = nullptr>
+auto vec_inner_or (V v)
+{
+  using Vv              = std::decay_t<V>;
+  constexpr auto traits = vec_traits<Vv>();
+  using T               = vec_value_type_t<Vv>;
+  static_assert (std::is_integral_v<T>);
+
+  T r {};
+  for (uint i = 0; i < traits.size; ++i) {
+    r |= v[i];
+  }
+  return r;
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_t<V>* = nullptr>
 bool vec_is_all_zeros (V v)
 {
-  using Vv              = std::remove_reference_t<std::remove_cv_t<V>>;
-  constexpr auto traits = vec_traits<Vv>();
-  static_assert (std::is_integral_v<vec_value_type_t<Vv>>, "");
-
-  if constexpr (traits.size == 1) {
-    // scalar, vector of size 1. Fast case
-    using uint_ssv = typename decltype (traits)::same_size_uint_type;
-    using uint_ss  = decltype (std::declval<uint_ssv>()[0]);
-    return (*reinterpret_cast<uint_ssv*> (&v))[0] == (uint_ss) 0ull;
-  }
-  else {
-    using V64 = vec<u64, sizeof (Vv) / sizeof (u64)>;
-
-    if constexpr (sizeof (Vv) == 16) {
-      // hoping that this translates to e.g. PSET on SSE4.1
-      V64 u = *reinterpret_cast<V64*> (&v);
-      return (u[0] | u[1]) == 0;
-    }
-    else if constexpr (sizeof (Vv) == 32) {
-      V64 u = *reinterpret_cast<V64*> (&v);
-      return (u[0] | u[1] | u[2] | u[3]) == 0;
-    }
-    else {
-      static_assert (!std::is_same_v<V, V>, "To be implemented");
-      return false;
-    }
-  }
+  return !vec_inner_or (v);
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
 bool vec_is_all_ones (V v)
 {
-  using Vv              = std::remove_reference_t<std::remove_cv_t<V>>;
-  constexpr auto traits = vec_traits<Vv>();
-  static_assert (std::is_integral_v<vec_value_type_t<Vv>>, "");
-
-  if constexpr (traits.size == 1) {
-    // scalar, vector of size 1. Fast case
-    using uint_ssv = typename decltype (traits)::same_size_uint_type;
-    using uint_ss  = decltype (std::declval<uint_ssv>()[0]);
-    return (*reinterpret_cast<uint_ssv*> (&v))[0] == (uint_ss) -1ull;
-  }
-  else {
-    using V64 = vec<u64, traits.bytes / sizeof (u64)>;
-
-    if constexpr (sizeof (Vv) == 16) {
-      V64 u = *reinterpret_cast<V64*> (&v);
-      return (u[0] & u[1]) == (u64) -1ull;
-    }
-    else if constexpr (sizeof (Vv) == 32) {
-      V64 u = *reinterpret_cast<V64*> (&v);
-      return (u[0] & u[1] & u[2] & u[3]) == (u64) -1ull;
-    }
-    else {
-      static_assert (!std::is_same_v<V, V>, "To be implemented");
-      return false;
-    }
-  }
+  return !(~vec_inner_and (v));
 }
 //------------------------------------------------------------------------------
 // common functions
