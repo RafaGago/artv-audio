@@ -3,7 +3,7 @@ desc:Artv phaser 2p (ZDF)
 slider1:f_center=0.4<0, 1, 0.001>Freq Center(%)
 slider2:f_width=0.5<0, 1, 0.001>Notches Width(%)
 slider3:f_detune=0<-1, 1, 0.001>Detune(%)
-slider4:f_mode=1<0, 2, 1>Range Curve
+slider4:f_mode=0.8<0, 0.999, 0.001>Range Curve
 
 slider10:lfo_freq=0.25<0, 1, 0.001>Lfo Freq(%)
 slider11:lfo_depth=0.85<0, 1, 0.001>Lfo Depth(%)
@@ -12,8 +12,9 @@ slider12:lfo_phase_diff=0<0, 1, 0.001>Lfo St Diff(%)
 slider20:feedback=0.9<-1, 1, 0.001>Feedback(%)
 slider21:hp=0.05<0, 1, 0.001>Feedback HP(%)
 slider22:lp=0.1<0, 1, 0.001>Feedback LP(%)
-slider23:bp=0.15<0, 1, 0.001>Feedback BP(%)
-slider23:hardness=0.15<0, 15, 0.001>Hardness
+
+slider24:hardness=0.15<0, 15, 0.001>Hardness
+slider25:focus=0.<0, 1, 0.001>Focus(BP)
 
 slider33:n_stages=6<1, 16, 1>N Stages
 slider34:out_stage=6<1, 16, 1>Out Stage
@@ -70,7 +71,7 @@ function get_coeffs_ws(
   f_width
   )
   global()
-  local (i, f, modlim, mod, f_det, f_detc, q, q_det) (
+  local (i, f, modlim, mod, f_det, f_detc, q, q_det, f1, p) (
 
   modlim = min (f_center, 0.5);
   modlim = min (1 - f_center, modlim);
@@ -78,11 +79,10 @@ function get_coeffs_ws(
   mod = lfo * lfo_depth * modlim;
 
   f = f_center + mod;
-  loop (f_mode,
-    f *= f;
-  );
-  f *= 0.95;
-  f += 0.05;
+  p = f_mode;
+  f = ((-1+f)/(1-f_mode*f))+1;
+  f *= 0.98;
+  f += 0.02;
   f_det = f_detune * ((0.1 * f) / n_stages);
   q_det = abs(f_detune) * ((4 * f) / n_stages);
 
@@ -196,8 +196,16 @@ get_coeffs_ws(
   freqs_r.ptr, qs_r.ptr, lfov.ptr[1], lfo_depth, n_stages, f_center, f_mode, f_detune, f_width
 );
 
-_f_dbg.debug_16(freqs_l);
-_q_dbg.debug_16(qs_l);
+l_half_stages = freqs_l.ptr[n_stages / 2];
+r_half_stages = freqs_r.ptr[n_stages / 2];
+
+q = 0.0001 + focus * 0.2;
+ga = 6;
+l_pre_emph.svf_bell_bp (l_half_stages, q, ga, srate);
+r_pre_emph.svf_bell_bp (r_half_stages, q, ga, srate);
+
+out0 = l_pre_emph.svf_tick (out0);
+out1 = r_pre_emph.svf_tick (out1);
 
 out0 = get_zdf_sample(
   out0,
@@ -287,7 +295,6 @@ r_hshelf.hshelf_1p_reset_no_prewarp(fshelf, g_db, srate);
   l_hshelf.hshelf_1p_tick (l_lshelf.lshelf_1p_tick (out0));
   r_hshelf.hshelf_1p_tick (r_lshelf.lshelf_1p_tick (out1));
 );
-
 
 g_wet = mix * g_hardness;
 g_dry = (1 - mix) * (1 + abs (fb_scaled));

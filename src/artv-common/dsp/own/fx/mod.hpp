@@ -357,31 +357,55 @@ private:
   }
   //----------------------------------------------------------------------------
   void run_phaser_mod (
-    all_parameters const& param,
+    all_parameters const& pars,
     uint                  n_stages,
     lfo_value_type        lfo)
   {
-    float modlim = std::min (param.center, 0.5f);
-    modlim       = std::min (1.f - param.center, modlim);
+    float modlim = std::min (pars.center, 0.5f);
+    modlim       = std::min (1.f - pars.center, modlim);
 
-    lfo_value_type mod = lfo * param.lfo_depth * modlim;
-    lfo_value_type v   = param.center + mod;
+    lfo_value_type mod    = lfo * pars.lfo_depth * modlim;
+    lfo_value_type center = pars.center + mod;
+#if 1
     // detune by a ramp
-    float detune_add = (param.detune * 0.05f);
+    lfo_value_type detuned = (1.f - abs (pars.detune * 0.07f)) * center;
+    lfo_value_type diff    = (center - detuned) / (float) (n_stages * 2);
+    lfo_value_type start;
+    if (pars.detune > 0.f) {
+      start = detuned;
+    }
+    else {
+      start = center;
+      diff  = -diff;
+    }
+    auto curr = vec_cat (start, start + diff);
+    auto add  = vec_cat (diff, diff);
+    add *= 2.f;
+
+    for (uint i = 0; i < n_stages; ++i) {
+      _mod[i][0] = curr[0];
+      _mod[i][1] = curr[1];
+      _mod[i][2] = curr[2];
+      _mod[i][3] = curr[3];
+      curr += add;
+    }
+#else
+    float detune_add = (pars.detune * 0.07f);
     float detune     = 1.f - detune_add;
     detune           = std::min (detune, 1.f);
-    detune_add /= n_stages;
+    detune_add /= (n_stages * 2);
 
     for (uint i = 0; i < n_stages; ++i) {
       detune += detune_add;
-      v *= detune;
+      auto v     = center * detune;
       _mod[i][0] = v[0];
       _mod[i][1] = v[1];
       detune += detune_add;
-      v *= detune;
+      v          = center * detune;
       _mod[i][2] = v[0];
       _mod[i][3] = v[1];
     }
+#endif
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -403,18 +427,22 @@ private:
         run_phaser_mod (pars, n_stages, run_lfo (pars));
         for (uint s = 0; s < n_stages; ++s) {
           float_x4 v = vec_from_array (_mod[s]);
-          v *= v;
-          float_x4 f = ((v * 0.95f) + 0.05f);
-          f *= float_x4 {18700.f, 18700.f, 17000.f, 17000.f};
+          // cheap'ish parametric curve
+          constexpr float k = 0.8f; // TODO curve: k = parameter
+          auto            f = ((-1.f + v) / (1.f - k * v)) + 1.f;
+          // auto f = v * v;
+          auto q = f;
+          f      = ((f * 0.993f) + 0.007f);
+          f *= float_x4 {21200.f, 21200.f, 20000.f, 20000.f};
           // A lot of freq-dependant weight on the Q when detuning
-          float_x4 q = (1.f + 7.f * v * abs (pars.detune));
-          q *= pars.width * pars.width * float_x4 {5.4f, 5.4f, 5.8f, 5.8f};
+          q = (1.f + 7.f * q * abs (pars.detune));
+          q *= pars.width * pars.width * float_x4 {3.4f, 3.4f, 3.8f, 3.8f};
           q += 0.05f;
-          _phaser.reset_coeffs_on_idx (s, f, q, _t_spl, no_prewarp {});
+          _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
         }
         float_x4 f {450.f, 460.f, 670.f, 680.f};
         f *= vec_from_array (_mod[0]);
-        _onepole.reset_coeffs<0> (f, _t_spl, no_prewarp {});
+        _onepole.reset_coeffs<0> (f, _t_spl);
       }
 
       float_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
