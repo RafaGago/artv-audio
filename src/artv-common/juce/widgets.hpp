@@ -281,7 +281,7 @@ public:
   }
 };
 // A slider that allows data entry on the center of the slider and doesn't have
-// the with limited to the actual component size.
+// the width limited to the actual slider size.
 class slider_w_data_entry : public juce::Slider {
 public:
   template <class... Ts>
@@ -355,7 +355,7 @@ private:
     if (top) {
       auto rdiff = top->getLocalBounds().getRight() - b.getRight();
       if (rdiff < 0) {
-        b = b.withX (b.getX() + x_r);
+        b = b.withX (b.getX() + rdiff);
       }
     }
     _edit_win.setBounds (b);

@@ -31,13 +31,11 @@
 #include <xsimd/xsimd.hpp>
 
 #include "artv-common/misc/bits.hpp"
+#include "artv-common/misc/hana.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#if 0 // was required when maybe implementing __shufflevector wrapper.
-#include "artv-common/misc/hana.hpp"
-#endif
 
 namespace artv {
 
@@ -519,6 +517,7 @@ static inline void vec_store_unaligned (crange<vec_value_type_t<V>> dst, V src)
   vec_store_unaligned (dst.data(), src);
 }
 //------------------------------------------------------------------------------
+// vec_set: broadcast a value to a vector
 template <class V, enable_if_vec_t<V>* = nullptr>
 static inline void vec_set (V& dst, vec_value_type_t<V> v)
 {
@@ -714,7 +713,7 @@ static inline V vec_shuffle (V a, V b, Ts... indexes)
 template <class V, enable_if_vec_t<V>* = nullptr>
 using vec_array_type = std::array<vec_value_type_t<V>, vec_traits_t<V>::size>;
 //------------------------------------------------------------------------------
-// vector cat, simple case, can go as complex as wanted, but only when necessary
+// vector cat, simple case, can go as complex as wanted, TBI when necessary
 template <class V, enable_if_vec_t<V>* = nullptr>
 auto vec_cat (V a, V b)
 {
@@ -728,6 +727,28 @@ auto vec_cat (V a, V b)
   }
   return vec_load<V_dst> (dst);
 }
+//------------------------------------------------------------------------------
+template <class T, class... Ts>
+auto vec_init (T&& a, Ts&&... b)
+{
+  constexpr uint n_elems = sizeof...(Ts) + 1;
+  static_assert (!is_vec_v<T>);
+  static_assert (std::is_arithmetic_v<T>);
+  static_assert ((n_elems % 2) == 0);
+  using V = vec<T, n_elems>;
+
+  alignas (V) vec_array_type<V> dst;
+  dst[0] = a;
+  uint i = 1;
+  hana::for_each (hana::make<hana::tuple_tag> (b...), [&] (auto&& idx) {
+    using U = std::remove_reference_t<std::remove_cv_t<decltype (idx)>>;
+    static_assert (!is_vec_v<U>);
+    static_assert (std::is_arithmetic_v<U>);
+    dst[i] = static_cast<T> (idx);
+    ++i;
+  });
+  return vec_load<V> (dst);
+};
 //------------------------------------------------------------------------------
 // Cast to a vector of another type with the same number of elements. If T is
 // of a different size than V::value_type "-Wpsabi" warnings might be generated.

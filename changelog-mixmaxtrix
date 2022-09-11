@@ -1,4 +1,8 @@
 1.9.0
+- Artv Mod: Add modulation effect fixing quirks on the phaser. It has the next
+  modes:
+  1. 2-pole ZDF phaser.
+  2. Schroeder phaser (reminescent of the Ensoniq DP/4).
 - Artv Phaser: Gain compensate "parallel" knob/parameter.
 - Artv Phaser: Gain compensate "delay feedback" knob/parameter.
 - Artv Phaser: Add feedback Lowpass/Hipass.

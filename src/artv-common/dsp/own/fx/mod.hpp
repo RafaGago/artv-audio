@@ -124,10 +124,10 @@ public:
     return float_param ("%", 0., 100., 50., 0.001);
   }
   //----------------------------------------------------------------------------
-  struct width_tag {};
-  void set (width_tag, float v) { _param_smooth.target().width = v * 0.01; }
+  struct a_tag {};
+  void set (a_tag, float v) { _param_smooth.target().a = v * 0.01; }
 
-  static constexpr auto get_parameter (width_tag)
+  static constexpr auto get_parameter (a_tag)
   {
     return float_param ("%", 0., 100., 25., 0.001);
   }
@@ -140,7 +140,7 @@ public:
     v = sqrt (sqrt (abs (v))); // something cheaper?
     v = neg ? -v : v;
 
-    _param_smooth.target().feedback = v;
+    _param_smooth.target().feedback = v * 0.98f;
   }
 
   static constexpr auto get_parameter (feedback_tag)
@@ -186,7 +186,7 @@ public:
     v *= 0.01f;
     v = v * v * v;
     v *= 100.f;
-    _param_smooth.target().feedback_sat = v;
+    _param_smooth.target().feedback_sat = v * 15.f;
   }
 
   static constexpr auto get_parameter (feedback_sat_tag)
@@ -194,13 +194,10 @@ public:
     return float_param ("%", 0., 100, 0., 0.1);
   }
   //----------------------------------------------------------------------------
-  struct special_tag {};
-  void set (special_tag, float v)
-  {
-    _param_smooth.target().special = v * 0.01f;
-  }
+  struct b_tag {};
+  void set (b_tag, float v) { _param_smooth.target().b = v * 0.01f; }
 
-  static constexpr auto get_parameter (special_tag)
+  static constexpr auto get_parameter (b_tag)
   {
     return float_param ("%", -100., 100, 0., 0.1);
   }
@@ -225,6 +222,23 @@ public:
     return float_param ("%", 0., 100, 50., 0.001);
   }
   //----------------------------------------------------------------------------
+  struct mode_tag {};
+  void set (mode_tag, int v)
+  {
+    // TODO: initializations?
+    _param.mode = v;
+  }
+
+  struct mode {
+    enum { zdf, schroeder };
+  };
+
+  static constexpr auto get_parameter (mode_tag)
+  {
+    return choice_param (
+      0, make_cstr_array ("Phaser (ZDF)", "Phaser (Schroeder)"), 16);
+  }
+  //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
     _srate               = pc.get_sample_rate();
@@ -234,6 +248,7 @@ public:
     uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
     _lfo_t_spl           = _t_spl * (_control_rate_mask + 1);
+    _1spl_fb             = decltype (_1spl_fb) {};
 
     _phaser.reset_states_cascade();
     _fb_filters.reset_states_cascade();
@@ -250,6 +265,8 @@ public:
     _param_smooth.set_all_from_target();
 
     _fb_filters.reset_coeffs<fb_filter::dc> (vec_set<4> (1.f), _t_spl);
+
+    reset_mem();
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -257,7 +274,17 @@ public:
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
-    tick_phaser<T> (outs, ins, samples);
+    switch (_param.mode) {
+    case mode::zdf:
+      tick_phaser<T> (outs, ins, samples);
+      break;
+    case mode::schroeder:
+      tick_schroeder<T> (outs, ins, samples);
+      break;
+    default:
+      assert (false);
+      break;
+    }
   }
   //----------------------------------------------------------------------------
   using parameters = mp_list<
@@ -269,20 +296,23 @@ public:
     lfo_start_phase_tag,
     lfo_stereo_tag,
     center_tag,
-    width_tag,
+    a_tag,
     feedback_tag,
     feedback_locut_tag,
     feedback_hicut_tag,
     feedback_sat_tag,
     detune_tag,
-    special_tag,
-    depth_tag>;
+    b_tag,
+    depth_tag,
+    mode_tag>;
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  static constexpr uint max_stages    = 16;
-  static constexpr uint n_channels    = 2;
-  static constexpr uint n_ap_channels = 4;
+  static constexpr uint max_phaser_stages = 16;
+  static constexpr uint max_scho_stages   = 8;
+  static constexpr uint max_scho_delay_ms = 7;
+  static constexpr uint n_channels        = 2;
+  static constexpr uint n_ap_channels     = 4;
   //----------------------------------------------------------------------------
   struct all_parameters;
   using lfo_type       = lfo<n_channels>;
@@ -293,10 +323,10 @@ private:
     float hz;
     switch (pars.lfo_time_base) {
     case lfo_time_base::free: {
-      float lfo_rate_pow = pars.lfo_rate * 0.01f;
-      lfo_rate_pow       = 1.f - lfo_rate_pow;
-      lfo_rate_pow *= lfo_rate_pow;
-      hz = lfo_rate_pow * 20.f; // 0 to 20 Hz
+      float lfo_rate = pars.lfo_rate * 0.01f;
+      lfo_rate       = 1.f - lfo_rate;
+      lfo_rate *= lfo_rate * lfo_rate;
+      hz = lfo_rate * 20.f; // 0 to 20 Hz
     } break;
     case lfo_time_base::quarter_beat:
       // TODO!!!!
@@ -359,6 +389,7 @@ private:
   void run_phaser_mod (
     all_parameters const& pars,
     uint                  n_stages,
+    float                 detune_ratio,
     lfo_value_type        lfo)
   {
     float modlim = std::min (pars.center, 0.5f);
@@ -366,46 +397,18 @@ private:
 
     lfo_value_type mod    = lfo * pars.lfo_depth * modlim;
     lfo_value_type center = pars.center + mod;
-#if 1
     // detune by a ramp
-    lfo_value_type detuned = (1.f - abs (pars.detune * 0.07f)) * center;
+    lfo_value_type detuned = (1.f - abs (pars.detune * detune_ratio)) * center;
     lfo_value_type diff    = (center - detuned) / (float) (n_stages * 2);
-    lfo_value_type start;
-    if (pars.detune > 0.f) {
-      start = detuned;
-    }
-    else {
-      start = center;
-      diff  = -diff;
-    }
-    auto curr = vec_cat (start, start + diff);
-    auto add  = vec_cat (diff, diff);
-    add *= 2.f;
+    lfo_value_type start   = (pars.detune > 0.f) ? detuned : center;
+    diff                   = (pars.detune > 0.f) ? diff : -diff;
+    float_x4 curr          = vec_cat (start, start + diff);
+    float_x4 add           = vec_cat (diff, diff) * 2.f;
 
     for (uint i = 0; i < n_stages; ++i) {
-      _mod[i][0] = curr[0];
-      _mod[i][1] = curr[1];
-      _mod[i][2] = curr[2];
-      _mod[i][3] = curr[3];
+      _mod[i] = vec_to_array (curr);
       curr += add;
     }
-#else
-    float detune_add = (pars.detune * 0.07f);
-    float detune     = 1.f - detune_add;
-    detune           = std::min (detune, 1.f);
-    detune_add /= (n_stages * 2);
-
-    for (uint i = 0; i < n_stages; ++i) {
-      detune += detune_add;
-      auto v     = center * detune;
-      _mod[i][0] = v[0];
-      _mod[i][1] = v[1];
-      detune += detune_add;
-      v          = center * detune;
-      _mod[i][2] = v[0];
-      _mod[i][3] = v[1];
-    }
-#endif
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -416,7 +419,7 @@ private:
 
     for (uint i = 0; i < samples; ++i, ++_n_processed_samples) {
       _param_smooth.tick();
-      // access parameters without caring if they are smoother or not.
+      // access parameters without caring if they are smoothed or not.
       all_parameters pars;
       *((smoothed_parameters*) &pars)   = _param_smooth.get();
       *((unsmoothed_parameters*) &pars) = _param;
@@ -424,7 +427,7 @@ private:
       uint n_stages = get_phaser_n_stages (pars);
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        run_phaser_mod (pars, n_stages, run_lfo (pars));
+        run_phaser_mod (pars, n_stages, 0.07f, run_lfo (pars));
         for (uint s = 0; s < n_stages; ++s) {
           float_x4 v = vec_from_array (_mod[s]);
           // cheap'ish parametric curve
@@ -436,7 +439,7 @@ private:
           f *= float_x4 {21200.f, 21200.f, 20000.f, 20000.f};
           // A lot of freq-dependant weight on the Q when detuning
           q = (1.f + 7.f * q * abs (pars.detune));
-          q *= pars.width * pars.width * float_x4 {3.4f, 3.4f, 3.8f, 3.8f};
+          q *= pars.a * pars.a * float_x4 {3.4f, 3.4f, 3.8f, 3.8f};
           q += 0.05f;
           _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
         }
@@ -453,7 +456,7 @@ private:
       float wet_gain = pars.depth;
 
       // Run allpass cascades with own feedback loop and saturation
-      std::array<float_x4, max_stages * zdf::n_gs_coeffs> G_S_mem;
+      std::array<float_x4, max_phaser_stages * zdf::n_gs_coeffs> G_S_mem;
       // obtain G and S for the phaser
       auto gs = make_crange (G_S_mem);
       for (uint s = 0; s < n_stages; ++s) {
@@ -473,11 +476,13 @@ private:
       auto filt_resp = zdf::combine_response<float_x4> (
         make_crange (G_S_mem.data(), fb_filter::count * zdf::n_gs_coeffs));
 
-      float hardness = pars.feedback_sat * 15.f;
-      float final_fb = pars.feedback * 0.98f;
       // Get ZDF feedback
       wet = _feedback.tick (
-        wet, aps_resp, filt_resp, vec_set<4> (final_fb), vec_set<4> (hardness));
+        wet,
+        aps_resp,
+        filt_resp,
+        vec_set<4> (pars.feedback),
+        vec_set<4> (pars.feedback_sat));
 
       // Run regular filter processing
       assert (n_stages > 0);
@@ -486,16 +491,13 @@ private:
       }
       // just running the shelves to update the states.
       _fb_filters.tick_cascade (wet);
-      // limit with x=inf of sqrt sigmoid to adjust mixing gain
-      float lim      = 1.f / sqrt (hardness != 0.f ? hardness : 1e-30f);
-      float zdf_gain = 1.f + std::min (lim, abs (final_fb));
-      wet_gain /= zdf_gain; // div, but it avoids gain changes.
+      wet_gain /= get_fb_gain (pars.feedback, pars.feedback_sat);
 
       double_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
       double_x2 parallel = {(double) wet[2], (double) wet[3]};
       double_x2 dry      = {(double) ins[0][i], (double) ins[1][i]};
-      wetdbl *= 1.f - abs (pars.special);
-      wetdbl += pars.special * parallel;
+      wetdbl *= 1.f - abs (pars.b);
+      wetdbl += pars.b * parallel;
       auto out = wetdbl * wet_gain + dry * dry_gain;
 
       outs[0][i] = out[0];
@@ -503,14 +505,115 @@ private:
     }
   }
   //----------------------------------------------------------------------------
+  template <class T>
+  void tick_schroeder (crange<T*> outs, crange<T const*> ins, uint samples)
+  {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
+    for (uint i = 0; i < samples; ++i, ++_n_processed_samples) {
+      _param_smooth.tick();
+      // access parameters without caring if they are smoother or not.
+      all_parameters pars;
+      *((smoothed_parameters*) &pars)   = _param_smooth.get();
+      *((unsmoothed_parameters*) &pars) = _param;
+
+      float frac     = 1.f + pars.order * (max_scho_stages - 1);
+      uint  n_stages = frac;
+      frac -= (float) n_stages;
+      n_stages += (frac != 0.f);
+      frac += (frac == 0.f);
+
+      std::array<float_x4, max_scho_stages> ap_g {};
+
+      if ((_n_processed_samples & _control_rate_mask) == 0) {
+        pars.center = 1.f - pars.center; // reverse range lf to hf
+        pars.center /= n_stages;
+        run_phaser_mod (pars, max_scho_stages, 0.25f, run_lfo (pars));
+        for (uint s = 0; s < n_stages; ++s) {
+          float_x4        v          = vec_from_array (_mod[s]);
+          float           t          = v[0];
+          constexpr float min_sec    = 1.f / 44000.f;
+          constexpr float sec_factor = (max_scho_delay_ms * 0.001f) - min_sec;
+          _scho_del_spls.target()[s] = _srate * (t * t * sec_factor + min_sec);
+          constexpr float min_g      = 0.0001f;
+          constexpr float g_factor   = 0.15 - min_g;
+          ap_g[s]                    = min_g + v * v * g_factor * pars.a;
+        }
+        for (uint s = n_stages; s < max_scho_stages; ++s) {
+          _scho_del_spls.target()[s] = _scho_del_spls.target()[s - 1];
+        }
+        float_x4 fv {1460.f, 1460.f, 1670.f, 1780.f};
+        auto     f = vec_from_array (_mod[n_stages / 2]);
+        f *= f;
+        f *= (1.f + pars.a) * fv;
+        _onepole.reset_coeffs<0> (f, _t_spl);
+      }
+      _scho_del_spls.tick();
+
+      float_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
+      wet = _onepole.tick<0> (wet);
+
+      float dry_gain = 1.f - pars.depth;
+      float wet_gain = pars.depth;
+
+      wet += _1spl_fb * pars.feedback;
+
+      std::array<float_x4, max_scho_stages> to_push {};
+      auto&                                 del_spls = _scho_del_spls.get();
+      for (uint s = 0; s < n_stages; ++s) {
+        auto n_spls = std::clamp (
+          del_spls[s],
+          (float) _scho.min_delay_spls(),
+          (float) _scho.max_delay_spls());
+        auto yn    = _scho.get (n_spls, s);
+        auto r     = allpass_fn::tick<float_x4> (wet, yn, ap_g[s]);
+        wet        = r.out;
+        to_push[s] = r.to_push;
+      }
+      _scho.push (to_push);
+      auto fb_val = wet / vec_sqrt (wet * wet * pars.feedback_sat + 1.f);
+      _1spl_fb    = _fb_filters.tick_cascade (fb_val);
+      wet_gain /= get_fb_gain (pars.feedback, pars.feedback_sat);
+
+      double_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
+      double_x2 parallel = {(double) wet[2], (double) wet[3]};
+      double_x2 dry      = {(double) ins[0][i], (double) ins[1][i]};
+      wetdbl *= 1.f - abs (pars.b);
+      wetdbl += pars.b * parallel;
+      auto out = wetdbl * wet_gain + dry * dry_gain;
+
+      outs[0][i] = out[0];
+      outs[1][i] = out[1];
+    }
+  }
+  //----------------------------------------------------------------------------
+  // hardness makes a sqrt sigmmoid
+  float get_fb_gain (float fb, float hardness)
+  {
+    float lim = 1.f / sqrt (hardness != 0.f ? hardness : 1e-30f);
+    return 1.f + std::min (lim, abs (fb));
+  }
+  //----------------------------------------------------------------------------
+  void reset_mem()
+  {
+    uint schroeder_size
+      = std::ceil (max_scho_delay_ms * 0.001f * _srate) + _scho.min_size_spls();
+    schroeder_size = _scho.n_required_elems (schroeder_size, max_scho_stages);
+    _mem.clear();
+    _mem.resize (schroeder_size);
+    _scho.reset (_mem, max_scho_stages);
+  }
+  //----------------------------------------------------------------------------
   static uint get_phaser_n_stages (all_parameters const& pars)
   {
-    return 1 + (uint) (pars.order * (max_stages - 1));
+    return 1 + (uint) (pars.order * (max_phaser_stages - 1));
   }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
     u32   lfo_wave;
     u32   lfo_time_base;
+    u32   mode;
     float feedback_locut;
     float feedback_hicut;
     bool  lfo_off; // The lfo is smoothed, this signals if the lfo is off
@@ -522,8 +625,8 @@ private:
     float lfo_phase;
     float lfo_stereo;
     float center;
-    float width;
-    float special; // e.g. parallel for the phaser
+    float a;
+    float b;
     float depth; // aka mix (make explicit?)
     float feedback;
     float feedback_sat;
@@ -548,13 +651,17 @@ private:
     enum { locut, hicut, dc, count };
   };
 
-  part_classes<mp_list<zdf_type>, float_x4>            _feedback;
-  part_class_array<allpass_type, float_x4, max_stages> _phaser;
-  part_classes<filters_list, float_x4>                 _fb_filters;
-  part_classes<mp_list<onepole_allpass>, float_x4>     _onepole;
+  part_classes<mp_list<zdf_type>, float_x4>                     _feedback;
+  part_class_array<allpass_type, float_x4, max_phaser_stages>   _phaser;
+  part_classes<filters_list, float_x4>                          _fb_filters;
+  part_classes<mp_list<onepole_allpass>, float_x4>              _onepole;
+  interpolated_delay_line<float_x4, linear_interp, true, false> _scho;
+  value_smoother<float, std::array<float, max_scho_stages>>     _scho_del_spls;
 
-  alignas (sse_bytes) array2d<float, n_ap_channels, max_stages> _mod;
+  alignas (sse_bytes) array2d<float, n_ap_channels, max_phaser_stages> _mod;
+  std::vector<float_x4, overaligned_allocator<float_x4, 128>> _mem;
   lfo_type _lfos; // 0 = L, 1 = R
+  float_x4 _1spl_fb;
   uint     _n_processed_samples;
   uint     _control_rate_mask;
   float    _lfo_t_spl;

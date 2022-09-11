@@ -7317,13 +7317,6 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  mod_width,
-  n_stereo_busses,
-  param_common ("Width", declptr<upsampled<mod>>(), declptr<mod::width_tag>()),
-  mod::get_parameter (mod::width_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
   mod_feedback,
   n_stereo_busses,
   param_common (
@@ -7364,13 +7357,17 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  mod_special,
+  mod_param_a,
   n_stereo_busses,
-  param_common (
-    "Special",
-    declptr<upsampled<mod>>(),
-    declptr<mod::special_tag>()),
-  mod::get_parameter (mod::special_tag {}),
+  param_common ("Param A", declptr<upsampled<mod>>(), declptr<mod::a_tag>()),
+  mod::get_parameter (mod::a_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_param_b,
+  n_stereo_busses,
+  param_common ("Param B", declptr<upsampled<mod>>(), declptr<mod::b_tag>()),
+  mod::get_parameter (mod::b_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -7391,6 +7388,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  mod_mode,
+  n_stereo_busses,
+  param_common ("Mode", declptr<upsampled<mod>>(), declptr<mod::mode_tag>()),
+  mod::get_parameter (mod::mode_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   mod_oversampling,
   n_stereo_busses,
   param_common (
@@ -7406,9 +7410,9 @@ using mod_params = mp_list<
   mod_order,
   mod_depth,
   mod_center,
-  mod_width,
   mod_detune,
-  mod_special,
+  mod_param_a,
+  mod_param_b,
   mod_feedback,
   mod_feedback_sat,
   mod_feedback_locut,
@@ -7417,6 +7421,7 @@ using mod_params = mp_list<
   mod_lfo_wave,
   mod_lfo_start_phase,
   mod_lfo_stereo,
+  mod_mode,
   mod_oversampling>;
 //------------------------------------------------------------------------------
 
