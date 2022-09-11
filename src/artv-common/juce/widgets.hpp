@@ -281,7 +281,7 @@ public:
   }
 };
 // A slider that allows data entry on the center of the slider and doesn't have
-// the with limited to the actual component (unused by now).
+// the with limited to the actual component size.
 class slider_w_data_entry : public juce::Slider {
 public:
   template <class... Ts>
@@ -327,12 +327,8 @@ public:
   {
     juce::ModifierKeys mods = juce::ModifierKeys::getCurrentModifiersRealtime();
     if (mods.isRightButtonDown() && isEnabled()) {
-      auto b = getBounds();
-      _edit.setText (getTextFromValue (getValue()), juce::dontSendNotification);
-      b = b.withSizeKeepingCentre (b.getWidth(), _edit.getTextHeight());
-      _edit_win.setBounds (b);
-      _edit.setBounds (b);
-      _edit_win.setContentNonOwned (&_edit, true);
+      adjust_positions();
+      _edit_win.setContentNonOwned (&_edit, false);
       _edit_win.setVisible (true);
       _edit_win.enterModalState (true, nullptr, false);
       _edit.grabKeyboardFocus();
@@ -343,6 +339,29 @@ public:
   }
 
 private:
+  void adjust_positions()
+  {
+    auto b = getBounds();
+    _edit.setText (getTextFromValue (getValue()), juce::dontSendNotification);
+    b = b.withSizeKeepingCentre (
+      std::max (
+        b.getWidth(),
+        _edit.getTextWidth() + _edit.getBorder().getLeftAndRight()),
+      _edit.getTextHeight());
+    if (b.getX() < 0) {
+      b = b.withX (0);
+    }
+    auto top = getTopLevelComponent();
+    if (top) {
+      auto rdiff = top->getLocalBounds().getRight() - b.getRight();
+      if (rdiff < 0) {
+        b = b.withX (b.getX() + x_r);
+      }
+    }
+    _edit_win.setBounds (b);
+    _edit.setBounds (b);
+  }
+
   resizable_win_destroyed_clicking _edit_win;
   juce::TextEditor                 _edit;
 };
