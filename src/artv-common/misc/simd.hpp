@@ -577,6 +577,7 @@ V make_vec (V v)
 {
   return v;
 }
+
 //------------------------------------------------------------------------------
 // convenience functions. Created basically to deal with vectors of size 1
 // conversion, so they should result in no-ops after optimization.
@@ -709,6 +710,24 @@ static inline V vec_shuffle (V a, V b, Ts... indexes)
   return __builtin_shufflevector (a, b, indexes...);
 }
 #endif
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_t<V>* = nullptr>
+using vec_array_type = std::array<vec_value_type_t<V>, vec_traits_t<V>::size>;
+//------------------------------------------------------------------------------
+// vector cat, simple case, can go as complex as wanted, but only when necessary
+template <class V, enable_if_vec_t<V>* = nullptr>
+auto vec_cat (V a, V b)
+{
+  using T      = vec_value_type_t<V>;
+  using traits = vec_traits_t<V>;
+  using V_dst  = vec<T, traits::size * 2>;
+  alignas (V_dst) vec_array_type<V_dst> dst;
+  for (uint i = 0; i < traits::size; ++i) {
+    dst[i]                = a[i];
+    dst[traits::size + i] = b[i];
+  }
+  return vec_load<V_dst> (dst);
+}
 //------------------------------------------------------------------------------
 // Cast to a vector of another type with the same number of elements. If T is
 // of a different size than V::value_type "-Wpsabi" warnings might be generated.
