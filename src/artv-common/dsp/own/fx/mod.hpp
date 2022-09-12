@@ -191,9 +191,8 @@ public:
   void set (feedback_sat_tag, float v)
   {
     v *= 0.01f;
-    v = v * v * v;
-    v *= 100.f;
-    _param_smooth.target().feedback_sat = v * 15.f;
+    v                                   = v * v * v * v;
+    _param_smooth.target().feedback_sat = v * 1500.f;
   }
 
   static constexpr auto get_parameter (feedback_sat_tag)
