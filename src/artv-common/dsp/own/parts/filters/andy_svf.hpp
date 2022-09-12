@@ -628,6 +628,13 @@ private:
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
+using svf_zdf_lowpass  = svf_multimode_zdf<lowpass_tag>;
+using svf_zdf_highpass = svf_multimode_zdf<highpass_tag>;
+using svf_zdf_allpass  = svf_multimode_zdf<allpass_tag>;
+using svf_zdf_bandpass = svf_multimode_zdf<bandpass_tag>;
+using svf_zdf_notch    = svf_multimode_zdf<notch_tag>;
+using svf_zdf_peak     = svf_multimode_zdf<peak_tag>;
+//------------------------------------------------------------------------------
 // less eficient version that can switch modes on the fly. Useful for e.g. EQs.
 struct svf {
   //----------------------------------------------------------------------------

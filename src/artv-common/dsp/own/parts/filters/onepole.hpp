@@ -271,9 +271,11 @@ private:
 template <class... Tags>
 using onepole = detail::onepole<void, Tags...>;
 //------------------------------------------------------------------------------
-using onepole_lowpass  = onepole<lowpass_tag>;
-using onepole_highpass = onepole<highpass_tag>;
-using onepole_allpass  = onepole<allpass_tag>;
+using onepole_lowpass         = onepole<lowpass_tag>;
+using onepole_highpass        = onepole<highpass_tag>;
+using onepole_allpass         = onepole<allpass_tag>;
+using onepole_naive_lowshelf  = onepole<lowshelf_naive_tag>;
+using onepole_naive_highshelf = onepole<highshelf_naive_tag>;
 //------------------------------------------------------------------------------
 // 1 pole adding the ability to get the S and G parameters for zdf feedback
 // calculations. Using a separate class because it needs some extra coefficient
@@ -485,6 +487,12 @@ private:
   }
   //----------------------------------------------------------------------------
 };
+//------------------------------------------------------------------------------
+using onepole_zdf_lowpass         = onepole_zdf<lowpass_tag>;
+using onepole_zdf_highpass        = onepole_zdf<highpass_tag>;
+using onepole_zdf_allpass         = onepole_zdf<allpass_tag>;
+using onepole_zdf_naive_lowshelf  = onepole_zdf<lowshelf_naive_tag>;
+using onepole_zdf_naive_highshelf = onepole_zdf<highshelf_naive_tag>;
 //------------------------------------------------------------------------------
 // When possible prfer the TPT variant, it only has 1 coeff and 1 state.
 struct onepole_tdf2 {
