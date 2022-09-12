@@ -27,8 +27,6 @@
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 
-// TODO: rm
-#include <fenv.h>
 namespace artv {
 //------------------------------------------------------------------------------
 class mod {
@@ -314,8 +312,8 @@ public:
 private:
   //----------------------------------------------------------------------------
   static constexpr uint max_phaser_stages = 16;
-  static constexpr uint max_scho_stages   = 8;
-  static constexpr uint max_scho_delay_ms = 7;
+  static constexpr uint max_scho_stages   = 12;
+  static constexpr uint max_scho_delay_ms = 30;
   static constexpr uint n_channels        = 2;
   static constexpr uint n_ap_channels     = 4;
   //----------------------------------------------------------------------------
@@ -418,8 +416,6 @@ private:
   template <class T>
   void tick_phaser (crange<T*> outs, crange<T const*> ins, uint samples)
   {
-    feenableexcept (FE_INVALID);
-
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
 
@@ -430,11 +426,10 @@ private:
       *((smoothed_parameters*) &pars)   = _param_smooth.get();
       *((unsmoothed_parameters*) &pars) = _param;
 
-      uint n_stages = get_phaser_n_stages (pars);
-
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        run_phaser_mod (pars, n_stages, 0.07f, run_lfo (pars));
-        for (uint s = 0; s < n_stages; ++s) {
+        _n_stages = 1 + (uint) (pars.order * (max_phaser_stages - 1));
+        run_phaser_mod (pars, _n_stages, 0.07f, run_lfo (pars));
+        for (uint s = 0; s < _n_stages; ++s) {
           float_x4 v = vec_from_array (_mod[s]);
           // cheap'ish parametric curve
           constexpr float k = 0.8f; // TODO curve: k = parameter
@@ -466,12 +461,12 @@ private:
 
       // obtain G and S for the phaser
       auto gs = make_crange (G_S_mem);
-      for (uint s = 0; s < n_stages; ++s) {
+      for (uint s = 0; s < _n_stages; ++s) {
         _phaser.tick_on_idx (
           s, gs.cut_head (zdf::n_gs_coeffs), zdf::gs_coeffs_tag {});
       }
       auto aps_resp = zdf::combine_response<float_x4> (
-        make_crange (G_S_mem.data(), n_stages * zdf::n_gs_coeffs));
+        make_crange (G_S_mem.data(), _n_stages * zdf::n_gs_coeffs));
       // obtain G and S for the filters
       gs = make_crange (G_S_mem);
       _fb_filters.tick<fb_filter::locut> (
@@ -491,8 +486,8 @@ private:
       auto ffwd = wet;
 
       // Run regular filter processing
-      assert (n_stages > 0);
-      for (uint s = 0; s < n_stages; ++s) {
+      assert (_n_stages > 0);
+      for (uint s = 0; s < _n_stages; ++s) {
         wet = _phaser.tick_on_idx (s, wet);
       }
       // just running the shelves to update the states.
@@ -528,33 +523,29 @@ private:
       *((smoothed_parameters*) &pars)   = _param_smooth.get();
       *((unsmoothed_parameters*) &pars) = _param;
 
-      float frac     = 1.f + pars.order * (max_scho_stages - 1);
-      uint  n_stages = frac;
-      frac -= (float) n_stages;
-      n_stages += (frac != 0.f);
-      frac += (frac == 0.f);
-
-      std::array<float_x4, max_scho_stages> ap_g {};
-
       if ((_n_processed_samples & _control_rate_mask) == 0) {
+        _n_stages = 1 + (uint) (pars.order * (max_scho_stages - 1));
+
         pars.center = 1.f - pars.center; // reverse range lf to hf
-        pars.center /= n_stages;
-        run_phaser_mod (pars, max_scho_stages, 0.25f, run_lfo (pars));
-        for (uint s = 0; s < n_stages; ++s) {
+        pars.center /= _n_stages;
+        run_phaser_mod (pars, _n_stages, 0.25f, run_lfo (pars));
+
+        for (uint s = 0; s < _n_stages; ++s) {
+          constexpr float sec_factor = (max_scho_delay_ms * 0.001f);
           float_x4        v          = vec_from_array (_mod[s]);
           float           t          = v[0];
-          constexpr float min_sec    = 1.f / 44000.f;
-          constexpr float sec_factor = (max_scho_delay_ms * 0.001f) - min_sec;
-          _scho_del_spls.target()[s] = _srate * (t * t * sec_factor + min_sec);
+          t                          = _srate * (t * t * sec_factor);
+          _scho_del_spls.target()[s] = t;
           constexpr float min_g      = 0.0001f;
           constexpr float g_factor   = 0.15 - min_g;
-          ap_g[s]                    = min_g + v * v * g_factor * pars.a;
+          _scho_g[s]
+            = min_g + pars.a * pars.a * 0.8f + v * v * g_factor * pars.a;
         }
-        for (uint s = n_stages; s < max_scho_stages; ++s) {
+        for (uint s = _n_stages; s < max_scho_stages; ++s) {
           _scho_del_spls.target()[s] = _scho_del_spls.target()[s - 1];
         }
         float_x4 fv {1460.f, 1460.f, 1670.f, 1780.f};
-        auto     f = vec_from_array (_mod[n_stages / 2]);
+        auto     f = vec_from_array (_mod[_n_stages / 2]);
         f *= f;
         f *= (1.f + pars.a) * fv;
         _onepole.reset_coeffs<0> (f, _t_spl);
@@ -571,13 +562,13 @@ private:
 
       std::array<float_x4, max_scho_stages> to_push {};
       auto&                                 del_spls = _scho_del_spls.get();
-      for (uint s = 0; s < n_stages; ++s) {
+      for (uint s = 0; s < _n_stages; ++s) {
         auto n_spls = std::clamp (
           del_spls[s],
           (float) _scho.min_delay_spls(),
           (float) _scho.max_delay_spls());
         auto yn    = _scho.get (n_spls, s);
-        auto r     = allpass_fn::tick<float_x4> (wet, yn, ap_g[s]);
+        auto r     = allpass_fn::tick<float_x4> (wet, yn, _scho_g[s]);
         wet        = r.out;
         to_push[s] = r.to_push;
       }
@@ -616,11 +607,6 @@ private:
     _mem.clear();
     _mem.resize (schroeder_size);
     _scho.reset (_mem, max_scho_stages);
-  }
-  //----------------------------------------------------------------------------
-  static uint get_phaser_n_stages (all_parameters const& pars)
-  {
-    return 1 + (uint) (pars.order * (max_phaser_stages - 1));
   }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
@@ -667,13 +653,16 @@ private:
   part_classes<mp_list<onepole_allpass>, float_x4>              _onepole;
   interpolated_delay_line<float_x4, linear_interp, true, false> _scho;
   value_smoother<float, std::array<float, max_scho_stages>>     _scho_del_spls;
+  std::array<float_x4, max_scho_stages>                         _scho_g;
 
   alignas (sse_bytes) array2d<float, n_ap_channels, max_phaser_stages> _mod;
+
   std::vector<float_x4, overaligned_allocator<float_x4, 128>> _mem;
   lfo_type _lfos; // 0 = L, 1 = R
   float_x4 _1spl_fb;
   uint     _n_processed_samples;
   uint     _control_rate_mask;
+  uint     _n_stages;
   float    _lfo_t_spl;
   float    _t_spl;
   float    _srate;
@@ -1161,7 +1150,7 @@ public:
   template <class T>
   void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
-    if (_params.unsmoothed.topology >= t_first_non_legacy) {
+    if (_params.unsmoothed.topology >= t_first_non_qlegacy) {
       process_zdf (outs, ins, samples);
     }
     else {
