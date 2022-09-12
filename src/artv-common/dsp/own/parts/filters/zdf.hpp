@@ -98,7 +98,7 @@ struct feedback<linear_tag, Any> {
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V>, crange<V>, response<V> resp, V k, V in)
+  static V tick (crange<const V>, crange<V>, V in, response<V> resp, V k)
   {
     using T = vec_value_type_t<V>;
     return (in - k * resp.S) / (k * resp.G + (T) 1);
@@ -139,7 +139,7 @@ public:
   static void reset_states (crange<V> st)
   {
     assert (st.size() >= n_states);
-    memset (st.data(), 0, sizeof (V) * n_states);
+    st[lin] = vec_set<V> (1);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -208,7 +208,7 @@ public:
   static void reset_states (crange<V> st)
   {
     assert (st.size() >= n_states);
-    memset (st.data(), 0, sizeof (V) * n_states);
+    st[lin] = vec_set<V> (1);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -284,7 +284,7 @@ public:
   static void reset_states (crange<V> st)
   {
     assert (st.size() >= n_states);
-    memset (st.data(), 0, sizeof (V) * n_states);
+    st[lin] = vec_set<V> (1);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
