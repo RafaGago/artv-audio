@@ -287,13 +287,20 @@ l_hshelf.hshelf_1p_reset_no_prewarp(fshelf, g_db, srate);
 fshelf = max (freqs_r.ptr[(n_stages * 0.5) | 0] , 1100);
 r_hshelf.hshelf_1p_reset_no_prewarp(fshelf, g_db, srate);
 
+// run the feedback to prepare the states
+fbl = out0 * fb_scaled;
+fbr = out1 * fb_scaled;
+(hardness != 0) (
+  fbl = fbl / sqrt (fbl * fbl * hardness + 1);
+  fbr = fbr / sqrt (fbr * fbr * hardness + 1);
+);
 (dc_block == 1) ? (
-  l_dc.tpt_1p_tick_hp (l_hshelf.hshelf_1p_tick (l_lshelf.lshelf_1p_tick (out0)));
-  r_dc.tpt_1p_tick_hp (r_hshelf.hshelf_1p_tick (r_lshelf.lshelf_1p_tick (out1)));
+  l_dc.tpt_1p_tick_hp (l_hshelf.hshelf_1p_tick (l_lshelf.lshelf_1p_tick (fbl)));
+  r_dc.tpt_1p_tick_hp (r_hshelf.hshelf_1p_tick (r_lshelf.lshelf_1p_tick (fbr)));
 ) : (
 // tick shelves and DC on the feedback path to update the states.
-  l_hshelf.hshelf_1p_tick (l_lshelf.lshelf_1p_tick (out0));
-  r_hshelf.hshelf_1p_tick (r_lshelf.lshelf_1p_tick (out1));
+  l_hshelf.hshelf_1p_tick (l_lshelf.lshelf_1p_tick (fbl));
+  r_hshelf.hshelf_1p_tick (r_lshelf.lshelf_1p_tick (fbr));
 );
 
 g_wet = mix * g_hardness;

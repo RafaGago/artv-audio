@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -26,6 +27,8 @@
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 
+// TODO: rm
+#include <fenv.h>
 namespace artv {
 //------------------------------------------------------------------------------
 class mod {
@@ -145,7 +148,7 @@ public:
 
   static constexpr auto get_parameter (feedback_tag)
   {
-    return float_param ("%", -100., 100, 50., 0.1);
+    return float_param ("%", -100., 100., 50., 0.1);
   }
   //----------------------------------------------------------------------------
   struct feedback_locut_tag {};
@@ -155,7 +158,9 @@ public:
     if (v != _param.feedback_locut) {
       _param.feedback_locut = v;
       _fb_filters.reset_coeffs<fb_filter::locut> (
-        vec_set<4> (280.f + 220.f * v), vec_set<4> (v * -4.f), _t_spl);
+        vec_set<4> (4.f + 620.f * v * v),
+        vec_set<4> ((float) M_SQRT1_2),
+        _t_spl);
     }
   }
 
@@ -171,7 +176,9 @@ public:
     if (v != _param.feedback_hicut) {
       _param.feedback_hicut = v;
       _fb_filters.reset_coeffs<fb_filter::hicut> (
-        vec_set<4> (3700.f - 1600.f * v), vec_set<4> (v * -1.5f), _t_spl);
+        vec_set<4> (21000.f - 19000.f * v * v),
+        vec_set<4> ((float) M_SQRT1_2),
+        _t_spl);
     }
   }
 
@@ -256,6 +263,7 @@ public:
     _onepole.reset_states_cascade();
     _param_smooth.reset (_t_spl, 10.f);
 
+    // ensure that all parameter's new values will be different
     memset (&_param, -1, sizeof _param);
     memset (&_param_smooth.target(), -1, sizeof _param_smooth.target());
 
@@ -263,8 +271,6 @@ public:
       set (type, get_parameter (type).defaultv);
     });
     _param_smooth.set_all_from_target();
-
-    _fb_filters.reset_coeffs<fb_filter::dc> (vec_set<4> (1.f), _t_spl);
 
     reset_mem();
   }
@@ -329,7 +335,6 @@ private:
       hz = lfo_rate * 20.f; // 0 to 20 Hz
     } break;
     case lfo_time_base::quarter_beat:
-      // TODO!!!!
       // a quarter beat for each 10%
       hz = (4.f * _beat_hz) / (1.f + pars.lfo_rate * 0.1f);
       break;
@@ -414,6 +419,8 @@ private:
   template <class T>
   void tick_phaser (crange<T*> outs, crange<T const*> ins, uint samples)
   {
+    feenableexcept (FE_INVALID);
+
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
 
@@ -457,6 +464,7 @@ private:
 
       // Run allpass cascades with own feedback loop and saturation
       std::array<float_x4, max_phaser_stages * zdf::n_gs_coeffs> G_S_mem;
+
       // obtain G and S for the phaser
       auto gs = make_crange (G_S_mem);
       for (uint s = 0; s < n_stages; ++s) {
@@ -471,8 +479,6 @@ private:
         gs.cut_head (zdf::n_gs_coeffs), zdf::gs_coeffs_tag {});
       _fb_filters.tick<fb_filter::hicut> (
         gs.cut_head (zdf::n_gs_coeffs), zdf::gs_coeffs_tag {});
-      _fb_filters.tick<fb_filter::dc> (
-        gs.cut_head (zdf::n_gs_coeffs), zdf::gs_coeffs_tag {});
       auto filt_resp = zdf::combine_response<float_x4> (
         make_crange (G_S_mem.data(), fb_filter::count * zdf::n_gs_coeffs));
 
@@ -483,6 +489,7 @@ private:
         filt_resp,
         vec_set<4> (pars.feedback),
         vec_set<4> (pars.feedback_sat));
+      auto ffwd = wet;
 
       // Run regular filter processing
       assert (n_stages > 0);
@@ -490,7 +497,11 @@ private:
         wet = _phaser.tick_on_idx (s, wet);
       }
       // just running the shelves to update the states.
-      _fb_filters.tick_cascade (wet);
+      auto fbv = wet * pars.feedback;
+      if (pars.feedback_sat != 0.f) {
+        fbv /= vec_sqrt (fbv * fbv * pars.feedback_sat + 1.f);
+      }
+      _fb_filters.tick_cascade (fbv);
       wet_gain /= get_fb_gain (pars.feedback, pars.feedback_sat);
 
       double_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
@@ -557,7 +568,7 @@ private:
       float dry_gain = 1.f - pars.depth;
       float wet_gain = pars.depth;
 
-      wet += _1spl_fb * pars.feedback;
+      wet -= _1spl_fb * pars.feedback;
 
       std::array<float_x4, max_scho_stages> to_push {};
       auto&                                 del_spls = _scho_del_spls.get();
@@ -591,7 +602,10 @@ private:
   // hardness makes a sqrt sigmmoid
   float get_fb_gain (float fb, float hardness)
   {
-    float lim = 1.f / sqrt (hardness != 0.f ? hardness : 1e-30f);
+    float lim = 1.f;
+    if (hardness != 0.f) {
+      lim = 1.f / sqrt (hardness);
+    }
     return 1.f + std::min (lim, abs (fb));
   }
   //----------------------------------------------------------------------------
@@ -640,15 +654,12 @@ private:
   unsmoothed_parameters                      _param;
   value_smoother<float, smoothed_parameters> _param_smooth;
 
-  using allpass_type = andy::svf_multimode_zdf<allpass_tag>;
-  using filters_list = mp_list<
-    onepole_zdf<lowshelf_naive_tag>,
-    onepole_zdf<highshelf_naive_tag>,
-    onepole_zdf<highpass_tag>>;
-  using zdf_type = zdf::
+  using allpass_type = andy::svf_zdf_allpass;
+  using filters_list = mp_list<andy::svf_zdf_highpass, andy::svf_zdf_lowpass>;
+  using zdf_type     = zdf::
     feedback<zdf::sqrt_sig_before_fb_juction_pp_tag, zdf::lin_mystran_2_tag>;
   struct fb_filter {
-    enum { locut, hicut, dc, count };
+    enum { locut, hicut, count };
   };
 
   part_classes<mp_list<zdf_type>, float_x4>                     _feedback;
