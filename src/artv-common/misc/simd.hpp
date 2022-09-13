@@ -554,7 +554,9 @@ static inline vec<T, N> vec_set (T v)
 //    - when "V" is a builtin and "x" is a builtin returns a vector of size 1.
 //    - when "V" is a vector and "x" is a vector it is passed through.
 
-template <class T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
+template <
+  class T,
+  std::enable_if_t<std::is_arithmetic_v<T> && !is_vec_v<T>>* = nullptr>
 auto make_vec (T v)
 {
   return vec_set<1> (v);
@@ -1467,26 +1469,5 @@ static V vec_gain_to_db (V gain)
   return vec_log (absv) * (20. / M_LN10);
 }
 //------------------------------------------------------------------------------
-// approximations.
-//------------------------------------------------------------------------------
-template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-static inline auto vec_tanh_approx_vaneev (V&& x)
-{
-  using Vv              = std::remove_reference_t<std::remove_cv_t<V>>;
-  constexpr auto traits = vec_traits<Vv>();
-  using T               = vec_value_type_t<Vv>;
-  // https://www.kvraudio.com/forum/viewtopic.php?f=33&t=388650&start=45
-  auto ax = vec_abs (x);
-  auto x2 = x * x;
 
-  // clang-format off
-  return (
-    x  * ((T) 2.45550750702956 +
-    (T) 2.45550750702956 * ax +
-    ((T) 0.893229853513558 + (T) 0.821226666969744 * ax) * x2)
-    / ((T) 2.44506634652299 + ((T) 2.44506634652299 + x2) *
-    vec_abs (x + (T) 0.814642734961073 * x * ax)));
-  // clang-format on
-}
-//------------------------------------------------------------------------------
 } // namespace artv
