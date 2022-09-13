@@ -7287,16 +7287,6 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  mod_lfo_start_phase,
-  n_stereo_busses,
-  param_common (
-    "LFO Phase",
-    declptr<upsampled<mod>>(),
-    declptr<mod::lfo_start_phase_tag>()),
-  mod::get_parameter (mod::lfo_start_phase_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
   mod_lfo_stereo,
   n_stereo_busses,
   param_common (
@@ -7419,7 +7409,6 @@ using mod_params = mp_list<
   mod_feedback_hicut,
   mod_lfo_time_base,
   mod_lfo_wave,
-  mod_lfo_start_phase,
   mod_lfo_stereo,
   mod_mode,
   mod_oversampling>;

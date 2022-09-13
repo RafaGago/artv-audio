@@ -99,17 +99,6 @@ public:
       10);
   }
   //----------------------------------------------------------------------------
-  struct lfo_start_phase_tag {};
-  void set (lfo_start_phase_tag, float v)
-  {
-    _param_smooth.target().lfo_phase = v;
-  }
-
-  static constexpr auto get_parameter (lfo_start_phase_tag)
-  {
-    return float_param ("deg", 0., 360., 0., 0.001);
-  }
-  //----------------------------------------------------------------------------
   struct lfo_stereo_tag {};
   void set (lfo_stereo_tag, float v) { _param_smooth.target().lfo_stereo = v; }
 
@@ -297,7 +286,6 @@ public:
     lfo_time_base_tag,
     lfo_depth_tag,
     lfo_wave_tag,
-    lfo_start_phase_tag,
     lfo_stereo_tag,
     center_tag,
     a_tag,
@@ -357,7 +345,7 @@ private:
     }
     else {
       auto start_ph = phase<n_channels> {
-        vec_set<n_channels> (pars.lfo_phase), phase<n_channels>::degrees {}};
+        vec_set<n_channels> (0.f), phase<n_channels>::degrees {}};
       start_ph.set_raw (start_ph.get_raw (0) + stereo_ph, 1);
       _lfos.set_phase (start_ph);
     }
@@ -618,7 +606,6 @@ private:
   struct smoothed_parameters {
     float lfo_rate;
     float lfo_depth;
-    float lfo_phase;
     float lfo_stereo;
     float center;
     float a;
