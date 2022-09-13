@@ -17,4 +17,6 @@ tvaneev = num / (den * h)
 tvaneev = tvaneev.subs(x, x * h)
 
 pprint (limit(tvaneev, x, oo))
-# print('tanh_vaneev with drive lim: {:.35f}'.format(limit(tvaneev, x, oo)))
+
+#tvaneev_int = simplify(integrate(tvaneev, x))
+#pprint (tvaneev_int)

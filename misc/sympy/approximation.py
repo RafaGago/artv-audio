@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from sympy import *
-import mpmath as mp
+from mpmath import mp
 
 # https://mpmath.org/doc/current/calculus/approximation.html
 
@@ -9,10 +9,16 @@ init_printing(use_latex="mathjax")
 
 var("v")
 
-def fx(x):
-    return sin (x)
+mp.dps = 30 # more precision than double can handle...
 
-taylor = mp.taylor (fx, 0, 12)
+def fx(x):
+    return x / sqrt(x**2 + 1)
+
+taylor = mp.taylor (fx, 0, 30)
+
+i = 0;
+for lv in taylor :
+    print('{},'.format(lv))
 
 print("Taylor")
 # Note list of coeffs reversal
