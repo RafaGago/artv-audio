@@ -16,6 +16,7 @@
 #include "artv-common/dsp/own/parts/filters/zdf.hpp"
 #include "artv-common/dsp/own/parts/oscillators/lfo.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
+#include "artv-common/dsp/own/parts/waveshapers/sigmoid.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"
@@ -492,9 +493,7 @@ private:
       }
       // just running the shelves to update the states.
       auto fbv = wet * pars.feedback;
-      if (pars.feedback_sat != 0.f) {
-        fbv /= vec_sqrt (fbv * fbv * pars.feedback_sat + 1.f);
-      }
+      fbv      = zdf_type::nonlin::tick (fbv, vec_set<4> (pars.feedback_sat));
       _fb_filters.tick_cascade (fbv);
       wet_gain /= get_fb_gain (pars.feedback, pars.feedback_sat);
 
@@ -573,8 +572,9 @@ private:
         to_push[s] = r.to_push;
       }
       _scho.push (to_push);
-      auto fb_val = wet / vec_sqrt (wet * wet * pars.feedback_sat + 1.f);
-      _1spl_fb    = _fb_filters.tick_cascade (fb_val);
+      auto fb_val
+        = zdf_type::nonlin::tick (wet, vec_set<4> (pars.feedback_sat));
+      _1spl_fb = _fb_filters.tick_cascade (fb_val);
       wet_gain /= get_fb_gain (pars.feedback, pars.feedback_sat);
 
       double_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
@@ -592,10 +592,7 @@ private:
   // hardness makes a sqrt sigmmoid
   float get_fb_gain (float fb, float hardness)
   {
-    float lim = 1.f;
-    if (hardness != 0.f) {
-      lim = 1.f / sqrt (hardness);
-    }
+    float lim = zdf_type::nonlin::limit_inf<float_x1> (make_vec (hardness))[0];
     return 1.f + std::min (lim, abs (fb));
   }
   //----------------------------------------------------------------------------
@@ -641,8 +638,10 @@ private:
 
   using allpass_type = andy::svf_zdf_allpass;
   using filters_list = mp_list<andy::svf_zdf_highpass, andy::svf_zdf_lowpass>;
-  using zdf_type     = zdf::
-    feedback<zdf::sqrt_sig_before_fb_juction_pp_tag, zdf::lin_mystran_2_tag>;
+  using zdf_type     = zdf::feedback<
+    zdf::lin_pre_fb_node_nonlin_after_tag,
+    zdf::lin_mystran_tag<2>,
+    sigmoid::rsqrt<true>>;
   struct fb_filter {
     enum { locut, hicut, count };
   };
@@ -2094,8 +2093,9 @@ private:
 
   zdf::feedback<
     float_x4,
-    zdf::sqrt_sig_before_fb_juction_tag,
-    zdf::lin_mystran_2_tag>
+    zdf::lin_pre_fb_node_nonlin_after_tag,
+    zdf::lin_mystran_2_tag,
+    sigmoid::rsqrt<true>>
     _zero_feedback;
   part_class_array<andy::svf_multimode_zdf<allpass_tag>, float_x4, max_stages>
     _zdf_ap;

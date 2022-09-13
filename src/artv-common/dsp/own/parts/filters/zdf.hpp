@@ -46,15 +46,16 @@ struct response<V> combine_response (crange<const V> G_S) {
 //------------------------------------------------------------------------------
 // topologies
 struct linear_tag {};
-struct sqrt_sig_after_fb_juction_tag {};
-struct sqrt_sig_before_fb_juction_tag {};
-struct sqrt_sig_before_fb_juction_pp_tag {};
+struct nonlin_post_fb_node_tag {};
+struct nonlin_pre_fb_node_tag {};
+struct lin_pre_fb_node_nonlin_after_tag {};
 
 // numeric methods
 
 // See Urs Heckmann and Mystran's comments:
 //  https://www.kvraudio.com/forum/viewtopic.php?start=375&t=350246&sid=eb35460aab9d1bda3038aa78018b5182
-struct lin_mystran_2_tag {};
+template <uint n_iters> // 1 or 2
+struct lin_mystran_tag {};
 
 // TO Add/test
 // struct lin_mystran_tag {};
@@ -62,9 +63,19 @@ struct lin_mystran_2_tag {};
 // struct euler_tag {};
 // struct heun_tag {};
 // struct runge_kutta_tag {};
+// etc...
 
 //------------------------------------------------------------------------------
-template <class Topology_tag, class Numerical_method_tag>
+// - Topology_tag, one of the topology tags above
+// - Numerical_method_tag one of the numerical method tags above (except for
+//   linear_tag)
+// - Nonlin: Nonlinearity class, e.g. one of the classes on
+//  "src/artv-common/dsp/own/parts/waveshapers/sigmoid.hpp" (except for
+//  linear_tag)
+template <
+  class Topology_tag,
+  class Numerical_method_tag = void,
+  class Nonlin               = void>
 struct feedback;
 //------------------------------------------------------------------------------
 // Solve zdf feedback loop. Linear case. "k" is the feedback ratio.
@@ -82,12 +93,14 @@ struct feedback;
 // where:
 // u = x - k * (G * u + S)
 
-template <class Any>
-struct feedback<linear_tag, Any> {
+template <class Any1, class Any2>
+struct feedback<linear_tag, Any1, Any2> {
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs };
   enum coeffs_int { n_coeffs_int };
   enum state { n_states };
+  //----------------------------------------------------------------------------
+  using nonlin = Any2;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> c)
@@ -123,13 +136,15 @@ struct feedback<linear_tag, Any> {
 // where:
 // u = x - k * (G * linramp * u + S)
 
-template <>
-class feedback<sqrt_sig_after_fb_juction_tag, lin_mystran_2_tag> {
+template <class Nonlin, uint n_iters>
+class feedback<nonlin_post_fb_node_tag, lin_mystran_tag<n_iters>, Nonlin> {
 public:
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs };
   enum coeffs_int { n_coeffs_int };
   enum state { lin, n_states };
+  //----------------------------------------------------------------------------
+  using nonlin = Nonlin;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> c)
@@ -142,32 +157,36 @@ public:
     st[lin] = vec_set<V> (1);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, class... Ts, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
     crange<const V>,
     crange<V>   st,
     V           in,
     response<V> resp,
     V           k,
-    V           h)
+    Ts&&... nonlin_args)
   {
+    static_assert (n_iters == 1 || n_iters == 2);
     using T = vec_value_type_t<V>;
     // 1st round
     auto scaled = resp;
     scaled.G *= st[lin];
-    V u = feedback<linear_tag, void>::tick<V> ({}, {}, scaled, k, in);
-    if (vec_is_all_ones (h == vec_set<V> (0))) {
+    V u = feedback<linear_tag>::tick<V> ({}, {}, scaled, k, in);
+    if (nonlin::is_linear (std::forward<Ts> (nonlin_args)...)) {
       // linear, fast-path
       st[lin] = vec_set<V> (1);
       return u;
     }
-    st[lin] = (T) 1 / vec_sqrt (u * u * h + (T) 1); // sqrt_sigmoid (u) / u
+    st[lin] = nonlin::tick (u, std::forward<Ts> (nonlin_args)...) / u;
+    if constexpr (n_iters == 1) {
+      return u;
+    }
     // 2 st round (compensation)
     scaled = resp;
     scaled.G *= st[lin];
-    u += feedback<linear_tag, void>::tick<V> ({}, {}, scaled, k, in);
+    u += feedback<linear_tag>::tick<V> ({}, {}, scaled, k, in);
     u *= (T) 0.5;
-    st[lin] = (T) 1 / vec_sqrt (u * u * h + (T) 1); // sqrt_sigmoid (u) / u
+    st[lin] = nonlin::tick (u, std::forward<Ts> (nonlin_args)...) / u;
     return u;
   }
   //----------------------------------------------------------------------------
@@ -192,13 +211,15 @@ public:
 // where:
 // u = x - linramp * k * (Gu + S)
 
-template <>
-class feedback<sqrt_sig_before_fb_juction_tag, lin_mystran_2_tag> {
+template <class Nonlin, uint n_iters>
+class feedback<nonlin_pre_fb_node_tag, lin_mystran_tag<n_iters>, Nonlin> {
 public:
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs };
   enum coeffs_int { n_coeffs_int };
   enum state { lin, n_states };
+  //----------------------------------------------------------------------------
+  using nonlin = Nonlin;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> c)
@@ -211,38 +232,40 @@ public:
     st[lin] = vec_set<V> (1);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, class... Ts, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
     crange<const V>,
     crange<V>   st,
     V           in,
     response<V> resp,
     V           k,
-    V           h)
+    Ts&&... nonlin_args)
   {
+    static_assert (n_iters == 1 || n_iters == 2);
     using T = vec_value_type_t<V>;
     // 1st round
     auto scaled = resp;
     scaled.G *= st[lin];
     scaled.S *= st[lin];
-    V u = feedback<linear_tag, void>::tick<V> ({}, {}, scaled, k, in);
-    if (vec_is_all_ones (h == vec_set<V> (0))) {
+    V u = feedback<linear_tag>::tick<V> ({}, {}, scaled, k, in);
+    if (nonlin::is_linear (std::forward<Ts> (nonlin_args)...)) {
       // linear, fast-path
       st[lin] = vec_set<V> (1);
       return u;
     }
     V sig_in = k * (resp.G * u + resp.S);
-    // sqrt_sigmoid (u) / u
-    st[lin] = (T) 1 / vec_sqrt (sig_in * sig_in * h + (T) 1);
+    st[lin] = nonlin::tick (sig_in, std::forward<Ts> (nonlin_args)...) / sig_in;
+    if constexpr (n_iters == 1) {
+      return u;
+    }
     // 2 st round (compensation)
     scaled = resp;
     scaled.G *= st[lin];
     scaled.S *= st[lin];
-    u += feedback<linear_tag, void>::tick<V> ({}, {}, scaled, k, in);
+    u += feedback<linear_tag>::tick<V> ({}, {}, scaled, k, in);
     u *= (T) 0.5;
-    sig_in = k * (resp.G * u + resp.S);
-    // sqrt_sigmoid (u) / u
-    st[lin] = (T) 1 / vec_sqrt (sig_in * sig_in * h + (T) 1);
+    sig_in  = k * (resp.G * u + resp.S);
+    st[lin] = nonlin::tick (sig_in, std::forward<Ts> (nonlin_args)...) / sig_in;
     return u;
   }
   //----------------------------------------------------------------------------
@@ -268,13 +291,18 @@ public:
 // u = x - (G2 (linramp * k * (G1 u + S1)) + S2)
 // u = (-G2 S1 k linramp - S2 + in) / (G1 G2 k linramp + 1)
 
-template <>
-class feedback<sqrt_sig_before_fb_juction_pp_tag, lin_mystran_2_tag> {
+template <class Nonlin, uint n_iters>
+class feedback<
+  lin_pre_fb_node_nonlin_after_tag,
+  lin_mystran_tag<n_iters>,
+  Nonlin> {
 public:
   //----------------------------------------------------------------------------
   enum coeffs { n_coeffs };
   enum coeffs_int { n_coeffs_int };
   enum state { lin, n_states };
+  //----------------------------------------------------------------------------
+  using nonlin = Nonlin;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (crange<V> c)
@@ -287,7 +315,7 @@ public:
     st[lin] = vec_set<V> (1);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, class... Ts, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
     crange<const V>,
     crange<V>   st,
@@ -295,28 +323,30 @@ public:
     response<V> r1,
     response<V> r2,
     V           k,
-    V           h)
+    Ts&&... nonlin_args)
   {
+    static_assert (n_iters == 1 || n_iters == 2);
     using T = vec_value_type_t<V>;
     // 1st round
     V u = -r2.G * r1.S * k * st[lin] - r2.S + in;
     u /= r1.G * r2.G * k * st[lin] + (T) 1;
 
-    if (vec_is_all_ones (h == vec_set<V> (0))) {
+    if (nonlin::is_linear (std::forward<Ts> (nonlin_args)...)) {
       // linear, fast-path
       st[lin] = vec_set<V> (1);
       return u;
     }
     V sig_in = k * (r1.G * u + r1.S);
-    // sqrt_sigmoid (u) / u
-    st[lin] = (T) 1 / vec_sqrt (sig_in * sig_in * h + (T) 1);
+    st[lin] = nonlin::tick (sig_in, std::forward<Ts> (nonlin_args)...) / sig_in;
+    if constexpr (n_iters == 1) {
+      return u;
+    }
     // 2 st round (compensation)
     V u2 = -r2.G * r1.S * k * st[lin] - r2.S + in;
     u2 /= r1.G * r2.G * k * st[lin] + (T) 1;
-    u      = (u + u2) * (T) 0.5;
-    sig_in = k * (r1.G * u + r1.S);
-    // sqrt_sigmoid (u) / u
-    st[lin] = (T) 1 / vec_sqrt (sig_in * sig_in * h + (T) 1);
+    u       = (u + u2) * (T) 0.5;
+    sig_in  = k * (r1.G * u + r1.S);
+    st[lin] = nonlin::tick (sig_in, std::forward<Ts> (nonlin_args)...) / sig_in;
     return u;
   }
   //----------------------------------------------------------------------------
