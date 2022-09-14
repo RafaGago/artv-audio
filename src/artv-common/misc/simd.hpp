@@ -920,10 +920,19 @@ static inline auto vec_pow (vec_value_type_t<V> x, V&& y)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_sqrt (V&& x)
 {
+#if XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::sqrt (std::forward<decltype (v)> (v)); },
     [] (auto&& v) { return sqrt (v); });
+#else
+  constexpr auto                               traits = vec_traits<V>();
+  std::remove_reference_t<std::remove_cv_t<V>> ret;
+  for (uint i = 0; i < traits.size; ++i) {
+    ret[i] = sqrt (x[i]);
+  }
+  return ret;
+#endif
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
