@@ -407,10 +407,12 @@ namespace detail {
 // https://www.kvraudio.com/forum/viewtopic.php?p=7334972&sid=a26443d2f2d2434f8fd2decd8c66d238#p7334972
 //
 // Demo on desmos, showing how it morphs into a hard clipper.
-// some more coeffs "https://www.desmos.com/calculator/qmlvfhsrad".
+// some more coeffs "https://www.desmos.com/calculator/8umi7okpd6".
+//
+// How to scale with the drive was found empirically
 struct mystran_pre_shape {
   template <uint N_terms, class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static constexpr V tick (V x, V hardness)
+  static constexpr V tick (V x, V drive, V hardness)
   {
     using T            = vec_value_type_t<V>;
     constexpr auto tbl = make_array<T> (
@@ -433,11 +435,13 @@ struct mystran_pre_shape {
 
     V ret = x;
     V pwr = x;
+    V d   = drive;
     V h   = hardness;
     for (uint i = 0; i < N_terms; ++i) {
       pwr *= x * x;
-      ret += pwr * h * tbl[i];
+      ret += d * pwr * h * tbl[i];
       h *= hardness * hardness;
+      d *= drive;
     };
     return ret;
   }
@@ -461,18 +465,18 @@ struct mystran<N_terms, false> {
   static V tick (V in, V hardness)
   {
     return sigmoid::rsqrt<false>::tick (
-      detail::mystran_pre_shape::tick<N_terms> (in, hardness));
+      detail::mystran_pre_shape::tick<N_terms> (in, vec_set<V> (1), hardness));
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick_div_in (V in, V hardness)
   {
     return sigmoid::rsqrt<false>::tick_div_in (
-      detail::mystran_pre_shape::tick<N_terms> (in, hardness));
+      detail::mystran_pre_shape::tick<N_terms> (in, vec_set<V> (1), hardness));
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V limit_inf()
+  static V limit_inf (V)
   {
     return sigmoid::rsqrt<false>::limit_inf<V>();
   }
@@ -489,14 +493,14 @@ struct mystran<N_terms, true> {
   static V tick (V in, V drive, V hardness)
   {
     return sigmoid::rsqrt<true>::tick (
-      detail::mystran_pre_shape::tick<N_terms> (in, hardness), drive);
+      detail::mystran_pre_shape::tick<N_terms> (in, drive, hardness), drive);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick_div_in (V in, V drive, V hardness)
   {
     return sigmoid::rsqrt<true>::tick_div_in (
-      detail::mystran_pre_shape::tick<N_terms> (in, hardness), drive);
+      detail::mystran_pre_shape::tick<N_terms> (in, drive, hardness), drive);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -506,7 +510,7 @@ struct mystran<N_terms, true> {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static bool is_linear (V drive, V)
+  static bool is_linear (V drive, V hardness)
   {
     using T = vec_value_type_t<V>;
     return vec_is_all_ones (drive == (T) 0);
