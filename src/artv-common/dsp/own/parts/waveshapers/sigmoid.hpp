@@ -485,6 +485,11 @@ struct mystran<N_terms, false> {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
+// Notice: Try to keep the drive between 0 and 1. 0:
+// where when drive=0 y=x, where when drive=1: y=sigmoid with lim x->±oo = ±1
+// As the polynomial might have higher powers of "drive", the limit resolution
+// of float might be easily reached. An alternative is to just amplify the
+// signal before and attenuate it later.
 template <uint N_terms>
 struct mystran<N_terms, true> {
   static constexpr uint n_params = 2;

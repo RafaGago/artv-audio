@@ -183,8 +183,7 @@ public:
   void set (feedback_drive_tag, float v)
   {
     v *= 0.01f;
-    v                                     = v * v * v * v;
-    _param_smooth.target().feedback_drive = v * 1500.f;
+    _param_smooth.target().feedback_drive = v * v * v * v;
   }
 
   static constexpr auto get_parameter (feedback_drive_tag)
@@ -458,9 +457,14 @@ private:
       }
 
       float_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
-      auto     onep_out = _onepole.tick<0> (wet);
-      wet               = vec_shuffle (wet, onep_out, 0, 1, 4, 5);
-
+      // drive for the sigmoid. Driving with the "drive" parameter of the
+      // sigmoid itself only might result in resolution loss/exhaustion due to
+      // high order polynomials. Better to keep the sigmoid drive between 0
+      // and 1.
+      float wet_drive = get_wet_drive (pars);
+      wet *= wet_drive;
+      auto onep_out = _onepole.tick<0> (wet);
+      wet           = vec_shuffle (wet, onep_out, 0, 1, 4, 5);
       // Run allpass cascades with own feedback loop and saturation
       std::array<float_x4, max_phaser_stages * zdf::n_gs_coeffs> G_S_mem;
 
@@ -503,7 +507,7 @@ private:
         vec_set<4> (pars.feedback_curve));
       _fb_filters.tick_cascade (fbv);
 
-      auto out   = mix (pars, wet, ins[0][i], ins[0][1]);
+      auto out   = mix (pars, wet, wet_drive, ins[0][i], ins[0][1]);
       outs[0][i] = out[0];
       outs[1][i] = out[1];
     }
@@ -552,6 +556,12 @@ private:
       _scho_del_spls.tick();
 
       float_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
+      // drive for the sigmoid. Driving with the "drive" parameter of the
+      // sigmoid itself only might result in resolution loss/exhaustion due to
+      // high order polynomials. Better to keep the sigmoid drive between 0
+      // and 1.
+      float wet_drive = get_wet_drive (pars);
+      wet *= wet_drive;
       wet = _onepole.tick<0> (wet);
       wet -= _1spl_fb * pars.feedback;
 
@@ -574,18 +584,23 @@ private:
         vec_set<4> (pars.feedback_curve));
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
 
-      auto out   = mix (pars, wet, ins[0][i], ins[1][i]);
+      auto out   = mix (pars, wet, wet_drive, ins[0][i], ins[1][i]);
       outs[0][i] = out[0];
       outs[1][i] = out[1];
     }
   }
   //----------------------------------------------------------------------------
   template <class T>
-  double_x2 mix (all_parameters const& p, float_x4 wet, T dry_l, T dry_r)
+  double_x2 mix (
+    all_parameters const& p,
+    float_x4              wet,
+    float                 wet_drive,
+    T                     dry_l,
+    T                     dry_r)
   {
     float dry_gain = 1.f - p.depth;
     float wet_gain = p.depth;
-    wet_gain /= (get_fb_gain (p.feedback, p.feedback_drive));
+    wet_gain /= (get_fb_gain (p.feedback, p.feedback_drive)) * wet_drive;
 
     double_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
     double_x2 parallel = {(double) wet[2], (double) wet[3]};
@@ -593,6 +608,13 @@ private:
     wetdbl *= 1.f - abs (p.b);
     wetdbl += p.b * parallel;
     return wetdbl * wet_gain + dry * dry_gain;
+  }
+  //----------------------------------------------------------------------------
+  // The sigmoid has a drive parameter which is mainly use from the range of
+  // 0 to 1. 0 disables it (and is a CPU reduction).
+  float get_wet_drive (all_parameters const& p)
+  {
+    return 1.f + p.feedback_drive * 1550.f;
   }
   //----------------------------------------------------------------------------
   // hardness makes a sqrt sigmmoid
