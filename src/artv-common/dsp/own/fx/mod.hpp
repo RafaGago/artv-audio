@@ -28,6 +28,10 @@
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 
+#define MOD_DBG_DENORMALS 0
+#if MOD_DBG_DENORMALS
+#include <fenv.h>
+#endif
 namespace artv {
 //------------------------------------------------------------------------------
 class mod {
@@ -175,15 +179,26 @@ public:
     return float_param ("%", 0., 100, 0., 0.1);
   }
   //----------------------------------------------------------------------------
-  struct feedback_sat_tag {};
-  void set (feedback_sat_tag, float v)
+  struct feedback_drive_tag {};
+  void set (feedback_drive_tag, float v)
   {
     v *= 0.01f;
-    v                                   = v * v * v * v;
-    _param_smooth.target().feedback_sat = v * 1500.f;
+    v                                     = v * v * v * v;
+    _param_smooth.target().feedback_drive = v * 1500.f;
   }
 
-  static constexpr auto get_parameter (feedback_sat_tag)
+  static constexpr auto get_parameter (feedback_drive_tag)
+  {
+    return float_param ("%", 0., 100, 0., 0.1);
+  }
+  //----------------------------------------------------------------------------
+  struct feedback_curve_tag {};
+  void set (feedback_curve_tag, float v)
+  {
+    _param_smooth.target().feedback_curve = v *= 0.01f;
+  }
+
+  static constexpr auto get_parameter (feedback_curve_tag)
   {
     return float_param ("%", 0., 100, 0., 0.1);
   }
@@ -265,6 +280,9 @@ public:
   template <class T>
   void process (crange<T*> outs, crange<T const*> ins, uint samples)
   {
+#if MOD_DBG_DENORMALS
+    feenableexcept (FE_INVALID);
+#endif
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
     switch (_param.mode) {
@@ -292,7 +310,8 @@ public:
     feedback_tag,
     feedback_locut_tag,
     feedback_hicut_tag,
-    feedback_sat_tag,
+    feedback_drive_tag,
+    feedback_curve_tag,
     detune_tag,
     b_tag,
     depth_tag,
@@ -471,7 +490,8 @@ private:
         aps_resp,
         filt_resp,
         vec_set<4> (pars.feedback),
-        vec_set<4> (pars.feedback_sat));
+        vec_set<4> (pars.feedback_drive),
+        vec_set<4> (pars.feedback_curve));
       auto ffwd = wet;
 
       // Run regular filter processing
@@ -481,9 +501,12 @@ private:
       }
       // just running the shelves to update the states.
       auto fbv = wet * pars.feedback;
-      fbv      = zdf_type::nonlin::tick (fbv, vec_set<4> (pars.feedback_sat));
+      fbv      = zdf_type::nonlin::tick (
+        fbv,
+        vec_set<4> (pars.feedback_drive),
+        vec_set<4> (pars.feedback_curve));
       _fb_filters.tick_cascade (fbv);
-      wet_gain /= get_fb_gain (pars.feedback, pars.feedback_sat);
+      wet_gain /= get_fb_gain (pars.feedback, pars.feedback_drive);
 
       double_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
       double_x2 parallel = {(double) wet[2], (double) wet[3]};
@@ -560,10 +583,12 @@ private:
         to_push[s] = r.to_push;
       }
       _scho.push (to_push);
-      auto fb_val
-        = zdf_type::nonlin::tick (wet, vec_set<4> (pars.feedback_sat));
+      auto fb_val = zdf_type::nonlin::tick (
+        wet,
+        vec_set<4> (pars.feedback_drive),
+        vec_set<4> (pars.feedback_curve));
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
-      wet_gain /= get_fb_gain (pars.feedback, pars.feedback_sat);
+      wet_gain /= get_fb_gain (pars.feedback, pars.feedback_drive);
 
       double_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
       double_x2 parallel = {(double) wet[2], (double) wet[3]};
@@ -580,7 +605,8 @@ private:
   // hardness makes a sqrt sigmmoid
   float get_fb_gain (float fb, float hardness)
   {
-    float lim = zdf_type::nonlin::limit_inf<float_x1> (make_vec (hardness))[0];
+    float lim = zdf_type::nonlin::limit_inf<float_x1> (
+      make_vec (hardness), make_vec (0.f))[0];
     return 1.f + std::min (lim, abs (fb));
   }
   //----------------------------------------------------------------------------
@@ -612,7 +638,8 @@ private:
     float b;
     float depth; // aka mix (make explicit?)
     float feedback;
-    float feedback_sat;
+    float feedback_drive;
+    float feedback_curve;
     float detune;
     float order;
   };
@@ -628,7 +655,7 @@ private:
   using zdf_type     = zdf::feedback<
     zdf::lin_pre_fb_node_nonlin_after_tag,
     zdf::lin_mystran_tag<2>,
-    sigmoid::rsqrt<true>>;
+    sigmoid::mystran<6, true>>;
   struct fb_filter {
     enum { locut, hicut, count };
   };
@@ -887,16 +914,16 @@ public:
     return float_param ("%", 0., 100, 0., 0.1);
   }
   //----------------------------------------------------------------------------
-  struct feedback_sat_tag {};
-  void set (feedback_sat_tag, float v)
+  struct feedback_drv_tag {};
+  void set (feedback_drv_tag, float v)
   {
     v *= 0.01f;
     v = v * v * v;
     v *= 100.f;
-    _params_smooth.target().feedback_sat = v;
+    _params_smooth.target().feedback_drv = v;
   }
 
-  static constexpr auto get_parameter (feedback_sat_tag)
+  static constexpr auto get_parameter (feedback_drv_tag)
   {
     return float_param ("%", 0., 100, 0., 0.1);
   }
@@ -1090,8 +1117,8 @@ public:
       = get_parameter (feedback_hp_tag {}).defaultv;
     _params_smooth.target().feedback_hp
       = get_parameter (feedback_lp_tag {}).defaultv;
-    _params_smooth.target().feedback_sat
-      = get_parameter (feedback_sat_tag {}).defaultv;
+    _params_smooth.target().feedback_drv
+      = get_parameter (feedback_drv_tag {}).defaultv;
     _params_smooth.target().parallel_mix
       = get_parameter (parallel_mix_tag {}).defaultv;
     _params_smooth.target().mix = get_parameter (mix_tag {}).defaultv;
@@ -1346,7 +1373,7 @@ public:
       auto main_fb = outx2;
       main_fb      = _feedback_shelf.tick_on_idx (k_shelf_lo, main_fb);
       main_fb      = _feedback_shelf.tick_on_idx (k_shelf_hi, main_fb);
-      main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_sat + 1.);
+      main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_drv + 1.);
       _feedback_samples = main_fb;
 
       // feedforward outside the feedback loop
@@ -1375,7 +1402,7 @@ public:
     parallel_mix_tag,
     delay_feedback_tag,
     feedback_hp_tag,
-    feedback_sat_tag,
+    feedback_drv_tag,
     delay_time_tag,
     delay_lfo_tag>;
   //----------------------------------------------------------------------------
@@ -1441,7 +1468,7 @@ private:
       auto main_fb = outx2;
       main_fb      = _feedback_shelf.tick_on_idx (k_shelf_lo, main_fb);
       main_fb      = _feedback_shelf.tick_on_idx (k_shelf_hi, main_fb);
-      main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_sat + 1.);
+      main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_drv + 1.);
       _feedback_samples = main_fb;
 
       // feedforward outside the feedback loop
@@ -1505,7 +1532,7 @@ private:
         n_stages += n_fb_filters;
         auto  gs_final = make_crange (G_S.data(), n_stages * 2);
         auto  resp     = zdf::get_response_series<float_x4> (gs_final);
-        float hardness = pars.feedback_sat * pars.feedback_sat * 15.f;
+        float hardness = pars.feedback_drv * pars.feedback_drv * 15.f;
         wet            = _zero_feedback.solve (
           resp, vec_set<4> (pars.feedback), vec_set<4> (hardness), wet);
 
@@ -1685,7 +1712,7 @@ private:
       auto main_fb = outx2;
       main_fb      = _feedback_shelf.tick_on_idx (k_shelf_lo, main_fb);
       main_fb      = _feedback_shelf.tick_on_idx (k_shelf_hi, main_fb);
-      main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_sat + 1.);
+      main_fb = main_fb / vec_sqrt (main_fb * main_fb * pars.feedback_drv + 1.);
       _feedback_samples = main_fb;
 
       // TODO: MIX
@@ -2036,7 +2063,7 @@ private:
     float parallel_mix;
     float feedback_hp;
     float feedback_lp;
-    float feedback_sat;
+    float feedback_drv;
 
     float scaled_feedback;
     float mix;

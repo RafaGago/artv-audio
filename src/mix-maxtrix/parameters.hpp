@@ -7337,13 +7337,23 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  mod_feedback_sat,
+  mod_feedback_drive,
   n_stereo_busses,
   param_common (
-    "Fb Sat",
+    "Fb Drive",
     declptr<upsampled<mod>>(),
-    declptr<mod::feedback_sat_tag>()),
-  mod::get_parameter (mod::feedback_sat_tag {}),
+    declptr<mod::feedback_drive_tag>()),
+  mod::get_parameter (mod::feedback_drive_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_feedback_curve,
+  n_stereo_busses,
+  param_common (
+    "Fb Curve",
+    declptr<upsampled<mod>>(),
+    declptr<mod::feedback_curve_tag>()),
+  mod::get_parameter (mod::feedback_curve_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -7403,14 +7413,15 @@ using mod_params = mp_list<
   mod_detune,
   mod_param_a,
   mod_param_b,
+  mod_mode,
   mod_feedback,
-  mod_feedback_sat,
+  mod_feedback_drive,
+  mod_feedback_curve,
   mod_feedback_locut,
   mod_feedback_hicut,
   mod_lfo_time_base,
   mod_lfo_wave,
   mod_lfo_stereo,
-  mod_mode,
   mod_oversampling>;
 //------------------------------------------------------------------------------
 

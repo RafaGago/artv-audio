@@ -2,6 +2,7 @@
 // routines for solving feedbacks with zero delay
 
 #include <cassert>
+#include <limits>
 #include <type_traits>
 
 #include "artv-common/misc/misc.hpp"
@@ -177,7 +178,7 @@ public:
       st[lin] = vec_set<V> (1);
       return u;
     }
-    st[lin] = nonlin::tick (u, std::forward<Ts> (nonlin_args)...) / u;
+    st[lin] = nonlin::tick_div_in (u, std::forward<Ts> (nonlin_args)...);
     if constexpr (n_iters == 1) {
       return u;
     }
@@ -186,7 +187,7 @@ public:
     scaled.G *= st[lin];
     u += feedback<linear_tag>::tick<V> ({}, {}, scaled, k, in);
     u *= (T) 0.5;
-    st[lin] = nonlin::tick (u, std::forward<Ts> (nonlin_args)...) / u;
+    st[lin] = nonlin::tick_div_in (u, std::forward<Ts> (nonlin_args)...);
     return u;
   }
   //----------------------------------------------------------------------------
@@ -254,7 +255,7 @@ public:
       return u;
     }
     V sig_in = k * (resp.G * u + resp.S);
-    st[lin] = nonlin::tick (sig_in, std::forward<Ts> (nonlin_args)...) / sig_in;
+    st[lin]  = nonlin::tick_div_in (sig_in, std::forward<Ts> (nonlin_args)...);
     if constexpr (n_iters == 1) {
       return u;
     }
@@ -265,7 +266,7 @@ public:
     u += feedback<linear_tag>::tick<V> ({}, {}, scaled, k, in);
     u *= (T) 0.5;
     sig_in  = k * (resp.G * u + resp.S);
-    st[lin] = nonlin::tick (sig_in, std::forward<Ts> (nonlin_args)...) / sig_in;
+    st[lin] = nonlin::tick_div_in (sig_in, std::forward<Ts> (nonlin_args)...);
     return u;
   }
   //----------------------------------------------------------------------------
@@ -337,7 +338,7 @@ public:
       return u;
     }
     V sig_in = k * (r1.G * u + r1.S);
-    st[lin] = nonlin::tick (sig_in, std::forward<Ts> (nonlin_args)...) / sig_in;
+    st[lin]  = nonlin::tick_div_in (sig_in, std::forward<Ts> (nonlin_args)...);
     if constexpr (n_iters == 1) {
       return u;
     }
@@ -346,7 +347,7 @@ public:
     u2 /= r1.G * r2.G * k * st[lin] + (T) 1;
     u       = (u + u2) * (T) 0.5;
     sig_in  = k * (r1.G * u + r1.S);
-    st[lin] = nonlin::tick (sig_in, std::forward<Ts> (nonlin_args)...) / sig_in;
+    st[lin] = nonlin::tick_div_in (sig_in, std::forward<Ts> (nonlin_args)...);
     return u;
   }
   //----------------------------------------------------------------------------
