@@ -336,6 +336,9 @@ struct tanh_vaneev<true> {
 // https://www.kvraudio.com/forum/viewtopic.php?t=521377
 // This one has the advantage of being well-behaved with zero drive, as there is
 // no zero division
+//
+// Notice: Try to keep the orders low with float, as the input can easily
+// go to Inf with high powers.
 //------------------------------------------------------------------------------
 template <uint N_terms = 3, bool Has_drive = false>
 struct tanh_mystran;
@@ -453,6 +456,9 @@ struct mystran_pre_shape {
 // based on the thread
 // https://www.kvraudio.com/forum/viewtopic.php?t=521377
 // This one is a sigmoid with variable hardness and drive.
+//
+// Notice: Try to keep the orders low with float, as both the input and the
+// drive parameters can easily go to Inf with high powers.
 //------------------------------------------------------------------------------
 template <uint N_terms = 3, bool Has_drive = false>
 struct mystran;
@@ -485,11 +491,6 @@ struct mystran<N_terms, false> {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-// Notice: Try to keep the drive between 0 and 1. 0:
-// where when drive=0 y=x, where when drive=1: y=sigmoid with lim x->±oo = ±1
-// As the polynomial might have higher powers of "drive", the limit resolution
-// of float might be easily reached. An alternative is to just amplify the
-// signal before and attenuate it later.
 template <uint N_terms>
 struct mystran<N_terms, true> {
   static constexpr uint n_params = 2;
@@ -522,6 +523,5 @@ struct mystran<N_terms, true> {
   }
   //----------------------------------------------------------------------------
 };
-
 //------------------------------------------------------------------------------
 }} // namespace artv::sigmoid
