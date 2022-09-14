@@ -461,9 +461,6 @@ private:
       auto     onep_out = _onepole.tick<0> (wet);
       wet               = vec_shuffle (wet, onep_out, 0, 1, 4, 5);
 
-      float dry_gain = 1.f - pars.depth;
-      float wet_gain = pars.depth;
-
       // Run allpass cascades with own feedback loop and saturation
       std::array<float_x4, max_phaser_stages * zdf::n_gs_coeffs> G_S_mem;
 
@@ -492,7 +489,6 @@ private:
         vec_set<4> (pars.feedback),
         vec_set<4> (pars.feedback_drive),
         vec_set<4> (pars.feedback_curve));
-      auto ffwd = wet;
 
       // Run regular filter processing
       assert (_n_stages > 0);
@@ -506,15 +502,8 @@ private:
         vec_set<4> (pars.feedback_drive),
         vec_set<4> (pars.feedback_curve));
       _fb_filters.tick_cascade (fbv);
-      wet_gain /= get_fb_gain (pars.feedback, pars.feedback_drive);
 
-      double_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
-      double_x2 parallel = {(double) wet[2], (double) wet[3]};
-      double_x2 dry      = {(double) ins[0][i], (double) ins[1][i]};
-      wetdbl *= 1.f - abs (pars.b);
-      wetdbl += pars.b * parallel;
-      auto out = wetdbl * wet_gain + dry * dry_gain;
-
+      auto out   = mix (pars, wet, ins[0][i], ins[0][1]);
       outs[0][i] = out[0];
       outs[1][i] = out[1];
     }
@@ -564,10 +553,6 @@ private:
 
       float_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
       wet = _onepole.tick<0> (wet);
-
-      float dry_gain = 1.f - pars.depth;
-      float wet_gain = pars.depth;
-
       wet -= _1spl_fb * pars.feedback;
 
       std::array<float_x4, max_scho_stages> to_push {};
@@ -588,18 +573,26 @@ private:
         vec_set<4> (pars.feedback_drive),
         vec_set<4> (pars.feedback_curve));
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
-      wet_gain /= get_fb_gain (pars.feedback, pars.feedback_drive);
 
-      double_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
-      double_x2 parallel = {(double) wet[2], (double) wet[3]};
-      double_x2 dry      = {(double) ins[0][i], (double) ins[1][i]};
-      wetdbl *= 1.f - abs (pars.b);
-      wetdbl += pars.b * parallel;
-      auto out = wetdbl * wet_gain + dry * dry_gain;
-
+      auto out   = mix (pars, wet, ins[0][i], ins[1][i]);
       outs[0][i] = out[0];
       outs[1][i] = out[1];
     }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  double_x2 mix (all_parameters const& p, float_x4 wet, T dry_l, T dry_r)
+  {
+    float dry_gain = 1.f - p.depth;
+    float wet_gain = p.depth;
+    wet_gain /= (get_fb_gain (p.feedback, p.feedback_drive));
+
+    double_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
+    double_x2 parallel = {(double) wet[2], (double) wet[3]};
+    double_x2 dry      = {(double) dry_l, (double) dry_r};
+    wetdbl *= 1.f - abs (p.b);
+    wetdbl += p.b * parallel;
+    return wetdbl * wet_gain + dry * dry_gain;
   }
   //----------------------------------------------------------------------------
   // hardness makes a sqrt sigmmoid
