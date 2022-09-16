@@ -285,13 +285,13 @@ public:
 class slider_w_data_entry : public juce::Slider {
 public:
   template <class... Ts>
-  slider_w_data_entry (Ts&&... args) : _edit_win {"", true}
+  slider_w_data_entry (Ts&&... args)
   {
     _edit.setScrollbarsShown (false);
     _edit.setReadOnly (false);
     _edit.onEscapeKey = [this]() {
-      _edit_win.setVisible (false);
-      _edit_win.exitModalState (0);
+      _edit_win->setVisible (false);
+      _edit_win->exitModalState (0);
     };
     _edit.onReturnKey = [this]() {
       setValue (getValueFromText (_edit.getText()));
@@ -302,15 +302,19 @@ public:
 
   ~slider_w_data_entry()
   {
-    _edit_win.setLookAndFeel (nullptr);
+    if (_edit_win) {
+      _edit_win->setLookAndFeel (nullptr);
+    }
     _edit.setLookAndFeel (nullptr);
   }
 
   void lookAndFeelChanged() override
   {
     Slider::lookAndFeelChanged();
-    _edit_win.setLookAndFeel (&getLookAndFeel());
     _edit.setLookAndFeel (&getLookAndFeel());
+    if (_edit_win) {
+      _edit_win->setLookAndFeel (&getLookAndFeel());
+    }
   }
 
   void parentHierarchyChanged() override
@@ -318,8 +322,8 @@ public:
     // make the window be children of the main window
     Slider::parentHierarchyChanged();
     auto top = getTopLevelComponent();
-    if (top) {
-      top->addChildComponent (_edit_win);
+    if (top && _edit_win) {
+      top->addChildComponent (*_edit_win);
     }
   }
 
@@ -327,10 +331,18 @@ public:
   {
     juce::ModifierKeys mods = juce::ModifierKeys::getCurrentModifiersRealtime();
     if (mods.isRightButtonDown() && isEnabled()) {
+      // lazy creation, Windows are expensive, at least on Linux
+      if (!_edit_win) {
+        _edit_win.emplace ("", true);
+        _edit_win->setLookAndFeel (&getLookAndFeel());
+        if (auto top = getTopLevelComponent()) {
+          top->addChildComponent (*_edit_win);
+        }
+      }
       adjust_positions();
-      _edit_win.setContentNonOwned (&_edit, false);
-      _edit_win.setVisible (true);
-      _edit_win.enterModalState (true, nullptr, false);
+      _edit_win->setContentNonOwned (&_edit, false);
+      _edit_win->setVisible (true);
+      _edit_win->enterModalState (true, nullptr, false);
       _edit.grabKeyboardFocus();
     }
     else {
@@ -358,12 +370,12 @@ private:
         b = b.withX (b.getX() + rdiff);
       }
     }
-    _edit_win.setBounds (b);
+    _edit_win->setBounds (b);
     _edit.setBounds (b);
   }
 
-  resizable_win_destroyed_clicking _edit_win;
-  juce::TextEditor                 _edit;
+  std::optional<resizable_win_destroyed_clicking> _edit_win;
+  juce::TextEditor                                _edit;
 };
 
 // -----------------------------------------------------------------------------
