@@ -1420,14 +1420,12 @@ static inline auto vec_sgn_no_zero (
 template <class V, enable_if_vec_t<V>* = nullptr>
 auto vec_inner_and (V v)
 {
-  using Vv              = std::decay_t<V>;
-  constexpr auto traits = vec_traits<Vv>();
-  using T               = vec_value_type_t<Vv>;
+  constexpr auto traits = vec_traits<V>();
+  using T               = vec_value_type_t<V>;
   static_assert (std::is_integral_v<T>);
 
-  T r {};
-  r = ~r;
-  for (uint i = 0; i < traits.size; ++i) {
+  T r {v[0]};
+  for (uint i = 1; i < traits.size; ++i) {
     r &= v[i];
   }
   return r;
@@ -1436,13 +1434,38 @@ auto vec_inner_and (V v)
 template <class V, enable_if_vec_t<V>* = nullptr>
 auto vec_inner_or (V v)
 {
-  using Vv              = std::decay_t<V>;
-  constexpr auto traits = vec_traits<Vv>();
-  using T               = vec_value_type_t<Vv>;
+  constexpr auto traits = vec_traits<V>();
+  using T               = vec_value_type_t<V>;
   static_assert (std::is_integral_v<T>);
 
-  T r {};
-  for (uint i = 0; i < traits.size; ++i) {
+  T r {v[0]};
+  for (uint i = 1; i < traits.size; ++i) {
+    r |= v[i];
+  }
+  return r;
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_t<V>* = nullptr>
+auto vec_inner_add (V v)
+{
+  constexpr auto traits = vec_traits<V>();
+  using T               = vec_value_type_t<V>;
+
+  T r {v[0]};
+  for (uint i = 1; i < traits.size; ++i) {
+    r += v[i];
+  }
+  return r;
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_t<V>* = nullptr>
+auto vec_inner_mul (V v)
+{
+  constexpr auto traits = vec_traits<V>();
+  using T               = vec_value_type_t<V>;
+
+  T r {v[0]};
+  for (uint i = 1; i < traits.size; ++i) {
     r |= v[i];
   }
   return r;
