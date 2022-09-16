@@ -78,7 +78,7 @@ public:
     // triangle by abs of phase (saw) + scaling. Adding a quarter cycle so its
     // starts at 0
     const auto quarter_cycle
-      = phase<N> {vec_set<N> (90.f), typename phase<N>::degrees {}};
+      = phase<N> {typename phase<N>::degrees {}, vec_set<N> (90.f)};
     const auto quarter_range = quarter_cycle.to_uint();
 
     auto ph = _phasor.tick (n);

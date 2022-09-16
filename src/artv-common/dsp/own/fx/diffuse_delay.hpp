@@ -467,16 +467,13 @@ public:
     _transients.set (saike::transience::gainsmoothing_tag {}, 0.5f);
 
     using phase_type = decltype (_mod_lfo)::phase_type;
-    using value_type = decltype (_mod_lfo)::value_type;
-
-    value_type phases {0.f, 0.25f, 0.5f, 0.75f};
-
+    phase_type::float_vec phases {0.f, 0.25f, 0.5f, 0.75f};
     _mod_lfo.reset();
-    _mod_lfo.set_phase (phase_type {phases, phase_type::normalized {}});
+    _mod_lfo.set_phase (phase_type {phase_type::normalized {}, phases});
 
     for (uint i = 0; i < _ap_lfo.size(); ++i) {
       _ap_lfo[i].reset();
-      _ap_lfo[i].set_phase (phase_type {phases, phase_type::normalized {}});
+      _ap_lfo[i].set_phase (phase_type {phase_type::normalized {}, phases});
       phases = vec_shuffle (phases, phases, 1, 2, 3, 0);
       phases += 0.01f;
       _ap_lfo[i].set_freq (vec_set<n_serial_diffusors> (0.247f), t_spl);

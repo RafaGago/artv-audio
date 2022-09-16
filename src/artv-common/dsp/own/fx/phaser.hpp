@@ -547,8 +547,7 @@ private:
 
     _lfos.set_freq (vec_set<2> (pars.lfo_hz_final), _lfo_t_spl);
     auto stereo_ph
-      = phase<1> {vec_set<1> (pars.lfo_stereo), phase<1>::degrees {}}.get_raw (
-        0);
+      = phase<1> {phase_tag::degrees {}, pars.lfo_stereo}.get_raw (0);
     if (pars.lfo_hz_final != 0.f) {
       // updating stereo phase diff.
       auto ph = _lfos.get_phase();
@@ -557,8 +556,7 @@ private:
     }
     else {
       auto start_ph = phase<n_channels> {
-        vec_set<n_channels> (pars.lfo_start_phase),
-        phase<n_channels>::degrees {}};
+        phase_tag::degrees {}, vec_set<n_channels> (pars.lfo_start_phase)};
       start_ph.set_raw (start_ph.get_raw (0) + stereo_ph, 1);
       _lfos.set_phase (start_ph);
     }

@@ -876,7 +876,7 @@ private:
       phase[i + _late_lfo.n_channels / 2] = ph;
       ph += inc;
     }
-    _late_lfo.set_phase (phase_type {phase, phase_type::normalized {}});
+    _late_lfo.set_phase (phase_type {phase_tag::normalized {}, phase});
 
     for (uint i = 0; i < _cfg.late.n_samples.size(); ++i) {
       _late_n_spls_master[i] = (float) (_cfg.late.n_samples[i]);
@@ -962,7 +962,7 @@ private:
         vphase[i] = (i & 2) ? -ph : ph;
       }
     }
-    _late_lfo.set_phase (phase<16> {vphase, phase<16>::normalized()});
+    _late_lfo.set_phase (phase<16> {phase_tag::normalized(), vphase});
   }
   //----------------------------------------------------------------------------
   template <class T, size_t A, size_t B>

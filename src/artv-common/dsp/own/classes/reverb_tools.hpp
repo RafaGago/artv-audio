@@ -26,14 +26,21 @@ public:
     T to_push;
   };
   //----------------------------------------------------------------------------
+  template <class T>
+  static result<T> tick (T in, T yn, T g_fb, T g_ffw)
+  {
+    T u = in + yn * g_fb;
+    return {yn - u * g_ffw, u};
+  }
+  //----------------------------------------------------------------------------
   // index 0 is the result, 1 the value to push to a delay line, yn is the
   // delayed sample fetched from the queue
   template <class T>
   static result<T> tick (T in, T yn, T gain)
   {
-    T y = in + yn * gain;
-    return {yn - y * gain, y};
+    return tick (in, yn, gain, gain);
   }
+
   //----------------------------------------------------------------------------
   // tick all delay line channels in parallel
   template <class T, class Time_type, class Delay_line>
