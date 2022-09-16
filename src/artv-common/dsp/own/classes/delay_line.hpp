@@ -29,11 +29,17 @@ public:
   void reset (crange<V> mem)
   {
     assert (is_pow2 (mem.size()));
-    crange_memset (mem, 0);
-    _pos  = 0;
     _mem  = mem.data();
     _mask = mem.size() - 1;
+    clear();
   };
+  //----------------------------------------------------------------------------
+  void clear()
+  {
+    assert (_mem);
+    _pos = 0;
+    memset (_mem, 0, sizeof *_mem * size());
+  }
   //----------------------------------------------------------------------------
   // idx from newest to oldest, so idx=0 -> z, idx=1 -> z-1, etc.
   V get (uint idx) const { return get_abs (_pos - idx); }
@@ -78,11 +84,17 @@ public:
   void reset (crange<V> mem)
   {
     assert (mem.size());
-    crange_memset (mem, 0);
-    _pos  = 0;
     _mem  = mem.data();
     _size = mem.size();
+    clear();
   };
+  //----------------------------------------------------------------------------
+  void clear()
+  {
+    assert (_mem);
+    _pos = 0;
+    memset (_mem, 0, sizeof *_mem * size());
+  }
   //----------------------------------------------------------------------------
   // idx from newest to oldest, so idx=0 -> z, idx=1 -> z-1, etc.
   V get (uint idx) const
@@ -130,11 +142,17 @@ public:
     assert ((mem.size() % n_channels) == 0);
     assert (size != 0 && is_pow2 (size));
 
-    crange_memset (mem, 0);
     _z          = mem.data();
     _mask       = size - 1;
-    _pos        = 0;
     _n_channels = n_channels;
+    clear();
+  }
+  //----------------------------------------------------------------------------
+  constexpr void clear()
+  {
+    assert (_z);
+    _pos = 0;
+    memset (_z, 0, size() * _n_channels * sizeof *_z);
   }
   //----------------------------------------------------------------------------
   constexpr uint size() const { return _mask + 1; }
@@ -169,11 +187,17 @@ public:
     assert ((mem.size() % n_channels) == 0);
     assert (size != 0);
 
-    crange_memset (mem, 0);
     _z          = mem.data();
-    _size       = size;
-    _pos        = 0;
     _n_channels = n_channels;
+    _size       = size;
+    clear();
+  }
+  //----------------------------------------------------------------------------
+  constexpr void clear()
+  {
+    assert (_z);
+    _pos = 0;
+    memset (_z, 0, size() * _n_channels * sizeof *_z);
   }
   //----------------------------------------------------------------------------
   constexpr uint size() const { return _size; }
@@ -222,10 +246,12 @@ private:
 
 public:
   //----------------------------------------------------------------------------
+  using base::clear;
   using base::n_channels;
   using base::n_required_elems;
   using base::reset;
   using base::size;
+
   using value_type = typename base::value_type;
   using time_type  = uint;
   //----------------------------------------------------------------------------
@@ -261,10 +287,12 @@ private:
 
 public:
   //----------------------------------------------------------------------------
+  using base::clear;
   using base::n_channels;
   using base::n_required_elems;
   using base::reset;
   using base::size;
+
   using value_type = typename base::value_type;
   using time_type  = uint;
   //----------------------------------------------------------------------------
@@ -303,10 +331,12 @@ private:
 
 public:
   //----------------------------------------------------------------------------
+  using base::clear;
   using base::n_channels;
   using base::n_required_elems;
   using base::reset;
   using base::size;
+
   using value_type = typename base::value_type;
   using time_type  = uint;
   //----------------------------------------------------------------------------
@@ -345,10 +375,12 @@ private:
 
 public:
   //----------------------------------------------------------------------------
+  using base::clear;
   using base::n_channels;
   using base::n_required_elems;
   using base::reset;
   using base::size;
+
   using value_type = typename base::value_type;
   using time_type  = uint;
   //----------------------------------------------------------------------------
@@ -392,9 +424,11 @@ private:
 
 public:
   //----------------------------------------------------------------------------
+  using base::clear;
   using base::n_channels;
   using base::push;
   using base::size;
+
   using value_type = typename base::value_type;
   using interp     = Interp;
 
@@ -634,11 +668,13 @@ private:
   using base = interpolated_delay_line<Delay_line_base, Interpolation>;
 
 public:
+  // TODO Clear
   //----------------------------------------------------------------------------
   using base::get_raw;
   using base::n_channels;
   using base::push;
   using base::size;
+
   using value_type = typename base::value_type;
   using interp     = Interpolation;
   //----------------------------------------------------------------------------
@@ -663,6 +699,14 @@ public:
     }
     n += base::n_required_elems (n_spls, n_channels);
     return n;
+  }
+  //----------------------------------------------------------------------------
+  void clear()
+  {
+    for (uint i = 0; i < n_channels(); ++i) {
+      reset_interpolator (0.f, 0.f, i, true);
+    }
+    base::clear();
   }
   //----------------------------------------------------------------------------
   void reset (crange<value_type> mem, uint n_channels)
@@ -802,6 +846,7 @@ private:
 
 public:
   //----------------------------------------------------------------------------
+  using base::clear;
   using base::get;
   using base::get_raw;
   using base::n_channels;
