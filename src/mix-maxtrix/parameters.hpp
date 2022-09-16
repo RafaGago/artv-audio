@@ -7240,10 +7240,13 @@ using diffuse_delay_params = mp_list<
   diffuse_bp_envfollow>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
-  mod_order,
+  mod_stages,
   n_stereo_busses,
-  param_common ("Order", declptr<upsampled<mod>>(), declptr<mod::order_tag>()),
-  mod::get_parameter (mod::order_tag {}),
+  param_common (
+    "N Stages",
+    declptr<upsampled<mod>>(),
+    declptr<mod::stages_tag>()),
+  mod::get_parameter (mod::stages_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -7407,21 +7410,21 @@ parameter_cpp_class_define (
 using mod_params = mp_list<
   mod_lfo_rate,
   mod_lfo_depth,
-  mod_order,
+  mod_stages,
   mod_depth,
   mod_center,
   mod_detune,
   mod_param_a,
   mod_param_b,
-  mod_mode,
+  mod_lfo_stereo,
   mod_feedback,
   mod_feedback_drive,
   mod_feedback_curve,
   mod_feedback_locut,
   mod_feedback_hicut,
-  mod_lfo_time_base,
   mod_lfo_wave,
-  mod_lfo_stereo,
+  mod_lfo_time_base,
+  mod_mode,
   mod_oversampling>;
 //------------------------------------------------------------------------------
 

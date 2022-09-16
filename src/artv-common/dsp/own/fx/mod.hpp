@@ -28,7 +28,7 @@
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 
-#define MOD_DBG_DENORMALS 1
+#define MOD_DBG_DENORMALS 0
 #if MOD_DBG_DENORMALS
 #include <fenv.h>
 #endif
@@ -42,10 +42,10 @@ public:
   static constexpr uint      n_inputs  = 1;
   static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
-  struct order_tag {};
-  void set (order_tag, float v) { _param_smooth.target().order = v * 0.01f; }
+  struct stages_tag {};
+  void set (stages_tag, float v) { _param_smooth.target().stages = v * 0.01f; }
 
-  static constexpr auto get_parameter (order_tag)
+  static constexpr auto get_parameter (stages_tag)
   {
     return float_param ("%", 0., 100., 25., 0.001);
   }
@@ -286,6 +286,7 @@ public:
     _feedback.reset_states_cascade();
     _onepole.reset_states_cascade();
     _param_smooth.reset (_t_spl, 10.f);
+    _del_spls.reset (_t_spl, 10.f);
 
     // ensure that all parameter's new values will be different
     memset (&_param, -1, sizeof _param);
@@ -327,7 +328,7 @@ public:
   }
   //----------------------------------------------------------------------------
   using parameters = mp_list<
-    order_tag,
+    stages_tag,
     lfo_rate_tag,
     lfo_time_base_tag,
     lfo_depth_tag,
@@ -351,7 +352,7 @@ private:
   static constexpr uint max_scho_stages   = 12;
   static constexpr uint max_scho_delay_ms = 30;
   static constexpr uint max_comb_delay_ms = 30;
-  static constexpr uint max_comb_stages   = 4;
+  static constexpr uint max_comb_stages   = 8;
   static constexpr uint n_channels        = 2;
   static constexpr uint n_ap_channels     = 4;
   //----------------------------------------------------------------------------
@@ -367,7 +368,7 @@ private:
       float lfo_rate = pars.lfo_rate * 0.01f;
       lfo_rate       = 1.f - lfo_rate;
       lfo_rate *= lfo_rate * lfo_rate;
-      hz = lfo_rate * 20.f; // 0 to 20 Hz
+      hz = lfo_rate * 16.f;
     } break;
     case lfo_time_base::quarter_beat:
       // a quarter beat for each 10%
@@ -463,7 +464,7 @@ private:
       *((unsmoothed_parameters*) &pars) = _param;
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        _n_stages = 1 + (uint) (pars.order * (max_phaser_stages - 1));
+        _n_stages = 1 + (uint) (pars.stages * (max_phaser_stages - 1));
         run_phaser_mod (pars, _n_stages, 0.07f, run_lfo (pars));
         for (uint s = 0; s < _n_stages; ++s) {
           float_x4 v = vec_from_array (_mod[s]);
@@ -530,7 +531,7 @@ private:
         vec_set<4> (pars.feedback_curve));
       _fb_filters.tick_cascade (fbv);
 
-      auto out   = mix (pars, wet, pars.b, ins[0][i], ins[0][1]);
+      auto out   = mix (pars, wet, pars.b, 1.f, ins[0][i], ins[1][i]);
       outs[0][i] = out[0];
       outs[1][i] = out[1];
     }
@@ -550,7 +551,7 @@ private:
       *((unsmoothed_parameters*) &pars) = _param;
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        _n_stages = 1 + (uint) (pars.order * (max_scho_stages - 1));
+        _n_stages = 1 + (uint) (pars.stages * (max_scho_stages - 1));
 
         pars.center = 1.f - pars.center; // reverse range lf to hf
         pars.center /= _n_stages;
@@ -567,7 +568,7 @@ private:
           _g.scho[s]
             = min_g + pars.a * pars.a * 0.8f + v * v * g_factor * pars.a;
         }
-        for (uint s = _n_stages; s < max_scho_stages; ++s) {
+        for (uint s = _n_stages; s < _del_spls.target().size(); ++s) {
           _del_spls.target()[s] = _del_spls.target()[s - 1];
         }
         float_x4 fv {1460.f, 1460.f, 1670.f, 1780.f};
@@ -601,7 +602,7 @@ private:
         vec_set<4> (pars.feedback_curve));
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
 
-      auto out   = mix (pars, wet, pars.b, ins[0][i], ins[1][i]);
+      auto out   = mix (pars, wet, pars.b, 1.f, ins[0][i], ins[1][i]);
       outs[0][i] = out[0];
       outs[1][i] = out[1];
     }
@@ -621,24 +622,22 @@ private:
       *((unsmoothed_parameters*) &pars) = _param;
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        _n_stages = 1 + (uint) (pars.order * (max_comb_stages - 1));
-
+        _n_stages   = 1 + (uint) (pars.stages * (max_comb_stages - 1));
         pars.center = 1.f - pars.center; // reverse range lf to hf
-        pars.center /= _n_stages;
         run_phaser_mod (pars, _n_stages, 0.35f, run_lfo (pars));
 
         for (uint s = 0; s < _n_stages; ++s) {
           constexpr float sec_factor = (max_comb_delay_ms * 0.001f);
-          float_x4        v          = vec_from_array (_mod[s]);
-          float           t          = v[0];
-          t                          = _srate * (t * t * sec_factor);
-          _del_spls.target()[s]      = t;
-          constexpr float g_factor   = 0.15f;
-          auto            m          = v[0] * v[0];
-          _g.comb[s][0] = pars.a * pars.a * 0.15f + m * g_factor * pars.a;
-          _rnd_lfo.set_freq (vec_set<4> (0.3f + abs (pars.b) * 1.f), _t_spl);
+
+          float t                  = _mod[s][0];
+          t                        = _srate * (t * t * sec_factor);
+          _del_spls.target()[s]    = t;
+          constexpr float g_factor = 0.15f;
+          auto            m        = _mod[s][1];
+          _g.comb[s][0] = pars.a * pars.a * 0.45f + m * m * g_factor * pars.a;
+          _rnd_lfo.set_freq (vec_set<4> (0.3f + pars.a * 1.f), _t_spl);
         }
-        for (uint s = _n_stages; s < max_scho_stages; ++s) {
+        for (uint s = _n_stages; s < _del_spls.target().size(); ++s) {
           _del_spls.target()[s] = _del_spls.target()[s - 1];
         }
         float_x4 fv {1460.f, 1460.f, 1670.f, 1780.f};
@@ -657,13 +656,10 @@ private:
       auto  comb_in  = vec1_array_wrap (vec_to_array (wet));
       wet            = vec_set<4> (0.f);
 
-      float panwidth = abs (pars.b);
-      float pan_d    = panwidth / (_n_stages - 1);
-      float pan      = (1.f - panwidth) * 0.5f;
-
-      // 0.9 to 1 gain modulation
-      auto lfov
-        = (_rnd_lfo.tick_filt_sample_and_hold() * 0.05f * pars.b) + 0.95f;
+      float panwidth   = pars.a;
+      float pan_d      = panwidth / (_n_stages - 1);
+      float pan        = (1.f - panwidth) * 0.5f;
+      auto  total_gain = vec_set<4> (0.f);
 
       std::array<float_x1, max_comb_stages> to_push {};
       for (uint s = 0; s < _n_stages; ++s) {
@@ -680,6 +676,7 @@ private:
         // feedback loop.
         float_x4 panv {pan, 1.f - pan, pan, 1.f - pan};
         panv = -panv * panv + 2.f * panv;
+        total_gain += panv;
         pan += pan_d;
 
         auto parallel = vec_set<4> (r.out[0]);
@@ -687,18 +684,21 @@ private:
         wet += parallel;
       }
       _comb.push (to_push);
-      wet /= (float) _n_stages;
-      wet *= lfov;
 
       auto fb_val = zdf_type::nonlin::tick (
-        wet,
+        wet / total_gain, // feedback with pan gains reverted.
         vec_set<4> (pars.feedback_drive), // modulate?
         vec_set<4> (pars.feedback_curve)); // modulate?
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
+      // 0.9 to 1 gain modulation
+      auto lfov
+        = (_rnd_lfo.tick_filt_sample_and_hold() * 0.05f * pars.b) + 0.95f;
+      wet *= lfov;
 
       // probably this mixing parameter needs to be adjusted from 0, even though
       // the feedback lines should use the 4 channels...
-      auto out   = mix (pars, wet, 0.f, ins[0][i], ins[1][i]);
+      auto out
+        = mix (pars, wet, pars.b, (float) _n_stages, ins[0][i], ins[1][i]);
       outs[0][i] = out[0];
       outs[1][i] = out[1];
     }
@@ -709,12 +709,13 @@ private:
     all_parameters const& p,
     float_x4              wet,
     float                 parallel_mix,
+    float                 att,
     T                     dry_l,
     T                     dry_r)
   {
     float dry_gain = 1.f - p.depth;
     float wet_gain = p.depth;
-    wet_gain /= (get_fb_gain (p.feedback, p.feedback_drive));
+    wet_gain /= ((get_fb_gain (p.feedback, p.feedback_drive)) * att);
 
     double_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
     double_x2 parallel = {(double) wet[2], (double) wet[3]};
@@ -770,7 +771,7 @@ private:
     float feedback_drive;
     float feedback_curve;
     float detune;
-    float order;
+    float stages;
   };
   //----------------------------------------------------------------------------
   struct all_parameters : public unsmoothed_parameters,
@@ -795,7 +796,10 @@ private:
   part_classes<mp_list<onepole_allpass>, float_x4>              _onepole;
   interpolated_delay_line<float_x4, linear_interp, true, false> _scho;
   interpolated_delay_line<float_x1, sinc_interp<8, 64>, false, false> _comb;
-  value_smoother<float, std::array<float, max_scho_stages>>           _del_spls;
+  value_smoother<
+    float,
+    std::array<float, std::max (max_scho_stages, max_comb_stages)>>
+    _del_spls;
   union {
     std::array<float_x4, max_scho_stages> scho;
     std::array<float_x1, max_comb_stages> comb;
