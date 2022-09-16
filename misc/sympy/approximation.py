@@ -35,3 +35,9 @@ chebyshev, err = mp.chebyfit(fx, [0, 1.6], 6, error=True)
 # Note NO list of coeffs reversal
 pprint (Poly(chebyshev, v).as_expr())
 pprint (err)
+
+def pan(x):
+    return sin(x*1.5707963267948966)
+
+chebyshev, err = mp.chebyfit(pan, [0, 1], 3, error=True)
+pprint (Poly(chebyshev, v).as_expr())
