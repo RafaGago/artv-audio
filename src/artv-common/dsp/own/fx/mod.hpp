@@ -179,26 +179,26 @@ public:
     return float_param ("%", 0., 100, 0., 0.1);
   }
   //----------------------------------------------------------------------------
-  struct feedback_drive_tag {};
-  void set (feedback_drive_tag, float v)
+  struct drive_tag {};
+  void set (drive_tag, float v)
   {
     v *= 0.01f;
-    v                                     = v * v * v * v;
-    _param_smooth.target().feedback_drive = v * 1400.f;
+    v                            = v * v * v * v;
+    _param_smooth.target().drive = v * 1400.f;
   }
 
-  static constexpr auto get_parameter (feedback_drive_tag)
+  static constexpr auto get_parameter (drive_tag)
   {
     return float_param ("%", 0., 100, 0., 0.1);
   }
   //----------------------------------------------------------------------------
-  struct feedback_curve_tag {};
-  void set (feedback_curve_tag, float v)
+  struct drive_curve_tag {};
+  void set (drive_curve_tag, float v)
   {
-    _param_smooth.target().feedback_curve = v *= 0.01f;
+    _param_smooth.target().drive_curve = v *= 0.01f;
   }
 
-  static constexpr auto get_parameter (feedback_curve_tag)
+  static constexpr auto get_parameter (drive_curve_tag)
   {
     return float_param ("%", 0., 100, 0., 0.1);
   }
@@ -211,10 +211,10 @@ public:
     return float_param ("%", -100., 100, 0., 0.1);
   }
   //----------------------------------------------------------------------------
-  struct detune_tag {};
-  void set (detune_tag, float v) { _param_smooth.target().detune = v * 0.01f; }
+  struct spread_tag {};
+  void set (spread_tag, float v) { _param_smooth.target().spread = v * 0.01f; }
 
-  static constexpr auto get_parameter (detune_tag)
+  static constexpr auto get_parameter (spread_tag)
   {
     return float_param ("%", -100., 100, 0., 0.1);
   }
@@ -246,27 +246,28 @@ public:
       _scho.reset (make_crange (_mem).cast<TC>(), max_scho_stages);
       //_scho.set_resync_delta (10.0);
       break;
-    case mode::comb:
-      using TF = decltype (_comb)::value_type;
-      _comb.reset (make_crange (_mem).cast<TF>(), max_comb_stages);
+    case mode::chorus:
+      using TF = decltype (_chor)::value_type;
+      _chor.reset (make_crange (_mem).cast<TF>(), max_chor_stages);
       // initialize windowed sinc table
-      _comb.reset_interpolator (0, false, 0.45f, 140.f);
+      _chor.reset_interpolator (0, false, 0.45f, 140.f);
+      _1spl_fb = vec_set<4> (0.f);
       break;
     default:
       assert (false);
       break;
     }
   }
-
   struct mode {
-    enum { zdf, schroeder, comb };
+    enum { zdf, schroeder, chorus, flanger };
   };
 
   static constexpr auto get_parameter (mode_tag)
   {
     return choice_param (
       0,
-      make_cstr_array ("Phaser (ZDF)", "Phaser (Schroeder)", "Flanger/Chorus"),
+      make_cstr_array (
+        "Phaser (ZDF)", "Phaser (Schroeder)", "Chorus", "Flanger"),
       16);
   }
   //----------------------------------------------------------------------------
@@ -318,8 +319,8 @@ public:
     case mode::schroeder:
       tick_schroeder<T> (outs, ins, samples);
       break;
-    case mode::comb:
-      tick_comb<T> (outs, ins, samples);
+    case mode::chorus:
+      tick_chorus<T> (outs, ins, samples);
       break;
     default:
       assert (false);
@@ -339,9 +340,9 @@ public:
     feedback_tag,
     feedback_locut_tag,
     feedback_hicut_tag,
-    feedback_drive_tag,
-    feedback_curve_tag,
-    detune_tag,
+    drive_tag,
+    drive_curve_tag,
+    spread_tag,
     b_tag,
     depth_tag,
     mode_tag>;
@@ -351,8 +352,8 @@ private:
   static constexpr uint max_phaser_stages = 16;
   static constexpr uint max_scho_stages   = 12;
   static constexpr uint max_scho_delay_ms = 30;
-  static constexpr uint max_comb_delay_ms = 30;
-  static constexpr uint max_comb_stages   = 8;
+  static constexpr uint max_chor_delay_ms = 40;
+  static constexpr uint max_chor_stages   = 8;
   static constexpr uint n_channels        = 2;
   static constexpr uint n_ap_channels     = 4;
   //----------------------------------------------------------------------------
@@ -428,7 +429,7 @@ private:
   void run_phaser_mod (
     all_parameters const& pars,
     uint                  n_stages,
-    float                 detune_ratio,
+    float                 spread_ratio,
     sweep_lfo_value       lfo)
   {
     float modlim = std::min (pars.center, 0.5f);
@@ -437,10 +438,10 @@ private:
     sweep_lfo_value mod    = lfo * pars.lfo_depth * modlim;
     sweep_lfo_value center = pars.center + mod;
     // detune by a ramp
-    sweep_lfo_value detuned = (1.f - abs (pars.detune * detune_ratio)) * center;
+    sweep_lfo_value detuned = (1.f - abs (pars.spread * spread_ratio)) * center;
     sweep_lfo_value diff    = (center - detuned) / (float) (n_stages * 2);
-    sweep_lfo_value start   = (pars.detune > 0.f) ? detuned : center;
-    diff                    = (pars.detune > 0.f) ? diff : -diff;
+    sweep_lfo_value start   = (pars.spread > 0.f) ? detuned : center;
+    diff                    = (pars.spread > 0.f) ? diff : -diff;
     float_x4 curr           = vec_cat (start, start + diff);
     float_x4 add            = vec_cat (diff, diff) * 2.f;
 
@@ -476,7 +477,7 @@ private:
           f      = ((f * 0.993f) + 0.007f);
           f *= float_x4 {21200.f, 21200.f, 20000.f, 20000.f};
           // A lot of freq-dependant weight on the Q when detuning
-          q = (1.f + 7.f * q * abs (pars.detune));
+          q = (1.f + 7.f * q * abs (pars.spread));
           q *= pars.a * pars.a * float_x4 {3.4f, 3.4f, 3.8f, 3.8f};
           q += 0.05f;
           _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
@@ -515,8 +516,8 @@ private:
         aps_resp,
         filt_resp,
         vec_set<4> (pars.feedback),
-        vec_set<4> (pars.feedback_drive),
-        vec_set<4> (pars.feedback_curve));
+        vec_set<4> (pars.drive),
+        vec_set<4> (pars.drive_curve));
 
       // Run regular filter processing
       assert (_n_stages > 0);
@@ -526,12 +527,17 @@ private:
       // just running the shelves to update the states.
       auto fbv = wet * pars.feedback;
       fbv      = zdf_type::nonlin::tick (
-        fbv,
-        vec_set<4> (pars.feedback_drive),
-        vec_set<4> (pars.feedback_curve));
+        fbv, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
       _fb_filters.tick_cascade (fbv);
 
-      auto out   = mix (pars, wet, pars.b, 1.f, ins[0][i], ins[1][i]);
+      auto out = mix (
+        pars,
+        wet,
+        pars.b,
+        get_fb_gain (pars.feedback, pars.drive),
+        ins[0][i],
+        ins[1][i]);
+
       outs[0][i] = out[0];
       outs[1][i] = out[1];
     }
@@ -597,19 +603,23 @@ private:
       }
       _scho.push (to_push);
       auto fb_val = zdf_type::nonlin::tick (
-        wet,
-        vec_set<4> (pars.feedback_drive),
-        vec_set<4> (pars.feedback_curve));
+        wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
 
-      auto out   = mix (pars, wet, pars.b, 1.f, ins[0][i], ins[1][i]);
+      auto out = mix (
+        pars,
+        wet,
+        pars.b,
+        get_fb_gain (pars.feedback, pars.drive),
+        ins[0][i],
+        ins[1][i]);
       outs[0][i] = out[0];
       outs[1][i] = out[1];
     }
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void tick_comb (crange<T*> outs, crange<T const*> ins, uint samples)
+  void tick_chorus (crange<T*> outs, crange<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -622,28 +632,29 @@ private:
       *((unsmoothed_parameters*) &pars) = _param;
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        _n_stages   = 1 + (uint) (pars.stages * (max_comb_stages - 1));
+        _n_stages   = 2 + (uint) (pars.stages * (max_chor_stages - 2));
         pars.center = 1.f - pars.center; // reverse range lf to hf
-        run_phaser_mod (pars, _n_stages, 0.35f, run_lfo (pars));
+        run_phaser_mod (pars, _n_stages, 0.45f, run_lfo (pars));
 
         for (uint s = 0; s < _n_stages; ++s) {
-          constexpr float sec_factor = (max_comb_delay_ms * 0.001f);
+          constexpr float sec_factor = (max_chor_delay_ms * 0.001f);
 
           float t                  = _mod[s][0];
           t                        = _srate * (t * t * sec_factor);
           _del_spls.target()[s]    = t;
-          constexpr float g_factor = 0.15f;
+          constexpr float g_factor = 0.1f;
           auto            m        = _mod[s][1];
-          _g.comb[s][0] = pars.a * pars.a * 0.45f + m * m * g_factor * pars.a;
+          auto            gv       = pars.feedback;
+          _g.chor[s][0]            = -gv * gv * 0.75f + m * m * g_factor * gv;
           _rnd_lfo.set_freq (vec_set<4> (0.3f + pars.a * 1.f), _t_spl);
         }
         for (uint s = _n_stages; s < _del_spls.target().size(); ++s) {
           _del_spls.target()[s] = _del_spls.target()[s - 1];
         }
-        float_x4 fv {1460.f, 1460.f, 1670.f, 1780.f};
+        float_x4 fv {460.f, 460.f, 870.f, 780.f};
         auto     f = vec_from_array (_mod[_n_stages / 2]);
         f *= f;
-        f *= (1.f + pars.a) * fv;
+        f *= (1.f + pars.feedback) * fv;
         _onepole.reset_coeffs<0> (f, _t_spl);
       }
       _del_spls.tick();
@@ -653,7 +664,7 @@ private:
       wet -= _1spl_fb * pars.feedback;
 
       auto& del_spls = _del_spls.get();
-      auto  comb_in  = vec1_array_wrap (vec_to_array (wet));
+      auto  chor_in  = vec1_array_wrap (vec_to_array (wet));
       wet            = vec_set<4> (0.f);
 
       float panwidth   = pars.a;
@@ -661,19 +672,17 @@ private:
       float pan        = (1.f - panwidth) * 0.5f;
       auto  total_gain = vec_set<4> (0.f);
 
-      std::array<float_x1, max_comb_stages> to_push {};
+      std::array<float_x1, max_chor_stages> to_push {};
       for (uint s = 0; s < _n_stages; ++s) {
         uint idx    = s % vec_traits_t<float_x4>::size;
         auto n_spls = std::clamp (
           del_spls[s],
-          (float) _comb.min_delay_spls(),
-          (float) _comb.max_delay_spls());
-        auto yn    = _comb.get (n_spls, s);
-        auto r     = allpass_fn::tick<float_x1> (comb_in[idx], yn, _g.comb[s]);
+          (float) _chor.min_delay_spls(),
+          (float) _chor.max_delay_spls());
+        auto yn    = _chor.get (n_spls, s);
+        auto r     = allpass_fn::tick<float_x1> (chor_in[idx], yn, _g.chor[s]);
         to_push[s] = r.to_push;
-        // using -x^2+2x as a bad approximation of sin(x*pi/2) pan law. It
-        // matches at the 1 extreme perfectly, which is the most important for a
-        // feedback loop.
+        // using -x^2+2x as a cheap approximation of the sin(x*pi/2) pan law.
         float_x4 panv {pan, 1.f - pan, pan, 1.f - pan};
         panv = -panv * panv + 2.f * panv;
         total_gain += panv;
@@ -683,17 +692,15 @@ private:
         parallel *= panv;
         wet += parallel;
       }
-      _comb.push (to_push);
+      _chor.push (to_push);
 
-      auto fb_val = zdf_type::nonlin::tick (
-        wet / total_gain, // feedback with pan gains reverted.
-        vec_set<4> (pars.feedback_drive), // modulate?
-        vec_set<4> (pars.feedback_curve)); // modulate?
-      _1spl_fb = _fb_filters.tick_cascade (fb_val);
-      // 0.9 to 1 gain modulation
+      // 0.9 to 1 modulation
       auto lfov
         = (_rnd_lfo.tick_filt_sample_and_hold() * 0.05f * pars.b) + 0.95f;
-      wet *= lfov;
+      wet = zdf_type::nonlin::tick (
+        wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve) * lfov);
+      wet = _fb_filters.tick_cascade (wet);
+      wet *= 2.f - lfov;
 
       // probably this mixing parameter needs to be adjusted from 0, even though
       // the feedback lines should use the 4 channels...
@@ -709,13 +716,13 @@ private:
     all_parameters const& p,
     float_x4              wet,
     float                 parallel_mix,
-    float                 att,
+    float                 wet_att,
     T                     dry_l,
     T                     dry_r)
   {
     float dry_gain = 1.f - p.depth;
     float wet_gain = p.depth;
-    wet_gain /= ((get_fb_gain (p.feedback, p.feedback_drive)) * att);
+    wet_gain /= wet_att;
 
     double_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
     double_x2 parallel = {(double) wet[2], (double) wet[3]};
@@ -739,15 +746,15 @@ private:
       = std::ceil (max_scho_delay_ms * 0.001f * _srate) + _scho.min_size_spls();
     schroeder_size = _scho.n_required_elems (schroeder_size, max_scho_stages);
 
-    uint comb_size
-      = std::ceil (max_comb_delay_ms * 0.001f * _srate) + _comb.min_size_spls();
-    comb_size = _comb.n_required_elems (comb_size, max_comb_stages);
+    uint chor_size
+      = std::ceil (max_chor_delay_ms * 0.001f * _srate) + _chor.min_size_spls();
+    chor_size = _chor.n_required_elems (chor_size, max_chor_stages);
 
     schroeder_size *= vec_traits_t<decltype (_scho)::value_type>::size;
-    comb_size *= vec_traits_t<decltype (_comb)::value_type>::size;
+    chor_size *= vec_traits_t<decltype (_chor)::value_type>::size;
 
     _mem.clear();
-    _mem.resize (std::max (schroeder_size, comb_size));
+    _mem.resize (std::max (schroeder_size, chor_size));
   }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
@@ -768,9 +775,9 @@ private:
     float b;
     float depth; // aka mix (make explicit?)
     float feedback;
-    float feedback_drive;
-    float feedback_curve;
-    float detune;
+    float drive;
+    float drive_curve;
+    float spread;
     float stages;
   };
   //----------------------------------------------------------------------------
@@ -795,17 +802,17 @@ private:
   part_classes<filters_list, float_x4>                          _fb_filters;
   part_classes<mp_list<onepole_allpass>, float_x4>              _onepole;
   interpolated_delay_line<float_x4, linear_interp, true, false> _scho;
-  interpolated_delay_line<float_x1, sinc_interp<8, 64>, false, false> _comb;
+  interpolated_delay_line<float_x1, sinc_interp<8, 64>, false, false> _chor;
   value_smoother<
     float,
-    std::array<float, std::max (max_scho_stages, max_comb_stages)>>
+    std::array<float, std::max (max_scho_stages, max_chor_stages)>>
     _del_spls;
   union {
     std::array<float_x4, max_scho_stages> scho;
-    std::array<float_x1, max_comb_stages> comb;
+    std::array<float_x1, max_chor_stages> chor;
   } _g;
 
-  std::array<float_x1, max_comb_stages> _del_g;
+  std::array<float_x1, max_chor_stages> _del_g;
   crange<float>                         _delay_mem;
 
   alignas (sse_bytes) array2d<float, n_ap_channels, max_phaser_stages> _mod;

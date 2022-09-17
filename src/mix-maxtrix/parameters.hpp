@@ -7340,23 +7340,20 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  mod_feedback_drive,
+  mod_drive,
   n_stereo_busses,
-  param_common (
-    "Fb Drive",
-    declptr<upsampled<mod>>(),
-    declptr<mod::feedback_drive_tag>()),
-  mod::get_parameter (mod::feedback_drive_tag {}),
+  param_common ("Drive", declptr<upsampled<mod>>(), declptr<mod::drive_tag>()),
+  mod::get_parameter (mod::drive_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  mod_feedback_curve,
+  mod_drive_curve,
   n_stereo_busses,
   param_common (
-    "Fb Curve",
+    "Drv Curve",
     declptr<upsampled<mod>>(),
-    declptr<mod::feedback_curve_tag>()),
-  mod::get_parameter (mod::feedback_curve_tag {}),
+    declptr<mod::drive_curve_tag>()),
+  mod::get_parameter (mod::drive_curve_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -7374,13 +7371,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  mod_detune,
+  mod_spread,
   n_stereo_busses,
   param_common (
-    "Detune",
+    "Spread",
     declptr<upsampled<mod>>(),
-    declptr<mod::detune_tag>()),
-  mod::get_parameter (mod::detune_tag {}),
+    declptr<mod::spread_tag>()),
+  mod::get_parameter (mod::spread_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -7413,13 +7410,13 @@ using mod_params = mp_list<
   mod_stages,
   mod_depth,
   mod_center,
-  mod_detune,
+  mod_spread,
   mod_param_a,
   mod_param_b,
   mod_lfo_stereo,
   mod_feedback,
-  mod_feedback_drive,
-  mod_feedback_curve,
+  mod_drive,
+  mod_drive_curve,
   mod_feedback_locut,
   mod_feedback_hicut,
   mod_lfo_wave,
@@ -7496,25 +7493,17 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  mod_params,
-  eq4x_params,
-  transient_gate_params>;
+  mod_params>;
 
-static constexpr auto fx_choices = make_cstr_array (
-  "none",
-  "LR",
-  "Wonky",
-  "lin IIR",
-  "1. Mod",
-  "2. Eq",
-  "3. TG");
+static constexpr auto fx_choices
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "1. Mod");
 #else
 // clang-format off
 using all_fx_typelists = mp_list<
@@ -7568,7 +7557,8 @@ using all_fx_typelists = mp_list<
   rubberband_params,
   soundtouch_params,
   reverb_params,
-  diffuse_delay_params>;
+  diffuse_delay_params,
+  mod_params>;
 // clang-format on
 //------------------------------------------------------------------------------
 // ordering between "fx_choices" and "all_fx_params_typelists" MUST match!
@@ -7627,7 +7617,8 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Pitch Rubberband",
   ":Pitch Soundtouch",
   ":Reverb Artv Reverb",
-  ":Delay Artv DelayVerb");
+  ":Delay Artv DelayVerb",
+  ":Modulation: ArtV Mod");
 
 #endif // #if TWEAK_BUILD
 
