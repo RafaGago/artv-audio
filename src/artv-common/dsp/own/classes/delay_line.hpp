@@ -723,7 +723,7 @@ public:
   using interp     = Interpolation;
   //----------------------------------------------------------------------------
   static constexpr uint min_delay_spls() { return base::min_delay_spls(); };
-  static constexpr uint max_delay_spls() { return base::max_delay_spls(); };
+  constexpr uint        max_delay_spls() { return base::max_delay_spls(); };
   //----------------------------------------------------------------------------
   // this is for thiran interpolators, which take the previous inputs from the
   // delay line itself, so the minimum size has to account for the states
@@ -1127,6 +1127,7 @@ class modulable_allpass_delay_line
 public:
   //----------------------------------------------------------------------------
   using base::get_raw;
+  using base::max_delay_spls;
   using base::min_delay_spls;
   using base::n_channels;
   using base::n_required_elems;
