@@ -382,7 +382,7 @@ private:
   static constexpr uint max_phaser_stages = 16;
   static constexpr uint max_scho_stages   = 12;
   static constexpr uint max_scho_delay_ms = 30;
-  static constexpr uint max_chor_delay_ms = 40;
+  static constexpr uint max_chor_delay_ms = 50;
   static constexpr uint max_chor_stages   = 8;
   static constexpr uint max_flan_delay_ms = 21;
   static constexpr uint flan_stages       = 2;
@@ -680,17 +680,19 @@ private:
         run_phaser_mod (
           1.f - pars.center, // reverse range lf to hf
           pars.spread,
-          pars.lfo_depth * (0.45f + 0.55f * pars.center * pars.center),
+          pars.lfo_depth * (0.35f + 0.65f * pars.center * pars.center),
           0.45f,
           _n_stages,
           run_lfo (pars));
 
         for (uint s = 0; s < _n_stages; ++s) {
-          constexpr float sec_factor = (max_chor_delay_ms * 0.001f);
+          constexpr float sec_offset = 0.01f;
+          constexpr float sec_factor
+            = ((max_chor_delay_ms - sec_offset) * 0.001f);
 
-          float t                  = _mod[s][0];
-          t                        = _srate * (t * t * sec_factor);
-          _del_spls.target()[s]    = t;
+          float t               = _mod[s][0];
+          t                     = _srate * (sec_offset + (t * t * sec_factor));
+          _del_spls.target()[s] = t;
           constexpr float g_factor = 0.1f;
           auto            m        = _mod[s][1];
           auto            gv       = pars.feedback;
