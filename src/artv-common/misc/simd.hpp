@@ -368,9 +368,9 @@ static inline auto vec_to_intrin (V simdvec)
   }
 }
 //------------------------------------------------------------------------------
-// split N elements from vec as a new vector of the appropiate size
+// slice N elements from vec as a new vector of the appropiate size
 template <uint N, class V, enable_if_vec_t<V>* = nullptr>
-static inline auto vec_split (V src, uint offset)
+static inline auto vec_slice (V src, uint offset)
 {
   using T               = vec_value_type_t<V>;
   constexpr auto traits = vec_traits<V>();
@@ -386,12 +386,12 @@ static inline auto vec_split (V src, uint offset)
   return dst;
 }
 //------------------------------------------------------------------------------
-// join all elements from "src" into "dst" at a given offset.
+// copy all elements from "src" into "dst" at a given offset.
 template <
   class V1,
   class V2,
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
-static inline auto vec_join (V1& dst, V2 src, uint offset)
+static inline auto vec_cp_slice (V1& dst, V2 src, uint offset)
 {
   using T = vec_value_type_t<V1>;
   static_assert (std::is_same_v<T, vec_value_type_t<V2>>);
@@ -687,19 +687,50 @@ static inline V vec_shuffle (V a, V b, Ts... indexes)
 template <class V, enable_if_vec_t<V>* = nullptr>
 using vec_array_type = std::array<vec_value_type_t<V>, vec_traits_t<V>::size>;
 //------------------------------------------------------------------------------
-// vector cat, simple case, can go as complex as wanted, TBI when necessary
-template <class V, enable_if_vec_t<V>* = nullptr>
-auto vec_cat (V a, V b)
+// "vec_cat" from an array
+template <class V, size_t N, enable_if_vec_t<V>* = nullptr>
+auto vec_cat (std::array<V, N> a)
 {
-  using T      = vec_value_type_t<V>;
-  using traits = vec_traits_t<V>;
-  using V_dst  = vec<T, traits::size * 2>;
-  alignas (V_dst) vec_array_type<V_dst> dst;
-  for (uint i = 0; i < traits::size; ++i) {
-    dst[i]                = a[i];
-    dst[traits::size + i] = b[i];
+  using T             = vec_value_type_t<V>;
+  using traits        = vec_traits_t<V>;
+  using V_dst         = vec<T, traits::size * 2>;
+  constexpr uint size = traits::size * N;
+  static_assert ((size % 2) == 0);
+
+  vec<T, size> ret;
+  for (uint i = 0; i < size; ++i) {
+    ret[i] = a[i / N][i % N];
   }
-  return vec_load<V_dst> (dst);
+  return ret;
+}
+
+// "vec_cat" from an array
+template <class V, class... Ts, enable_if_vec_t<V>* = nullptr>
+auto vec_cat (V v1, Ts&&... vecs)
+{
+  constexpr size_t n_elems = 1 + sizeof...(Ts);
+  static_assert ((n_elems % 2) == 0);
+  return vec_cat (std::array<V, n_elems> {v1, std::forward<Ts> (vecs)...});
+}
+//------------------------------------------------------------------------------
+// split vector in an array of vectors of a smaller (divisible) vector type.
+template <uint N, class V, enable_if_vec_t<V>* = nullptr>
+static inline auto vec_split (V src)
+{
+  using T               = vec_value_type_t<V>;
+  constexpr auto traits = vec_traits<V>();
+
+  static_assert (traits.size >= N);
+  static_assert ((traits.size % N) == 0);
+
+  constexpr uint n_elems = traits.size / N;
+
+  std::array<vec<T, N>, n_elems> dst;
+  // no memcpy, ordering inside the vector not guaranteed.
+  for (uint i = 0; i < traits.size; ++i) {
+    dst[i / N][i % N] = src[i];
+  }
+  return dst;
 }
 //------------------------------------------------------------------------------
 // init a vector from scalars, type deduced from the first element
@@ -782,10 +813,10 @@ static inline auto call_vec_function_impl (
       for (uint i = 0; i < n_parts; ++i) {
         // xsimd batches can be casted back to intrinsic types
         auto result = static_cast<intrin> (simdf (batch {vec_to_intrin (
-          vec_split<n_elems> (std::forward<Ts> (args), i * n_elems))}...));
+          vec_slice<n_elems> (std::forward<Ts> (args), i * n_elems))}...));
         // vector types are __may_alias__, so they can be casted back from
         // intrinsic types
-        vec_join (ret, *reinterpret_cast<V_small*> (&result), i * n_elems);
+        vec_cp_slice (ret, *reinterpret_cast<V_small*> (&result), i * n_elems);
       }
       return ret;
     }
