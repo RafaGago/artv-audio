@@ -7,9 +7,9 @@
 
 #include "artv-common/dsp/own/parts/waveshapers/adaa.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -95,12 +95,12 @@ public:
   enum state { x1, x1_sqrt, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V>)
+  static void reset_coeffs (xspan<V>)
   {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
@@ -108,8 +108,8 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V>,
-    crange<V> st,
+    xspan<const V>,
+    xspan<V> st,
     V x)
   {
     using T = vec_value_type_t<V>;

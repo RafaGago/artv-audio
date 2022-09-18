@@ -39,17 +39,17 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
     for (uint i = 0; i < block_samples; ++i) {
       std::array<sample_type, channels> in = {ins[0][i], ins[1][i]};
       std::array<std::array<sample_type, ratio>, channels> upsampled;
-      _up.tick ({make_crange (upsampled[0]), make_crange (upsampled[1])}, in);
+      _up.tick ({make_xspan (upsampled[0]), make_xspan (upsampled[1])}, in);
 #if 1
       auto ret
-        = _down.tick ({make_crange (upsampled[0]), make_crange (upsampled[1])});
+        = _down.tick ({make_xspan (upsampled[0]), make_xspan (upsampled[1])});
       outs[0][i] = ret[0] * _gain;
       outs[1][i] = ret[1] * _gain;
 #else

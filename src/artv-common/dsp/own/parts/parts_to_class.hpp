@@ -12,9 +12,9 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/overaligned_allocator.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -54,35 +54,35 @@ public:
   //----------------------------------------------------------------------------
   void reset() { memset (this, 0, sizeof *this); }
   //----------------------------------------------------------------------------
-  crange<T_co> get_coeffs (uint layer = 0)
+  xspan<T_co> get_coeffs (uint layer = 0)
   {
     assert (layer < N_co_layers);
     return _coeffs[layer];
   }
   //----------------------------------------------------------------------------
-  crange<T_co> get_all_coeffs()
+  xspan<T_co> get_all_coeffs()
   {
     return {_coeffs[0].data(), _coeffs.size() * _coeffs[0].size()};
   }
   //----------------------------------------------------------------------------
-  crange<T_co> get_coeffs_int (uint layer = 0)
+  xspan<T_co> get_coeffs_int (uint layer = 0)
   {
     assert (layer < N_co_layers);
     return _coeffs_int[layer];
   }
   //----------------------------------------------------------------------------
-  crange<T_co> get_all_coeffs_int()
+  xspan<T_co> get_all_coeffs_int()
   {
     return {_coeffs_int[0].data(), _coeffs_int.size() * _coeffs_int[0].size()};
   }
   //----------------------------------------------------------------------------
-  crange<T_st> get_states (uint layer = 0)
+  xspan<T_st> get_states (uint layer = 0)
   {
     assert (layer < N_st_layers);
     return _states[layer];
   }
   //----------------------------------------------------------------------------
-  crange<T_st> get_all_states()
+  xspan<T_st> get_all_states()
   {
     return {_states[0].data(), _states.size() * _states[0].size()};
   }
@@ -112,35 +112,35 @@ public:
     _mem.resize ((N_co + N_co_int) * N_co_layers + (N_st * N_st_layers));
   }
   //----------------------------------------------------------------------------
-  crange<T> get_coeffs (uint layer = 0)
+  xspan<T> get_coeffs (uint layer = 0)
   {
     assert (layer < N_co_layers);
     return {&_mem[coeff_offset + layer * N_co], N_co};
   }
   //----------------------------------------------------------------------------
-  crange<T> get_all_coeffs()
+  xspan<T> get_all_coeffs()
   {
     return {&_mem[coeff_offset], N_co * N_co_layers};
   }
   //----------------------------------------------------------------------------
-  crange<T> get_coeffs_int (uint layer = 0)
+  xspan<T> get_coeffs_int (uint layer = 0)
   {
     assert (layer < N_co_layers);
     return {&_mem[coeff_int_offset + layer * N_co_int], N_co_int};
   }
   //----------------------------------------------------------------------------
-  crange<T> get_all_coeffs_int()
+  xspan<T> get_all_coeffs_int()
   {
     return {&_mem[coeff_int_offset], N_co_int * N_co_layers};
   }
   //----------------------------------------------------------------------------
-  crange<T> get_states (uint layer = 0)
+  xspan<T> get_states (uint layer = 0)
   {
     assert (layer < N_st_layers);
     return {&_mem[states_offset + layer * N_st], N_st};
   }
   //----------------------------------------------------------------------------
-  crange<T> get_all_states()
+  xspan<T> get_all_states()
   {
     return {&_mem[states_offset], N_st * N_st_layers};
   }
@@ -183,7 +183,7 @@ public:
     _mem.resize (n_bytes);
   }
   //----------------------------------------------------------------------------
-  crange<T_co> get_coeffs (uint layer = 0)
+  xspan<T_co> get_coeffs (uint layer = 0)
   {
     assert (layer < N_co_layers);
     // This is intended to be used with __may_alias__ types, hence the C casts
@@ -191,14 +191,14 @@ public:
     return {offset + (layer * N_co), N_co};
   }
   //----------------------------------------------------------------------------
-  crange<T_co> get_all_coeffs()
+  xspan<T_co> get_all_coeffs()
   {
     // This is intended to be used with __may_alias__ types, hence the C casts
     auto offset = (T_co*) &_mem[co_offset];
     return {offset, N_co * N_co_layers};
   }
   //----------------------------------------------------------------------------
-  crange<T_co> get_coeffs_int (uint layer = 0)
+  xspan<T_co> get_coeffs_int (uint layer = 0)
   {
     assert (layer < N_co_layers);
     // This is intended to be used with __may_alias__ types, hence the C casts
@@ -206,21 +206,21 @@ public:
     return {offset + (layer * N_co_int), N_co_int};
   }
   //----------------------------------------------------------------------------
-  crange<T_co> get_all_coeffs_int()
+  xspan<T_co> get_all_coeffs_int()
   {
     // This is intended to be used with __may_alias__ types, hence the C casts
     auto offset = (T_co*) &_mem[co_int_offset];
     return {offset, N_co_int * N_co_layers};
   }
   //----------------------------------------------------------------------------
-  crange<T_st> get_states (uint layer = 0)
+  xspan<T_st> get_states (uint layer = 0)
   {
     // This is intended to be used with __may_alias__ types, hence the C casts
     auto offset = (T_st*) &_mem[st_offset];
     return {offset + (layer * N_st), N_st};
   }
   //----------------------------------------------------------------------------
-  crange<T_st> get_all_states()
+  xspan<T_st> get_all_states()
   {
     // This is intended to be used with __may_alias__ types, hence the C casts
     auto offset = (T_st*) &_mem[st_offset];
@@ -272,7 +272,7 @@ public:
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <class... Ts>
-  void reset_coeffs_ext (uint idx, crange<value_type> coeff_out, Ts&&... args)
+  void reset_coeffs_ext (uint idx, xspan<value_type> coeff_out, Ts&&... args)
   {
     assert (coeff_out.size() >= part::n_coeffs);
 
@@ -387,15 +387,15 @@ public:
   }
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
-  crange<value_type> get_coeffs (uint idx = 0) { return _mem.get_coeffs (idx); }
+  xspan<value_type> get_coeffs (uint idx = 0) { return _mem.get_coeffs (idx); }
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
-  crange<value_type> get_all_coeffs() { return _mem.get_all_coeffs(); }
+  xspan<value_type> get_all_coeffs() { return _mem.get_all_coeffs(); }
   //----------------------------------------------------------------------------
   // for initial conditions setup
-  crange<value_type> get_states (uint idx = 0) { return _mem.get_states (idx); }
+  xspan<value_type> get_states (uint idx = 0) { return _mem.get_states (idx); }
   //----------------------------------------------------------------------------
-  void zero_all_states() { crange_memset (_mem.get_all_states(), 0); }
+  void zero_all_states() { xspan_memset (_mem.get_all_states(), 0); }
   //----------------------------------------------------------------------------
 private:
   detail::part_memory<
@@ -430,7 +430,7 @@ public:
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <class... Ts>
-  void reset_coeffs_ext (crange<builtin> coeff_out, Ts&&... args)
+  void reset_coeffs_ext (xspan<builtin> coeff_out, Ts&&... args)
   {
     assert (coeff_out.size() >= part::n_coeffs);
 
@@ -524,11 +524,11 @@ public:
     return out;
   }
   //----------------------------------------------------------------------------
-  crange<builtin> get_coeffs() { return _mem.get_coeffs(); }
-  crange<builtin> get_all_coeffs() { return _mem.get_all_coeffs(); }
+  xspan<builtin> get_coeffs() { return _mem.get_coeffs(); }
+  xspan<builtin> get_all_coeffs() { return _mem.get_all_coeffs(); }
   //----------------------------------------------------------------------------
-  crange<value_type> get_states (uint idx = 0) { return _mem.get_states (idx); }
-  void zero_all_states() { crange_memset (_mem.get_all_states(), 0); }
+  xspan<value_type> get_states (uint idx = 0) { return _mem.get_states (idx); }
+  void zero_all_states() { xspan_memset (_mem.get_all_states(), 0); }
   //----------------------------------------------------------------------------
 private:
   detail::part_memory<
@@ -571,7 +571,7 @@ public:
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <uint Idx, class... Ts>
-  void reset_coeffs_ext (crange<value_type> coeff_out, Ts&&... args)
+  void reset_coeffs_ext (xspan<value_type> coeff_out, Ts&&... args)
   {
     static_assert (Idx < sizeof...(Parts));
     using part = get_part<Idx>;
@@ -667,7 +667,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <uint Idx>
-  crange<value_type> get_coeffs()
+  xspan<value_type> get_coeffs()
   {
     static_assert (Idx < sizeof...(Parts));
     using part = get_part<Idx>;
@@ -675,7 +675,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
-  crange<value_type> get_all_coeffs() { return _mem.get_all_coeffs(); }
+  xspan<value_type> get_all_coeffs() { return _mem.get_all_coeffs(); }
   //----------------------------------------------------------------------------
   template <uint Idx>
   static constexpr uint get_coeff_offset()
@@ -684,19 +684,19 @@ public:
     return get_offset<n_coeffs_list, Idx>();
   }
   //----------------------------------------------------------------------------
-  void zero_all_states() { crange_memset (_mem.get_all_states(), 0); }
+  void zero_all_states() { xspan_memset (_mem.get_all_states(), 0); }
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
   template <uint Idx>
-  crange<value_type> get_states()
+  xspan<value_type> get_states()
   {
     using part = get_part<Idx>;
     return get_states<Idx, part::n_states>();
   }
   //----------------------------------------------------------------------------
   template <uint Idx, uint N_states>
-  crange<value_type> get_states()
+  xspan<value_type> get_states()
   {
     if constexpr (N_states > 0) {
       constexpr auto offset = get_offset<n_states_list, Idx>();
@@ -709,7 +709,7 @@ private:
   }
   //----------------------------------------------------------------------------
   template <uint Idx, uint N_coeffs>
-  crange<value_type> get_coeffs_int()
+  xspan<value_type> get_coeffs_int()
   {
     if constexpr (N_coeffs > 0) {
       constexpr auto offset = get_offset<n_coeffs_int_list, Idx>();
@@ -723,7 +723,7 @@ private:
   }
   //----------------------------------------------------------------------------
   template <uint Idx, uint N_coeffs>
-  crange<value_type> get_coeffs()
+  xspan<value_type> get_coeffs()
   {
     if constexpr (N_coeffs > 0) {
       constexpr auto offset = get_coeff_offset<Idx>();
@@ -815,7 +815,7 @@ public:
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
   template <class Part, class... Ts>
-  void reset_coeffs_ext (uint idx, crange<coeff_type> coeff_out, Ts&&... args)
+  void reset_coeffs_ext (uint idx, xspan<coeff_type> coeff_out, Ts&&... args)
   {
     static_assert (mp11::mp_find<parts, Part>::value < n_parts, "");
 
@@ -836,12 +836,12 @@ public:
       using x1_t = vec<builtin, 1>;
       if constexpr (Part::n_coeffs_int == 0) {
         Part::template reset_coeffs<x1_t> (
-          make_crange (coeff_out).cast (x1_t {}), std::forward<Ts> (args)...);
+          make_xspan (coeff_out).cast (x1_t {}), std::forward<Ts> (args)...);
       }
       else {
         auto co_int = _mem.get_coeffs_int (idx);
         Part::template reset_coeffs<x1_t> (
-          make_crange (coeff_out).cast (x1_t {}),
+          make_xspan (coeff_out).cast (x1_t {}),
           co_int.cast (x1_t {}),
           std::forward<Ts> (args)...);
       }
@@ -868,7 +868,7 @@ public:
   void reset_states_on_idx (uint idx)
   {
     auto st = _mem.get_states (idx);
-    crange_memset (st, 0);
+    xspan_memset (st, 0);
   }
   //----------------------------------------------------------------------------
   template <class Part, class... Ts>
@@ -930,13 +930,13 @@ public:
   }
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
-  crange<coeff_type> get_coeffs (uint idx = 0) { return _mem.get_coeffs (idx); }
+  xspan<coeff_type> get_coeffs (uint idx = 0) { return _mem.get_coeffs (idx); }
   //----------------------------------------------------------------------------
   // for bulk coefficient smoothing
-  crange<coeff_type> get_all_coeffs() { return _mem.get_all_coeffs(); }
+  xspan<coeff_type> get_all_coeffs() { return _mem.get_all_coeffs(); }
   //----------------------------------------------------------------------------
-  crange<coeff_type> get_states (uint idx = 0) { return _mem.get_states (idx); }
-  void zero_all_states() { crange_memset (_mem.get_all_states(), 0); }
+  xspan<coeff_type> get_states (uint idx = 0) { return _mem.get_states (idx); }
+  void zero_all_states() { xspan_memset (_mem.get_all_states(), 0); }
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------

@@ -23,8 +23,8 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace saike {
 
@@ -65,7 +65,10 @@ provides. */
   //----------------------------------------------------------------------------
   // stubs for JSFX special variables
   float  sample_rate = 44100;
-  double jsfx_specialvar_get_srate() { return sample_rate; }
+  double jsfx_specialvar_get_srate()
+  {
+    return sample_rate;
+  }
 
   //----------------------------------------------------------------------------
   // stubs for sliders
@@ -605,12 +608,15 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  void slider() { init$sliderupdate(); }
+  void slider()
+  {
+    init$sliderupdate();
+  }
 
 public:
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -1037,7 +1043,10 @@ private:
 #endif
   }
   //----------------------------------------------------------------------------
-  double init$tanh (double x) { return 2. / (std::exp (x * -2.) + 1.) - 1.; }
+  double init$tanh (double x)
+  {
+    return 2. / (std::exp (x * -2.) + 1.) - 1.;
+  }
   //----------------------------------------------------------------------------
   double init$updatebuffer (
     double  m,

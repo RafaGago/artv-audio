@@ -5,9 +5,9 @@
 
 #include "artv-common/dsp/own/parts/traits.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 //------------------------------------------------------------------------------
 namespace artv {
@@ -25,22 +25,22 @@ struct lattice {
   enum state { n_states = N };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, crange<V> g)
+  static void reset_coeffs (xspan<V> co, xspan<V> g)
   {
     assert (co.size() >= n_coeffs);
     assert (g.size() >= n_coeffs);
-    crange_memcpy (co, g.cut_head (n_coeffs));
+    xspan_memcpy (co, g.cut_head (n_coeffs));
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V> co, crange<V> st, V in)
+  static V tick (xspan<const V> co, xspan<V> st, V in)
   {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);

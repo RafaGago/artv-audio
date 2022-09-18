@@ -14,9 +14,9 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 
@@ -33,7 +33,7 @@ class fdn_verb_householder<V, 4> {
 public:
   static constexpr uint size = 4;
   //----------------------------------------------------------------------------
-  void reset (crange<V> mem) { _z.reset (mem, size); }
+  void reset (xspan<V> mem) { _z.reset (mem, size); }
   //----------------------------------------------------------------------------
   void set (std::array<uint, size> t, V feedback)
   {
@@ -351,13 +351,13 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     add_ducker::process (
       outs,
       ins,
       samples,
-      [=] (crange<T*> outs_fw, crange<T const*> ins_fw, uint samples_fw) {
+      [=] (xspan<T*> outs_fw, xspan<T const*> ins_fw, uint samples_fw) {
         this->process_intern (outs_fw, ins_fw, samples_fw);
       });
   }
@@ -365,7 +365,7 @@ public:
 private:
   //----------------------------------------------------------------------------
   template <class T>
-  void process_intern (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process_intern (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -380,7 +380,7 @@ private:
       auto old = l;
 
       l = _mod.get (_mod_delay_spls, _lfo.tick_sine()[0], _mod_depth_spls, 0);
-      _mod.push (make_crange (old));
+      _mod.push (make_xspan (old));
       for (auto& ap : _ap) {
         l = ap.tick (l);
       }
@@ -430,30 +430,30 @@ private:
       _mem.resize (n_delays * delay_size + n_pitch_buffers * pitch_size);
     }
     else {
-      crange_memset (make_crange (_mem), 0);
+      xspan_memset (make_xspan (_mem), 0);
     }
 
     auto ptr = _mem.data();
 
-    _mod.reset (make_crange (ptr, delay_size).cast (float_x1 {}), 1);
+    _mod.reset (make_xspan (ptr, delay_size).cast (float_x1 {}), 1);
     ptr += delay_size;
 
     for (uint i = 0; i < _ap.size(); ++i) {
-      _ap[i].reset (make_crange (ptr, delay_size).cast (float_x1 {}));
+      _ap[i].reset (make_xspan (ptr, delay_size).cast (float_x1 {}));
       ptr += delay_size;
     }
 
     for (uint i = 0; i < _hhmatrix.size(); ++i) {
       _hhmatrix[i].reset (
-        make_crange (ptr, delay_size * _hhmatrix[i].size).cast (float_x1 {}));
+        make_xspan (ptr, delay_size * _hhmatrix[i].size).cast (float_x1 {}));
       ptr += delay_size * _hhmatrix[i].size;
     }
 
-    _fb_shift.reset (make_crange (ptr, pitch_size).cast (float_x1 {}));
+    _fb_shift.reset (make_xspan (ptr, pitch_size).cast (float_x1 {}));
     ptr += pitch_size;
 
     _main_shift.reset (
-      make_crange (ptr, pitch_size * 2).cast (vec<float, 2> {}));
+      make_xspan (ptr, pitch_size * 2).cast (vec<float, 2> {}));
   }
   //----------------------------------------------------------------------------
   void set_delay_lengths (float length, float warp, float swidth)

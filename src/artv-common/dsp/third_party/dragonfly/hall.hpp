@@ -10,8 +10,8 @@
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/third_party/dragonfly/compilation_firewalls.hpp"
 
@@ -268,13 +268,13 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     add_ducker::process (
       outs,
       ins,
       samples,
-      [=] (crange<T*> outs_fw, crange<T const*> ins_fw, uint samples_fw) {
+      [=] (xspan<T*> outs_fw, xspan<T const*> ins_fw, uint samples_fw) {
         this->process_intern (outs_fw, ins_fw, samples_fw);
       });
   }
@@ -282,7 +282,7 @@ public:
 private:
   //----------------------------------------------------------------------------
   template <class T>
-  void process_intern (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process_intern (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));

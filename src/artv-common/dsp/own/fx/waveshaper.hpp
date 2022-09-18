@@ -27,8 +27,8 @@
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 // A pretty naive but extreme saturation unit. Doing a subltler less featured
 // variant based on Chebyshev polynomials could be fun.
@@ -506,7 +506,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint block_samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));

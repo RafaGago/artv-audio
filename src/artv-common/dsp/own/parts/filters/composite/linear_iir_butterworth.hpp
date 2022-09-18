@@ -4,10 +4,10 @@
 #include <cmath>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/simd_complex.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
 
@@ -42,13 +42,13 @@ public:
   static constexpr uint get_latency (uint n_stages) { return 1 << n_stages; }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> t_spl)
+  static void reset_coeffs (xspan<V> co, V freq, vec_value_type_t<V> t_spl)
   {
     vec_complex<V> poles, zeros;
-    butterworth_lp_complex::poles (make_crange (poles), freq, t_spl, 1);
-    butterworth_lp_complex::zeros (make_crange (zeros), freq, t_spl, 1);
+    butterworth_lp_complex::poles (make_xspan (poles), freq, t_spl, 1);
+    butterworth_lp_complex::zeros (make_xspan (zeros), freq, t_spl, 1);
     // gain is last, storing before moving "co"
-    co[gain] = butterworth_lp_complex::gain (make_crange (poles), 1);
+    co[gain] = butterworth_lp_complex::gain (make_xspan (poles), 1);
 
     rev_1pole::reset_coeffs (co, vec_real (poles), vec_real (zeros));
     co.cut_head (rev_1pole::n_coeffs);
@@ -57,7 +57,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, uint stages)
+  static void reset_states (xspan<V> st, uint stages)
   {
     uint numstates = get_n_states (stages);
     assert (st.size() >= numstates);
@@ -66,11 +66,11 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (
-    crange<const V> co,
-    crange<V>       st,
-    V               v,
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+    xspan<const V> co,
+    xspan<V>       st,
+    V              v,
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
     assert (co.size() >= (n_coeffs));
     assert (st.size() >= (get_n_states (n_stages)));
@@ -90,11 +90,11 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void tick (
-    crange<const V> co,
-    crange<V>       st,
-    crange<V>       io, // ins on call, outs when returning
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+    xspan<const V> co,
+    xspan<V>       st,
+    xspan<V>       io, // ins on call, outs when returning
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= get_n_states (n_stages));
@@ -148,7 +148,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
+    xspan<V>            co,
     V                   freq,
     vec_value_type_t<V> t_spl,
     uint                order)
@@ -158,10 +158,10 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
     std::array<vec_complex<V>, 1>             zeros;
     std::array<vec_complex<V>, max_order / 2> poles;
 
-    butterworth_lp_complex::zeros (make_crange (zeros), freq, t_spl, 1);
-    butterworth_lp_complex::poles (make_crange (poles), freq, t_spl, order / 2);
+    butterworth_lp_complex::zeros (make_xspan (zeros), freq, t_spl, 1);
+    butterworth_lp_complex::poles (make_xspan (poles), freq, t_spl, order / 2);
 
-    co[gain] = butterworth_lp_complex::gain (make_crange (poles), order / 2);
+    co[gain] = butterworth_lp_complex::gain (make_xspan (poles), order / 2);
     co.cut_head (1); // advance the gain coefficient
 
     for (uint i = 0; i < (order / 4); ++i) {
@@ -172,7 +172,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, uint order, uint stages)
+  static void reset_states (xspan<V> st, uint order, uint stages)
   {
     uint numstates = get_n_states (order, stages);
     assert (st.size() >= numstates);
@@ -181,12 +181,12 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (
-    crange<const V> co,
-    crange<V>       st,
-    V               v,
-    uint            order,
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+    xspan<const V> co,
+    xspan<V>       st,
+    V              v,
+    uint           order,
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
     assert (co.size() >= get_n_coeffs (order));
     assert (st.size() >= get_n_states (order, n_stages));
@@ -208,12 +208,12 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void tick (
-    crange<const V> co,
-    crange<V>       st,
-    crange<V>       io, // ins on call, outs when returning
-    uint            order,
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+    xspan<const V> co,
+    xspan<V>       st,
+    xspan<V>       io, // ins on call, outs when returning
+    uint           order,
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
@@ -269,14 +269,14 @@ struct linear_iir_butterworth_lowpass_any_order {
     vec_complex<double_x2> pole;
     // worst case, 1 pole.
     butterworth_lp_complex::poles (
-      make_crange (pole), vec_set<double_x2> (freq), (double) t_spl, 1);
+      make_xspan (pole), vec_set<double_x2> (freq), (double) t_spl, 1);
     return get_reversed_pole_n_stages (
       {vec_real (pole)[0], vec_imag (pole)[0]}, snr_db);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>            co, // coeffs (interleaved, SIMD aligned)
     V                   freq,
     vec_value_type_t<V> t_spl,
     uint                order)
@@ -293,12 +293,12 @@ struct linear_iir_butterworth_lowpass_any_order {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (
-    crange<const V> co,
-    crange<V>       st,
-    V               v,
-    uint            order,
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+    xspan<const V> co,
+    xspan<V>       st,
+    V              v,
+    uint           order,
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
     assert ((order % 2) == 0);
     assert (order <= max_order);
@@ -312,12 +312,12 @@ struct linear_iir_butterworth_lowpass_any_order {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void tick (
-    crange<const V> co,
-    crange<V>       st,
-    crange<V>       io,
-    uint            order,
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+    xspan<const V> co,
+    xspan<V>       st,
+    xspan<V>       io,
+    uint           order,
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
     assert ((order % 2) == 0);
     assert (order <= max_order);

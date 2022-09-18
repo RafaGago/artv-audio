@@ -1,7 +1,7 @@
 #pragma once
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include <juce_dsp/juce_dsp.h>
 
@@ -11,7 +11,7 @@ namespace artv {
 // applies a ramp on a buffer but instead of interpolating on each sample, the
 // ramp is incremented at SIMD size width intervals.
 template <class T>
-void simd_gain_ramp (contiguous_range<T> in, T gain_beg, T gain_end)
+void simd_gain_ramp (xspan<T> in, T gain_beg, T gain_end)
 {
   using simd                  = juce::dsp::SIMDRegister<T>;
   constexpr size_t simd_elems = simd::SIMDNumElements;

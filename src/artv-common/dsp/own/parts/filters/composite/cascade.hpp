@@ -6,9 +6,9 @@
 #include <gcem.hpp>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
@@ -47,11 +47,11 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>                   co, // coeffs interleaved
-    V                           freq,
-    crange<vec_value_type_t<V>> q_list, // one Q for each cascaded SVF
-    vec_value_type_t<V>         t_spl,
-    uint                        order)
+    xspan<V>                   co, // coeffs interleaved
+    V                          freq,
+    xspan<vec_value_type_t<V>> q_list, // one Q for each cascaded SVF
+    vec_value_type_t<V>        t_spl,
+    uint                       order)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
@@ -72,7 +72,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, uint order)
+  static void reset_states (xspan<V> st, uint order)
   {
     uint numstates = n_states_for_order (order);
     assert (st.size() >= numstates);
@@ -81,10 +81,10 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (single set)
-    crange<V>                         st, // states (interleaved, SIMD aligned)
-    V                                 in,
-    uint                              order)
+    xspan<const vec_value_type_t<V>> co, // coeffs (single set)
+    xspan<V>                         st, // states (interleaved, SIMD aligned)
+    V                                in,
+    uint                             order)
   {
     return tick_impl (co, st, in, order);
   }
@@ -92,10 +92,10 @@ public:
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in,
-    uint            order)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in,
+    uint           order)
   {
     return tick_impl (co, st, in, order);
   }
@@ -104,10 +104,10 @@ private:
   //----------------------------------------------------------------------------
   template <class Co, class V>
   static V tick_impl (
-    crange<const Co> co, // coeffs (interleaved or single set)
-    crange<V>        st, // states (interleaved, SIMD aligned)
-    V                in,
-    uint             order)
+    xspan<const Co> co, // coeffs (interleaved or single set)
+    xspan<V>        st, // states (interleaved, SIMD aligned)
+    V               in,
+    uint            order)
   {
     assert (co.size() >= n_coeffs_for_order (order));
     assert (st.size() >= n_states_for_order (order));
@@ -151,16 +151,16 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>                   co, // coeffs (interleaved, SIMD aligned)
-    V                           freq,
-    crange<vec_value_type_t<V>> q_list, // one Q for each cascaded SVF
-    vec_value_type_t<V>         t_spl)
+    xspan<V>                   co, // coeffs (interleaved, SIMD aligned)
+    V                          freq,
+    xspan<vec_value_type_t<V>> q_list, // one Q for each cascaded SVF
+    vec_value_type_t<V>        t_spl)
   {
     cascade_type::reset_coeffs (co, freq, q_list, t_spl, order);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
@@ -168,18 +168,18 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (single set)
-    crange<V>                         st, // states (interleaved, SIMD aligned)
-    V                                 in)
+    xspan<const vec_value_type_t<V>> co, // coeffs (single set)
+    xspan<V>                         st, // states (interleaved, SIMD aligned)
+    V                                in)
   {
     return cascade_type::tick (co, st, in, order);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in)
   {
     return cascade_type::tick (co, st, in, order);
   }

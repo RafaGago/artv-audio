@@ -82,7 +82,7 @@ juce::AudioProcessorEditor* new_editor (
   juce::AudioProcessor&               p,
   juce::AudioProcessorValueTreeState& params,
   juce::ValueTree&                    gui_params,
-  crange<foleys::LevelMeterSource>    meter_srcs);
+  xspan<foleys::LevelMeterSource>     meter_srcs);
 // -----------------------------------------------------------------------------
 class processor
   : public effect_base,
@@ -498,7 +498,7 @@ private:
           ins[i] = zeroed[i] ? 0 : _io.out[chnl][i];
         }
         buffers.template mix<2, s8> (
-          chnl + 1, make_crange (ins)); // chnls are 1 indexed
+          chnl + 1, make_xspan (ins)); // chnls are 1 indexed
       }
     }
 
@@ -608,21 +608,21 @@ private:
     bool has_inputs;
     if (processors[0] == nullptr) {
       has_inputs = buffers.template mix<2, s8> (
-        _io.mix[channel], make_crange (_io.in[channel]));
+        _io.mix[channel], make_xspan (_io.in[channel]));
 
       if (_io.receives_latency[channel] != 0) {
         dly_compensate_post_input_mix (channel);
       }
       if (_io.receives[channel][0] != 0) {
         has_receives = buffers.template mix<2, s8> (
-          _io.mix[channel], make_crange (_io.receives[channel]), has_inputs);
+          _io.mix[channel], make_xspan (_io.receives[channel]), has_inputs);
       }
     }
     else {
       has_inputs = buffers.template mix<2, s8> (
         _io.mix[channel],
-        make_crange (_io.in[channel]),
-        make_crange (processors));
+        make_xspan (_io.in[channel]),
+        make_xspan (processors));
 
       if (_io.receives_latency[channel] != 0) {
         dly_compensate_post_input_mix (channel);
@@ -630,8 +630,8 @@ private:
       if (_io.receives[channel][0] != 0) {
         has_receives = buffers.template mix<2, s8> (
           _io.mix[channel],
-          make_crange (_io.receives[channel]),
-          make_crange (processors),
+          make_xspan (_io.receives[channel]),
+          make_xspan (processors),
           has_inputs);
       }
     }
@@ -736,7 +736,7 @@ private:
 
       auto c_mix_bus = array_const_cast<T const*> (mix_bus);
 
-      fx->process (crange<T*> {out_ptrs}, crange<T const*> {c_mix_bus}, bsz);
+      fx->process (xspan<T*> {out_ptrs}, xspan<T const*> {c_mix_bus}, bsz);
 
       if (_io.fx_latency[channel] != 0) {
         dly_compensate_fx_dry (channel, mix_bus, bsz);
@@ -787,11 +787,11 @@ private:
       return;
     case 1:
       // copy L to R
-      buffers.template mix<1, s8> (buses_s8[1], make_crange (&buses_s8[0], 1));
+      buffers.template mix<1, s8> (buses_s8[1], make_xspan (&buses_s8[0], 1));
       return;
     case 2:
       // copy R to L
-      buffers.template mix<1, s8> (buses_s8[0], make_crange (&buses_s8[1], 1));
+      buffers.template mix<1, s8> (buses_s8[0], make_xspan (&buses_s8[1], 1));
       return;
     case 4:
       buffers.template swap<1> (buses_s8[0], buses_s8[1]);
@@ -833,8 +833,8 @@ private:
     // 2 compensations of 2 chnl each bus, see "reset_latency_buffers"
     uint id_l = mix_chnl * (2 + 2);
     uint id_r = id_l + 1;
-    _dly_comp_buffers.compensate (id_l, make_crange (chnlptrs[0], samples));
-    _dly_comp_buffers.compensate (id_r, make_crange (chnlptrs[1], samples));
+    _dly_comp_buffers.compensate (id_l, make_xspan (chnlptrs[0], samples));
+    _dly_comp_buffers.compensate (id_r, make_xspan (chnlptrs[1], samples));
   }
   //----------------------------------------------------------------------------
   void dly_compensate_fx_dry (
@@ -845,8 +845,8 @@ private:
     // 2 compensations of 2 chnl each bus, see "reset_latency_buffers"
     uint id_l = (mix_chnl * (2 + 2)) + 2;
     uint id_r = id_l + 1;
-    _dly_comp_buffers.compensate (id_l, make_crange (buff[0], n_samples));
-    _dly_comp_buffers.compensate (id_r, make_crange (buff[1], n_samples));
+    _dly_comp_buffers.compensate (id_l, make_xspan (buff[0], n_samples));
+    _dly_comp_buffers.compensate (id_r, make_xspan (buff[1], n_samples));
   }
   //----------------------------------------------------------------------------
   void dly_compensate_pre_output_mix (uint mix_chnl)
@@ -856,8 +856,8 @@ private:
     // Mix bus compensations at the bottom, see "reset_latency_buffers"
     uint id_l = (n_busses * (2 + 2)) + (mix_chnl * 2);
     uint id_r = id_l + 1;
-    _dly_comp_buffers.compensate (id_l, make_crange (chnlptrs[0], samples));
-    _dly_comp_buffers.compensate (id_r, make_crange (chnlptrs[1], samples));
+    _dly_comp_buffers.compensate (id_l, make_xspan (chnlptrs[0], samples));
+    _dly_comp_buffers.compensate (id_r, make_xspan (chnlptrs[1], samples));
   }
   //----------------------------------------------------------------------------
   void clear_crossv_buffers()

@@ -4,9 +4,9 @@
 #include <limits>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/classes/ducker.hpp"
 namespace artv {
@@ -48,7 +48,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T, class F>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples, F child_f)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples, F child_f)
   {
     assert (outs.size() >= 2);
     assert (ins.size() >= 2);
@@ -67,7 +67,7 @@ public:
         ducker_gain[i] = _ducker.tick (V {(VT) in[0][i], (VT) in[1][i]});
       }
 
-      child_f (make_crange (out), make_crange (in), blocksize);
+      child_f (make_xspan (out), make_xspan (in), blocksize);
 
       for (uint i = 0; i < blocksize; ++i) {
         out[0][i] *= ducker_gain[i][0];

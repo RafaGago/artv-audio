@@ -462,7 +462,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     _impl.process (outs, ins, samples);
   }

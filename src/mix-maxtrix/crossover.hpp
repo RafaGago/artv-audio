@@ -3,8 +3,8 @@
 #include "artv-common/dsp/own/classes/lr_crossover.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -40,7 +40,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     _crossv.tick<T> (outs, ins, samples);
   }

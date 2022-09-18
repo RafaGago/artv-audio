@@ -6,8 +6,8 @@
 #include <cstring>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -465,14 +465,14 @@ static inline void vec_load (C& dst, complex_float_type_t<C> const* src)
 }
 
 template <class C, enable_if_complex_vec_t<C>* = nullptr>
-static inline C vec_load (crange<const complex_float_type_t<C>> src)
+static inline C vec_load (xspan<const complex_float_type_t<C>> src)
 {
   assert (src.size() >= C::size);
   return vec_load<C> (src.data());
 }
 
 template <class C, enable_if_complex_vec_t<C>* = nullptr>
-static inline void vec_load (C& dst, crange<const complex_float_type_t<C>> src)
+static inline void vec_load (C& dst, xspan<const complex_float_type_t<C>> src)
 {
   dst = vec_load<C> (src);
 }
@@ -492,14 +492,14 @@ static inline void vec_load (C& dst, complex_value_type_t<C> const* src)
 }
 
 template <class C, enable_if_complex_vec_t<C>* = nullptr>
-static inline C vec_load (crange<const complex_value_type_t<C>> src)
+static inline C vec_load (xspan<const complex_value_type_t<C>> src)
 {
   assert (src.size() >= C::size);
   return vec_load<C> (src.data());
 }
 
 template <class C, enable_if_complex_vec_t<C>* = nullptr>
-static inline void vec_load (C& dst, crange<const complex_value_type_t<C>> src)
+static inline void vec_load (C& dst, xspan<const complex_value_type_t<C>> src)
 {
   dst = vec_load<C> (src);
 }
@@ -520,7 +520,7 @@ static inline void vec_load_unaligned (
 }
 
 template <class C, enable_if_complex_vec_t<C>* = nullptr>
-static inline C vec_load_unaligned (crange<const complex_float_type_t<C>> src)
+static inline C vec_load_unaligned (xspan<const complex_float_type_t<C>> src)
 {
   assert (src.size() >= C::size);
   return vec_load_unaligned<C> (src.data());
@@ -528,8 +528,8 @@ static inline C vec_load_unaligned (crange<const complex_float_type_t<C>> src)
 
 template <class C, enable_if_complex_vec_t<C>* = nullptr>
 static inline void vec_load_unaligned (
-  C&                                    dst,
-  crange<const complex_float_type_t<C>> src)
+  C&                                   dst,
+  xspan<const complex_float_type_t<C>> src)
 {
   dst = vec_load_unaligned<C> (src);
 }
@@ -550,7 +550,7 @@ static inline void vec_load_unaligned (
 }
 
 template <class C, enable_if_complex_vec_t<C>* = nullptr>
-static inline C vec_load_unaligned (crange<const complex_value_type_t<C>> src)
+static inline C vec_load_unaligned (xspan<const complex_value_type_t<C>> src)
 {
   assert (src.size() >= C::size);
   return vec_load_unaligned<C> (src.data());
@@ -558,8 +558,8 @@ static inline C vec_load_unaligned (crange<const complex_value_type_t<C>> src)
 
 template <class C, enable_if_complex_vec_t<C>* = nullptr>
 static inline void vec_load_unaligned (
-  C&                                    dst,
-  crange<const complex_value_type_t<C>> src)
+  C&                                   dst,
+  xspan<const complex_value_type_t<C>> src)
 {
   dst = vec_load_unaligned<C> (src);
 }
@@ -571,7 +571,7 @@ static inline void vec_store (complex_float_type_t<C>* dst, C src)
 }
 
 template <class C, enable_if_complex_vec_t<C>* = nullptr>
-static inline void vec_store (crange<complex_float_type_t<C>> dst, C src)
+static inline void vec_store (xspan<complex_float_type_t<C>> dst, C src)
 {
   assert (dst.size() >= C::size);
   vec_store (dst.data(), src);
@@ -584,7 +584,7 @@ static inline void vec_store (complex_value_type_t<C>* dst, C src)
 }
 
 template <class C, enable_if_complex_vec_t<C>* = nullptr>
-static inline void vec_store (crange<complex_value_type_t<C>> dst, C src)
+static inline void vec_store (xspan<complex_value_type_t<C>> dst, C src)
 {
   assert (dst.size() >= C::vec_size);
   vec_store (dst.data(), src);

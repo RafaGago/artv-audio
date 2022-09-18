@@ -8,7 +8,7 @@
 
 #include "artv-common/juce/widgets.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -59,7 +59,7 @@ static juce::Rectangle<T> grid (
   float                       width,
   std::array<float, N> const& heights,
   grid_row_idx<N>             row,
-  contiguous_range<C>         pack,
+  xspan<C>                    pack,
   args&&... vargs)
 {
   for (int i = 0; i < pack.size(); ++i) {
@@ -90,7 +90,7 @@ static juce::Rectangle<T> grid (
     width,
     heights,
     row,
-    contiguous_range (arr),
+    xspan (arr),
     std::forward<args> (vargs)...);
 }
 
@@ -111,7 +111,7 @@ static juce::Rectangle<T> grid (
     width,
     heights,
     row,
-    make_contiguous_range (&comp, 1),
+    make_xspan (&comp, 1),
     std::forward<args> (vargs)...);
 }
 

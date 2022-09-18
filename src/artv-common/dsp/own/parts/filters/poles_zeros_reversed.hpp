@@ -67,7 +67,7 @@ struct t_rev_single {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, value_type<V> pole_or_zero)
+  static void reset_coeffs (xspan<V> co, value_type<V> pole_or_zero)
   {
     assert (co.size() >= n_coeffs);
     auto c = (value_type<V>*) co.data();
@@ -75,7 +75,7 @@ struct t_rev_single {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, uint n_stages)
+  static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
     assert (st.size() >= numstates);
@@ -84,11 +84,11 @@ struct t_rev_single {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static value_type<V> tick (
-    crange<const V> co,
-    crange<V>       st,
-    value_type<V>   in,
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+    xspan<const V> co,
+    xspan<V>       st,
+    value_type<V>  in,
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= get_n_states (n_stages));
@@ -113,12 +113,12 @@ struct t_rev_single {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static crange<value_type<V>> tick (
-    crange<const V>       co,
-    crange<V>             st,
-    crange<value_type<V>> io, // ins on call, outs when returning
-    uint                  n_stages,
-    uint                  sample_idx) // sample counter (external)
+  static xspan<value_type<V>> tick (
+    xspan<const V>       co,
+    xspan<V>             st,
+    xspan<value_type<V>> io, // ins on call, outs when returning
+    uint                 n_stages,
+    uint                 sample_idx) // sample counter (external)
   {
     // block version, the intent with it is to run some iterations on the same
     // cache/delay line before moving to the next. This is a theoretically
@@ -163,7 +163,7 @@ struct t_rev_conjugate {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, vec_complex<V> pole_or_zero)
+  static void reset_coeffs (xspan<V> co, vec_complex<V> pole_or_zero)
   {
     assert (co.size() >= n_coeffs);
     base::reset_coeffs (co, pole_or_zero);
@@ -171,7 +171,7 @@ struct t_rev_conjugate {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, uint n_stages)
+  static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
     assert (st.size() >= numstates);
@@ -180,11 +180,11 @@ struct t_rev_conjugate {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co,
-    crange<V>       st,
-    V               in_re,
-    uint            n_stages, // sample counter (external)
-    uint            sample_idx)
+    xspan<const V> co,
+    xspan<V>       st,
+    V              in_re,
+    uint           n_stages, // sample counter (external)
+    uint           sample_idx)
   {
     assert (co.size() >= n_coeffs);
     vec_complex<V> y
@@ -193,12 +193,12 @@ struct t_rev_conjugate {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static crange<V> tick (
-    crange<const V> co,
-    crange<V>       st,
-    crange<V>       io, // ins on call, outs when returning
-    uint            n_stages, // sample counter (external)
-    uint            sample_idx)
+  static xspan<V> tick (
+    xspan<const V> co,
+    xspan<V>       st,
+    xspan<V>       io, // ins on call, outs when returning
+    uint           n_stages, // sample counter (external)
+    uint           sample_idx)
   {
     assert (co.size() >= n_coeffs);
 
@@ -215,7 +215,7 @@ struct t_rev_conjugate {
       base::tick (
         co,
         st,
-        make_crange (io_c.data(), blocksize),
+        make_xspan (io_c.data(), blocksize),
         n_stages,
         sample_idx + offset);
       // deinterleave
@@ -255,7 +255,7 @@ struct t_rev_pfe_pole_pair {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>     co,
+    xspan<V>      co,
     value_type<V> pole1,
     value_type<V> pole2)
   {
@@ -271,7 +271,7 @@ struct t_rev_pfe_pole_pair {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, uint n_stages)
+  static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
     assert (st.size() >= numstates);
@@ -280,11 +280,11 @@ struct t_rev_pfe_pole_pair {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co,
-    crange<V>       st,
-    V               in,
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+    xspan<const V> co,
+    xspan<V>       st,
+    V              in,
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= get_n_states (n_stages));
@@ -326,12 +326,12 @@ struct t_rev_pfe_pole_pair {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static crange<V> tick (
-    crange<const V> co,
-    crange<V>       st,
-    crange<V>       io, // ins on call, outs when returning
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+  static xspan<V> tick (
+    xspan<const V> co,
+    xspan<V>       st,
+    xspan<V>       io, // ins on call, outs when returning
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
 
     assert (co.size() >= n_coeffs);
@@ -428,7 +428,7 @@ struct t_rev_naive_cascade_pair {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>     co,
+    xspan<V>     co,
     value_type<V> zero_or_pole1,
     value_type<V> zero_or_pole2)
   {
@@ -438,7 +438,7 @@ struct t_rev_naive_cascade_pair {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, uint n_stages)
+  static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
     assert (st.size() >= numstates);
@@ -447,8 +447,8 @@ struct t_rev_naive_cascade_pair {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co,
-    crange<V>       st,
+    xspan<const V> co,
+    xspan<V>       st,
     V               in,
     uint            n_stages,
     uint            sample_idx) // sample counter (external)
@@ -466,10 +466,10 @@ struct t_rev_naive_cascade_pair {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static crange<V> tick (
-    crange<const V> co,
-    crange<V>       st,
-    crange<V>       io, // ins on call, outs when returning
+  static xspan<V> tick (
+    xspan<const V> co,
+    xspan<V>       st,
+    xspan<V>       io, // ins on call, outs when returning
     uint            n_stages,
     uint            sample_idx) // sample counter (external)
   {
@@ -478,9 +478,9 @@ struct t_rev_naive_cascade_pair {
     assert (n_stages >= 1);
 
     [[maybe_unused]] std::array<value_type<V>, 64> buff_mem;
-    crange<value_type<V>>                          buff;
+    xspan<value_type<V>>                          buff;
     if constexpr (is_complex) {
-      buff = make_crange (buff_mem);
+      buff = make_xspan (buff_mem);
     }
     else {
       buff = io;
@@ -490,7 +490,7 @@ struct t_rev_naive_cascade_pair {
     auto st2 = st.advanced (base::get_n_states (n_stages));
 
     for (uint offset = 0; offset < io.size(); offset += buff.size()) {
-      auto block = make_crange (
+      auto block = make_xspan (
         &buff[0], std::min<uint> (buff.size(), io.size() - offset));
 
       if constexpr (is_complex) {
@@ -550,8 +550,8 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>      co,
-    crange<V>      co_int,
+    xspan<V>       co,
+    xspan<V>       co_int,
     vec_complex<V> pole1,
     vec_complex<V> pole2)
   {
@@ -594,7 +594,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, uint n_stages)
+  static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
     assert (st.size() >= numstates);
@@ -603,12 +603,12 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co,
-    crange<const V> co_int,
-    crange<V>       st,
-    V               in,
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+    xspan<const V> co,
+    xspan<const V> co_int,
+    xspan<V>       st,
+    V              in,
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
     using T = vec_value_type_t<V>;
 
@@ -625,13 +625,13 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static crange<V> tick (
-    crange<const V> co,
-    crange<const V> co_int,
-    crange<V>       st,
-    crange<V>       io, // ins on call, outs when returning
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+  static xspan<V> tick (
+    xspan<const V> co,
+    xspan<const V> co_int,
+    xspan<V>       st,
+    xspan<V>       io, // ins on call, outs when returning
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
     using T = vec_value_type_t<V>;
 
@@ -651,11 +651,11 @@ private:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick_pfe (
-    crange<const V> co,
-    crange<V>       st,
-    V               in,
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+    xspan<const V> co,
+    xspan<V>       st,
+    V              in,
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
     using T = vec_value_type_t<V>;
 
@@ -691,12 +691,12 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static crange<V> tick_pfe (
-    crange<const V> co,
-    crange<V>       st,
-    crange<V>       io, // ins on call, outs when returning
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+  static xspan<V> tick_pfe (
+    xspan<const V> co,
+    xspan<V>       st,
+    xspan<V>       io, // ins on call, outs when returning
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
     using T = vec_value_type_t<V>;
 
@@ -755,11 +755,11 @@ private:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick_cc (
-    crange<const V> co,
-    crange<V>       st,
-    V               in,
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+    xspan<const V> co,
+    xspan<V>       st,
+    V              in,
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
     using T = vec_value_type_t<V>;
 
@@ -792,12 +792,12 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static crange<V> tick_cc (
-    crange<const V> co,
-    crange<V>       st,
-    crange<V>       io, // ins on call, outs when returning
-    uint            n_stages,
-    uint            sample_idx) // sample counter (external)
+  static xspan<V> tick_cc (
+    xspan<const V> co,
+    xspan<V>       st,
+    xspan<V>       io, // ins on call, outs when returning
+    uint           n_stages,
+    uint           sample_idx) // sample counter (external)
   {
 
     std::array<vec_complex<V>, 64> io_c;
@@ -866,7 +866,7 @@ struct t_rev_rpole_rzero {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, V re_pole, V re_zero)
+  static void reset_coeffs (xspan<V> co, V re_pole, V re_zero)
   {
     t_rev_rpole::reset_coeffs (co, re_pole);
     co.cut_head (t_rev_rpole::n_coeffs);
@@ -874,7 +874,7 @@ struct t_rev_rpole_rzero {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, uint n_stages)
+  static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
     assert (st.size() >= numstates);
@@ -883,11 +883,11 @@ struct t_rev_rpole_rzero {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co,
-    crange<V>       st,
-    V               x,
-    uint            n_stages,
-    uint            sample_idx)
+    xspan<const V> co,
+    xspan<V>       st,
+    V              x,
+    uint           n_stages,
+    uint           sample_idx)
   {
     V out = t_rev_rpole::tick (co, st, x, n_stages, sample_idx);
     co.cut_head (t_rev_rpole::n_coeffs);
@@ -896,12 +896,12 @@ struct t_rev_rpole_rzero {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static crange<V> tick (
-    crange<const V> co,
-    crange<V>       st,
-    crange<V>       io, // ins on call, outs when returning
-    uint            n_stages,
-    uint            sample_idx)
+  static xspan<V> tick (
+    xspan<const V> co,
+    xspan<V>       st,
+    xspan<V>       io, // ins on call, outs when returning
+    uint           n_stages,
+    uint           sample_idx)
   {
     t_rev_rpole::tick (co, st, io, n_stages, sample_idx);
     co.cut_head (t_rev_rpole::n_coeffs);
@@ -929,7 +929,7 @@ struct t_rev_ccpole_pair_rzero_eq_pair {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, vec_complex<V> pole, V re_zero)
+  static void reset_coeffs (xspan<V> co, vec_complex<V> pole, V re_zero)
   {
     t_rev_ccpole_pair::reset_coeffs (co, pole);
     co.cut_head (t_rev_ccpole_pair::n_coeffs);
@@ -937,7 +937,7 @@ struct t_rev_ccpole_pair_rzero_eq_pair {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, uint n_stages)
+  static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
     assert (st.size() >= numstates);
@@ -946,11 +946,11 @@ struct t_rev_ccpole_pair_rzero_eq_pair {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co,
-    crange<V>       st,
-    V               x,
-    uint            n_stages,
-    uint            sample_idx)
+    xspan<const V> co,
+    xspan<V>       st,
+    V              x,
+    uint           n_stages,
+    uint           sample_idx)
   {
     auto out = x;
 
@@ -967,12 +967,12 @@ struct t_rev_ccpole_pair_rzero_eq_pair {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static crange<V> tick (
-    crange<const V> co,
-    crange<V>       st,
-    crange<V>       io, // ins on call, outs when returning
-    uint            n_stages,
-    uint            sample_idx)
+  static xspan<V> tick (
+    xspan<const V> co,
+    xspan<V>       st,
+    xspan<V>       io, // ins on call, outs when returning
+    uint           n_stages,
+    uint           sample_idx)
   {
     t_rev_ccpole_pair::tick (co, st, io, n_stages, sample_idx);
     co.cut_head (t_rev_ccpole_pair::n_coeffs);

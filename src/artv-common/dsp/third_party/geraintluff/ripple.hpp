@@ -24,8 +24,8 @@
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace geraint_luff {
 
@@ -101,7 +101,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct control_band_count_tag {};
 
-  void set (control_band_count_tag, float v) { control_band_count = v; }
+  void set (control_band_count_tag, float v)
+  {
+    control_band_count = v;
+  }
 
   static constexpr auto get_parameter (control_band_count_tag)
   {
@@ -182,7 +185,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct cycle_phase_offset_tag {};
 
-  void set (cycle_phase_offset_tag, float v) { cycle_phase_offset = v; }
+  void set (cycle_phase_offset_tag, float v)
+  {
+    cycle_phase_offset = v;
+  }
 
   static constexpr auto get_parameter (cycle_phase_offset_tag)
   {
@@ -235,7 +241,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct cycle_phase_lfo_hz_tag {};
 
-  void set (cycle_phase_lfo_hz_tag, float v) { cycle_phase_lfo_hz = v; }
+  void set (cycle_phase_lfo_hz_tag, float v)
+  {
+    cycle_phase_lfo_hz = v;
+  }
 
   static constexpr auto get_parameter (cycle_phase_lfo_hz_tag)
   {
@@ -259,7 +268,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct cycle_phase_invbeat_tag {};
 
-  void set (cycle_phase_invbeat_tag, float v) { cycle_phase_invbeat = v; }
+  void set (cycle_phase_invbeat_tag, float v)
+  {
+    cycle_phase_invbeat = v;
+  }
 
   static constexpr auto get_parameter (cycle_phase_invbeat_tag)
   {
@@ -285,7 +297,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct control_filter_mode_tag {};
 
-  void set (control_filter_mode_tag, float v) { control_filter_mode = v; }
+  void set (control_filter_mode_tag, float v)
+  {
+    control_filter_mode = v;
+  }
 
   static constexpr auto get_parameter (control_filter_mode_tag)
   {
@@ -310,7 +325,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct filter_db_tag {};
 
-  void set (filter_db_tag, float v) { filter_db = v; }
+  void set (filter_db_tag, float v)
+  {
+    filter_db = v;
+  }
 
   static constexpr auto get_parameter (filter_db_tag)
   {
@@ -334,7 +352,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct filter_width_factor_tag {};
 
-  void set (filter_width_factor_tag, float v) { filter_width_factor = v; }
+  void set (filter_width_factor_tag, float v)
+  {
+    filter_width_factor = v;
+  }
 
   static constexpr auto get_parameter (filter_width_factor_tag)
   {
@@ -359,7 +380,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct output_gain_db_tag {};
 
-  void set (output_gain_db_tag, float v) { output_gain_db = v; }
+  void set (output_gain_db_tag, float v)
+  {
+    output_gain_db = v;
+  }
 
   static constexpr auto get_parameter (output_gain_db_tag)
   {
@@ -4092,7 +4116,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint block_samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));

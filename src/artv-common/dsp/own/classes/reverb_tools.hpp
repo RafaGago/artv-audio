@@ -7,9 +7,9 @@
 #include "artv-common/misc/primes.hpp"
 #include "artv-common/misc/primes_table.hpp"
 #include "artv-common/misc/random_table.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/classes/delay_line.hpp"
 
@@ -45,11 +45,11 @@ public:
   // tick all delay line channels in parallel
   template <class T, class Time_type, class Delay_line>
   static void tick (
-    crange<T>               out,
-    crange<const T>         in,
-    crange<const Time_type> delay,
-    crange<const T>         gain,
-    Delay_line&             dl)
+    xspan<T>               out,
+    xspan<const T>         in,
+    xspan<const Time_type> delay,
+    xspan<const T>         gain,
+    Delay_line&            dl)
   {
     assert (out.size() >= dl.n_channels());
     assert (in.size() >= dl.n_channels());
@@ -64,16 +64,16 @@ public:
       out[i]     = r.out;
       to_push[i] = r.to_push;
     }
-    dl.push (make_crange (&to_push[0], dl.n_channels()));
+    dl.push (make_xspan (&to_push[0], dl.n_channels()));
   }
   //----------------------------------------------------------------------------
   // tick all delay line channels in serial
   template <class T, class Time_type, class Delay_line>
   static T tick (
-    T                       in,
-    crange<const Time_type> delay,
-    crange<const T>         gain,
-    Delay_line&             dl)
+    T                      in,
+    xspan<const Time_type> delay,
+    xspan<const T>         gain,
+    Delay_line&            dl)
   {
     assert (delay.size() >= dl.n_channels());
     assert (gain.size() >= dl.n_channels());
@@ -87,7 +87,7 @@ public:
       out        = r.out;
       to_push[i] = r.to_push;
     }
-    dl.push (make_crange (&to_push[0], dl.n_channels()));
+    dl.push (make_xspan (&to_push[0], dl.n_channels()));
     return out;
   }
   //----------------------------------------------------------------------------
@@ -97,7 +97,7 @@ public:
   {
     assert (dl.n_channels() == 1);
     auto r = tick (in, dl.get (delay, 0), gain);
-    dl.push (make_crange (&r.to_push, 1));
+    dl.push (make_xspan (&r.to_push, 1));
     return r.out;
   }
   //----------------------------------------------------------------------------
@@ -109,7 +109,7 @@ template <class V, class Circ_bufer>
 class allpass {
 public:
   //----------------------------------------------------------------------------
-  void reset (crange<V> mem) { _mem.reset (mem); }
+  void reset (xspan<V> mem) { _mem.reset (mem); }
   //----------------------------------------------------------------------------
   V tick (V in, uint delay, V gain)
   {
@@ -144,7 +144,7 @@ template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 class allpass_with_params {
 public:
   //----------------------------------------------------------------------------
-  void reset (crange<V> mem) { _ap.reset (mem); }
+  void reset (xspan<V> mem) { _ap.reset (mem); }
   //----------------------------------------------------------------------------
   void set (uint delay_samples, V gain)
   {
@@ -209,10 +209,10 @@ struct delay_length {
   // for the intermediate prime table.
   template <class T>
   static bool get_prime (
-    crange<T> dst,
-    T         spls_min,
-    T         spls_max,
-    crange<T> work_mem)
+    xspan<T> dst,
+    T        spls_min,
+    T        spls_max,
+    xspan<T> work_mem)
   {
     assert (dst.size());
     auto tbl = make_primes_table (work_mem, spls_min, spls_max);
@@ -240,11 +240,11 @@ struct delay_length {
   //----------------------------------------------------------------------------
   template <class T>
   static void get_prime_power (
-    crange<T> dst,
-    T         spls_min,
-    T         spls_max,
-    uint      prime_idx,
-    float     rounding_factor)
+    xspan<T> dst,
+    T        spls_min,
+    T        spls_max,
+    uint     prime_idx,
+    float    rounding_factor)
   {
     assert (dst.size());
     float ln_ratio = log ((float) spls_min / (float) spls_max);
@@ -262,12 +262,12 @@ struct delay_length {
   // A "get_prime" with "get_prime_power" as a fallback
   template <class T>
   static void get (
-    crange<T> dst,
-    T         spls_min,
-    T         spls_max,
-    uint      prime_idx,
-    float     rounding_factor,
-    crange<T> work_mem)
+    xspan<T> dst,
+    T        spls_min,
+    T        spls_max,
+    uint     prime_idx,
+    float    rounding_factor,
+    xspan<T> work_mem)
   {
     assert (dst.size());
     if (get_prime (dst, spls_min, spls_max, work_mem)) {

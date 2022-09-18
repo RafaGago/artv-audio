@@ -21,8 +21,8 @@
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace witti {
 
@@ -74,7 +74,10 @@ private:
     return 0.; /* TODO: stub for getting JSFX var "samplesblock" */
   }
 #endif
-  double jsfx_specialvar_get_srate() { return plugcontext->get_sample_rate(); }
+  double jsfx_specialvar_get_srate()
+  {
+    return plugcontext->get_sample_rate();
+  }
 
   void jsfx_specialvar_set_ext_nodenorm (double val)
   {
@@ -305,7 +308,10 @@ public:
     slider();
   }
 
-  uint get_stage_count() { return 1u << (((uint) slider6) + 6); }
+  uint get_stage_count()
+  {
+    return 1u << (((uint) slider6) + 6);
+  }
 
 #endif
 #if 0
@@ -1026,7 +1032,7 @@ private:
   //----------------------------------------------------------------------------
 public:
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint block_samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));

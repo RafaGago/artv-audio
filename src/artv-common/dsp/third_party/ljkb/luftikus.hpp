@@ -8,8 +8,8 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace ljkb {
 //------------------------------------------------------------------------------
@@ -155,7 +155,7 @@ public:
     });
   }
   //----------------------------------------------------------------------------
-  void process (crange<float*> outs, crange<float const*> ins, int samples)
+  void process (xspan<float*> outs, xspan<float const*> ins, int samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));

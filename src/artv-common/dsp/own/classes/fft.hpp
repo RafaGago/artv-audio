@@ -12,8 +12,8 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/overaligned_allocator.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 //------------------------------------------------------------------------------
@@ -42,9 +42,9 @@ private:
 template <class T, uint Align>
 class fft_members<T, Align, true, false> {
 public:
-  void      resize (uint v) { _work.resize (v); }
-  uint      buffer_size() const { return _work.size(); }
-  crange<T> get_buffer() { return _work; }
+  void     resize (uint v) { _work.resize (v); }
+  uint     buffer_size() const { return _work.size(); }
+  xspan<T> get_buffer() { return _work; }
 
 private:
   std::vector<T, overaligned_allocator<T, Align>> _work;
@@ -53,17 +53,17 @@ private:
 template <class T, uint Align>
 class fft_members<T, Align, true, true> {
 public:
-  void      resize (uint v) {}
-  uint      buffer_size() const { return _work.size(); }
-  crange<T> get_buffer() { return _work; }
-  void      set_buffer (crange<T> v, uint iosize)
+  void     resize (uint v) {}
+  uint     buffer_size() const { return _work.size(); }
+  xspan<T> get_buffer() { return _work; }
+  void     set_buffer (xspan<T> v, uint iosize)
   {
     assert (v.size() >= iosize);
-    _work = make_crange (v.data(), iosize);
+    _work = make_xspan (v.data(), iosize);
   }
 
 private:
-  crange<T> _work;
+  xspan<T> _work;
 };
 //------------------------------------------------------------------------------
 } // namespace detail
@@ -80,9 +80,9 @@ public:
   using allocator = overaligned_allocator<value_type, io_alignment>;
   //----------------------------------------------------------------------------
   bool reset (
-    uint               blocksize,
-    bool               complex = true,
-    crange<value_type> extbuff = {})
+    uint              blocksize,
+    bool              complex = true,
+    xspan<value_type> extbuff = {})
   {
     uint iosize = blocksize * (complex ? 2 : 1);
     if (!_impl.reset (blocksize, complex)) {
@@ -96,7 +96,7 @@ public:
     return true;
   }
   //----------------------------------------------------------------------------
-  void forward (crange<value_type> out, const crange<value_type> in)
+  void forward (xspan<value_type> out, const xspan<value_type> in)
   {
     assert (out.size() >= _work.buffer_size());
     assert (in.size() >= _work.buffer_size());
@@ -108,18 +108,18 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  void forward (crange<value_type> io)
+  void forward (xspan<value_type> io)
   {
     if constexpr (impl::io_can_alias) {
       forward (io, io);
     }
     else {
-      crange_copy (_work.get_buffer(), io);
+      xspan_copy (_work.get_buffer(), io);
       forward (io, _work.get_buffer());
     }
   }
   //----------------------------------------------------------------------------
-  void forward_ordered (crange<value_type> out, const crange<value_type> in)
+  void forward_ordered (xspan<value_type> out, const xspan<value_type> in)
   {
     assert (out.size() >= _work.buffer_size());
     assert (in.size() >= _work.buffer_size());
@@ -131,18 +131,18 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  void forward_ordered (crange<value_type> io)
+  void forward_ordered (xspan<value_type> io)
   {
     if constexpr (impl::io_can_alias) {
       forward_ordered (io, io);
     }
     else {
-      crange_copy (_work.get_buffer(), io);
+      xspan_copy (_work.get_buffer(), io);
       forward_ordered (io, _work.get_buffer());
     }
   }
   //----------------------------------------------------------------------------
-  void reorder_after_forward (crange<value_type> out)
+  void reorder_after_forward (xspan<value_type> out)
   {
     if constexpr (impl::reorder_requires_buffer) {
       _impl.reorder_after_forward (out, _work.get_buffer());
@@ -152,7 +152,7 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  void backward (crange<value_type> out, const crange<value_type> in)
+  void backward (xspan<value_type> out, const xspan<value_type> in)
   {
     assert (out.size() >= _work.buffer_size());
     assert (in.size() >= _work.buffer_size());
@@ -164,18 +164,18 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  void backward (crange<value_type> io)
+  void backward (xspan<value_type> io)
   {
     if constexpr (impl::io_can_alias) {
       backward (io, io);
     }
     else {
-      crange_copy (_work.get_buffer(), io);
+      xspan_copy (_work.get_buffer(), io);
       backward (io, _work.get_buffer());
     }
   }
   //----------------------------------------------------------------------------
-  void backward_ordered (crange<value_type> out, const crange<value_type> in)
+  void backward_ordered (xspan<value_type> out, const xspan<value_type> in)
   {
     assert (out.size() >= _work.buffer_size());
     assert (in.size() >= _work.buffer_size());
@@ -187,18 +187,18 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  void backward_ordered (crange<value_type> io)
+  void backward_ordered (xspan<value_type> io)
   {
     if constexpr (impl::io_can_alias) {
       backward_ordered (io, io);
     }
     else {
-      crange_copy (_work.get_buffer(), io);
+      xspan_copy (_work.get_buffer(), io);
       backward_ordered (io, _work.get_buffer());
     }
   }
   //----------------------------------------------------------------------------
-  void reorder_before_backward (crange<value_type> out)
+  void reorder_before_backward (xspan<value_type> out)
   {
     if constexpr (impl::reorder_requires_buffer) {
       _impl.reorder_before_backward (out, _work.get_buffer());
@@ -208,7 +208,7 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  void data_rescale (crange<value_type> v)
+  void data_rescale (xspan<value_type> v)
   {
     _impl.data_rescale (v, size(), is_complex());
   }
@@ -252,10 +252,10 @@ public:
     });
   }
   //----------------------------------------------------------------------------
-  ~initialized_ffts()                   = default;
-  initialized_ffts (initialized_ffts&&) = default;
-  initialized_ffts& operator= (initialized_ffts&&) = default;
-  initialized_ffts (initialized_ffts const&)       = delete;
+  ~initialized_ffts()                                   = default;
+  initialized_ffts (initialized_ffts&&)                 = default;
+  initialized_ffts& operator= (initialized_ffts&&)      = default;
+  initialized_ffts (initialized_ffts const&)            = delete;
   initialized_ffts& operator= (initialized_ffts const&) = delete;
   //----------------------------------------------------------------------------
   fft_type* get_fft (uint blocksize)

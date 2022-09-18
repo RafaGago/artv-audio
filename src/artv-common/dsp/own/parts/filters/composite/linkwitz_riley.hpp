@@ -6,9 +6,9 @@
 #include <algorithm>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/composite/butterworth.hpp"
@@ -43,14 +43,14 @@ public:
   static constexpr uint n_correction_states = onepole_type::n_states;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> t_spl)
+  static void reset_coeffs (xspan<V> c, V freq, vec_value_type_t<V> t_spl)
   {
     assert (c.size() >= n_coeffs);
     onepole_type::reset_coeffs (c, freq, t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
@@ -58,9 +58,9 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static lr_crossover_out<V> tick (
-    crange<const V> c, // coeffs (interleaved, SIMD aligned)
-    crange<V>       s, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> c, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       s, // states (interleaved, SIMD aligned)
+    V              in)
   {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
@@ -78,9 +78,9 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V apply_correction (
-    crange<const V> c, // coeffs (interleaved, SIMD aligned)
-    crange<V>       extern_s, // coeffs "
-    V               in)
+    xspan<const V> c, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       extern_s, // coeffs "
+    V              in)
   {
     assert (c.size() >= n_coeffs);
     assert (extern_s.size() >= n_correction_states);
@@ -108,7 +108,7 @@ public:
 
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> t_spl)
+  static void reset_coeffs (xspan<V> c, V freq, vec_value_type_t<V> t_spl)
   {
     static constexpr auto qlist = butterworth_2p_cascade_q_list::cget<2>();
 
@@ -117,7 +117,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
@@ -125,9 +125,9 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static lr_crossover_out<V> tick (
-    crange<const V> c, // coeffs (interleaved, SIMD aligned)
-    crange<V>       s, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> c, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       s, // states (interleaved, SIMD aligned)
+    V              in)
   {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
@@ -142,9 +142,9 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V apply_correction (
-    crange<const V> c, // coeffs (interleaved, SIMD aligned)
-    crange<V>       extern_s, // coeffs "
-    V               in)
+    xspan<const V> c, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       extern_s, // coeffs "
+    V              in)
   {
     assert (c.size() >= n_coeffs);
     assert (extern_s.size() >= n_correction_states);
@@ -174,7 +174,7 @@ public:
 
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> t_spl)
+  static void reset_coeffs (xspan<V> c, V freq, vec_value_type_t<V> t_spl)
   {
     static constexpr auto qlist = butterworth_2p_cascade_q_list::cget<4>();
 
@@ -186,7 +186,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
@@ -194,9 +194,9 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static lr_crossover_out<V> tick (
-    crange<const V> c, // coeffs (interleaved, SIMD aligned)
-    crange<V>       s, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> c, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       s, // states (interleaved, SIMD aligned)
+    V              in)
   {
     // Look at:
     // https://www.kvraudio.com/forum/viewtopic.php?t=557465
@@ -255,9 +255,9 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V apply_correction (
-    crange<const V> c, // coeffs (interleaved, SIMD aligned)
-    crange<V>       extern_s, // coeffs "
-    V               in)
+    xspan<const V> c, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       extern_s, // coeffs "
+    V              in)
   {
     assert (c.size() >= n_coeffs);
     assert (extern_s.size() >= n_correction_states);
@@ -298,7 +298,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           c,
+    xspan<V>            c,
     V                   freq,
     vec_value_type_t<V> t_spl,
     uint                order)
@@ -322,7 +322,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<vec_value_type_t<V>> st)
+  static void reset_states (xspan<vec_value_type_t<V>> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
@@ -330,10 +330,10 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static lr_crossover_out<V> tick (
-    crange<const V> c,
-    crange<V>       s,
-    V               in,
-    uint            order)
+    xspan<const V> c,
+    xspan<V>       s,
+    V              in,
+    uint           order)
   {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
@@ -353,10 +353,10 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V apply_correction (
-    crange<const V> c,
-    crange<V>       extern_s,
-    V               in,
-    uint            order)
+    xspan<const V> c,
+    xspan<V>       extern_s,
+    V              in,
+    uint           order)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();

@@ -19,8 +19,8 @@
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace geraint_luff {
 
@@ -67,7 +67,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct limit_db_tag {};
 
-  void set (limit_db_tag, float v) { limit_db = v; }
+  void set (limit_db_tag, float v)
+  {
+    limit_db = v;
+  }
 
   static constexpr auto get_parameter (limit_db_tag)
   {
@@ -91,7 +94,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct asymmetry_tag {};
 
-  void set (asymmetry_tag, float v) { asymmetry = v; }
+  void set (asymmetry_tag, float v)
+  {
+    asymmetry = v;
+  }
 
   static constexpr auto get_parameter (asymmetry_tag)
   {
@@ -115,7 +121,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct output_db_tag {};
 
-  void set (output_db_tag, float v) { output_db = v; }
+  void set (output_db_tag, float v)
+  {
+    output_db = v;
+  }
 
   static constexpr auto get_parameter (output_db_tag)
   {
@@ -139,7 +148,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct distortion_width_tag {};
 
-  void set (distortion_width_tag, float v) { distortion_width = v; }
+  void set (distortion_width_tag, float v)
+  {
+    distortion_width = v;
+  }
 
   static constexpr auto get_parameter (distortion_width_tag)
   {
@@ -191,7 +203,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct filter_gain_tag {};
 
-  void set (filter_gain_tag, float v) { filter_gain = v; }
+  void set (filter_gain_tag, float v)
+  {
+    filter_gain = v;
+  }
 
   static constexpr auto get_parameter (filter_gain_tag)
   {
@@ -215,7 +230,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct bandwidth_octaves_tag {};
 
-  void set (bandwidth_octaves_tag, float v) { bandwidth_octaves = v; }
+  void set (bandwidth_octaves_tag, float v)
+  {
+    bandwidth_octaves = v;
+  }
 
   static constexpr auto get_parameter (bandwidth_octaves_tag)
   {
@@ -240,7 +258,10 @@ public:
   // Snippet for parameter boilerplate in the authors framework....
   struct secondary_gain_db_tag {};
 
-  void set (secondary_gain_db_tag, float v) { secondary_gain_db = v; }
+  void set (secondary_gain_db_tag, float v)
+  {
+    secondary_gain_db = v;
+  }
 
   static constexpr auto get_parameter (secondary_gain_db_tag)
   {
@@ -476,7 +497,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint block_samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -569,7 +590,10 @@ public:
   // functions for section "init"
 private:
   //----------------------------------------------------------------------------
-  double init$sinh (double x) { return (std::exp (x) - std::exp (-x)) * 0.5; }
+  double init$sinh (double x)
+  {
+    return (std::exp (x) - std::exp (-x)) * 0.5;
+  }
   //----------------------------------------------------------------------------
   double init$smoother_block_1 (double& this$, double& $value, double& $step)
   {
@@ -598,7 +622,10 @@ private:
     return $value;
   }
   //----------------------------------------------------------------------------
-  double init$smoother_value (double& $value) { return $value; }
+  double init$smoother_value (double& $value)
+  {
+    return $value;
+  }
   //----------------------------------------------------------------------------
   double init$tanh (double x)
   {

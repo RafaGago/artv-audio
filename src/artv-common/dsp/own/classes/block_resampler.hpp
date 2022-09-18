@@ -5,8 +5,8 @@
 #include "artv-common/dsp/own/classes/window.hpp"
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 //------------------------------------------------------------------------------
@@ -23,16 +23,16 @@ public:
   //----------------------------------------------------------------------------
   // "block_processor_fn" has to have the signature below:
   //
-  // void (crange<sample_type>)
+  // void (xspan<sample_type>)
   //
   // The block of samples to process is passed as a read and write contiguous
   // range.
   template <class U, class Functor>
   void process (
-    crange<U*>       outs,
-    crange<U const*> ins,
-    uint             block_samples,
-    Functor          block_processor_fn)
+    xspan<U*>       outs,
+    xspan<U const*> ins,
+    uint            block_samples,
+    Functor         block_processor_fn)
   {
     // Using the VLA extension (non-portable) to avoid touching a lot of memory
     // whenever it's possible. It may inhibit inlining but I guess it's not that
@@ -40,10 +40,10 @@ public:
     sample_type stack_tgt_buff[_tgt_rate_bf ? 0 : _tgt_rate_bf_spls];
     sample_type stack_src_buff[_src_rate_bf ? 0 : _src_rate_bf_spls];
 
-    auto tgt_rate_bf = make_crange (
+    auto tgt_rate_bf = make_xspan (
       _tgt_rate_bf ? _tgt_rate_bf : stack_tgt_buff, _tgt_rate_bf_spls);
 
-    auto src_rate_bf = make_crange (
+    auto src_rate_bf = make_xspan (
       _src_rate_bf ? _src_rate_bf : stack_src_buff, _src_rate_bf_spls);
 
     uint spls_out  = 0;
@@ -209,7 +209,7 @@ public:
     _raw_mem.clear();
     _raw_mem.resize (
       remainder_n_spls + dyn_tgt_rate_bf_spls + dyn_src_rate_bf_spls);
-    auto dynmem = make_crange (_raw_mem);
+    auto dynmem = make_xspan (_raw_mem);
 
     _remainder.reset (dynmem.cut_head (remainder_n_spls));
     _tgt_rate_bf = dynmem.cut_head (dyn_tgt_rate_bf_spls).data();

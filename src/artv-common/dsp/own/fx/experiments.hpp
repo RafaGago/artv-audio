@@ -17,8 +17,8 @@
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 #if 1
@@ -92,7 +92,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint block_samples)
   {
     _resampler.process (outs, ins, block_samples, [=] (auto block) {
       process_resampled_block (block);
@@ -100,7 +100,7 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  void process_resampled_block (crange<vec<float, 2>> io)
+  void process_resampled_block (xspan<vec<float, 2>> io)
   {
     // process the block here...
   }
@@ -213,7 +213,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint block_samples)
   {
     uint n_out = 0;
     for (uint i = 0; i < block_samples; ++i) {
@@ -319,7 +319,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint block_samples)
   {
     for (uint i = 0; i < block_samples; ++i) {
 
@@ -395,7 +395,7 @@ public:
     _plugcontext = &pc;
 
     lp_type::reset_coeffs (
-      make_crange (_coeffs).cast (double {}),
+      make_xspan (_coeffs).cast (double {}),
       vec_set<double_x2> (660.),
       pc.get_sample_rate(),
       order);
@@ -403,7 +403,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint block_samples)
   {
     for (uint i = 0; i < block_samples; ++i) {
       double_x2 in {double_x2 {ins[0][i], ins[1][i]}};
@@ -413,8 +413,8 @@ public:
       _delay[pos] = in;
 
       auto lp = lp_type::tick (
-        make_crange (_coeffs).cast (double {}),
-        make_crange (_states).cast (double {}),
+        make_xspan (_coeffs).cast (double {}),
+        make_xspan (_states).cast (double {}),
         in,
         order,
         n_stages,
@@ -512,30 +512,30 @@ public:
     double t_spl =  1. / (double) pc.get_sample_rate();
 
     butterworth_lp_complex::poles (
-      make_crange (poles),
+      make_xspan (poles),
       vec_set<double_x2> (660),
       t_spl,
       2);
 
     butterworth_lp_complex::zeros (
-      make_crange (zeros),
+      make_xspan (zeros),
       vec_set<double_x2> (660),
       t_spl,
       2);
 
-    _gain = butterworth_lp_complex::gain (make_crange (poles), 2);
+    _gain = butterworth_lp_complex::gain (make_xspan (poles), 2);
 
     t_rev_ccpole_pair_rzero_eq_pair::reset_coeffs (
-      make_crange (co_rev_poles).cast (double {}),
+      make_xspan (co_rev_poles).cast (double {}),
       poles[0],
       vec_real (zeros[0]));
 
     ccpole_pair_rzero_pair::reset_coeffs (
-      make_crange (co_poles).cast (double {}), poles[0], vec_real (zeros[0]));
+      make_xspan (co_poles).cast (double {}), poles[0], vec_real (zeros[0]));
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint block_samples)
   {
     for (uint i = 0; i < block_samples; ++i) {
 
@@ -546,16 +546,16 @@ public:
       _delay[pos] = out;
 
       out = t_rev_ccpole_pair_rzero_eq_pair::tick (
-        make_crange (co_rev_poles).cast (double {}),
-        make_crange (st_rev_poles).cast (double {}),
+        make_xspan (co_rev_poles).cast (double {}),
+        make_xspan (st_rev_poles).cast (double {}),
         out,
         n_stages,
         _sample_idx);
       out *= _gain;
 
       out = ccpole_pair_rzero_pair::tick (
-        make_crange (co_poles).cast (double {}),
-        make_crange (st_poles).cast (double {}),
+        make_xspan (co_poles).cast (double {}),
+        make_xspan (st_poles).cast (double {}),
         out);
       out *= _gain;
 
@@ -649,32 +649,32 @@ public:
     double t_spl =  1. / (double) pc.get_sample_rate();
 
     butterworth_lp_complex::poles (
-      make_crange (poles),
+      make_xspan (poles),
       vec_set<double_x2> (660),
       t_spl,
       1);
 
     butterworth_lp_complex::zeros (
-      make_crange (zeros),
+      make_xspan (zeros),
       vec_set<double_x2> (660),
       t_spl,
       1);
 
-    _gain = butterworth_lp_complex::gain (make_crange (poles), 1);
+    _gain = butterworth_lp_complex::gain (make_xspan (poles), 1);
 
     t_rev_rpole_rzero::reset_coeffs (
-      make_crange (co_rev_poles).cast (double {}),
+      make_xspan (co_rev_poles).cast (double {}),
       vec_real (poles[0]),
       vec_real (zeros[0]));
 
     rpole_rzero::reset_coeffs (
-      make_crange (co_poles).cast (double {}),
+      make_xspan (co_poles).cast (double {}),
       vec_real (poles[0]),
       vec_real (zeros[0]));
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint block_samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint block_samples)
   {
     for (uint i = 0; i < block_samples; ++i) {
 
@@ -685,16 +685,16 @@ public:
       _delay[pos] = out;
 
       out = t_rev_rpole_rzero::tick (
-        make_crange (co_rev_poles).cast (double {}),
-        make_crange (st_rev_poles).cast (double {}),
+        make_xspan (co_rev_poles).cast (double {}),
+        make_xspan (st_rev_poles).cast (double {}),
         out,
         n_stages,
         _sample_idx);
       out *= _gain;
 
       out = rpole_rzero::tick (
-        make_crange (co_poles).cast (double {}),
-        make_crange (st_poles).cast (double {}),
+        make_xspan (co_poles).cast (double {}),
+        make_xspan (st_poles).cast (double {}),
         out);
       out *= _gain;
 

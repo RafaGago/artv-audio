@@ -1,8 +1,8 @@
 #pragma once
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -67,7 +67,7 @@ static constexpr auto primes_table_raw = array_cast<u8> (make_array (
 
 } // namespace detail
 
-// crange has assertions on member access.
-static constexpr auto primes_table = make_crange (detail::primes_table_raw);
+// xspan has assertions on member access.
+static constexpr auto primes_table = make_xspan (detail::primes_table_raw);
 
 } // namespace artv

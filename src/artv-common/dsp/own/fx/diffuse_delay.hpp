@@ -24,9 +24,9 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/overaligned_allocator.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 // Both thiran and sinc of different sizes consume the same CPU, the sound
 // is not that bad on the Thiran ones and they don't require tables, so favoring
@@ -515,7 +515,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     _resampler.process (outs, ins, samples, [=] (auto io) {
       process_block (io);
@@ -564,7 +564,7 @@ private:
     // allocate
     _mem.clear();
     _mem.resize (n_samples_delay + n_samples_allpass);
-    auto mem = make_crange (_mem);
+    auto mem = make_xspan (_mem);
 
     // distribute
     _delay.reset (mem.cut_head (n_samples_delay), n_taps);
@@ -645,7 +645,7 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block (crange<std::array<T, 2>> io)
+  void process_block (xspan<std::array<T, 2>> io)
   {
     auto const allpass_sizes = get_diffusor_delay_spls();
 
@@ -946,7 +946,7 @@ private:
   void stereo_interleaving (
     std::array<arith_type, n_taps>* tap_head, // samples that will be
                                               // inserted
-    crange<std::array<T, 2> const>        in, // inputs
+    xspan<std::array<T, 2> const>         in, // inputs
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     // stereo with side ping pong
@@ -966,7 +966,7 @@ private:
   void pingpong_interleaving (
     std::array<arith_type, n_taps>* tap_head, // samples that will be
                                               // inserted
-    crange<std::array<T, 2> const>        in, // inputs
+    xspan<std::array<T, 2> const>         in, // inputs
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     for (uint i = 0; i < in.size(); ++i) {
@@ -985,7 +985,7 @@ private:
   void pingpong_stereo_interleaving (
     std::array<arith_type, n_taps>* tap_head, // samples that will be
                                               // inserted
-    crange<std::array<T, 2> const>        in, // inputs
+    xspan<std::array<T, 2> const>         in, // inputs
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     for (uint i = 0; i < in.size(); ++i) {
@@ -1002,7 +1002,7 @@ private:
   void x3_interleaving (
     std::array<arith_type, n_taps>* tap_head, // samples that will be
                                               // inserted
-    crange<std::array<T, 2> const>        in, // inputs
+    xspan<std::array<T, 2> const>         in, // inputs
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     for (uint i = 0; i < in.size(); ++i) {
@@ -1019,7 +1019,7 @@ private:
   void x4_interleaving (
     std::array<arith_type, n_taps>* tap_head, // samples that will be
                                               // inserted
-    crange<std::array<T, 2> const>        in, // inputs
+    xspan<std::array<T, 2> const>         in, // inputs
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     for (uint i = 0; i < in.size(); ++i) {
@@ -1039,7 +1039,7 @@ private:
   void self_feed_interleaving (
     std::array<arith_type, n_taps>* tap_head, // samples that will be
                                               // inserted
-    crange<std::array<T, 2> const>        in, // inputs
+    xspan<std::array<T, 2> const>         in, // inputs
     std::array<arith_type, n_taps> const* tap_tail) // samples that are outputs
   {
     for (uint i = 0; i < in.size(); ++i) {

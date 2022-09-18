@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 // -----------------------------------------------------------------------------
@@ -31,7 +31,7 @@ public:
   using index_type                 = Index;
   // ---------------------------------------------------------------------------
   template <class U>
-  void reset (crange<const U> delays)
+  void reset (xspan<const U> delays)
   {
     static_assert (std::is_integral_v<U> && std::is_unsigned_v<U>, "");
     // Accepting sample losses when changing delay compensation
@@ -50,17 +50,17 @@ public:
     }
     _mem.clear();
     _mem.resize (offset + biggest);
-    _tmp_buff = make_crange (&_mem[offset], biggest);
+    _tmp_buff = make_xspan (&_mem[offset], biggest);
   }
   // ---------------------------------------------------------------------------
   uint size() const noexcept { return _loc.size(); }
   // ---------------------------------------------------------------------------
-  void compensate (uint buffer_idx, crange<T> src)
+  void compensate (uint buffer_idx, xspan<T> src)
   {
     assert (buffer_idx < size());
     assert (src.size());
 
-    crange<T> dly = get_buffer (buffer_idx);
+    xspan<T> dly = get_buffer (buffer_idx);
 
     if (likely (src.size() >= dly.size())) {
       uint bytes = dly.size() * sizeof (T);
@@ -90,7 +90,7 @@ public:
   // ---------------------------------------------------------------------------
 private:
   // ---------------------------------------------------------------------------
-  crange<T> get_buffer (uint idx)
+  xspan<T> get_buffer (uint idx)
   {
     return {&_mem[_loc[idx].offset], _loc[idx].size};
   }
@@ -101,7 +101,7 @@ private:
   };
   std::vector<buffer_location> _loc;
   std::vector<T>               _mem;
-  crange<T>                    _tmp_buff;
+  xspan<T>                     _tmp_buff;
 };
 // -----------------------------------------------------------------------------
 // This class is a helper for doing delay compensation on overallocated buffers.
@@ -120,11 +120,11 @@ public:
   //----------------------------------------------------------------------------
   // buffer contains a buffer that is the number of usable bytes + max_delay
   // long.
-  void reset (crange<T> buffer, uint max_delay)
+  void reset (xspan<T> buffer, uint max_delay)
   {
     _buff      = buffer;
     _max_delay = max_delay;
-    crange_memset (_buff, 0);
+    xspan_memset (_buff, 0);
   }
   //----------------------------------------------------------------------------
   void iteration_end (uint delay, uint total_bytes_written)
@@ -138,19 +138,19 @@ public:
       delay * sizeof _buff[0]);
   }
   //----------------------------------------------------------------------------
-  crange<T> get_write_buffer()
+  xspan<T> get_write_buffer()
   {
     return {&_buff[_max_delay], _buff.size() - _max_delay};
   }
   //----------------------------------------------------------------------------
-  crange<T> get_read_buffer (uint delay)
+  xspan<T> get_read_buffer (uint delay)
   {
     return {&_buff[_max_delay - delay], _buff.size() - _max_delay};
   }
   //----------------------------------------------------------------------------
 private:
-  crange<T> _buff;
-  uint      _max_delay;
+  xspan<T> _buff;
+  uint     _max_delay;
   // ---------------------------------------------------------------------------
 };
 // -----------------------------------------------------------------------------
@@ -160,13 +160,13 @@ template <class T>
 class delay_compensated_buffer {
 public:
   //----------------------------------------------------------------------------
-  void reset (crange<T> buffer, uint delay)
+  void reset (xspan<T> buffer, uint delay)
   {
     assert (buffer.size() >= delay);
     _buffer = buffer;
     _pos    = 0;
     _delay  = delay;
-    crange_memset (_buffer, 0);
+    xspan_memset (_buffer, 0);
   }
   //----------------------------------------------------------------------------
   void reset (uint delay) { reset (_buffer, delay); }
@@ -181,7 +181,7 @@ public:
   //----------------------------------------------------------------------------
   uint delay() const { return _delay; }
   //----------------------------------------------------------------------------
-  crange<T> memory() const { return _buffer; }
+  xspan<T> memory() const { return _buffer; }
   //----------------------------------------------------------------------------
 private:
   uint next_idx() const
@@ -190,9 +190,9 @@ private:
     return next < _delay ? next : 0;
   }
   //----------------------------------------------------------------------------
-  crange<T> _buffer {};
-  uint      _delay = 0;
-  uint      _pos   = 0;
+  xspan<T> _buffer {};
+  uint     _delay = 0;
+  uint     _pos   = 0;
 };
 // -----------------------------------------------------------------------------
 

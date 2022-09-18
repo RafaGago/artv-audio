@@ -14,9 +14,9 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -39,7 +39,7 @@ public:
 
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -72,7 +72,7 @@ public:
           io[i][0] = src[0][i];
           io[i][1] = src[1][i];
         }
-        process_band (make_crange (io.data(), blocksize), b, _sample + offset);
+        process_band (make_xspan (io.data(), blocksize), b, _sample + offset);
         // deinterleaving
         for (uint i = 0; i < blocksize; ++i) {
           outs[0][offset + i] = io[i][0];
@@ -108,8 +108,8 @@ public:
       for (uint bi = 0; (bi < n_bands) && (_order_parallel[bi] >= 0); ++bi) {
         auto b = _order_parallel[bi];
 
-        auto buff = make_crange ((bi == 0) ? &sum[0] : &io[0], blocksize);
-        crange_memcpy (buff, make_crange (&in_cp[0], blocksize));
+        auto buff = make_xspan ((bi == 0) ? &sum[0] : &io[0], blocksize);
+        xspan_memcpy (buff, make_xspan (&in_cp[0], blocksize));
         process_band (buff, b, _sample + offset);
 
         // match latency with other bands
@@ -347,7 +347,7 @@ public:
     reset_quality_settings (_t_spl);
 
     smoother::reset_coeffs (
-      make_crange (_smooth_coeff).cast (x1_t {}),
+      make_xspan (_smooth_coeff).cast (x1_t {}),
       vec_set<x1_t> (1 / 0.001),
       _t_spl);
 
@@ -358,15 +358,15 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  void process_band (crange<double_x2> io, uint b, uint sample_idx)
+  void process_band (xspan<double_x2> io, uint b, uint sample_idx)
   {
     // bulk smoothing (at blocksize rate)
-    crange<double_x2> internal = _eq[b].get_all_coeffs();
+    xspan<double_x2> internal = _eq[b].get_all_coeffs();
     for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
       for (uint i = 0; i < io.size(); ++i) {
         internal[j] = smoother::tick (
-          make_crange (_smooth_coeff),
-          make_crange (internal[j]),
+          make_xspan (_smooth_coeff),
+          make_xspan (internal[j]),
           _target_coeffs[b][j]);
       }
     }
@@ -435,7 +435,7 @@ private:
 
     // assign the buffers to the parallel bands
     auto ptr = _mem.data();
-    _incomp.reset (make_crange (ptr, latency_parallel), latency_parallel);
+    _incomp.reset (make_xspan (ptr, latency_parallel), latency_parallel);
     ptr += latency_parallel;
 
     for (uint b = 0; b < n_bands; ++b) {
@@ -443,7 +443,7 @@ private:
         continue; // series. no compensation required
       }
       uint comp = latency_parallel - _cfg[b].latency;
-      _bandcomp[b].reset (make_crange (ptr, comp), comp);
+      _bandcomp[b].reset (make_xspan (ptr, comp), comp);
       ptr += comp;
     }
   }
@@ -463,7 +463,7 @@ private:
 
     b.slope_gain = gain - 1; // e.g 0dB = 1, so the multiplier is 0
 
-    auto co        = make_crange (_target_coeffs[band]);
+    auto co        = make_xspan (_target_coeffs[band]);
     auto co_biquad = co.advanced (_eq[0].get_coeff_offset<fwd_idx>());
     auto co_bwd_poles
       = co.advanced (_eq[0].get_coeff_offset<bckwd_poles_idx>());
@@ -513,7 +513,7 @@ private:
       jassert (false);
     }
 
-    crange_memcpy (co_bwd_zeros, co_biquad);
+    xspan_memcpy (co_bwd_zeros, co_biquad);
 
     std::array<vec_complex<double_x2>, 2> poles;
     biquad::get_poles<double_x2> (poles, co_biquad);
@@ -526,7 +526,7 @@ private:
       _eq[band].reset_states<bckwd_poles_idx> (_n_stages[band][_quality]);
       _eq[band].reset_states<bckwd_zeros_idx>();
       _eq[band].reset_states<fwd_idx>();
-      crange_copy<double_x2> (_eq[band].get_all_coeffs(), _target_coeffs[band]);
+      xspan_copy<double_x2> (_eq[band].get_all_coeffs(), _target_coeffs[band]);
       reset_latency();
     }
     _cfg[band].has_changes      = false;

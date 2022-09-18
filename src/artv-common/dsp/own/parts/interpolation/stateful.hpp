@@ -3,9 +3,9 @@
 #include <cassert>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/biquad.hpp"
 
@@ -32,7 +32,7 @@ struct thiran_interp<1> {
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, V fractional)
+  static void reset_coeffs (xspan<V> co, V fractional)
   {
     using T     = vec_value_type_t<V>;
     V corrected = vec_max (fractional, vec_set<V> ((T) 0.000001));
@@ -43,7 +43,7 @@ struct thiran_interp<1> {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
@@ -51,8 +51,8 @@ struct thiran_interp<1> {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V>         co,
-    crange<V>               st,
+    xspan<const V>          co,
+    xspan<V>                st,
     std::array<V, n_points> y,
     V                       x [[maybe_unused]])
   {
@@ -80,7 +80,7 @@ struct thiran_interp<2> {
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, V fractional)
+  static void reset_coeffs (xspan<V> co, V fractional)
   {
     biquad::reset_coeffs (co, fractional, thiran_tag {});
 #ifndef NDEBUG
@@ -89,15 +89,15 @@ struct thiran_interp<2> {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     biquad::reset_states (st);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V>         co,
-    crange<V>               st,
+    xspan<const V>          co,
+    xspan<V>                st,
     std::array<V, n_points> y,
     V                       x [[maybe_unused]])
   {

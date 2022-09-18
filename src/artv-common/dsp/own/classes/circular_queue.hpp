@@ -4,8 +4,8 @@
 
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 //------------------------------------------------------------------------------
@@ -14,10 +14,10 @@ template <class T>
 class static_pow2_circular_queue {
 public:
   //----------------------------------------------------------------------------
-  void reset (crange<T> mem)
+  void reset (xspan<T> mem)
   {
     assert (is_pow2 (mem.size()));
-    crange_memset (mem, 0);
+    xspan_memset (mem, 0);
     _mem  = mem.data();
     _mask = mem.size() - 1;
     _head = _tail = 0;
@@ -39,7 +39,7 @@ public:
     ++_head;
   }
   //----------------------------------------------------------------------------
-  void push (crange<const T> vs)
+  void push (xspan<const T> vs)
   {
     assert ((vs.size() + size()) <= capacity());
     for (auto v : vs) {

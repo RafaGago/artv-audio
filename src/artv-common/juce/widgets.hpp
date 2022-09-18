@@ -15,7 +15,7 @@
 
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 // -----------------------------------------------------------------------------
@@ -786,8 +786,7 @@ private:
   using bitfield_type = uint32_t;
 
 public:
-  toggle_buttons_impl (
-    contiguous_range<add_juce_callbacks<juce::TextButton>> txt_buttons)
+  toggle_buttons_impl (xspan<add_juce_callbacks<juce::TextButton>> txt_buttons)
     : buttons (txt_buttons)
   {}
 
@@ -930,7 +929,7 @@ public:
   // has to return ptrs...
   auto get_components() { return buttons; }
 
-  contiguous_range<add_juce_callbacks<juce::TextButton>> buttons;
+  xspan<add_juce_callbacks<juce::TextButton>> buttons;
 
 private:
   juce::Slider  _hidden_slider;
@@ -948,7 +947,7 @@ class toggle_buttons : public detail::toggle_buttons_impl {
 public:
   static_assert (N <= 23 && "JUCE uses float for storing(?).");
   toggle_buttons()
-    : toggle_buttons_impl {make_contiguous_range (_button_storage)}
+    : toggle_buttons_impl {make_xspan (_button_storage)}
   {}
 
   // in the current state moving or copying invalidates the base, easy to fix

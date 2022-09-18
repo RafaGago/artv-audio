@@ -9,9 +9,9 @@
 
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/classes/fft.hpp"
 #include "artv-common/dsp/own/classes/window.hpp"
@@ -21,9 +21,9 @@ namespace artv {
 // "mu" is a fractional delay in samples
 template <class T>
 static void get_sinc_lowpass (
-  crange<T> dst_kernel,
-  T         fc, // 0 to 0.5 (nyquist)
-  T         mu)
+  xspan<T> dst_kernel,
+  T        fc, // 0 to 0.5 (nyquist)
+  T        mu)
 {
   static_assert (std::is_floating_point_v<T>);
 
@@ -35,7 +35,7 @@ static void get_sinc_lowpass (
 //------------------------------------------------------------------------------
 // "mu" is a fractional delay in samples, from -0.5 to 0.5
 template <class T>
-static void fir_kernel_normalize (crange<T> kernel)
+static void fir_kernel_normalize (xspan<T> kernel)
 {
   static_assert (std::is_floating_point_v<T>);
 
@@ -51,9 +51,9 @@ static void fir_kernel_normalize (crange<T> kernel)
 //
 template <class T, class U, class FFT>
 static void fir_kernel_to_minphase (
-  crange<T> kernel,
-  FFT&      fft,
-  crange<U> fft_work_buffer)
+  xspan<T> kernel,
+  FFT&     fft,
+  xspan<U> fft_work_buffer)
 {
   static_assert (std::is_floating_point_v<T>);
   static_assert (std::is_floating_point_v<U>);
@@ -65,7 +65,7 @@ static void fir_kernel_to_minphase (
   assert (fft.buffer_size() <= fftwb.size());
   assert (fftsize >= (kernel.size() * 8));
 
-  crange_memset (fftwb, 0);
+  xspan_memset (fftwb, 0);
 
   // regular fft of the impulse
   for (uint i = 0; i < kernel.size(); ++i) {
@@ -89,7 +89,7 @@ static void fir_kernel_to_minphase (
     fftwb[i] *= (U) 2;
     fftwb[i + 1] = (U) 0; // should be real already...
   }
-  crange_memset (fftwb.advanced (fftsize + 2), 0);
+  xspan_memset (fftwb.advanced (fftsize + 2), 0);
 
   // FFT again
   fft.forward_ordered (fftwb);
@@ -109,7 +109,7 @@ static void fir_kernel_to_minphase (
 }
 //------------------------------------------------------------------------------
 template <class T>
-static void fir_kernel_to_minphase (crange<T> kernel)
+static void fir_kernel_to_minphase (xspan<T> kernel)
 {
   fft<double>                                 fftv;
   std::vector<double, fft<double>::allocator> fft_buff;
@@ -122,11 +122,11 @@ static void fir_kernel_to_minphase (crange<T> kernel)
 // https://www.dsprelated.com/freebooks/filters/Numerical_Computation_Group_Delay.html
 template <class T, class U, class FFT>
 static void fir_kernel_group_delay (
-  crange<T> kernel,
-  T         fc, // normalized, from 0 to 0.5
-  FFT&      fft,
-  crange<U> fft_work_buffer1,
-  crange<U> fft_work_buffer2)
+  xspan<T> kernel,
+  T        fc, // normalized, from 0 to 0.5
+  FFT&     fft,
+  xspan<U> fft_work_buffer1,
+  xspan<U> fft_work_buffer2)
 {
   static_assert (std::is_floating_point_v<T>);
   static_assert (std::is_floating_point_v<U>);
@@ -140,8 +140,8 @@ static void fir_kernel_group_delay (
   assert (br.size() == b.size());
   assert (is_pow2 (fftsize));
 
-  crange_memset (b, 0);
-  crange_memset (br, 0);
+  xspan_memset (b, 0);
+  xspan_memset (br, 0);
 
   for (uint i = 0; i < kernel.size(); ++i) {
     b[i * 2]  = (U) kernel[i];
@@ -163,11 +163,11 @@ static void fir_kernel_group_delay (
 // fc normalized freq, 0 to 0.5 (nyquist)
 template <class T>
 static void kaiser_lp_kernel_2 (
-  crange<T> dst_kernel,
-  T         fc,
-  T         beta,
-  T         mu,
-  bool      minphase)
+  xspan<T> dst_kernel,
+  T        fc,
+  T        beta,
+  T        mu,
+  bool     minphase)
 {
   static_assert (std::is_floating_point_v<T>);
 
@@ -182,11 +182,11 @@ static void kaiser_lp_kernel_2 (
 // fc normalized freq, 0 to 0.5 (nyquist)
 template <class T>
 static void kaiser_lp_kernel (
-  crange<T> dst_kernel,
-  T         fc,
-  T         att_db,
-  T         mu,
-  bool      minphase)
+  xspan<T> dst_kernel,
+  T        fc,
+  T        att_db,
+  T        mu,
+  bool     minphase)
 {
   static_assert (std::is_floating_point_v<T>);
 

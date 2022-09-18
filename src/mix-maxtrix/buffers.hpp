@@ -9,8 +9,8 @@
 
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 // -----------------------------------------------------------------------------
@@ -178,9 +178,9 @@ public:
   //----------------------------------------------------------------------------
   template <size_t N_bus_chnls = 2, class I> // 2 = stereo
   bool mix (
-    int             dst_bus,
-    crange<const I> mix_buses,
-    bool            foce_sum_with_dst = false)
+    int            dst_bus,
+    xspan<const I> mix_buses,
+    bool           foce_sum_with_dst = false)
   {
     static_assert (
       std::is_integral<I>::value && std::is_signed<I>::value
@@ -231,10 +231,10 @@ public:
   //----------------------------------------------------------------------------
   template <size_t N_bus_chnls = 2, class I, class P> // 2 = stereo
   bool mix (
-    int             dst_bus,
-    crange<const I> mix_buses,
-    crange<P*>      summing_procesors,
-    bool            foce_sum_with_dst = false)
+    int            dst_bus,
+    xspan<const I> mix_buses,
+    xspan<P*>      summing_procesors,
+    bool           foce_sum_with_dst = false)
   {
     static_assert (
       std::is_integral<I>::value && std::is_signed<I>::value

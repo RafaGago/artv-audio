@@ -6,9 +6,9 @@
 
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/interpolation/stateful.hpp"
 #include "artv-common/dsp/own/parts/interpolation/stateless.hpp"
@@ -26,7 +26,7 @@ template <class V>
 class pow2_circular_buffer {
 public:
   //----------------------------------------------------------------------------
-  void reset (crange<V> mem)
+  void reset (xspan<V> mem)
   {
     assert (is_pow2 (mem.size()));
     _mem  = mem.data();
@@ -81,7 +81,7 @@ template <class V>
 class circular_buffer {
 public:
   //----------------------------------------------------------------------------
-  void reset (crange<V> mem)
+  void reset (xspan<V> mem)
   {
     assert (mem.size());
     _mem  = mem.data();
@@ -136,7 +136,7 @@ public:
   //----------------------------------------------------------------------------
   using value_type = T;
   //----------------------------------------------------------------------------
-  constexpr void reset (crange<T> mem, uint n_channels)
+  constexpr void reset (xspan<T> mem, uint n_channels)
   {
     uint size = mem.size() / n_channels;
     assert ((mem.size() % n_channels) == 0);
@@ -181,7 +181,7 @@ public:
   //----------------------------------------------------------------------------
   using value_type = T;
   //----------------------------------------------------------------------------
-  constexpr void reset (crange<T> mem, uint n_channels)
+  constexpr void reset (xspan<T> mem, uint n_channels)
   {
     uint size = mem.size() / n_channels;
     assert ((mem.size() % n_channels) == 0);
@@ -266,7 +266,7 @@ public:
     return t._z[pos * t._n_channels + chnl];
   }
   //----------------------------------------------------------------------------
-  constexpr void push (const crange<value_type> row)
+  constexpr void push (const xspan<value_type> row)
   {
     auto& t = *this;
 
@@ -309,7 +309,7 @@ public:
     return t._z[pos * t._n_channels + chnl];
   }
   //----------------------------------------------------------------------------
-  constexpr void push (const crange<value_type> row)
+  constexpr void push (const xspan<value_type> row)
   {
     auto& t = *this;
 
@@ -352,7 +352,7 @@ public:
     return t._z[chmem + pos];
   }
   //----------------------------------------------------------------------------
-  constexpr void push (const crange<value_type> row)
+  constexpr void push (const xspan<value_type> row)
   {
     auto& t = *this;
 
@@ -397,7 +397,7 @@ public:
     return t._z[chmem + pos];
   }
   //----------------------------------------------------------------------------
-  constexpr void push (const crange<value_type> row)
+  constexpr void push (const xspan<value_type> row)
   {
     auto& t = *this;
 
@@ -483,7 +483,7 @@ public:
   //----------------------------------------------------------------------------
   // distributes the memory, but if the interpolators require initialization
   // they will have to be reset separately.
-  void reset (crange<value_type> mem, uint n_channels)
+  void reset (xspan<value_type> mem, uint n_channels)
   {
     if constexpr (interp::n_coeffs > 0 || interp::n_states > 0) {
       uint n_coeff_sets = interp::coeffs_are_global ? 1 : n_channels;
@@ -531,9 +531,9 @@ public:
     class T,
     std::enable_if_t<std::is_same_v<T, T> && interp_global_co_ext>* = nullptr>
   void reset_interpolator (
-    uint            channel,
-    bool            reset_state,
-    crange<const T> external_coeffs)
+    uint           channel,
+    bool           reset_state,
+    xspan<const T> external_coeffs)
   {
     static_assert (std::is_same_v<T, coeffs_type>);
     if (channel == 0) {
@@ -587,7 +587,7 @@ public:
     return ret;
   }
   //----------------------------------------------------------------------------
-  void get (crange<value_type> out, crange<float> n_spls)
+  void get (xspan<value_type> out, xspan<float> n_spls)
   {
     assert (out.size() >= n_channels());
     assert (n_spls.size() >= n_channels());
@@ -611,7 +611,7 @@ protected:
   auto get_interp_coeffs (uint channel)
   {
     if constexpr (interp::n_coeffs == 0) {
-      return crange<coeffs_type> {};
+      return xspan<coeffs_type> {};
     }
     else if constexpr (interp_global_co_ext) {
       return _ext_coeffs;
@@ -626,7 +626,7 @@ protected:
     }
   }
   //----------------------------------------------------------------------------
-  crange<states_type> get_interp_states (uint channel)
+  xspan<states_type> get_interp_states (uint channel)
   {
     if constexpr (interp::n_states == 0) {
       return {};
@@ -686,10 +686,10 @@ private:
   using mem_storage_type = std::conditional_t<
     interp::n_coeffs == 0 && interp::n_states == 0,
     null_type,
-    crange<builtin_type>>;
+    xspan<builtin_type>>;
 
   using ext_interp_coeffs_type = std::
-    conditional_t<interp_global_co_ext, crange<const coeffs_type>, null_type>;
+    conditional_t<interp_global_co_ext, xspan<const coeffs_type>, null_type>;
 
   mem_storage_type       _mem {};
   ext_interp_coeffs_type _ext_coeffs {};
@@ -753,7 +753,7 @@ public:
     base::clear();
   }
   //----------------------------------------------------------------------------
-  void reset (crange<value_type> mem, uint n_channels)
+  void reset (xspan<value_type> mem, uint n_channels)
   {
     if constexpr (is_vec_v<value_type>) {
       _delay_spls = mem.template cast<delay_type>().cut_head (n_channels);
@@ -823,7 +823,7 @@ private:
     vec_value_type_t<value_type>,
     value_type>;
 
-  crange<delay_type> _delay_spls;
+  xspan<delay_type> _delay_spls;
 };
 //------------------------------------------------------------------------------
 } // namespace detail
@@ -934,19 +934,19 @@ struct raw_allpass_interp {
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, V fractional)
+  static void reset_coeffs (xspan<V> co, V fractional)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     st[y1] = vec_set<V> ((vec_value_type_t<V>) 0);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V>         co,
-    crange<V>               st,
+    xspan<const V>          co,
+    xspan<V>                st,
     std::array<V, n_points> y_points,
     V                       x)
   {
@@ -972,7 +972,7 @@ struct thiran_interp_1 {
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> srate)
+  static void reset_coeffs (xspan<V> co, V freq, vec_value_type_t<V> srate)
   {
     using T = vec_value_type_t<V>;
     auto d  = vec_tan (M_PI * freq / srate);
@@ -980,7 +980,7 @@ struct thiran_interp_1 {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, V fractional)
+  static void reset_coeffs (xspan<V> co, V fractional)
   {
     using T = vec_value_type_t<V>;
     // D parameter between 0.418 and 1.418
@@ -1005,13 +1005,13 @@ struct thiran_interp_1 {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V>         co,
-    crange<V>               st,
+    xspan<const V>          co,
+    xspan<V>                st,
     std::array<V, n_points> y_points,
     V                       x [[maybe_unused]])
   {
@@ -1037,7 +1037,7 @@ struct thiran_interp_2_df1 {
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, V freq, vec_value_type_t<V> srate)
+  static void reset_coeffs (xspan<V> co, V freq, vec_value_type_t<V> srate)
   {
     using T = vec_value_type_t<V>;
     auto d  = vec_tan (M_PI * freq / srate);
@@ -1046,7 +1046,7 @@ struct thiran_interp_2_df1 {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> co, V fractional)
+  static void reset_coeffs (xspan<V> co, V fractional)
   {
     using T = vec_value_type_t<V>;
     V d     = fractional + (T) 1.403;
@@ -1084,13 +1084,13 @@ struct thiran_interp_2_df1 {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V>         co,
-    crange<V>               st,
+    xspan<const V>          co,
+    xspan<V>                st,
     std::array<V, n_points> y_points,
     V                       x [[maybe_unused]])
   {
@@ -1225,7 +1225,7 @@ public:
     return base::get_interpolated_unchecked (spls, frac, channel);
   }
   //----------------------------------------------------------------------------
-  constexpr void get (crange<value_type> dst, crange<float> del_spls)
+  constexpr void get (xspan<value_type> dst, xspan<float> del_spls)
   {
     assert (dst.size() >= n_channels());
     assert (del_spls.size() >= n_channels());
@@ -1301,12 +1301,12 @@ public:
     do_delete();
     uint elems = max_delay * n_channels;
     _mem       = new value_type[elems];
-    _z.reset (make_crange (_mem, elems), n_channels);
+    _z.reset (make_xspan (_mem, elems), n_channels);
   }
   //----------------------------------------------------------------------------
   T get (time_type sample, uint channel) { return _z.get (sample, channel); }
   //----------------------------------------------------------------------------
-  void push (const crange<T> x) { _z.push (x); }
+  void push (const xspan<T> x) { _z.push (x); }
   //----------------------------------------------------------------------------
   uint size() const { return _z.size(); }
   //----------------------------------------------------------------------------
@@ -1339,7 +1339,7 @@ public:
   static_assert (std::is_floating_point_v<T>);
   //----------------------------------------------------------------------------
   template <class U>
-  crange<value_type> reset (crange<value_type> mem, crange<const U> sizes)
+  xspan<value_type> reset (xspan<value_type> mem, xspan<const U> sizes)
   {
     static_assert (std::is_unsigned_v<U>);
 
@@ -1351,7 +1351,7 @@ public:
     return mem; // return the remainder
   }
   //----------------------------------------------------------------------------
-  constexpr void push (const crange<value_type> row)
+  constexpr void push (const xspan<value_type> row)
   {
     assert (row.size() >= n_channels);
     ++_pos;
@@ -1369,7 +1369,7 @@ public:
     return del.ptr[del.mask & (_pos - del_spls)];
   }
   //----------------------------------------------------------------------------
-  constexpr void get (crange<value_type> dst, crange<uint> del_spls)
+  constexpr void get (xspan<value_type> dst, xspan<uint> del_spls)
   {
     assert (dst.size() >= n_channels);
     assert (del_spls.size() >= n_channels);
@@ -1398,7 +1398,7 @@ public:
   static_assert (std::is_floating_point_v<T>);
   //----------------------------------------------------------------------------
   template <class U>
-  crange<value_type> reset (crange<value_type> mem, crange<const U> sizes)
+  xspan<value_type> reset (xspan<value_type> mem, xspan<const U> sizes)
   {
     static_assert (std::is_unsigned_v<U>);
 
@@ -1409,7 +1409,7 @@ public:
     return mem; // return the remainder
   }
   //----------------------------------------------------------------------------
-  constexpr void push (const crange<value_type> row)
+  constexpr void push (const xspan<value_type> row)
   {
     assert (row.size() >= n_channels);
     for (uint i = 0; i < n_channels; ++i) {
@@ -1430,7 +1430,7 @@ public:
     return del.ptr[del_spls];
   }
   //----------------------------------------------------------------------------
-  constexpr void get (crange<value_type> dst, crange<uint> del_spls)
+  constexpr void get (xspan<value_type> dst, xspan<uint> del_spls)
   {
     assert (dst.size() >= n_channels);
     assert (del_spls.size() >= n_channels);
@@ -1439,7 +1439,7 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  static constexpr uint n_required_elems (crange<const uint> sizes)
+  static constexpr uint n_required_elems (xspan<const uint> sizes)
   {
     return std::accumulate (sizes.begin(), sizes.end(), 0);
   }

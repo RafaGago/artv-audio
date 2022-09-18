@@ -10,8 +10,8 @@
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace pffft {
 //------------------------------------------------------------------------------
@@ -30,7 +30,7 @@ public:
   fft() = default;
   ~fft() { reset (0); }
   //----------------------------------------------------------------------------
-  fft (const fft&) = delete;
+  fft (const fft&)            = delete;
   fft& operator= (const fft&) = delete;
   //----------------------------------------------------------------------------
   fft (fft&& other) { *this = std::forward<fft<value_type>> (other); };
@@ -75,9 +75,9 @@ public:
   // unordered complex array, so in practice forward/backward is for little use
   // except for performing some functionality not yet wrapped.
   void forward (
-    crange<value_type>       out,
-    const crange<value_type> in,
-    crange<value_type>       work)
+    xspan<value_type>       out,
+    const xspan<value_type> in,
+    xspan<value_type>       work)
   {
     align_assert (out.data());
     align_assert (in.data());
@@ -89,9 +89,9 @@ public:
   // unordered complex array, so in practice forward/backward is for little use
   // except for performing some functionality not yet wrapped.
   void backward (
-    crange<value_type>       out,
-    const crange<value_type> in,
-    crange<value_type>       work)
+    xspan<value_type>       out,
+    const xspan<value_type> in,
+    xspan<value_type>       work)
   {
     align_assert (out.data());
     align_assert (in.data());
@@ -99,26 +99,26 @@ public:
     pffftd_transform (_setup, &in[0], &out[0], &work[0], PFFFT_BACKWARD);
   }
   //----------------------------------------------------------------------------
-  void reorder_after_forward (crange<value_type> out, crange<value_type> work)
+  void reorder_after_forward (xspan<value_type> out, xspan<value_type> work)
   {
     align_assert (out.data());
     align_assert (work.data());
-    crange_copy (work, out);
+    xspan_copy (work, out);
     pffftd_zreorder (_setup, &work[0], &out[0], PFFFT_FORWARD);
   }
   //----------------------------------------------------------------------------
-  void reorder_before_backward (crange<value_type> out, crange<value_type> work)
+  void reorder_before_backward (xspan<value_type> out, xspan<value_type> work)
   {
     align_assert (out.data());
     align_assert (work.data());
-    crange_copy (work, out);
+    xspan_copy (work, out);
     pffftd_zreorder (_setup, &work[0], &out[0], PFFFT_BACKWARD);
   }
   //----------------------------------------------------------------------------
   void forward_ordered (
-    crange<value_type>       out,
-    const crange<value_type> in,
-    crange<value_type>       work)
+    xspan<value_type>       out,
+    const xspan<value_type> in,
+    xspan<value_type>       work)
   {
     align_assert (out.data());
     align_assert (in.data());
@@ -127,9 +127,9 @@ public:
   }
   //----------------------------------------------------------------------------
   void backward_ordered (
-    crange<value_type>       out,
-    const crange<value_type> in,
-    crange<value_type>       work)
+    xspan<value_type>       out,
+    const xspan<value_type> in,
+    xspan<value_type>       work)
   {
     align_assert (out.data());
     align_assert (in.data());
@@ -138,7 +138,7 @@ public:
       _setup, &in[0], &out[0], &work[0], PFFFT_BACKWARD);
   }
   //----------------------------------------------------------------------------
-  void data_rescale (crange<value_type> v, uint fft_size, bool complex)
+  void data_rescale (xspan<value_type> v, uint fft_size, bool complex)
   {
     uint elems = fft_size * (complex ? 2 : 1);
     assert (v.size() >= elems);

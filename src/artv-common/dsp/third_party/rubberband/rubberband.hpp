@@ -13,9 +13,9 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -140,7 +140,7 @@ public:
     });
   }
   //----------------------------------------------------------------------------
-  void process (crange<float*> outs, crange<float const*> ins, uint samples)
+  void process (xspan<float*> outs, xspan<float const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -161,7 +161,7 @@ public:
       if (unlikely (got != blocksize)) {
         uint blank = blocksize - got;
         for (uint i = 0; i < 2; ++i) {
-          crange_memset (make_crange (out[i], blank), 0);
+          xspan_memset (make_xspan (out[i], blank), 0);
           out[i] += blank;
         }
       }

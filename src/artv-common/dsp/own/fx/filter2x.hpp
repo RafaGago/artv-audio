@@ -20,9 +20,9 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -314,7 +314,7 @@ public:
     _cfg   = decltype (_cfg) {};
 
     smoother::reset_coeffs (
-      make_crange (_smooth_coeff).cast (x1_t {}),
+      make_xspan (_smooth_coeff).cast (x1_t {}),
       vec_set<x1_t> (1. / 0.08),
       _t_spl);
 
@@ -334,7 +334,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -384,17 +384,17 @@ public:
           auto smcoeff = (float) _smooth_coeff;
 
           smoother::tick<float_x4> (
-            make_crange (smcoeff),
-            make_crange (_smooth_pars[b].arr).cast (float_x4 {}),
+            make_xspan (smcoeff),
+            make_xspan (_smooth_pars[b].arr).cast (float_x4 {}),
             vec_load<float_x4> (target_pars.arr.data()));
         }
 
-        crange<double_x2> internal = _filter.get_coeffs (b);
+        xspan<double_x2> internal = _filter.get_coeffs (b);
         for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
           for (uint i = 0; i < n_samples; ++i) {
             internal[j] = smoother::tick (
-              make_crange (_smooth_coeff),
-              make_crange (internal[j]),
+              make_xspan (_smooth_coeff),
+              make_xspan (internal[j]),
               _target_coeffs[b][j]);
           }
         }
@@ -640,7 +640,7 @@ private:
 
     auto btype = get_band_type (band);
 
-    auto co = make_crange (_target_coeffs[band]);
+    auto co = make_xspan (_target_coeffs[band]);
 
     switch (btype) {
     case bandtype::off:
@@ -779,7 +779,7 @@ private:
     // reset smoothing
     if (_cfg[band].reset_band_state) {
       _filter.reset_states_on_idx (band);
-      crange_copy<double_x2> (_filter.get_coeffs (band), co);
+      xspan_copy<double_x2> (_filter.get_coeffs (band), co);
       set_target_params (_smooth_pars[band], band);
     }
     _cfg[band].has_changes      = false;

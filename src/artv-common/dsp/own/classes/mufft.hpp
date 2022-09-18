@@ -16,8 +16,8 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/overaligned_allocator.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace mufft {
 //------------------------------------------------------------------------------
@@ -36,7 +36,7 @@ public:
   fft() = default;
   ~fft() { reset (0); }
   //----------------------------------------------------------------------------
-  fft (const fft&) = delete;
+  fft (const fft&)            = delete;
   fft& operator= (const fft&) = delete;
   //----------------------------------------------------------------------------
   fft (fft&& other) { *this = std::forward<fft<value_type>> (other); };
@@ -88,7 +88,7 @@ public:
     return true;
   }
   //----------------------------------------------------------------------------
-  void forward (crange<value_type> out, const crange<value_type> in)
+  void forward (xspan<value_type> out, const xspan<value_type> in)
   {
     align_assert (out.data());
     align_assert (in.data());
@@ -96,7 +96,7 @@ public:
     mufft_execute_plan_1d (_fwd, out.data(), in.data());
   }
   //----------------------------------------------------------------------------
-  void backward (crange<value_type> out, const crange<value_type> in)
+  void backward (xspan<value_type> out, const xspan<value_type> in)
   {
     align_assert (out.data());
     align_assert (in.data());
@@ -104,21 +104,21 @@ public:
     mufft_execute_plan_1d (_bckwd, out.data(), in.data());
   }
   //----------------------------------------------------------------------------
-  void reorder_after_forward (crange<value_type>) {}
+  void reorder_after_forward (xspan<value_type>) {}
   //----------------------------------------------------------------------------
-  void reorder_before_backward (crange<value_type>) {}
+  void reorder_before_backward (xspan<value_type>) {}
   //----------------------------------------------------------------------------
-  void forward_ordered (crange<value_type> out, const crange<value_type> in)
+  void forward_ordered (xspan<value_type> out, const xspan<value_type> in)
   {
     forward (out, in);
   }
   //----------------------------------------------------------------------------
-  void backward_ordered (crange<value_type> out, const crange<value_type> in)
+  void backward_ordered (xspan<value_type> out, const xspan<value_type> in)
   {
     backward (out, in);
   }
   //----------------------------------------------------------------------------
-  void data_rescale (crange<value_type> v, uint fft_size, bool complex)
+  void data_rescale (xspan<value_type> v, uint fft_size, bool complex)
   {
     uint elems = fft_size * (complex ? 2 : 1);
     assert (v.size() >= elems);

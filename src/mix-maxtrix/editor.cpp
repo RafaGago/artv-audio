@@ -73,7 +73,7 @@ public:
     juce::AudioProcessor&               p,
     juce::AudioProcessorValueTreeState& params,
     juce::ValueTree&                    gui_params,
-    crange<foleys::LevelMeterSource>    meter_srcs)
+    xspan<foleys::LevelMeterSource>     meter_srcs)
     : AudioProcessorEditor (p), _processor (p)
   {
     //        id, juce::Colours::green.brighter (0.2),
@@ -372,7 +372,7 @@ public:
         outs[7]->buttons[i],
         mods[i]->buttons,
         mutesolo[i]->buttons,
-        make_contiguous_range (_page_buttons[i]));
+        make_xspan (_page_buttons[i]));
     }
     set_color (
       juce::TextButton::buttonOnColourId,
@@ -738,7 +738,7 @@ public:
         columns[i],
         (float) columns[i].getWidth() / _page_buttons[i].size(),
         make_array (fx_page_h),
-        make_contiguous_range (_page_buttons[i]));
+        make_xspan (_page_buttons[i]));
     }
 
     area.removeFromTop (sep_h); // separator
@@ -1359,7 +1359,7 @@ private:
 
   std::array<foleys::LevelMeterLookAndFeel, n_stereo_busses> _meters_look_feel;
   std::array<foleys::LevelMeter, n_stereo_busses>            _meters;
-  crange<foleys::LevelMeterSource>                           _meter_srcs;
+  xspan<foleys::LevelMeterSource>                            _meter_srcs;
 
   std::array<juce::Label, n_stereo_busses>                 _chnl_names;
   std::array<value_tree_label_attachment, n_stereo_busses> _chnl_name_updates;
@@ -1370,7 +1370,7 @@ juce::AudioProcessorEditor* new_editor (
   juce::AudioProcessor&               p,
   juce::AudioProcessorValueTreeState& params,
   juce::ValueTree&                    gui_params,
-  crange<foleys::LevelMeterSource>    meter_srcs)
+  xspan<foleys::LevelMeterSource>     meter_srcs)
 {
   return new artv::editor (p, params, gui_params, meter_srcs);
 }

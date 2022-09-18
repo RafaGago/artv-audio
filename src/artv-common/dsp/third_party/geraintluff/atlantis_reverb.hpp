@@ -42,8 +42,8 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace geraint_luff {
 
@@ -75,23 +75,23 @@ private:
   void      jsfx_fft (float start_index, uint size)
   {
     jsfx_ffts.get_fft (size)->forward (
-      make_crange (&heap (start_index), size * 2));
+      make_xspan (&heap (start_index), size * 2));
   }
   void jsfx_ifft (float start_index, uint size)
   {
     jsfx_ffts.get_fft (size)->backward (
-      make_crange (&heap (start_index), size * 2));
+      make_xspan (&heap (start_index), size * 2));
   }
 
   void jsfx_fft_ipermute (double start_index, uint size)
   {
     jsfx_ffts.get_fft (size)->reorder_before_backward (
-      make_crange (&heap (start_index), size * 2));
+      make_xspan (&heap (start_index), size * 2));
   }
   void jsfx_fft_permute (double start_index, uint size)
   {
     jsfx_ffts.get_fft (size)->reorder_after_forward (
-      make_crange (&heap (start_index), size * 2));
+      make_xspan (&heap (start_index), size * 2));
   }
 
   using simdwrapper = simd_mem<float, 32 / sizeof (float), 32>;
@@ -935,13 +935,13 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     add_ducker::process (
       outs,
       ins,
       samples,
-      [=] (crange<T*> outs_fw, crange<T const*> ins_fw, uint samples_fw) {
+      [=] (xspan<T*> outs_fw, xspan<T const*> ins_fw, uint samples_fw) {
         this->process_intern (outs_fw, ins_fw, samples_fw);
       });
   }
@@ -957,7 +957,7 @@ private:
 
   //----------------------------------------------------------------------------
   template <class T>
-  void process_intern (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process_intern (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));

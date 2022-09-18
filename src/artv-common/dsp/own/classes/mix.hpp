@@ -11,8 +11,8 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -201,7 +201,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block (crange<T*> outs, crange<T const*> ins, int samples)
+  void process_block (xspan<T*> outs, xspan<T const*> ins, int samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= ((uint) bus_type));
@@ -215,10 +215,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block_dry_wet (
-    crange<T*>       outs,
-    crange<T const*> ins,
-    uint             samples)
+  void process_block_dry_wet (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     using simd                  = juce::dsp::SIMDRegister<T>;
     constexpr size_t simd_elems = simd::SIMDNumElements;
@@ -313,9 +310,9 @@ public:
   // panning, but it doesn't skip dry M/S balance.
   template <class T>
   void process_block_dry_only (
-    crange<T*>       outs,
-    crange<T const*> ins,
-    uint             samples)
+    xspan<T*>       outs,
+    xspan<T const*> ins,
+    uint            samples)
   {
     using simd                  = juce::dsp::SIMDRegister<T>;
     constexpr size_t simd_elems = simd::SIMDNumElements;

@@ -9,9 +9,9 @@
 #include "artv-common/dsp/own/parts/filters/thiran.hpp"
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace adaa {
 //------------------------------------------------------------------------------
@@ -33,15 +33,15 @@ public:
   enum state { n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V>)
+  static void reset_coeffs (xspan<V>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V>)
+  static void reset_states (xspan<V>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V>, crange<V>, V x)
+  static V tick (xspan<const V>, xspan<V>, V x)
   {
     return functions::fn (x);
   }
@@ -56,15 +56,15 @@ public:
   enum state { x1, x1_int, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V>)
+  static void reset_coeffs (xspan<V>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V>, crange<V> st, V x)
+  static V tick (xspan<const V>, xspan<V> st, V x)
   {
     // as this has to calculate both branches, it might not be worth bothering.
     using T = vec_value_type_t<V>;
@@ -105,11 +105,11 @@ public:
   enum state { x1, x2, x2_der, x1_int2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V>)
+  static void reset_coeffs (xspan<V>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
@@ -117,7 +117,7 @@ public:
   //----------------------------------------------------------------------------
   // kept as an impl reference if going for it.
   template <class T>
-  static T tick (crange<const T>, crange<T> st, T x)
+  static T tick (xspan<const T>, xspan<T> st, T x)
   {
     using fns = functions;
 
@@ -152,7 +152,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V>, crange<V> st, V x)
+  static V tick (xspan<const V>, xspan<V> st, V x)
   {
     // Real SIMD: TODO. Might not be worth because of the high number of
     // branches.
@@ -162,7 +162,7 @@ public:
 private:
   //----------------------------------------------------------------------------
   template <class T>
-  static T get_derivative_x1 (crange<T> st, T x)
+  static T get_derivative_x1 (xspan<T> st, T x)
   {
     T x1v      = st[x1];
     T x1v_int2 = st[x1_int2];
@@ -203,7 +203,7 @@ public:
   };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c)
+  static void reset_coeffs (xspan<V> c)
   {
     using T = vec_value_type_t<V>;
 
@@ -216,14 +216,14 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> s)
+  static void reset_states (xspan<V> s)
   {
     // maybe memset delay line and boxcar?
     Impl<1, Ts...>::template reset_states<V> (s.advanced (impl_states_idx));
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V> c, crange<V> st, V x)
+  static V tick (xspan<const V> c, xspan<V> st, V x)
   {
     assert (c.size() >= n_coeffs);
     assert (st.size() >= n_states);
@@ -248,7 +248,7 @@ struct null_shaper {
   enum state { n_states };
 
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V> c, crange<V> st, V x)
+  static V tick (xspan<const V> c, xspan<V> st, V x)
   {
     return x;
   }

@@ -11,9 +11,8 @@ class plugin_context;
 template <class T>
 struct stereo_processor {
   virtual ~stereo_processor() {}
-  virtual void reset (plugin_context& pc) = 0;
-  virtual void process (crange<T*> outs, crange<T const*> ins, uint samples)
-    = 0;
+  virtual void reset (plugin_context& pc)                                  = 0;
+  virtual void process (xspan<T*> outs, xspan<T const*> ins, uint samples) = 0;
 
   // TODO: All of this is implementable on "stereo_processor_adapt", just not
   // done yet.
@@ -35,7 +34,7 @@ public:
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc) override { Impl::reset (pc); };
   //----------------------------------------------------------------------------
-  void process (crange<T*> outs, crange<T const*> ins, uint samples) override
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples) override
   {
     Impl::process (outs, ins, samples);
   }

@@ -25,7 +25,7 @@ struct linear_phase_fir_coeffs;
 
 template <>
 struct linear_phase_fir_coeffs<2> {
-  static crange<const float> data()
+  static xspan<const float> data()
   {
     // scripts/fir-oversampling.py -s 88200 -c 22050 -t 4250 -a 96 --float
     static const std::array<float, 65> coeffs = {
@@ -102,7 +102,7 @@ struct linear_phase_fir_coeffs<2> {
 
 template <>
 struct linear_phase_fir_coeffs<4> {
-  static crange<const float> data()
+  static xspan<const float> data()
   {
     // scripts/fir-oversampling.py -s 176400 -c 22050 -t 4250 -a 96 --float
     static const std::array<float, 129> coeffs = {
@@ -243,7 +243,7 @@ struct linear_phase_fir_coeffs<4> {
 
 template <>
 struct linear_phase_fir_coeffs<8> {
-  static crange<const float> data()
+  static xspan<const float> data()
   {
     static const std::array<float, 257> coeffs = {
       0.f,
@@ -513,7 +513,7 @@ struct linear_phase_fir_coeffs<8> {
 
 template <>
 struct linear_phase_fir_coeffs<16> {
-  static crange<const float> data()
+  static xspan<const float> data()
   {
     // scripts/fir-oversampling.py -s 705600 -c 22050 -t 4226 -a 96 --float
     static const std::array<float, 513> coeffs = {
@@ -1062,7 +1062,7 @@ struct min_phase_coeffs;
 
 template <>
 struct min_phase_coeffs<2> {
-  static crange<const crange<const float>> iir()
+  static xspan<const xspan<const float>> iir()
   {
     // filter from the IIR docs (oversampling.txt):
     //
@@ -1088,18 +1088,18 @@ struct min_phase_coeffs<2> {
       0.65849242953158127f,
       0.79323734846738669f,
       0.92851085864352823f};
-    static const std::array<crange<const float>, 1> range = {x2};
+    static const std::array<xspan<const float>, 1> range = {x2};
     return range;
   };
 
-  static crange<const float> fir() { return {}; }
+  static xspan<const float> fir() { return {}; }
 
   static uint latency() { return 4; };
 };
 
 template <>
 struct min_phase_coeffs<4> {
-  static crange<const crange<const float>> iir()
+  static xspan<const xspan<const float>> iir()
   {
     // filter from the IIR docs (oversampling.txt):
     //
@@ -1141,23 +1141,23 @@ struct min_phase_coeffs<4> {
       0.8366526760248606,
       0.94507809950113342};
 
-    static const std::array<crange<const float>, 2> range = {x2, x4};
+    static const std::array<xspan<const float>, 2> range = {x2, x4};
     return range;
   };
 
-  static crange<const float> fir() { return {}; }
+  static xspan<const float> fir() { return {}; }
 
   static uint latency() { return 5; };
 };
 
 template <>
 struct min_phase_coeffs<8> {
-  static crange<const crange<const float>> iir()
+  static xspan<const xspan<const float>> iir()
   {
     return min_phase_coeffs<4>::iir();
   }
 
-  static crange<const float> fir()
+  static xspan<const float> fir()
   {
     // scripts/fir-oversampling.py -s 352800 -c 88200 -t 66850 -a 95 --float
     static const std::array<float, 34> coeffs = {
@@ -1189,12 +1189,12 @@ struct min_phase_coeffs<8> {
 
 template <>
 struct min_phase_coeffs<16> {
-  static crange<const crange<const float>> iir()
+  static xspan<const xspan<const float>> iir()
   {
     return min_phase_coeffs<4>::iir();
   }
 
-  static crange<const float> fir()
+  static xspan<const float> fir()
   {
     // scripts/fir-oversampling.py -s 705600 -c 88200 -t 66850 -a 95 --float
     static const std::array<float, 33> coeffs = {

@@ -7,9 +7,9 @@
 #include "artv-common/dsp/own/parts/traits.hpp"
 #include "artv-common/dsp/own/parts/waveshapers/sigmoid.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 //------------------------------------------------------------------------------
 namespace artv { namespace saike {
 
@@ -58,7 +58,7 @@ struct ms20_base {
   enum state { y1, y2, d1, d2, n_states };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
@@ -68,7 +68,7 @@ protected:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           c,
+    xspan<V>            c,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl)
@@ -100,7 +100,7 @@ struct ms20_lowpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           c,
+    xspan<V>            c,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl)
@@ -111,9 +111,9 @@ struct ms20_lowpass : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in)
   {
     using T = vec_value_type_t<V>;
 
@@ -175,7 +175,7 @@ struct ms20_highpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           c,
+    xspan<V>            c,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl)
@@ -186,9 +186,9 @@ struct ms20_highpass : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in)
   {
     using T = vec_value_type_t<V>;
 
@@ -251,7 +251,7 @@ struct ms20_bandpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           c,
+    xspan<V>            c,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl)
@@ -262,9 +262,9 @@ struct ms20_bandpass : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in)
   {
     using T = vec_value_type_t<V>;
 
@@ -327,7 +327,7 @@ struct ms20_notch : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           c,
+    xspan<V>            c,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl)
@@ -338,9 +338,9 @@ struct ms20_notch : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in)
   {
     using T = vec_value_type_t<V>;
 
@@ -405,7 +405,7 @@ struct ms20_asym_lowpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           c,
+    xspan<V>            c,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl)
@@ -416,9 +416,9 @@ struct ms20_asym_lowpass : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in)
   {
     using T = vec_value_type_t<V>;
 
@@ -486,7 +486,7 @@ struct ms20_asym_highpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           c,
+    xspan<V>            c,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl)
@@ -497,9 +497,9 @@ struct ms20_asym_highpass : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in)
   {
     using T = vec_value_type_t<V>;
 
@@ -562,7 +562,7 @@ struct ms20_asym_bandpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           c,
+    xspan<V>            c,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl)
@@ -573,9 +573,9 @@ struct ms20_asym_bandpass : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in)
   {
     using T = vec_value_type_t<V>;
 
@@ -643,7 +643,7 @@ struct ms20_asym_notch : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           c,
+    xspan<V>            c,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl)
@@ -654,9 +654,9 @@ struct ms20_asym_notch : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in)
   {
     using T = vec_value_type_t<V>;
 
@@ -729,7 +729,7 @@ struct steiner_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
+    xspan<V>            co,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl,
@@ -740,7 +740,7 @@ struct steiner_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
+    xspan<V>            co,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl,
@@ -752,7 +752,7 @@ struct steiner_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
+    xspan<V>            co,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl,
@@ -764,7 +764,7 @@ struct steiner_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
+    xspan<V>            co,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl,
@@ -774,7 +774,7 @@ struct steiner_base {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
@@ -784,7 +784,7 @@ protected:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
+    xspan<V>            co,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> morph,
@@ -852,9 +852,9 @@ struct steiner_1 : public detail::steiner_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in)
   {
     using T = vec_value_type_t<V>;
 
@@ -930,9 +930,9 @@ struct steiner_2 : public detail::steiner_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in)
   {
     using T = vec_value_type_t<V>;
 
@@ -1045,8 +1045,8 @@ struct moog_1 {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
-    crange<V>           co_int,
+    xspan<V>            co,
+    xspan<V>            co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl,
@@ -1057,8 +1057,8 @@ struct moog_1 {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
-    crange<V>           co_int,
+    xspan<V>            co,
+    xspan<V>            co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl,
@@ -1070,8 +1070,8 @@ struct moog_1 {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
-    crange<V>           co_int,
+    xspan<V>            co,
+    xspan<V>            co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl,
@@ -1082,8 +1082,8 @@ struct moog_1 {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
-    crange<V>           co_int,
+    xspan<V>            co,
+    xspan<V>            co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl,
@@ -1093,7 +1093,7 @@ struct moog_1 {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     using T = vec_value_type_t<V>;
 
@@ -1103,7 +1103,7 @@ struct moog_1 {
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V> co, crange<const V> co_int, crange<V> st, V in)
+  static V tick (xspan<const V> co, xspan<const V> co_int, xspan<V> st, V in)
   {
     using T = vec_value_type_t<V>;
 
@@ -1221,8 +1221,8 @@ private:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
-    crange<V>           co_int,
+    xspan<V>            co,
+    xspan<V>            co_int,
     V                   freq,
     V                   reso,
     uint                filter_type, // choice on the original code
@@ -1297,8 +1297,8 @@ struct moog_2 {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
-    crange<V>           co_int,
+    xspan<V>            co,
+    xspan<V>            co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl,
@@ -1309,8 +1309,8 @@ struct moog_2 {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
-    crange<V>           co_int,
+    xspan<V>            co,
+    xspan<V>            co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl,
@@ -1321,8 +1321,8 @@ struct moog_2 {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
-    crange<V>           co_int,
+    xspan<V>            co,
+    xspan<V>            co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl,
@@ -1333,8 +1333,8 @@ struct moog_2 {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
-    crange<V>           co_int,
+    xspan<V>            co,
+    xspan<V>            co_int,
     V                   freq,
     V                   reso,
     vec_value_type_t<V> t_spl,
@@ -1344,7 +1344,7 @@ struct moog_2 {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
@@ -1352,7 +1352,7 @@ struct moog_2 {
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V> co, crange<const V> co_int, crange<V> st, V in)
+  static V tick (xspan<const V> co, xspan<const V> co_int, xspan<V> st, V in)
   {
     using T = vec_value_type_t<V>;
 
@@ -1438,8 +1438,8 @@ private:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
-    crange<V>           co_int,
+    xspan<V>            co,
+    xspan<V>            co_int,
     V                   freq,
     V                   reso,
     uint                filter_type, // choice on the original code

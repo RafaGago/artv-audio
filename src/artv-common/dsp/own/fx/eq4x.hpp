@@ -13,9 +13,9 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -42,13 +42,13 @@ public:
     _t_spl     = 1.f / pc.get_sample_rate();
     _cfg       = decltype (_cfg) {};
     smoother::reset_coeffs (
-      make_crange (_smooth_coeff).cast (x1_t {}),
+      make_xspan (_smooth_coeff).cast (x1_t {}),
       vec_set<x1_t> (1. / 0.02),
       _t_spl);
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -82,12 +82,12 @@ public:
         }
 
         // smoothing (at blocksize rate)
-        crange<double_x2> internal = _eq.get_coeffs (b);
+        xspan<double_x2> internal = _eq.get_coeffs (b);
         for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
           for (uint i = 0; i < blocksize; ++i) {
             internal[j] = smoother::tick (
-              make_crange (_smooth_coeff),
-              make_crange (internal[j]),
+              make_xspan (_smooth_coeff),
+              make_xspan (internal[j]),
               _target_coeffs[b][j]);
           }
         }
@@ -426,7 +426,7 @@ private:
     // reset smoothing
     if (_cfg[band].reset_band_state) {
       _eq.reset_states_on_idx (band);
-      crange_copy<double_x2> (_eq.get_coeffs (band), _target_coeffs[band]);
+      xspan_copy<double_x2> (_eq.get_coeffs (band), _target_coeffs[band]);
     }
     _cfg[band].has_changes      = false;
     _cfg[band].reset_band_state = false;

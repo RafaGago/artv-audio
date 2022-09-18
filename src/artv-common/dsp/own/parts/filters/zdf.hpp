@@ -6,9 +6,9 @@
 #include <type_traits>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace zdf {
 
@@ -29,7 +29,7 @@ static constexpr uint n_gs_coeffs = 2;
 //
 // See "The ART ov VA filter design" (Vadim Zabalishin) 5.3
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-struct response<V> combine_response (crange<const V> G_S) {
+struct response<V> combine_response (xspan<const V> G_S) {
   using T = vec_value_type_t<V>;
   assert ((G_S.size() % n_gs_coeffs) == 0);
 
@@ -104,15 +104,15 @@ struct feedback<linear_tag, Any1, Any2> {
   using nonlin = Any2;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c)
+  static void reset_coeffs (xspan<V> c)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V>, crange<V>, V in, response<V> resp, V k)
+  static V tick (xspan<const V>, xspan<V>, V in, response<V> resp, V k)
   {
     using T = vec_value_type_t<V>;
     return (in - k * resp.S) / (k * resp.G + (T) 1);
@@ -148,11 +148,11 @@ public:
   using nonlin = Nonlin;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c)
+  static void reset_coeffs (xspan<V> c)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     st[lin] = vec_set<V> (1);
@@ -160,8 +160,8 @@ public:
   //----------------------------------------------------------------------------
   template <class V, class... Ts, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V>,
-    crange<V>   st,
+    xspan<const V>,
+    xspan<V>    st,
     V           in,
     response<V> resp,
     V           k,
@@ -223,11 +223,11 @@ public:
   using nonlin = Nonlin;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c)
+  static void reset_coeffs (xspan<V> c)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     st[lin] = vec_set<V> (1);
@@ -235,8 +235,8 @@ public:
   //----------------------------------------------------------------------------
   template <class V, class... Ts, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V>,
-    crange<V>   st,
+    xspan<const V>,
+    xspan<V>    st,
     V           in,
     response<V> resp,
     V           k,
@@ -306,11 +306,11 @@ public:
   using nonlin = Nonlin;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c)
+  static void reset_coeffs (xspan<V> c)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     st[lin] = vec_set<V> (1);
@@ -318,8 +318,8 @@ public:
   //----------------------------------------------------------------------------
   template <class V, class... Ts, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V>,
-    crange<V>   st,
+    xspan<const V>,
+    xspan<V>    st,
     V           in,
     response<V> r1,
     response<V> r2,

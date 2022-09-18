@@ -6,8 +6,8 @@
 #include <gcem.hpp>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 //------------------------------------------------------------------------------
@@ -111,7 +111,7 @@ static T kaiser_beta_estimate (T att_db)
 //------------------------------------------------------------------------------
 // "mu" is a fractional delay in samples, from -0.5 to 0.5
 template <class T>
-static void apply_kaiser_window (crange<T> x, T beta, T mu)
+static void apply_kaiser_window (xspan<T> x, T beta, T mu)
 {
   static_assert (std::is_floating_point_v<T>);
 

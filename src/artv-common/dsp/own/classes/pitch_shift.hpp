@@ -6,9 +6,9 @@
 #include "artv-common/dsp/own/parts/interpolation/stateless.hpp"
 #include "artv-common/misc/fixed_point.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -29,7 +29,7 @@ public:
     fixed_point<10, 22, false> delta {}; // u32
   };
   //----------------------------------------------------------------------------
-  void reset (crange<V> mem) // has a latency of "mem.size() / 2"
+  void reset (xspan<V> mem) // has a latency of "mem.size() / 2"
   {
     assert (mem.size() <= (decltype (reader::pos)::int_max) + 1);
 

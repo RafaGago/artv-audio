@@ -34,8 +34,8 @@
 #include "artv-common/misc/hana.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -429,7 +429,7 @@ static inline void vec_load (V& dst, vec_value_type_t<V> const* src)
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline V vec_load (crange<const vec_value_type_t<V>> src)
+static inline V vec_load (xspan<const vec_value_type_t<V>> src)
 {
   constexpr auto traits = vec_traits<V>();
   assert (src.size() >= traits.size);
@@ -437,13 +437,13 @@ static inline V vec_load (crange<const vec_value_type_t<V>> src)
 }
 
 template <uint N, class T>
-static inline vec<T, N> vec_load (crange<const T> src)
+static inline vec<T, N> vec_load (xspan<const T> src)
 {
   return vec_load<vec<T, N>> (src);
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline void vec_load (V& dst, crange<const vec_value_type_t<V>> src)
+static inline void vec_load (V& dst, xspan<const vec_value_type_t<V>> src)
 {
   dst = vec_load<V> (src);
 }
@@ -470,7 +470,7 @@ static inline void vec_load_unaligned (V& dst, vec_value_type_t<V> const* src)
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline V vec_load_unaligned (crange<const vec_value_type_t<V>> src)
+static inline V vec_load_unaligned (xspan<const vec_value_type_t<V>> src)
 {
   constexpr auto traits = vec_traits<V>();
   assert (src.size() >= traits.size);
@@ -478,15 +478,15 @@ static inline V vec_load_unaligned (crange<const vec_value_type_t<V>> src)
 }
 
 template <uint N, class T>
-static inline vec<T, N> vec_load_unaligned (crange<const T> src)
+static inline vec<T, N> vec_load_unaligned (xspan<const T> src)
 {
   return vec_load_unaligned<vec<T, N>> (src);
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
 static inline void vec_load_unaligned (
-  V&                                dst,
-  crange<const vec_value_type_t<V>> src)
+  V&                               dst,
+  xspan<const vec_value_type_t<V>> src)
 {
   dst = vec_load_unaligned<V> (src);
 }
@@ -501,7 +501,7 @@ static inline void vec_store (vec_value_type_t<V>* dst, V src)
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline void vec_store (crange<vec_value_type_t<V>> dst, V src)
+static inline void vec_store (xspan<vec_value_type_t<V>> dst, V src)
 {
   constexpr auto traits = vec_traits<V>();
   assert (dst.size() >= traits.size);
@@ -519,7 +519,7 @@ static inline void vec_store_unaligned (vec_value_type_t<V>* dst, V src)
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline void vec_store_unaligned (crange<vec_value_type_t<V>> dst, V src)
+static inline void vec_store_unaligned (xspan<vec_value_type_t<V>> dst, V src)
 {
   constexpr auto traits = vec_traits<V>();
   assert (dst.size() >= traits.size);

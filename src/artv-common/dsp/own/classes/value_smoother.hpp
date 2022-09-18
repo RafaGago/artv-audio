@@ -6,9 +6,9 @@
 
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -45,7 +45,7 @@ public:
     memset (&_current, 0, sizeof _current);
     using x1_t = vec<T, 1>;
     onepole_smoother::reset_coeffs (
-      make_crange (_smoother_coeff).cast (x1_t {}), vec_set<x1_t> (hz), t_spl);
+      make_xspan (_smoother_coeff).cast (x1_t {}), vec_set<x1_t> (hz), t_spl);
   }
   //----------------------------------------------------------------------------
   void set_all_from_target() { _current = _target; }
@@ -59,8 +59,8 @@ public:
     for (uint i = 0; i < samples; ++i) {
       for (uint j = 0; j < _target.mem.size(); ++j) {
         _current.mem[j] = onepole_smoother::tick<vec_type> (
-          make_crange (_smoother_coeff),
-          make_crange (_current.mem[j]),
+          make_xspan (_smoother_coeff),
+          make_xspan (_current.mem[j]),
           _target.mem[j]);
       }
     }

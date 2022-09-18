@@ -22,9 +22,9 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace chow {
 namespace detail {
@@ -42,7 +42,7 @@ public:
   enum coeffs_int { n_coeffs_int };
   enum state { n_states = n_stages_max };
   //----------------------------------------------------------------------------
-  static void calc_coefs (crange<value_type> c, float R, float fs)
+  static void calc_coefs (xspan<value_type> c, float R, float fs)
   {
     assert (c.size() >= n_coeffs);
     // component values
@@ -66,17 +66,17 @@ public:
     c[a1] = (-a0s * K + a1s) / a0;
   }
   //----------------------------------------------------------------------------
-  static void reset_states (crange<value_type> s)
+  static void reset_states (xspan<value_type> s)
   {
     assert (s.size() >= n_states);
     memset (s.data(), 0, sizeof s[0] * n_states);
   }
   //----------------------------------------------------------------------------
   static float tick (
-    crange<const value_type> c, // coeffs
-    crange<value_type>       s, // state
-    value_type               x,
-    float                    n_stages)
+    xspan<const value_type> c, // coeffs
+    xspan<value_type>       s, // state
+    value_type              x,
+    float                   n_stages)
   {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
@@ -95,10 +95,10 @@ public:
   //----------------------------------------------------------------------------
 private:
   static value_type tick_stage (
-    crange<const value_type> c, // coeffs
-    crange<value_type>       s, // state,
-    value_type               x,
-    uint                     stage)
+    xspan<const value_type> c, // coeffs
+    xspan<value_type>       s, // state,
+    value_type              x,
+    uint                    stage)
   {
     double y = s[stage] + x * c[b0];
     s[stage] = x * c[b1] - y * c[a1];
@@ -131,10 +131,10 @@ public:
   };
   //----------------------------------------------------------------------------
   static void calc_coefs (
-    crange<value_type> c,
-    double             R,
-    double             fbAmt,
-    double             fs)
+    xspan<value_type> c,
+    double            R,
+    double            fbAmt,
+    double            fs)
   {
     using x1_vec = vec<value_type, 1>;
 
@@ -175,19 +175,19 @@ public:
       c.cast (x1_vec {}), make_vec (2.), 1. / fs);
   }
   //----------------------------------------------------------------------------
-  static void reset_states (crange<value_type> s)
+  static void reset_states (xspan<value_type> s)
   {
     assert (s.size() >= n_states);
     memset (s.data(), 0, sizeof s[0] * n_states);
   }
   //----------------------------------------------------------------------------
   static float tick (
-    crange<const value_type> c, // coeffs
-    crange<value_type>       s, // state
-    value_type               x,
-    float                    d1,
-    float                    d2,
-    float                    d3) noexcept
+    xspan<const value_type> c, // coeffs
+    xspan<value_type>       s, // state
+    value_type              x,
+    float                   d1,
+    float                   d2,
+    float                   d3) noexcept
   {
     using x1_vec = vec<value_type, 1>;
 
@@ -351,7 +351,7 @@ public:
     _t_spl       = 1.f / pc.get_sample_rate();
 
     smoother::reset_coeffs (
-      make_crange (_smooth_coeff).cast (x1_t {}),
+      make_xspan (_smooth_coeff).cast (x1_t {}),
       vec_set<x1_t> (1. / 0.1),
       _t_spl);
 
@@ -380,7 +380,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -397,8 +397,8 @@ public:
       // block LP parameter smoothing. 4 = SSE float
       for (uint j = 0; j < param_tgt.arr.size(); j += sse_step) {
         float_x4 out = smoother::tick (
-          make_crange (_smooth_coeff),
-          make_crange (&_param_state.arr[j], sse_step).cast (float_x4 {}),
+          make_xspan (_smooth_coeff),
+          make_xspan (&_param_state.arr[j], sse_step).cast (float_x4 {}),
           vec_load<float_x4> (&param_tgt.arr[j]));
 
         vec_store (&smooth.arr[j], out);

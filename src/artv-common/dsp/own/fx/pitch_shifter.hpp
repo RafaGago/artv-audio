@@ -12,9 +12,9 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -142,7 +142,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -173,7 +173,7 @@ private:
     uint size = get_delay_size (_mode);
     _plugcontext->set_delay_compensation (size / 2);
     assert (size <= _mem.size());
-    _shift.reset (make_crange (_mem.data(), size));
+    _shift.reset (make_xspan (_mem.data(), size));
     reset_amt(); // reset all readers
   }
   //----------------------------------------------------------------------------

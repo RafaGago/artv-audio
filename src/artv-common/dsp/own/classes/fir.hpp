@@ -19,8 +19,8 @@
 #include "artv-common/misc/math.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/overaligned_allocator.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 namespace detail {
@@ -43,7 +43,7 @@ public:
   //----------------------------------------------------------------------------
   static constexpr uint n_channels = channels;
   //----------------------------------------------------------------------------
-  void reset (crange<T> delay_line_mem, uint size)
+  void reset (xspan<T> delay_line_mem, uint size)
   {
     assert (delay_line_mem.size() >= (size * n_channels * 2));
     _head = 0;
@@ -53,7 +53,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // interleaved input
-  void push (crange<const T> v)
+  void push (xspan<const T> v)
   {
     assert (v.size() >= n_channels);
 
@@ -67,18 +67,18 @@ public:
     });
   }
 
-  void push (crange<const T> v, uint count)
+  void push (xspan<const T> v, uint count)
   {
     assert (v.size() >= (n_channels * count));
     for (uint i = 0; i < count; ++i) {
-      push (make_crange (&v[i * n_channels], n_channels));
+      push (make_xspan (&v[i * n_channels], n_channels));
     }
   }
   //---------------------------------------------------------------------------
   // instead of "push" "push_leading" and "copy_trailing" can be used. This is
   // for probable cache-friendliness, so the tail is written near the last
   // touched memory location.
-  void push_leading (crange<const T> v)
+  void push_leading (xspan<const T> v)
   {
     assert (v.size() >= n_channels);
 
@@ -100,7 +100,7 @@ public:
     });
   }
 
-  void prepare_trailing (crange<const T> v)
+  void prepare_trailing (xspan<const T> v)
   {
     assert (v.size() >= n_channels);
 
@@ -111,7 +111,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // sparse input (all the leading/trailing functions TBD if required)
-  void push (std::array<crange<const T>, n_channels> v, uint count = 1)
+  void push (std::array<xspan<const T>, n_channels> v, uint count = 1)
   {
     for (auto& r : v) {
       assert (r.size() >= count);
@@ -160,7 +160,7 @@ public:
   using value_type                 = T;
   static constexpr uint n_channels = channels;
   //----------------------------------------------------------------------------
-  void reset (crange<const T> kernel_mem) { _h = kernel_mem.data(); }
+  void reset (xspan<const T> kernel_mem) { _h = kernel_mem.data(); }
   //----------------------------------------------------------------------------
   std::array<T, n_channels> tick (
     convolution_delay_line<T, n_channels> const& dl)
@@ -214,7 +214,7 @@ public:
   using value_type                 = T;
   static constexpr uint n_channels = channels;
   //----------------------------------------------------------------------------
-  void reset (crange<const T> kernel_mem, crange<T> delay_line_mem)
+  void reset (xspan<const T> kernel_mem, xspan<T> delay_line_mem)
   {
     _impl.reset (kernel_mem);
     _dl.reset (delay_line_mem, kernel_mem.size());
@@ -237,7 +237,7 @@ private:
 // on a lth-band filter.
 struct lth_band {
   template <class T>
-  static bool verify_coeffs (const crange<T> kernel, uint ratio)
+  static bool verify_coeffs (const xspan<T> kernel, uint ratio)
   {
     for (uint i = 0; i < kernel.size(); ++i) {
       if (i % ratio) {
@@ -288,7 +288,7 @@ public:
   using value_type                 = T;
   static constexpr uint n_channels = channels;
   //----------------------------------------------------------------------------
-  void reset (crange<const T> kernel, uint ratio)
+  void reset (xspan<const T> kernel, uint ratio)
   {
     constexpr uint overalign = alignment / sizeof (T);
 
@@ -308,12 +308,12 @@ public:
       kernel.data(),
       sizeof kernel[0] * kernel.size());
 
-    _filter.reset (make_crange (&_mem[0], ksize));
-    _delay.reset (make_crange (&_mem[ksize], delsize), ksize);
+    _filter.reset (make_xspan (&_mem[0], ksize));
+    _delay.reset (make_xspan (&_mem[ksize], delsize), ksize);
   }
   //----------------------------------------------------------------------------
   // inputs spread.
-  std::array<T, n_channels> tick (std::array<crange<const T>, n_channels> in)
+  std::array<T, n_channels> tick (std::array<xspan<const T>, n_channels> in)
   {
     for (auto& r : in) {
       assert (r.size() >= _ratio);
@@ -323,7 +323,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // inputs interleaved
-  std::array<T, n_channels> tick (crange<const T> in)
+  std::array<T, n_channels> tick (xspan<const T> in)
   {
     assert (in.size() >= _ratio * n_channels);
     _delay.push (in, _ratio);
@@ -350,7 +350,7 @@ public:
   using value_type                 = T;
   static constexpr uint n_channels = channels;
   //----------------------------------------------------------------------------
-  void reset (crange<const T> kernel, uint ratio)
+  void reset (xspan<const T> kernel, uint ratio)
   {
     assert (lth_band::verify_coeffs (kernel, ratio));
 
@@ -396,16 +396,16 @@ public:
     _center_coeff = kernel[kernel.size() / 2];
 
     T* dst = &_mem[0];
-    _filter.reset (make_crange (dst, kernel_mem));
+    _filter.reset (make_xspan (dst, kernel_mem));
     dst += kernel_mem;
 
-    _delays[0].reset (make_crange (dst, non_zero_dl_size), non_zero_dl_elems);
+    _delays[0].reset (make_xspan (dst, non_zero_dl_size), non_zero_dl_elems);
     dst += non_zero_dl_size;
 
-    _delays[1].reset (make_crange (dst, zero_dl_size), zero_dl_elems);
+    _delays[1].reset (make_xspan (dst, zero_dl_size), zero_dl_elems);
   }
   //----------------------------------------------------------------------------
-  std::array<T, n_channels> tick (std::array<crange<const T>, n_channels> in)
+  std::array<T, n_channels> tick (std::array<xspan<const T>, n_channels> in)
   {
     _delays[1].push (in);
     for (auto& r : in) {
@@ -416,7 +416,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // interleaved version
-  std::array<T, n_channels> tick (crange<const T> in)
+  std::array<T, n_channels> tick (xspan<const T> in)
   {
     _delays[1].push (in.get_head (1));
     _delays[0].push (in.advanced (n_channels), _ratio - 1);
@@ -467,9 +467,9 @@ public:
   // in a way that the skipping the zeroed branch is trivial, so it doesn't have
   // a separate implementation as the decimator does.
   void reset (
-    crange<const T> kernel,
-    uint            ratio,
-    bool            enable_lth_band_optimization = false)
+    xspan<const T> kernel,
+    uint           ratio,
+    bool           enable_lth_band_optimization = false)
   {
     // To make it polyphase, we ensure that the coefficients are multiples of
     // "ratio" the unused parts of the kernel will have zeros that don't
@@ -500,7 +500,7 @@ public:
     _filters.resize (ratio - _is_lth_band);
 
     // One delay line is shared between all subfilters.
-    _delay.reset (make_crange (&_mem[kernel_mem], delay_lines_mem), subk_size);
+    _delay.reset (make_xspan (&_mem[kernel_mem], delay_lines_mem), subk_size);
 
     for (uint subk = _is_lth_band, offset = 0; subk < ratio;
          ++subk, offset += subk_size) {
@@ -513,11 +513,11 @@ public:
       }
       // filter initialization
       _filters[subk - _is_lth_band].reset (
-        make_crange (&_mem[offset], subk_size));
+        make_xspan (&_mem[offset], subk_size));
     }
   }
   //----------------------------------------------------------------------------
-  void tick (std::array<crange<T>, n_channels> out, crange<const T> in)
+  void tick (std::array<xspan<T>, n_channels> out, xspan<const T> in)
   {
     for (auto& r : out) {
       assert (r.size() >= _ratio);
@@ -546,7 +546,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // interleaved out
-  void tick (crange<T> out, crange<const T> in)
+  void tick (xspan<T> out, xspan<const T> in)
   {
     assert (out.size() >= (_ratio * n_channels));
     assert (in.size() >= n_channels);
@@ -831,9 +831,9 @@ public:
   // outputs and takes interleaved samples, "out" has to contain enough space
   // to contain "next_tick_n_spls_out" multichannel elements.
   uint tick (
-    crange<value_type>       out,
-    crange<const value_type> ins,
-    uint                     block_size = 1)
+    xspan<value_type>       out,
+    xspan<const value_type> ins,
+    uint                    block_size = 1)
   {
     auto in     = ins.get_head (block_size * n_channels);
     uint n_spls = 0;
@@ -869,7 +869,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  crange<value_type> get_subkernel (uint pos)
+  xspan<value_type> get_subkernel (uint pos)
   {
     return {(T*) &_kernels[_kernel_bytes * pos], _kernel_size};
   }
@@ -884,15 +884,15 @@ private:
     uint k_size_bytes   = _kernel_bytes * n_kernel_tables;
 
     _mem.resize (del_size_bytes + k_size_bytes);
-    _delay.reset (make_crange ((T*) &_mem[0], del_elems), _kernel_size);
+    _delay.reset (make_xspan ((T*) &_mem[0], del_elems), _kernel_size);
     _kernels = &_mem[del_size_bytes];
   }
   //----------------------------------------------------------------------------
   void write_subkernel (
-    crange<T> bigkernel,
-    uint      offset,
-    uint      pos,
-    uint      rate_tgt)
+    xspan<T> bigkernel,
+    uint     offset,
+    uint     pos,
+    uint     rate_tgt)
   {
     auto kern = (T*) _kernels[_kernel_bytes * pos];
     for (uint i = 0; i < _kernel_size; ++i) {
@@ -1090,9 +1090,9 @@ public:
   };
   //----------------------------------------------------------------------------
   uint tick_upsampler (
-    crange<value_type>       out,
-    crange<const value_type> in,
-    uint                     block_size)
+    xspan<value_type>       out,
+    xspan<const value_type> in,
+    uint                    block_size)
   {
     assert (_max_samples != 1);
     assert (in.size() >= (n_channels * block_size));
@@ -1100,15 +1100,15 @@ public:
     // Normally "block_size" should be a fixed internal size of around 32/64.
     assert (block_size < max_block_size);
     // Magic "2", acounting for ratios of 1.99999999...
-    uint               frac_mem_elems = 2 * block_size * n_channels;
-    value_type         frac_mem[frac_mem_elems];
-    crange<value_type> fracbf {&frac_mem[0], frac_mem_elems};
+    uint              frac_mem_elems = 2 * block_size * n_channels;
+    value_type        frac_mem[frac_mem_elems];
+    xspan<value_type> fracbf {&frac_mem[0], frac_mem_elems};
 
     // the no-src change case is not handled.
     uint n_spls = 0;
 
     if (_fractional) {
-      auto in_frac  = make_crange (in.data(), block_size * n_channels);
+      auto in_frac  = make_xspan (in.data(), block_size * n_channels);
       auto out_frac = fracbf;
       n_spls        = _fractional->tick (out_frac, in_frac, block_size);
     }
@@ -1117,12 +1117,12 @@ public:
       auto& interpolator = std::get<interpolator_type> (_integer);
       auto  ratio        = interpolator.ratio();
 
-      crange<const value_type> in_int;
+      xspan<const value_type> in_int;
       if (n_spls != 0) {
-        in_int = make_crange (fracbf.data(), n_spls * n_channels);
+        in_int = make_xspan (fracbf.data(), n_spls * n_channels);
       }
       else {
-        in_int = make_crange (in.data(), block_size * n_channels);
+        in_int = make_xspan (in.data(), block_size * n_channels);
         n_spls = block_size;
       }
       while (in_int.size()) {
@@ -1139,9 +1139,9 @@ public:
   }
   //----------------------------------------------------------------------------
   uint tick_downsampler (
-    crange<value_type>       out,
-    crange<const value_type> in,
-    uint                     block_size)
+    xspan<value_type>       out,
+    xspan<const value_type> in,
+    uint                    block_size)
   {
     assert (_max_samples == 1);
     assert (block_size < max_block_size);
@@ -1152,7 +1152,7 @@ public:
     // when upsampling.
     uint       int_mem_elems = div_ceil<uint> (block_size, 2) * n_channels;
     value_type int_mem[int_mem_elems];
-    crange<value_type> intbf {&int_mem[0], int_mem_elems};
+    xspan<value_type> intbf {&int_mem[0], int_mem_elems};
 
     uint n_spls    = 0;
     bool processed = false;
@@ -1163,7 +1163,7 @@ public:
       auto& decimator_in = std::get<decimator_type> (_integer).input;
       auto  ready_n_spls = decimator.ratio() * n_channels;
 
-      auto in_int  = make_crange (in.data(), block_size * n_channels);
+      auto in_int  = make_xspan (in.data(), block_size * n_channels);
       auto out_int = intbf;
 
       while (in_int.size()) {
@@ -1184,8 +1184,8 @@ public:
     }
     if (_fractional) {
       if (n_spls || !processed) {
-        crange<const value_type> in_frac;
-        uint                     bsz;
+        xspan<const value_type> in_frac;
+        uint                    bsz;
 
         if (processed) {
           bsz     = n_spls;
@@ -1193,7 +1193,7 @@ public:
         }
         else {
           bsz     = block_size;
-          in_frac = make_crange (in.data(), bsz * n_channels);
+          in_frac = make_xspan (in.data(), bsz * n_channels);
         }
         processed = true;
         n_spls    = _fractional->tick (out, in_frac, bsz);
@@ -1212,10 +1212,7 @@ public:
     return n_spls;
   }
   //----------------------------------------------------------------------------
-  uint tick (
-    crange<value_type>       out,
-    crange<const value_type> in,
-    uint                     block_size)
+  uint tick (xspan<value_type> out, xspan<const value_type> in, uint block_size)
   {
     if (_max_samples == 1) {
       return tick_downsampler (out, in, block_size);

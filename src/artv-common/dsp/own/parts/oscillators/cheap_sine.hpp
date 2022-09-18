@@ -1,9 +1,9 @@
 #pragma once
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -19,7 +19,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           c,
+    xspan<V>            c,
     V                   freq,
     vec_value_type_t<V> t_spl,
     highpass_tag)
@@ -31,14 +31,14 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     using T = vec_value_type_t<V>;
     reset_states (st, vec_set<V> ((T) 1.0));
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, V bipolar_ampl)
+  static void reset_states (xspan<V> st, V bipolar_ampl)
   {
     assert (st.size() >= n_states);
 
@@ -48,8 +48,8 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st) // states (interleaved, SIMD aligned)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st) // states (interleaved, SIMD aligned)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();

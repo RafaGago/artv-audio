@@ -3,8 +3,8 @@
 #include <type_traits>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -20,7 +20,7 @@ T primes_table_size_guess (T minv, T maxv)
 }
 //------------------------------------------------------------------------------
 template <class T>
-crange<T> make_primes_table (crange<T> mem, T minv, T maxv)
+xspan<T> make_primes_table (xspan<T> mem, T minv, T maxv)
 {
   static_assert (std::is_unsigned_v<T>);
 

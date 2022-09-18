@@ -20,8 +20,8 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #define LITEON_NONLIN_BIG_TABLE 0
 
@@ -51,14 +51,20 @@ private:
   }
 #if LITEON_NONLIN_BIG_TABLE
   std::vector<float> heapmem;
-  inline float&      heap (std::size_t value) { return heapmem[value]; }
-  void               heap_reset (std::size_t s)
+  inline float&      heap (std::size_t value)
+  {
+    return heapmem[value];
+  }
+  void heap_reset (std::size_t s)
   { /*heap_reset has to be set after manual analysis of the mem requirements*/
     heapmem.resize (s);
     std::memset (heapmem.data(), 0, heapmem.size() * sizeof heapmem[0]);
   }
 #else
-  double get_noise_sample() { return jsfx_engine::rand (2.) - 1.; }
+  double get_noise_sample()
+  {
+    return jsfx_engine::rand (2.) - 1.;
+  }
 #endif
 
   //----------------------------------------------------------------------------
@@ -69,7 +75,10 @@ private:
     return 0.; /* TODO: stub for getting JSFX var "samplesblock" */
   }
 
-  double jsfx_specialvar_get_srate() { return plugcontext->get_sample_rate(); }
+  double jsfx_specialvar_get_srate()
+  {
+    return plugcontext->get_sample_rate();
+  }
 
   void jsfx_specialvar_set_pdc_bot_ch (double val)
   {
@@ -442,7 +451,7 @@ private:
   //----------------------------------------------------------------------------
 public:
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));

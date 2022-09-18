@@ -6,7 +6,7 @@
 
 #include "artv-common/dsp/own/parts/waveshapers/adaa.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
+#include "artv-common/misc/xspan.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 

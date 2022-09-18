@@ -14,8 +14,8 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #error "Ported Oversamplers are a CPU hog!. Param smoothing and HF Fix TBD"
 
@@ -56,7 +56,10 @@ private:
   //----------------------------------------------------------------------------
   // stubs for JSFX special variables
 
-  double jsfx_specialvar_get_srate() { return plugcontext->get_sample_rate(); }
+  double jsfx_specialvar_get_srate()
+  {
+    return plugcontext->get_sample_rate();
+  }
 
   void jsfx_specialvar_set_pdc_delay (double val)
   {
@@ -388,7 +391,10 @@ private:
 private:
   double target_pdc;
   //----------------------------------------------------------------------------
-  void init_slider_variables() { target_pdc = 0; }
+  void init_slider_variables()
+  {
+    target_pdc = 0;
+  }
   //----------------------------------------------------------------------------
   // global/stateful variables for section "block"
 private:
@@ -1778,7 +1784,7 @@ private:
   //----------------------------------------------------------------------------
 public:
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -13409,7 +13415,10 @@ private:
     return $y0;
   }
   //----------------------------------------------------------------------------
-  double block$tanh (double x) { return 2. / (1. + std::exp (-2. * x)) - 1.; }
+  double block$tanh (double x)
+  {
+    return 2. / (1. + std::exp (-2. * x)) - 1.;
+  }
 }; /* jsfx_process */
 
 }} // namespace artv::saike

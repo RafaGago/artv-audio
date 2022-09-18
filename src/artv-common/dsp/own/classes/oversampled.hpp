@@ -11,8 +11,8 @@
 #include "artv-common/misc/delay_compensation_buffers.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -114,12 +114,12 @@ public:
     fx_reset_fn (_pc);
   }
   //----------------------------------------------------------------------------
-  using processfn = std::function<void (crange<T*>, crange<T const*>, uint)>;
+  using processfn = std::function<void (xspan<T*>, xspan<T const*>, uint)>;
   //----------------------------------------------------------------------------
   template <bool downsample>
   void process (
-    crange<T*>         outs,
-    crange<T const*>   ins,
+    xspan<T*>          outs,
+    xspan<T const*>    ins,
     int                samples,
     processfn          fx_process,
     interpolator_type& interpolator,
@@ -148,8 +148,8 @@ public:
     for (uint i = 0; i < samples; ++i) {
       std::array<T, 2> interleaved {ins[0][i], ins[1][i]};
       uint             idx = (i << oversampling_order);
-      auto             l   = make_crange (upsampled[0] + idx, ratio);
-      auto             r   = make_crange (upsampled[1] + idx, ratio);
+      auto             l   = make_xspan (upsampled[0] + idx, ratio);
+      auto             r   = make_xspan (upsampled[1] + idx, ratio);
       interpolator.tick ({l, r}, interleaved);
     }
     // The fractional delay line is placed after the upsampler
@@ -168,8 +168,8 @@ public:
     for (uint i = 0; i < samples; ++i) {
       uint idx = (i << oversampling_order);
       if constexpr (downsample) {
-        auto l     = make_crange (upsampled_frac_corrected[0] + idx, ratio);
-        auto r     = make_crange (upsampled_frac_corrected[1] + idx, ratio);
+        auto l     = make_xspan (upsampled_frac_corrected[0] + idx, ratio);
+        auto r     = make_xspan (upsampled_frac_corrected[1] + idx, ratio);
         auto ret   = decimator->tick ({l, r});
         outs[0][i] = ret[0];
         outs[1][i] = ret[1];
@@ -230,7 +230,7 @@ private:
 
     _tmp_kernel.clear();
     _tmp_kernel.resize (tap_ratio * _pc.get_oversampling());
-    auto kernel = make_crange (_tmp_kernel);
+    auto kernel = make_xspan (_tmp_kernel);
 
     kaiser_lp_kernel (kernel, fc, att_db, frac, _minphase);
 
@@ -405,14 +405,13 @@ public:
     _common.reset (pc, fx_reset);
   }
   //----------------------------------------------------------------------------
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
 
-    auto fx_process = [=] (crange<T*> o, crange<T const*> i, uint s) {
-      _fx.process (o, i, s);
-    };
+    auto fx_process
+      = [=] (xspan<T*> o, xspan<T const*> i, uint s) { _fx.process (o, i, s); };
     if constexpr (downsample) {
       _common.template process<downsample> (
         outs, ins, samples, fx_process, _interpolator, &_decimator);

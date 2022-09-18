@@ -17,8 +17,8 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace saike {
 
@@ -70,7 +70,10 @@ provides. */
   //----------------------------------------------------------------------------
   // stubs for JSFX special variables
 
-  double jsfx_specialvar_get_srate() { return sample_rate; }
+  double jsfx_specialvar_get_srate()
+  {
+    return sample_rate;
+  }
 
 public:
   //----------------------------------------------------------------------------
@@ -119,19 +122,31 @@ public:
   }
 
   float  low_cutp = -1.f;
-  double get_slider_LowCut() { return low_cutp; }
+  double get_slider_LowCut()
+  {
+    return low_cutp;
+  }
   //----------------------------------------------------------------------------
   struct side_level_tag {};
-  void                  set (side_level_tag, float v) { sideLevel = v; }
+  void set (side_level_tag, float v)
+  {
+    sideLevel = v;
+  }
   static constexpr auto get_parameter (side_level_tag)
   {
     return float_param ("", 0.f, 2.f, 1.f, 0.01f);
   }
 
-  double get_slider_SideHP() { return sideLevel; }
+  double get_slider_SideHP()
+  {
+    return sideLevel;
+  }
   //----------------------------------------------------------------------------
   struct strength_tag {};
-  void                  set (strength_tag, float v) { strengthp = v; }
+  void set (strength_tag, float v)
+  {
+    strengthp = v;
+  }
   static constexpr auto get_parameter (strength_tag)
   {
     return float_param ("", 0.f, 1.f, 0.4f, 0.0001f);
@@ -275,7 +290,7 @@ public:
 #endif
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));

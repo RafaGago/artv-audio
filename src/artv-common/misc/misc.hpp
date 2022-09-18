@@ -14,8 +14,8 @@
 #include <gcem.hpp>
 
 #include "artv-common/misc/bits.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 // TODO: Split this.
 
@@ -187,7 +187,7 @@ static constexpr auto array_slice (std::array<T, ArrSize> v)
   return ret;
 }
 //------------------------------------------------------------------------------
-// Double pointers don't const convert, this is annoying on crange.
+// Double pointers don't const convert, this is annoying on xspan.
 // https://stackoverflow.com/questions/5055655/double-pointer-const-correctness-warnings-in-c
 template <class U, class T, size_t N>
 static constexpr auto array_static_cast (std::array<T, N>& in)
@@ -232,7 +232,7 @@ static void apply (funct const& f, T& v, args&&... vargs)
 }
 
 template <class funct, typename T, typename... args>
-static void apply (funct const& f, contiguous_range<T> r, args&&... vargs)
+static void apply (funct const& f, xspan<T> r, args&&... vargs)
 {
   for (int i = 0; i < r.size(); ++i) {
     f (r[i]);

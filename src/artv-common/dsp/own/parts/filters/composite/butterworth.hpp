@@ -6,10 +6,10 @@
 #include <gcem.hpp>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/simd_complex.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/composite/cascade.hpp"
 #include "artv-common/dsp/own/parts/traits.hpp"
@@ -26,7 +26,7 @@ struct butterworth_2p_cascade_q_list {
   template <uint Max_order>
   using array = std::array<double, size_v<Max_order>>;
   //----------------------------------------------------------------------------
-  static crange<double> get (crange<double> res_mem, uint order)
+  static xspan<double> get (xspan<double> res_mem, uint order)
   {
     // odd orders have a single pole at the front.
     uint sz = size (order);
@@ -97,7 +97,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co, // coeffs interleaved
+    xspan<V>            co, // coeffs interleaved
     V                   freq,
     vec_value_type_t<V> t_spl,
     uint                order)
@@ -116,23 +116,23 @@ public:
       for (uint i = 0; i < q_list.size(); ++i) {
         q_list_cast_mem[i] = (T) q_list[i];
       }
-      auto q_list_cast = make_crange (q_list_cast_mem.data(), q_list.size());
+      auto q_list_cast = make_xspan (q_list_cast_mem.data(), q_list.size());
       cascade_type::reset_coeffs (co, freq, q_list_cast, t_spl, order);
     }
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st, uint order)
+  static void reset_states (xspan<V> st, uint order)
   {
     cascade_type::reset_states (st, order);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (single set)
-    crange<V>                         st, // states (interleaved, SIMD aligned)
-    V                                 in,
-    uint                              order)
+    xspan<const vec_value_type_t<V>> co, // coeffs (single set)
+    xspan<V>                         st, // states (interleaved, SIMD aligned)
+    V                                in,
+    uint                             order)
   {
     return cascade_type::tick (co, st, in, order);
   }
@@ -140,10 +140,10 @@ public:
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in,
-    uint            order)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in,
+    uint           order)
   {
     return cascade_type::tick (co, st, in, order);
   }
@@ -168,7 +168,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>            co, // coeffs (interleaved, SIMD aligned)
     V                   freq,
     vec_value_type_t<V> t_spl,
     lowpass_tag)
@@ -177,25 +177,25 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     butterworth_type::reset_states (st, order);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (single set)
-    crange<V>                         st, // states (interleaved, SIMD aligned)
-    V                                 in)
+    xspan<const vec_value_type_t<V>> co, // coeffs (single set)
+    xspan<V>                         st, // states (interleaved, SIMD aligned)
+    V                                in)
   {
     return butterworth_type::tick (co, st, in, order);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // coeffs (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in)
   {
     return butterworth_type::tick (co, st, in, order);
   }
@@ -216,10 +216,10 @@ struct butterworth_lp_complex {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void poles (
-    crange<vec_complex<V>> poles,
-    V                      freq,
-    vec_value_type_t<V>    t_spl,
-    uint                   order)
+    xspan<vec_complex<V>> poles,
+    V                     freq,
+    vec_value_type_t<V>   t_spl,
+    uint                  order)
   {
     /*
      This function places the poles of a normalized filter on the S-plane.
@@ -283,7 +283,7 @@ struct butterworth_lp_complex {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void zeros (
-    crange<vec_complex<V>> zeros,
+    xspan<vec_complex<V>> zeros,
     V,
     vec_value_type_t<V>,
     uint order)
@@ -299,7 +299,7 @@ struct butterworth_lp_complex {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V gain (const crange<vec_complex<V>> poles, uint order)
+  static V gain (const xspan<vec_complex<V>> poles, uint order)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();

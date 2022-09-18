@@ -1,6 +1,5 @@
-// own old invention of (a dynamic extent) std::span, probably to be
-// refactored/renamed to xspan (Extended span)
-
+// own old invention of (a dynamic extent) std::span, (previously named xspan)
+// prepared from on C++20 probably inherit an std::span<T, std::dynamic_extent>
 #pragma once
 
 #include <array>
@@ -10,9 +9,10 @@
 
 namespace artv {
 //------------------------------------------------------------------------------
+// TODO: this won't match a std::span, it is just the old own version I was
+// using.
 template <class T>
-class contiguous_range // std might have something like this. Check.
-{
+class xspan {
 private:
   //----------------------------------------------------------------------------
   template <class U>
@@ -22,29 +22,32 @@ private:
   // This one gets "U" just to have a dependant type for SFINAE. It decides
   // based on "T".
   template <class U>
-  static constexpr bool      crange_type_is_const
+  static constexpr bool      xspan_type_is_const
     = std::is_same_v<U, U>&& std::is_const_v<T>;
   //----------------------------------------------------------------------------
 public:
-  using value_type     = T;
-  using iterator       = value_type*;
-  using const_iterator = value_type const*;
+  using value_type      = T;
+  using iterator        = value_type*;
+  using const_iterator  = value_type const*;
+  using pointer         = value_type*;
+  using const_pointer   = value_type const*;
+  using reference       = value_type&;
+  using const_reference = value_type const&;
 
-  constexpr contiguous_range() = default;
+  constexpr xspan() = default;
 
-  constexpr contiguous_range (value_type* start, size_t size)
+  constexpr xspan (value_type* start, size_t size)
   {
     _start = start;
     _size  = start ? size : 0;
   }
 
   template <class U, std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  constexpr contiguous_range (contiguous_range<U> const& other)
-    : contiguous_range {other.data(), other.size()}
+  constexpr xspan (xspan<U> const& other) : xspan {other.data(), other.size()}
   {}
 
   template <class U, std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  constexpr contiguous_range<T>& operator= (contiguous_range<U> const& other)
+  constexpr xspan<T>& operator= (xspan<U> const& other)
   {
     _start = other.data();
     _size  = other.size();
@@ -55,21 +58,21 @@ public:
     class U,
     uint N,
     std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  constexpr contiguous_range (U (&arr)[N]) : contiguous_range {&arr[0], N}
+  constexpr xspan (U (&arr)[N]) : xspan {&arr[0], N}
   {}
 
   template <
     class U,
     uint N,
-    std::enable_if_t<crange_type_is_const<U>>* = nullptr>
-  constexpr contiguous_range (U const (&arr)[N]) : contiguous_range {&arr[0], N}
+    std::enable_if_t<xspan_type_is_const<U>>* = nullptr>
+  constexpr xspan (U const (&arr)[N]) : xspan {&arr[0], N}
   {}
 
   template <
     class U,
     uint N,
     std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  constexpr contiguous_range<T>& operator= (U (&arr)[N])
+  constexpr xspan<T>& operator= (U (&arr)[N])
   {
     _start = &arr[0];
     _size  = N;
@@ -79,8 +82,8 @@ public:
   template <
     class U,
     uint N,
-    std::enable_if_t<crange_type_is_const<U>>* = nullptr>
-  constexpr contiguous_range<T>& operator= (U const (&arr)[N])
+    std::enable_if_t<xspan_type_is_const<U>>* = nullptr>
+  constexpr xspan<T>& operator= (U const (&arr)[N])
   {
     _start = &arr[0];
     _size  = N;
@@ -91,20 +94,18 @@ public:
     class U,
     size_t N,
     std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  constexpr contiguous_range (std::array<U, N>& arr)
-    : contiguous_range {arr.data(), arr.size()}
+  constexpr xspan (std::array<U, N>& arr) : xspan {arr.data(), arr.size()}
   {}
 
   template <
     class U,
     size_t N,
-    std::enable_if_t<crange_type_is_const<U>>* = nullptr>
-  constexpr contiguous_range (std::array<U, N> const& arr)
-    : contiguous_range {arr.data(), arr.size()}
+    std::enable_if_t<xspan_type_is_const<U>>* = nullptr>
+  constexpr xspan (std::array<U, N> const& arr) : xspan {arr.data(), arr.size()}
   {}
 
   template <class U, size_t N>
-  contiguous_range (std::array<U, N>&& arr)
+  xspan (std::array<U, N>&& arr)
   {
     static_assert (!std::is_same_v<U, U>, "No binding to rvalues");
   }
@@ -113,7 +114,7 @@ public:
     class U,
     size_t N,
     std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  constexpr contiguous_range<T>& operator= (std::array<U, N>& arr)
+  constexpr xspan<T>& operator= (std::array<U, N>& arr)
   {
     _start = arr.data();
     _size  = N;
@@ -123,8 +124,8 @@ public:
   template <
     class U,
     size_t N,
-    std::enable_if_t<crange_type_is_const<U>>* = nullptr>
-  constexpr contiguous_range<T>& operator= (std::array<U, N> const& arr)
+    std::enable_if_t<xspan_type_is_const<U>>* = nullptr>
+  constexpr xspan<T>& operator= (std::array<U, N> const& arr)
   {
     _start = arr.data();
     _size  = N;
@@ -132,32 +133,30 @@ public:
   }
 
   template <class U, size_t N>
-  contiguous_range<T>& operator= (std::array<U, N>&& arr)
+  xspan<T>& operator= (std::array<U, N>&& arr)
   {
     static_assert (!std::is_same_v<U, U>, "No binding to rvalues");
     return *this;
   }
 
-  // remember that contiguous_range is a non-owning reference that can get
+  // remember that xspan is a non-owning reference that can get
   // easily invalidated...
   template <
     class U,
     class Alloc,
     std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  contiguous_range (std::vector<U, Alloc>& vec)
-    : contiguous_range {vec.data(), vec.size()}
+  xspan (std::vector<U, Alloc>& vec) : xspan {vec.data(), vec.size()}
   {}
 
   template <
     class U,
     class Alloc,
-    std::enable_if_t<crange_type_is_const<U>>* = nullptr>
-  contiguous_range (std::vector<U, Alloc> const& vec)
-    : contiguous_range {vec.data(), vec.size()}
+    std::enable_if_t<xspan_type_is_const<U>>* = nullptr>
+  xspan (std::vector<U, Alloc> const& vec) : xspan {vec.data(), vec.size()}
   {}
 
   template <class U, class Alloc>
-  contiguous_range (std::vector<U, Alloc>&& vec)
+  xspan (std::vector<U, Alloc>&& vec)
   {
     static_assert (!std::is_same_v<U, U>, "No binding to rvalues");
   }
@@ -166,7 +165,7 @@ public:
     class U,
     class Alloc,
     std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  contiguous_range<T>& operator= (std::vector<U, Alloc>& vec)
+  xspan<T>& operator= (std::vector<U, Alloc>& vec)
   {
     _start = vec.data();
     _size  = vec.size();
@@ -176,8 +175,8 @@ public:
   template <
     class U,
     class Alloc,
-    std::enable_if_t<crange_type_is_const<U>>* = nullptr>
-  contiguous_range<T>& operator= (std::vector<U, Alloc>& vec)
+    std::enable_if_t<xspan_type_is_const<U>>* = nullptr>
+  xspan<T>& operator= (std::vector<U, Alloc>& vec)
   {
     _start = vec.data();
     _size  = vec.size();
@@ -185,7 +184,7 @@ public:
   }
 
   template <class U, class Alloc>
-  contiguous_range<T>& operator= (std::vector<U, Alloc>&& vec)
+  xspan<T>& operator= (std::vector<U, Alloc>&& vec)
   {
     static_assert (!std::is_same_v<U, U>, "No binding to rvalues");
     return *this;
@@ -211,20 +210,20 @@ public:
   constexpr explicit operator bool() const { return !empty(); }
 
   // returns a copy/subrange with "count" elements dropped from the tail.
-  constexpr contiguous_range<T> reduced (uint count) const
+  constexpr xspan<T> reduced (uint count) const
   {
     assert (count <= size());
-    contiguous_range<T> r {*this};
+    xspan<T> r {*this};
     r._size -= count;
     r._start = r._size ? r._start : nullptr;
     return r;
   }
 
   // returns a copy/subrange with "count" elements dropped from the head.
-  constexpr contiguous_range<T> advanced (uint count) const
+  constexpr xspan<T> advanced (uint count) const
   {
     assert (count <= size());
-    contiguous_range<T> r {*this};
+    xspan<T> r {*this};
     r._start += count;
     r._size -= count;
     r._start = r._size ? r._start : nullptr;
@@ -232,33 +231,33 @@ public:
   }
   // returns a copy/subrange containing "count" elements starting from the
   // head.
-  constexpr contiguous_range<T> get_head (uint count) const
+  constexpr xspan<T> get_head (uint count) const
   {
     assert (count <= size());
-    contiguous_range<T> r {*this};
+    xspan<T> r {*this};
     r._size  = count;
     r._start = r._size ? r._start : nullptr;
     return r;
   }
   // returns a copy/subrange containing "count" elements starting from the tail.
-  constexpr contiguous_range<T> get_tail (uint count) const
+  constexpr xspan<T> get_tail (uint count) const
   {
     assert (count <= size());
-    contiguous_range<T> r {*this};
+    xspan<T> r {*this};
     r._start += r._size - count;
     r._size  = count;
     r._start = r._size ? r._start : nullptr;
     return r;
   }
   // drops "count" elems from the head and returns the cut subrange
-  constexpr contiguous_range<T> cut_head (uint count)
+  constexpr xspan<T> cut_head (uint count)
   {
     auto r = get_head (count);
     *this  = advanced (count);
     return r;
   }
   // drops "count" elems from the tail and returns the cut subrange
-  constexpr contiguous_range<T> cut_tail (uint count)
+  constexpr xspan<T> cut_tail (uint count)
   {
     auto r = get_tail (count);
     *this  = reduced (count);
@@ -292,7 +291,7 @@ public:
   }
 
   template <class U>
-  contiguous_range<U> cast() const
+  xspan<U> cast() const
   {
     constexpr auto big   = std::max (sizeof (value_type), sizeof (U));
     constexpr auto small = std::min (sizeof (value_type), sizeof (U));
@@ -301,14 +300,14 @@ public:
 
     return {reinterpret_cast<U*> (_start), byte_size() / sizeof (U)};
   }
-  // dummy parameter version to avoid calling make_crange(x).template cast<T>();
+  // dummy parameter version to avoid calling make_xspan(x).template cast<T>();
   template <class U>
-  contiguous_range<U> cast (U) const
+  xspan<U> cast (U) const
   {
     return cast<U>();
   }
 
-  contiguous_range<std::add_const_t<T>> to_const() const { return *this; }
+  xspan<std::add_const_t<T>> to_const() const { return *this; }
 
 private:
   //----------------------------------------------------------------------------
@@ -317,41 +316,37 @@ private:
 };
 //------------------------------------------------------------------------------
 template <class T>
-static constexpr contiguous_range<T> make_contiguous_range (
-  T*     mem,
-  size_t count)
+static constexpr xspan<T> make_xspan (T* mem, size_t count)
 {
   return {mem, count};
 };
 
 template <class T>
-static constexpr contiguous_range<const T> make_contiguous_range (
-  T const* mem,
-  size_t   count)
+static constexpr xspan<const T> make_xspan (T const* mem, size_t count)
 {
   return {mem, count};
 };
 
 template <class T>
-static constexpr contiguous_range<T> make_contiguous_range (T& mem)
+static constexpr xspan<T> make_xspan (T& mem)
 {
   return {&mem, 1};
 };
 
 template <class T>
-static constexpr contiguous_range<const T> make_contiguous_range (T const& mem)
+static constexpr xspan<const T> make_xspan (T const& mem)
 {
   return {&mem, 1};
 };
 
 template <class T>
-static constexpr void make_contiguous_range (T&& mem)
+static constexpr void make_xspan (T&& mem)
 {
   static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
 };
 
 template <class T, size_t N>
-static constexpr contiguous_range<T> make_contiguous_range (
+static constexpr xspan<T> make_xspan (
   T (&arr)[N],
   size_t count      = N,
   size_t offset_idx = 0)
@@ -361,7 +356,7 @@ static constexpr contiguous_range<T> make_contiguous_range (
 };
 
 template <class T, size_t N>
-static constexpr contiguous_range<const T> make_contiguous_range (
+static constexpr xspan<const T> make_xspan (
   T const (&arr)[N],
   size_t count      = N,
   size_t offset_idx = 0)
@@ -371,7 +366,7 @@ static constexpr contiguous_range<const T> make_contiguous_range (
 };
 
 template <class T, size_t N>
-static constexpr contiguous_range<T> make_contiguous_range (
+static constexpr xspan<T> make_xspan (
   std::array<T, N>& arr,
   size_t            count      = N,
   size_t            offset_idx = 0)
@@ -381,7 +376,7 @@ static constexpr contiguous_range<T> make_contiguous_range (
 };
 
 template <class T, size_t N>
-static constexpr contiguous_range<const T> make_contiguous_range (
+static constexpr xspan<const T> make_xspan (
   std::array<T, N> const& arr,
   size_t                  count      = N,
   size_t                  offset_idx = 0)
@@ -391,7 +386,7 @@ static constexpr contiguous_range<const T> make_contiguous_range (
 };
 
 template <class T, size_t N>
-static constexpr void make_contiguous_range (
+static constexpr void make_xspan (
   std::array<T, N>&& arr,
   size_t             count      = N,
   size_t             offset_idx = 0)
@@ -400,27 +395,25 @@ static constexpr void make_contiguous_range (
 };
 
 template <class T, class Alloc>
-static constexpr contiguous_range<T> make_contiguous_range (
-  std::vector<T, Alloc>& vec)
+static constexpr xspan<T> make_xspan (std::vector<T, Alloc>& vec)
 {
   return {vec.data(), vec.size()};
 };
 
 template <class T, class Alloc>
-static constexpr contiguous_range<const T> make_contiguous_range (
-  std::vector<T, Alloc> const& vec)
+static constexpr xspan<const T> make_xspan (std::vector<T, Alloc> const& vec)
 {
   return {vec.data(), vec.size()};
 };
 
 template <class T, class Alloc>
-static constexpr void make_contiguous_range (std::vector<T, Alloc>&& vec)
+static constexpr void make_xspan (std::vector<T, Alloc>&& vec)
 {
   static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
 };
 
 template <class T, class Alloc>
-static constexpr contiguous_range<T> make_contiguous_range (
+static constexpr xspan<T> make_xspan (
   std::vector<T, Alloc>& vec,
   size_t                 count,
   size_t                 offset_idx = 0)
@@ -430,7 +423,7 @@ static constexpr contiguous_range<T> make_contiguous_range (
 };
 
 template <class T, class Alloc>
-static constexpr contiguous_range<const T> make_contiguous_range (
+static constexpr xspan<const T> make_xspan (
   std::vector<T, Alloc> const& vec,
   size_t                       count,
   size_t                       offset_idx = 0)
@@ -440,7 +433,7 @@ static constexpr contiguous_range<const T> make_contiguous_range (
 };
 
 template <class T, class Alloc>
-static constexpr void make_contiguous_range (
+static constexpr void make_xspan (
   std::vector<T, Alloc>&& vec,
   size_t                  count,
   size_t                  offset_idx = 0)
@@ -449,35 +442,33 @@ static constexpr void make_contiguous_range (
 };
 
 template <class T>
-static constexpr contiguous_range<T> make_contiguous_range (
-  contiguous_range<T> range,
-  size_t              count,
-  size_t              offset_idx = 0)
+static constexpr xspan<T> make_xspan (
+  xspan<T> range,
+  size_t   count,
+  size_t   offset_idx = 0)
 {
   assert (count + offset_idx <= range.size() && "out of bounds");
   return {&range[offset_idx], count};
 };
 
 template <class T>
-static constexpr contiguous_range<const T> make_contiguous_range (
-  contiguous_range<T> range,
-  size_t              count,
-  size_t              offset_idx = 0)
+static constexpr xspan<const T> make_xspan (
+  xspan<T> range,
+  size_t   count,
+  size_t   offset_idx = 0)
 {
   assert (count + offset_idx <= range.size() && "out of bounds");
   return {&range[offset_idx], count};
 };
 //------------------------------------------------------------------------------
 template <class T>
-static void contiguous_range_memset (contiguous_range<T> range, int value = 0)
+static void xspan_memset (xspan<T> range, int value = 0)
 {
   memset (range.data(), value, range.size() * sizeof range[0]);
 }
 //------------------------------------------------------------------------------
 template <class T, class U>
-static uint contiguous_range_memcpy (
-  contiguous_range<T>       dst,
-  contiguous_range<const U> src)
+static uint xspan_memcpy (xspan<T> dst, xspan<const U> src)
 {
   uint size = std::min (dst.size() * sizeof (T), src.size() * sizeof (U));
   memcpy (dst.data(), src.data(), size);
@@ -485,48 +476,15 @@ static uint contiguous_range_memcpy (
 }
 // just for template deduction to work with const
 template <class T, class U>
-static uint contiguous_range_memcpy (
-  contiguous_range<T> dst,
-  contiguous_range<U> src)
+static uint xspan_memcpy (xspan<T> dst, xspan<U> src)
 {
-  return contiguous_range_memcpy<T, const U> (dst, src);
+  return xspan_memcpy<T, const U> (dst, src);
 }
 //------------------------------------------------------------------------------
 template <class T>
-static uint contiguous_range_copy (
-  contiguous_range<T>       dst,
-  const contiguous_range<T> src)
+static uint xspan_copy (xspan<T> dst, const xspan<T> src)
 {
-  return contiguous_range_memcpy (dst, src) / sizeof (T);
-}
-//------------------------------------------------------------------------------
-// shorter "contiguous_range" namings
-//------------------------------------------------------------------------------
-template <class T>
-using crange = contiguous_range<T>;
-
-template <class... Ts>
-static constexpr auto make_crange (Ts&&... args)
-{
-  return make_contiguous_range (std::forward<Ts> (args)...);
-}
-
-template <class T>
-static void crange_memset (crange<T> range, int value = 0)
-{
-  contiguous_range_memset (range, value);
-}
-
-template <class T, class U>
-static uint crange_memcpy (crange<T> dst, const crange<U> src)
-{
-  return contiguous_range_memcpy (dst, src);
-}
-
-template <class T>
-static uint crange_copy (crange<T> dst, const crange<T> src)
-{
-  return contiguous_range_copy (dst, src);
+  return xspan_memcpy (dst, src) / sizeof (T);
 }
 //------------------------------------------------------------------------------
 } // namespace artv

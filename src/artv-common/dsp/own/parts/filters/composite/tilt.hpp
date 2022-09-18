@@ -4,9 +4,9 @@
 
 #include "artv-common/dsp/own/parts/traits.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
@@ -24,7 +24,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
+    xspan<V>            co,
     V                   freq,
     V                   q,
     V                   gain_db,
@@ -37,7 +37,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
@@ -45,9 +45,9 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> co, // coeffs (single set)
-    crange<V>                         st, // states (interleaved, SIMD aligned)
-    V                                 in)
+    xspan<const vec_value_type_t<V>> co, // coeffs (single set)
+    xspan<V>                         st, // states (interleaved, SIMD aligned)
+    V                                in)
   {
     constexpr auto traits = vec_traits<V>();
 
@@ -62,9 +62,9 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V> co, // states (interleaved, SIMD aligned)
-    crange<V>       st, // states (interleaved, SIMD aligned)
-    V               in)
+    xspan<const V> co, // states (interleaved, SIMD aligned)
+    xspan<V>       st, // states (interleaved, SIMD aligned)
+    V              in)
   {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);
@@ -91,7 +91,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
+    xspan<V>            co,
     V                   f0,
     V                   bw_oct,
     V                   alpha,
@@ -133,7 +133,7 @@ public:
   // Best effort.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void reset_coeffs (
-    crange<V>           co,
+    xspan<V>            co,
     V                   fc,
     V                   bw_oct,
     V                   alpha,
@@ -153,14 +153,14 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V> co, crange<V> st, V in)
+  static V tick (xspan<const V> co, xspan<V> st, V in)
   {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);

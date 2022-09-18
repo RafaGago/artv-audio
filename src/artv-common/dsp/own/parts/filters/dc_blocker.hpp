@@ -23,7 +23,7 @@ struct iir_dc_blocker {
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> t_spl)
+  static void reset_coeffs (xspan<V> c, V freq, vec_value_type_t<V> t_spl)
   {
     using T = vec_value_type_t<V>;
     assert (c.size() >= n_coeffs);
@@ -32,7 +32,7 @@ struct iir_dc_blocker {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V> c, crange<V> s, V x)
+  static V tick (xspan<const V> c, xspan<V> s, V x)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
@@ -42,7 +42,7 @@ struct iir_dc_blocker {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const vec_value_type_t<V>> c, crange<V> s, V x)
+  static V tick (xspan<const vec_value_type_t<V>> c, xspan<V> s, V x)
   {
     assert (c.size() >= n_coeffs);
     return tick (s, x, vec_set<V> (c[R]));
@@ -51,7 +51,7 @@ struct iir_dc_blocker {
 private:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<V> s, V x, V Rv)
+  static V tick (xspan<V> s, V x, V Rv)
   {
     assert (s.size() >= n_states);
 
@@ -74,20 +74,20 @@ struct mystran_dc_blocker {
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> t_spl)
+  static void reset_coeffs (xspan<V> c, V freq, vec_value_type_t<V> t_spl)
   {
     onepole_smoother::reset_coeffs (c, freq, t_spl);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V> c, crange<V> s, V x)
+  static V tick (xspan<const V> c, xspan<V> s, V x)
   {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
@@ -99,9 +99,9 @@ struct mystran_dc_blocker {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> c, // single coeff set
-    crange<V>                         s,
-    V                                 x)
+    xspan<const vec_value_type_t<V>> c, // single coeff set
+    xspan<V>                         s,
+    V                                x)
   {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
@@ -125,7 +125,7 @@ struct mystran_dc_blocker_2pole {
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V> c, V freq, vec_value_type_t<V> t_spl)
+  static void reset_coeffs (xspan<V> c, V freq, vec_value_type_t<V> t_spl)
   {
     using T                   = vec_value_type_t<V>;
     constexpr T butterworth_q = M_SQRT1_2;
@@ -135,14 +135,14 @@ struct mystran_dc_blocker_2pole {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V> c, crange<V> s, V x)
+  static V tick (xspan<const V> c, xspan<V> s, V x)
   {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
@@ -156,9 +156,9 @@ struct mystran_dc_blocker_2pole {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> c, // single coeff set
-    crange<V>                         s,
-    V                                 x)
+    xspan<const vec_value_type_t<V>> c, // single coeff set
+    xspan<V>                         s,
+    V                                x)
   {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);

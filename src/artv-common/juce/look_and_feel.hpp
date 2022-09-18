@@ -7,7 +7,7 @@
 #include <type_traits>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 

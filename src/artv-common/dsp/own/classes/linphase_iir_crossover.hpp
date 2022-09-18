@@ -6,9 +6,9 @@
 #include "artv-common/misc/delay_compensation_buffers.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/overaligned_allocator.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/composite/linear_iir_butterworth.hpp"
 
@@ -29,12 +29,12 @@ public:
   {
     _mem.clear();
 
-    crange_memset (make_crange (_order), 0);
-    crange_memset (make_crange (_freq), 0);
-    crange_memset (make_crange (_coeffs), 0);
-    crange_memset (make_crange (_states), 0);
-    crange_memset (make_crange (_in_delcomp), 0);
-    crange_memset (make_crange (_out_delcomp), 0);
+    xspan_memset (make_xspan (_order), 0);
+    xspan_memset (make_xspan (_freq), 0);
+    xspan_memset (make_xspan (_coeffs), 0);
+    xspan_memset (make_xspan (_states), 0);
+    xspan_memset (make_xspan (_in_delcomp), 0);
+    xspan_memset (make_xspan (_out_delcomp), 0);
 
     _t_spl    = 1.f / samplerate;
     _n_stages = n_stages;
@@ -78,13 +78,13 @@ public:
     ptr += block_mem::n_double_x2;
 
     for (uint i = 0; i < n_crossovers; ++i) {
-      _states[i] = make_crange (ptr, stage_state[i]);
+      _states[i] = make_xspan (ptr, stage_state[i]);
       ptr += stage_state[i];
 
-      _in_delcomp[i].reset (make_crange (ptr, stage_in[i]), 0);
+      _in_delcomp[i].reset (make_xspan (ptr, stage_in[i]), 0);
       ptr += stage_in[i];
 
-      _out_delcomp[i].reset (make_crange (ptr, stage_out[i]), 0);
+      _out_delcomp[i].reset (make_xspan (ptr, stage_out[i]), 0);
       ptr += stage_out[i];
     }
   }
@@ -133,7 +133,7 @@ public:
     }
     _order[idx] = order;
     // asuming an order change as able to cause a click.
-    crange_memset (_states[idx], 0);
+    xspan_memset (_states[idx], 0);
     recompute_latencies (idx);
     memset (_block, 0, sizeof *_block);
   }
@@ -168,7 +168,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void tick (crange<T*> outs, crange<T const*> ins, uint samples)
+  void tick (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (ins.size() >= 2);
     assert (ins[0] != nullptr);
@@ -201,7 +201,7 @@ public:
         lp_type::tick<double_x2> (
           _coeffs[c],
           _states[c],
-          make_crange (&_block->bands[c][0], blocksize),
+          make_xspan (&_block->bands[c][0], blocksize),
           _order[c],
           _n_stages[c],
           _sample_idx);
@@ -284,7 +284,7 @@ private:
   alignas (sse_bytes)
     std::array<std::array<double_x2, n_crossv_coeffs>, n_crossovers> _coeffs;
 
-  std::array<crange<double_x2>, n_crossovers>                   _states;
+  std::array<xspan<double_x2>, n_crossovers>                    _states;
   std::array<delay_compensated_buffer<double_x2>, n_crossovers> _in_delcomp;
   std::array<delay_compensated_buffer<double_x2>, n_crossovers> _out_delcomp;
 

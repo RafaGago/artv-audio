@@ -2,9 +2,9 @@
 
 #include "artv-common/dsp/own/classes/windowed_sync.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 //------------------------------------------------------------------------------
@@ -19,11 +19,11 @@ struct zero_order_hold {
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T>
-  static void reset_coeffs (crange<T>)
+  static void reset_coeffs (xspan<T>)
   {}
   //----------------------------------------------------------------------------
   template <class T>
-  static void reset_states (crange<T>)
+  static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -33,7 +33,7 @@ struct zero_order_hold {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V>, crange<V>, std::array<V, n_points> y, V x)
+  static V tick (xspan<const V>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
   }
@@ -51,11 +51,11 @@ struct linear_interp {
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T>
-  static void reset_coeffs (crange<T>)
+  static void reset_coeffs (xspan<T>)
   {}
   //----------------------------------------------------------------------------
   template <class T>
-  static void reset_states (crange<T>)
+  static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -65,7 +65,7 @@ struct linear_interp {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V>, crange<V>, std::array<V, n_points> y, V x)
+  static V tick (xspan<const V>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
   }
@@ -88,11 +88,11 @@ struct lagrange_interp<2> {
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T>
-  static void reset_coeffs (crange<T>)
+  static void reset_coeffs (xspan<T>)
   {}
   //----------------------------------------------------------------------------
   template <class T>
-  static void reset_states (crange<T>)
+  static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -114,7 +114,7 @@ struct lagrange_interp<2> {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V>, crange<V>, std::array<V, n_points> y, V x)
+  static V tick (xspan<const V>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
   }
@@ -133,11 +133,11 @@ struct lagrange_interp<3> {
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T>
-  static void reset_coeffs (crange<T>)
+  static void reset_coeffs (xspan<T>)
   {}
   //----------------------------------------------------------------------------
   template <class T>
-  static void reset_states (crange<T>)
+  static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -160,7 +160,7 @@ struct lagrange_interp<3> {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V>, crange<V>, std::array<V, n_points> y, V x)
+  static V tick (xspan<const V>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
   }
@@ -178,11 +178,11 @@ struct hermite_interp {
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T>
-  static void reset_coeffs (crange<T>)
+  static void reset_coeffs (xspan<T>)
   {}
   //----------------------------------------------------------------------------
   template <class T>
-  static void reset_states (crange<T>)
+  static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -197,7 +197,7 @@ struct hermite_interp {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V>, crange<V>, std::array<V, n_points> y, V x)
+  static V tick (xspan<const V>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
   }
@@ -215,11 +215,11 @@ struct catmull_rom_interp {
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T>
-  static void reset_coeffs (crange<T>)
+  static void reset_coeffs (xspan<T>)
   {}
   //----------------------------------------------------------------------------
   template <class T>
-  static void reset_states (crange<T>)
+  static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -239,7 +239,7 @@ struct catmull_rom_interp {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (crange<const V>, crange<V>, std::array<V, n_points> y, V x)
+  static V tick (xspan<const V>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
   }
@@ -260,7 +260,7 @@ struct sinc_interp {
   static constexpr bool   states_are_vec    = true;
   //----------------------------------------------------------------------------
   template <class T> // fc 0 to 0.5
-  static void reset_coeffs (crange<T> co, float fc, float kaiser_att_db)
+  static void reset_coeffs (xspan<T> co, float fc, float kaiser_att_db)
   {
     static_assert (!is_vec_v<T>);
     assert (co.size() >= n_coeffs);
@@ -285,13 +285,13 @@ struct sinc_interp {
   }
   //----------------------------------------------------------------------------
   template <class T>
-  static void reset_states (crange<T>)
+  static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const vec_value_type_t<V>> co,
-    crange<V>,
+    xspan<const vec_value_type_t<V>> co,
+    xspan<V>,
     std::array<V, n_points> y,
     V                       x)
   {

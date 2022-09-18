@@ -2,9 +2,9 @@
 
 #include "artv-common/misc/compiler.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/dc_blocker.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
@@ -448,7 +448,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     _resampler.process (outs, ins, samples, [=] (auto io) {
       process_block (io);
@@ -466,7 +466,7 @@ private:
     return ret;
   }
   //----------------------------------------------------------------------------
-  void process_block (crange<std::array<float, 2>> io)
+  void process_block (xspan<std::array<float, 2>> io)
   {
     // hardcoding 2's to ease readability, as this will be always be stereo so
     // "static_asserting"
@@ -490,7 +490,7 @@ private:
       // pre diffusor ----------------------------------------------------------
 
       // AP gain LFO
-      auto mod_g     = make_crange (tmp);
+      auto mod_g     = make_xspan (tmp);
       uint late_wave = _late_wave; // telling the optimizer to ignore changes
       for (uint i = 0; i < block.size(); ++i) {
         vec<float, 2> mod;
@@ -515,7 +515,7 @@ private:
         }
       }
       else {
-        crange_copy<std::array<float, 2>> (pre_dif, block);
+        xspan_copy<std::array<float, 2>> (pre_dif, block);
       }
 
       for (uint st = 0; st < _pre_dif.size(); ++st) {
@@ -573,7 +573,7 @@ private:
         }
       }
       else {
-        crange_memset (block, 0);
+        xspan_memset (block, 0);
       }
       // gap -------------------------------------------------------------------
       if (_gap_spls > _gap_lat_spls) {
@@ -592,7 +592,7 @@ private:
         }
       }
       else {
-        crange_copy<std::array<float, 2>> (early_then_late, block);
+        xspan_copy<std::array<float, 2>> (early_then_late, block);
       }
       // late
       // -----------------------------------------------------------------------
@@ -671,7 +671,7 @@ private:
         }
 #endif
         // internal diffusor lfo.
-        mod_g = make_crange (tmp);
+        mod_g = make_xspan (tmp);
         for (uint i = 0; i < block.size(); ++i) {
           vec<float, 2> mod;
           if (late_wave == modwv_sh) {
@@ -707,19 +707,19 @@ private:
         }
 
         for (uint i = 0; i < block.size(); ++i) {
-          auto lm = make_crange (late_mtx[i]);
+          auto lm = make_xspan (late_mtx[i]);
           // diffusion
           auto l
             = rotation_matrix<8>::tick<float> (lm.get_head (8), _late_l_angle);
-          crange_copy<float> (lm.get_head (8), l);
+          xspan_copy<float> (lm.get_head (8), l);
 
           auto r
             = rotation_matrix<8>::tick<float> (lm.advanced (8), _late_r_angle);
-          crange_copy<float> (lm.advanced (8), r);
+          xspan_copy<float> (lm.advanced (8), r);
 
           auto midch = rotation_matrix<8>::tick<float> (
             lm.advanced (4).get_head (8), _late_lr_angle);
-          crange_copy<float> (lm.advanced (4).get_head (8), midch);
+          xspan_copy<float> (lm.advanced (4).get_head (8), midch);
         }
 
         for (uint i = 0; i < block.size(); ++i) {
@@ -811,11 +811,11 @@ private:
   //----------------------------------------------------------------------------
   template <class T>
   void get_delay_length (
-    crange<T> dst,
-    T         spls_min,
-    T         spls_max,
-    uint      prime_idx,
-    float     rounding_fact)
+    xspan<T> dst,
+    T        spls_min,
+    T        spls_max,
+    uint     prime_idx,
+    float    rounding_fact)
   {
     static constexpr uint n_max_stack = (6 * 1024) / sizeof (T);
 
@@ -829,8 +829,8 @@ private:
     // Non portable: VLA.
     T stat_mem[tbl_length];
 
-    auto work_mem = tbl_length ? make_crange (&stat_mem[0], tbl_length)
-                               : make_crange (dyn_mem);
+    auto work_mem = tbl_length ? make_xspan (&stat_mem[0], tbl_length)
+                               : make_xspan (dyn_mem);
 
     delay_length::get (
       dst, spls_min, spls_max, prime_idx, rounding_fact, work_mem);
@@ -1066,7 +1066,7 @@ private:
     _mem.resize (mem_total);
 
     // assigning memory
-    auto mem = make_crange (_mem);
+    auto mem = make_xspan (_mem);
     // pre delay
     _pre_delay.reset (mem.cut_head (pre_delay_spls_max).cast (float {}), 2);
     // gap
@@ -1110,10 +1110,10 @@ private:
   }
   //----------------------------------------------------------------------------
   void allpass_stage_tick (
-    crange<float>             io,
-    crange<allpass<float_x1>> ap,
-    crange<float>             g,
-    crange<u16>               del_spls)
+    xspan<float>             io,
+    xspan<allpass<float_x1>> ap,
+    xspan<float>             g,
+    xspan<u16>               del_spls)
   {
     for (uint i = 0; i < io.size(); ++i) {
       io[i] = ap[i].tick (make_vec (io[i]), del_spls[i], make_vec (g[i]))[0];

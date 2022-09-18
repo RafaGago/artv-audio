@@ -24,9 +24,9 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/overaligned_allocator.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -397,7 +397,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -448,7 +448,7 @@ public:
       out         = _dc_blocker.tick (out);
       auto del_fb = _feedback_delay_shelf.tick_on_idx (k_shelf_lo, out);
       del_fb      = _feedback_delay_shelf.tick_on_idx (k_shelf_hi, out);
-      _delay.push (make_crange (del_fb));
+      _delay.push (make_xspan (del_fb));
 
       double_x2 outx2    = {(double) out[0], (double) out[1]};
       double_x2 parallel = {(double) out[2], (double) out[3]};
@@ -512,7 +512,7 @@ private:
 
     _delay_mem.clear();
     _delay_mem.resize (delay_size);
-    auto mem = make_crange (_delay_mem);
+    auto mem = make_xspan (_delay_mem);
     _delay.reset (mem, 1);
   }
   //----------------------------------------------------------------------------

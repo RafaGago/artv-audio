@@ -15,8 +15,8 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 namespace artv { namespace saike {
 //------------------------------------------------------------------------------
 struct transience {
@@ -162,7 +162,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     for (uint i = 0; i < samples; ++i) {
       T gain     = get_gain (ins[0][i], ins[1][i]);
@@ -172,7 +172,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<std::array<T, 2>> io)
+  void process (xspan<std::array<T, 2>> io)
   {
     for (uint i = 0; i < io.size(); ++i) {
       T gain   = get_gain (io[i][0], io[i][1]);

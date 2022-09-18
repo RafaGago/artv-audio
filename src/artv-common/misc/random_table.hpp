@@ -1,7 +1,7 @@
 #pragma once
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -75,7 +75,7 @@ static constexpr auto rnd_table_raw = make_array<double> (
   0.9102159605707534);
 }
 
-// crange has assertions on member access.
-static constexpr auto rnd_table = make_crange (detail::rnd_table_raw);
+// xspan has assertions on member access.
+static constexpr auto rnd_table = make_xspan (detail::rnd_table_raw);
 
 } // namespace artv

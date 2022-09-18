@@ -17,8 +17,8 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace airwindows {
 
@@ -48,7 +48,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= 2);
     assert (ins.size() >= 2);
@@ -199,7 +199,10 @@ public:
   }
   // Parameters (call once per block) ------------------------------------------
   struct drive_tag {};
-  void set (drive_tag, float value) { A = db_to_gain (-value); }
+  void set (drive_tag, float value)
+  {
+    A = db_to_gain (-value);
+  }
   static constexpr auto get_parameter (drive_tag)
   {
     return float_param ("dB", -20.f, 20.f, 0.f, 0.01f);
@@ -248,10 +251,10 @@ public:
   //----------------------------------------------------------------------------
   template <class T>
   void process_block_adding (
-    crange<T*>       outs,
-    crange<T const*> ins,
-    uint             samples,
-    bool             dst_sum)
+    xspan<T*>       outs,
+    xspan<T const*> ins,
+    uint            samples,
+    bool            dst_sum)
   {
     assert (outs.size() >= 2);
     assert (ins.size() >= 2);
@@ -389,19 +392,19 @@ public:
   }
   //----------------------------------------------------------------------------
   void process (
-    crange<float*>       outs,
-    crange<float const*> ins,
-    uint                 samples,
-    bool                 dst_sum) override
+    xspan<float*>       outs,
+    xspan<float const*> ins,
+    uint                samples,
+    bool                dst_sum) override
   {
     process_block_adding (outs, ins, samples, dst_sum);
   }
   //----------------------------------------------------------------------------
   void process (
-    crange<double*>       outs,
-    crange<double const*> ins,
-    uint                  samples,
-    bool                  dst_sum) override
+    xspan<double*>       outs,
+    xspan<double const*> ins,
+    uint                 samples,
+    bool                 dst_sum) override
   {
     process_block_adding (outs, ins, samples, dst_sum);
   }

@@ -17,8 +17,8 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace airwindows {
 
@@ -85,7 +85,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -1539,7 +1539,10 @@ public:
   }
   //----------------------------------------------------------------------------
   struct dry_wet_tag {};
-  void                  set (dry_wet_tag, int v) { D = v / 100.; }
+  void set (dry_wet_tag, int v)
+  {
+    D = v / 100.;
+  }
   static constexpr auto get_parameter (dry_wet_tag)
   {
     return float_param ("%", 0.f, 100.f, 100.f, 0.01f, 1.3f);

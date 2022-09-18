@@ -4,9 +4,9 @@
 #include <type_traits>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/composite/butterworth.hpp"
 
@@ -87,7 +87,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void tick (crange<T*> outs, crange<T const*> ins, uint samples)
+  void tick (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     static constexpr uint blocksize = 32;
 

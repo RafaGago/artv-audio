@@ -3,9 +3,9 @@
 #include <type_traits>
 
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 
@@ -23,11 +23,11 @@ struct moving_average {
   enum state { n_states = length - 1 };
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_coeffs (crange<V>)
+  static void reset_coeffs (xspan<V>)
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void reset_states (crange<V> st)
+  static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
@@ -35,9 +35,9 @@ struct moving_average {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    crange<const V>,
-    crange<V> z, // state 'z1' 1 to N
-    V         in) // in' 1 to N
+    xspan<const V>,
+    xspan<V> z, // state 'z1' 1 to N
+    V        in) // in' 1 to N
   {
     using T = vec_value_type_t<V>;
     assert (z.size() >= n_states);

@@ -24,9 +24,9 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/overaligned_allocator.hpp"
-#include "artv-common/misc/range.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 #define MOD_DBG_DENORMALS 0
 #if MOD_DBG_DENORMALS
@@ -243,7 +243,7 @@ public:
       break;
     case mode::schroeder:
       using TS = decltype (_scho)::value_type;
-      _scho.reset (make_crange (_mem).cast<TS>(), max_scho_stages);
+      _scho.reset (make_xspan (_mem).cast<TS>(), max_scho_stages);
       // TODO: try thiran1
       //_scho.set_resync_delta (10.0);
       _1spl_fb = vec_set<4> (0.f);
@@ -309,7 +309,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process (crange<T*> outs, crange<T const*> ins, uint samples)
+  void process (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
 #if MOD_DBG_DENORMALS
     feenableexcept (FE_INVALID);
@@ -459,7 +459,7 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void tick_phaser (crange<T*> outs, crange<T const*> ins, uint samples)
+  void tick_phaser (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -509,21 +509,21 @@ private:
       std::array<float_x4, max_phaser_stages * zdf::n_gs_coeffs> G_S_mem;
 
       // obtain G and S for the phaser
-      auto gs = make_crange (G_S_mem);
+      auto gs = make_xspan (G_S_mem);
       for (uint s = 0; s < _n_stages; ++s) {
         _phaser.tick_on_idx (
           s, gs.cut_head (zdf::n_gs_coeffs), zdf::gs_coeffs_tag {});
       }
       auto aps_resp = zdf::combine_response<float_x4> (
-        make_crange (G_S_mem.data(), _n_stages * zdf::n_gs_coeffs));
+        make_xspan (G_S_mem.data(), _n_stages * zdf::n_gs_coeffs));
       // obtain G and S for the filters
-      gs = make_crange (G_S_mem);
+      gs = make_xspan (G_S_mem);
       _fb_filters.tick<fb_filter::locut> (
         gs.cut_head (zdf::n_gs_coeffs), zdf::gs_coeffs_tag {});
       _fb_filters.tick<fb_filter::hicut> (
         gs.cut_head (zdf::n_gs_coeffs), zdf::gs_coeffs_tag {});
       auto filt_resp = zdf::combine_response<float_x4> (
-        make_crange (G_S_mem.data(), fb_filter::count * zdf::n_gs_coeffs));
+        make_xspan (G_S_mem.data(), fb_filter::count * zdf::n_gs_coeffs));
 
       // Get ZDF feedback
       wet = _feedback.tick (
@@ -557,7 +557,7 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void tick_schroeder (crange<T*> outs, crange<T const*> ins, uint samples)
+  void tick_schroeder (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -635,7 +635,7 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void tick_chorus (crange<T*> outs, crange<T const*> ins, uint samples)
+  void tick_chorus (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
@@ -720,7 +720,7 @@ private:
       _chor.push (to_push);
 
       float_x2 dry {ins[0][i], ins[1][i]};
-      _dry.push (make_crange (dry));
+      _dry.push (make_xspan (dry));
       constexpr float kdry = 0.001f * max_dry_delay_ms;
       float n_spls         = _srate * (1.f - pars.center) * abs (pars.b) * kdry;
       n_spls               = std::clamp (
@@ -795,7 +795,7 @@ private:
     _mem.resize (
       sinc_t::n_coeffs + std::max (schroeder_size, chor_size + dry_size));
 
-    auto mem = make_crange (_mem);
+    auto mem = make_xspan (_mem);
     static_assert (std::is_same_v<T_sinc, T_mem>);
     // overaligned to 128, so the tables aren't on cache line boundaries
     _sinc_co = mem.cut_head (sinc_t::n_coeffs);
@@ -866,7 +866,7 @@ private:
   } _g;
 
   std::array<float_x1, max_chor_stages> _del_g;
-  crange<float>                         _delay_mem;
+  xspan<float>                          _delay_mem;
 
   alignas (sse_bytes) array2d<float, n_ap_channels, max_phaser_stages> _mod;
 
@@ -883,10 +883,10 @@ private:
   float          _lp_smooth_coeff;
   float          _beat_hz;
 
-  crange<float>    _sinc_co;
-  crange<float_x2> _mem_dry;
-  crange<float_x1> _mem_chor;
-  crange<float_x4> _mem_scho;
+  xspan<float>    _sinc_co;
+  xspan<float_x2> _mem_dry;
+  xspan<float_x1> _mem_chor;
+  xspan<float_x4> _mem_scho;
 };
 //------------------------------------------------------------------------------
 } // namespace artv
