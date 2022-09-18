@@ -243,7 +243,7 @@ public:
       break;
     case mode::schroeder:
       using TS = decltype (_scho)::value_type;
-      _scho.reset (xspan {_mem}.cast<TS>(), max_scho_stages);
+      _scho.reset (_mem_scho, max_scho_stages);
       // TODO: try thiran1
       //_scho.set_resync_delta (10.0);
       _1spl_fb = vec_set<4> (0.f);
@@ -652,7 +652,7 @@ private:
         run_phaser_mod (
           1.f - pars.center, // reverse range lf to hf
           pars.spread,
-          pars.lfo_depth,
+          pars.lfo_depth * (0.3f + 0.7f * pars.center * pars.center),
           0.45f,
           _n_stages,
           run_lfo (pars));
