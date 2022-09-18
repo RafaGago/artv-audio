@@ -134,6 +134,7 @@ public:
   using const_pointer   = element_type const*;
   using reference       = element_type&;
   using const_reference = element_type const&;
+  using size_type       = size_t;
 
   static_assert (std::is_object_v<T>);
   static_assert (!std::is_abstract_v<T>);
@@ -142,7 +143,7 @@ public:
   ~xspan()                                  = default;
   constexpr xspan& operator= (xspan const&) = default;
   //----------------------------------------------------------------------------
-  constexpr xspan (pointer ptr, size_t size) noexcept
+  constexpr xspan (pointer ptr, size_type size) noexcept
   {
     _start = ptr;
     _size  = ptr ? size : 0;
@@ -156,7 +157,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <
-    std::size_t N,
+    size_type N,
     xspan_detail::
       enable_if_compatible<element_type (&)[N], element_type>* = nullptr>
   constexpr xspan (element_type (&arr)[N]) noexcept : xspan (arr, N)
@@ -164,7 +165,7 @@ public:
   //----------------------------------------------------------------------------
   template <
     class U,
-    std::size_t N,
+    size_type N,
     xspan_detail::
       enable_if_compatible<std::array<U, N>&, element_type>* = nullptr>
   constexpr xspan (std::array<U, N>& arr) noexcept : xspan (arr.data(), N)
@@ -172,7 +173,7 @@ public:
 
   template <
     class U,
-    std::size_t N,
+    size_type N,
     xspan_detail::
       enable_if_compatible<std::array<U, N> const&, element_type>* = nullptr>
   constexpr xspan (std::array<U, N> const& arr) noexcept : xspan (arr.data(), N)
@@ -193,22 +194,29 @@ public:
     : xspan (std::data (c), std::size (c))
   {}
   //----------------------------------------------------------------------------
-  constexpr reference at (size_t idx) noexcept
+  template <
+    class U,
+    std::enable_if_t<
+      std::is_convertible_v<U (*)[], element_type (*)[]>>* = nullptr>
+  constexpr xspan (xspan<U> const& s) noexcept : xspan (s.data(), s.size())
+  {}
+  //----------------------------------------------------------------------------
+  constexpr reference at (size_type idx) noexcept
   {
     assert (_start);
     assert (idx < size());
     return _start[idx];
   }
 
-  constexpr const_reference at (size_t idx) const noexcept
+  constexpr const_reference at (size_type idx) const noexcept
   {
     assert (_start);
     assert (idx < size());
     return _start[idx];
   }
   //----------------------------------------------------------------------------
-  constexpr reference operator[] (size_t idx) noexcept { return at (idx); }
-  constexpr const_reference operator[] (size_t idx) const noexcept
+  constexpr reference operator[] (size_type idx) noexcept { return at (idx); }
+  constexpr const_reference operator[] (size_type idx) const noexcept
   {
     return at (idx);
   }
@@ -282,8 +290,8 @@ public:
   constexpr const_iterator cend() noexcept { return _start + _size; }
   constexpr const_iterator end() const noexcept { return _start + _size; }
   //----------------------------------------------------------------------------
-  constexpr size_t size() const noexcept { return _size; }
-  constexpr size_t byte_size() const noexcept
+  constexpr size_type size() const noexcept { return _size; }
+  constexpr size_type byte_size() const noexcept
   {
     return _size * sizeof (element_type);
   }
@@ -292,10 +300,25 @@ public:
   //----------------------------------------------------------------------------
   constexpr bool empty() const noexcept { return size() == 0; }
   //----------------------------------------------------------------------------
-  constexpr reference       first() noexcept { return at (0); }
-  constexpr const_reference first() const noexcept { return at (0); }
-  constexpr reference       last() noexcept { return at (_size - 1); }
-  constexpr const_reference last() const noexcept { return at (_size - 1); }
+  constexpr reference       front() noexcept { return at (0); }
+  constexpr const_reference front() const noexcept { return at (0); }
+  constexpr reference       back() noexcept { return at (_size - 1); }
+  constexpr const_reference back() const noexcept { return at (_size - 1); }
+  //----------------------------------------------------------------------------
+  constexpr auto first (size_type size) const noexcept
+  {
+    return get_head (size);
+  }
+  constexpr auto last (size_type size) const noexcept
+  {
+    return get_tail (size);
+  }
+  //----------------------------------------------------------------------------
+  constexpr auto subspan (size_type offset) const { return advanced (offset); }
+  constexpr auto subspan (size_type offset, size_type count) const
+  {
+    return advanced (offset).get_head (count);
+  }
   //----------------------------------------------------------------------------
   constexpr void clear() noexcept
   {
@@ -325,8 +348,8 @@ public:
 
 private:
   //----------------------------------------------------------------------------
-  T*     _start = nullptr;
-  size_t _size  = 0;
+  T*        _start = nullptr;
+  size_type _size  = 0;
 };
 //------------------------------------------------------------------------------
 template <class T>

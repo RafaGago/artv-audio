@@ -229,7 +229,7 @@ struct delay_length {
     for (; i < dst.size() - 1; ++i) {
       dst[i] = (T) tbl[i * dist];
     }
-    dst[i] = (T) tbl.last();
+    dst[i] = (T) tbl.back();
     return true;
   }
   //----------------------------------------------------------------------------
