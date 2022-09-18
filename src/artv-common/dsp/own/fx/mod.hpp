@@ -28,6 +28,8 @@
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/xspan.hpp"
 
+#define ARTV_MOD_SCHO_TIRAN 1
+
 #define MOD_DBG_DENORMALS 0
 #if MOD_DBG_DENORMALS
 #include <fenv.h>
@@ -244,8 +246,9 @@ public:
     case mode::schroeder:
       using TS = decltype (_scho)::value_type;
       _scho.reset (_mem_scho, max_scho_stages);
-      // TODO: try thiran1
-      //_scho.set_resync_delta (10.0);
+#if ARTV_MOD_SCHO_TIRAN
+      _scho.set_resync_delta (10.0);
+#endif
       break;
     case mode::chorus: {
       _chor.reset (_mem_chor, max_chor_stages);
@@ -964,11 +967,15 @@ private:
 
   using sinc_t = sinc_interp<8, 64>;
 
-  part_classes<mp_list<zdf_type>, float_x4>                     _feedback;
-  part_class_array<allpass_type, float_x4, max_phaser_stages>   _phaser;
-  part_classes<filters_list, float_x4>                          _fb_filters;
-  part_classes<mp_list<onepole_allpass>, float_x4>              _onepole;
+  part_classes<mp_list<zdf_type>, float_x4>                   _feedback;
+  part_class_array<allpass_type, float_x4, max_phaser_stages> _phaser;
+  part_classes<filters_list, float_x4>                        _fb_filters;
+  part_classes<mp_list<onepole_allpass>, float_x4>            _onepole;
+#if ARTV_MOD_SCHO_TIRAN
+  modulable_thiran1_delay_line<float_x4, 4, false, false> _scho {};
+#else
   interpolated_delay_line<float_x4, linear_interp, true, false> _scho;
+#endif
   interpolated_delay_line<float_x1, sinc_t, false, false, true> _chor;
   interpolated_delay_line<float_x2, sinc_t, false, false, true> _dry;
   interpolated_delay_line<float_x2, sinc_t, false, false, true> _flan;
