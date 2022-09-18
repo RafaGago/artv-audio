@@ -67,7 +67,7 @@ public:
         ducker_gain[i] = _ducker.tick (V {(VT) in[0][i], (VT) in[1][i]});
       }
 
-      child_f (make_xspan (out), make_xspan (in), blocksize);
+      child_f (xspan {out}, xspan {in}, blocksize);
 
       for (uint i = 0; i < blocksize; ++i) {
         out[0][i] *= ducker_gain[i][0];

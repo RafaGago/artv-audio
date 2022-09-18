@@ -76,6 +76,6 @@ static constexpr auto rnd_table_raw = make_array<double> (
 }
 
 // xspan has assertions on member access.
-static constexpr auto rnd_table = make_xspan (detail::rnd_table_raw);
+static constexpr auto rnd_table = xspan {detail::rnd_table_raw};
 
 } // namespace artv

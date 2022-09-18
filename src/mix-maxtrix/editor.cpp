@@ -372,7 +372,7 @@ public:
         outs[7]->buttons[i],
         mods[i]->buttons,
         mutesolo[i]->buttons,
-        make_xspan (_page_buttons[i]));
+        xspan {_page_buttons[i]});
     }
     set_color (
       juce::TextButton::buttonOnColourId,
@@ -738,7 +738,7 @@ public:
         columns[i],
         (float) columns[i].getWidth() / _page_buttons[i].size(),
         make_array (fx_page_h),
-        make_xspan (_page_buttons[i]));
+        xspan {_page_buttons[i]});
     }
 
     area.removeFromTop (sep_h); // separator

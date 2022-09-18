@@ -380,7 +380,7 @@ private:
       auto old = l;
 
       l = _mod.get (_mod_delay_spls, _lfo.tick_sine()[0], _mod_depth_spls, 0);
-      _mod.push (make_xspan (old));
+      _mod.push (xspan {&old, 1});
       for (auto& ap : _ap) {
         l = ap.tick (l);
       }
@@ -430,30 +430,29 @@ private:
       _mem.resize (n_delays * delay_size + n_pitch_buffers * pitch_size);
     }
     else {
-      xspan_memset (make_xspan (_mem), 0);
+      xspan_memset (xspan {_mem}, 0);
     }
 
     auto ptr = _mem.data();
 
-    _mod.reset (make_xspan (ptr, delay_size).cast (float_x1 {}), 1);
+    _mod.reset (xspan {ptr, delay_size}.cast (float_x1 {}), 1);
     ptr += delay_size;
 
     for (uint i = 0; i < _ap.size(); ++i) {
-      _ap[i].reset (make_xspan (ptr, delay_size).cast (float_x1 {}));
+      _ap[i].reset (xspan {ptr, delay_size}.cast (float_x1 {}));
       ptr += delay_size;
     }
 
     for (uint i = 0; i < _hhmatrix.size(); ++i) {
       _hhmatrix[i].reset (
-        make_xspan (ptr, delay_size * _hhmatrix[i].size).cast (float_x1 {}));
+        xspan {ptr, delay_size * _hhmatrix[i].size}.cast (float_x1 {}));
       ptr += delay_size * _hhmatrix[i].size;
     }
 
-    _fb_shift.reset (make_xspan (ptr, pitch_size).cast (float_x1 {}));
+    _fb_shift.reset (xspan {ptr, pitch_size}.cast (float_x1 {}));
     ptr += pitch_size;
 
-    _main_shift.reset (
-      make_xspan (ptr, pitch_size * 2).cast (vec<float, 2> {}));
+    _main_shift.reset (xspan {ptr, pitch_size * 2}.cast (vec<float, 2> {}));
   }
   //----------------------------------------------------------------------------
   void set_delay_lengths (float length, float warp, float swidth)

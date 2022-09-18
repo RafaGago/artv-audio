@@ -564,7 +564,7 @@ private:
     // allocate
     _mem.clear();
     _mem.resize (n_samples_delay + n_samples_allpass);
-    auto mem = make_xspan (_mem);
+    auto mem = xspan {_mem};
 
     // distribute
     _delay.reset (mem.cut_head (n_samples_delay), n_taps);

@@ -946,9 +946,7 @@ template <size_t N>
 class toggle_buttons : public detail::toggle_buttons_impl {
 public:
   static_assert (N <= 23 && "JUCE uses float for storing(?).");
-  toggle_buttons()
-    : toggle_buttons_impl {make_xspan (_button_storage)}
-  {}
+  toggle_buttons() : toggle_buttons_impl {xspan {_button_storage}} {}
 
   // in the current state moving or copying invalidates the base, easy to fix
   // if required

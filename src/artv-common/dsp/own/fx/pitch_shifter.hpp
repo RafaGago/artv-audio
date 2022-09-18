@@ -173,7 +173,7 @@ private:
     uint size = get_delay_size (_mode);
     _plugcontext->set_delay_compensation (size / 2);
     assert (size <= _mem.size());
-    _shift.reset (make_xspan (_mem.data(), size));
+    _shift.reset (xspan {_mem.data(), size});
     reset_amt(); // reset all readers
   }
   //----------------------------------------------------------------------------

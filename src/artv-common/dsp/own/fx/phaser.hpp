@@ -448,7 +448,7 @@ public:
       out         = _dc_blocker.tick (out);
       auto del_fb = _feedback_delay_shelf.tick_on_idx (k_shelf_lo, out);
       del_fb      = _feedback_delay_shelf.tick_on_idx (k_shelf_hi, out);
-      _delay.push (make_xspan (del_fb));
+      _delay.push (xspan {&del_fb, 1});
 
       double_x2 outx2    = {(double) out[0], (double) out[1]};
       double_x2 parallel = {(double) out[2], (double) out[3]};
@@ -512,7 +512,7 @@ private:
 
     _delay_mem.clear();
     _delay_mem.resize (delay_size);
-    auto mem = make_xspan (_delay_mem);
+    auto mem = xspan {_delay_mem};
     _delay.reset (mem, 1);
   }
   //----------------------------------------------------------------------------

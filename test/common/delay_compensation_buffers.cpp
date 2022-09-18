@@ -12,7 +12,7 @@ TEST (block_delay_compensation, bigger_input)
   using in_arr = std::array<uint, 4>;
   std::array<uint, 1> latencies {2};
 
-  dly.reset<uint> (make_xspan (latencies));
+  dly.reset<uint> (xspan {latencies});
 
   in_arr in {1, 2, 3, 4};
   dly.compensate (0, in);
@@ -46,7 +46,7 @@ TEST (block_delay_compensation, bigger_delay)
   using in_arr = std::array<uint, 2>;
   std::array<uint, 1> latencies {4};
 
-  dly.reset<uint> (make_xspan (latencies));
+  dly.reset<uint> (xspan {latencies});
 
   in_arr in {1, 2};
   dly.compensate (0, in);

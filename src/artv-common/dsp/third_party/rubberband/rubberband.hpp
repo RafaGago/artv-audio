@@ -161,7 +161,7 @@ public:
       if (unlikely (got != blocksize)) {
         uint blank = blocksize - got;
         for (uint i = 0; i < 2; ++i) {
-          xspan_memset (make_xspan (out[i], blank), 0);
+          xspan_memset (xspan {out[i], blank}, 0);
           out[i] += blank;
         }
       }

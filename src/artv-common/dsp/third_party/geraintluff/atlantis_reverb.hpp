@@ -74,24 +74,22 @@ private:
   jsfx::fft jsfx_ffts;
   void      jsfx_fft (float start_index, uint size)
   {
-    jsfx_ffts.get_fft (size)->forward (
-      make_xspan (&heap (start_index), size * 2));
+    jsfx_ffts.get_fft (size)->forward (xspan {&heap (start_index), size * 2});
   }
   void jsfx_ifft (float start_index, uint size)
   {
-    jsfx_ffts.get_fft (size)->backward (
-      make_xspan (&heap (start_index), size * 2));
+    jsfx_ffts.get_fft (size)->backward (xspan {&heap (start_index), size * 2});
   }
 
   void jsfx_fft_ipermute (double start_index, uint size)
   {
     jsfx_ffts.get_fft (size)->reorder_before_backward (
-      make_xspan (&heap (start_index), size * 2));
+      xspan {&heap (start_index), size * 2});
   }
   void jsfx_fft_permute (double start_index, uint size)
   {
     jsfx_ffts.get_fft (size)->reorder_after_forward (
-      make_xspan (&heap (start_index), size * 2));
+      xspan {&heap (start_index), size * 2});
   }
 
   using simdwrapper = simd_mem<float, 32 / sizeof (float), 32>;

@@ -50,7 +50,7 @@ public:
     }
     _mem.clear();
     _mem.resize (offset + biggest);
-    _tmp_buff = make_xspan (&_mem[offset], biggest);
+    _tmp_buff = xspan {&_mem[offset], biggest};
   }
   // ---------------------------------------------------------------------------
   uint size() const noexcept { return _loc.size(); }

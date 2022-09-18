@@ -314,7 +314,7 @@ public:
     _cfg   = decltype (_cfg) {};
 
     smoother::reset_coeffs (
-      make_xspan (_smooth_coeff).cast (x1_t {}),
+      xspan {&_smooth_coeff, 1}.cast (x1_t {}),
       vec_set<x1_t> (1. / 0.08),
       _t_spl);
 
@@ -384,8 +384,8 @@ public:
           auto smcoeff = (float) _smooth_coeff;
 
           smoother::tick<float_x4> (
-            make_xspan (smcoeff),
-            make_xspan (_smooth_pars[b].arr).cast (float_x4 {}),
+            xspan {&smcoeff, 1},
+            xspan {_smooth_pars[b].arr}.cast (float_x4 {}),
             vec_load<float_x4> (target_pars.arr.data()));
         }
 
@@ -393,8 +393,8 @@ public:
         for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
           for (uint i = 0; i < n_samples; ++i) {
             internal[j] = smoother::tick (
-              make_xspan (_smooth_coeff),
-              make_xspan (internal[j]),
+              xspan {&_smooth_coeff, 1},
+              xspan {&internal[j], 1},
               _target_coeffs[b][j]);
           }
         }
@@ -640,7 +640,7 @@ private:
 
     auto btype = get_band_type (band);
 
-    auto co = make_xspan (_target_coeffs[band]);
+    auto co = xspan {_target_coeffs[band]};
 
     switch (btype) {
     case bandtype::off:

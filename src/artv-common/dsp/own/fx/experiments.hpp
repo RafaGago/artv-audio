@@ -395,7 +395,7 @@ public:
     _plugcontext = &pc;
 
     lp_type::reset_coeffs (
-      make_xspan (_coeffs).cast (double {}),
+      xspan {_coeffs}.cast (double {}),
       vec_set<double_x2> (660.),
       pc.get_sample_rate(),
       order);
@@ -413,8 +413,8 @@ public:
       _delay[pos] = in;
 
       auto lp = lp_type::tick (
-        make_xspan (_coeffs).cast (double {}),
-        make_xspan (_states).cast (double {}),
+        xspan {_coeffs}.cast (double {}),
+        xspan {_states}.cast (double {}),
         in,
         order,
         n_stages,
@@ -512,26 +512,26 @@ public:
     double t_spl =  1. / (double) pc.get_sample_rate();
 
     butterworth_lp_complex::poles (
-      make_xspan (poles),
+      xspan {poles},
       vec_set<double_x2> (660),
       t_spl,
       2);
 
     butterworth_lp_complex::zeros (
-      make_xspan (zeros),
+      xspan {zeros},
       vec_set<double_x2> (660),
       t_spl,
       2);
 
-    _gain = butterworth_lp_complex::gain (make_xspan (poles), 2);
+    _gain = butterworth_lp_complex::gain (xspan {poles}, 2);
 
     t_rev_ccpole_pair_rzero_eq_pair::reset_coeffs (
-      make_xspan (co_rev_poles).cast (double {}),
+      xspan {co_rev_poles}.cast (double {}),
       poles[0],
       vec_real (zeros[0]));
 
     ccpole_pair_rzero_pair::reset_coeffs (
-      make_xspan (co_poles).cast (double {}), poles[0], vec_real (zeros[0]));
+      xspan {co_poles}.cast (double {}), poles[0], vec_real (zeros[0]));
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -546,16 +546,16 @@ public:
       _delay[pos] = out;
 
       out = t_rev_ccpole_pair_rzero_eq_pair::tick (
-        make_xspan (co_rev_poles).cast (double {}),
-        make_xspan (st_rev_poles).cast (double {}),
+        xspan {co_rev_poles}.cast (double {}),
+        xspan {st_rev_poles}.cast (double {}),
         out,
         n_stages,
         _sample_idx);
       out *= _gain;
 
       out = ccpole_pair_rzero_pair::tick (
-        make_xspan (co_poles).cast (double {}),
-        make_xspan (st_poles).cast (double {}),
+        xspan {co_poles}.cast (double {}),
+        xspan {st_poles}.cast (double {}),
         out);
       out *= _gain;
 
@@ -649,26 +649,26 @@ public:
     double t_spl =  1. / (double) pc.get_sample_rate();
 
     butterworth_lp_complex::poles (
-      make_xspan (poles),
+      xspan {poles},
       vec_set<double_x2> (660),
       t_spl,
       1);
 
     butterworth_lp_complex::zeros (
-      make_xspan (zeros),
+      xspan {zeros},
       vec_set<double_x2> (660),
       t_spl,
       1);
 
-    _gain = butterworth_lp_complex::gain (make_xspan (poles), 1);
+    _gain = butterworth_lp_complex::gain (xspan {poles}, 1);
 
     t_rev_rpole_rzero::reset_coeffs (
-      make_xspan (co_rev_poles).cast (double {}),
+      xspan {co_rev_poles}.cast (double {}),
       vec_real (poles[0]),
       vec_real (zeros[0]));
 
     rpole_rzero::reset_coeffs (
-      make_xspan (co_poles).cast (double {}),
+      xspan {co_poles}.cast (double {}),
       vec_real (poles[0]),
       vec_real (zeros[0]));
   }
@@ -685,16 +685,16 @@ public:
       _delay[pos] = out;
 
       out = t_rev_rpole_rzero::tick (
-        make_xspan (co_rev_poles).cast (double {}),
-        make_xspan (st_rev_poles).cast (double {}),
+        xspan {co_rev_poles}.cast (double {}),
+        xspan {st_rev_poles}.cast (double {}),
         out,
         n_stages,
         _sample_idx);
       out *= _gain;
 
       out = rpole_rzero::tick (
-        make_xspan (co_poles).cast (double {}),
-        make_xspan (st_poles).cast (double {}),
+        xspan {co_poles}.cast (double {}),
+        xspan {st_poles}.cast (double {}),
         out);
       out *= _gain;
 

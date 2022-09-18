@@ -148,8 +148,8 @@ public:
     for (uint i = 0; i < samples; ++i) {
       std::array<T, 2> interleaved {ins[0][i], ins[1][i]};
       uint             idx = (i << oversampling_order);
-      auto             l   = make_xspan (upsampled[0] + idx, ratio);
-      auto             r   = make_xspan (upsampled[1] + idx, ratio);
+      auto             l   = xspan {upsampled[0] + idx, ratio};
+      auto             r   = xspan {upsampled[1] + idx, ratio};
       interpolator.tick ({l, r}, interleaved);
     }
     // The fractional delay line is placed after the upsampler
@@ -168,8 +168,8 @@ public:
     for (uint i = 0; i < samples; ++i) {
       uint idx = (i << oversampling_order);
       if constexpr (downsample) {
-        auto l     = make_xspan (upsampled_frac_corrected[0] + idx, ratio);
-        auto r     = make_xspan (upsampled_frac_corrected[1] + idx, ratio);
+        auto l     = xspan {upsampled_frac_corrected[0] + idx, ratio};
+        auto r     = xspan {upsampled_frac_corrected[1] + idx, ratio};
         auto ret   = decimator->tick ({l, r});
         outs[0][i] = ret[0];
         outs[1][i] = ret[1];
@@ -230,7 +230,7 @@ private:
 
     _tmp_kernel.clear();
     _tmp_kernel.resize (tap_ratio * _pc.get_oversampling());
-    auto kernel = make_xspan (_tmp_kernel);
+    auto kernel = xspan {_tmp_kernel};
 
     kaiser_lp_kernel (kernel, fc, att_db, frac, _minphase);
 

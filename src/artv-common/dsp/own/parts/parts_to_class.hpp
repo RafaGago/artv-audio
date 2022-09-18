@@ -836,12 +836,12 @@ public:
       using x1_t = vec<builtin, 1>;
       if constexpr (Part::n_coeffs_int == 0) {
         Part::template reset_coeffs<x1_t> (
-          make_xspan (coeff_out).cast (x1_t {}), std::forward<Ts> (args)...);
+          xspan {coeff_out}.cast (x1_t {}), std::forward<Ts> (args)...);
       }
       else {
         auto co_int = _mem.get_coeffs_int (idx);
         Part::template reset_coeffs<x1_t> (
-          make_xspan (coeff_out).cast (x1_t {}),
+          xspan {coeff_out}.cast (x1_t {}),
           co_int.cast (x1_t {}),
           std::forward<Ts> (args)...);
       }

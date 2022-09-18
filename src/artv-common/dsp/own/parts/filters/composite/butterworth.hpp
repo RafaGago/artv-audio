@@ -116,7 +116,7 @@ public:
       for (uint i = 0; i < q_list.size(); ++i) {
         q_list_cast_mem[i] = (T) q_list[i];
       }
-      auto q_list_cast = make_xspan (q_list_cast_mem.data(), q_list.size());
+      auto q_list_cast = xspan {q_list_cast_mem.data(), q_list.size()};
       cascade_type::reset_coeffs (co, freq, q_list_cast, t_spl, order);
     }
   }

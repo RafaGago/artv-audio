@@ -351,7 +351,7 @@ public:
     _t_spl       = 1.f / pc.get_sample_rate();
 
     smoother::reset_coeffs (
-      make_xspan (_smooth_coeff).cast (x1_t {}),
+      xspan {&_smooth_coeff, 1}.cast (x1_t {}),
       vec_set<x1_t> (1. / 0.1),
       _t_spl);
 
@@ -396,10 +396,9 @@ public:
     for (uint i = 0; i < samples; ++i) {
       // block LP parameter smoothing. 4 = SSE float
       for (uint j = 0; j < param_tgt.arr.size(); j += sse_step) {
-        float_x4 out = smoother::tick (
-          make_xspan (_smooth_coeff),
-          make_xspan (&_param_state.arr[j], sse_step).cast (float_x4 {}),
-          vec_load<float_x4> (&param_tgt.arr[j]));
+        auto spn  = xspan {&_param_state.arr[j], sse_step}.cast (float_x4 {});
+        auto vecv = vec_load<float_x4> (&param_tgt.arr[j]);
+        float_x4 out = smoother::tick (xspan {&_smooth_coeff, 1}, spn, vecv);
 
         vec_store (&smooth.arr[j], out);
       }

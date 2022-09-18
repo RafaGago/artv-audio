@@ -95,7 +95,6 @@ using is_same_template_t = typename is_same_template<T, U>::type;
 
 template <template <class...> class T, class U>
 static constexpr bool is_same_template_v = is_same_template<T, U>::value;
-
 //------------------------------------------------------------------------------
 template <class T = void, class... Ts>
 static constexpr auto make_array (Ts&&... args)

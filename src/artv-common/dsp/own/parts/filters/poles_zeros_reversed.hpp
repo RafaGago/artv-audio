@@ -213,11 +213,7 @@ struct t_rev_conjugate {
       }
       // process
       base::tick (
-        co,
-        st,
-        make_xspan (io_c.data(), blocksize),
-        n_stages,
-        sample_idx + offset);
+        co, st, xspan {io_c.data(), blocksize}, n_stages, sample_idx + offset);
       // deinterleave
       for (uint i = 0; i < blocksize; ++i) {
         io[offset + i] = io_c[i].re + ratio_v * io_c[i].im;
@@ -480,7 +476,7 @@ struct t_rev_naive_cascade_pair {
     [[maybe_unused]] std::array<value_type<V>, 64> buff_mem;
     xspan<value_type<V>>                          buff;
     if constexpr (is_complex) {
-      buff = make_xspan (buff_mem);
+      buff = xspan {buff_mem};
     }
     else {
       buff = io;
@@ -490,8 +486,8 @@ struct t_rev_naive_cascade_pair {
     auto st2 = st.advanced (base::get_n_states (n_stages));
 
     for (uint offset = 0; offset < io.size(); offset += buff.size()) {
-      auto block = make_xspan (
-        &buff[0], std::min<uint> (buff.size(), io.size() - offset));
+      auto block = xspan {
+        &buff[0], std::min<uint> (buff.size(), io.size() - offset)};
 
       if constexpr (is_complex) {
         for (uint i = 0; i < block.size(); ++i) {

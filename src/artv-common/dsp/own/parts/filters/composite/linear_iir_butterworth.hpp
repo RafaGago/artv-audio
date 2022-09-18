@@ -45,10 +45,10 @@ public:
   static void reset_coeffs (xspan<V> co, V freq, vec_value_type_t<V> t_spl)
   {
     vec_complex<V> poles, zeros;
-    butterworth_lp_complex::poles (make_xspan (poles), freq, t_spl, 1);
-    butterworth_lp_complex::zeros (make_xspan (zeros), freq, t_spl, 1);
+    butterworth_lp_complex::poles (xspan {&poles, 1}, freq, t_spl, 1);
+    butterworth_lp_complex::zeros (xspan {&zeros, 1}, freq, t_spl, 1);
     // gain is last, storing before moving "co"
-    co[gain] = butterworth_lp_complex::gain (make_xspan (poles), 1);
+    co[gain] = butterworth_lp_complex::gain (xspan {&poles, 1}, 1);
 
     rev_1pole::reset_coeffs (co, vec_real (poles), vec_real (zeros));
     co.cut_head (rev_1pole::n_coeffs);
@@ -158,10 +158,10 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
     std::array<vec_complex<V>, 1>             zeros;
     std::array<vec_complex<V>, max_order / 2> poles;
 
-    butterworth_lp_complex::zeros (make_xspan (zeros), freq, t_spl, 1);
-    butterworth_lp_complex::poles (make_xspan (poles), freq, t_spl, order / 2);
+    butterworth_lp_complex::zeros (xspan {zeros}, freq, t_spl, 1);
+    butterworth_lp_complex::poles (xspan {poles}, freq, t_spl, order / 2);
 
-    co[gain] = butterworth_lp_complex::gain (make_xspan (poles), order / 2);
+    co[gain] = butterworth_lp_complex::gain (xspan {poles}, order / 2);
     co.cut_head (1); // advance the gain coefficient
 
     for (uint i = 0; i < (order / 4); ++i) {
@@ -269,7 +269,7 @@ struct linear_iir_butterworth_lowpass_any_order {
     vec_complex<double_x2> pole;
     // worst case, 1 pole.
     butterworth_lp_complex::poles (
-      make_xspan (pole), vec_set<double_x2> (freq), (double) t_spl, 1);
+      xspan {&pole, 1}, vec_set<double_x2> (freq), (double) t_spl, 1);
     return get_reversed_pole_n_stages (
       {vec_real (pole)[0], vec_imag (pole)[0]}, snr_db);
   }

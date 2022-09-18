@@ -72,7 +72,7 @@ public:
           io[i][0] = src[0][i];
           io[i][1] = src[1][i];
         }
-        process_band (make_xspan (io.data(), blocksize), b, _sample + offset);
+        process_band (xspan {io.data(), blocksize}, b, _sample + offset);
         // deinterleaving
         for (uint i = 0; i < blocksize; ++i) {
           outs[0][offset + i] = io[i][0];
@@ -108,8 +108,8 @@ public:
       for (uint bi = 0; (bi < n_bands) && (_order_parallel[bi] >= 0); ++bi) {
         auto b = _order_parallel[bi];
 
-        auto buff = make_xspan ((bi == 0) ? &sum[0] : &io[0], blocksize);
-        xspan_memcpy (buff, make_xspan (&in_cp[0], blocksize));
+        auto buff = xspan {(bi == 0) ? &sum[0] : &io[0], blocksize};
+        xspan_memcpy (buff, xspan {&in_cp[0], blocksize});
         process_band (buff, b, _sample + offset);
 
         // match latency with other bands
@@ -347,7 +347,7 @@ public:
     reset_quality_settings (_t_spl);
 
     smoother::reset_coeffs (
-      make_xspan (_smooth_coeff).cast (x1_t {}),
+      xspan {&_smooth_coeff, 1}.cast (x1_t {}),
       vec_set<x1_t> (1 / 0.001),
       _t_spl);
 
@@ -365,8 +365,8 @@ private:
     for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
       for (uint i = 0; i < io.size(); ++i) {
         internal[j] = smoother::tick (
-          make_xspan (_smooth_coeff),
-          make_xspan (internal[j]),
+          xspan {&_smooth_coeff, 1},
+          xspan {&internal[j], 1},
           _target_coeffs[b][j]);
       }
     }
@@ -435,7 +435,7 @@ private:
 
     // assign the buffers to the parallel bands
     auto ptr = _mem.data();
-    _incomp.reset (make_xspan (ptr, latency_parallel), latency_parallel);
+    _incomp.reset (xspan {ptr, latency_parallel}, latency_parallel);
     ptr += latency_parallel;
 
     for (uint b = 0; b < n_bands; ++b) {
@@ -443,7 +443,7 @@ private:
         continue; // series. no compensation required
       }
       uint comp = latency_parallel - _cfg[b].latency;
-      _bandcomp[b].reset (make_xspan (ptr, comp), comp);
+      _bandcomp[b].reset (xspan {ptr, comp}, comp);
       ptr += comp;
     }
   }
@@ -463,7 +463,7 @@ private:
 
     b.slope_gain = gain - 1; // e.g 0dB = 1, so the multiplier is 0
 
-    auto co        = make_xspan (_target_coeffs[band]);
+    auto co        = xspan {_target_coeffs[band]};
     auto co_biquad = co.advanced (_eq[0].get_coeff_offset<fwd_idx>());
     auto co_bwd_poles
       = co.advanced (_eq[0].get_coeff_offset<bckwd_poles_idx>());

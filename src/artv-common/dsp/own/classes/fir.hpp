@@ -71,7 +71,7 @@ public:
   {
     assert (v.size() >= (n_channels * count));
     for (uint i = 0; i < count; ++i) {
-      push (make_xspan (&v[i * n_channels], n_channels));
+      push (xspan {&v[i * n_channels], n_channels});
     }
   }
   //---------------------------------------------------------------------------
@@ -308,8 +308,8 @@ public:
       kernel.data(),
       sizeof kernel[0] * kernel.size());
 
-    _filter.reset (make_xspan (&_mem[0], ksize));
-    _delay.reset (make_xspan (&_mem[ksize], delsize), ksize);
+    _filter.reset (xspan {&_mem[0], ksize});
+    _delay.reset (xspan {&_mem[ksize], delsize}, ksize);
   }
   //----------------------------------------------------------------------------
   // inputs spread.
@@ -396,13 +396,13 @@ public:
     _center_coeff = kernel[kernel.size() / 2];
 
     T* dst = &_mem[0];
-    _filter.reset (make_xspan (dst, kernel_mem));
+    _filter.reset (xspan {dst, kernel_mem});
     dst += kernel_mem;
 
-    _delays[0].reset (make_xspan (dst, non_zero_dl_size), non_zero_dl_elems);
+    _delays[0].reset (xspan {dst, non_zero_dl_size}, non_zero_dl_elems);
     dst += non_zero_dl_size;
 
-    _delays[1].reset (make_xspan (dst, zero_dl_size), zero_dl_elems);
+    _delays[1].reset (xspan {dst, zero_dl_size}, zero_dl_elems);
   }
   //----------------------------------------------------------------------------
   std::array<T, n_channels> tick (std::array<xspan<const T>, n_channels> in)
@@ -500,7 +500,7 @@ public:
     _filters.resize (ratio - _is_lth_band);
 
     // One delay line is shared between all subfilters.
-    _delay.reset (make_xspan (&_mem[kernel_mem], delay_lines_mem), subk_size);
+    _delay.reset (xspan {&_mem[kernel_mem], delay_lines_mem}, subk_size);
 
     for (uint subk = _is_lth_band, offset = 0; subk < ratio;
          ++subk, offset += subk_size) {
@@ -512,8 +512,7 @@ public:
         _mem[offset + dst] *= (T) _ratio; // gain loss compensation
       }
       // filter initialization
-      _filters[subk - _is_lth_band].reset (
-        make_xspan (&_mem[offset], subk_size));
+      _filters[subk - _is_lth_band].reset (xspan {&_mem[offset], subk_size});
     }
   }
   //----------------------------------------------------------------------------
@@ -884,7 +883,7 @@ private:
     uint k_size_bytes   = _kernel_bytes * n_kernel_tables;
 
     _mem.resize (del_size_bytes + k_size_bytes);
-    _delay.reset (make_xspan ((T*) &_mem[0], del_elems), _kernel_size);
+    _delay.reset (xspan {(T*) &_mem[0], del_elems}, _kernel_size);
     _kernels = &_mem[del_size_bytes];
   }
   //----------------------------------------------------------------------------
@@ -1108,7 +1107,7 @@ public:
     uint n_spls = 0;
 
     if (_fractional) {
-      auto in_frac  = make_xspan (in.data(), block_size * n_channels);
+      auto in_frac  = xspan {in.data(), block_size * n_channels};
       auto out_frac = fracbf;
       n_spls        = _fractional->tick (out_frac, in_frac, block_size);
     }
@@ -1119,10 +1118,10 @@ public:
 
       xspan<const value_type> in_int;
       if (n_spls != 0) {
-        in_int = make_xspan (fracbf.data(), n_spls * n_channels);
+        in_int = xspan {fracbf.data(), n_spls * n_channels};
       }
       else {
-        in_int = make_xspan (in.data(), block_size * n_channels);
+        in_int = xspan {in.data(), block_size * n_channels};
         n_spls = block_size;
       }
       while (in_int.size()) {
@@ -1163,7 +1162,7 @@ public:
       auto& decimator_in = std::get<decimator_type> (_integer).input;
       auto  ready_n_spls = decimator.ratio() * n_channels;
 
-      auto in_int  = make_xspan (in.data(), block_size * n_channels);
+      auto in_int  = xspan {in.data(), block_size * n_channels};
       auto out_int = intbf;
 
       while (in_int.size()) {
@@ -1193,7 +1192,7 @@ public:
         }
         else {
           bsz     = block_size;
-          in_frac = make_xspan (in.data(), bsz * n_channels);
+          in_frac = xspan {in.data(), bsz * n_channels};
         }
         processed = true;
         n_spls    = _fractional->tick (out, in_frac, bsz);

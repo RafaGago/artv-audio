@@ -64,7 +64,7 @@ public:
       out[i]     = r.out;
       to_push[i] = r.to_push;
     }
-    dl.push (make_xspan (&to_push[0], dl.n_channels()));
+    dl.push (xspan {&to_push[0], dl.n_channels()});
   }
   //----------------------------------------------------------------------------
   // tick all delay line channels in serial
@@ -87,7 +87,7 @@ public:
       out        = r.out;
       to_push[i] = r.to_push;
     }
-    dl.push (make_xspan (&to_push[0], dl.n_channels()));
+    dl.push (xspan {&to_push[0], dl.n_channels()});
     return out;
   }
   //----------------------------------------------------------------------------
@@ -97,7 +97,7 @@ public:
   {
     assert (dl.n_channels() == 1);
     auto r = tick (in, dl.get (delay, 0), gain);
-    dl.push (make_xspan (&r.to_push, 1));
+    dl.push (xspan {&r.to_push, 1});
     return r.out;
   }
   //----------------------------------------------------------------------------

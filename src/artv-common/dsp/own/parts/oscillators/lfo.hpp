@@ -32,7 +32,7 @@ public:
   void set_freq (value_type f, float t_spl)
   {
     _phasor.set_freq (f, t_spl);
-    onepole_smoother::reset_coeffs (make_xspan (_smooth_coeff), f * 2.f, t_spl);
+    onepole_smoother::reset_coeffs (xspan {&_smooth_coeff, 1}, f * 2.f, t_spl);
   }
   //----------------------------------------------------------------------------
   void set_phase (phase_type p) { _phasor.set_phase (p); }
@@ -120,7 +120,7 @@ public:
     for (uint i = 0; i < n; ++i) {
       ret = tick_sample_hold (1);
       ret = onepole_smoother::tick<decltype (ret)> (
-        make_xspan (_smooth_coeff), make_xspan (_smooth_state), ret);
+        xspan {&_smooth_coeff, 1}, xspan {&_smooth_state, 1}, ret);
     }
     return ret;
   }

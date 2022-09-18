@@ -29,12 +29,12 @@ public:
   {
     _mem.clear();
 
-    xspan_memset (make_xspan (_order), 0);
-    xspan_memset (make_xspan (_freq), 0);
-    xspan_memset (make_xspan (_coeffs), 0);
-    xspan_memset (make_xspan (_states), 0);
-    xspan_memset (make_xspan (_in_delcomp), 0);
-    xspan_memset (make_xspan (_out_delcomp), 0);
+    xspan_memset (xspan {_order}, 0);
+    xspan_memset (xspan {_freq}, 0);
+    xspan_memset (xspan {_coeffs}, 0);
+    xspan_memset (xspan {_states}, 0);
+    xspan_memset (xspan {_in_delcomp}, 0);
+    xspan_memset (xspan {_out_delcomp}, 0);
 
     _t_spl    = 1.f / samplerate;
     _n_stages = n_stages;
@@ -78,13 +78,13 @@ public:
     ptr += block_mem::n_double_x2;
 
     for (uint i = 0; i < n_crossovers; ++i) {
-      _states[i] = make_xspan (ptr, stage_state[i]);
+      _states[i] = xspan {ptr, stage_state[i]};
       ptr += stage_state[i];
 
-      _in_delcomp[i].reset (make_xspan (ptr, stage_in[i]), 0);
+      _in_delcomp[i].reset (xspan {ptr, stage_in[i]}, 0);
       ptr += stage_in[i];
 
-      _out_delcomp[i].reset (make_xspan (ptr, stage_out[i]), 0);
+      _out_delcomp[i].reset (xspan {ptr, stage_out[i]}, 0);
       ptr += stage_out[i];
     }
   }
@@ -201,7 +201,7 @@ public:
         lp_type::tick<double_x2> (
           _coeffs[c],
           _states[c],
-          make_xspan (&_block->bands[c][0], blocksize),
+          xspan {&_block->bands[c][0], blocksize},
           _order[c],
           _n_stages[c],
           _sample_idx);

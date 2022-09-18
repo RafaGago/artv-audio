@@ -45,7 +45,7 @@ public:
     memset (&_current, 0, sizeof _current);
     using x1_t = vec<T, 1>;
     onepole_smoother::reset_coeffs (
-      make_xspan (_smoother_coeff).cast (x1_t {}), vec_set<x1_t> (hz), t_spl);
+      xspan {&_smoother_coeff, 1}.cast (x1_t {}), vec_set<x1_t> (hz), t_spl);
   }
   //----------------------------------------------------------------------------
   void set_all_from_target() { _current = _target; }
@@ -59,8 +59,8 @@ public:
     for (uint i = 0; i < samples; ++i) {
       for (uint j = 0; j < _target.mem.size(); ++j) {
         _current.mem[j] = onepole_smoother::tick<vec_type> (
-          make_xspan (_smoother_coeff),
-          make_xspan (_current.mem[j]),
+          xspan {&_smoother_coeff, 1},
+          xspan {&_current.mem[j], 1},
           _target.mem[j]);
       }
     }

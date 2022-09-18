@@ -59,7 +59,7 @@ public:
   void     set_buffer (xspan<T> v, uint iosize)
   {
     assert (v.size() >= iosize);
-    _work = make_xspan (v.data(), iosize);
+    _work = xspan {v.data(), iosize};
   }
 
 private:

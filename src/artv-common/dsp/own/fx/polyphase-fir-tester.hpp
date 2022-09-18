@@ -46,10 +46,9 @@ public:
     for (uint i = 0; i < block_samples; ++i) {
       std::array<sample_type, channels> in = {ins[0][i], ins[1][i]};
       std::array<std::array<sample_type, ratio>, channels> upsampled;
-      _up.tick ({make_xspan (upsampled[0]), make_xspan (upsampled[1])}, in);
+      _up.tick ({xspan {upsampled[0]}, xspan {upsampled[1]}}, in);
 #if 1
-      auto ret
-        = _down.tick ({make_xspan (upsampled[0]), make_xspan (upsampled[1])});
+      auto ret   = _down.tick ({xspan {upsampled[0]}, xspan {upsampled[1]}});
       outs[0][i] = ret[0] * _gain;
       outs[1][i] = ret[1] * _gain;
 #else

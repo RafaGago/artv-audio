@@ -490,7 +490,7 @@ private:
       // pre diffusor ----------------------------------------------------------
 
       // AP gain LFO
-      auto mod_g     = make_xspan (tmp);
+      auto mod_g     = xspan {tmp};
       uint late_wave = _late_wave; // telling the optimizer to ignore changes
       for (uint i = 0; i < block.size(); ++i) {
         vec<float, 2> mod;
@@ -671,7 +671,7 @@ private:
         }
 #endif
         // internal diffusor lfo.
-        mod_g = make_xspan (tmp);
+        mod_g = xspan {tmp};
         for (uint i = 0; i < block.size(); ++i) {
           vec<float, 2> mod;
           if (late_wave == modwv_sh) {
@@ -707,7 +707,7 @@ private:
         }
 
         for (uint i = 0; i < block.size(); ++i) {
-          auto lm = make_xspan (late_mtx[i]);
+          auto lm = xspan {late_mtx[i]};
           // diffusion
           auto l
             = rotation_matrix<8>::tick<float> (lm.get_head (8), _late_l_angle);
@@ -829,8 +829,8 @@ private:
     // Non portable: VLA.
     T stat_mem[tbl_length];
 
-    auto work_mem = tbl_length ? make_xspan (&stat_mem[0], tbl_length)
-                               : make_xspan (dyn_mem);
+    auto work_mem
+      = tbl_length ? xspan {&stat_mem[0], tbl_length} : xspan {dyn_mem};
 
     delay_length::get (
       dst, spls_min, spls_max, prime_idx, rounding_fact, work_mem);
@@ -1066,7 +1066,7 @@ private:
     _mem.resize (mem_total);
 
     // assigning memory
-    auto mem = make_xspan (_mem);
+    auto mem = xspan {_mem};
     // pre delay
     _pre_delay.reset (mem.cut_head (pre_delay_spls_max).cast (float {}), 2);
     // gap

@@ -68,6 +68,6 @@ static constexpr auto primes_table_raw = array_cast<u8> (make_array (
 } // namespace detail
 
 // xspan has assertions on member access.
-static constexpr auto primes_table = make_xspan (detail::primes_table_raw);
+static constexpr auto primes_table = xspan {detail::primes_table_raw};
 
 } // namespace artv

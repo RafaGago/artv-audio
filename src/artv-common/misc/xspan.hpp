@@ -3,214 +3,220 @@
 #pragma once
 
 #include <array>
+#include <iterator>
+#include <type_traits>
 #include <vector>
 
+#include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
 
 namespace artv {
+
+template <class T>
+class xspan;
+
+namespace xspan_detail {
+
+#if !defined(__cpp_lib_nonmember_container_access)
+#error "This span implementation requires __cpp_lib_nonmember_container_access"
+#endif
+
+template <class T, class E>
+static constexpr bool arrays_are_convertible_v = std::is_convertible_v<
+  std::remove_pointer_t<decltype (std::data (std::declval<T>()))> (*)[],
+  E (*)[]>;
+
+template <class T>
+static constexpr bool data_is_void_v = std::
+  is_same_v<std::remove_cv_t<decltype (std::data (std::declval<T>()))>, void>;
+
+template <class, class, class = void>
+struct is_compatible : std::false_type {};
+
+template <class T, class E>
+struct is_compatible<
+  T,
+  E,
+  std::enable_if_t<!data_is_void_v<T> && arrays_are_convertible_v<T, E>>>
+  : std::true_type {};
+
+template <class T, class E>
+static constexpr bool is_compatible_v = is_compatible<T, E>::value;
+
+template <class T, class E>
+using enable_if_compatible = std::enable_if_t<is_compatible_v<T, E>>;
 //------------------------------------------------------------------------------
-// TODO: this won't match a std::span, it is just the old own version I was
-// using.
+template <class T>
+struct is_std_array : public std::false_type {};
+
+template <class T, size_t N>
+struct is_std_array<std::array<T, N>> : public std::true_type {};
+
+template <class T>
+static constexpr bool is_std_array_v = is_std_array<T>::value;
+//------------------------------------------------------------------------------
+template <class T>
+struct is_xspan : public std::false_type {};
+
+template <class T>
+struct is_xspan<xspan<T>> : public std::true_type {};
+
+template <class T>
+static constexpr bool is_xspan_v = is_xspan<T>::value;
+//------------------------------------------------------------------------------
+template <class, class = void>
+struct callable_by_global_std_size_and_std_data : std::false_type {};
+
+template <class T>
+struct callable_by_global_std_size_and_std_data<
+  T,
+  std::void_t<
+    decltype (std::size (std::declval<T>())),
+    decltype (std::data (std::declval<T>()))>> : std::true_type {};
+
+template <class T>
+static constexpr bool callable_by_global_std_size_and_std_data_v
+  = callable_by_global_std_size_and_std_data<T>::value;
+
+template <typename T>
+using uncvref_t = std::remove_cv_t<std::remove_reference<T>>;
+
+// clang-format off
+template <class T>
+static constexpr bool is_container_v =
+  !is_xspan_v<uncvref_t<T>> &&
+  !std::is_array_v<uncvref_t<T>> &&
+  !is_std_array_v<uncvref_t<T>> &&
+  callable_by_global_std_size_and_std_data_v<T>;
+// clang-format on
+
+// For some reason in seems that the next template:
+//
+// template <class T, class E>
+// using enable_if_compatible_container
+//   = std::enable_if_t<is_container_v<T> && is_compatible_v<T, E>>;
+//
+// Is always evaluating both "is_container_v" and "is_compatible_v", when the
+// expected behavior would be that if "is_container_v" is "false" then
+// "is_compatible_v" shouldn't be evaluated.
+//
+// Without "container_compatible_workaround" every type fails on
+// "data_is_void_v", as they have no "std::data" defined.
+//
+// This is on Clang14.
+template <class T, class E, class = void>
+struct container_compatible_workaround : std::false_type {};
+
+template <class T, class E>
+struct container_compatible_workaround<
+  T,
+  E,
+  std::enable_if_t<is_container_v<T>>> : public is_compatible<T, E> {};
+
+template <class T, class E>
+using enable_if_compatible_container
+  = std::enable_if_t<container_compatible_workaround<T, E>::value>;
+
+//------------------------------------------------------------------------------
+} // namespace xspan_detail
+//------------------------------------------------------------------------------
+// took this as reference:
+// https://github.com/tcbrindle/span/blob/master/include/tcb/span.hpp
 template <class T>
 class xspan {
-private:
-  //----------------------------------------------------------------------------
-  template <class U>
-  static constexpr bool same_or_non_const_to_const
-    = std::is_same_v<T, U> || std::is_same_v<std::remove_const_t<T>, U>;
-  //----------------------------------------------------------------------------
-  // This one gets "U" just to have a dependant type for SFINAE. It decides
-  // based on "T".
-  template <class U>
-  static constexpr bool      xspan_type_is_const
-    = std::is_same_v<U, U>&& std::is_const_v<T>;
-  //----------------------------------------------------------------------------
 public:
-  using value_type      = T;
-  using iterator        = value_type*;
-  using const_iterator  = value_type const*;
-  using pointer         = value_type*;
-  using const_pointer   = value_type const*;
-  using reference       = value_type&;
-  using const_reference = value_type const&;
+  //----------------------------------------------------------------------------
+  using element_type    = T;
+  using value_type      = std::remove_cv_t<T>;
+  using iterator        = element_type*;
+  using const_iterator  = element_type const*;
+  using pointer         = element_type*;
+  using const_pointer   = element_type const*;
+  using reference       = element_type&;
+  using const_reference = element_type const&;
 
-  constexpr xspan() = default;
+  static_assert (std::is_object_v<T>);
+  static_assert (!std::is_abstract_v<T>);
 
-  constexpr xspan (value_type* start, size_t size)
+  constexpr xspan()                         = default;
+  ~xspan()                                  = default;
+  constexpr xspan& operator= (xspan const&) = default;
+  //----------------------------------------------------------------------------
+  constexpr xspan (pointer ptr, size_t size) noexcept
   {
-    _start = start;
-    _size  = start ? size : 0;
+    _start = ptr;
+    _size  = ptr ? size : 0;
   }
-
-  template <class U, std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  constexpr xspan (xspan<U> const& other) : xspan {other.data(), other.size()}
+  //----------------------------------------------------------------------------
+  constexpr xspan (pointer first, pointer last) noexcept
+  {
+    _start = first;
+    assert (last >= first);
+    _size = first - last;
+  }
+  //----------------------------------------------------------------------------
+  template <
+    std::size_t N,
+    xspan_detail::
+      enable_if_compatible<element_type (&)[N], element_type>* = nullptr>
+  constexpr xspan (element_type (&arr)[N]) noexcept : xspan (arr, N)
   {}
-
-  template <class U, std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  constexpr xspan<T>& operator= (xspan<U> const& other)
-  {
-    _start = other.data();
-    _size  = other.size();
-    return *this;
-  }
-
+  //----------------------------------------------------------------------------
   template <
     class U,
-    uint N,
-    std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  constexpr xspan (U (&arr)[N]) : xspan {&arr[0], N}
-  {}
-
-  template <
-    class U,
-    uint N,
-    std::enable_if_t<xspan_type_is_const<U>>* = nullptr>
-  constexpr xspan (U const (&arr)[N]) : xspan {&arr[0], N}
-  {}
-
-  template <
-    class U,
-    uint N,
-    std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  constexpr xspan<T>& operator= (U (&arr)[N])
-  {
-    _start = &arr[0];
-    _size  = N;
-    return *this;
-  }
-
-  template <
-    class U,
-    uint N,
-    std::enable_if_t<xspan_type_is_const<U>>* = nullptr>
-  constexpr xspan<T>& operator= (U const (&arr)[N])
-  {
-    _start = &arr[0];
-    _size  = N;
-    return *this;
-  }
-
-  template <
-    class U,
-    size_t N,
-    std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  constexpr xspan (std::array<U, N>& arr) : xspan {arr.data(), arr.size()}
+    std::size_t N,
+    xspan_detail::
+      enable_if_compatible<std::array<U, N>&, element_type>* = nullptr>
+  constexpr xspan (std::array<U, N>& arr) noexcept : xspan (arr.data(), N)
   {}
 
   template <
     class U,
-    size_t N,
-    std::enable_if_t<xspan_type_is_const<U>>* = nullptr>
-  constexpr xspan (std::array<U, N> const& arr) : xspan {arr.data(), arr.size()}
+    std::size_t N,
+    xspan_detail::
+      enable_if_compatible<std::array<U, N> const&, element_type>* = nullptr>
+  constexpr xspan (std::array<U, N> const& arr) noexcept : xspan (arr.data(), N)
   {}
-
-  template <class U, size_t N>
-  xspan (std::array<U, N>&& arr)
-  {
-    static_assert (!std::is_same_v<U, U>, "No binding to rvalues");
-  }
-
+  //----------------------------------------------------------------------------
   template <
-    class U,
-    size_t N,
-    std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  constexpr xspan<T>& operator= (std::array<U, N>& arr)
-  {
-    _start = arr.data();
-    _size  = N;
-    return *this;
-  }
-
-  template <
-    class U,
-    size_t N,
-    std::enable_if_t<xspan_type_is_const<U>>* = nullptr>
-  constexpr xspan<T>& operator= (std::array<U, N> const& arr)
-  {
-    _start = arr.data();
-    _size  = N;
-    return *this;
-  }
-
-  template <class U, size_t N>
-  xspan<T>& operator= (std::array<U, N>&& arr)
-  {
-    static_assert (!std::is_same_v<U, U>, "No binding to rvalues");
-    return *this;
-  }
-
-  // remember that xspan is a non-owning reference that can get
-  // easily invalidated...
-  template <
-    class U,
-    class Alloc,
-    std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  xspan (std::vector<U, Alloc>& vec) : xspan {vec.data(), vec.size()}
+    class Container,
+    xspan_detail::
+      enable_if_compatible_container<Container&, element_type>* = nullptr>
+  constexpr xspan (Container& c) noexcept : xspan (std::data (c), std::size (c))
   {}
 
   template <
-    class U,
-    class Alloc,
-    std::enable_if_t<xspan_type_is_const<U>>* = nullptr>
-  xspan (std::vector<U, Alloc> const& vec) : xspan {vec.data(), vec.size()}
+    class Container,
+    xspan_detail::
+      enable_if_compatible_container<Container const&, element_type>* = nullptr>
+  constexpr xspan (Container const& c) noexcept
+    : xspan (std::data (c), std::size (c))
   {}
-
-  template <class U, class Alloc>
-  xspan (std::vector<U, Alloc>&& vec)
-  {
-    static_assert (!std::is_same_v<U, U>, "No binding to rvalues");
-  }
-
-  template <
-    class U,
-    class Alloc,
-    std::enable_if_t<same_or_non_const_to_const<U>>* = nullptr>
-  xspan<T>& operator= (std::vector<U, Alloc>& vec)
-  {
-    _start = vec.data();
-    _size  = vec.size();
-    return *this;
-  }
-
-  template <
-    class U,
-    class Alloc,
-    std::enable_if_t<xspan_type_is_const<U>>* = nullptr>
-  xspan<T>& operator= (std::vector<U, Alloc>& vec)
-  {
-    _start = vec.data();
-    _size  = vec.size();
-    return *this;
-  }
-
-  template <class U, class Alloc>
-  xspan<T>& operator= (std::vector<U, Alloc>&& vec)
-  {
-    static_assert (!std::is_same_v<U, U>, "No binding to rvalues");
-    return *this;
-  }
-
-  constexpr value_type& at (size_t idx)
+  //----------------------------------------------------------------------------
+  constexpr reference at (size_t idx) noexcept
   {
     assert (_start);
     assert (idx < size());
     return _start[idx];
   }
 
-  constexpr value_type const& at (size_t idx) const
+  constexpr const_reference at (size_t idx) const noexcept
   {
     assert (_start);
     assert (idx < size());
     return _start[idx];
   }
-
-  constexpr value_type&       operator[] (size_t idx) { return at (idx); }
-  constexpr value_type const& operator[] (size_t idx) const { return at (idx); }
-
-  constexpr explicit operator bool() const { return !empty(); }
-
+  //----------------------------------------------------------------------------
+  constexpr reference operator[] (size_t idx) noexcept { return at (idx); }
+  constexpr const_reference operator[] (size_t idx) const noexcept
+  {
+    return at (idx);
+  }
+  //----------------------------------------------------------------------------
+  constexpr explicit operator bool() const noexcept { return !empty(); }
+  //----------------------------------------------------------------------------
   // returns a copy/subrange with "count" elements dropped from the tail.
-  constexpr xspan<T> reduced (uint count) const
+  constexpr xspan<T> reduced (uint count) const noexcept
   {
     assert (count <= size());
     xspan<T> r {*this};
@@ -218,9 +224,9 @@ public:
     r._start = r._size ? r._start : nullptr;
     return r;
   }
-
+  //----------------------------------------------------------------------------
   // returns a copy/subrange with "count" elements dropped from the head.
-  constexpr xspan<T> advanced (uint count) const
+  constexpr xspan<T> advanced (uint count) const noexcept
   {
     assert (count <= size());
     xspan<T> r {*this};
@@ -229,9 +235,10 @@ public:
     r._start = r._size ? r._start : nullptr;
     return r;
   }
+  //----------------------------------------------------------------------------
   // returns a copy/subrange containing "count" elements starting from the
   // head.
-  constexpr xspan<T> get_head (uint count) const
+  constexpr xspan<T> get_head (uint count) const noexcept
   {
     assert (count <= size());
     xspan<T> r {*this};
@@ -239,8 +246,9 @@ public:
     r._start = r._size ? r._start : nullptr;
     return r;
   }
+  //----------------------------------------------------------------------------
   // returns a copy/subrange containing "count" elements starting from the tail.
-  constexpr xspan<T> get_tail (uint count) const
+  constexpr xspan<T> get_tail (uint count) const noexcept
   {
     assert (count <= size());
     xspan<T> r {*this};
@@ -249,216 +257,76 @@ public:
     r._start = r._size ? r._start : nullptr;
     return r;
   }
+  //----------------------------------------------------------------------------
   // drops "count" elems from the head and returns the cut subrange
-  constexpr xspan<T> cut_head (uint count)
+  constexpr xspan<T> cut_head (uint count) noexcept
   {
     auto r = get_head (count);
     *this  = advanced (count);
     return r;
   }
+  //----------------------------------------------------------------------------
   // drops "count" elems from the tail and returns the cut subrange
-  constexpr xspan<T> cut_tail (uint count)
+  constexpr xspan<T> cut_tail (uint count) noexcept
   {
     auto r = get_tail (count);
     *this  = reduced (count);
     return r;
   }
-
-  constexpr iterator       begin() { return _start; }
-  constexpr const_iterator cbegin() { return _start; }
-  constexpr const_iterator begin() const { return _start; }
-
-  constexpr iterator       end() { return _start + _size; }
-  constexpr const_iterator cend() { return _start + _size; }
-  constexpr const_iterator end() const { return _start + _size; }
-
-  constexpr size_t   size() const { return _size; }
-  constexpr size_t   byte_size() const { return _size * sizeof (value_type); }
-  constexpr T*       data() { return _start; }
-  constexpr T const* data() const { return _start; }
-
-  constexpr bool empty() const { return size() == 0; }
-
-  constexpr T&       first() { return at (0); }
-  constexpr T const& first() const { return at (0); }
-  constexpr T&       last() { return at (_size - 1); }
-  constexpr T const& last() const { return at (_size - 1); }
-
-  constexpr void clear()
+  //----------------------------------------------------------------------------
+  constexpr iterator       begin() noexcept { return _start; }
+  constexpr const_iterator cbegin() noexcept { return _start; }
+  constexpr const_iterator begin() const noexcept { return _start; }
+  //----------------------------------------------------------------------------
+  constexpr iterator       end() noexcept { return _start + _size; }
+  constexpr const_iterator cend() noexcept { return _start + _size; }
+  constexpr const_iterator end() const noexcept { return _start + _size; }
+  //----------------------------------------------------------------------------
+  constexpr size_t size() const noexcept { return _size; }
+  constexpr size_t byte_size() const noexcept
+  {
+    return _size * sizeof (element_type);
+  }
+  constexpr pointer       data() noexcept { return _start; }
+  constexpr const_pointer data() const noexcept { return _start; }
+  //----------------------------------------------------------------------------
+  constexpr bool empty() const noexcept { return size() == 0; }
+  //----------------------------------------------------------------------------
+  constexpr reference       first() noexcept { return at (0); }
+  constexpr const_reference first() const noexcept { return at (0); }
+  constexpr reference       last() noexcept { return at (_size - 1); }
+  constexpr const_reference last() const noexcept { return at (_size - 1); }
+  //----------------------------------------------------------------------------
+  constexpr void clear() noexcept
   {
     _start = nullptr;
     _size == 0;
   }
-
+  //----------------------------------------------------------------------------
   template <class U>
-  xspan<U> cast() const
+  xspan<U> cast() const noexcept
   {
-    constexpr auto big   = std::max (sizeof (value_type), sizeof (U));
-    constexpr auto small = std::min (sizeof (value_type), sizeof (U));
+    constexpr auto big   = std::max (sizeof (element_type), sizeof (U));
+    constexpr auto small = std::min (sizeof (element_type), sizeof (U));
 
     static_assert ((big % small) == 0, "sizes are not multiples");
 
     return {reinterpret_cast<U*> (_start), byte_size() / sizeof (U)};
   }
-  // dummy parameter version to avoid calling make_xspan(x).template cast<T>();
+  //----------------------------------------------------------------------------
+  // dummy parameter version to avoid calling xspan(x).template cast<T>();
   template <class U>
-  xspan<U> cast (U) const
+  xspan<U> cast (U) const noexcept
   {
     return cast<U>();
   }
-
-  xspan<std::add_const_t<T>> to_const() const { return *this; }
+  //----------------------------------------------------------------------------
+  xspan<std::add_const_t<T>> to_const() const noexcept { return *this; }
 
 private:
   //----------------------------------------------------------------------------
   T*     _start = nullptr;
   size_t _size  = 0;
-};
-//------------------------------------------------------------------------------
-template <class T>
-static constexpr xspan<T> make_xspan (T* mem, size_t count)
-{
-  return {mem, count};
-};
-
-template <class T>
-static constexpr xspan<const T> make_xspan (T const* mem, size_t count)
-{
-  return {mem, count};
-};
-
-template <class T>
-static constexpr xspan<T> make_xspan (T& mem)
-{
-  return {&mem, 1};
-};
-
-template <class T>
-static constexpr xspan<const T> make_xspan (T const& mem)
-{
-  return {&mem, 1};
-};
-
-template <class T>
-static constexpr void make_xspan (T&& mem)
-{
-  static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
-};
-
-template <class T, size_t N>
-static constexpr xspan<T> make_xspan (
-  T (&arr)[N],
-  size_t count      = N,
-  size_t offset_idx = 0)
-{
-  assert (count + offset_idx <= N && "out of bounds");
-  return {arr.data() + offset_idx, count};
-};
-
-template <class T, size_t N>
-static constexpr xspan<const T> make_xspan (
-  T const (&arr)[N],
-  size_t count      = N,
-  size_t offset_idx = 0)
-{
-  assert (count + offset_idx <= N && "out of bounds");
-  return {arr.data() + offset_idx, count};
-};
-
-template <class T, size_t N>
-static constexpr xspan<T> make_xspan (
-  std::array<T, N>& arr,
-  size_t            count      = N,
-  size_t            offset_idx = 0)
-{
-  assert ((count + offset_idx) <= N && "out of bounds");
-  return {arr.data() + offset_idx, count};
-};
-
-template <class T, size_t N>
-static constexpr xspan<const T> make_xspan (
-  std::array<T, N> const& arr,
-  size_t                  count      = N,
-  size_t                  offset_idx = 0)
-{
-  assert ((count + offset_idx) <= N && "out of bounds");
-  return {arr.data() + offset_idx, count};
-};
-
-template <class T, size_t N>
-static constexpr void make_xspan (
-  std::array<T, N>&& arr,
-  size_t             count      = N,
-  size_t             offset_idx = 0)
-{
-  static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
-};
-
-template <class T, class Alloc>
-static constexpr xspan<T> make_xspan (std::vector<T, Alloc>& vec)
-{
-  return {vec.data(), vec.size()};
-};
-
-template <class T, class Alloc>
-static constexpr xspan<const T> make_xspan (std::vector<T, Alloc> const& vec)
-{
-  return {vec.data(), vec.size()};
-};
-
-template <class T, class Alloc>
-static constexpr void make_xspan (std::vector<T, Alloc>&& vec)
-{
-  static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
-};
-
-template <class T, class Alloc>
-static constexpr xspan<T> make_xspan (
-  std::vector<T, Alloc>& vec,
-  size_t                 count,
-  size_t                 offset_idx = 0)
-{
-  assert (count + offset_idx <= vec.size() && "out of bounds");
-  return {vec.data() + offset_idx, count};
-};
-
-template <class T, class Alloc>
-static constexpr xspan<const T> make_xspan (
-  std::vector<T, Alloc> const& vec,
-  size_t                       count,
-  size_t                       offset_idx = 0)
-{
-  assert (count + offset_idx <= vec.size() && "out of bounds");
-  return {vec.data() + offset_idx, count};
-};
-
-template <class T, class Alloc>
-static constexpr void make_xspan (
-  std::vector<T, Alloc>&& vec,
-  size_t                  count,
-  size_t                  offset_idx = 0)
-{
-  static_assert (!std::is_same_v<T, T>, "No binding to rvalues");
-};
-
-template <class T>
-static constexpr xspan<T> make_xspan (
-  xspan<T> range,
-  size_t   count,
-  size_t   offset_idx = 0)
-{
-  assert (count + offset_idx <= range.size() && "out of bounds");
-  return {&range[offset_idx], count};
-};
-
-template <class T>
-static constexpr xspan<const T> make_xspan (
-  xspan<T> range,
-  size_t   count,
-  size_t   offset_idx = 0)
-{
-  assert (count + offset_idx <= range.size() && "out of bounds");
-  return {&range[offset_idx], count};
 };
 //------------------------------------------------------------------------------
 template <class T>
@@ -487,4 +355,25 @@ static uint xspan_copy (xspan<T> dst, const xspan<T> src)
   return xspan_memcpy (dst, src) / sizeof (T);
 }
 //------------------------------------------------------------------------------
+#if defined(__cpp_deduction_guides)
+
+template <class T, size_t N>
+xspan (T (&)[N]) -> xspan<T>;
+
+template <class T, size_t N>
+xspan (std::array<T, N>&) -> xspan<T>;
+
+template <class T, size_t N>
+xspan (std::array<T, N> const&) -> xspan<const T>;
+
+template <class Container>
+xspan (Container&) -> xspan<
+  std::remove_reference_t<decltype (*std::data (std::declval<Container&>()))>>;
+
+template <class Container>
+xspan (const Container&) -> xspan<const typename Container::value_type>;
+
+#else
+#error "This span implementation requires __cpp_deduction_guides"
+#endif
 } // namespace artv

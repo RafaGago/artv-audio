@@ -40,11 +40,11 @@ public:
     sample_type stack_tgt_buff[_tgt_rate_bf ? 0 : _tgt_rate_bf_spls];
     sample_type stack_src_buff[_src_rate_bf ? 0 : _src_rate_bf_spls];
 
-    auto tgt_rate_bf = make_xspan (
-      _tgt_rate_bf ? _tgt_rate_bf : stack_tgt_buff, _tgt_rate_bf_spls);
+    auto tgt_rate_bf
+      = xspan {_tgt_rate_bf ? _tgt_rate_bf : stack_tgt_buff, _tgt_rate_bf_spls};
 
-    auto src_rate_bf = make_xspan (
-      _src_rate_bf ? _src_rate_bf : stack_src_buff, _src_rate_bf_spls);
+    auto src_rate_bf
+      = xspan {_src_rate_bf ? _src_rate_bf : stack_src_buff, _src_rate_bf_spls};
 
     uint spls_out  = 0;
     uint block_rem = block_samples;
@@ -209,7 +209,7 @@ public:
     _raw_mem.clear();
     _raw_mem.resize (
       remainder_n_spls + dyn_tgt_rate_bf_spls + dyn_src_rate_bf_spls);
-    auto dynmem = make_xspan (_raw_mem);
+    auto dynmem = xspan {_raw_mem};
 
     _remainder.reset (dynmem.cut_head (remainder_n_spls));
     _tgt_rate_bf = dynmem.cut_head (dyn_tgt_rate_bf_spls).data();

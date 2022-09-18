@@ -42,7 +42,7 @@ public:
     _t_spl     = 1.f / pc.get_sample_rate();
     _cfg       = decltype (_cfg) {};
     smoother::reset_coeffs (
-      make_xspan (_smooth_coeff).cast (x1_t {}),
+      xspan {&_smooth_coeff, 1}.cast (x1_t {}),
       vec_set<x1_t> (1. / 0.02),
       _t_spl);
   }
@@ -86,8 +86,8 @@ public:
         for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
           for (uint i = 0; i < blocksize; ++i) {
             internal[j] = smoother::tick (
-              make_xspan (_smooth_coeff),
-              make_xspan (internal[j]),
+              xspan {&_smooth_coeff, 1},
+              xspan {&internal[j], 1},
               _target_coeffs[b][j]);
           }
         }

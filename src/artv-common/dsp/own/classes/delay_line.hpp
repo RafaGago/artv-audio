@@ -1301,7 +1301,7 @@ public:
     do_delete();
     uint elems = max_delay * n_channels;
     _mem       = new value_type[elems];
-    _z.reset (make_xspan (_mem, elems), n_channels);
+    _z.reset (xspan {_mem, elems}, n_channels);
   }
   //----------------------------------------------------------------------------
   T get (time_type sample, uint channel) { return _z.get (sample, channel); }

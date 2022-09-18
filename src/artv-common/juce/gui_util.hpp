@@ -111,7 +111,7 @@ static juce::Rectangle<T> grid (
     width,
     heights,
     row,
-    make_xspan (&comp, 1),
+    xspan {&comp, 1},
     std::forward<args> (vargs)...);
 }
 

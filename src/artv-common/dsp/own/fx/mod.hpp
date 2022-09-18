@@ -243,7 +243,7 @@ public:
       break;
     case mode::schroeder:
       using TS = decltype (_scho)::value_type;
-      _scho.reset (make_xspan (_mem).cast<TS>(), max_scho_stages);
+      _scho.reset (xspan {_mem}.cast<TS>(), max_scho_stages);
       // TODO: try thiran1
       //_scho.set_resync_delta (10.0);
       _1spl_fb = vec_set<4> (0.f);
@@ -509,21 +509,21 @@ private:
       std::array<float_x4, max_phaser_stages * zdf::n_gs_coeffs> G_S_mem;
 
       // obtain G and S for the phaser
-      auto gs = make_xspan (G_S_mem);
+      auto gs = xspan {G_S_mem};
       for (uint s = 0; s < _n_stages; ++s) {
         _phaser.tick_on_idx (
           s, gs.cut_head (zdf::n_gs_coeffs), zdf::gs_coeffs_tag {});
       }
       auto aps_resp = zdf::combine_response<float_x4> (
-        make_xspan (G_S_mem.data(), _n_stages * zdf::n_gs_coeffs));
+        xspan {G_S_mem.data(), _n_stages * zdf::n_gs_coeffs});
       // obtain G and S for the filters
-      gs = make_xspan (G_S_mem);
+      gs = xspan {G_S_mem};
       _fb_filters.tick<fb_filter::locut> (
         gs.cut_head (zdf::n_gs_coeffs), zdf::gs_coeffs_tag {});
       _fb_filters.tick<fb_filter::hicut> (
         gs.cut_head (zdf::n_gs_coeffs), zdf::gs_coeffs_tag {});
       auto filt_resp = zdf::combine_response<float_x4> (
-        make_xspan (G_S_mem.data(), fb_filter::count * zdf::n_gs_coeffs));
+        xspan {G_S_mem.data(), fb_filter::count * zdf::n_gs_coeffs});
 
       // Get ZDF feedback
       wet = _feedback.tick (
@@ -720,7 +720,7 @@ private:
       _chor.push (to_push);
 
       float_x2 dry {ins[0][i], ins[1][i]};
-      _dry.push (make_xspan (dry));
+      _dry.push (xspan {&dry, 1});
       constexpr float kdry = 0.001f * max_dry_delay_ms;
       float n_spls         = _srate * (1.f - pars.center) * abs (pars.b) * kdry;
       n_spls               = std::clamp (
@@ -795,7 +795,7 @@ private:
     _mem.resize (
       sinc_t::n_coeffs + std::max (schroeder_size, chor_size + dry_size));
 
-    auto mem = make_xspan (_mem);
+    auto mem = xspan {_mem};
     static_assert (std::is_same_v<T_sinc, T_mem>);
     // overaligned to 128, so the tables aren't on cache line boundaries
     _sinc_co = mem.cut_head (sinc_t::n_coeffs);
