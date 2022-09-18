@@ -237,6 +237,15 @@ static constexpr bool is_vec_of_float_type_v
 using float_x1  = vec<float, 1>;
 using double_x1 = vec<double, 1>;
 
+// Convenience half simd, normally used to avoid duplicating two channels
+using float_x2 = vec<float, 2>;
+using s8_x8    = vec<s8, 8>;
+using u8_x8    = vec<u8, 8>;
+using s16_x4   = vec<s16, 4>;
+using u16_x4   = vec<u16, 4>;
+using s32_x2   = vec<s32, 2>;
+using u32_x2   = vec<u32, 2>;
+
 // SSE or equivalent
 using float_x4  = vec<float, 4>;
 using double_x2 = vec<double, 2>;
