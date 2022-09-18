@@ -29,6 +29,7 @@
 #include "artv-common/misc/xspan.hpp"
 
 #define ARTV_MOD_SCHO_TIRAN 1
+#define ARTV_MOD_CHO_FLAN_TIRAN 1
 
 #define MOD_DBG_DENORMALS 0
 #if MOD_DBG_DENORMALS
@@ -253,17 +254,27 @@ public:
     case mode::chorus: {
       _chor.reset (_mem_chor, max_chor_stages);
       _dry.reset (_mem_dry, 1);
+#if ARTV_MOD_CHO_FLAN_TIRAN
+      _chor.set_resync_delta (10.0);
+      _dry.set_resync_delta (10.0);
+#else
       // pass the shared sinc interpolator coefficients
       _chor.reset_interpolator (0, false, _sinc_co.to_const());
       _dry.reset_interpolator (0, false, _sinc_co.to_const());
+#endif
       break;
     }
     case mode::flanger: {
       _flan.reset (_mem_flan, flan_stages);
       _dry.reset (_mem_dry, 1);
+#if ARTV_MOD_CHO_FLAN_TIRAN
+      _flan.set_resync_delta (10.0);
+      _dry.set_resync_delta (10.0);
+#else
       // pass the shared sinc interpolator coefficients
       _flan.reset_interpolator (0, false, _sinc_co.to_const());
       _dry.reset_interpolator (0, false, _sinc_co.to_const());
+#endif
       _n_stages = flan_stages;
       break;
     }
@@ -894,8 +905,10 @@ private:
     uint dry_size = std::ceil (max_dry_delay_ms * 0.001f * _srate);
     dry_size      = _dry.n_required_elems (dry_size + 1, n_channels);
 
-    using T_mem  = decltype (_mem)::value_type;
+    using T_mem = decltype (_mem)::value_type;
+#if !ARTV_MOD_SCHO_TIRAN
     using T_sinc = decltype (_sinc_co)::value_type;
+#endif
     using T_scho = decltype (_scho)::value_type;
     using T_chor = decltype (_chor)::value_type;
     using T_flan = decltype (_flan)::value_type;
@@ -910,19 +923,27 @@ private:
     max_size      = std::max (max_size, flan_size + dry_size);
 
     _mem.clear();
+#if !ARTV_MOD_SCHO_TIRAN
     _mem.resize (sinc_t::n_coeffs + max_size);
+#else
+    _mem.resize (max_size);
+#endif
 
     auto mem = xspan {_mem};
+#if !ARTV_MOD_SCHO_TIRAN
     static_assert (std::is_same_v<T_sinc, T_mem>);
     // overaligned to 128, so the tables aren't on cache line boundaries
-    _sinc_co  = mem.cut_head (sinc_t::n_coeffs);
+    _sinc_co = mem.cut_head (sinc_t::n_coeffs);
+#endif
     _mem_scho = mem.get_head (schroeder_size).cast<T_scho>();
     _mem_dry  = mem.cut_head (dry_size).cast<T_dry>();
     _mem_chor = mem.get_head (chor_size).cast<T_chor>();
     _mem_flan = mem.get_head (flan_size).cast<T_flan>();
 
+#if !ARTV_MOD_SCHO_TIRAN
     // initialize windowed sinc table
     sinc_t::reset_coeffs (_sinc_co, 0.45f, 140.f);
+#endif
   }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
@@ -976,9 +997,15 @@ private:
 #else
   interpolated_delay_line<float_x4, linear_interp, true, false> _scho;
 #endif
+#if ARTV_MOD_SCHO_TIRAN
+  modulable_thiran1_delay_line<float_x1, 4, false, false> _chor;
+  modulable_thiran1_delay_line<float_x2, 4, false, false> _dry;
+  modulable_thiran1_delay_line<float_x2, 4, false, false> _flan;
+#else
   interpolated_delay_line<float_x1, sinc_t, false, false, true> _chor;
   interpolated_delay_line<float_x2, sinc_t, false, false, true> _dry;
   interpolated_delay_line<float_x2, sinc_t, false, false, true> _flan;
+#endif
   value_smoother<
     float,
     std::array<float, std::max (max_scho_stages, max_chor_stages)>>
@@ -1006,8 +1033,9 @@ private:
   float          _srate;
   float          _lp_smooth_coeff;
   float          _beat_hz;
-
-  xspan<float>    _sinc_co;
+#if !ARTV_MOD_SCHO_TIRAN
+  xspan<float> _sinc_co;
+#endif
   xspan<float_x2> _mem_dry;
   xspan<float_x1> _mem_chor;
   xspan<float_x2> _mem_flan;
