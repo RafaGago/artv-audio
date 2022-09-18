@@ -246,7 +246,6 @@ public:
       _scho.reset (_mem_scho, max_scho_stages);
       // TODO: try thiran1
       //_scho.set_resync_delta (10.0);
-      _1spl_fb = vec_set<4> (0.f);
       break;
     case mode::chorus: {
       _chor.reset (_mem_chor, max_chor_stages);
@@ -254,13 +253,23 @@ public:
       // pass the shared sinc interpolator coefficients
       _chor.reset_interpolator (0, false, _sinc_co.to_const());
       _dry.reset_interpolator (0, false, _sinc_co.to_const());
-      _1spl_fb = vec_set<4> (0.f);
+      break;
+    }
+    case mode::flanger: {
+      _flan.reset (_mem_flan, flan_stages);
+      _dry.reset (_mem_dry, 1);
+      // pass the shared sinc interpolator coefficients
+      _flan.reset_interpolator (0, false, _sinc_co.to_const());
+      _dry.reset_interpolator (0, false, _sinc_co.to_const());
+      _n_stages = flan_stages;
       break;
     }
     default:
       assert (false);
       break;
     }
+    _1spl_fb             = vec_set<4> (0.f);
+    _n_processed_samples = 0; // trigger the control block on first sample
   }
   struct mode {
     enum { zdf, schroeder, chorus, flanger };
@@ -326,6 +335,9 @@ public:
     case mode::chorus:
       tick_chorus<T> (outs, ins, samples);
       break;
+    case mode::flanger:
+      tick_flanger<T> (outs, ins, samples);
+      break;
     default:
       assert (false);
       break;
@@ -358,6 +370,8 @@ private:
   static constexpr uint max_scho_delay_ms = 30;
   static constexpr uint max_chor_delay_ms = 40;
   static constexpr uint max_chor_stages   = 8;
+  static constexpr uint max_flan_delay_ms = 21;
+  static constexpr uint flan_stages       = 2;
   static constexpr uint max_dry_delay_ms  = max_chor_delay_ms / 2;
   static constexpr uint n_channels        = 2;
   static constexpr uint n_ap_channels     = 4;
@@ -652,7 +666,7 @@ private:
         run_phaser_mod (
           1.f - pars.center, // reverse range lf to hf
           pars.spread,
-          pars.lfo_depth * (0.3f + 0.7f * pars.center * pars.center),
+          pars.lfo_depth * (0.35f + 0.65f * pars.center * pars.center),
           0.45f,
           _n_stages,
           run_lfo (pars));
@@ -681,7 +695,7 @@ private:
       _del_spls.tick();
 
       float_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
-      // wet = _onepole.tick<0> (wet);
+      wet = _onepole.tick<0> (wet);
       wet -= _1spl_fb * pars.feedback;
 
       auto& del_spls = _del_spls.get();
@@ -721,9 +735,10 @@ private:
 
       float_x2 dry {ins[0][i], ins[1][i]};
       _dry.push (xspan {&dry, 1});
-      constexpr float kdry = 0.001f * max_dry_delay_ms;
-      float n_spls         = _srate * (1.f - pars.center) * abs (pars.b) * kdry;
-      n_spls               = std::clamp (
+      constexpr float kdry
+        = 0.001f * std::max (max_dry_delay_ms, max_chor_delay_ms / 2);
+      float n_spls = _srate * (1.f - pars.center) * abs (pars.b) * kdry;
+      n_spls       = std::clamp (
         n_spls, (float) _dry.min_delay_spls(), (float) _dry.max_delay_spls());
       dry = _dry.get (n_spls, 0);
 
@@ -737,6 +752,97 @@ private:
         wet,
         double_x2 {dry[0], dry[1]},
         pars.depth / ((float) _n_stages * 0.5f),
+        1.f - pars.depth,
+        pars.b);
+
+      outs[0][i] = out[0];
+      outs[1][i] = out[1];
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void tick_flanger (xspan<T*> outs, xspan<T const*> ins, uint samples)
+  {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
+    for (uint i = 0; i < samples; ++i, ++_n_processed_samples) {
+      _param_smooth.tick();
+      // access parameters without caring if they are smoother or not.
+      all_parameters pars;
+      *((smoothed_parameters*) &pars)   = _param_smooth.get();
+      *((unsmoothed_parameters*) &pars) = _param;
+
+      if ((_n_processed_samples & _control_rate_mask) == 0) {
+        run_phaser_mod (
+          1.f - pars.center, // reverse range lf to hf
+          pars.spread,
+          pars.lfo_depth,
+          0.45f,
+          _n_stages,
+          run_lfo (pars));
+
+        for (uint s = 0; s < flan_stages; ++s) {
+          constexpr float sec_factor = (max_flan_delay_ms * 0.001f);
+
+          float t                  = _mod[s][0];
+          t                        = _srate * (t * t * sec_factor);
+          _del_spls.target()[s]    = t;
+          constexpr float g_factor = 0.1f;
+          auto            m        = _mod[s][1];
+          auto            gv       = pars.stages;
+          _g.flan[s][0]            = -gv * gv * 0.75f + m * m * g_factor * gv;
+          //_rnd_lfo.set_freq (vec_set<4> (0.3f + pars.a * 1.f), _t_spl);
+        }
+        for (uint s = flan_stages; s < _del_spls.target().size(); ++s) {
+          _del_spls.target()[s] = _del_spls.target()[s - 1];
+        }
+        float_x4 fv {460.f, 460.f, 970.f, 980.f};
+        auto     f = vec_from_array (_mod[0]);
+        f *= f;
+        f *= (1.f + pars.feedback) * fv;
+        _onepole.reset_coeffs<0> (f, _t_spl);
+      }
+      _del_spls.tick();
+
+      float_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
+      wet = _onepole.tick<0> (wet);
+      wet -= _1spl_fb * pars.feedback;
+
+      auto& del_spls = _del_spls.get();
+      auto  flan_in  = vec_split<flan_stages> (wet);
+
+      std::array<float_x2, flan_stages> to_push {};
+      for (uint s = 0; s < flan_stages; ++s) {
+        auto n_spls = std::clamp (
+          del_spls[s],
+          (float) _flan.min_delay_spls(),
+          (float) _flan.max_delay_spls());
+        auto yn    = _flan.get (n_spls, s);
+        auto r     = allpass_fn::tick<float_x2> (flan_in[s], yn, _g.flan[s]);
+        to_push[s] = r.to_push;
+        wet[0 + s] = r.out[0];
+        wet[2 + s] = r.out[1];
+      }
+      _flan.push (to_push);
+
+      auto fb_val = zdf_type::nonlin::tick (
+        wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
+      _1spl_fb = _fb_filters.tick_cascade (fb_val);
+
+      float_x2 dry {ins[0][i], ins[1][i]};
+      _dry.push (xspan {&dry, 1});
+      constexpr float kdry
+        = 0.001f * std::max (max_dry_delay_ms, max_flan_delay_ms / 2);
+      float n_spls = _srate * kdry * (1.f - pars.center) * pars.a;
+      n_spls       = std::clamp (
+        n_spls, (float) _dry.min_delay_spls(), (float) _dry.max_delay_spls());
+      dry = _dry.get (n_spls, 0);
+
+      auto out = mix (
+        wet,
+        double_x2 {dry[0], dry[1]},
+        pars.depth / get_fb_gain (pars.feedback, pars.drive),
         1.f - pars.depth,
         pars.b);
 
@@ -778,6 +884,10 @@ private:
       = std::ceil (max_chor_delay_ms * 0.001f * _srate) + _chor.min_size_spls();
     chor_size = _chor.n_required_elems (chor_size + 1, max_chor_stages);
 
+    uint flan_size
+      = std::ceil (max_flan_delay_ms * 0.001f * _srate) + _flan.min_size_spls();
+    flan_size = _flan.n_required_elems (flan_size + 1, flan_stages);
+
     uint dry_size = std::ceil (max_dry_delay_ms * 0.001f * _srate);
     dry_size      = _dry.n_required_elems (dry_size + 1, n_channels);
 
@@ -785,26 +895,31 @@ private:
     using T_sinc = decltype (_sinc_co)::value_type;
     using T_scho = decltype (_scho)::value_type;
     using T_chor = decltype (_chor)::value_type;
+    using T_flan = decltype (_flan)::value_type;
     using T_dry  = decltype (_dry)::value_type;
 
     schroeder_size *= vec_traits_t<T_scho>::size;
     chor_size *= vec_traits_t<T_chor>::size;
     dry_size *= vec_traits_t<T_dry>::size;
+    flan_size *= vec_traits_t<T_flan>::size;
+
+    auto max_size = std::max (schroeder_size, chor_size + dry_size);
+    max_size      = std::max (max_size, flan_size + dry_size);
 
     _mem.clear();
-    _mem.resize (
-      sinc_t::n_coeffs + std::max (schroeder_size, chor_size + dry_size));
+    _mem.resize (sinc_t::n_coeffs + max_size);
 
     auto mem = xspan {_mem};
     static_assert (std::is_same_v<T_sinc, T_mem>);
     // overaligned to 128, so the tables aren't on cache line boundaries
-    _sinc_co = mem.cut_head (sinc_t::n_coeffs);
-    sinc_t::reset_coeffs (_sinc_co, 0.45f, 140.f);
-
+    _sinc_co  = mem.cut_head (sinc_t::n_coeffs);
     _mem_scho = mem.get_head (schroeder_size).cast<T_scho>();
     _mem_dry  = mem.cut_head (dry_size).cast<T_dry>();
     _mem_chor = mem.get_head (chor_size).cast<T_chor>();
-    //_mem_flan = _mem_chor = mem.get_head (fla_size).cast<T_flan>();
+    _mem_flan = mem.get_head (flan_size).cast<T_flan>();
+
+    // initialize windowed sinc table
+    sinc_t::reset_coeffs (_sinc_co, 0.45f, 140.f);
   }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
@@ -856,6 +971,7 @@ private:
   interpolated_delay_line<float_x4, linear_interp, true, false> _scho;
   interpolated_delay_line<float_x1, sinc_t, false, false, true> _chor;
   interpolated_delay_line<float_x2, sinc_t, false, false, true> _dry;
+  interpolated_delay_line<float_x2, sinc_t, false, false, true> _flan;
   value_smoother<
     float,
     std::array<float, std::max (max_scho_stages, max_chor_stages)>>
@@ -863,6 +979,7 @@ private:
   union {
     std::array<float_x4, max_scho_stages> scho;
     std::array<float_x1, max_chor_stages> chor;
+    std::array<float_x2, flan_stages>     flan;
   } _g;
 
   std::array<float_x1, max_chor_stages> _del_g;
@@ -886,6 +1003,7 @@ private:
   xspan<float>    _sinc_co;
   xspan<float_x2> _mem_dry;
   xspan<float_x1> _mem_chor;
+  xspan<float_x2> _mem_flan;
   xspan<float_x4> _mem_scho;
 };
 //------------------------------------------------------------------------------
