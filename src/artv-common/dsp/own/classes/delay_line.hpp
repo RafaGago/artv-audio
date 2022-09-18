@@ -417,7 +417,13 @@ namespace detail {
 // "Interp "a class on
 // "artv-common/dsp/own/parts/interpolation/stateless.hpp"
 // "Delay_line_base" = the underlying buffer type, e.g. "static_delay_line".
-template <class Delay_line_base, class Interp>
+// "Interp" = interpolator type
+// "External_global_interp_coeffs"= used for reusing interpolator coefficients,
+// e.g. for the case of sharing sinc interpolator tables.
+template <
+  class Delay_line_base,
+  class Interp,
+  bool External_global_interp_coeffs = false>
 class interpolated_delay_line : private Delay_line_base {
 private:
   using base = Delay_line_base;
@@ -429,8 +435,10 @@ public:
   using base::push;
   using base::size;
 
-  using value_type = typename base::value_type;
-  using interp     = Interp;
+  using value_type                           = typename base::value_type;
+  using interp                               = Interp;
+  static constexpr bool interp_global_co_ext = External_global_interp_coeffs;
+  static_assert (!interp_global_co_ext || interp::coeffs_are_global);
 
   // As of now the additional interpolation boundaries can't be abstacted
   // away because it conflicts the requirement of the memory been allocated
@@ -500,13 +508,41 @@ public:
     base::reset (mem, n_channels);
   }
   //----------------------------------------------------------------------------
-  template <class... Args>
+  template <
+    class... Args,
+    std::enable_if_t<
+      (sizeof...(Args) == sizeof...(Args)) && !interp_global_co_ext>* = nullptr>
   void reset_interpolator (uint channel, bool reset_state, Args&&... interp_arg)
   {
     assert (channel < n_channels());
-
-    interp::reset_coeffs (
-      get_interp_coeffs (channel), std::forward<Args> (interp_arg)...);
+    if (channel == 0 || !interp::coeffs_are_global) {
+      // only reset the interpolator by passing channel 0 when the coefficients
+      // are global. This is to avoid unnecessary coefficient recomputations
+      // while still allow resetting the states for each individual channel.
+      interp::reset_coeffs (
+        get_interp_coeffs (channel), std::forward<Args> (interp_arg)...);
+    }
+    if (reset_state) {
+      interp::reset_states (get_interp_states (channel));
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <
+    class T,
+    std::enable_if_t<std::is_same_v<T, T> && interp_global_co_ext>* = nullptr>
+  void reset_interpolator (
+    uint            channel,
+    bool            reset_state,
+    crange<const T> external_coeffs)
+  {
+    static_assert (std::is_same_v<T, coeffs_type>);
+    if (channel == 0) {
+      // only reset the interpolator by passing channel 0 when the coefficients
+      // are global. This is to keep simmetry with "reset_interpolator" when
+      // "interp_global_co_ext" is false.
+      static_assert (interp::coeffs_are_global);
+      _ext_coeffs = external_coeffs;
+    }
     if (reset_state) {
       interp::reset_states (get_interp_states (channel));
     }
@@ -572,10 +608,13 @@ protected:
     vec_value_type_t<value_type>,
     value_type>;
   //----------------------------------------------------------------------------
-  crange<coeffs_type> get_interp_coeffs (uint channel)
+  auto get_interp_coeffs (uint channel)
   {
     if constexpr (interp::n_coeffs == 0) {
-      return {};
+      return crange<coeffs_type> {};
+    }
+    else if constexpr (interp_global_co_ext) {
+      return _ext_coeffs;
     }
     else {
       auto ret = _mem;
@@ -614,7 +653,8 @@ private:
       = is_vec_v<value_type> ? vec_traits_t<value_type>::size : 1;
 
     // size in number of floats of one coefficient/state element
-    static constexpr uint size_co_elem = interp::coeffs_are_vec ? vec_size : 1;
+    static constexpr uint size_co_elem = (interp::coeffs_are_vec ? vec_size : 1)
+      * (interp_global_co_ext ? 0 : 1);
     static constexpr uint size_st_elem = interp::states_are_vec ? vec_size : 1;
 
     // unpadded size in number of floats of all coefficient/state elements
@@ -628,7 +668,7 @@ private:
       : round_ceil (size_co, size_st_elem);
 
     static constexpr uint size_st_padded
-      = (size_co_elem == size_st_elem || size_st_elem != 1)
+      = (size_co_elem == size_st_elem || size_st_elem != 1 || size_co_elem == 0)
       ? size_st
       : round_ceil (size_st, size_co_elem);
 
@@ -648,7 +688,11 @@ private:
     null_type,
     crange<builtin_type>>;
 
-  mem_storage_type _mem {};
+  using ext_interp_coeffs_type = std::
+    conditional_t<interp_global_co_ext, crange<const coeffs_type>, null_type>;
+
+  mem_storage_type       _mem {};
+  ext_interp_coeffs_type _ext_coeffs {};
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
@@ -796,12 +840,14 @@ private:
 //------------------------------------------------------------------------------
 template <
   class T,
-  class Interp        = linear_interp,
-  bool Interleaved    = false,
-  bool Use_pow2_sizes = true>
+  class Interp                       = linear_interp,
+  bool Interleaved                   = false,
+  bool Use_pow2_sizes                = true,
+  bool External_global_interp_coeffs = false>
 using interpolated_delay_line = detail::interpolated_delay_line<
   static_delay_line<T, Interleaved, Use_pow2_sizes>,
-  Interp>;
+  Interp,
+  External_global_interp_coeffs>;
 
 //------------------------------------------------------------------------------
 // - not managed memory
