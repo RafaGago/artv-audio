@@ -402,7 +402,7 @@ private:
       float lfo_rate = pars.lfo_rate * 0.01f;
       lfo_rate       = 1.f - lfo_rate;
       lfo_rate *= lfo_rate * lfo_rate;
-      hz = lfo_rate * 16.f;
+      hz = lfo_rate * 12.f;
     } break;
     case lfo_time_base::quarter_beat:
       // a quarter beat for each 10%
@@ -680,7 +680,7 @@ private:
         run_phaser_mod (
           1.f - pars.center, // reverse range lf to hf
           pars.spread,
-          pars.lfo_depth * (0.35f + 0.65f * pars.center * pars.center),
+          pars.lfo_depth * (0.45f + 0.55f * pars.center * pars.center),
           0.45f,
           _n_stages,
           run_lfo (pars));
