@@ -965,7 +965,7 @@ private:
     enum { locut, hicut, count };
   };
 
-  using sinc_t = sinc_interp<8, 64>;
+  using sinc_t = sinc_interp<8, 96>;
 
   part_classes<mp_list<zdf_type>, float_x4>                   _feedback;
   part_class_array<allpass_type, float_x4, max_phaser_stages> _phaser;
