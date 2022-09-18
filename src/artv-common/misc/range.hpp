@@ -1,3 +1,6 @@
+// own old invention of (a dynamic extent) std::span, probably to be
+// refactored/renamed to xspan (Extended span)
+
 #pragma once
 
 #include <array>
