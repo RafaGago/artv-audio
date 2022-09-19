@@ -382,7 +382,7 @@ private:
   static constexpr uint max_phaser_stages = 16;
   static constexpr uint max_scho_stages   = 12;
   static constexpr uint max_scho_delay_ms = 30;
-  static constexpr uint max_chor_delay_ms = 50;
+  static constexpr uint max_chor_delay_ms = 55;
   static constexpr uint max_chor_stages   = 8;
   static constexpr uint max_flan_delay_ms = 21;
   static constexpr uint flan_stages       = 2;
@@ -500,7 +500,10 @@ private:
       *((unsmoothed_parameters*) &pars) = _param;
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        _n_stages = 1 + (uint) (pars.stages * (max_phaser_stages - 1));
+        float stages   = 1.f + pars.stages * (max_phaser_stages - 2.000000001f);
+        _n_stages      = (uint) stages;
+        _n_stages_frac = stages - (float) _n_stages;
+        _n_stages += 1; // fractional stage
 
         run_phaser_mod (
           pars.center,
@@ -512,10 +515,13 @@ private:
 
         for (uint s = 0; s < _n_stages; ++s) {
           float_x4 v = vec_from_array (_mod[s]);
+#if 0
           // cheap'ish parametric curve
           constexpr float k = 0.8f; // TODO curve: k = parameter
           auto            f = ((-1.f + v) / (1.f - k * v)) + 1.f;
-          // auto f = v * v;
+#else
+          auto f = v * v;
+#endif
           auto q = f;
           f      = ((f * 0.993f) + 0.007f);
           f *= float_x4 {21200.f, 21200.f, 20000.f, 20000.f};
@@ -525,33 +531,30 @@ private:
           q += 0.05f;
           _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
         }
-        float_x4 f {450.f, 460.f, 670.f, 680.f};
-        f *= vec_from_array (_mod[0]);
-        _onepole.reset_coeffs<0> (f, _t_spl);
+        for (uint s = _n_stages; s < max_phaser_stages; ++s) {
+          _phaser.reset_states_on_idx (s);
+        }
       }
 
       float_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
       auto     onep_out = _onepole.tick<0> (wet);
       wet               = vec_shuffle (wet, onep_out, 0, 1, 4, 5);
-      // Run allpass cascades with own feedback loop and saturation
-      std::array<float_x4, max_phaser_stages * zdf::n_gs_coeffs> G_S_mem;
 
-      // obtain G and S for the phaser
-      auto gs = xspan {G_S_mem};
-      for (uint s = 0; s < _n_stages; ++s) {
-        _phaser.tick_on_idx (
-          s, gs.cut_head (zdf::n_gs_coeffs), zdf::gs_coeffs_tag {});
-      }
-      auto aps_resp = zdf::combine_response<float_x4> (
-        xspan {G_S_mem.data(), _n_stages * zdf::n_gs_coeffs});
-      // obtain G and S for the filters
-      gs = xspan {G_S_mem};
-      _fb_filters.tick<fb_filter::locut> (
-        gs.cut_head (zdf::n_gs_coeffs), zdf::gs_coeffs_tag {});
-      _fb_filters.tick<fb_filter::hicut> (
-        gs.cut_head (zdf::n_gs_coeffs), zdf::gs_coeffs_tag {});
-      auto filt_resp = zdf::combine_response<float_x4> (
-        xspan {G_S_mem.data(), fb_filter::count * zdf::n_gs_coeffs});
+      // obtain response for the phaser
+      zdf::response<float_x4> aps_resp {};
+      decltype (aps_resp)     aps_resp_prev {};
+      for (uint s = 0; s < (_n_stages - 1); ++s) {
+        aps_resp_prev = aps_resp;
+        aps_resp *= _phaser.tick_on_idx (s, zdf::gs_coeffs_tag {});
+      };
+      // crossfade the fractional response
+      aps_resp
+        = (1.f - _n_stages_frac) * aps_resp_prev + _n_stages_frac * aps_resp;
+
+      // obtain response for the filters
+      auto filt_resp
+        = _fb_filters.tick<fb_filter::locut> (zdf::gs_coeffs_tag {});
+      filt_resp *= _fb_filters.tick<fb_filter::hicut> (zdf::gs_coeffs_tag {});
 
       // Get ZDF feedback
       wet = _feedback.tick (
@@ -564,9 +567,12 @@ private:
 
       // Run regular filter processing
       assert (_n_stages > 0);
+      float_x4 prev;
       for (uint s = 0; s < _n_stages; ++s) {
-        wet = _phaser.tick_on_idx (s, wet);
+        prev = wet;
+        wet  = _phaser.tick_on_idx (s, wet);
       }
+      wet = (1.f - _n_stages_frac) * prev + _n_stages_frac * wet;
       // just running the shelves to update the states.
       auto fbv = wet * pars.feedback;
       fbv      = zdf_type::nonlin::tick (
@@ -574,7 +580,7 @@ private:
       _fb_filters.tick_cascade (fbv);
 
       auto out = mix (
-        wet,
+        (1.f - _n_stages_frac) * prev + _n_stages_frac * wet,
         double_x2 {ins[0][i], ins[1][i]},
         pars.depth / get_fb_gain (pars.feedback, pars.drive),
         1.f - pars.depth,
@@ -598,7 +604,10 @@ private:
       *((unsmoothed_parameters*) &pars) = _param;
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        _n_stages = 1 + (uint) (pars.stages * (max_scho_stages - 1));
+        float stages   = 1.f + pars.stages * (max_scho_stages - 2.000000001f);
+        _n_stages      = (uint) stages;
+        _n_stages_frac = stages - (float) _n_stages;
+        _n_stages += 1; // fractional stage
 
         run_phaser_mod (
           (1.f - pars.center) / _n_stages, // reverse range lf to hf
@@ -636,6 +645,7 @@ private:
 
       std::array<float_x4, max_scho_stages> to_push {};
       auto&                                 del_spls = _del_spls.get();
+      float_x4                              prev;
       for (uint s = 0; s < _n_stages; ++s) {
         auto n_spls = std::clamp (
           del_spls[s],
@@ -643,10 +653,13 @@ private:
           (float) _scho.max_delay_spls());
         auto yn    = _scho.get (n_spls, s);
         auto r     = allpass_fn::tick<float_x4> (wet, yn, _g.scho[s]);
+        prev       = wet;
         wet        = r.out;
         to_push[s] = r.to_push;
       }
       _scho.push (to_push);
+      wet = (1.f - _n_stages_frac) * prev + _n_stages_frac * wet;
+
       auto fb_val = zdf_type::nonlin::tick (
         wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
@@ -676,16 +689,22 @@ private:
       *((unsmoothed_parameters*) &pars) = _param;
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        _n_stages = 2 + (uint) (pars.stages * (max_chor_stages - 2));
+        // stages are in pairs (TODO check)
+        float stages
+          = 1.f + pars.stages * ((float) (max_chor_stages / 2) - 1.0000000001f);
+        _n_stages      = (uint) stages;
+        _n_stages_frac = stages - (float) _n_stages;
+        _n_stages += 1; // fractional stage
+
         run_phaser_mod (
           1.f - pars.center, // reverse range lf to hf
           pars.spread,
-          pars.lfo_depth * (0.35f + 0.65f * pars.center * pars.center),
+          pars.lfo_depth * (0.5f + 0.5f * pars.center * pars.center),
           0.45f,
           _n_stages,
           run_lfo (pars));
 
-        for (uint s = 0; s < _n_stages; ++s) {
+        for (uint s = 0; s < (_n_stages * 2); ++s) {
           constexpr float sec_offset = 0.01f;
           constexpr float sec_factor
             = ((max_chor_delay_ms - sec_offset) * 0.001f);
@@ -697,9 +716,19 @@ private:
           auto            m        = _mod[s][1];
           auto            gv       = pars.feedback;
           _g.chor[s][0]            = -gv * gv * 0.75f + m * m * g_factor * gv;
-          _rnd_lfo.set_freq (vec_set<4> (0.3f + pars.a * 1.f), _t_spl);
+          _rnd_lfo.set_freq (vec_set<4> (0.8f + abs (pars.b)), _t_spl);
+
+          // set the phasers (no feeedback)
+          auto v = vec_from_array (_mod[s]);
+          auto f = v * v;
+          auto q = v;
+          f      = ((f * 0.85f) + 0.15f);
+          f *= float_x4 {21200.f, 21200.f, 17000.f, 17000.f};
+          q = (1.f + 2.f * q * abs (pars.spread));
+          q += 0.09f;
+          _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
         }
-        for (uint s = _n_stages; s < _del_spls.target().size(); ++s) {
+        for (uint s = (_n_stages * 2); s < _del_spls.target().size(); ++s) {
           _del_spls.target()[s] = _del_spls.target()[s - 1];
         }
         float_x4 fv {460.f, 460.f, 970.f, 980.f};
@@ -708,47 +737,90 @@ private:
         f *= (1.f + pars.feedback) * fv;
         _onepole.reset_coeffs<0> (f, _t_spl);
       }
-      _del_spls.tick();
-
+      // create some difference on the inputs
       float_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
       wet = _onepole.tick<0> (wet);
       wet -= _1spl_fb * pars.feedback;
 
+      _del_spls.tick();
       auto& del_spls = _del_spls.get();
       auto  chor_in  = vec1_array_wrap (vec_to_array (wet));
       wet            = vec_set<4> (0.f);
 
-      // 0.9 to 1 modulation
-      auto lfov = _rnd_lfo.tick_filt_sample_and_hold();
+      // To allow stage crossfading constant panning positions are kept.
+      // Processing is done in pairs.
+      //
+      // L             R
+      // 1 3 2 4 4 2 3 1
 
-      float panwidth
-        = std::clamp (pars.a + (lfov[0] * 0.1f) * pars.b, 0.f, 1.f);
-      float pan_d      = panwidth / (_n_stages - 1);
-      float pan        = (1.f - panwidth) * 0.5f;
-      auto  total_gain = vec_set<4> (0.f);
+      constexpr auto kpanl = make_array (0.f, 2.f / 7.f, 1.f / 7.f, 3.f / 7.f);
+      static_assert (kpanl.size() == (max_chor_stages / 2));
+
+      auto panlv = vec_from_array (kpanl);
+      // skew towards center based on pars.a
+      panlv *= pars.a;
+      panlv += (1.f - pars.a) * 0.5f;
+      // using -x^2+2x as a cheap approximation of the sin(x*pi/2) pan law.
+      panlv      = -panlv * panlv + 2.f * panlv;
+      auto panrv = 1.f - panlv;
+
+      auto panl = vec_to_array (panlv);
+      auto panr = vec_to_array (panrv);
+
+      auto rndlfo = _rnd_lfo.tick_filt_sample_and_hold();
+      auto trnd   = vec_to_array (rndlfo * _srate * 0.0005f);
 
       std::array<float_x1, max_chor_stages> to_push {};
       for (uint s = 0; s < _n_stages; ++s) {
-        uint idx    = s % vec_traits_t<float_x4>::size;
-        auto n_spls = std::clamp (
-          del_spls[s],
+        uint idx  = s * 2;
+        uint lane = idx % vec_traits_t<float_x4>::size;
+
+        auto n_splsl = std::clamp (
+          del_spls[idx] + trnd[lane],
           (float) _chor.min_delay_spls(),
           (float) _chor.max_delay_spls());
-        auto yn    = _chor.get (n_spls, s);
-        auto r     = allpass_fn::tick<float_x1> (chor_in[idx], yn, _g.chor[s]);
-        to_push[s] = r.to_push;
-        // using -x^2+2x as a cheap approximation of the sin(x*pi/2) pan law.
-        float_x4 panv {pan, 1.f - pan, pan, 1.f - pan};
-        panv = -panv * panv + 2.f * panv;
-        total_gain += panv;
-        pan += pan_d;
 
-        auto parallel = vec_set<4> (r.out[0]);
-        parallel *= panv;
-        wet += parallel;
+        auto gl      = _g.chor[idx];
+        auto ynl     = _chor.get (n_splsl, idx);
+        auto rl      = allpass_fn::tick<float_x1> (chor_in[lane], ynl, gl);
+        to_push[idx] = rl.to_push;
+
+        lane += 1;
+        idx += 1;
+
+        auto n_splsr = std::clamp (
+          del_spls[idx] + trnd[lane],
+          (float) _chor.min_delay_spls(),
+          (float) _chor.max_delay_spls());
+
+        auto gr      = _g.chor[idx];
+        auto ynr     = _chor.get (n_splsr, idx);
+        auto rr      = allpass_fn::tick<float_x1> (chor_in[lane], ynr, gr);
+        to_push[idx] = rr.to_push;
+
+        float l = rr.out[0] * panl[s] + rl.out[0] * panr[s];
+        float r = rr.out[0] * panr[s] + rl.out[0] * panl[s];
+
+        float_x4 v;
+        v = float_x4 {l, r, l, r};
+        v = _phaser.tick_on_idx (s, v);
+        //  crossfade / parallel arch
+        v *= ((_n_stages == (s - 1)) ? _n_stages_frac : 1.f);
+        wet += v;
       }
+
       _chor.push (to_push);
 
+      auto rndmod = (rndlfo * 0.05f * abs (pars.b)) + 0.95f;
+      wet *= rndmod;
+
+      // saturation
+      wet = zdf_type::nonlin::tick (
+        wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve) * rndmod);
+      wet = _fb_filters.tick_cascade (wet);
+      wet *= 2.f - rndmod;
+
+      // delay dry signal based on b
       float_x2 dry {ins[0][i], ins[1][i]};
       _dry.push (xspan {&dry, 1});
       constexpr float kdry
@@ -758,16 +830,11 @@ private:
         n_spls, (float) _dry.min_delay_spls(), (float) _dry.max_delay_spls());
       dry = _dry.get (n_spls, 0);
 
-      auto sig_mod = (lfov * 0.05f * pars.b) + 0.95f;
-      wet          = zdf_type::nonlin::tick (
-        wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve) * sig_mod);
-      wet = _fb_filters.tick_cascade (wet);
-      wet *= 2.f - sig_mod;
-
       auto out = mix (
         wet,
         double_x2 {dry[0], dry[1]},
-        pars.depth / ((float) _n_stages * 0.5f),
+        // TODO: adjust _n_stages
+        pars.depth / (_n_stages_frac + (float) (_n_stages - 1)),
         1.f - pars.depth,
         pars.b);
 
@@ -1030,6 +1097,7 @@ private:
   uint           _n_processed_samples;
   uint           _control_rate_mask;
   uint           _n_stages;
+  float          _n_stages_frac;
   float          _lfo_t_spl;
   float          _t_spl;
   float          _srate;

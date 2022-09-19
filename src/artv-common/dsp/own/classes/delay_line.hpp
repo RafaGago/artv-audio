@@ -976,7 +976,7 @@ struct thiran_interp_1 {
   {
     using T = vec_value_type_t<V>;
     auto d  = vec_tan (M_PI * freq / srate);
-    co[a]   = (1 - d) / (1 + d);
+    co[a]   = ((T) 1 - d) / ((T) 1 + d);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
