@@ -16,33 +16,142 @@ namespace artv { namespace zdf {
 // See "The ART ov VA filter design" (Vadim Zabalishin) for what G and S are.
 struct gs_coeffs_tag {};
 
-template <class T>
-struct response {
-  T G;
-  T S;
-};
-
-static constexpr uint n_gs_coeffs = 2;
 //------------------------------------------------------------------------------
-// Accumulates the linear response of a number of elements connected in series.
-// G_S contains a list of G and S values
+// Representation of the response of a linear system as as r = Gx + S.
 //
 // See "The ART ov VA filter design" (Vadim Zabalishin) 5.3
-template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-struct response<V> combine_response (xspan<const V> G_S) {
-  using T = vec_value_type_t<V>;
-  assert ((G_S.size() % n_gs_coeffs) == 0);
-
-  response<V> ret;
-  ret.G = vec_set<V> ((T) 1);
-  ret.S = vec_set<V> ((T) 0);
-
-  for (uint i = 0; i < G_S.size(); i += n_gs_coeffs) {
-    ret.G *= G_S[i];
-    ret.S *= G_S[i];
-    ret.S += G_S[i + 1];
+//------------------------------------------------------------------------------
+template <class T>
+struct response {
+  //----------------------------------------------------------------------------
+  using value_type = T;
+  //----------------------------------------------------------------------------
+  // passthrough response
+  constexpr response()
+  {
+    if constexpr (is_vec_v<value_type>) {
+      G = vec_set<value_type> (1);
+      S = vec_set<value_type> (0);
+    }
+    else {
+      G = (value_type) 1;
+      S = (value_type) 0;
+    }
   }
-  return ret;
+  //----------------------------------------------------------------------------
+  constexpr response (value_type g, value_type s)
+  {
+    G = g;
+    S = s;
+  }
+  //----------------------------------------------------------------------------
+  response (response const&)            = default;
+  response (response&&)                 = default;
+  response& operator= (response const&) = default;
+  response& operator= (response&&)      = default;
+  ~response()                           = default;
+  //----------------------------------------------------------------------------
+  // mul: serial/cascade connection
+  constexpr response& operator*= (const response& r)
+  {
+    G *= r.G;
+    S *= r.G;
+    S += r.S;
+    return *this;
+  }
+  //----------------------------------------------------------------------------
+  // mul: gain
+  constexpr response& operator*= (value_type r)
+  {
+    G *= r;
+    S *= r;
+    return *this;
+  }
+  //----------------------------------------------------------------------------
+  // mul: gain
+  template <class U, enable_if_vec_value_type_t<value_type, U>* = nullptr>
+  constexpr response& operator*= (U r)
+  {
+    G *= r;
+    S *= r;
+    return *this;
+  }
+  //----------------------------------------------------------------------------
+  // add: parallel connection
+  constexpr response& operator+= (const response& r)
+  {
+    G += r.G;
+    S += r.S;
+    return *this;
+  }
+  //----------------------------------------------------------------------------
+  // sub: parallel connection
+  constexpr response& operator-= (const response& r)
+  {
+    G -= r.G;
+    S -= r.S;
+    return *this;
+  }
+  //----------------------------------------------------------------------------
+  constexpr response& operator-()
+  {
+    G = -G;
+    S = -S;
+    return *this;
+  }
+  //----------------------------------------------------------------------------
+  value_type G;
+  value_type S;
+  //----------------------------------------------------------------------------
+};
+//------------------------------------------------------------------------------
+template <class T>
+response<T> operator* (response<T> a, response<T> b)
+{
+  a *= b;
+  return a;
+}
+
+template <class T>
+response<T> operator* (response<T> a, T b)
+{
+  a *= b;
+  return a;
+}
+
+template <class T>
+response<T> operator* (T a, response<T> b)
+{
+  b *= a;
+  return b;
+}
+
+template <class V, class T, enable_if_vec_value_type_t<V, T>* = nullptr>
+response<V> operator* (response<V> a, T b)
+{
+  a *= b;
+  return a;
+}
+
+template <class V, class T, enable_if_vec_value_type_t<V, T>* = nullptr>
+response<V> operator* (T a, response<V> b)
+{
+  b *= a;
+  return b;
+}
+
+template <class T>
+response<T> operator+ (response<T> a, response<T> b)
+{
+  a += b;
+  return a;
+}
+
+template <class T>
+response<T> operator- (response<T> a, response<T> b)
+{
+  a -= b;
+  return a;
 }
 //------------------------------------------------------------------------------
 // topologies
@@ -115,7 +224,8 @@ struct feedback<linear_tag, Any1, Any2> {
   static V tick (xspan<const V>, xspan<V>, V in, response<V> resp, V k)
   {
     using T = vec_value_type_t<V>;
-    return (in - k * resp.S) / (k * resp.G + (T) 1);
+    resp *= k;
+    return (in - resp.S) / (resp.G + (T) 1);
   }
   //----------------------------------------------------------------------------
 };
@@ -246,8 +356,7 @@ public:
     using T = vec_value_type_t<V>;
     // 1st round
     auto scaled = resp;
-    scaled.G *= st[lin];
-    scaled.S *= st[lin];
+    scaled *= st[lin];
     V u = feedback<linear_tag>::tick<V> ({}, {}, scaled, k, in);
     if (nonlin::is_linear (std::forward<Ts> (nonlin_args)...)) {
       // linear, fast-path
@@ -261,8 +370,7 @@ public:
     }
     // 2 st round (compensation)
     scaled = resp;
-    scaled.G *= st[lin];
-    scaled.S *= st[lin];
+    scaled *= st[lin];
     u += feedback<linear_tag>::tick<V> ({}, {}, scaled, k, in);
     u *= (T) 0.5;
     sig_in  = k * (resp.G * u + resp.S);

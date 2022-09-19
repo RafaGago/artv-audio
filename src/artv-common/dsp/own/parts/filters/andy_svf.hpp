@@ -388,9 +388,7 @@ public:
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (xspan<const V> co, xspan<V> st, zdf::gs_coeffs_tag)
   {
-    std::array<V, n_zdf_coeffs> ret;
-    tick_impl<V, V> (co, st, ret, zdf::gs_coeffs_tag {});
-    return ret;
+    return tick_impl<V, V> (co, st, zdf::gs_coeffs_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -399,42 +397,19 @@ public:
     xspan<V>                         st,
     zdf::gs_coeffs_tag)
   {
-    std::array<V, n_zdf_coeffs> ret;
-    tick_impl<V, vec_value_type_t<V>> (co, st, ret, zdf::gs_coeffs_tag {});
-    return ret;
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void tick (
-    xspan<const V> co,
-    xspan<V>       st,
-    xspan<V>       G_S,
-    zdf::gs_coeffs_tag)
-  {
-    tick_impl<V, V> (co, st, G_S, zdf::gs_coeffs_tag {});
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void tick (
-    xspan<const vec_value_type_t<V>> co,
-    xspan<V>                         st,
-    xspan<V>                         G_S,
-    zdf::gs_coeffs_tag)
-  {
-    tick_impl<V, vec_value_type_t<V>> (co, st, G_S, zdf::gs_coeffs_tag {});
+
+    return tick_impl<V, vec_value_type_t<V>> (co, st, zdf::gs_coeffs_tag {});
   }
   //----------------------------------------------------------------------------
 private:
   // return G and S for each mode
   template <class V, class VT, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void tick_impl (
+  static auto tick_impl (
     xspan<const VT> co, // coeffs (V builtin type (single set) or V (SIMD))
     xspan<const V>  st, // states (interleaved, SIMD aligned)
-    xspan<V>        G_S,
     zdf::gs_coeffs_tag)
   {
     using T = vec_value_type_t<V>;
-    assert (G_S.size() >= n_zdf_coeffs);
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);
 
@@ -466,10 +441,13 @@ private:
         sizeof (V) == 0, "T type must be either V or V's builtin type");
     }
 
+    constexpr auto n_modes = mp11::mp_size<typename base::enabled_modes>::value;
+    std::array<zdf::response<V>, n_modes> ret;
+
     mp_foreach_idx (
       typename base::enabled_modes {}, [&] (auto index, auto mode) {
         using tag    = decltype (mode);
-        uint const i = index.value * 2;
+        uint const i = index.value;
 
         // b1 = k * a1, b2 = gk * a1 = k * a2
         // formulas below computed with
@@ -491,8 +469,8 @@ private:
           //            2
           //           g  + g⋅k + 1
 
-          G_S[i + 0] = a3_; // G
-          G_S[i + 1] = st[base::s1] * a2_ + st[base::s2] * (a1_ + b2_); // S
+          ret[i].G = a3_;
+          ret[i].S = st[base::s1] * a2_ + st[base::s2] * (a1_ + b2_);
         }
         else if constexpr (std::is_same_v<tag, highpass_tag>) {
           //        -s₁⋅(g + k) - s₂ + x
@@ -508,9 +486,9 @@ private:
           //             2
           //            g  + g⋅k + 1
 
-          G_S[i + 0] = a1_; // G
-          G_S[i + 1] = st[base::s1] * (a2_ + b1_) + st[base::s2] * a1_;
-          G_S[i + 1] = -G_S[i + 1]; // S
+          ret[i].G = a1_; // G
+          ret[i].S = st[base::s1] * (a2_ + b1_) + st[base::s2] * a1_;
+          ret[i].S = -ret[i].S; // S
         }
         else if constexpr (std::is_same_v<tag, bandpass_q_gain_tag>) {
           //            -g⋅(s₂ - x) + s₁
@@ -525,8 +503,8 @@ private:
           // BP_raw_S = ────────────
           //             2
           //            g  + g⋅k + 1
-          G_S[i + 0] = a2_; // G
-          G_S[i + 1] = st[base::s1] * a1_ - st[base::s2] * a2_; // S
+          ret[i].G = a2_; // G
+          ret[i].S = st[base::s1] * a1_ - st[base::s2] * a2_; // S
         }
         else if constexpr (std::is_same_v<tag, bandpass_tag>) {
           //        -k⋅(g⋅(s₂ - x) - s₁)
@@ -541,8 +519,8 @@ private:
           // BP_S = ──────────────
           //          2
           //         g  + g⋅k + 1
-          G_S[i + 0] = b2_; // G
-          G_S[i + 1] = st[base::s1] * b1_ - st[base::s2] * b2_; // S
+          ret[i].G = b2_; // G
+          ret[i].S = st[base::s1] * b1_ - st[base::s2] * b2_; // S
         }
         else if constexpr (std::is_same_v<tag, notch_tag>) {
           //            2
@@ -559,8 +537,8 @@ private:
           // Notch_S = ─────────────
           //             2
           //            g  + g⋅k + 1
-          G_S[i + 0] = a3_ + a1_; // G
-          G_S[i + 1] = st[base::s2] * b2_ - st[base::s1] * b1_; // S
+          ret[i].G = a3_ + a1_; // G
+          ret[i].S = st[base::s2] * b2_ - st[base::s1] * b1_; // S
         }
         else if constexpr (std::is_same_v<tag, peak_tag>) {
           //           2
@@ -577,9 +555,9 @@ private:
           // Peak_S = ─────────────────────────────
           //                    2
           //                   g  + g⋅k + 1
-          G_S[i + 0] = a3_ - a1_; // G
-          G_S[i + 1] = st[base::s1] * ((T) 2 * a2_ + b1_);
-          G_S[i + 1] += st[base::s2] * ((T) 2 * a1_ + b2_);
+          ret[i].G = a3_ - a1_; // G
+          ret[i].S = st[base::s1] * ((T) 2 * a2_ + b1_);
+          ret[i].S += st[base::s2] * ((T) 2 * a1_ + b2_);
         }
         else if constexpr (std::is_same_v<tag, allpass_tag>) {
           //                                 ⎛ 2          ⎞
@@ -596,11 +574,18 @@ private:
           // AP_S = ───────────────
           //           2
           //          g  + g⋅k + 1
-          G_S[i + 0] = a3_ - b2_ + a1_; // G
-          G_S[i + 1] = st[base::s2] * b2_ - st[base::s1] * b1_;
-          G_S[i + 1] *= (T) 2; // S
+          ret[i].G = a3_ - b2_ + a1_; // G
+          ret[i].S = st[base::s2] * b2_ - st[base::s1] * b1_;
+          ret[i].S *= (T) 2; // S
         }
       });
+
+    if constexpr (base::returns_array) {
+      return ret;
+    }
+    else {
+      return ret[0];
+    }
   }
   //----------------------------------------------------------------------------
   friend class detail::svf_multimode<svf_multimode_zdf<Tags...>, Tags...>;

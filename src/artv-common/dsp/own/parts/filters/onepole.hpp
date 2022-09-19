@@ -316,9 +316,7 @@ public:
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (xspan<const V> co, xspan<V> st, zdf::gs_coeffs_tag)
   {
-    std::array<V, n_zdf_coeffs> ret;
-    tick_impl<V, V> (co, st, ret, zdf::gs_coeffs_tag {});
-    return ret;
+    return tick_impl<V, V> (co, st, zdf::gs_coeffs_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -327,43 +325,19 @@ public:
     xspan<V>                         st,
     zdf::gs_coeffs_tag)
   {
-    std::array<V, n_zdf_coeffs> ret;
-    tick_impl<V, vec_value_type_t<V>> (co, st, ret, zdf::gs_coeffs_tag {});
-    return ret;
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void tick (
-    xspan<const V> co,
-    xspan<V>       st,
-    xspan<V>       G_S,
-    zdf::gs_coeffs_tag)
-  {
-    tick_impl<V, V> (co, st, G_S, zdf::gs_coeffs_tag {});
-  }
-  //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void tick (
-    xspan<const vec_value_type_t<V>> co,
-    xspan<V>                         st,
-    xspan<V>                         G_S,
-    zdf::gs_coeffs_tag)
-  {
-    tick_impl<V, vec_value_type_t<V>> (co, st, G_S, zdf::gs_coeffs_tag {});
+    return tick_impl<V, vec_value_type_t<V>> (co, st, zdf::gs_coeffs_tag {});
   }
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
   // return G and S for each mode
   template <class V, class VT, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void tick_impl (
+  static auto tick_impl (
     xspan<const VT> co, // coeffs (V builtin type (single set) or V (SIMD))
     xspan<V>        st, // states (interleaved, SIMD aligned)
-    xspan<V>        G_S,
     zdf::gs_coeffs_tag)
   {
     using T = vec_value_type_t<V>;
-    assert (G_S.size() >= n_zdf_coeffs);
 
     V G_, g0_, k_, g_ap_;
     if constexpr (std::is_same_v<VT, V>) {
@@ -395,10 +369,13 @@ private:
         sizeof (V) == 0, "T type must be either V or V's builtin type");
     }
 
+    constexpr auto n_modes = mp11::mp_size<typename base::enabled_modes>::value;
+    std::array<zdf::response<V>, n_modes> ret;
+
     mp_foreach_idx (
       typename base::enabled_modes {}, [&] (auto index, auto mode) {
         using tag    = decltype (mode);
-        uint const i = index.value * 2;
+        uint const i = index.value;
 
         if constexpr (std::is_same_v<tag, lowpass_tag>) {
           //          g⋅(s₁ + x)
@@ -410,8 +387,8 @@ private:
           //          g⋅s₁
           // LP_1_S = ──────
           //          g + 1
-          G_S[i + 0] = G_; // G
-          G_S[i + 1] = st[base::s] * G_; // S
+          ret[i].G = G_;
+          ret[i].S = st[base::s] * G_;
         }
         else if constexpr (std::is_same_v<tag, highpass_tag>) {
           //          g⋅s₁ + x
@@ -423,8 +400,8 @@ private:
           //           -g⋅s₁
           // HP_1_S = ─────
           //          g + 1
-          G_S[i + 0] = g0_; // G
-          G_S[i + 1] = -st[base::s] * G_; // S
+          ret[i].G = g0_;
+          ret[i].S = -st[base::s] * G_;
         }
         else if constexpr (std::is_same_v<tag, allpass_tag>) {
           //          -2⋅g⋅s₁ + g⋅x - x
@@ -436,8 +413,8 @@ private:
           //          -2⋅g⋅s₁
           // AP_1_S = ────────
           //           g + 1
-          G_S[i + 0] = g_ap_;
-          G_S[i + 1] = (T) 2. * st[base::s] * G_; // S
+          ret[i].G = g_ap_;
+          ret[i].S = (T) 2. * st[base::s] * G_;
         }
         else if constexpr (std::is_same_v<tag, lowshelf_naive_tag>) {
           //          -g⋅k⋅(s₁ - x) + x⋅(g + 1)
@@ -449,8 +426,8 @@ private:
           //          g⋅k⋅s₁
           // LS_1_S = ────────
           //           g + 1
-          G_S[i + 0] = G_ * ((T) 1 + k_) + g0_; // G
-          G_S[i + 1] = st[base::s] * k_ * G_; // S
+          ret[i].G = G_ * ((T) 1 + k_) + g0_;
+          ret[i].S = st[base::s] * k_ * G_;
         }
         else if constexpr (std::is_same_v<tag, highshelf_naive_tag>) {
           // y = x + k * yHP
@@ -463,10 +440,17 @@ private:
           //          -g⋅k⋅s₁
           // HS_1_S = ──────
           //          g + 1
-          G_S[i + 0] = g0_ * ((T) 1 + k_) + G_; // G
-          G_S[i + 1] = -st[base::s] * k_ * G_; // S
+          ret[i].G = g0_ * ((T) 1 + k_) + G_;
+          ret[i].S = -st[base::s] * k_ * G_;
         }
       });
+
+    if constexpr (base::returns_array) {
+      return ret;
+    }
+    else {
+      return ret[0];
+    }
   }
   //----------------------------------------------------------------------------
   friend class detail::onepole<onepole_zdf<Tags...>, Tags...>;

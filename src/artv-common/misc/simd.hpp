@@ -292,6 +292,10 @@ template <class V>
 using enable_if_vec_of_float_point_t
   = std::enable_if_t<is_vec_of_float_type_v<V>>;
 
+template <class V, class T>
+using enable_if_vec_value_type_t
+  = std::enable_if_t<is_vec_v<V> && std::is_same_v<vec_value_type_t<V>, T>>;
+
 //------------------------------------------------------------------------------
 // TODO: As of now this is only done for x64, but it can be easily ifdefed
 //------------------------------------------------------------------------------
