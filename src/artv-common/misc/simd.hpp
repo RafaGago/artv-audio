@@ -246,6 +246,11 @@ using u16_x4   = vec<u16, 4>;
 using s32_x2   = vec<s32, 2>;
 using u32_x2   = vec<u32, 2>;
 
+template <
+  class T,
+  std::enable_if_t<sizeof (T) <= 8 && std::is_arithmetic_v<T>>* = nullptr>
+using vec8 = vec<T, 8 / sizeof (T)>;
+
 // SSE or equivalent
 using float_x4  = vec<float, 4>;
 using double_x2 = vec<double, 2>;
@@ -258,6 +263,11 @@ using u32_x4    = vec<u32, 4>;
 using s64_x2    = vec<s64, 2>;
 using u64_x2    = vec<u64, 2>;
 
+template <
+  class T,
+  std::enable_if_t<sizeof (T) <= 16 && std::is_arithmetic_v<T>>* = nullptr>
+using vec16 = vec<T, 16 / sizeof (T)>;
+
 // AVX or equivalent.
 using float_x8  = vec<float, 8>;
 using double_x4 = vec<double, 4>;
@@ -269,6 +279,11 @@ using s32_x8    = vec<s32, 8>;
 using u32_x8    = vec<u32, 8>;
 using s64_x4    = vec<s64, 4>;
 using u64_x4    = vec<u64, 4>;
+
+template <
+  class T,
+  std::enable_if_t<sizeof (T) <= 32 && std::is_arithmetic_v<T>>* = nullptr>
+using vec32 = vec<T, 32 / sizeof (T)>;
 
 static constexpr uint sse_bytes = 16;
 static constexpr uint avx_bytes = 32;

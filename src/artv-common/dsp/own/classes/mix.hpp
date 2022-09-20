@@ -3,15 +3,13 @@
 #include <array>
 #include <cmath>
 
-#include <juce_audio_processors/juce_audio_processors.h>
-#include <juce_dsp/juce_dsp.h>
-
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv {
@@ -217,52 +215,52 @@ public:
   template <class T>
   void process_block_dry_wet (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
-    using simd                  = juce::dsp::SIMDRegister<T>;
-    constexpr size_t simd_elems = simd::SIMDNumElements;
-    // TODO: test if/how the compiler vectorizes this and simplify if possible.
-    // TODO: This is legacy. Use own vector wrappers instead.
+    static_assert (std::is_floating_point_v<T>);
+    using vec_t           = vec16<T>;
+    constexpr auto traits = vec_traits_t<vec_t> {}; // matching SSE
+
     auto vect = [=] (std::array<T*, 4> c, uint blocks) {
-      T* end = c[0] + (blocks * simd_elems);
+      T* end = c[0] + (blocks * traits.size);
 
       while (c[0] < end) {
         // dry channels
-        auto dl  = simd::fromRawArray (c[0]);
-        auto dr  = simd::fromRawArray (c[1]);
+        auto dl  = vec_load<vec_t> (c[0]);
+        auto dr  = vec_load<vec_t> (c[1]);
         auto reg = dl;
         dl       = dl + dr; // now L is M
         dr       = dr - reg; // now R is S
-        dl *= _ms[dry].m.skip (simd_elems);
-        dr *= _ms[dry].s.skip (simd_elems);
+        dl *= _ms[dry].m.skip (traits.size);
+        dr *= _ms[dry].s.skip (traits.size);
         reg = dl;
         dl  = dl - dr;
         dr  = reg + dr;
-        dl *= _gain[dry].l.skip (simd_elems);
-        dr *= _gain[dry].r.skip (simd_elems);
+        dl *= _gain[dry].l.skip (traits.size);
+        dr *= _gain[dry].r.skip (traits.size);
         // wet channels
-        auto wl = simd::fromRawArray (c[2]);
-        auto wr = simd::fromRawArray (c[3]);
+        auto wl = vec_load<vec_t> (c[2]);
+        auto wr = vec_load<vec_t> (c[3]);
         reg     = wl;
         wl      = wl + wr; // now L is M
         wr      = wr - reg; // now R is S
-        wl *= _ms[wet].m.skip (simd_elems);
-        wr *= _ms[wet].s.skip (simd_elems);
+        wl *= _ms[wet].m.skip (traits.size);
+        wr *= _ms[wet].s.skip (traits.size);
         reg = wl;
         wl  = wl - wr;
         wr  = reg + wr;
-        wl *= _gain[wet].l.skip (simd_elems);
-        wr *= _gain[wet].r.skip (simd_elems);
+        wl *= _gain[wet].l.skip (traits.size);
+        wr *= _gain[wet].r.skip (traits.size);
         // sum and global _gain
         dl += wl;
         dr += wr;
-        dl *= _gain[global].l.skip (simd_elems);
-        dr *= _gain[global].r.skip (simd_elems);
+        dl *= _gain[global].l.skip (traits.size);
+        dr *= _gain[global].r.skip (traits.size);
 
-        dl.copyToRawArray (c[0]);
-        dr.copyToRawArray (c[1]);
-        c[0] += simd_elems;
-        c[1] += simd_elems;
-        c[2] += simd_elems;
-        c[3] += simd_elems;
+        vec_store (c[0], dl);
+        vec_store (c[1], dr);
+        c[0] += traits.size;
+        c[1] += traits.size;
+        c[2] += traits.size;
+        c[3] += traits.size;
       }
     };
 
@@ -303,7 +301,7 @@ public:
     std::array<T*, 4> chnls
       = {outs[0], outs[1], const_cast<T*> (ins[2]), const_cast<T*> (ins[3])};
 
-    block_divide (simd::SIMDRegisterSize, chnls, samples, vect, unvect);
+    block_divide (traits.bytes, chnls, samples, vect, unvect);
   }
   //----------------------------------------------------------------------------
   // this can be invoked when you know there is no wet signal, it skips dry
@@ -314,8 +312,9 @@ public:
     xspan<T const*> ins,
     uint            samples)
   {
-    using simd                  = juce::dsp::SIMDRegister<T>;
-    constexpr size_t simd_elems = simd::SIMDNumElements;
+    static_assert (std::is_floating_point_v<T>);
+    using vec_t           = vec16<T>;
+    constexpr auto traits = vec_traits_t<vec_t> {}; // matching SSE
 
     if (
       _gain[global].is_passthrough() && _gain[dry].is_passthrough()
@@ -323,31 +322,28 @@ public:
       return;
     }
 
-    // TODO: test if/how the compiler vectorizes this and simplify if
-    // possible.
-    // TODO: This is legacy. Use own vector wrappers instead.
     auto vect = [=] (std::array<T*, 2> c, uint blocks) {
-      T* end = c[0] + (blocks * simd_elems);
+      T* end = c[0] + (blocks * traits.size);
 
       while (c[0] < end) {
         // dry channels
-        auto dl  = simd::fromRawArray (c[0]);
-        auto dr  = simd::fromRawArray (c[1]);
+        auto dl  = vec_load<vec_t> (c[0]);
+        auto dr  = vec_load<vec_t> (c[1]);
         auto reg = dl;
         dl       = dl + dr; // now L is M
         dr       = dr - reg; // now R is S
-        dl *= _ms[dry].m.skip (simd_elems);
-        dr *= _ms[dry].s.skip (simd_elems);
+        dl *= _ms[dry].m.skip (traits.size);
+        dr *= _ms[dry].s.skip (traits.size);
         reg = dl;
         dl  = dl - dr;
         dr  = reg + dr;
-        dl *= _gain[global].l.skip (simd_elems);
-        dr *= _gain[global].r.skip (simd_elems);
+        dl *= _gain[global].l.skip (traits.size);
+        dr *= _gain[global].r.skip (traits.size);
 
-        dl.copyToRawArray (c[0]);
-        dr.copyToRawArray (c[1]);
-        c[0] += simd_elems;
-        c[1] += simd_elems;
+        vec_store (c[0], dl);
+        vec_store (c[1], dr);
+        c[0] += traits.size;
+        c[1] += traits.size;
       }
     };
 
@@ -378,7 +374,7 @@ public:
     // this "const_cast" is because making "block_divide" const aware could be
     // a real mess. The wet channels are unnmodified.
     std::array<T*, 2> dryb = {outs[0], outs[1]};
-    block_divide (simd::SIMDRegisterSize, dryb, samples, vect, unvect);
+    block_divide (traits.bytes, dryb, samples, vect, unvect);
 
     _gain[wet].l.skip (samples);
     _gain[wet].r.skip (samples);

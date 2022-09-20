@@ -1,35 +1,38 @@
 #pragma once
+#include <cassert>
+#include <cstdint>
+#include <type_traits>
 
 #include "artv-common/misc/misc.hpp"
+#include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/xspan.hpp"
-
-#include <juce_dsp/juce_dsp.h>
 
 namespace artv {
 
-// TODO: drop JUCE SIMD and use Vectors
 //------------------------------------------------------------------------------
 // applies a ramp on a buffer but instead of interpolating on each sample, the
 // ramp is incremented at SIMD size width intervals.
 template <class T>
 void simd_gain_ramp (xspan<T> in, T gain_beg, T gain_end)
 {
-  using simd                  = juce::dsp::SIMDRegister<T>;
-  constexpr size_t simd_elems = simd::SIMDNumElements;
+  static_assert (std::is_floating_point_v<T>);
+  using vec_t           = vec16<T>;
+  constexpr auto traits = vec_traits_t<vec_t> {}; // matching SSE
+  assert (0 == ((std::uintptr_t) in.data() % 16)); // assert alignment
 
   // applies a gain ramp in steps of the current SSE type size.
-  T inc  = ((T) simd_elems) * (gain_end - gain_beg) / (T) (in.size());
+  T inc  = ((T) traits.size) * (gain_end - gain_beg) / (T) (in.size());
   T gain = gain_beg;
 
   auto simd_ramp = [=, &gain] (std::array<T*, 1> c, uint blocks) {
-    T* end = c[0] + (blocks * simd_elems);
+    T* end = c[0] + (blocks * traits.size);
 
     while (c[0] < end) {
-      auto v = simd::fromRawArray (c[0]);
-      auto g = simd {gain};
-      v *= g;
+      auto v = vec_load<vec_t> (c[0]);
+      v *= gain;
       gain += inc;
-      c[0] += simd_elems;
+      vec_store (c[0], v);
+      c[0] += traits.size;
     }
   };
 
@@ -42,7 +45,7 @@ void simd_gain_ramp (xspan<T> in, T gain_beg, T gain_end)
   };
 
   block_divide (
-    simd::SIMDRegisterSize,
+    traits.bytes,
     std::array<T*, 1> {in.data()},
     in.size(),
     simd_ramp,
@@ -57,31 +60,31 @@ void simd_gain_ramps_add (
   std::array<T, 2>  gain_beg,
   std::array<T, 2>  gain_end)
 {
-  using simd                  = juce::dsp::SIMDRegister<T>;
-  constexpr size_t simd_elems = simd::SIMDNumElements;
+  static_assert (std::is_floating_point_v<T>);
+  using vec_t           = vec16<T>;
+  constexpr auto traits = vec_traits_t<vec_t> {}; // matching SSE
+  assert (0 == ((std::uintptr_t) in.data() % 16)); // assert alignment
 
   std::array<T, 2> inc;
   for (uint i = 0; i < inc.size(); ++i) {
-    inc[i] = ((T) simd_elems) * (gain_end[i] - gain_beg[i]) / (T) (in_size);
+    inc[i] = ((T) traits.size) * (gain_end[i] - gain_beg[i]) / (T) (in_size);
   }
   auto gain = gain_beg;
 
   auto simd_ramp = [=, &gain] (std::array<T*, 2> c, uint blocks) {
-    T* end = c[0] + (blocks * simd_elems);
+    T* end = c[0] + (blocks * traits.size);
 
     while (c[0] < end) {
-      auto v1 = simd::fromRawArray (c[0]);
-      auto v2 = simd::fromRawArray (c[1]);
-      auto g1 = simd {gain[0]};
-      auto g2 = simd {gain[1]};
-      v1 *= g1;
-      v2 *= g2;
+      auto v1 = vec_load<vec_t> (c[0]);
+      auto v2 = vec_load<vec_t> (c[1]);
+      v1 *= gain[0];
+      v2 *= gain[1];
       v1 += v2;
-      v1.copyToRawArray (c[0]);
+      vec_store (c[0], v1);
       gain[0] += inc[0];
       gain[1] += inc[1];
-      c[0] += simd_elems;
-      c[1] += simd_elems;
+      c[0] += traits.size;
+      c[1] += traits.size;
     }
   };
 
@@ -94,7 +97,7 @@ void simd_gain_ramps_add (
     }
   };
 
-  block_divide (simd::SIMDRegisterSize, in, in_size, simd_ramp, regular_ramp);
+  block_divide (traits.bytes, in, in_size, simd_ramp, regular_ramp);
 }
 //------------------------------------------------------------------------------
 } // namespace artv
