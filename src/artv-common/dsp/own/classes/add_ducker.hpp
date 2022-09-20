@@ -3,6 +3,7 @@
 #include <cassert>
 #include <limits>
 
+#include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"

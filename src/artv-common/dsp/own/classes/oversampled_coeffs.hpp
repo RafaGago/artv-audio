@@ -1,6 +1,7 @@
 #pragma once
 
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/xspan.hpp"
 #include <array>
 
 namespace artv {

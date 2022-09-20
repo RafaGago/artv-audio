@@ -7,6 +7,7 @@
 
 namespace artv {
 
+// TODO: drop JUCE SIMD and use Vectors
 //------------------------------------------------------------------------------
 // applies a ramp on a buffer but instead of interpolating on each sample, the
 // ramp is incremented at SIMD size width intervals.

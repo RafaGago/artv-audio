@@ -1,7 +1,10 @@
 #pragma once
 
 #include "artv-common/dsp/own/classes/lr_crossover.hpp"
+#include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"
+#include "artv-common/juce/parameter_definitions.hpp"
+#include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/xspan.hpp"

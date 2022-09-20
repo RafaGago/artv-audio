@@ -1,6 +1,10 @@
 #pragma once
 
-namespace artv { namespace taylor {
+#include "artv-common/misc/misc.hpp"
+#include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/simd.hpp"
+
+namespace artv::taylor {
 //------------------------------------------------------------------------------
 // sin with optimization point being zero
 // see
@@ -111,4 +115,4 @@ static V get (V x)
 }
 //------------------------------------------------------------------------------
 
-}} // namespace artv::taylor
+} // namespace artv::taylor

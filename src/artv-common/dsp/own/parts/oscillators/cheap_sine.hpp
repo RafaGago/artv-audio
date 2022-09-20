@@ -1,5 +1,6 @@
 #pragma once
 
+#include "artv-common/dsp/own/parts/traits.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"

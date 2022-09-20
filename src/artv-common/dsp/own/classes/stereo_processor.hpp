@@ -1,5 +1,6 @@
 #pragma once
 
+#include "artv-common/misc/xspan.hpp"
 #include <array>
 //#include <variant>
 //#include "artv-common/misc/mp11.hpp"
