@@ -750,8 +750,8 @@ private:
       // To allow stage crossfading constant panning positions are kept.
       // Processing is done in pairs.
       //
-      // L             R
-      // 1 3 2 4 4 2 3 1
+      // pan position   | L             R
+      // stage ordering | 1 3 2 4 4 2 3 1
 
       constexpr auto kpanl = make_array (0.f, 2.f / 7.f, 1.f / 7.f, 3.f / 7.f);
       static_assert (kpanl.size() == (max_chor_stages / 2));
@@ -772,37 +772,29 @@ private:
 
       std::array<float_x1, max_chor_stages> to_push {};
       for (uint s = 0; s < _n_stages; ++s) {
+
         uint idx  = s * 2;
         uint lane = idx % vec_traits_t<float_x4>::size;
 
-        auto n_splsl = std::clamp (
-          del_spls[idx] + trnd[lane],
-          (float) _chor.min_delay_spls(),
-          (float) _chor.max_delay_spls());
+        std::array<float, n_channels> channel;
 
-        auto gl      = _g.chor[idx];
-        auto ynl     = _chor.get (n_splsl, idx);
-        auto rl      = allpass_fn::tick<float_x1> (chor_in[lane], ynl, gl);
-        to_push[idx] = rl.to_push;
+        for (uint j = 0; j < channel.size(); ++j, ++idx, ++lane) {
+          auto n_spls = std::clamp (
+            del_spls[idx] + trnd[lane],
+            (float) _chor.min_delay_spls(),
+            (float) _chor.max_delay_spls());
+          auto g       = _g.chor[idx];
+          auto yn      = _chor.get (n_spls, idx);
+          auto r       = allpass_fn::tick<float_x1> (chor_in[lane], yn, g);
+          to_push[idx] = r.to_push;
+          channel[j]   = r.out[0];
+        }
 
-        lane += 1;
-        idx += 1;
+        float l = channel[0] * panl[s] + channel[1] * panr[s];
+        float r = channel[0] * panr[s] + channel[1] * panl[s];
 
-        auto n_splsr = std::clamp (
-          del_spls[idx] + trnd[lane],
-          (float) _chor.min_delay_spls(),
-          (float) _chor.max_delay_spls());
-
-        auto gr      = _g.chor[idx];
-        auto ynr     = _chor.get (n_splsr, idx);
-        auto rr      = allpass_fn::tick<float_x1> (chor_in[lane], ynr, gr);
-        to_push[idx] = rr.to_push;
-
-        float l = rr.out[0] * panl[s] + rl.out[0] * panr[s];
-        float r = rr.out[0] * panr[s] + rl.out[0] * panl[s];
-
-        float_x4 v;
-        v = float_x4 {l, r, l, r};
+        // TODO: probably run this on its own loop?
+        float_x4 v {l, r, l, r};
         v = _phaser.tick_on_idx (s, v);
         //  crossfade / parallel arch
         v *= ((_n_stages == (s - 1)) ? _n_stages_frac : 1.f);
@@ -833,7 +825,6 @@ private:
       auto out = mix (
         wet,
         double_x2 {dry[0], dry[1]},
-        // TODO: adjust _n_stages
         pars.depth / (_n_stages_frac + (float) (_n_stages - 1)),
         1.f - pars.depth,
         pars.b);
