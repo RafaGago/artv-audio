@@ -499,7 +499,7 @@ public:
     _control_rate_mask   = lsb_mask<uint> (sr_order);
     _n_processed_samples = 0;
     _sat_prev = _dcmod_prev = _crossv_prev[lo_crossv] = _crossv_prev[hi_crossv]
-      = double_x2 {};
+      = f64_x2 {};
 
     update_emphasis();
     _sparams.set_all_from_target();
@@ -525,7 +525,7 @@ public:
       _crossv.zero_all_states();
       _wvsh.zero_all_states();
       _sat_prev = _dcmod_prev     = _crossv_prev[lo_crossv]
-        = _crossv_prev[hi_crossv] = double_x2 {};
+        = _crossv_prev[hi_crossv] = f64_x2 {};
       // feed some 0 samples
       static constexpr uint        n_samples = 32;
       std::array<T, n_samples * 2> in {};
@@ -534,9 +534,9 @@ public:
       process<T> (io, cio, n_samples);
     }
 
-    static constexpr uint                 max_block_size    = 32;
-    uint                                  samples_processed = 0;
-    std::array<double_x2, max_block_size> sat, lo, hi;
+    static constexpr uint              max_block_size    = 32;
+    uint                               samples_processed = 0;
+    std::array<f64_x2, max_block_size> sat, lo, hi;
 
     while (samples_processed < block_samples) {
       uint subblock_size
@@ -594,11 +594,11 @@ public:
             lo[i] = _crossv.tick_on_idx<hp_type> (
               lo_crossv, sat[i], p.crossv_order[lo_crossv]);
             sat[i] = lo[i];
-            lo[i]  = double_x2 {};
+            lo[i]  = f64_x2 {};
           }
         }
         else {
-          lo[i] = double_x2 {};
+          lo[i] = f64_x2 {};
         }
 
         if (_p.crossv_enabled[hi_crossv]) {
@@ -611,11 +611,11 @@ public:
             hi[i] = _crossv.tick_on_idx<lp_type> (
               hi_crossv, sat[i], p.crossv_order[hi_crossv]);
             sat[i] = hi[i];
-            hi[i]  = double_x2 {};
+            hi[i]  = f64_x2 {};
           }
         }
         else {
-          hi[i] = double_x2 {};
+          hi[i] = f64_x2 {};
         }
       }
       // Main block with audio-rate modulations. Done sample-wise for
@@ -631,12 +631,12 @@ public:
         // smoothing some params
         _sparams.tick();
 
-        double_x2 drive {_sparams.get().drive_l, _sparams.get().drive_r};
-        double_x2 inv_drive = 1. / drive;
+        f64_x2 drive {_sparams.get().drive_l, _sparams.get().drive_r};
+        f64_x2 inv_drive = 1. / drive;
         inv_drive *= _sparams.get().trim;
 
         // Envelope follower/modulation
-        double_x2 follow = _envfollow.tick (sat[i]);
+        f64_x2 follow = _envfollow.tick (sat[i]);
         // Make unipolar and clip at 1.
         follow = vec_min (vec_abs (follow) * p.ef_gain, 1.);
 
@@ -669,8 +669,7 @@ public:
 
         if (ef_to_drive != 0.f) {
           // gain modulation. Audio rate.
-          double_x2 gainfollow
-            = (follow * abs (ef_to_drive)) + 1.; // 1 to N range
+          f64_x2 gainfollow = (follow * abs (ef_to_drive)) + 1.; // 1 to N range
 
           if (ef_to_drive > 0.f) {
             drive *= gainfollow;
@@ -691,7 +690,7 @@ public:
 
         auto feedback = _sat_prev * _sparams.get().feedback;
 
-        double_x2 feedback_follow = follow * ef_to_drive * fb_att;
+        f64_x2 feedback_follow = follow * ef_to_drive * fb_att;
 
         // inverted channels on feedback_follow, just for fun...
         feedback_follow = vec_shuffle (feedback_follow, feedback_follow, 1, 0);
@@ -798,7 +797,7 @@ private:
   //----------------------------------------------------------------------------
   void update_crossover (uint idx, bool reset_states)
   {
-    auto f = double_x2 {_p.crossv_hz[idx], _p.crossv_hz[idx] * 1.009};
+    auto f = f64_x2 {_p.crossv_hz[idx], _p.crossv_hz[idx] * 1.009};
     if (_p.crossv_is_lp[idx]) {
       _crossv.reset_coeffs_on_idx<lp_type> (
         idx, f, _t_spl, _p.crossv_order[idx]);
@@ -809,7 +808,7 @@ private:
     }
 
     if (reset_states) {
-      _crossv_prev[idx] = double_x2 {};
+      _crossv_prev[idx] = f64_x2 {};
       _crossv.reset_states_on_idx (idx);
     }
   }
@@ -831,12 +830,12 @@ private:
   }
   //----------------------------------------------------------------------------
   void update_emphasis (
-    double_x2 freq_offset = double_x2 {},
-    double_x2 amt_offset  = double_x2 {})
+    f64_x2 freq_offset = f64_x2 {},
+    f64_x2 amt_offset  = f64_x2 {})
   {
-    double_x2 f  = vec_set<double_x2> (_sparams.get().emphasis_freq);
-    double_x2 q  = vec_set<double_x2> (_sparams.get().emphasis_q);
-    double_x2 db = vec_set<double_x2> (_sparams.get().emphasis_amt);
+    f64_x2 f  = vec_set<f64_x2> (_sparams.get().emphasis_freq);
+    f64_x2 q  = vec_set<f64_x2> (_sparams.get().emphasis_q);
+    f64_x2 db = vec_set<f64_x2> (_sparams.get().emphasis_amt);
 
     f += freq_offset;
     db += amt_offset;
@@ -849,9 +848,7 @@ private:
   void update_envelope_follower()
   {
     _envfollow.reset_coeffs (
-      vec_set<double_x2> (_p.ef_attack),
-      vec_set<double_x2> (_p.ef_release),
-      _t_spl);
+      vec_set<f64_x2> (_p.ef_attack), vec_set<f64_x2> (_p.ef_release), _t_spl);
   }
   //----------------------------------------------------------------------------
   enum sat_type {
@@ -966,33 +963,32 @@ private:
       pow2_aa,
       compand_1a_aa,
       compand_1b_aa>,
-    double_x2,
+    f64_x2,
     n_waveshapers>;
 
   using lp_type = butterworth_lowpass_any_order;
   using hp_type = butterworth_highpass_any_order;
 
-  using crossv
-    = parts_union_array<mp_list<lp_type, hp_type>, double_x2, n_crossv>;
+  using crossv = parts_union_array<mp_list<lp_type, hp_type>, f64_x2, n_crossv>;
 
   using dc_blockers = part_class_array_coeffs_global<
     mystran_dc_blocker,
-    double_x2,
+    f64_x2,
     dc_block_count>;
 
-  params                                    _p;
-  value_smoother<float, smoothed_params>    _sparams;
-  part_class_array<andy::svf, double_x2>    _pre_emphasis;
-  crossv                                    _crossv;
-  waveshapers                               _wvsh;
-  part_class_array<slew_limiter, double_x2> _envfollow;
-  dc_blockers                               _dc_block;
-  part_class_array<andy::svf, double_x2>    _post_emphasis;
-  double_x2                                 _sat_prev;
-  double_x2                                 _dcmod_prev;
-  std::array<double_x2, n_crossv>           _crossv_prev;
-  uint                                      _n_processed_samples;
-  uint                                      _control_rate_mask;
+  params                                 _p;
+  value_smoother<float, smoothed_params> _sparams;
+  part_class_array<andy::svf, f64_x2>    _pre_emphasis;
+  crossv                                 _crossv;
+  waveshapers                            _wvsh;
+  part_class_array<slew_limiter, f64_x2> _envfollow;
+  dc_blockers                            _dc_block;
+  part_class_array<andy::svf, f64_x2>    _post_emphasis;
+  f64_x2                                 _sat_prev;
+  f64_x2                                 _dcmod_prev;
+  std::array<f64_x2, n_crossv>           _crossv_prev;
+  uint                                   _n_processed_samples;
+  uint                                   _control_rate_mask;
 
   plugin_context* _plugcontext = nullptr;
   float           _t_spl;

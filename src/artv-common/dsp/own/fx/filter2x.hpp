@@ -324,9 +324,9 @@ public:
     _filter.zero_all_states();
     _proc.reset_states<proc_envfollow>();
     _proc.reset_states<proc_dc_block>();
-    _proc.reset_coeffs<proc_dc_block> (vec_set<double_x2> (1.), _t_spl);
+    _proc.reset_coeffs<proc_dc_block> (vec_set<f64_x2> (1.), _t_spl);
 
-    _ef_value = vec_set<double_x2> (0.);
+    _ef_value = vec_set<f64_x2> (0.);
 
     constexpr uint base_order = bl_static_log2_floor_u64 ((u64) blocksize);
     uint sr_order = get_samplerate_order (pc.get_sample_rate()) + base_order;
@@ -343,9 +343,9 @@ public:
       uint n_samples = std::min<uint> (blocksize, samples - block_smp);
 
       // both filters are parallel/operate on the same input
-      std::array<double_x2, blocksize> in_cp;
+      std::array<f64_x2, blocksize> in_cp;
       for (uint i = 0; i < blocksize; ++i) {
-        in_cp[i] = double_x2 {ins[0][block_smp + i], ins[1][block_smp + i]};
+        in_cp[i] = f64_x2 {ins[0][block_smp + i], ins[1][block_smp + i]};
       }
       memset (&outs[0][block_smp], 0, n_samples * sizeof (T));
       memset (&outs[1][block_smp], 0, n_samples * sizeof (T));
@@ -383,13 +383,13 @@ public:
           set_target_params (target_pars, b);
           auto smcoeff = (float) _smooth_coeff;
 
-          smoother::tick<float_x4> (
+          smoother::tick<f32_x4> (
             xspan {&smcoeff, 1},
-            xspan {_smooth_pars[b].arr}.cast (float_x4 {}),
-            vec_load<float_x4> (target_pars.arr.data()));
+            xspan {_smooth_pars[b].arr}.cast (f32_x4 {}),
+            vec_load<f32_x4> (target_pars.arr.data()));
         }
 
-        xspan<double_x2> internal = _filter.get_coeffs (b);
+        xspan<f64_x2> internal = _filter.get_coeffs (b);
         for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
           for (uint i = 0; i < n_samples; ++i) {
             internal[j] = smoother::tick (
@@ -401,7 +401,7 @@ public:
 
         auto& smoothed_p = _smooth_pars[b];
 
-        double_x2 fb_gain = vec_set<double_x2> (smoothed_p.vars.feedback);
+        f64_x2 fb_gain = vec_set<f64_x2> (smoothed_p.vars.feedback);
         if (is_moog_1 (btype)) {
           fb_gain *= 0.03; // moogs are extremely unstable reduce feedback
         }
@@ -409,11 +409,11 @@ public:
           fb_gain *= 0.03; // moogs are extremely unstable reduce feedback
         }
 
-        double_x2 pre_drive = double_x2 {
-          smoothed_p.vars.pre_drive_l, smoothed_p.vars.pre_drive_r};
+        f64_x2 pre_drive
+          = f64_x2 {smoothed_p.vars.pre_drive_l, smoothed_p.vars.pre_drive_r};
 
-        std::array<double_x2, blocksize> out;
-        double_x2                        last = _last_sample[b];
+        std::array<f64_x2, blocksize> out;
+        f64_x2                        last = _last_sample[b];
 
         switch (btype) {
         case bandtype::off: // not reachable
@@ -625,16 +625,16 @@ private:
 
     auto& b = _cfg[band];
 
-    auto ef_mod = double_x2 {};
+    auto ef_mod = f64_x2 {};
     if (b.ef_to_freq != 0.f || b.ef_to_reso != 0.f) {
       ef_mod = ((_ef_value * _ef_value) + vec_sqrt (_ef_value)) * 0.5;
     }
 
-    double_x2 freq = {b.freq, b.freq * (1.f + (b.tolerance * 0.2f))};
+    f64_x2 freq = {b.freq, b.freq * (1.f + (b.tolerance * 0.2f))};
     freq *= vec_exp2 (ef_mod * b.ef_to_freq);
     freq = vec_clamp (freq, min_hz, max_hz);
 
-    double_x2 reso = {b.reso, b.reso * (1.f - (b.tolerance * 0.11f))};
+    f64_x2 reso = {b.reso, b.reso * (1.f - (b.tolerance * 0.11f))};
     reso += reso * ef_mod * b.ef_to_reso;
     reso = vec_clamp (reso, min_reso, max_reso);
 
@@ -779,7 +779,7 @@ private:
     // reset smoothing
     if (_cfg[band].reset_band_state) {
       _filter.reset_states_on_idx (band);
-      xspan_copy<double_x2> (_filter.get_coeffs (band), co);
+      xspan_copy<f64_x2> (_filter.get_coeffs (band), co);
       set_target_params (_smooth_pars[band], band);
     }
     _cfg[band].has_changes      = false;
@@ -789,8 +789,8 @@ private:
   void update_envelope_follower()
   {
     _proc.reset_coeffs<proc_envfollow> (
-      vec_set<double_x2> (_ef.attack),
-      vec_set<double_x2> (_ef.release),
+      vec_set<f64_x2> (_ef.attack),
+      vec_set<f64_x2> (_ef.release),
       _t_spl * (float) _control.get_period());
   }
   //----------------------------------------------------------------------------
@@ -820,7 +820,7 @@ private:
       saike::steiner_2,
       saike::moog_1,
       saike::moog_2>,
-    double_x2,
+    f64_x2,
     n_bands>;
   using smoother = onepole_smoother;
   //----------------------------------------------------------------------------
@@ -874,10 +874,10 @@ private:
   alignas (sse_bytes) std::array<coeff_array, n_bands> _target_coeffs;
   filters _filter;
   enum { proc_envfollow, proc_dc_block };
-  part_classes<mp_list<slew_limiter, mystran_dc_blocker>, double_x2> _proc;
+  part_classes<mp_list<slew_limiter, mystran_dc_blocker>, f64_x2> _proc;
 
-  alignas (sse_bytes) std::array<double_x2, n_bands> _last_sample;
-  double_x2    _ef_value;
+  alignas (sse_bytes) std::array<f64_x2, n_bands> _last_sample;
+  f64_x2       _ef_value;
   ef_cfg       _ef;
   control_rate _control;
 

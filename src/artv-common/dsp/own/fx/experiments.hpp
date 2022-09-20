@@ -323,7 +323,7 @@ public:
   {
     for (uint i = 0; i < block_samples; ++i) {
 
-      auto vals  = _crossv.tick (double_x2 {ins[0][i], ins[1][i]});
+      auto vals  = _crossv.tick (f64_x2 {ins[0][i], ins[1][i]});
       outs[0][i] = vals[0][0] + /*vals[1][0] + vals[2][0]*/ +vals[3][0];
       outs[1][i] = vals[0][1] + /*vals[1][1] + vals[2][1]*/ +vals[3][0];
     }
@@ -396,7 +396,7 @@ public:
 
     lp_type::reset_coeffs (
       xspan {_coeffs}.cast (double {}),
-      vec_set<double_x2> (660.),
+      vec_set<f64_x2> (660.),
       pc.get_sample_rate(),
       order);
     // pc.set_delay_compensation (lp_type::get_latency (order, n_stages));
@@ -406,7 +406,7 @@ public:
   void process (xspan<T*> outs, xspan<T const*> ins, uint block_samples)
   {
     for (uint i = 0; i < block_samples; ++i) {
-      double_x2 in {double_x2 {ins[0][i], ins[1][i]}};
+      f64_x2 in {f64_x2 {ins[0][i], ins[1][i]}};
 
       auto pos    = _sample_idx % lp_type::get_latency (order, n_stages);
       auto prev   = _delay[pos];
@@ -444,10 +444,10 @@ private:
   static constexpr uint n_stages  = 12;
   static constexpr uint max_delay = ((1 << n_stages) + 1) * 2;
 
-  std::array<double_x2, lp_type::get_n_coeffs (max_order) * 2> _coeffs;
-  std::array<double_x2, lp_type::get_n_states (max_order, n_stages) * 2>
+  std::array<f64_x2, lp_type::get_n_coeffs (max_order) * 2> _coeffs;
+  std::array<f64_x2, lp_type::get_n_states (max_order, n_stages) * 2>
                                        _states;
-  std::array<double_x2, max_delay * 2> _delay;
+  std::array<f64_x2, max_delay * 2> _delay;
 };
 //------------------------------------------------------------------------------
 #endif
@@ -506,20 +506,20 @@ public:
     memset (this, 0, sizeof *this);
     _plugcontext = &pc;
 
-    std::array<vec_complex<double_x2>, 2> poles;
-    std::array<vec_complex<double_x2>, 2> zeros;
+    std::array<vec_complex<f64_x2>, 2> poles;
+    std::array<vec_complex<f64_x2>, 2> zeros;
 
     double t_spl =  1. / (double) pc.get_sample_rate();
 
     butterworth_lp_complex::poles (
       xspan {poles},
-      vec_set<double_x2> (660),
+      vec_set<f64_x2> (660),
       t_spl,
       2);
 
     butterworth_lp_complex::zeros (
       xspan {zeros},
-      vec_set<double_x2> (660),
+      vec_set<f64_x2> (660),
       t_spl,
       2);
 
@@ -539,7 +539,7 @@ public:
   {
     for (uint i = 0; i < block_samples; ++i) {
 
-      double_x2 out {ins[0][i], ins[1][i]};
+      f64_x2 out {ins[0][i], ins[1][i]};
 
       auto pos    = _sample_idx % _delay.size();
       auto prev   = _delay[pos];
@@ -570,21 +570,21 @@ public:
 private:
   //----------------------------------------------------------------------------
   plugin_context* _plugcontext;
-  double_x2       _gain;
+  f64_x2       _gain;
   uint            _sample_idx;
   float           _a, _b, _c, _d;
 
   static constexpr uint n_stages = 12;
   static constexpr uint delay    = (1 << n_stages) + 1;
 
-  std::array<double_x2, ccpole_pair_rzero_pair::n_coeffs>       co_poles;
-  std::array<double_x2, t_rev_ccpole_pair_rzero_eq_pair::n_coeffs> co_rev_poles;
+  std::array<f64_x2, ccpole_pair_rzero_pair::n_coeffs>       co_poles;
+  std::array<f64_x2, t_rev_ccpole_pair_rzero_eq_pair::n_coeffs> co_rev_poles;
 
-  std::array<double_x2, ccpole_pair_rzero_pair::n_states> st_poles;
-  std::array<double_x2, t_rev_ccpole_pair_rzero_eq_pair::get_n_states (n_stages)>
+  std::array<f64_x2, ccpole_pair_rzero_pair::n_states> st_poles;
+  std::array<f64_x2, t_rev_ccpole_pair_rzero_eq_pair::get_n_states (n_stages)>
     st_rev_poles;
 
-  std::array<double_x2, delay> _delay;
+  std::array<f64_x2, delay> _delay;
 };
 //------------------------------------------------------------------------------
 #endif
@@ -643,20 +643,20 @@ public:
     memset (this, 0, sizeof *this);
     _plugcontext = &pc;
 
-    std::array<vec_complex<double_x2>, 1> poles;
-    std::array<vec_complex<double_x2>, 1> zeros;
+    std::array<vec_complex<f64_x2>, 1> poles;
+    std::array<vec_complex<f64_x2>, 1> zeros;
 
     double t_spl =  1. / (double) pc.get_sample_rate();
 
     butterworth_lp_complex::poles (
       xspan {poles},
-      vec_set<double_x2> (660),
+      vec_set<f64_x2> (660),
       t_spl,
       1);
 
     butterworth_lp_complex::zeros (
       xspan {zeros},
-      vec_set<double_x2> (660),
+      vec_set<f64_x2> (660),
       t_spl,
       1);
 
@@ -678,7 +678,7 @@ public:
   {
     for (uint i = 0; i < block_samples; ++i) {
 
-      double_x2 out {ins[0][i], ins[1][i]};
+      f64_x2 out {ins[0][i], ins[1][i]};
 
       auto pos    = _sample_idx % _delay.size();
       auto prev   = _delay[pos];
@@ -709,21 +709,21 @@ public:
 private:
   //----------------------------------------------------------------------------
   plugin_context* _plugcontext;
-  double_x2       _gain;
+  f64_x2       _gain;
   uint            _sample_idx;
   float           _a, _b, _c, _d;
 
   static constexpr uint n_stages = 12;
   static constexpr uint delay    = (1 << n_stages);
 
-  std::array<double_x2, rpole_rzero::n_coeffs>       co_poles;
-  std::array<double_x2, t_rev_rpole_rzero::n_coeffs> co_rev_poles;
+  std::array<f64_x2, rpole_rzero::n_coeffs>       co_poles;
+  std::array<f64_x2, t_rev_rpole_rzero::n_coeffs> co_rev_poles;
 
-  std::array<double_x2, rpole_rzero::n_states> st_poles;
-  std::array<double_x2, t_rev_rpole_rzero::get_n_states (n_stages)>
+  std::array<f64_x2, rpole_rzero::n_states> st_poles;
+  std::array<f64_x2, t_rev_rpole_rzero::get_n_states (n_stages)>
     st_rev_poles;
 
-  std::array<double_x2, delay> _delay;
+  std::array<f64_x2, delay> _delay;
 };
 
 #endif

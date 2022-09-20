@@ -13,7 +13,7 @@ namespace artv { namespace witti {
 // is for the synced L/R and the other one became a decalibration parameter to
 // create stereo differences.
 //------------------------------------------------------------------------------
-struct bbd_echo_stereo : private add_ducker<double_x2> {
+struct bbd_echo_stereo : private add_ducker<f64_x2> {
 public:
   //----------------------------------------------------------------------------
   static constexpr dsp_types dsp_type  = dsp_types::delay;

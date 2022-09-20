@@ -46,10 +46,10 @@ public:
 
     bool in_on_out = false;
 
-    std::array<bool, 2>       is_copied {false, false};
-    std::array<double_x2, 32> io;
-    std::array<double_x2, 32> in_cp;
-    std::array<double_x2, 32> sum;
+    std::array<bool, 2>    is_copied {false, false};
+    std::array<f64_x2, 32> io;
+    std::array<f64_x2, 32> in_cp;
+    std::array<f64_x2, 32> sum;
 
     // recompute coefficients
     for (uint b = 0; b < n_bands; ++b) {
@@ -358,10 +358,10 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  void process_band (xspan<double_x2> io, uint b, uint sample_idx)
+  void process_band (xspan<f64_x2> io, uint b, uint sample_idx)
   {
     // bulk smoothing (at blocksize rate)
-    xspan<double_x2> internal = _eq[b].get_all_coeffs();
+    xspan<f64_x2> internal = _eq[b].get_all_coeffs();
     for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
       for (uint i = 0; i < io.size(); ++i) {
         internal[j] = smoother::tick (
@@ -453,11 +453,11 @@ private:
     auto& b             = _cfg[band];
     auto  bandtype_prev = b.type;
 
-    auto freq = vec_set<double_x2> (midi_note_to_hz (b.freq_note));
+    auto freq = vec_set<f64_x2> (midi_note_to_hz (b.freq_note));
     freq[1] *= exp2 (b.diff);
     // not changing the Q, as we want both poles to either be real or
     // conjugate
-    auto q = vec_set<double_x2> (b.q);
+    auto q = vec_set<f64_x2> (b.q);
 
     auto gain = exp ((double) b.gain_db * (1. / 20.) * M_LN10);
 
@@ -470,7 +470,7 @@ private:
     auto co_bwd_zeros
       = co.advanced (_eq[0].get_coeff_offset<bckwd_zeros_idx>());
 
-    std::array<double_x2, biquad::n_coeffs> coeffs;
+    std::array<f64_x2, biquad::n_coeffs> coeffs;
     bool high_srate = _plugcontext->get_sample_rate() > 70000;
 
     switch (b.type) {
@@ -515,8 +515,8 @@ private:
 
     xspan_memcpy (co_bwd_zeros, co_biquad);
 
-    std::array<vec_complex<double_x2>, 2> poles;
-    biquad::get_poles<double_x2> (poles, co_biquad);
+    std::array<vec_complex<f64_x2>, 2> poles;
+    biquad::get_poles<f64_x2> (poles, co_biquad);
 
     _eq[band].reset_coeffs_ext<bckwd_poles_idx> (
       co_bwd_poles, poles[0], poles[1]);
@@ -526,7 +526,7 @@ private:
       _eq[band].reset_states<bckwd_poles_idx> (_n_stages[band][_quality]);
       _eq[band].reset_states<bckwd_zeros_idx>();
       _eq[band].reset_states<fwd_idx>();
-      xspan_copy<double_x2> (_eq[band].get_all_coeffs(), _target_coeffs[band]);
+      xspan_copy<f64_x2> (_eq[band].get_all_coeffs(), _target_coeffs[band]);
       reset_latency();
     }
     _cfg[band].has_changes      = false;
@@ -633,7 +633,7 @@ private:
       make_max_stages_t_rev<t_rev_pole_pair, max_n_stages>,
       biquad,
       biquad>,
-    double_x2,
+    f64_x2,
     true>;
 
   using coeff_array = std::array<eqs::value_type, eqs::n_coeffs>;
@@ -641,9 +641,9 @@ private:
   alignas (eqs::value_type) std::array<coeff_array, n_bands> _target_coeffs;
   std::array<eqs, n_bands> _eq;
 
-  std::array<delay_compensated_buffer<double_x2>, n_bands>            _bandcomp;
-  delay_compensated_buffer<double_x2>                                 _incomp;
-  std::vector<double_x2, overaligned_allocator<double_x2, sse_bytes>> _mem;
+  std::array<delay_compensated_buffer<f64_x2>, n_bands>         _bandcomp;
+  delay_compensated_buffer<f64_x2>                              _incomp;
+  std::vector<f64_x2, overaligned_allocator<f64_x2, sse_bytes>> _mem;
 
   std::array<bandconfig, n_bands>                        _cfg;
   std::array<int, n_bands>                               _order_serial;

@@ -477,8 +477,8 @@ private:
     sweep_lfo_value diff    = (center - detuned) / (float) (n_stages * 2);
     sweep_lfo_value start   = (spread > 0.f) ? detuned : center;
     diff                    = (spread > 0.f) ? diff : -diff;
-    float_x4 curr           = vec_cat (start, start + diff);
-    float_x4 add            = vec_cat (diff, diff) * 2.f;
+    f32_x4 curr             = vec_cat (start, start + diff);
+    f32_x4 add              = vec_cat (diff, diff) * 2.f;
 
     for (uint i = 0; i < n_stages; ++i) {
       _mod[i] = vec_to_array (curr);
@@ -514,7 +514,7 @@ private:
           run_lfo (pars));
 
         for (uint s = 0; s < _n_stages; ++s) {
-          float_x4 v = vec_from_array (_mod[s]);
+          f32_x4 v = vec_from_array (_mod[s]);
 #if 0
           // cheap'ish parametric curve
           constexpr float k = 0.8f; // TODO curve: k = parameter
@@ -524,10 +524,10 @@ private:
 #endif
           auto q = f;
           f      = ((f * 0.993f) + 0.007f);
-          f *= float_x4 {21200.f, 21200.f, 20000.f, 20000.f};
+          f *= f32_x4 {21200.f, 21200.f, 20000.f, 20000.f};
           // A lot of freq-dependant weight on the Q when detuning
           q = (1.f + 7.f * q * abs (pars.spread));
-          q *= pars.a * pars.a * float_x4 {3.4f, 3.4f, 3.8f, 3.8f};
+          q *= pars.a * pars.a * f32_x4 {3.4f, 3.4f, 3.8f, 3.8f};
           q += 0.05f;
           _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
         }
@@ -536,13 +536,13 @@ private:
         }
       }
 
-      float_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
-      auto     onep_out = _onepole.tick<0> (wet);
-      wet               = vec_shuffle (wet, onep_out, 0, 1, 4, 5);
+      f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
+      auto   onep_out = _onepole.tick<0> (wet);
+      wet             = vec_shuffle (wet, onep_out, 0, 1, 4, 5);
 
       // obtain response for the phaser
-      zdf::response<float_x4> aps_resp {};
-      decltype (aps_resp)     aps_resp_prev {};
+      zdf::response<f32_x4> aps_resp {};
+      decltype (aps_resp)   aps_resp_prev {};
       for (uint s = 0; s < (_n_stages - 1); ++s) {
         aps_resp_prev = aps_resp;
         aps_resp *= _phaser.tick_on_idx (s, zdf::gs_coeffs_tag {});
@@ -567,7 +567,7 @@ private:
 
       // Run regular filter processing
       assert (_n_stages > 0);
-      float_x4 prev;
+      f32_x4 prev;
       for (uint s = 0; s < _n_stages; ++s) {
         prev = wet;
         wet  = _phaser.tick_on_idx (s, wet);
@@ -581,7 +581,7 @@ private:
 
       auto out = mix (
         (1.f - _n_stages_frac) * prev + _n_stages_frac * wet,
-        double_x2 {ins[0][i], ins[1][i]},
+        f64_x2 {ins[0][i], ins[1][i]},
         pars.depth / get_fb_gain (pars.feedback, pars.drive),
         1.f - pars.depth,
         pars.b);
@@ -619,7 +619,7 @@ private:
 
         for (uint s = 0; s < _n_stages; ++s) {
           constexpr float sec_factor = (max_scho_delay_ms * 0.001f);
-          float_x4        v          = vec_from_array (_mod[s]);
+          f32_x4          v          = vec_from_array (_mod[s]);
           float           t          = v[0];
           t                          = _srate * (t * t * sec_factor);
           _del_spls.target()[s]      = t;
@@ -631,28 +631,28 @@ private:
         for (uint s = _n_stages; s < _del_spls.target().size(); ++s) {
           _del_spls.target()[s] = _del_spls.target()[s - 1];
         }
-        float_x4 fv {1460.f, 1460.f, 1670.f, 1780.f};
-        auto     f = vec_from_array (_mod[_n_stages / 2]);
+        f32_x4 fv {1460.f, 1460.f, 1670.f, 1780.f};
+        auto   f = vec_from_array (_mod[_n_stages / 2]);
         f *= f;
         f *= (1.f + pars.a) * fv;
         _onepole.reset_coeffs<0> (f, _t_spl);
       }
       _del_spls.tick();
 
-      float_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
+      f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
       wet = _onepole.tick<0> (wet);
       wet -= _1spl_fb * pars.feedback;
 
-      std::array<float_x4, max_scho_stages> to_push {};
-      auto&                                 del_spls = _del_spls.get();
-      float_x4                              prev;
+      std::array<f32_x4, max_scho_stages> to_push {};
+      auto&                               del_spls = _del_spls.get();
+      f32_x4                              prev;
       for (uint s = 0; s < _n_stages; ++s) {
         auto n_spls = std::clamp (
           del_spls[s],
           (float) _scho.min_delay_spls(),
           (float) _scho.max_delay_spls());
         auto yn    = _scho.get (n_spls, s);
-        auto r     = allpass_fn::tick<float_x4> (wet, yn, _g.scho[s]);
+        auto r     = allpass_fn::tick<f32_x4> (wet, yn, _g.scho[s]);
         prev       = wet;
         wet        = r.out;
         to_push[s] = r.to_push;
@@ -666,7 +666,7 @@ private:
 
       auto out = mix (
         wet,
-        double_x2 {ins[0][i], ins[1][i]},
+        f64_x2 {ins[0][i], ins[1][i]},
         pars.depth / get_fb_gain (pars.feedback, pars.drive),
         1.f - pars.depth,
         pars.b);
@@ -723,7 +723,7 @@ private:
           auto f = v * v;
           auto q = v;
           f      = ((f * 0.85f) + 0.15f);
-          f *= float_x4 {21200.f, 21200.f, 17000.f, 17000.f};
+          f *= f32_x4 {21200.f, 21200.f, 17000.f, 17000.f};
           q = (1.f + 2.f * q * abs (pars.spread));
           q += 0.09f;
           _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
@@ -731,14 +731,14 @@ private:
         for (uint s = (_n_stages * 2); s < _del_spls.target().size(); ++s) {
           _del_spls.target()[s] = _del_spls.target()[s - 1];
         }
-        float_x4 fv {460.f, 460.f, 970.f, 980.f};
-        auto     f = vec_from_array (_mod[_n_stages / 2]);
+        f32_x4 fv {460.f, 460.f, 970.f, 980.f};
+        auto   f = vec_from_array (_mod[_n_stages / 2]);
         f *= f;
         f *= (1.f + pars.feedback) * fv;
         _onepole.reset_coeffs<0> (f, _t_spl);
       }
       // create some difference on the inputs
-      float_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
+      f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
       wet = _onepole.tick<0> (wet);
       wet -= _1spl_fb * pars.feedback;
 
@@ -770,11 +770,11 @@ private:
       auto rndlfo = _rnd_lfo.tick_filt_sample_and_hold();
       auto trnd   = vec_to_array (rndlfo * _srate * 0.0005f);
 
-      std::array<float_x1, max_chor_stages> to_push {};
+      std::array<f32_x1, max_chor_stages> to_push {};
       for (uint s = 0; s < _n_stages; ++s) {
 
         uint idx  = s * 2;
-        uint lane = idx % vec_traits_t<float_x4>::size;
+        uint lane = idx % vec_traits_t<f32_x4>::size;
 
         std::array<float, n_channels> channel;
 
@@ -785,7 +785,7 @@ private:
             (float) _chor.max_delay_spls());
           auto g       = _g.chor[idx];
           auto yn      = _chor.get (n_spls, idx);
-          auto r       = allpass_fn::tick<float_x1> (chor_in[lane], yn, g);
+          auto r       = allpass_fn::tick<f32_x1> (chor_in[lane], yn, g);
           to_push[idx] = r.to_push;
           channel[j]   = r.out[0];
         }
@@ -794,7 +794,7 @@ private:
         float r = channel[0] * panr[s] + channel[1] * panl[s];
 
         // TODO: probably run this on its own loop?
-        float_x4 v {l, r, l, r};
+        f32_x4 v {l, r, l, r};
         v = _phaser.tick_on_idx (s, v);
         //  crossfade / parallel arch
         v *= ((_n_stages == (s - 1)) ? _n_stages_frac : 1.f);
@@ -813,7 +813,7 @@ private:
       wet *= 2.f - rndmod;
 
       // delay dry signal based on b
-      float_x2 dry {ins[0][i], ins[1][i]};
+      f32_x2 dry {ins[0][i], ins[1][i]};
       _dry.push (xspan {&dry, 1});
       constexpr float kdry
         = 0.001f * std::max (max_dry_delay_ms, max_chor_delay_ms / 2);
@@ -824,7 +824,7 @@ private:
 
       auto out = mix (
         wet,
-        double_x2 {dry[0], dry[1]},
+        f64_x2 {dry[0], dry[1]},
         pars.depth / (_n_stages_frac + (float) (_n_stages - 1)),
         1.f - pars.depth,
         pars.b);
@@ -871,29 +871,29 @@ private:
         for (uint s = flan_stages; s < _del_spls.target().size(); ++s) {
           _del_spls.target()[s] = _del_spls.target()[s - 1];
         }
-        float_x4 fv {460.f, 460.f, 970.f, 980.f};
-        auto     f = vec_from_array (_mod[0]);
+        f32_x4 fv {460.f, 460.f, 970.f, 980.f};
+        auto   f = vec_from_array (_mod[0]);
         f *= f;
         f *= (1.f + pars.feedback) * fv;
         _onepole.reset_coeffs<0> (f, _t_spl);
       }
       _del_spls.tick();
 
-      float_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
+      f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
       wet = _onepole.tick<0> (wet);
       wet -= _1spl_fb * pars.feedback;
 
       auto& del_spls = _del_spls.get();
       auto  flan_in  = vec_split<flan_stages> (wet);
 
-      std::array<float_x2, flan_stages> to_push {};
+      std::array<f32_x2, flan_stages> to_push {};
       for (uint s = 0; s < flan_stages; ++s) {
         auto n_spls = std::clamp (
           del_spls[s],
           (float) _flan.min_delay_spls(),
           (float) _flan.max_delay_spls());
         auto yn    = _flan.get (n_spls, s);
-        auto r     = allpass_fn::tick<float_x2> (flan_in[s], yn, _g.flan[s]);
+        auto r     = allpass_fn::tick<f32_x2> (flan_in[s], yn, _g.flan[s]);
         to_push[s] = r.to_push;
         wet[0 + s] = r.out[0];
         wet[2 + s] = r.out[1];
@@ -904,7 +904,7 @@ private:
         wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
 
-      float_x2 dry {ins[0][i], ins[1][i]};
+      f32_x2 dry {ins[0][i], ins[1][i]};
       _dry.push (xspan {&dry, 1});
       constexpr float kdry
         = 0.001f * std::max (max_dry_delay_ms, max_flan_delay_ms / 2);
@@ -915,7 +915,7 @@ private:
 
       auto out = mix (
         wet,
-        double_x2 {dry[0], dry[1]},
+        f64_x2 {dry[0], dry[1]},
         pars.depth / get_fb_gain (pars.feedback, pars.drive),
         1.f - pars.depth,
         pars.b);
@@ -925,15 +925,15 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  double_x2 mix (
-    float_x4  wet,
-    double_x2 dry,
-    float     wet_gain,
-    float     dry_gain,
-    float     parallel_mix)
+  f64_x2 mix (
+    f32_x4 wet,
+    f64_x2 dry,
+    float  wet_gain,
+    float  dry_gain,
+    float  parallel_mix)
   {
-    double_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
-    double_x2 parallel = {(double) wet[2], (double) wet[3]};
+    f64_x2 wetdbl   = {(double) wet[0], (double) wet[1]};
+    f64_x2 parallel = {(double) wet[2], (double) wet[3]};
     wetdbl *= 1.f - abs (parallel_mix);
     wetdbl += parallel_mix * parallel;
     return wetdbl * wet_gain + dry * dry_gain;
@@ -942,7 +942,7 @@ private:
   // hardness makes a sqrt sigmmoid
   float get_fb_gain (float fb, float hardness)
   {
-    float lim = zdf_type::nonlin::limit_inf<float_x1> (
+    float lim = zdf_type::nonlin::limit_inf<f32_x1> (
       make_vec (hardness), make_vec (0.f))[0];
     return 1.f + std::min (lim, abs (fb));
   }
@@ -1048,43 +1048,43 @@ private:
 
   using sinc_t = sinc_interp<8, 96>;
 
-  part_classes<mp_list<zdf_type>, float_x4>                   _feedback;
-  part_class_array<allpass_type, float_x4, max_phaser_stages> _phaser;
-  part_classes<filters_list, float_x4>                        _fb_filters;
-  part_classes<mp_list<onepole_allpass>, float_x4>            _onepole;
+  part_classes<mp_list<zdf_type>, f32_x4>                   _feedback;
+  part_class_array<allpass_type, f32_x4, max_phaser_stages> _phaser;
+  part_classes<filters_list, f32_x4>                        _fb_filters;
+  part_classes<mp_list<onepole_allpass>, f32_x4>            _onepole;
 #if ARTV_MOD_SCHO_TIRAN
-  modulable_thiran1_delay_line<float_x4, 4, false, false> _scho {};
+  modulable_thiran1_delay_line<f32_x4, 4, false, false> _scho {};
 #else
-  interpolated_delay_line<float_x4, linear_interp, true, false> _scho;
+  interpolated_delay_line<f32_x4, linear_interp, true, false> _scho;
 #endif
 #if ARTV_MOD_SCHO_TIRAN
-  modulable_thiran1_delay_line<float_x1, 4, false, false> _chor;
-  modulable_thiran1_delay_line<float_x2, 4, false, false> _dry;
-  modulable_thiran1_delay_line<float_x2, 4, false, false> _flan;
+  modulable_thiran1_delay_line<f32_x1, 4, false, false> _chor;
+  modulable_thiran1_delay_line<f32_x2, 4, false, false> _dry;
+  modulable_thiran1_delay_line<f32_x2, 4, false, false> _flan;
 #else
-  interpolated_delay_line<float_x1, sinc_t, false, false, true> _chor;
-  interpolated_delay_line<float_x2, sinc_t, false, false, true> _dry;
-  interpolated_delay_line<float_x2, sinc_t, false, false, true> _flan;
+  interpolated_delay_line<f32_x1, sinc_t, false, false, true> _chor;
+  interpolated_delay_line<f32_x2, sinc_t, false, false, true> _dry;
+  interpolated_delay_line<f32_x2, sinc_t, false, false, true> _flan;
 #endif
   value_smoother<
     float,
     std::array<float, std::max (max_scho_stages, max_chor_stages)>>
     _del_spls;
   union {
-    std::array<float_x4, max_scho_stages> scho;
-    std::array<float_x1, max_chor_stages> chor;
-    std::array<float_x2, flan_stages>     flan;
+    std::array<f32_x4, max_scho_stages> scho;
+    std::array<f32_x1, max_chor_stages> chor;
+    std::array<f32_x2, flan_stages>     flan;
   } _g;
 
-  std::array<float_x1, max_chor_stages> _del_g;
-  xspan<float>                          _delay_mem;
+  std::array<f32_x1, max_chor_stages> _del_g;
+  xspan<float>                        _delay_mem;
 
   alignas (sse_bytes) array2d<float, n_ap_channels, max_phaser_stages> _mod;
 
   std::vector<float, overaligned_allocator<float, 128>> _mem;
   sweep_lfo_type _sweep_lfo; // 0 = L, 1 = R, control rate
   lfo<4>         _rnd_lfo; // 0 = L, 1 = R, audio rate
-  float_x4       _1spl_fb;
+  f32_x4         _1spl_fb;
   uint           _n_processed_samples;
   uint           _control_rate_mask;
   uint           _n_stages;
@@ -1097,10 +1097,10 @@ private:
 #if !ARTV_MOD_SCHO_TIRAN
   xspan<float> _sinc_co;
 #endif
-  xspan<float_x2> _mem_dry;
-  xspan<float_x1> _mem_chor;
-  xspan<float_x2> _mem_flan;
-  xspan<float_x4> _mem_scho;
+  xspan<f32_x2> _mem_dry;
+  xspan<f32_x1> _mem_chor;
+  xspan<f32_x2> _mem_flan;
+  xspan<f32_x4> _mem_scho;
 };
 //------------------------------------------------------------------------------
 } // namespace artv

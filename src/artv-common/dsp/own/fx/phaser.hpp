@@ -388,7 +388,7 @@ public:
     // Sample rates 44100 multiples update every 362.811us
     uint sr_order      = get_samplerate_order (pc.get_sample_rate()) + 3;
     _control_rate_mask = lsb_mask<uint> (sr_order);
-    _feedback_samples  = vec_set<double_x2> (0.);
+    _feedback_samples  = vec_set<f64_x2> (0.);
     _lfo_t_spl         = _t_spl * (_control_rate_mask + 1);
 
     // setting up delay
@@ -403,7 +403,7 @@ public:
     assert (ins.size() >= (n_inputs * (uint) bus_type));
     for (uint i = 0; i < samples; ++i, ++_n_processed_samples) {
 
-      constexpr uint vec_size = vec_traits<float_x4>().size;
+      constexpr uint vec_size = vec_traits<f32_x4>().size;
 
       // parameter smoothing (could be done at a subblock/control rate).
       _pars_smooth.tick();
@@ -420,15 +420,15 @@ public:
         run_control_rate (pars);
       }
       // sample-wise processing block (unbreakable, it has 1 sample delays) ----
-      float_x4 fb = {
+      f32_x4 fb = {
         (float) _feedback_samples[0],
         (float) _feedback_samples[1],
         (float) _feedback_samples[0],
         (float) _feedback_samples[1]};
       // regular processing
-      float_x4 out {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
+      f32_x4 out {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
       out += fb * pars.feedback;
-      double_x2 feedforward {out[0], out[1]};
+      f64_x2 feedforward {out[0], out[1]};
 
       auto n_spls = pars.delay_spls;
       n_spls *= exp (ln_max_delay_factor * pars.lfo_last * pars.delay_lfo);
@@ -450,8 +450,8 @@ public:
       del_fb      = _feedback_delay_shelf.tick_on_idx (k_shelf_hi, out);
       _delay.push (xspan {&del_fb, 1});
 
-      double_x2 outx2    = {(double) out[0], (double) out[1]};
-      double_x2 parallel = {(double) out[2], (double) out[3]};
+      f64_x2 outx2    = {(double) out[0], (double) out[1]};
+      f64_x2 parallel = {(double) out[2], (double) out[3]};
 
       outx2 *= 0.5f + (0.5f - abs (pars.parallel_mix));
       outx2 += pars.parallel_mix * parallel;
@@ -543,7 +543,7 @@ private:
   {
     // this is very naive, note that we could e.g. be interpolating SVF
     // coefficients internally.
-    constexpr uint vec_size = vec_traits<float_x4>().size;
+    constexpr uint vec_size = vec_traits<f32_x4>().size;
 
     _lfos.set_freq (vec_set<2> (pars.lfo_hz_final), _lfo_t_spl);
     auto stereo_ph
@@ -619,14 +619,14 @@ private:
       fconstant[1] = 0.;
       break;
     }
-    auto     f         = freq_lo;
-    auto     lfo_depth = pars.lfo_depth;
-    float_x4 q_fact {lfov[0], lfov[1], lfov[1], lfov[0]};
+    auto   f         = freq_lo;
+    auto   lfo_depth = pars.lfo_depth;
+    f32_x4 q_fact {lfov[0], lfov[1], lfov[1], lfov[0]};
     q_fact = vec_exp (q_fact * -lfo_depth * 0.23f);
 
     for (uint s = 0; s < pars.n_stages; ++s) {
-      float_x4 freqs {};
-      float_x4 qs = vec_set<float_x4> (pars.q);
+      f32_x4 freqs {};
+      f32_x4 qs = vec_set<f32_x4> (pars.q);
       // fill freqs
       for (uint ap = 0; ap < (vec_size / 2); ++ap) {
         float max_depth = pars.lin_lfo_mod ? 0.6 : 1.7;
@@ -684,13 +684,13 @@ private:
         constexpr float cut_ratio = 0.3f;
         constexpr float gain_db   = -20.f;
 
-        auto cutfreq = double_x2 {freqs[0], freqs[1]};
+        auto cutfreq = f64_x2 {freqs[0], freqs[1]};
         cutfreq -= pars.feedback_hp * cutfreq * cut_ratio;
         _feedback_shelf.reset_coeffs_on_idx (
           k_shelf_lo,
           vec_max (210., cutfreq),
-          vec_set<double_x2> (0.35),
-          vec_set<double_x2> (pars.feedback_hp * gain_db),
+          vec_set<f64_x2> (0.35),
+          vec_set<f64_x2> (pars.feedback_hp * gain_db),
           _t_spl,
           lowshelf_tag {});
 
@@ -699,8 +699,8 @@ private:
         _feedback_delay_shelf.reset_coeffs_on_idx (
           k_shelf_lo,
           vec_max (210.f, del_cutfreq),
-          vec_set<float_x4> (0.35),
-          vec_set<float_x4> (pars.feedback_hp * gain_db),
+          vec_set<f32_x4> (0.35),
+          vec_set<f32_x4> (pars.feedback_hp * gain_db),
           _t_spl,
           lowshelf_tag {});
       }
@@ -708,13 +708,13 @@ private:
         constexpr float cut_ratio = 0.3f;
         constexpr float gain_db   = -6.f;
 
-        auto cutfreq = double_x2 {freqs[0], freqs[1]};
+        auto cutfreq = f64_x2 {freqs[0], freqs[1]};
         cutfreq += pars.feedback_lp * cutfreq * cut_ratio;
         _feedback_shelf.reset_coeffs_on_idx (
           k_shelf_hi,
           vec_max (4000., cutfreq),
-          vec_set<double_x2> (0.35),
-          vec_set<double_x2> (pars.feedback_lp * gain_db),
+          vec_set<f64_x2> (0.35),
+          vec_set<f64_x2> (pars.feedback_lp * gain_db),
           _t_spl,
           highshelf_tag {});
 
@@ -723,8 +723,8 @@ private:
         _feedback_delay_shelf.reset_coeffs_on_idx (
           k_shelf_hi,
           vec_max (4000.f, del_cutfreq),
-          vec_set<float_x4> (0.35),
-          vec_set<float_x4> (pars.feedback_lp * gain_db),
+          vec_set<f32_x4> (0.35),
+          vec_set<f32_x4> (pars.feedback_lp * gain_db),
           _t_spl,
           highshelf_tag {});
       }
@@ -766,21 +766,21 @@ private:
   struct all_parameters : public unsmoothed_parameters,
                           public smoothed_parameters {};
   //----------------------------------------------------------------------------
-  double_x2             _feedback_samples;
+  f64_x2                _feedback_samples;
   unsmoothed_parameters _pars;
 
-  std::vector<float_x4, overaligned_allocator<float_x4, 128>> _delay_mem;
+  std::vector<f32_x4, overaligned_allocator<f32_x4, 128>> _delay_mem;
 
   value_smoother<float, smoothed_parameters> _pars_smooth;
   // TODO: use a variant?
-  part_class_array<andy::svf_allpass, float_x4, max_stages> _allpass2p;
-  part_class_array<onepole_allpass, float_x4, max_stages>   _allpass1p;
+  part_class_array<andy::svf_allpass, f32_x4, max_stages> _allpass2p;
+  part_class_array<onepole_allpass, f32_x4, max_stages>   _allpass1p;
   enum { k_shelf_lo, k_shelf_hi };
-  part_class_array<andy::svf, double_x2, 2> _feedback_shelf;
-  part_class_array<andy::svf, float_x4, 2>  _feedback_delay_shelf;
+  part_class_array<andy::svf, f64_x2, 2> _feedback_shelf;
+  part_class_array<andy::svf, f32_x4, 2> _feedback_delay_shelf;
 
-  modulable_thiran1_delay_line<float_x4, 1>      _delay {};
-  part_class_array<mystran_dc_blocker, float_x4> _dc_blocker;
+  modulable_thiran1_delay_line<f32_x4, 1>      _delay {};
+  part_class_array<mystran_dc_blocker, f32_x4> _dc_blocker;
 
   lfo<n_channels> _lfos; // 0 = L, 1 = R
   uint            _n_processed_samples;

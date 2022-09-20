@@ -234,17 +234,20 @@ static constexpr bool is_vec_of_float_type_v
   = is_vec_v<V> && std::is_floating_point_v<vec_value_type_t<V>>;
 // clang-format on
 
-using float_x1  = vec<float, 1>;
-using double_x1 = vec<double, 1>;
+using float_x1 = vec<float, 1>;
+using f32_x1   = float_x1;
 
 // Convenience half simd, normally used to avoid duplicating two channels
-using float_x2 = vec<float, 2>;
-using s8_x8    = vec<s8, 8>;
-using u8_x8    = vec<u8, 8>;
-using s16_x4   = vec<s16, 4>;
-using u16_x4   = vec<u16, 4>;
-using s32_x2   = vec<s32, 2>;
-using u32_x2   = vec<u32, 2>;
+using float_x2  = vec<float, 2>;
+using double_x1 = vec<double, 1>;
+using f32_x2    = float_x2;
+using f64_x1    = double_x1;
+using s8_x8     = vec<s8, 8>;
+using u8_x8     = vec<u8, 8>;
+using s16_x4    = vec<s16, 4>;
+using u16_x4    = vec<u16, 4>;
+using s32_x2    = vec<s32, 2>;
+using u32_x2    = vec<u32, 2>;
 
 template <
   class T,
@@ -254,6 +257,8 @@ using vec8 = vec<T, 8 / sizeof (T)>;
 // SSE or equivalent
 using float_x4  = vec<float, 4>;
 using double_x2 = vec<double, 2>;
+using f32_x4    = float_x4;
+using f64_x2    = double_x2;
 using s8_x16    = vec<s8, 16>;
 using u8_x16    = vec<u8, 16>;
 using s16_x8    = vec<s16, 8>;
@@ -271,6 +276,8 @@ using vec16 = vec<T, 16 / sizeof (T)>;
 // AVX or equivalent.
 using float_x8  = vec<float, 8>;
 using double_x4 = vec<double, 4>;
+using f32_x8    = float_x8;
+using f64_x4    = double_x4;
 using s8_x32    = vec<s8, 32>;
 using u8_x32    = vec<u8, 32>;
 using s16_x16   = vec<s16, 16>;

@@ -55,8 +55,8 @@ public:
 
     uint n_enabled_bands = 0;
 
-    std::array<bool, 2>       is_copied {false, false};
-    std::array<double_x2, 32> io;
+    std::array<bool, 2>    is_copied {false, false};
+    std::array<f64_x2, 32> io;
 
     for (uint b = 0; b < n_bands; ++b) {
       if (_cfg[b].has_changes) {
@@ -82,7 +82,7 @@ public:
         }
 
         // smoothing (at blocksize rate)
-        xspan<double_x2> internal = _eq.get_coeffs (b);
+        xspan<f64_x2> internal = _eq.get_coeffs (b);
         for (uint j = 0; j < _target_coeffs[b].size(); ++j) {
           for (uint i = 0; i < blocksize; ++i) {
             internal[j] = smoother::tick (
@@ -361,11 +361,11 @@ private:
     auto& b             = _cfg[band];
     auto  bandtype_prev = b.type;
 
-    auto freq = vec_set<double_x2> (midi_note_to_hz (b.freq_note));
+    auto freq = vec_set<f64_x2> (midi_note_to_hz (b.freq_note));
     freq[1] *= exp2 (b.diff);
-    auto q = vec_set<double_x2> (b.q);
+    auto q = vec_set<f64_x2> (b.q);
     q[1] += q[1] * b.diff * 0.05;
-    auto gain = vec_set<double_x2> (b.gain_db);
+    auto gain = vec_set<f64_x2> (b.gain_db);
 
     switch (b.type) {
     case bandtype::off:
@@ -426,7 +426,7 @@ private:
     // reset smoothing
     if (_cfg[band].reset_band_state) {
       _eq.reset_states_on_idx (band);
-      xspan_copy<double_x2> (_eq.get_coeffs (band), _target_coeffs[band]);
+      xspan_copy<f64_x2> (_eq.get_coeffs (band), _target_coeffs[band]);
     }
     _cfg[band].has_changes      = false;
     _cfg[band].reset_band_state = false;
@@ -481,7 +481,7 @@ private:
       onepole_allpass,
       tilt_eq,
       liteon::presence_high_shelf>,
-    double_x2,
+    f64_x2,
     n_bands>;
   //----------------------------------------------------------------------------
   using smoother = onepole_smoother;

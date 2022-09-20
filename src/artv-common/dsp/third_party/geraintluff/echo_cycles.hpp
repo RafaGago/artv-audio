@@ -27,7 +27,7 @@
 
 namespace artv { namespace geraint_luff {
 
-class echo_cycles : private add_ducker<double_x2> {
+class echo_cycles : private add_ducker<f64_x2> {
 public:
   //----------------------------------------------------------------------------
   static constexpr dsp_types dsp_type  = dsp_types::delay;

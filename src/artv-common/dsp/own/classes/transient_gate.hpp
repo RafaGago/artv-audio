@@ -19,7 +19,7 @@ namespace artv {
 //------------------------------------------------------------------------------
 class transient_gate {
 private:
-  using vec_type     = double_x2;
+  using vec_type     = f64_x2;
   using vec_cmp_type = vec<s64, 2>;
 
 public:

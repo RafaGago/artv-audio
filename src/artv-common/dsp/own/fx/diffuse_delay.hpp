@@ -123,7 +123,7 @@ public:
     }
     _extpar.ducking_speed = v;
     v *= 0.01f;
-    _ducker.set_speed (vec_set<double_x2> (v * v), t_spl);
+    _ducker.set_speed (vec_set<f64_x2> (v * v), t_spl);
   }
 
   static constexpr auto get_parameter (ducking_speed_tag)
@@ -603,10 +603,10 @@ private:
     uint min_main_delay_spls
       = _delay.min_delay_spls() + blocksize + main_mod_samples;
     constexpr float max_delay_sec = 20.f;
-    float_x4        desync_spls_max {0.f, 161.803398f, 261.803f, 423.606f};
+    f32_x4          desync_spls_max {0.f, 161.803398f, 261.803f, 423.606f};
 
     auto delay_spls = std::max<float> (_extpar.delay_spls, min_main_delay_spls);
-    float_x4 spl_budget = vec_set<n_taps> (delay_spls - min_main_delay_spls);
+    f32_x4 spl_budget = vec_set<n_taps> (delay_spls - min_main_delay_spls);
     // desync
     auto desync_spls = spl_budget;
     spl_budget = vec_max (spl_budget - (desync_spls_max * _extpar.desync), 0.f);
@@ -692,7 +692,7 @@ private:
         break;
       };
       // smoothing and clamping the delay in samples after modulation
-      auto min_spls = vec_set<float_x4> (_delay.min_delay_spls() + blocksize);
+      auto min_spls = vec_set<f32_x4> (_delay.min_delay_spls() + blocksize);
       for (uint i = 0; i < block.size(); ++i) {
         n_spls[i] = _n_spls_smoother.tick (n_spls[i]);
         n_spls[i] = vec_max (n_spls[i], min_spls);
@@ -710,9 +710,9 @@ private:
       }
       // tilt inputs
       for (uint i = 0; i < block.size(); ++i) {
-        auto&     lr = block[i];
-        double_x2 ins {lr[0], lr[1]};
-        auto      gain    = _ducker.tick (ins);
+        auto&  lr = block[i];
+        f64_x2 ins {lr[0], lr[1]};
+        auto   gain       = _ducker.tick (ins);
         ins               = _tilt.tick (ins);
         ducker_gain[i][0] = (arith_type) gain[0];
         ducker_gain[i][1] = (arith_type) gain[1];
@@ -803,7 +803,7 @@ private:
         // filter cutoff modulation by signal
         auto l     = block[i][0];
         auto r     = block[i][1];
-        auto input = float_x4 {(float) l, (float) r, (float) r, (float) r};
+        auto input = f32_x4 {(float) l, (float) r, (float) r, (float) r};
         auto input_env
           = _env.tick<peakfollow_idx> (input, envelope::rms_tag {});
         if ((bp_wet != 0.f) && ((_bp_update_spls & 15) == 0)) {
@@ -1079,14 +1079,14 @@ private:
     _bp_update_spls = 0;
   }
   //----------------------------------------------------------------------------
-  float_x4 get_scaled_reso (float_x4 freq)
+  f32_x4 get_scaled_reso (f32_x4 freq)
   {
     // high reso at high frequencies sounds ear pearcing, especially at this low
     // samplerate and low datatype resolution (for a nonlinear filter)
     constexpr float max_freq    = (float) ((tgt_srate - 1) / 2);
     constexpr float reso_att_hz = 1.f / max_freq;
 
-    auto max_reso = vec_set<float_x4> (_extpar.bp_reso);
+    auto max_reso = vec_set<f32_x4> (_extpar.bp_reso);
     auto ratio    = freq * reso_att_hz;
     ratio         = vec_exp (-ratio * 2.f);
     return max_reso * ratio;
@@ -1139,9 +1139,9 @@ private:
   };
   //----------------------------------------------------------------------------
   struct internal_parameters {
-    float_x4             bp_freqs;
-    float_x4             delay_spls;
-    float_x4             fb_gain;
+    f32_x4               bp_freqs;
+    f32_x4               delay_spls;
+    f32_x4               fb_gain;
     array2d<float, 2, 1> mtx_angle;
     double               delay_spls_max;
     double               spls_x_beat;
@@ -1183,15 +1183,15 @@ private:
 #else
   interpolated_delay_line<vec1_type, catmull_rom_interp> _delay {};
 #endif
-  mem_vector<vec1_type>                        _mem {};
-  part_class_array<onepole_smoother, float_x4> _n_spls_smoother {};
-  part_class_array<tilt_eq, double_x2>         _tilt {};
-  saike::transience                            _transients;
-  lfo<n_taps>                                  _mod_lfo;
-  std::array<lfo<n_serial_diffusors>, n_taps>  _ap_lfo;
-  ducker<double_x2>                            _ducker;
+  mem_vector<vec1_type>                       _mem {};
+  part_class_array<onepole_smoother, f32_x4>  _n_spls_smoother {};
+  part_class_array<tilt_eq, f64_x2>           _tilt {};
+  saike::transience                           _transients;
+  lfo<n_taps>                                 _mod_lfo;
+  std::array<lfo<n_serial_diffusors>, n_taps> _ap_lfo;
+  ducker<f64_x2>                              _ducker;
   enum { rms_dry_idx, rms_wet_idx, peakfollow_idx };
-  part_classes<mp_list<envelope, envelope, envelope>, float_x4, false> _env;
+  part_classes<mp_list<envelope, envelope, envelope>, f32_x4, false> _env;
   enum { lp_idx, hp_idx, bp_idx };
   part_classes<
     mp_list<onepole_lowpass, mystran_dc_blocker, saike::ms20_bandpass>,

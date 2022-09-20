@@ -266,10 +266,10 @@ struct linear_iir_butterworth_lowpass_any_order {
   //----------------------------------------------------------------------------
   static uint get_n_stages (float freq, float t_spl, float snr_db)
   {
-    vec_complex<double_x2> pole;
+    vec_complex<f64_x2> pole;
     // worst case, 1 pole.
     butterworth_lp_complex::poles (
-      xspan {&pole, 1}, vec_set<double_x2> (freq), (double) t_spl, 1);
+      xspan {&pole, 1}, vec_set<f64_x2> (freq), (double) t_spl, 1);
     return get_reversed_pole_n_stages (
       {vec_real (pole)[0], vec_imag (pole)[0]}, snr_db);
   }

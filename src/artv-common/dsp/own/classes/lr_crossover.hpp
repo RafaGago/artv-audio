@@ -53,8 +53,8 @@ public:
     _freq[idx][1] = freq_r;
 
     if (order != 0) {
-      double_x2 f = {freq_l, freq_r};
-      lr::reset_coeffs<double_x2> (_coeffs[idx], f, _t_spl, order);
+      f64_x2 f = {freq_l, freq_r};
+      lr::reset_coeffs<f64_x2> (_coeffs[idx], f, _t_spl, order);
     }
 
     if (order == _order[idx]) {
@@ -85,11 +85,11 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  std::array<double_x2, n_bands> tick (double_x2 in)
+  std::array<f64_x2, n_bands> tick (f64_x2 in)
   {
     // bands enable disabled.
-    std::array<double_x2, n_bands> bands {};
-    lr_crossover_out<double_x2>    crossv {};
+    std::array<f64_x2, n_bands> bands {};
+    lr_crossover_out<f64_x2>    crossv {};
     crossv.lp = in;
 
     // crossovers go top to bottom internally
@@ -103,8 +103,8 @@ public:
       if (_order[crv] == 0) {
         continue;
       }
-      crossv = lr::tick<double_x2> (
-        _coeffs[crv], _states[crv], crossv.lp, _order[crv]);
+      crossv
+        = lr::tick<f64_x2> (_coeffs[crv], _states[crv], crossv.lp, _order[crv]);
 
       bands[bnd] = crossv.hp;
     }
@@ -118,15 +118,14 @@ public:
     tick<T, !controls_summing> (outs, ins, samples);
   }
   //----------------------------------------------------------------------------
-  std::array<double_x2, n_bands> phase_correct (
-    std::array<double_x2, n_bands> bands)
+  std::array<f64_x2, n_bands> phase_correct (std::array<f64_x2, n_bands> bands)
   {
     // with three bands there are the same number of correctiong blocks wether
     // we can perform the summing optimizations or not.
     assert (!controls_summing || n_bands == 3);
 
-    std::array<double_x2, n_bands> ret            = bands;
-    uint                           correction_idx = 0;
+    std::array<f64_x2, n_bands> ret            = bands;
+    uint                        correction_idx = 0;
 
     //        c3     c2     c1     c0
     //  ----------------------------------
@@ -142,18 +141,18 @@ public:
           continue;
         }
         uint band = n_crossovers - i;
-        ret[band] = lr::apply_correction<double_x2> (
+        ret[band] = lr::apply_correction<f64_x2> (
           _coeffs[crv], _corr_states[correction_idx], ret[band], _order[crv]);
       }
     }
     return ret;
   }
   //----------------------------------------------------------------------------
-  double_x2 sum (std::array<double_x2, n_bands> bands)
+  f64_x2 sum (std::array<f64_x2, n_bands> bands)
   {
     assert (controls_summing);
 
-    double_x2 ret {};
+    f64_x2 ret {};
     for (uint band = (n_bands - 1), crossv = 1; band > 1; --band, ++crossv) {
       uint correction_idx = crossv - 1;
 
@@ -182,7 +181,7 @@ public:
       assert (ins[b] != nullptr);
     }
 
-    std::array<std::array<double_x2, n_bands>, blocksize> buffer;
+    std::array<std::array<f64_x2, n_bands>, blocksize> buffer;
 
     uint done = 0;
     while (done < samples) {
@@ -191,7 +190,7 @@ public:
       for (uint b = 0; b < n_bands; ++b) {
         uint in = b * 2;
         for (uint i = 0; i < subblock_size; ++subblock_size) {
-          buffer[i][b] = double_x2 {ins[in][done + i], ins[in + 1][done + i]};
+          buffer[i][b] = f64_x2 {ins[in][done + i], ins[in + 1][done + i]};
         }
       }
 
@@ -223,14 +222,14 @@ private:
       assert (outs[b] != nullptr);
     }
 
-    std::array<std::array<double_x2, n_bands>, blocksize> buffer;
+    std::array<std::array<f64_x2, n_bands>, blocksize> buffer;
 
     uint done = 0;
     while (done < samples) {
       uint subblock_size = std::min (samples - done, blocksize);
 
       for (uint i = 0; i < subblock_size; ++i) {
-        buffer[i] = tick (double_x2 {ins[0][done + i], ins[1][done + i]});
+        buffer[i] = tick (f64_x2 {ins[0][done + i], ins[1][done + i]});
       }
       if constexpr (do_phase_correct) {
         for (uint i = 0; i < subblock_size; ++i) {
@@ -296,12 +295,12 @@ private:
     : decltype (get_n_correctors())::value;
 
   //----------------------------------------------------------------------------
-  alignas (double_x2)
-    std::array<std::array<double_x2, lr::n_coeffs>, n_crossovers> _coeffs;
-  alignas (double_x2)
-    std::array<std::array<double_x2, lr::n_states>, n_crossovers> _states;
-  alignas (double_x2) std::array<
-    std::array<double_x2, lr::n_correction_states>,
+  alignas (
+    f64_x2) std::array<std::array<f64_x2, lr::n_coeffs>, n_crossovers> _coeffs;
+  alignas (
+    f64_x2) std::array<std::array<f64_x2, lr::n_states>, n_crossovers> _states;
+  alignas (f64_x2) std::array<
+    std::array<f64_x2, lr::n_correction_states>,
     n_correctors> _corr_states;
 
   std::array<uint, n_crossovers>                 _order {};

@@ -413,7 +413,7 @@ public:
   {
     assert (factor >= 0.f && factor <= 1.f);
     _ducker.set_speed (
-      vec_set<double_x2> (factor * factor), (float) 1.f / _cfg.src.srate);
+      vec_set<f64_x2> (factor * factor), (float) 1.f / _cfg.src.srate);
   }
   //----------------------------------------------------------------------------
   void set_ducker_threshold (float db)
@@ -785,7 +785,7 @@ private:
           er[i][0] *= _early_gain;
           er[i][1] *= _early_gain;
 
-          auto gain_duck = _ducker.tick (double_x2 {block[i][0], block[i][1]});
+          auto gain_duck = _ducker.tick (f64_x2 {block[i][0], block[i][1]});
 
           block[i][0] = er[i][0];
           block[i][1] = er[i][1];
@@ -1086,10 +1086,10 @@ private:
 // late
 #if ARTV_FDNST8_USE_THIRAN
     for (uint i = 0; i < _late.size(); ++i) {
-      _late[i].reset (mem.cut_head (late_sizes[i]).cast<float_x1>(), 1);
+      _late[i].reset (mem.cut_head (late_sizes[i]).cast<f32_x1>(), 1);
     }
 #else
-    mem = _late.reset<u32> (mem.cast<float>(), late_sizes).cast<float_x1>();
+    mem = _late.reset<u32> (mem.cast<float>(), late_sizes).cast<f32_x1>();
 #endif
     // internal diffusor
     for (uint i = 0; i < int_dif_sizes.size(); ++i) {
@@ -1110,10 +1110,10 @@ private:
   }
   //----------------------------------------------------------------------------
   void allpass_stage_tick (
-    xspan<float>             io,
-    xspan<allpass<float_x1>> ap,
-    xspan<float>             g,
-    xspan<u16>               del_spls)
+    xspan<float>           io,
+    xspan<allpass<f32_x1>> ap,
+    xspan<float>           g,
+    xspan<u16>             del_spls)
   {
     for (uint i = 0; i < io.size(); ++i) {
       io[i] = ap[i].tick (make_vec (io[i]), del_spls[i], make_vec (g[i]))[0];
@@ -1219,12 +1219,12 @@ private:
   uint                                 _pre_delay_lat_spls;
   uint                                 _pre_delay_spls;
 
-  reverb_array<allpass<float_x1>, pre_dif_cfg> _pre_dif;
-  lfo<2>                                       _pre_dif_lfo;
-  float                                        _pre_dif_g;
+  reverb_array<allpass<f32_x1>, pre_dif_cfg> _pre_dif;
+  lfo<2>                                     _pre_dif_lfo;
+  float                                      _pre_dif_g;
 
-  reverb_array<u16, early_cfg>               _early_delay_spls;
-  reverb_array<allpass<float_x1>, early_cfg> _early;
+  reverb_array<u16, early_cfg>             _early_delay_spls;
+  reverb_array<allpass<f32_x1>, early_cfg> _early;
 
   uint                                 _gap_lat_spls;
   uint                                 _gap_spls;
@@ -1239,7 +1239,7 @@ private:
   uint                                    _late_wave = 0;
 
 #if ARTV_FDNST8_USE_THIRAN
-  using delay_line_type = modulable_thiran1_delay_line<float_x1, 2, false>;
+  using delay_line_type = modulable_thiran1_delay_line<f32_x1, 2, false>;
   std::array<delay_line_type, late_cfg::n_channels> _late;
 #else
   using delay_line_type = interpolated_multisized_delay_line<
@@ -1258,14 +1258,14 @@ private:
   float _mod_depth_factor = 0.f;
   float _mod_stereo       = 0.f;
 
-  reverb_array<allpass<float_x1>, internal_dif_cfg> _int_dif;
-  lfo<2>                                            _int_dif_lfo;
+  reverb_array<allpass<f32_x1>, internal_dif_cfg> _int_dif;
+  lfo<2>                                          _int_dif_lfo;
 
-  reverb_array<allpass<float_x1>, internal_dif_cfg> _out_dif;
-  float                                             _out_dif_g;
+  reverb_array<allpass<f32_x1>, internal_dif_cfg> _out_dif;
+  float                                           _out_dif_g;
 
-  std::array<allpass<float_x1>, n_channels> _stereo_allpass;
-  lfo<1>                                    _stereo_lfo;
+  std::array<allpass<f32_x1>, n_channels> _stereo_allpass;
+  lfo<1>                                  _stereo_lfo;
 
   enum { dc_idx, lp_idx };
 
@@ -1275,7 +1275,7 @@ private:
     false>
     _filters;
 
-  ducker<double_x2> _ducker;
+  ducker<f64_x2> _ducker;
 
   float _lf_rt60_factor;
   float _filter_hp_att;
@@ -1288,7 +1288,7 @@ private:
 
   cfg _cfg;
 
-  std::vector<float_x1> _mem;
+  std::vector<f32_x1> _mem;
 
   float _early_size;
   float _seconds;

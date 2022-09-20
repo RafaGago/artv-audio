@@ -76,7 +76,7 @@ private:
   V                                _fb {};
 };
 //------------------------------------------------------------------------------
-class fdn_verb : private add_ducker<double_x2> {
+class fdn_verb : private add_ducker<f64_x2> {
 public:
   static constexpr dsp_types dsp_type  = dsp_types::reverb;
   static constexpr bus_types bus_type  = bus_types::stereo;
@@ -139,7 +139,7 @@ public:
     }
     _density = d;
     for (auto& ap : _ap) {
-      ap.set_gain (vec_set<float_x1> (d));
+      ap.set_gain (vec_set<f32_x1> (d));
     }
   }
 
@@ -435,21 +435,21 @@ private:
 
     auto ptr = _mem.data();
 
-    _mod.reset (xspan {ptr, delay_size}.cast (float_x1 {}), 1);
+    _mod.reset (xspan {ptr, delay_size}.cast (f32_x1 {}), 1);
     ptr += delay_size;
 
     for (uint i = 0; i < _ap.size(); ++i) {
-      _ap[i].reset (xspan {ptr, delay_size}.cast (float_x1 {}));
+      _ap[i].reset (xspan {ptr, delay_size}.cast (f32_x1 {}));
       ptr += delay_size;
     }
 
     for (uint i = 0; i < _hhmatrix.size(); ++i) {
       _hhmatrix[i].reset (
-        xspan {ptr, delay_size * _hhmatrix[i].size}.cast (float_x1 {}));
+        xspan {ptr, delay_size * _hhmatrix[i].size}.cast (f32_x1 {}));
       ptr += delay_size * _hhmatrix[i].size;
     }
 
-    _fb_shift.reset (xspan {ptr, pitch_size}.cast (float_x1 {}));
+    _fb_shift.reset (xspan {ptr, pitch_size}.cast (f32_x1 {}));
     ptr += pitch_size;
 
     _main_shift.reset (xspan {ptr, pitch_size * 2}.cast (vec<float, 2> {}));
@@ -487,18 +487,18 @@ private:
   enum filter_type { filter_lp, filter_hp };
   using filter_types = mp_list<andy::svf_lowpass, andy::svf_highpass>;
 
-  lfo<1>                                                     _lfo;
-  modulable_delay_line<float_x1, linear_interp, false, true> _mod;
+  lfo<1>                                                   _lfo;
+  modulable_delay_line<f32_x1, linear_interp, false, true> _mod;
 
-  std::array<allpass_with_params<float_x1>, ap_size>            _ap;
-  part_classes<filter_types, float_x1>                          _filters;
-  std::array<fdn_verb_householder<float_x1, hh_matrix_size>, 2> _hhmatrix;
-  pitch_shift_sin<float_x1, false>                              _fb_shift;
-  decltype (_fb_shift)::reader                                  _fb_shift_read;
-  pitch_shift_sin<vec<float, 2>, true>                          _main_shift;
-  decltype (_main_shift)::reader _main_shift_read;
+  std::array<allpass_with_params<f32_x1>, ap_size>            _ap;
+  part_classes<filter_types, f32_x1>                          _filters;
+  std::array<fdn_verb_householder<f32_x1, hh_matrix_size>, 2> _hhmatrix;
+  pitch_shift_sin<f32_x1, false>                              _fb_shift;
+  decltype (_fb_shift)::reader                                _fb_shift_read;
+  pitch_shift_sin<vec<float, 2>, true>                        _main_shift;
+  decltype (_main_shift)::reader                              _main_shift_read;
 
-  std::vector<float_x1> _mem;
+  std::vector<f32_x1> _mem;
 
   vec<float, 1> _out_prev;
 

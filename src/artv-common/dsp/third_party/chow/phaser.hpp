@@ -391,14 +391,14 @@ public:
 
     float sr = (float) _plugcontext->get_sample_rate();
 
-    constexpr uint sse_step = vec_traits<float_x4>().size;
+    constexpr uint sse_step = vec_traits<f32_x4>().size;
 
     for (uint i = 0; i < samples; ++i) {
       // block LP parameter smoothing. 4 = SSE float
       for (uint j = 0; j < param_tgt.arr.size(); j += sse_step) {
-        auto spn  = xspan {&_param_state.arr[j], sse_step}.cast (float_x4 {});
-        auto vecv = vec_load<float_x4> (&param_tgt.arr[j]);
-        float_x4 out = smoother::tick (xspan {&_smooth_coeff, 1}, spn, vecv);
+        auto   spn  = xspan {&_param_state.arr[j], sse_step}.cast (f32_x4 {});
+        auto   vecv = vec_load<f32_x4> (&param_tgt.arr[j]);
+        f32_x4 out  = smoother::tick (xspan {&_smooth_coeff, 1}, spn, vecv);
 
         vec_store (&smooth.arr[j], out);
       }

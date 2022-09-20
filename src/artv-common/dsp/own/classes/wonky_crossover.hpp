@@ -55,8 +55,8 @@ public:
     _freq[idx][1] = freq_r;
 
     if (order != 0) {
-      double_x2 f = {freq_l, freq_r};
-      crossv::reset_coeffs<double_x2> (_coeffs[idx], f, _t_spl, order);
+      f64_x2 f = {freq_l, freq_r};
+      crossv::reset_coeffs<f64_x2> (_coeffs[idx], f, _t_spl, order);
     }
 
     if (order == _order[idx]) {
@@ -67,19 +67,19 @@ public:
     memset (&_states[idx], 0, sizeof _states[0]);
   }
   //----------------------------------------------------------------------------
-  std::array<double_x2, n_bands> tick (double_x2 in)
+  std::array<f64_x2, n_bands> tick (f64_x2 in)
   {
     // the lowest band, usually the one with the most energy on audio signals,
     // is the one that doesn't have any wonky response.
-    std::array<double_x2, n_bands> bands {};
-    double_x2                      residue = in;
+    std::array<f64_x2, n_bands> bands {};
+    f64_x2                      residue = in;
 
     for (uint i = 0; i < n_crossovers; ++i) {
       if (_order[i] == 0) {
         continue;
       }
       bands[i]
-        = crossv::tick<double_x2> (_coeffs[i], _states[i], residue, _order[i]);
+        = crossv::tick<f64_x2> (_coeffs[i], _states[i], residue, _order[i]);
       residue -= bands[i];
     }
     bands[n_crossovers] = residue;
@@ -100,14 +100,14 @@ public:
       assert (outs[b] != nullptr);
     }
 
-    std::array<std::array<double_x2, n_bands>, blocksize> buffer;
+    std::array<std::array<f64_x2, n_bands>, blocksize> buffer;
 
     uint done = 0;
     while (done < samples) {
       uint subblock_size = std::min (samples - done, blocksize);
 
       for (uint i = 0; i < subblock_size; ++i) {
-        buffer[i] = tick (double_x2 {ins[0][done + i], ins[1][done + i]});
+        buffer[i] = tick (f64_x2 {ins[0][done + i], ins[1][done + i]});
       }
       for (uint b = 0; b < n_bands; ++b) {
         for (uint i = 0; i < subblock_size; ++i) {
@@ -131,10 +131,10 @@ private:
   static constexpr uint n_crossv_states
     = crossv::n_states_for_order (max_order);
 
-  alignas (double_x2)
-    std::array<std::array<double_x2, n_crossv_coeffs>, n_crossovers> _coeffs;
-  alignas (double_x2)
-    std::array<std::array<double_x2, n_crossv_states>, n_crossovers> _states;
+  alignas (f64_x2)
+    std::array<std::array<f64_x2, n_crossv_coeffs>, n_crossovers> _coeffs;
+  alignas (f64_x2)
+    std::array<std::array<f64_x2, n_crossv_states>, n_crossovers> _states;
 
   std::array<uint, n_crossovers>                 _order {};
   std::array<std::array<float, 2>, n_crossovers> _freq {};

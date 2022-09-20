@@ -70,12 +70,12 @@ public:
     stage_out[n_crossovers - 1] = 0;
 
     // allocate all required memory.
-    _mem.resize (block_mem::n_double_x2 + total_states + total_in + total_out);
+    _mem.resize (block_mem::n_f64_x2 + total_states + total_in + total_out);
 
     // assign the (worst-case) memory ranges
-    double_x2* ptr = _mem.data();
-    _block = reinterpret_cast<block_mem*> (ptr); // TODO: strict alias...
-    ptr += block_mem::n_double_x2;
+    f64_x2* ptr = _mem.data();
+    _block      = reinterpret_cast<block_mem*> (ptr); // TODO: strict alias...
+    ptr += block_mem::n_f64_x2;
 
     for (uint i = 0; i < n_crossovers; ++i) {
       _states[i] = xspan {ptr, stage_state[i]};
@@ -124,8 +124,8 @@ public:
     _freq[idx][1] = freq_r;
 
     if (order != 0) {
-      double_x2 f = {freq_l, freq_r};
-      lp_type::reset_coeffs<double_x2> (_coeffs[idx], f, _t_spl, order);
+      f64_x2 f = {freq_l, freq_r};
+      lp_type::reset_coeffs<f64_x2> (_coeffs[idx], f, _t_spl, order);
     }
 
     if (order == _order[idx]) {
@@ -138,17 +138,17 @@ public:
     memset (_block, 0, sizeof *_block);
   }
   //----------------------------------------------------------------------------
-  std::array<double_x2, n_bands> tick (double_x2 in)
+  std::array<f64_x2, n_bands> tick (f64_x2 in)
   {
-    std::array<double_x2, n_bands> bands {};
-    auto                           hp_out = in;
+    std::array<f64_x2, n_bands> bands {};
+    auto                        hp_out = in;
 
     for (uint c = 0; c < n_crossovers; ++c) {
       if (_order[c] == 0) {
         continue;
       }
 
-      auto lp_out = lp_type::tick<double_x2> (
+      auto lp_out = lp_type::tick<f64_x2> (
         _coeffs[c], _states[c], hp_out, _order[c], _n_stages[c], _sample_idx);
 
       auto delayed_in = _in_delcomp[c].exchange (hp_out);
@@ -181,7 +181,7 @@ public:
 
     // hp always contains the hp residue. The highpass out always sits on the
     // last channel independently on how many bands are activated.
-    double_x2* hp = &_block->bands[n_crossovers][0];
+    f64_x2* hp = &_block->bands[n_crossovers][0];
 
     uint done = 0;
     while (done < samples) {
@@ -189,7 +189,7 @@ public:
 
       // to interleaved in
       for (uint i = 0; i < blocksize; ++i) {
-        hp[i] = double_x2 {ins[0][done + i], ins[1][done + i]};
+        hp[i] = f64_x2 {ins[0][done + i], ins[1][done + i]};
       }
       // process all bands
       for (uint c = 0; c < n_crossovers; ++c) {
@@ -198,7 +198,7 @@ public:
         }
         // process and place non latency compensated lp in band out
         memcpy (&_block->bands[c], hp, blocksize * sizeof hp[0]);
-        lp_type::tick<double_x2> (
+        lp_type::tick<f64_x2> (
           _coeffs[c],
           _states[c],
           xspan {&_block->bands[c][0], blocksize},
@@ -240,10 +240,10 @@ public:
 private:
   //----------------------------------------------------------------------------
   struct block_mem {
-    static constexpr uint block_size  = 64;
-    static constexpr uint n_double_x2 = (block_size * n_bands);
+    static constexpr uint block_size = 64;
+    static constexpr uint n_f64_x2   = (block_size * n_bands);
 
-    std::array<std::array<double_x2, block_size>, n_bands> bands;
+    std::array<std::array<f64_x2, block_size>, n_bands> bands;
   };
   //----------------------------------------------------------------------------
   void recompute_latencies (uint modified_idx)
@@ -282,14 +282,14 @@ private:
   static constexpr uint n_crossv_coeffs = lp_type::get_n_coeffs (max_order);
 
   alignas (sse_bytes)
-    std::array<std::array<double_x2, n_crossv_coeffs>, n_crossovers> _coeffs;
+    std::array<std::array<f64_x2, n_crossv_coeffs>, n_crossovers> _coeffs;
 
-  std::array<xspan<double_x2>, n_crossovers>                    _states;
-  std::array<delay_compensated_buffer<double_x2>, n_crossovers> _in_delcomp;
-  std::array<delay_compensated_buffer<double_x2>, n_crossovers> _out_delcomp;
+  std::array<xspan<f64_x2>, n_crossovers>                    _states;
+  std::array<delay_compensated_buffer<f64_x2>, n_crossovers> _in_delcomp;
+  std::array<delay_compensated_buffer<f64_x2>, n_crossovers> _out_delcomp;
 
-  std::vector<double_x2, overaligned_allocator<double_x2, sse_bytes>> _mem;
-  block_mem*                                                          _block;
+  std::vector<f64_x2, overaligned_allocator<f64_x2, sse_bytes>> _mem;
+  block_mem*                                                    _block;
 
   std::array<uint, n_crossovers>                       _order {};
   std::array<uint, n_crossovers>                       _n_stages;

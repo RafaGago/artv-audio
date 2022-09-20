@@ -138,7 +138,7 @@ public:
     static constexpr uint in  = 0;
     static constexpr uint out = 1;
 
-    std::array<std::array<double_x2, 2>, 32> io;
+    std::array<std::array<f64_x2, 2>, 32> io;
 
     size_t done = 0;
     while (done < samples) {

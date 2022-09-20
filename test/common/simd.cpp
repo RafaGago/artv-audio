@@ -23,7 +23,7 @@ static void simd_check (
 
   for (double i = range_start; i < range_end; i += range_step) {
     double cm  = cmath_func (i);
-    double vec = vec_func (vec_set<double_x2> (i))[0];
+    double vec = vec_func (vec_set<f64_x2> (i))[0];
     double fac = cm / vec;
 
     if ((fac < min || fac > max) && !(cm == 0. && vec == 0.)) {

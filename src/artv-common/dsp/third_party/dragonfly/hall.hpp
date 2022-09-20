@@ -17,7 +17,7 @@
 
 namespace artv { namespace dragonfly {
 
-class hall : private add_ducker<double_x2> {
+class hall : private add_ducker<f64_x2> {
 public:
   //----------------------------------------------------------------------------
   static constexpr dsp_types dsp_type  = dsp_types::reverb;
