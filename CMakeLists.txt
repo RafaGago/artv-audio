@@ -66,6 +66,9 @@ set (CMAKE_CXX_STANDARD 17)
 project (artv-audio VERSION ${VERSION_FULL})
 set (INSTALL_DIR ${CMAKE_BINARY_DIR}/install)
 set (VST3_COPY_DIR vst3-${CMAKE_BUILD_TYPE})
+
+#-------------------------------------------------------------------------------
+set(CMAKE_EXPORT_COMPILE_COMMANDS On)
 #-------------------------------------------------------------------------------
 if (NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND
     NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
