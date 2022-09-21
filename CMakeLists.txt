@@ -217,12 +217,12 @@ add_compile_definitions(
     JUCE_USE_SSE_INTRINSICS=1
     JUCE_DISABLE_CAUTIOUS_PARAMETER_ID_CHECKING=1 # To disable AAX-related asserts
     )
-# Juce 7.0.1
+# Juce 7.0.2
 FetchContent_Declare(
     juce
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-    GIT_TAG        b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0
-    PATCH_COMMAND  git reset --hard b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0 && git apply --whitespace=fix ${JUCE_PATCH}
+    GIT_TAG        965d0ca4be178c4a0000b116d460e15c30311992
+    PATCH_COMMAND  git reset --hard 965d0ca4be178c4a0000b116d460e15c30311992 && git apply --whitespace=fix ${JUCE_PATCH}
     )
 FetchContent_MakeAvailable (juce)
 set (JUCE_REPO ${juce_SOURCE_DIR})
