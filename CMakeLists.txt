@@ -653,8 +653,8 @@ add_executable(
 target_link_libraries (common-test PUBLIC test mufft-all pffft)
 #-- Mix-maxtrix ----------------------------------------------------------------
 set (MIXMAXTRIX_VERSION_MAJOR 1)
-set (MIXMAXTRIX_VERSION_MINOR 8)
-set (MIXMAXTRIX_VERSION_REV 1)
+set (MIXMAXTRIX_VERSION_MINOR 9)
+set (MIXMAXTRIX_VERSION_REV 0)
 set(
     MIXMAXTRIX_VERSION
     "${MIXMAXTRIX_VERSION_MAJOR}.${MIXMAXTRIX_VERSION_MINOR}.${MIXMAXTRIX_VERSION_REV}"
