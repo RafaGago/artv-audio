@@ -546,7 +546,7 @@ private:
       // obtain response for the phaser
       zdf::response<f32_x4> aps_resp {};
       decltype (aps_resp)   aps_resp_prev {};
-      for (uint s = 0; s < (_n_stages - 1); ++s) {
+      for (uint s = 0; s < _n_stages; ++s) {
         aps_resp_prev = aps_resp;
         aps_resp *= _phaser.tick_on_idx (s, zdf::gs_coeffs_tag {});
       };
