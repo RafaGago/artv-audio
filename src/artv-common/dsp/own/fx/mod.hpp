@@ -379,8 +379,8 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  static constexpr uint max_phaser_stages = 22;
-  static constexpr uint max_scho_stages   = 12;
+  static constexpr uint max_phaser_stages = 21;
+  static constexpr uint max_scho_stages   = 11;
   static constexpr uint max_scho_delay_ms = 30;
   static constexpr uint max_chor_delay_ms = 55;
   static constexpr uint max_chor_stages   = 8;
@@ -500,10 +500,8 @@ private:
       *((unsmoothed_parameters*) &pars) = _param;
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        float stages   = 1.f + pars.stages * (max_phaser_stages - 2.000000001f);
-        _n_stages      = (uint) stages;
-        _n_stages_frac = stages - (float) _n_stages;
-        _n_stages += 1; // fractional stage
+        float stages = 1.f + pars.stages * (max_phaser_stages - 1);
+        _n_stages    = (uint) stages;
 
         run_phaser_mod (
           pars.center,
@@ -545,14 +543,9 @@ private:
 
       // obtain response for the phaser
       zdf::response<f32_x4> aps_resp {};
-      decltype (aps_resp)   aps_resp_prev {};
       for (uint s = 0; s < _n_stages; ++s) {
-        aps_resp_prev = aps_resp;
         aps_resp *= _phaser.tick_on_idx (s, zdf::gs_coeffs_tag {});
       };
-      // crossfade the fractional response
-      aps_resp = aps_resp_prev + (aps_resp - aps_resp_prev) * _n_stages_frac;
-
       // obtain response for the filters
       auto filt_resp
         = _fb_filters.tick<fb_filter::locut> (zdf::gs_coeffs_tag {});
@@ -574,7 +567,6 @@ private:
         prev = wet;
         wet  = _phaser.tick_on_idx (s, wet);
       }
-      wet = prev + (wet - prev) * _n_stages_frac;
       // just running the shelves to update the states.
       auto fbv = wet * pars.feedback;
       fbv      = zdf_type::nonlin::tick (
@@ -606,10 +598,8 @@ private:
       *((unsmoothed_parameters*) &pars) = _param;
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        float stages   = 1.f + pars.stages * (max_scho_stages - 2.000000001f);
-        _n_stages      = (uint) stages;
-        _n_stages_frac = stages - (float) _n_stages;
-        _n_stages += 1; // fractional stage
+        float stages = 1.f + pars.stages * (max_scho_stages - 1);
+        _n_stages    = (uint) stages;
 
         run_phaser_mod (
           (1.f - pars.center) / _n_stages, // reverse range lf to hf
@@ -660,7 +650,6 @@ private:
         to_push[s] = r.to_push;
       }
       _scho.push (to_push);
-      wet = prev + (wet - prev) * _n_stages_frac;
 
       auto fb_val = zdf_type::nonlin::tick (
         wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
