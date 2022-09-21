@@ -7413,15 +7413,15 @@ using mod_params = mp_list<
   mod_spread,
   mod_param_a,
   mod_param_b,
+  mod_mode,
   mod_lfo_stereo,
+  mod_lfo_wave,
   mod_feedback,
   mod_drive,
   mod_drive_curve,
   mod_feedback_locut,
   mod_feedback_hicut,
-  mod_lfo_wave,
   mod_lfo_time_base,
-  mod_mode,
   mod_oversampling>;
 //------------------------------------------------------------------------------
 
@@ -7493,7 +7493,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
