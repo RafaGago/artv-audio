@@ -2,7 +2,9 @@
 - Artv Mod: Add modulation effect fixing quirks on the phaser. It has the next
   modes:
   1. 2-pole ZDF phaser.
-  2. Schroeder phaser (reminescent of the Ensoniq DP/4).
+  2. Schroeder phaser (flangerphaser, sometimes reminescent of the Ensoniq DP/4).
+  3. Chorus.
+  4. Flanger.
 - Artv Phaser: Gain compensate "parallel" knob/parameter.
 - Artv Phaser: Gain compensate "delay feedback" knob/parameter.
 - Artv Phaser: Add feedback Lowpass/Hipass.
@@ -17,7 +19,7 @@
   the phaser (for good). Be sure to render old projects.
 - Editor: Comboboxes: Fix arrow buttons behavior when some items are disabled.
   Now disabled items are skipped.
-- Editor: Comboboxes: Wrap around the list.
+- Editor: Comboboxes: Wrap around the list when using the arrows.
 - Editor: Knobs: Add keyboard data entry when pressing the Right mouse button.
 
 1.8.1
