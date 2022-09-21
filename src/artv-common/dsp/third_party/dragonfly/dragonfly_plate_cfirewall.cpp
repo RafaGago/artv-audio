@@ -46,7 +46,7 @@ void plate_compile_firewall::reset (unsigned samplerate)
 
 void plate_compile_firewall::process (
   float**       out,
-  const float** in,
+  float const** in,
   unsigned      samples)
 {
   cast (_dsp)->run (in, out, samples);

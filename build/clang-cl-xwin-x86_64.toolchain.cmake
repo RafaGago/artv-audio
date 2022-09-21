@@ -1,5 +1,5 @@
 
-# sudo apt install lld-142 clang-tools-14
+# sudo apt install lld-15 clang-tools-15
 # cmake -DCMAKE_TOOLCHAIN_FILE=./clang-cl-xwin-x86_64.toolchain.cmake -DCMAKE_BUILD_TYPE=Release -B win-release-build -S .
 
 # Heavy lifting done here, just dumbing down:
@@ -8,7 +8,7 @@
 set (CMAKE_SYSTEM_NAME Windows)
 set (CMAKE_SYSTEM_PROCESSOR x86_64)
 
-set (CLANG_VERSION 14)
+set (CLANG_VERSION 15)
 
 # cross tools
 set (CMAKE_C_COMPILER clang-cl-${CLANG_VERSION})

@@ -2,16 +2,18 @@
 # it's still missing breaking the last parentheses to a new line when splitting
 # parameter lists.
 
-# It is generated for clang-format 10
+# It is generated for clang-format 15
 
 ---
 Language:        Cpp
 AccessModifierOffset: -2
 AlignAfterOpenBracket: AlwaysBreak
-AlignConsecutiveAssignments: true
-AlignConsecutiveDeclarations: true
+AlignConsecutiveAssignments: Consecutive
+AlignConsecutiveBitFields: Consecutive
+AlignConsecutiveDeclarations: Consecutive
+AlignConsecutiveMacros: Consecutive
 AlignEscapedNewlines: DontAlign
-AlignOperands:   false
+AlignOperands: DontAlign
 AlignTrailingComments: false
 AllowAllConstructorInitializersOnNextLine: true
 AllowAllParametersOfDeclarationOnNextLine: false
@@ -79,6 +81,7 @@ IndentCaseLabels: false
 IndentPPDirectives: None
 IndentWidth:     2
 IndentWrappedFunctionNames: false
+LambdaBodyIndentation: Signature
 JavaScriptQuotes: Leave
 JavaScriptWrapImports: true
 KeepEmptyLinesAtTheStartOfBlocks: true
@@ -100,6 +103,7 @@ PenaltyExcessCharacter: 1000000
 PenaltyReturnTypeOnItsOwnLine: 1200
 PenaltyIndentedWhitespace: 1
 PointerAlignment: Left
+QualifierAlignment: Right
 ReflowComments:  true
 SortIncludes:    true
 SortUsingDeclarations: true

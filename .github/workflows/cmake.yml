@@ -32,11 +32,11 @@ jobs:
 
       - name: Install Deps
         run: |
-          echo "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-14 main" | sudo tee -a /etc/apt/sources.list
-          echo "deb-src http://apt.llvm.org/focal/ llvm-toolchain-focal-14 main" | sudo tee -a /etc/apt/sources.list
+          echo "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-15 main" | sudo tee -a /etc/apt/sources.list
+          echo "deb-src http://apt.llvm.org/focal/ llvm-toolchain-focal-15 main" | sudo tee -a /etc/apt/sources.list
           wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
           sudo apt update
-          sudo apt install libasound2-dev libcurl4-openssl-dev libx11-dev libxinerama-dev libxext-dev libfreetype6-dev libwebkit2gtk-4.0-dev libglu1-mesa-dev libjack-jackd2-dev clang-14 clang-tools-14 lld-14
+          sudo apt install libasound2-dev libcurl4-openssl-dev libx11-dev libxinerama-dev libxext-dev libfreetype6-dev libwebkit2gtk-4.0-dev libglu1-mesa-dev libjack-jackd2-dev clang-15 clang-tools-15 lld-15
 
       - name: Get latest CMake
         uses: lukka/get-cmake@latest
@@ -64,7 +64,7 @@ jobs:
       - name: Configure Linux
         # Not using ninja. I don't remember the reason but it wasn't really running parallel builds
         run: |
-          CC=/usr/bin/clang-14 CXX=/usr/bin/clang++-14 cmake -B ${{github.workspace}}/build-linux -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_LV2=Off-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
+          CC=/usr/bin/clang-15 CXX=/usr/bin/clang++-15 cmake -B ${{github.workspace}}/build-linux -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_LV2=Off-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
 
       - name: Build Linux
         run: |

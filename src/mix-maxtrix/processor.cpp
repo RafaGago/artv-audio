@@ -167,7 +167,7 @@ public:
     _non_fx_slider_refreshed.parameterChanged ("", 0.f);
   }
   //----------------------------------------------------------------------------
-  bool isBusesLayoutSupported (const BusesLayout& buses) const override
+  bool isBusesLayoutSupported (BusesLayout const& buses) const override
   {
     using namespace juce;
 
