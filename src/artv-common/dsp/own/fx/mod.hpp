@@ -382,7 +382,7 @@ private:
   static constexpr uint max_phaser_stages = 21;
   static constexpr uint max_scho_stages   = 11;
   static constexpr uint max_scho_delay_ms = 30;
-  static constexpr uint max_chor_delay_ms = 55;
+  static constexpr uint max_chor_delay_ms = 48;
   static constexpr uint max_chor_stages   = 8;
   static constexpr uint max_flan_delay_ms = 21;
   static constexpr uint flan_stages       = 2;
@@ -679,6 +679,8 @@ private:
       *((smoothed_parameters*) &pars)   = _param_smooth.get();
       *((unsmoothed_parameters*) &pars) = _param;
 
+      auto rndlfo = _rnd_lfo.tick_filt_sample_and_hold();
+
       if ((_n_processed_samples & _control_rate_mask) == 0) {
         // stages are in pairs (TODO check)
         float stages
@@ -688,32 +690,36 @@ private:
         _n_stages += 1; // fractional stage
 
         run_phaser_mod (
-          1.f - pars.center, // reverse range lf to hf
+          0.05f * rndlfo[0] + 0.85f - pars.center, // reverse range lf to hf
           pars.spread,
           pars.lfo_depth * (0.5f + 0.5f * pars.center * pars.center),
-          0.45f,
+          0.8f + 0.1f * rndlfo[0],
           _n_stages,
           run_lfo (pars));
 
         for (uint s = 0; s < (_n_stages * 2); ++s) {
-          constexpr float sec_offset = 0.01f;
+          constexpr float sec_offset = 0.009f;
           constexpr float sec_factor
             = ((max_chor_delay_ms - sec_offset) * 0.001f);
 
+          bool  neg             = !!((s / 2) % 2);
           float t               = _mod[s][0];
+          t                     = neg ? 1.f - t : t;
           t                     = _srate * (sec_offset + (t * t * sec_factor));
           _del_spls.target()[s] = t;
           constexpr float g_factor = 0.1f;
           auto            m        = _mod[s][1];
           auto            gv       = pars.feedback;
-          _g.chor[s][0]            = -gv * gv * 0.75f + m * m * g_factor * gv;
+          auto            negf     = neg ? 1.f : -1.f;
+          _g.chor[s][0]            = gv * gv * 0.87f + m * g_factor * gv;
+          _g.chor[s][0] *= neg;
           _rnd_lfo.set_freq (vec_set<4> (0.8f + abs (pars.b)), _t_spl);
 
           // set the phasers (no feeedback)
           auto v = vec_from_array (_mod[s]);
           auto f = v * v;
           auto q = v;
-          f      = ((f * 0.85f) + 0.15f);
+          f      = ((f * (0.45f + 0.3f * rndlfo)) + 0.15f);
           f *= f32_x4 {21200.f, 21200.f, 17000.f, 17000.f};
           q = (1.f + 2.f * q * abs (pars.spread));
           q += 0.09f;
@@ -747,20 +753,24 @@ private:
       constexpr auto kpanl = make_array (0.f, 2.f / 7.f, 1.f / 7.f, 3.f / 7.f);
       static_assert (kpanl.size() == (max_chor_stages / 2));
 
+      auto rndmod = (rndlfo * 0.05f * abs (pars.b)) + 0.95f;
+
       auto panlv = vec_from_array (kpanl);
       // skew towards center based on pars.a
       panlv *= pars.a;
       panlv += (1.f - pars.a) * 0.5f;
       // using -x^2+2x as a cheap approximation of the sin(x*pi/2) pan law.
-      panlv      = -panlv * panlv + 2.f * panlv;
+      panlv = -panlv * panlv + 2.f * panlv;
+      // some randomization
+      panlv *= rndmod;
       auto panrv = 1.f - panlv;
 
       auto panl = vec_to_array (panlv);
       auto panr = vec_to_array (panrv);
 
-      auto rndlfo = _rnd_lfo.tick_filt_sample_and_hold();
-      auto trnd   = vec_to_array (rndlfo * _srate * 0.0005f);
+      auto trnd = vec_to_array (rndlfo * _srate * 0.0005f);
 
+      auto                                prev = wet;
       std::array<f32_x1, max_chor_stages> to_push {};
       for (uint s = 0; s < _n_stages; ++s) {
 
@@ -786,22 +796,19 @@ private:
 
         // TODO: probably run this on its own loop?
         f32_x4 v {l, r, l, r};
-        v = _phaser.tick_on_idx (s, v);
-        //  crossfade / parallel arch
-        v *= ((_n_stages == (s - 1)) ? _n_stages_frac : 1.f);
+        v    = _phaser.tick_on_idx (s, v);
+        prev = wet;
         wet += v;
       }
+      //  crossfade last stage
+      wet = prev + (wet - prev) * _n_stages_frac;
 
       _chor.push (to_push);
 
-      auto rndmod = (rndlfo * 0.05f * abs (pars.b)) + 0.95f;
-      wet *= rndmod;
-
-      // saturation
+      // naive saturation
       wet = zdf_type::nonlin::tick (
         wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve) * rndmod);
       wet = _fb_filters.tick_cascade (wet);
-      wet *= 2.f - rndmod;
 
       // delay dry signal based on b
       f32_x2 dry {ins[0][i], ins[1][i]};
