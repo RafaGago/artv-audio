@@ -379,7 +379,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  static constexpr uint max_phaser_stages = 16;
+  static constexpr uint max_phaser_stages = 22;
   static constexpr uint max_scho_stages   = 12;
   static constexpr uint max_scho_delay_ms = 30;
   static constexpr uint max_chor_delay_ms = 55;
@@ -523,7 +523,7 @@ private:
           auto f = v * v;
 #endif
           auto q = f;
-          f      = ((f * 0.993f) + 0.007f);
+          f      = ((f * 0.99975f) + 0.00025f);
           f *= f32_x4 {21200.f, 21200.f, 20000.f, 20000.f};
           // A lot of freq-dependant weight on the Q when detuning
           q = (1.f + 7.f * q * abs (pars.spread));
@@ -551,8 +551,7 @@ private:
         aps_resp *= _phaser.tick_on_idx (s, zdf::gs_coeffs_tag {});
       };
       // crossfade the fractional response
-      aps_resp
-        = (1.f - _n_stages_frac) * aps_resp_prev + _n_stages_frac * aps_resp;
+      aps_resp = aps_resp_prev + (aps_resp - aps_resp_prev) * _n_stages_frac;
 
       // obtain response for the filters
       auto filt_resp
@@ -575,7 +574,7 @@ private:
         prev = wet;
         wet  = _phaser.tick_on_idx (s, wet);
       }
-      wet = (1.f - _n_stages_frac) * prev + _n_stages_frac * wet;
+      wet = prev + (wet - prev) * _n_stages_frac;
       // just running the shelves to update the states.
       auto fbv = wet * pars.feedback;
       fbv      = zdf_type::nonlin::tick (
@@ -583,7 +582,7 @@ private:
       _fb_filters.tick_cascade (fbv);
 
       auto out = mix (
-        (1.f - _n_stages_frac) * prev + _n_stages_frac * wet,
+        wet,
         f64_x2 {ins[0][i], ins[1][i]},
         pars.depth / get_fb_gain (pars.feedback, pars.drive),
         1.f - pars.depth,
@@ -661,7 +660,7 @@ private:
         to_push[s] = r.to_push;
       }
       _scho.push (to_push);
-      wet = (1.f - _n_stages_frac) * prev + _n_stages_frac * wet;
+      wet = prev + (wet - prev) * _n_stages_frac;
 
       auto fb_val = zdf_type::nonlin::tick (
         wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
