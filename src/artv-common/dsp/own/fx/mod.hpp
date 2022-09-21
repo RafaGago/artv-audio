@@ -28,7 +28,7 @@
 #include "artv-common/misc/simd.hpp"
 #include "artv-common/misc/xspan.hpp"
 
-#define ARTV_MOD_SCHO_TIRAN 1
+#define ARTV_MOD_SCHO_TIRAN     1
 #define ARTV_MOD_CHO_FLAN_TIRAN 1
 
 #define MOD_DBG_DENORMALS 0
@@ -534,6 +534,9 @@ private:
         for (uint s = _n_stages; s < max_phaser_stages; ++s) {
           _phaser.reset_states_on_idx (s);
         }
+        f32_x4 f {450.f, 460.f, 670.f, 680.f};
+        f *= vec_from_array (_mod[0]);
+        _onepole.reset_coeffs<0> (f, _t_spl);
       }
 
       f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
