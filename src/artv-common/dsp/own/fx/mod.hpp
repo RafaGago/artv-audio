@@ -698,15 +698,15 @@ private:
           run_lfo (pars));
 
         for (uint s = 0; s < (_n_stages * 2); ++s) {
-          constexpr float sec_offset = 0.009f;
+          constexpr float msec_offset = 9.f;
           constexpr float sec_factor
-            = ((max_chor_delay_ms - sec_offset) * 0.001f);
+            = ((max_chor_delay_ms - msec_offset) * 0.001f);
 
-          bool  neg             = !!((s / 2) % 2);
-          float t               = _mod[s][0];
-          t                     = neg ? 1.f - t : t;
-          t                     = _srate * (sec_offset + (t * t * sec_factor));
-          _del_spls.target()[s] = t;
+          bool  neg = !!((s / 2) % 2);
+          float t   = _mod[s][0];
+          t         = neg ? 1.f - t : t;
+          t         = _srate * (msec_offset * 0.001f + (t * t * sec_factor));
+          _del_spls.target()[s]    = t;
           constexpr float g_factor = 0.1f;
           auto            m        = _mod[s][1];
           auto            gv       = pars.feedback;
@@ -757,8 +757,9 @@ private:
 
       auto panlv = vec_from_array (kpanl);
       // skew towards center based on pars.a
-      panlv *= pars.a;
-      panlv += (1.f - pars.a) * 0.5f;
+      auto st = pars.lfo_stereo * (1.f / get_parameter (lfo_stereo_tag {}).max);
+      panlv *= st;
+      panlv += (1.f - st) * 0.5f;
       // using -x^2+2x as a cheap approximation of the sin(x*pi/2) pan law.
       panlv = -panlv * panlv + 2.f * panlv;
       // some randomization
@@ -802,7 +803,6 @@ private:
       }
       //  crossfade last stage
       wet = prev + (wet - prev) * _n_stages_frac;
-
       _chor.push (to_push);
 
       // naive saturation
@@ -810,21 +810,23 @@ private:
         wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve) * rndmod);
       wet = _fb_filters.tick_cascade (wet);
 
-      // delay dry signal based on b
+      // delay dry signal based on a
       f32_x2 dry {ins[0][i], ins[1][i]};
       _dry.push (xspan {&dry, 1});
-      constexpr float kdry
-        = 0.001f * std::max (max_dry_delay_ms, max_chor_delay_ms / 2);
-      float n_spls = _srate * (1.f - pars.center) * abs (pars.b) * kdry;
+      constexpr auto ratio
+        = (float) max_chor_delay_ms / (0.01f + (float) (max_dry_delay_ms));
+      float n_spls = del_spls[0] * ratio * pars.a;
       n_spls       = std::clamp (
         n_spls, (float) _dry.min_delay_spls(), (float) _dry.max_delay_spls());
-      dry = _dry.get (n_spls, 0);
+      auto dryz      = _dry.get (n_spls, 0);
+      auto dryz_gain = abs (pars.b) * (float) _n_stages;
+      wet += f32_x4 {dryz[0], dryz[1], dryz[0], dryz[1]} * dryz_gain;
 
       auto out = mix (
         wet,
         f64_x2 {dry[0], dry[1]},
-        pars.depth / (_n_stages_frac + (float) (_n_stages - 1)),
-        1.f - pars.depth,
+        pars.depth / (_n_stages_frac + (float) (_n_stages - 1) + dryz_gain),
+        (1.f - pars.depth),
         pars.b);
 
       outs[0][i] = out[0];
