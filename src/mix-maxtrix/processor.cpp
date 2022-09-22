@@ -607,6 +607,7 @@ private:
     bool has_receives;
     bool has_inputs;
     if (processors[0] == nullptr) {
+      // dsp_class::dsp_type == dsp_types::console
       has_inputs = buffers.template mix<2, s8> (
         _io.mix[channel], xspan {_io.in[channel]});
 
@@ -619,18 +620,23 @@ private:
       }
     }
     else {
+      // mix inputs
       has_inputs = buffers.template mix<2, s8> (
-        _io.mix[channel], xspan {_io.in[channel]}, xspan {processors});
+        _io.mix[channel],
+        xspan {_io.in[channel]},
+        xspan {processors}.get_head (parameters::n_stereo_busses));
 
       if (_io.receives_latency[channel] != 0) {
         dly_compensate_post_input_mix (channel);
       }
       if (_io.receives[channel][0] != 0) {
+        // mix sends
         has_receives = buffers.template mix<2, s8> (
           _io.mix[channel],
           xspan {_io.receives[channel]},
-          xspan {processors},
-          has_inputs);
+          xspan {processors}.get_tail (parameters::console_n_sends),
+          has_inputs,
+          true);
       }
     }
     bool ch0_crossv = channel == 0 && _crossv_type != crossv_off && has_inputs;

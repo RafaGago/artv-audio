@@ -753,8 +753,8 @@ using lin_iir_crossv_params = mp_list<
   lin_iir_crossv_band2_quality,
   lin_iir_crossv_band3_quality>;
 //------------------------------------------------------------------------------
-static constexpr uint console_n_elems
-  = n_stereo_busses + 1 + (crossover_n_bands - 1);
+static constexpr uint console_n_sends = 1 + (crossover_n_bands - 1);
+static constexpr uint console_n_elems = n_stereo_busses + console_n_sends;
 
 using consoles_dsp_type = airwindows::all_consoles<console_n_elems>;
 
@@ -7493,7 +7493,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<

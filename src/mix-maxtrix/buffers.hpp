@@ -234,7 +234,8 @@ public:
     int            dst_bus,
     xspan<const I> mix_buses,
     xspan<P*>      summing_procesors,
-    bool           foce_sum_with_dst = false)
+    bool           foce_sum_with_dst = false,
+    bool           processing_sends  = false)
   {
     static_assert (
       std::is_integral<I>::value && std::is_signed<I>::value
@@ -244,25 +245,30 @@ public:
 
     size_t samples = sample_count();
     uint   mixed   = foce_sum_with_dst ? 1 : 0;
-    // check if dst_bus is in the mix sources, it has to go first before writing
-    // starts.
-    for (uint i = 0; i < mix_buses.size(); ++i) {
-      if (dst_bus == mix_buses[i]) {
-        auto in     = get_read_ptrs<N_bus_chnls> (dst_bus);
-        auto out    = get_write_ptrs<N_bus_chnls> (dst_bus);
-        bool do_sum = mixed > 0;
-        summing_procesors[i]->process (out, in, samples, do_sum);
-        ++mixed;
-        break;
+    if (!processing_sends) {
+      // check if dst_bus is in the mix sources, it has to go first before
+      for (uint i = 0; i < mix_buses.size(); ++i) {
+        if (dst_bus == mix_buses[i]) {
+          auto in     = get_read_ptrs<N_bus_chnls> (dst_bus);
+          auto out    = get_write_ptrs<N_bus_chnls> (dst_bus);
+          bool do_sum = mixed > 0;
+          summing_procesors[i]->process (out, in, samples, do_sum);
+          ++mixed;
+          break;
+        }
       }
     }
-
-    for (uint bus : mix_buses) {
+    for (uint i = 0; i < mix_buses.size(); ++i) {
+      uint bus = mix_buses[i];
       if (bus != 0 && bus != dst_bus) {
         auto out    = get_write_ptrs<N_bus_chnls> (dst_bus);
         auto in     = get_read_ptrs<N_bus_chnls> (bus);
         bool do_sum = mixed > 0;
-        summing_procesors[bus - 1]->process (out, in, samples, do_sum);
+        // sends are fixed-position, can even have negative indexes. Inputs are
+        // always positive.
+        uint idx = processing_sends ? i : bus - 1;
+        assert (bus > 0 || processing_sends);
+        summing_procesors[idx]->process (out, in, samples, do_sum);
         ++mixed;
       }
     }
