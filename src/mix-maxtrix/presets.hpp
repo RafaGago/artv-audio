@@ -1162,36 +1162,16 @@ static constexpr preset presets[] = {
     <PARAM id="in_selection_01" value="1.0" />
     <PARAM id="out_selection_01" value="0.0" />
     <PARAM id="fx_mix_01" value="100.0" />
-    <PARAM id="fx_mix_02" value="5.770000457763672" />
-    <PARAM id="fx_type_01" value="25.0" />
+    <PARAM id="fx_mix_02" value="8.40000057220459" />
+    <PARAM id="fx_type_01" value="52.0" />
     <PARAM id="fx_type_02" value="51.0" />
-    <PARAM id="in_selection_02" value="0.0" />
-    <PARAM id="in_selection_03" value="1.0" />
     <PARAM id="mixer_sends" value="1.0" />
     <PARAM id="out_selection_02" value="1.0" />
-    <PARAM id="out_selection_03" value="1.0" />
     <PARAM id="wet_balance_02" value="0.0" />
-    <PARAM id="myphaser_feedback_01" value="99.60000610351562" />
-    <PARAM id="myphaser_high_freq_01" value="82.19224548339844" />
-    <PARAM id="myphaser_lfo_depth_01" value="100.0" />
-    <PARAM id="myphaser_lfo_rate_01" value="-70.22529602050781" />
-    <PARAM id="myphaser_lfo_stereo_01" value="31.60000038146973" />
-    <PARAM id="myphaser_lfo_wave_01" value="1.0" />
-    <PARAM id="myphaser_low_freq_01" value="68.08266448974609" />
-    <PARAM id="myphaser_q_01" value="0.02099999971687794" />
-    <PARAM id="myphaser_stages_01" value="5.0" />
-    <PARAM id="myphaser_stages_mode_01" value="8.0" />
-    <PARAM id="myphaser_parallel_mix_01" value="80.0" />
-    <PARAM id="myphaser_topology_01" value="1.0" />
-    <PARAM id="myphaser_delay_feedback_01" value="-33.86000061035156" />
-    <PARAM id="myphaser_delay_time_01" value="43.20000076293945" />
-    <PARAM id="myphaser_delay_lfo_01" value="-73.59999847412109" />
-    <PARAM id="myphaser_feedback_hp_01" value="50.8" />
-    <PARAM id="myphaser_feedback_lp_01" value="38.4" />
     <PARAM id="diffuse_delay_damp_02" value="0.0" />
     <PARAM id="diffuse_delay_desync_02" value="64.79999542236328" />
     <PARAM id="diffuse_delay_diffusion_02" value="10.0" />
-    <PARAM id="diffuse_delay_feedback_02" value="32.53000259399414" />
+    <PARAM id="diffuse_delay_feedback_02" value="25.33000183105469" />
     <PARAM id="diffuse_delay_freq_spread_02" value="84.0" />
     <PARAM id="diffuse_delay_hipass_02" value="43.0" />
     <PARAM id="diffuse_delay_mod_depth_02" value="1.209999918937683" />
@@ -1201,12 +1181,20 @@ static constexpr preset presets[] = {
     <PARAM id="diffuse_delay_transients_02" value="-64.80000305175781" />
     <PARAM id="diffuse_delay_mod_freq_02" value="0.1410000026226044" />
     <PARAM id="diffuse_delay_mod_mode_02" value="2.0" />
-    <PARAM id="channel_modifs_02" value="0.0" />
-    <PARAM id="channel_modifs_03" value="1.0" />
-    <PARAM id="fx_mix_03" value="100.0" />
-    <PARAM id="fx_type_03" value="0.0" />
-    <PARAM id="global_volume" value="0.0" />
-    <gui_data bus1_text="Pass -&gt;" bus2_text="Wet" bus3_text="Dry" bus4_text="-" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
+    <PARAM id="mod_center_01" value="64.40000152587891" />
+    <PARAM id="mod_depth_01" value="29.6150016784668" />
+    <PARAM id="mod_drive_01" value="20.39999961853027" />
+    <PARAM id="mod_feedback_01" value="62.0" />
+    <PARAM id="mod_lfo_depth_01" value="100.0" />
+    <PARAM id="mod_lfo_rate_01" value="80.60000610351562" />
+    <PARAM id="mod_lfo_stereo_01" value="25.89999961853027" />
+    <PARAM id="mod_lfo_wave_01" value="1.0" />
+    <PARAM id="mod_mode_01" value="1.0" />
+    <PARAM id="mod_param_a_01" value="13.80000019073486" />
+    <PARAM id="mod_param_b_01" value="76.0" />
+    <PARAM id="mod_spread_01" value="85.60000610351562" />
+    <PARAM id="mod_stages_01" value="28.60000228881836" />
+    <gui_data bus1_text="Phaser;" bus2_text="Delay" bus3_text="-" bus4_text="-" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
 </params>
      )END"},
 };
