@@ -478,7 +478,7 @@ private:
     slider.setDoubleClickReturnValue (true, ps.getDoubleClickReturnValue());
     slider.setSkewFactor (ps.getSkewFactor(), ps.isSymmetricSkew());
     slider.addListener (this);
-    slider.valueFromTextFunction = [=] (const juce::String& v) {
+    slider.valueFromTextFunction = [=] (juce::String const& v) {
       return _paramslider.getValueFromText (v);
     };
     slider.textFromValueFunction
@@ -580,19 +580,18 @@ struct combobox_ext
     prev.setButtonText ("<");
     prev.setName (juce::String {text} + " Prev");
     prev.onClick = [this] {
-      int id = combo.getSelectedItemIndex() - 1;
-      // wraparound.
-      if (id < 0) {
-        id = combo.getNumItems();
-      }
-      while (id >= 0) {
-        if (!combo.isItemEnabled (id + 1)) {
-          --id;
+      int idx = combo.getSelectedItemIndex() - 1;
+      do {
+        if (idx < 0) {
+          idx = combo.getNumItems() - 1;
+        }
+        if (!combo.isItemEnabled (combo.getItemId (idx))) {
+          --idx;
           continue;
         }
-        combo.setSelectedItemIndex (id);
+        combo.setSelectedItemIndex (idx);
         break;
-      }
+      } while (combo.getSelectedItemIndex() != idx);
     };
     prev_next_grid_width_factor (0.f);
     parent.addAndMakeVisible (prev);
@@ -601,19 +600,18 @@ struct combobox_ext
     next.setButtonText (">");
     next.setName (juce::String {text} + " Next");
     next.onClick = [this] {
-      int id = combo.getSelectedItemIndex() + 1;
-      // wraparound.
-      if (id == combo.getNumItems()) {
-        id = 0;
-      }
-      while (id < combo.getNumItems()) {
-        if (!combo.isItemEnabled (id + 1)) {
-          ++id;
+      int idx = combo.getSelectedItemIndex() + 1;
+      do {
+        if (idx == combo.getNumItems()) {
+          idx = 0;
+        }
+        if (!combo.isItemEnabled (combo.getItemId (idx))) {
+          ++idx;
           continue;
         }
-        combo.setSelectedItemIndex (id);
+        combo.setSelectedItemIndex (idx);
         break;
-      }
+      } while (combo.getSelectedItemIndex() != idx);
     };
     next.setConnectedEdges (juce::TextButton::ConnectedOnLeft);
     parent.addAndMakeVisible (next);
@@ -950,7 +948,7 @@ public:
 
   // in the current state moving or copying invalidates the base, easy to fix
   // if required
-  toggle_buttons (const toggle_buttons&)            = delete;
+  toggle_buttons (toggle_buttons const&)            = delete;
   toggle_buttons& operator= (toggle_buttons const&) = delete;
   toggle_buttons (toggle_buttons&&)                 = delete;
   toggle_buttons& operator= (toggle_buttons&&)      = delete;

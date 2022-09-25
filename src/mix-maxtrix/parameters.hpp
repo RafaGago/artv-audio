@@ -7493,7 +7493,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
@@ -7503,7 +7503,7 @@ using all_fx_typelists = mp_list<
   mod_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "1. Mod");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "Mod");
 #else
 // clang-format off
 using all_fx_typelists = mp_list<

@@ -423,7 +423,7 @@ public:
       on_routing_change();
     }
 
-    // crossover only available on channel 0
+    // crossovers only available on channel 0
     constexpr uint crossv_id = mp11::mp_find<
       parameters::all_fx_typelists,
       parameters::lr_crossv_params>::value;
