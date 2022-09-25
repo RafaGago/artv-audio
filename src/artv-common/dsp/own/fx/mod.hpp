@@ -527,6 +527,7 @@ private:
           q = (1.f + 7.f * q * abs (pars.spread));
           q *= pars.a * pars.a * f32_x4 {3.4f, 3.4f, 3.8f, 3.8f};
           q += 0.05f;
+          q *= 1.f + (_n_stages) * (1.3f / max_phaser_stages);
           _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
         }
         for (uint s = _n_stages; s < max_phaser_stages; ++s) {
@@ -562,10 +563,8 @@ private:
 
       // Run regular filter processing
       assert (_n_stages > 0);
-      f32_x4 prev;
       for (uint s = 0; s < _n_stages; ++s) {
-        prev = wet;
-        wet  = _phaser.tick_on_idx (s, wet);
+        wet = _phaser.tick_on_idx (s, wet);
       }
       // just running the shelves to update the states.
       auto fbv = wet * pars.feedback;
@@ -615,13 +614,18 @@ private:
             constexpr float sec_factor = (max_scho_delay_ms * 0.001f);
             float           t          = _mod[s][j];
             t                          = _srate * (t * t * sec_factor);
-            _del_spls.target()[idx]    = t;
-            constexpr float min_g      = 0.0001f;
-            constexpr float g_factor   = 0.15 - min_g;
+            t                          = std::clamp (
+              t,
+              (float) _scho.min_delay_spls(),
+              (float) _scho.max_delay_spls());
+            _del_spls.target()[idx]  = t;
+            constexpr float min_g    = 0.0001f;
+            constexpr float g_factor = 0.1 - min_g;
             f32_x2          v = (j == 0) ? f32_x2 {_mod[s][0], _mod[s][2]}
                                          : f32_x2 {_mod[s][1], _mod[s][3]};
+            v                 = v * v;
             _g.scho[idx]
-              = min_g + pars.a * pars.a * 0.8f + v * v * g_factor * pars.a;
+              = min_g + pars.a * pars.a * 0.85f + v * g_factor * pars.a;
           }
         }
         for (uint s = (_n_stages * 2); s < _del_spls.target().size(); ++s) {
@@ -644,12 +648,8 @@ private:
       auto&                               del_spls = _del_spls.get();
       for (uint s = 0; s < _n_stages; ++s) {
         for (uint c = 0; c < n_channels; ++c) {
-          uint idx    = s * 2 + c;
-          auto n_spls = std::clamp (
-            del_spls[idx],
-            (float) _scho.min_delay_spls(),
-            (float) _scho.max_delay_spls());
-          auto yn      = _scho.get (n_spls, idx);
+          uint idx     = s * 2 + c;
+          auto yn      = _scho.get (del_spls[idx], idx);
           auto r       = allpass_fn::tick<f32_x2> (sig[c], yn, _g.scho[idx]);
           sig[c]       = r.out;
           to_push[idx] = r.to_push;
@@ -867,8 +867,10 @@ private:
           static_assert (flan_stages == 2, "this loop assumes s < 2");
           constexpr float sec_factor = (max_flan_delay_ms * 0.001f);
 
-          float t                  = _mod[0][s];
-          t                        = _srate * (t * t * sec_factor);
+          float t = _mod[0][s];
+          t       = _srate * (t * t * sec_factor);
+          t       = std::clamp (
+            t, (float) _flan.min_delay_spls(), (float) _flan.max_delay_spls());
           _del_spls.target()[s]    = t;
           constexpr float g_factor = 0.1f;
           auto            m        = _mod[0][2 + s];
@@ -895,11 +897,7 @@ private:
 
       std::array<f32_x2, flan_stages> to_push {};
       for (uint s = 0; s < flan_stages; ++s) {
-        auto n_spls = std::clamp (
-          del_spls[s],
-          (float) _flan.min_delay_spls(),
-          (float) _flan.max_delay_spls());
-        auto yn    = _flan.get (n_spls, s);
+        auto yn    = _flan.get (del_spls[s], s);
         auto r     = allpass_fn::tick<f32_x2> (flan_in[s], yn, _g.flan[s]);
         to_push[s] = r.to_push;
         wet[0 + s] = r.out[0];
@@ -973,7 +971,7 @@ private:
     dry_size      = _dry.n_required_elems (dry_size + 1, n_channels);
 
     using T_mem = decltype (_mem)::value_type;
-#if !ARTV_MOD_SCHO_TIRAN
+#if !ARTV_MOD_CHO_FLAN_TIRAN
     using T_sinc = decltype (_sinc_co)::value_type;
 #endif
     using T_scho = decltype (_scho)::value_type;
@@ -990,14 +988,14 @@ private:
     max_size      = std::max (max_size, flan_size + dry_size);
 
     _mem.clear();
-#if !ARTV_MOD_SCHO_TIRAN
+#if !ARTV_MOD_CHO_FLAN_TIRAN
     _mem.resize (sinc_t::n_coeffs + max_size);
 #else
     _mem.resize (max_size);
 #endif
 
     auto mem = xspan {_mem};
-#if !ARTV_MOD_SCHO_TIRAN
+#if !ARTV_MOD_CHO_FLAN_TIRAN
     static_assert (std::is_same_v<T_sinc, T_mem>);
     // overaligned to 128, so the tables aren't on cache line boundaries
     _sinc_co = mem.cut_head (sinc_t::n_coeffs);
@@ -1007,7 +1005,7 @@ private:
     _mem_chor = mem.get_head (chor_size).cast<T_chor>();
     _mem_flan = mem.get_head (flan_size).cast<T_flan>();
 
-#if !ARTV_MOD_SCHO_TIRAN
+#if !ARTV_MOD_CHO_FLAN_TIRAN
     // initialize windowed sinc table
     sinc_t::reset_coeffs (_sinc_co, 0.45f, 140.f);
 #endif
@@ -1064,7 +1062,7 @@ private:
 #else
   interpolated_delay_line<f32_x2, linear_interp, true, false> _scho;
 #endif
-#if ARTV_MOD_SCHO_TIRAN
+#if ARTV_MOD_CHO_FLAN_TIRAN
   modulable_thiran1_delay_line<f32_x1, 4, true, false> _chor;
   modulable_thiran1_delay_line<f32_x2, 4, true, false> _dry;
   modulable_thiran1_delay_line<f32_x2, 4, true, false> _flan;
@@ -1101,7 +1099,7 @@ private:
   float          _srate;
   float          _lp_smooth_coeff;
   float          _beat_hz;
-#if !ARTV_MOD_SCHO_TIRAN
+#if !ARTV_MOD_CHO_FLAN_TIRAN
   xspan<float> _sinc_co;
 #endif
   xspan<f32_x2> _mem_dry;
