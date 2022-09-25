@@ -62,7 +62,7 @@ public:
 
   static constexpr auto get_parameter (lfo_rate_tag)
   {
-    return float_param ("%", 0., 100., 25., 0.001);
+    return float_param ("%", 0., 100., 75., 0.001);
   }
   //----------------------------------------------------------------------------
   struct lfo_time_base_tag {};
@@ -87,7 +87,7 @@ public:
   //----------------------------------------------------------------------------
   static constexpr auto get_parameter (lfo_depth_tag)
   {
-    return float_param ("%", 0., 100., 25., 0.001);
+    return float_param ("%", 0., 100., 50., 0.001);
   }
   //----------------------------------------------------------------------------
   struct lfo_wave_tag {};
@@ -143,7 +143,7 @@ public:
 
   static constexpr auto get_parameter (feedback_tag)
   {
-    return float_param ("%", -100., 100., 50., 0.1);
+    return float_param ("%", -100., 100., 70., 0.1);
   }
   //----------------------------------------------------------------------------
   struct feedback_locut_tag {};
@@ -380,7 +380,7 @@ public:
 private:
   //----------------------------------------------------------------------------
   static constexpr uint max_phaser_stages = 21;
-  static constexpr uint max_scho_stages   = 11;
+  static constexpr uint max_scho_stages   = 22;
   static constexpr uint max_scho_delay_ms = 30;
   static constexpr uint max_chor_delay_ms = 48;
   static constexpr uint max_chor_stages   = 8;
@@ -598,11 +598,11 @@ private:
       *((unsmoothed_parameters*) &pars) = _param;
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        float stages = 1.f + pars.stages * (max_scho_stages - 1);
-        _n_stages    = (uint) stages;
+        float stages = 2.f + pars.stages * (max_scho_stages - 2);
+        _n_stages    = ((uint) stages) / 2;
 
         run_phaser_mod (
-          (1.f - pars.center) / _n_stages, // reverse range lf to hf
+          (1.f - pars.center) / _n_stages,
           pars.spread,
           pars.lfo_depth,
           0.45f,
@@ -610,17 +610,21 @@ private:
           run_lfo (pars));
 
         for (uint s = 0; s < _n_stages; ++s) {
-          constexpr float sec_factor = (max_scho_delay_ms * 0.001f);
-          f32_x4          v          = vec_from_array (_mod[s]);
-          float           t          = v[0];
-          t                          = _srate * (t * t * sec_factor);
-          _del_spls.target()[s]      = t;
-          constexpr float min_g      = 0.0001f;
-          constexpr float g_factor   = 0.15 - min_g;
-          _g.scho[s]
-            = min_g + pars.a * pars.a * 0.8f + v * v * g_factor * pars.a;
+          for (uint j = 0; j < 2; ++j) {
+            uint            idx        = s * 2 + j;
+            constexpr float sec_factor = (max_scho_delay_ms * 0.001f);
+            float           t          = _mod[s][j];
+            t                          = _srate * (t * t * sec_factor);
+            _del_spls.target()[idx]    = t;
+            constexpr float min_g      = 0.0001f;
+            constexpr float g_factor   = 0.15 - min_g;
+            f32_x2          v = (j == 0) ? f32_x2 {_mod[s][0], _mod[s][2]}
+                                         : f32_x2 {_mod[s][1], _mod[s][3]};
+            _g.scho[idx]
+              = min_g + pars.a * pars.a * 0.8f + v * v * g_factor * pars.a;
+          }
         }
-        for (uint s = _n_stages; s < _del_spls.target().size(); ++s) {
+        for (uint s = (_n_stages * 2); s < _del_spls.target().size(); ++s) {
           _del_spls.target()[s] = _del_spls.target()[s - 1];
         }
         f32_x4 fv {1460.f, 1460.f, 1670.f, 1780.f};
@@ -635,21 +639,24 @@ private:
       wet = _onepole.tick<0> (wet);
       wet -= _1spl_fb * pars.feedback;
 
-      std::array<f32_x4, max_scho_stages> to_push {};
+      std::array<f32_x2, 2> sig {{{wet[0], wet[2]}, {wet[1], wet[3]}}};
+      std::array<f32_x2, max_scho_stages> to_push {};
       auto&                               del_spls = _del_spls.get();
-      f32_x4                              prev;
       for (uint s = 0; s < _n_stages; ++s) {
-        auto n_spls = std::clamp (
-          del_spls[s],
-          (float) _scho.min_delay_spls(),
-          (float) _scho.max_delay_spls());
-        auto yn    = _scho.get (n_spls, s);
-        auto r     = allpass_fn::tick<f32_x4> (wet, yn, _g.scho[s]);
-        prev       = wet;
-        wet        = r.out;
-        to_push[s] = r.to_push;
+        for (uint c = 0; c < n_channels; ++c) {
+          uint idx    = s * 2 + c;
+          auto n_spls = std::clamp (
+            del_spls[idx],
+            (float) _scho.min_delay_spls(),
+            (float) _scho.max_delay_spls());
+          auto yn      = _scho.get (n_spls, idx);
+          auto r       = allpass_fn::tick<f32_x2> (sig[c], yn, _g.scho[idx]);
+          sig[c]       = r.out;
+          to_push[idx] = r.to_push;
+        }
       }
       _scho.push (to_push);
+      wet = vec_shuffle (sig[0], sig[1], 0, 2, 1, 3);
 
       auto fb_val = zdf_type::nonlin::tick (
         wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
@@ -1053,9 +1060,9 @@ private:
   part_classes<filters_list, f32_x4>                        _fb_filters;
   part_classes<mp_list<onepole_allpass>, f32_x4>            _onepole;
 #if ARTV_MOD_SCHO_TIRAN
-  modulable_thiran1_delay_line<f32_x4, 4, false, false> _scho {};
+  modulable_thiran1_delay_line<f32_x2, 4, false, false> _scho {};
 #else
-  interpolated_delay_line<f32_x4, linear_interp, true, false> _scho;
+  interpolated_delay_line<f32_x2, linear_interp, true, false> _scho;
 #endif
 #if ARTV_MOD_SCHO_TIRAN
   modulable_thiran1_delay_line<f32_x1, 4, false, false> _chor;
@@ -1071,7 +1078,7 @@ private:
     std::array<float, std::max (max_scho_stages, max_chor_stages)>>
     _del_spls;
   union {
-    std::array<f32_x4, max_scho_stages> scho;
+    std::array<f32_x2, max_scho_stages> scho;
     std::array<f32_x1, max_chor_stages> chor;
     std::array<f32_x2, flan_stages>     flan;
   } _g;
@@ -1100,7 +1107,7 @@ private:
   xspan<f32_x2> _mem_dry;
   xspan<f32_x1> _mem_chor;
   xspan<f32_x2> _mem_flan;
-  xspan<f32_x4> _mem_scho;
+  xspan<f32_x2> _mem_scho;
 };
 //------------------------------------------------------------------------------
 } // namespace artv
