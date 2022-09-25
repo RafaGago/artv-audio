@@ -233,29 +233,27 @@ public:
   bool mix (
     int            dst_bus,
     xspan<const I> mix_buses,
-    xspan<P*>      summing_procesors,
-    bool           foce_sum_with_dst = false,
-    bool           processing_sends  = false)
+    xspan<P*>      adders,
+    bool           dst_has_valid_data          = false,
+    bool           adder_idx_is_mix_bus_offset = false)
   {
     static_assert (
       std::is_integral<I>::value && std::is_signed<I>::value
         && std::numeric_limits<I>::max() <= std::numeric_limits<int>::max(),
       "Invalid input array type");
-    assert (summing_procesors.size() >= mix_buses.size());
+    assert (adders.size() >= mix_buses.size());
 
     size_t samples = sample_count();
-    uint   mixed   = foce_sum_with_dst ? 1 : 0;
-    if (!processing_sends) {
-      // check if dst_bus is in the mix sources, it has to go first before
-      for (uint i = 0; i < mix_buses.size(); ++i) {
-        if (dst_bus == mix_buses[i]) {
-          auto in     = get_read_ptrs<N_bus_chnls> (dst_bus);
-          auto out    = get_write_ptrs<N_bus_chnls> (dst_bus);
-          bool do_sum = mixed > 0;
-          summing_procesors[i]->process (out, in, samples, do_sum);
-          ++mixed;
-          break;
-        }
+    uint   mixed   = dst_has_valid_data ? 1 : 0;
+    // check if dst_bus is in the mix sources, it has to go first before
+    for (uint i = 0; i < mix_buses.size(); ++i) {
+      if (dst_bus == mix_buses[i]) {
+        auto in     = get_read_ptrs<N_bus_chnls> (dst_bus);
+        auto out    = get_write_ptrs<N_bus_chnls> (dst_bus);
+        bool do_sum = mixed > 0;
+        adders[i]->process (out, in, samples, do_sum);
+        ++mixed;
+        break;
       }
     }
     for (uint i = 0; i < mix_buses.size(); ++i) {
@@ -266,9 +264,9 @@ public:
         bool do_sum = mixed > 0;
         // sends are fixed-position, can even have negative indexes. Inputs are
         // always positive.
-        uint idx = processing_sends ? i : bus - 1;
-        assert (bus > 0 || processing_sends);
-        summing_procesors[idx]->process (out, in, samples, do_sum);
+        uint idx = adder_idx_is_mix_bus_offset ? i : bus - 1;
+        assert (bus > 0 || adder_idx_is_mix_bus_offset);
+        adders[idx]->process (out, in, samples, do_sum);
         ++mixed;
       }
     }
