@@ -1060,18 +1060,18 @@ private:
   part_classes<filters_list, f32_x4>                        _fb_filters;
   part_classes<mp_list<onepole_allpass>, f32_x4>            _onepole;
 #if ARTV_MOD_SCHO_TIRAN
-  modulable_thiran1_delay_line<f32_x2, 4, false, false> _scho {};
+  modulable_thiran1_delay_line<f32_x2, 4, true, false> _scho {};
 #else
   interpolated_delay_line<f32_x2, linear_interp, true, false> _scho;
 #endif
 #if ARTV_MOD_SCHO_TIRAN
-  modulable_thiran1_delay_line<f32_x1, 4, false, false> _chor;
-  modulable_thiran1_delay_line<f32_x2, 4, false, false> _dry;
-  modulable_thiran1_delay_line<f32_x2, 4, false, false> _flan;
+  modulable_thiran1_delay_line<f32_x1, 4, true, false> _chor;
+  modulable_thiran1_delay_line<f32_x2, 4, true, false> _dry;
+  modulable_thiran1_delay_line<f32_x2, 4, true, false> _flan;
 #else
-  interpolated_delay_line<f32_x1, sinc_t, false, false, true> _chor;
-  interpolated_delay_line<f32_x2, sinc_t, false, false, true> _dry;
-  interpolated_delay_line<f32_x2, sinc_t, false, false, true> _flan;
+  interpolated_delay_line<f32_x1, sinc_t, true, false, true> _chor;
+  interpolated_delay_line<f32_x2, sinc_t, true, false, true> _dry;
+  interpolated_delay_line<f32_x2, sinc_t, true, false, true> _flan;
 #endif
   value_smoother<
     float,
