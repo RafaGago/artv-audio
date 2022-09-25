@@ -860,20 +860,20 @@ private:
           pars.spread,
           pars.lfo_depth,
           0.45f,
-          _n_stages,
+          1, // flanger is always one stage
           run_lfo (pars));
 
         for (uint s = 0; s < flan_stages; ++s) {
+          static_assert (flan_stages == 2, "this loop assumes s < 2");
           constexpr float sec_factor = (max_flan_delay_ms * 0.001f);
 
-          float t                  = _mod[s][0];
+          float t                  = _mod[0][s];
           t                        = _srate * (t * t * sec_factor);
           _del_spls.target()[s]    = t;
           constexpr float g_factor = 0.1f;
-          auto            m        = _mod[s][1];
+          auto            m        = _mod[0][2 + s];
           auto            gv       = pars.stages;
           _g.flan[s][0]            = -gv * gv * 0.75f + m * m * g_factor * gv;
-          //_rnd_lfo.set_freq (vec_set<4> (0.3f + pars.a * 1.f), _t_spl);
         }
         for (uint s = flan_stages; s < _del_spls.target().size(); ++s) {
           _del_spls.target()[s] = _del_spls.target()[s - 1];
