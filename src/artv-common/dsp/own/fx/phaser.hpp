@@ -349,38 +349,18 @@ public:
     _allpass2p.reset_states_cascade();
     _feedback_shelf.reset_states_cascade();
     _feedback_delay_shelf.reset_states_cascade();
+    _dc_blocker.reset_states();
     _lfos.reset();
     _pars_smooth.reset (_t_spl, 1.f / 0.01f);
 
-    auto& ptarget = _pars_smooth.target();
-
-    ptarget.freq_lo         = get_parameter (low_freq_tag {}).defaultv;
-    ptarget.freq_hi         = get_parameter (high_freq_tag {}).defaultv;
-    ptarget.lfo_stereo      = get_parameter (lfo_stereo_tag {}).defaultv;
-    ptarget.lfo_depth       = get_parameter (lfo_depth_tag {}).defaultv;
-    ptarget.lfo_start_phase = get_parameter (lfo_start_phase_tag {}).defaultv;
-    ptarget.feedback        = get_parameter (feedback_tag {}).defaultv;
-    ptarget.q               = get_parameter (q_tag {}).defaultv;
-    ptarget.delay_spls      = 0.f;
-    ptarget.delay_feedback  = 0.f;
-    ptarget.delay_lfo       = 0.f;
-    ptarget.lfo_last        = 0.f;
-    ptarget.feedback_hp     = get_parameter (feedback_hp_tag {}).defaultv;
-    ptarget.feedback_hp     = get_parameter (feedback_lp_tag {}).defaultv;
-    ptarget.feedback_sat    = get_parameter (feedback_sat_tag {}).defaultv;
-    ptarget.parallel_mix    = get_parameter (parallel_mix_tag {}).defaultv;
-
-    _pars.lfo_hz_user = get_parameter (lfo_rate_tag {}).defaultv;
-    _pars.lfo_eights  = get_parameter (lfo_rate_sync_tag {}).defaultv;
-    _pars.lfo_wave    = get_parameter (lfo_wave_tag {}).defaultv;
-    _pars.n_stages    = get_parameter (stages_tag {}).defaultv;
-    _pars.mode        = get_parameter (stages_mode_tag {}).defaultv;
-
+    // ensure that all parameter's new values will be different
+    mp11::mp_for_each<parameters> ([&] (auto type) {
+      set (type, get_parameter (type).defaultv);
+    });
     _pars_smooth.set_all_from_target();
 
     refresh_lfo_hz();
 
-    _dc_blocker.reset_states();
     _dc_blocker.reset_coeffs (vec_set<4> (2.f), _t_spl);
 
     _n_processed_samples = 0;
@@ -482,6 +462,7 @@ public:
     parallel_mix_tag,
     delay_feedback_tag,
     feedback_hp_tag,
+    feedback_lp_tag,
     feedback_sat_tag,
     delay_time_tag,
     delay_lfo_tag>;
