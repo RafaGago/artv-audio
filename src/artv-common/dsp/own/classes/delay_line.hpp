@@ -266,7 +266,7 @@ public:
     return t._z[pos * t._n_channels + chnl];
   }
   //----------------------------------------------------------------------------
-  constexpr void push (const xspan<value_type> row)
+  constexpr void push (xspan<value_type> const row)
   {
     auto& t = *this;
 
@@ -309,7 +309,7 @@ public:
     return t._z[pos * t._n_channels + chnl];
   }
   //----------------------------------------------------------------------------
-  constexpr void push (const xspan<value_type> row)
+  constexpr void push (xspan<value_type> const row)
   {
     auto& t = *this;
 
@@ -352,7 +352,7 @@ public:
     return t._z[chmem + pos];
   }
   //----------------------------------------------------------------------------
-  constexpr void push (const xspan<value_type> row)
+  constexpr void push (xspan<value_type> const row)
   {
     auto& t = *this;
 
@@ -397,7 +397,7 @@ public:
     return t._z[chmem + pos];
   }
   //----------------------------------------------------------------------------
-  constexpr void push (const xspan<value_type> row)
+  constexpr void push (xspan<value_type> const row)
   {
     auto& t = *this;
 
@@ -500,7 +500,8 @@ public:
         n_cut += storage::size_st_padded * n_channels;
       }
       _mem = mem.template cast<builtin_type>().cut_head (n_cut);
-      mem  = mem.template cast<builtin_type>()
+      xspan_memset (_mem, 0);
+      mem = mem.template cast<builtin_type>()
               .advanced (n_cut)
               .template cast<value_type>();
     }
@@ -762,6 +763,7 @@ public:
     else {
       _delay_spls = mem.cut_head (n_channels);
     }
+    xspan_memset (_delay_spls, 0);
     base::reset (mem, n_channels);
   }
   //----------------------------------------------------------------------------
@@ -1307,7 +1309,7 @@ public:
   //----------------------------------------------------------------------------
   T get (time_type sample, uint channel) { return _z.get (sample, channel); }
   //----------------------------------------------------------------------------
-  void push (const xspan<T> x) { _z.push (x); }
+  void push (xspan<T> const x) { _z.push (x); }
   //----------------------------------------------------------------------------
   uint size() const { return _z.size(); }
   //----------------------------------------------------------------------------
@@ -1352,7 +1354,7 @@ public:
     return mem; // return the remainder
   }
   //----------------------------------------------------------------------------
-  constexpr void push (const xspan<value_type> row)
+  constexpr void push (xspan<value_type> const row)
   {
     assert (row.size() >= n_channels);
     ++_pos;
@@ -1410,7 +1412,7 @@ public:
     return mem; // return the remainder
   }
   //----------------------------------------------------------------------------
-  constexpr void push (const xspan<value_type> row)
+  constexpr void push (xspan<value_type> const row)
   {
     assert (row.size() >= n_channels);
     for (uint i = 0; i < n_channels; ++i) {

@@ -240,30 +240,18 @@ public:
     if (v == _param.mode) {
       return;
     }
-    _param.mode = v;
     switch (v) {
     case mode::zdf:
       break;
     case mode::schroeder:
+      [[fallthrough]];
+    case mode::schroeder_nested:
       using TS = decltype (_scho)::value_type;
       _scho.reset (_mem_scho, max_scho_stages);
 #if ARTV_MOD_SCHO_TIRAN
       _scho.set_resync_delta (10.0);
 #endif
       break;
-    case mode::chorus: {
-      _chor.reset (_mem_chor, max_chor_stages);
-      _dry.reset (_mem_dry, 1);
-#if ARTV_MOD_CHO_FLAN_TIRAN
-      _chor.set_resync_delta (10.0);
-      _dry.set_resync_delta (10.0);
-#else
-      // pass the shared sinc interpolator coefficients
-      _chor.reset_interpolator (0, false, _sinc_co.to_const());
-      _dry.reset_interpolator (0, false, _sinc_co.to_const());
-#endif
-      break;
-    }
     case mode::flanger: {
       _flan.reset (_mem_flan, flan_stages);
       _dry.reset (_mem_dry, 1);
@@ -278,15 +266,36 @@ public:
       _n_stages = flan_stages;
       break;
     }
+    case mode::chorus: {
+      _chor.reset (_mem_chor, max_chor_stages);
+      _dry.reset (_mem_dry, 1);
+#if ARTV_MOD_CHO_FLAN_TIRAN
+      _chor.set_resync_delta (10.0);
+      _dry.set_resync_delta (10.0);
+#else
+      // pass the shared sinc interpolator coefficients
+      _chor.reset_interpolator (0, false, _sinc_co.to_const());
+      _dry.reset_interpolator (0, false, _sinc_co.to_const());
+#endif
+      break;
+    }
     default:
       assert (false);
       break;
     }
+    if (_param.mode == mode::chorus) {
+      // avoid high delay_spls values on change
+      for (auto& v : _del_spls.target()) {
+        v = 20.f;
+      }
+      _del_spls.set_all_from_target();
+    }
     _1spl_fb             = vec_set<4> (0.f);
     _n_processed_samples = 0; // trigger the control block on first sample
+    _param.mode          = v;
   }
   struct mode {
-    enum { zdf, schroeder, chorus, flanger };
+    enum { zdf, schroeder, schroeder_nested, flanger, chorus };
   };
 
   static constexpr auto get_parameter (mode_tag)
@@ -294,7 +303,11 @@ public:
     return choice_param (
       0,
       make_cstr_array (
-        "Phaser (ZDF)", "Phaser (Schroeder)", "Chorus", "Flanger"),
+        "Phaser (ZDF)",
+        "Phaser/Flanger",
+        "Phaser/Flanger 2",
+        "Flanger",
+        "Chorus"),
       16);
   }
   //----------------------------------------------------------------------------
@@ -344,13 +357,16 @@ public:
       tick_phaser<T> (outs, ins, samples);
       break;
     case mode::schroeder:
-      tick_schroeder<T> (outs, ins, samples);
+      tick_schroeder<T, false> (outs, ins, samples);
       break;
-    case mode::chorus:
-      tick_chorus<T> (outs, ins, samples);
+    case mode::schroeder_nested:
+      tick_schroeder<T, true> (outs, ins, samples);
       break;
     case mode::flanger:
       tick_flanger<T> (outs, ins, samples);
+      break;
+    case mode::chorus:
+      tick_chorus<T> (outs, ins, samples);
       break;
     default:
       assert (false);
@@ -583,7 +599,7 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  template <class T>
+  template <class T, bool nested>
   void tick_schroeder (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
     assert (outs.size() >= (n_outputs * (uint) bus_type));
@@ -604,7 +620,7 @@ private:
           (1.f - pars.center) / _n_stages,
           pars.spread,
           pars.lfo_depth,
-          0.45f,
+          0.55f,
           _n_stages,
           run_lfo (pars));
 
@@ -618,14 +634,14 @@ private:
               t,
               (float) _scho.min_delay_spls(),
               (float) _scho.max_delay_spls());
-            _del_spls.target()[idx]  = t;
-            constexpr float min_g    = 0.0001f;
-            constexpr float g_factor = 0.1 - min_g;
-            f32_x2          v = (j == 0) ? f32_x2 {_mod[s][0], _mod[s][2]}
-                                         : f32_x2 {_mod[s][1], _mod[s][3]};
-            v                 = v * v;
-            _g.scho[idx]
-              = min_g + pars.a * pars.a * 0.85f + v * g_factor * pars.a;
+            _del_spls.target()[idx] = t;
+            f32_x2          v       = (j == 0) ? f32_x2 {_mod[s][1], _mod[s][3]}
+                                               : f32_x2 {_mod[s][0], _mod[s][2]};
+            constexpr float min_g   = 0.0001f;
+            auto            g       = pars.a * 0.88f + min_g;
+            // gain mod
+            v            = (1.f - g) * (v - 0.5f) * 1.8f * pars.b * pars.b;
+            _g.scho[idx] = g + v;
           }
         }
         for (uint s = (_n_stages * 2); s < _del_spls.target().size(); ++s) {
@@ -646,14 +662,40 @@ private:
       std::array<f32_x2, 2> sig {{{wet[0], wet[2]}, {wet[1], wet[3]}}};
       std::array<f32_x2, max_scho_stages> to_push {};
       auto&                               del_spls = _del_spls.get();
-      for (uint s = 0; s < _n_stages; ++s) {
-        for (uint c = 0; c < n_channels; ++c) {
-          uint idx     = s * 2 + c;
-          auto yn      = _scho.get (del_spls[idx], idx);
-          auto r       = allpass_fn::tick<f32_x2> (sig[c], yn, _g.scho[idx]);
-          sig[c]       = r.out;
-          to_push[idx] = r.to_push;
+      if constexpr (!nested) {
+        for (uint s = 0; s < _n_stages; ++s) {
+          for (uint c = 0; c < n_channels; ++c) {
+            uint idx     = s * 2 + c;
+            auto yn      = _scho.get (del_spls[idx], idx);
+            auto r       = allpass_fn::tick<f32_x2> (sig[c], yn, _g.scho[idx]);
+            sig[c]       = r.out;
+            to_push[idx] = r.to_push;
+          }
         }
+      }
+      else {
+        // Nested, as e.g. a lattice
+        std::array<f32_x2, 2> fwd {};
+        for (uint c = 0; c < n_channels; ++c) {
+          uint idx = c;
+          auto yn  = _scho.get (del_spls[idx], idx);
+
+          fwd[c] = sig[c] + yn * -_g.scho[idx];
+          sig[c] = yn + fwd[c] * _g.scho[idx];
+        }
+        for (uint s = 1; s < _n_stages; ++s) {
+          for (uint c = 0; c < n_channels; ++c) {
+            uint idx = s * 2 + c;
+            auto yn  = _scho.get (del_spls[idx], idx);
+
+            fwd[c] += yn * -_g.scho[idx];
+            to_push[idx - 2] = yn + fwd[c] * _g.scho[idx];
+          }
+        }
+        to_push[(_n_stages * 2) - 2] = fwd[0];
+        to_push[(_n_stages * 2) - 1] = fwd[1];
+        sig[0]                       = -sig[0];
+        sig[1]                       = -sig[1];
       }
       _scho.push (to_push);
       wet = vec_shuffle (sig[0], sig[1], 0, 2, 1, 3);
@@ -667,7 +709,7 @@ private:
         f64_x2 {ins[0][i], ins[1][i]},
         pars.depth / get_fb_gain (pars.feedback, pars.drive),
         1.f - pars.depth,
-        pars.b);
+        1.f);
       outs[0][i] = out[0];
       outs[1][i] = out[1];
     }
