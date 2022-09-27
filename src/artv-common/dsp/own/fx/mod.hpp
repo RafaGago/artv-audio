@@ -303,11 +303,7 @@ public:
     return choice_param (
       0,
       make_cstr_array (
-        "Phaser (ZDF)",
-        "Phaser/Flanger",
-        "Phaser/Flanger 2",
-        "Flanger",
-        "Chorus"),
+        "Phaser (ZDF)", "PhaserFlanger", "FlangerPhaser", "Flanger", "Chorus"),
       16);
   }
   //----------------------------------------------------------------------------
@@ -531,8 +527,11 @@ private:
           f32_x4 v = vec_from_array (_mod[s]);
 #if 0
           // cheap'ish parametric curve
-          constexpr float k = 0.8f; // TODO curve: k = parameter
-          auto            f = ((-1.f + v) / (1.f - k * v)) + 1.f;
+          // constexpr float k =  0.8f;
+          float k = (0.5f * pars.b + 0.5f);
+          k -= 1.f;
+          k      = 1.f - k * k;
+          auto f = ((-1.f + v) / (1.f - k * v)) + 1.f;
 #else
           auto f = v * v;
 #endif
@@ -540,10 +539,10 @@ private:
           f      = ((f * 0.99975f) + 0.00025f);
           f *= f32_x4 {21200.f, 21200.f, 20000.f, 20000.f};
           // A lot of freq-dependant weight on the Q when detuning
-          q = (1.f + 7.f * q * abs (pars.spread));
-          q *= pars.a * pars.a * f32_x4 {3.4f, 3.4f, 3.8f, 3.8f};
-          q += 0.05f;
-          q *= 1.f + (_n_stages) * (1.3f / max_phaser_stages);
+          q = (1.f + 3.f * q * abs (pars.spread));
+          q *= pars.a * pars.a * f32_x4 {1.2f, 1.2f, 1.8f, 1.8f};
+          q += 0.007f;
+          q *= 1.f + (_n_stages) * (1.1f / max_phaser_stages);
           _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
         }
         for (uint s = _n_stages; s < max_phaser_stages; ++s) {
@@ -615,7 +614,6 @@ private:
       if ((_n_processed_samples & _control_rate_mask) == 0) {
         float stages = 2.f + pars.stages * (max_scho_stages - 2);
         _n_stages    = ((uint) stages) / 2;
-
         run_phaser_mod (
           (1.f - pars.center) / _n_stages,
           pars.spread,
@@ -680,16 +678,16 @@ private:
           uint idx = c;
           auto yn  = _scho.get (del_spls[idx], idx);
 
-          fwd[c] = sig[c] + yn * -_g.scho[idx];
-          sig[c] = yn + fwd[c] * _g.scho[idx];
+          fwd[c] = sig[c] + yn * _g.scho[idx];
+          sig[c] = yn + fwd[c] * -_g.scho[idx];
         }
         for (uint s = 1; s < _n_stages; ++s) {
           for (uint c = 0; c < n_channels; ++c) {
             uint idx = s * 2 + c;
             auto yn  = _scho.get (del_spls[idx], idx);
 
-            fwd[c] += yn * -_g.scho[idx];
-            to_push[idx - 2] = yn + fwd[c] * _g.scho[idx];
+            fwd[c] += yn * _g.scho[idx];
+            to_push[idx - 2] = yn + fwd[c] * -_g.scho[idx];
           }
         }
         to_push[(_n_stages * 2) - 2] = fwd[0];
