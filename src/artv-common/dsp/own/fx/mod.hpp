@@ -78,6 +78,17 @@ public:
       0, make_cstr_array ("Free", "1/4 beat=10%", "2 beats=10%"), 16);
   }
   //----------------------------------------------------------------------------
+  struct lfo_warp_tag {};
+  void set (lfo_warp_tag, int v)
+  {
+    _param_smooth.target().lfo_warp = 0.5f - v * 0.01f * 0.5f;
+  }
+
+  static constexpr auto get_parameter (lfo_warp_tag)
+  {
+    return float_param ("%", -100., 100., 0., 0.01);
+  }
+  //----------------------------------------------------------------------------
   struct lfo_depth_tag {};
   void set (lfo_depth_tag, float v)
   {
@@ -375,6 +386,7 @@ public:
     lfo_rate_tag,
     lfo_time_base_tag,
     lfo_depth_tag,
+    lfo_warp_tag,
     lfo_wave_tag,
     lfo_stereo_tag,
     center_tag,
@@ -525,23 +537,14 @@ private:
 
         for (uint s = 0; s < _n_stages; ++s) {
           f32_x4 v = vec_from_array (_mod[s]);
-#if 0
-          // cheap'ish parametric curve
-          // constexpr float k =  0.8f;
-          float k = (0.5f * pars.b + 0.5f);
-          k -= 1.f;
-          k      = 1.f - k * k;
-          auto f = ((-1.f + v) / (1.f - k * v)) + 1.f;
-#else
-          auto f = v * v;
-#endif
-          auto q = f;
-          f      = ((f * 0.99975f) + 0.00025f);
+          auto   f = lfo_freq_warp (v, 1.f - pars.lfo_warp);
+          auto   q = f;
+          f        = ((f * 0.9995f) + 0.0005f);
           f *= f32_x4 {21200.f, 21200.f, 20000.f, 20000.f};
           // A lot of freq-dependant weight on the Q when detuning
           q = (1.f + 3.f * q * abs (pars.spread));
-          q *= pars.a * pars.a * f32_x4 {1.2f, 1.2f, 1.8f, 1.8f};
-          q += 0.007f;
+          q *= pars.a * pars.a * f32_x4 {1.f, 1.f, 1.6f, 1.6f};
+          q += 0.015f;
           q *= 1.f + (_n_stages) * (1.1f / max_phaser_stages);
           _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
         }
@@ -627,7 +630,8 @@ private:
             uint            idx        = s * 2 + j;
             constexpr float sec_factor = (max_scho_delay_ms * 0.001f);
             float           t          = _mod[s][j];
-            t                          = _srate * (t * t * sec_factor);
+            t                          = lfo_time_warp (t, pars.lfo_warp);
+            t                          = _srate * t * sec_factor;
             t                          = std::clamp (
               t,
               (float) _scho.min_delay_spls(),
@@ -751,8 +755,9 @@ private:
 
           bool  neg = !!((s / 2) % 2);
           float t   = _mod[s][0];
+          t         = lfo_time_warp (t, pars.lfo_warp);
           t         = neg ? 1.f - t : t;
-          t         = _srate * (msec_offset * 0.001f + (t * t * sec_factor));
+          t         = _srate * (msec_offset * 0.001f + (t * sec_factor));
           _del_spls.target()[s]    = t;
           constexpr float g_factor = 0.1f;
           auto            m        = _mod[s][1];
@@ -857,7 +862,7 @@ private:
         wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve) * rndmod);
       wet = _fb_filters.tick_cascade (wet);
 
-      // delay dry signal based on a
+      // delay dry signal based
       f32_x2 dry {ins[0][i], ins[1][i]};
       _dry.push (xspan {&dry, 1});
       constexpr auto ratio
@@ -908,7 +913,8 @@ private:
           constexpr float sec_factor = (max_flan_delay_ms * 0.001f);
 
           float t = _mod[0][s];
-          t       = _srate * (t * t * sec_factor);
+          t       = lfo_time_warp (t, pars.lfo_warp);
+          t       = _srate * t * sec_factor;
           t       = std::clamp (
             t, (float) _flan.min_delay_spls(), (float) _flan.max_delay_spls());
           _del_spls.target()[s]    = t;
@@ -1050,6 +1056,64 @@ private:
     sinc_t::reset_coeffs (_sinc_co, 0.45f, 140.f);
 #endif
   }
+//----------------------------------------------------------------------------
+#if 0
+// from linear to  cubic.
+  template <class T>
+  static T lfo_freq_warp (T v, float warp)
+  {
+    return (1.f - warp) * v + warp * v * v * v;
+  }
+
+  //----------------------------------------------------------------------------
+  // from cubic to inverse cubic.  0.5 warp = crosses 0.5,0.5 but snakey.
+  template <class T>
+  static T lfo_freq_warp (T v, float warp)
+  {
+    auto v1   = v * v * v;
+    auto vm12 = v - 1.f;
+    auto v2   = vm12 * vm12 * vm12 + 1.f;
+
+    return (1.f - warp) * v2 + warp * v1;
+  }
+    //----------------------------------------------------------------------------
+  // from squared to inverse squared. 0.5 warp = linear
+  template <class T>
+  static T lfo_freq_warp (T v, float warp)
+  {
+    auto v1   = v * v;
+    auto vm12 = v - 1.f;
+    auto v2   = 1.f - vm12 * vm12;
+
+    return (1.f - warp) * v2 + warp * v1;
+  }
+    //----------------------------------------------------------------------------
+  // from quadractic to inverse squared. 0.5 warp = crosses 0.5,0.5 but snakey.
+  template <class T>
+  static T lfo_freq_warp (T v, float warp)
+  {
+    auto v1   = v * v * v * v;
+    auto vm12 = v - 1.f;
+    auto v2   = 1.f - vm12 * vm12;
+
+    return (1.f - warp) * v2 + warp * v1;
+  }
+#endif
+  //----------------------------------------------------------------------------
+  // from linear to cubic.
+  template <class T>
+  static T lfo_freq_warp (T v, float warp)
+  {
+    return (1.f - warp) * v * v * v + warp * v;
+  }
+  //----------------------------------------------------------------------------
+  // from linear to cubic. but weighted towards the cubic side
+  template <class T>
+  static T lfo_time_warp (T v, float warp)
+  {
+    warp *= warp;
+    return (1.f - warp) * v * v * v + warp * v;
+  }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
     u32   lfo_wave;
@@ -1063,6 +1127,7 @@ private:
   struct smoothed_parameters {
     float lfo_rate;
     float lfo_depth;
+    float lfo_warp;
     float lfo_stereo;
     float center;
     float a;
