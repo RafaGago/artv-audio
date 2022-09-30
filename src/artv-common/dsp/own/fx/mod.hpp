@@ -349,6 +349,7 @@ public:
     using phase = decltype (_rnd_lfo)::phase_type;
     _rnd_lfo.set_phase (phase {phase::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
     _rnd_lfo.set_freq (vec_set<4> (0.3f), _t_spl);
+    _tremolo_lfo.reset();
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -406,7 +407,7 @@ private:
   static constexpr uint max_phaser_stages = 21;
   static constexpr uint max_scho_stages   = 22;
   static constexpr uint max_scho_delay_ms = 30;
-  static constexpr uint max_chor_delay_ms = 48;
+  static constexpr uint max_chor_delay_ms = 55;
   static constexpr uint max_chor_stages   = 8;
   static constexpr uint max_flan_delay_ms = 21;
   static constexpr uint flan_stages       = 2;
@@ -442,6 +443,7 @@ private:
     }
 
     _sweep_lfo.set_freq (vec_set<2> (hz), _lfo_t_spl);
+    _tremolo_lfo.set_freq (vec_set<4> (hz), _t_spl);
     auto stereo_ph
       = phase<1> {phase_tag::degrees {}, pars.lfo_stereo}.get_raw (0);
     if (!pars.lfo_off) {
@@ -449,6 +451,11 @@ private:
       auto ph = _sweep_lfo.get_phase();
       ph.set_raw (ph.get_raw (0) + stereo_ph, 1);
       _sweep_lfo.set_phase (ph);
+      auto tph = _tremolo_lfo.get_phase();
+      tph.set_raw (tph.get_raw (0) + stereo_ph, 1);
+      tph.set_raw (tph.get_raw (0), 2);
+      tph.set_raw (tph.get_raw (1), 3);
+      _tremolo_lfo.set_phase (tph);
     }
     else {
       auto start_ph = phase<n_channels> {phase_tag::degrees {}, 0.f, 0.f};
@@ -749,7 +756,7 @@ private:
           run_lfo (pars));
 
         for (uint s = 0; s < (_n_stages * 2); ++s) {
-          constexpr float msec_offset = 9.f;
+          constexpr float msec_offset = 15.f;
           constexpr float sec_factor
             = ((max_chor_delay_ms - msec_offset) * 0.001f);
 
@@ -808,7 +815,6 @@ private:
       auto rndmod = (rndlfo * 0.05f * abs (pars.b)) + 0.95f;
 
       auto panlv = vec_from_array (kpanl);
-      // skew towards center based on pars.a
       auto st = pars.lfo_stereo * (1.f / get_parameter (lfo_stereo_tag {}).max);
       panlv *= st;
       panlv += (1.f - st) * 0.5f;
@@ -862,22 +868,26 @@ private:
         wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve) * rndmod);
       wet = _fb_filters.tick_cascade (wet);
 
-      // delay dry signal based
+      auto tremolo = _tremolo_lfo.tick_sine() * pars.feedback;
+      wet *= 1.f - tremolo;
+
+      // dry feedforward signal based
       f32_x2 dry {ins[0][i], ins[1][i]};
       _dry.push (xspan {&dry, 1});
       constexpr auto ratio
-        = (float) max_chor_delay_ms / (0.01f + (float) (max_dry_delay_ms));
+        = (float) max_chor_delay_ms / (0.015f + (float) (max_dry_delay_ms));
       float n_spls = del_spls[0] * ratio * pars.a;
       n_spls       = std::clamp (
         n_spls, (float) _dry.min_delay_spls(), (float) _dry.max_delay_spls());
-      auto dryz      = _dry.get (n_spls, 0);
-      auto dryz_gain = abs (pars.b) * (float) _n_stages;
-      wet += f32_x4 {dryz[0], dryz[1], dryz[0], dryz[1]} * dryz_gain;
+      auto ffwd      = _dry.get (n_spls, 0);
+      auto ffwd_gain = abs (pars.b) * (float) _n_stages;
+      auto ffwd4     = f32_x4 {ffwd[0], ffwd[1], ffwd[0], ffwd[1]} * ffwd_gain;
+      wet += ffwd4;
 
       auto out = mix (
         wet,
         f64_x2 {dry[0], dry[1]},
-        pars.depth / (_n_stages_frac + (float) (_n_stages - 1) + dryz_gain),
+        pars.depth / (_n_stages_frac + (float) (_n_stages - 1) + ffwd_gain),
         (1.f - pars.depth),
         pars.b);
 
@@ -1194,6 +1204,7 @@ private:
   std::vector<float, overaligned_allocator<float, 128>> _mem;
   sweep_lfo_type _sweep_lfo; // 0 = L, 1 = R, control rate
   lfo<4>         _rnd_lfo; // 0 = L, 1 = R, audio rate
+  lfo<4>         _tremolo_lfo; // 0 = L, 1 = R, audio rate
   f32_x4         _1spl_fb;
   uint           _n_processed_samples;
   uint           _control_rate_mask;
