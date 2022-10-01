@@ -70,7 +70,7 @@ static constexpr auto int_param (
 // options passed to the widget
 template <size_t N>
 struct choice_parameter : public int_parameter_ext<> {
-  using choices_type = std::array<const char*, N>;
+  using choices_type = std::array<char const*, N>;
 
   constexpr choice_parameter (
     int                 defaultv,
@@ -86,10 +86,22 @@ struct choice_parameter : public int_parameter_ext<> {
   bool         alphabetically_sorted; // only available on for comboboxes
 };
 
+namespace detail {
+template <class T>
+struct is_choice : public std::false_type {};
+
+template <size_t N>
+struct is_choice<choice_parameter<N>> : public std::true_type {};
+
+} // namespace detail
+
+template <class T>
+static constexpr bool is_choice = detail::is_choice<T>::value;
+
 template <size_t N>
 static constexpr choice_parameter<N> choice_param (
   int                               defaultv,
-  std::array<const char*, N> const& choices,
+  std::array<char const*, N> const& choices,
   uint                              total_future_choices = 0,
   bool                              sorted               = false) // if 0 == N
 {
@@ -101,7 +113,7 @@ static constexpr choice_parameter<N> choice_param (
 // -----------------------------------------------------------------------------
 template <size_t N>
 struct toggle_buttons_parameter : public int_parameter_ext<> {
-  using texts_type = std::array<const char*, N>;
+  using texts_type = std::array<char const*, N>;
 
   // fixed at 23-bit, so they can be expanded without breaking past
   // automation/presets
@@ -129,7 +141,7 @@ struct toggle_buttons_parameter : public int_parameter_ext<> {
 template <size_t N>
 static constexpr toggle_buttons_parameter<N> toggle_buttons_param (
   int                               defaultv,
-  std::array<const char*, N> const& texts,
+  std::array<char const*, N> const& texts,
   uint                              parameter_range_bits = 0)
 {
   // assert (range_bits <= 23); // can't be constexpr...

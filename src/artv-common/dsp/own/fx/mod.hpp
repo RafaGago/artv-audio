@@ -336,12 +336,12 @@ public:
     _param_smooth.reset (_t_spl, 10.f);
     _del_spls.reset (_t_spl, 10.f);
 
-    // ensure that all parameter's new values will be different
-    memset (&_param, -1, sizeof _param);
-    memset (&_param_smooth.target(), -1, sizeof _param_smooth.target());
-
-    mp11::mp_for_each<parameters> ([&] (auto type) {
-      set (type, get_parameter (type).defaultv);
+    mp11::mp_for_each<parameters> ([&] (auto param) {
+      set (param, get_parameter (param).min);
+      if constexpr (!is_choice<decltype (get_parameter (param))>) {
+        set (param, get_parameter (param).max); // max might be not yet impl.
+      }
+      set (param, get_parameter (param).defaultv);
     });
     _param_smooth.set_all_from_target();
 
