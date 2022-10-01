@@ -747,11 +747,12 @@ private:
         _n_stages_frac = stages - (float) _n_stages;
         _n_stages += 1; // fractional stage
 
+        float ratefact = pars.lfo_rate * 0.01f;
         run_phaser_mod (
           0.05f * rndlfo[0] + 0.85f - pars.center, // reverse range lf to hf
           pars.spread,
-          pars.lfo_depth * (0.5f + 0.5f * pars.center * pars.center),
-          0.8f + 0.1f * rndlfo[0],
+          pars.lfo_depth * (0.45f + 0.2f * pars.center + 0.25f * ratefact),
+          0.3f + 0.1f * rndlfo[0] + 0.5f * pars.center,
           _n_stages,
           run_lfo (pars));
 
@@ -768,7 +769,7 @@ private:
           _del_spls.target()[s]    = t;
           constexpr float g_factor = 0.1f;
           auto            m        = _mod[s][1];
-          auto            gv       = pars.feedback;
+          auto            gv       = pars.b;
           auto            negf     = neg ? 1.f : -1.f;
           _g.chor[s][0]            = gv * gv * 0.87f + m * g_factor * gv;
           _g.chor[s][0] *= neg;
@@ -790,13 +791,12 @@ private:
         f32_x4 fv {460.f, 460.f, 970.f, 980.f};
         auto   f = vec_from_array (_mod[_n_stages / 2]);
         f *= f;
-        f *= (1.f + pars.feedback) * fv;
+        f *= (1.f + pars.b) * fv;
         _onepole.reset_coeffs<0> (f, _t_spl);
       }
       // create some difference on the inputs
       f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
       wet = _onepole.tick<0> (wet);
-      wet -= _1spl_fb * pars.feedback;
 
       _del_spls.tick();
       auto& del_spls = _del_spls.get();
@@ -868,7 +868,7 @@ private:
         wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve) * rndmod);
       wet = _fb_filters.tick_cascade (wet);
 
-      auto tremolo = _tremolo_lfo.tick_sine() * pars.feedback;
+      auto tremolo = _tremolo_lfo.tick_sine() * pars.b;
       wet *= 1.f - tremolo;
 
       // dry feedforward signal based
@@ -880,7 +880,7 @@ private:
       n_spls       = std::clamp (
         n_spls, (float) _dry.min_delay_spls(), (float) _dry.max_delay_spls());
       auto ffwd      = _dry.get (n_spls, 0);
-      auto ffwd_gain = abs (pars.b) * (float) _n_stages;
+      auto ffwd_gain = abs (pars.feedback) * (float) _n_stages;
       auto ffwd4     = f32_x4 {ffwd[0], ffwd[1], ffwd[0], ffwd[1]} * ffwd_gain;
       wet += ffwd4;
 
