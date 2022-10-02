@@ -972,3 +972,22 @@ function get_zdf_sqrt_sigmoid_before_fb_junction_pp(
   u;
 );
 //------------------------------------------------------------------------------
+// Algo 1
+// https://cytomic.com/files/dsp/DynamicSmoothing.pdf
+function cytomic_smooth1_init (freq, sensitivity, srate)
+  local (wc, gc) global() (
+  gc = tan ($pi * freq / srate);
+  this.g0 = 2 * gc / (1 + gc);
+  this.s = sensitivity * 4;
+);
+
+function cytomic_smooth1_tick(in)
+  local (z1, z2, bandz, g) global() (
+  z1 = this.z1;
+  z2 = this.z2;
+  bandz = z1 - z2;
+  g = min (this.g0 + this.s * abs (bandz), 1);
+  this.z1 = z1 + g * (in - z1);
+  this.z2 = z2 + g * (this.z1 - z2);
+);
+//------------------------------------------------------------------------------

@@ -9,6 +9,9 @@ slider10:lfo_freq=0.25<0, 1, 0.001>Lfo Freq(%)
 slider11:lfo_depth=0.85<0, 1, 0.001>Lfo Depth(%)
 slider12:lfo_phase_diff=0<0, 1, 0.001>Lfo St Diff(%)
 
+slider14:env_depth=0<-1, 1, 0.001>Env Depth(%)
+slider15:env_speed=0<0, 1, 0.001>Env Speed(%)
+
 slider20:feedback=0.9<-1, 1, 0.001>Feedback(%)
 slider21:hp=0.05<0, 1, 0.001>Feedback HP(%)
 slider22:lp=0.1<0, 1, 0.001>Feedback LP(%)
@@ -32,6 +35,7 @@ out_pin:right output
 import _delay-line.jsfx-inc
 import _lfo.jsfx-inc
 import _filters.jsfx-inc
+import _dynamics.jsfx-inc
 
 @init
 
@@ -62,8 +66,7 @@ r_dc.tpt_1p_reset (20., srate);
 function get_coeffs_ws(
   f_ptr,
   q_ptr,
-  lfo,
-  lfo_depth,
+  modv,
   n_stages,
   f_center,
   f_mode,
@@ -76,7 +79,7 @@ function get_coeffs_ws(
   modlim = min (f_center, 0.5);
   modlim = min (1 - f_center, modlim);
 
-  mod = lfo * lfo_depth * modlim;
+  mod = modv * modlim;
 
   f = f_center + mod;
   p = f_mode;
@@ -183,17 +186,42 @@ lim_hardness = 1 / sqrt (hardness);
 g_hardness = (fb_scaled > lim_hardness) ? fb_scaled / lim_hardness : 1;
 fb_scaled = (feedback < 0) ? -fb_scaled : fb_scaled;
 
+
+envl.slew_limiter_init(0.0003 + env_speed * 0.05, 0.0009 + env_speed * 0.6, srate);
+envr.slew_limiter_init(0.0003 + env_speed * 0.05, 0.0009 + env_speed * 0.6, srate);
+
+envlfilt.cytomic_smooth1_init (15, 0.9, srate);
+envrfilt.cytomic_smooth1_init (15, 0.9, srate);
+
 @sample
 
 out0 = spl0;
 out1 = spl1;
 
+efl = envl.slew_limiter_tick (out0 * out0);
+efr = envl.slew_limiter_tick (out1 * out1);
+efl = envlfilt.cytomic_smooth1_tick (efl);
+efr = envlfilt.cytomic_smooth1_tick (efr);
+efl = sqrt (efl);
+efr = sqrt (efr);
+
 lfo.lfo_bank_tick_tri (lfov.ptr, 0);
+
+efl *= env_depth * env_depth * 24 * sign(env_depth);
+efr *= env_depth * env_depth * 24 * sign(env_depth);
+efl = clamp (efl, -1, 1);
+efr = clamp (efr, -1, 1);
+
+lfol = lfov.ptr[0] * lfo_depth;
+lfor = lfov.ptr[1] * lfo_depth;
+modl = clamp (lfol + efl, -1, 1);
+modr = clamp (lfor + efr, -1, 1);
+
 get_coeffs_ws(
-  freqs_l.ptr, qs_l.ptr, lfov.ptr[0], lfo_depth, n_stages, f_center, f_mode, f_detune, f_width
+  freqs_l.ptr, qs_l.ptr, modr, n_stages, f_center, f_mode, f_detune, f_width
   );
 get_coeffs_ws(
-  freqs_r.ptr, qs_r.ptr, lfov.ptr[1], lfo_depth, n_stages, f_center, f_mode, f_detune, f_width
+  freqs_r.ptr, qs_r.ptr, modl, n_stages, f_center, f_mode, f_detune, f_width
 );
 
 l_half_stages = freqs_l.ptr[n_stages / 2];
@@ -290,7 +318,7 @@ r_hshelf.hshelf_1p_reset_no_prewarp(fshelf, g_db, srate);
 // run the feedback to prepare the states
 fbl = out0 * fb_scaled;
 fbr = out1 * fb_scaled;
-(hardness != 0) (
+(hardness != 0) ? (
   fbl = fbl / sqrt (fbl * fbl * hardness + 1);
   fbr = fbr / sqrt (fbr * fbr * hardness + 1);
 );
