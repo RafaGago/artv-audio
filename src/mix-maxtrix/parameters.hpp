@@ -7260,13 +7260,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  mod_lfo_warp,
+  mod_mod_warp,
   n_stereo_busses,
   param_common (
     "LFO Warp",
     declptr<upsampled<mod>>(),
-    declptr<mod::lfo_warp_tag>()),
-  mod::get_parameter (mod::lfo_warp_tag {}),
+    declptr<mod::mod_warp_tag>()),
+  mod::get_parameter (mod::mod_warp_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -7466,7 +7466,7 @@ using mod_params = mp_list<
 
   mod_env_depth,
   mod_env_speed,
-  mod_lfo_warp,
+  mod_mod_warp,
   mod_lfo_stereo,
   mod_drive,
   mod_drive_curve,

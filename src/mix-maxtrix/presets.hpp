@@ -1199,7 +1199,7 @@ static constexpr preset presets[] = {
     <PARAM id="mod_lfo_depth_03" value="100.0" />
     <PARAM id="mod_lfo_rate_03" value="79.45000457763672" />
     <PARAM id="mod_lfo_stereo_03" value="21.0" />
-    <PARAM id="mod_lfo_warp_03" value="79.64999389648438" />
+    <PARAM id="mod_mod_warp_03" value="79.64999389648438" />
     <PARAM id="mod_lfo_wave_03" value="1.0" />
     <PARAM id="mod_mode_03" value="1.0" />
     <PARAM id="mod_param_a_03" value="30.20000076293945" />
