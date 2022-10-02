@@ -7290,6 +7290,26 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  mod_env_depth,
+  n_stereo_busses,
+  param_common (
+    "Env Amt",
+    declptr<upsampled<mod>>(),
+    declptr<mod::env_depth_tag>()),
+  mod::get_parameter (mod::env_depth_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_env_speed,
+  n_stereo_busses,
+  param_common (
+    "Env Spd",
+    declptr<upsampled<mod>>(),
+    declptr<mod::env_speed_tag>()),
+  mod::get_parameter (mod::env_speed_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   mod_lfo_wave,
   n_stereo_busses,
   param_common (
@@ -7416,23 +7436,26 @@ parameter_cpp_class_define (
 
 using mod_params = mp_list<
   mod_lfo_rate,
-  mod_lfo_warp,
-  mod_stages,
+  mod_lfo_depth,
   mod_depth,
   mod_center,
-  mod_lfo_depth,
   mod_spread,
   mod_feedback,
   mod_param_a,
   mod_param_b,
+
+  mod_env_depth,
+  mod_env_speed,
+  mod_lfo_warp,
+  mod_lfo_stereo,
   mod_drive,
   mod_drive_curve,
   mod_feedback_locut,
   mod_feedback_hicut,
-  mod_lfo_wave,
-  mod_lfo_stereo,
 
   mod_mode,
+  mod_stages,
+  mod_lfo_wave,
   mod_lfo_time_base,
   mod_oversampling>;
 //------------------------------------------------------------------------------

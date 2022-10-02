@@ -9,11 +9,13 @@
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/value_smoother.hpp"
+#include "artv-common/dsp/own/parts/filters/andy_smooth.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/biquad.hpp"
 #include "artv-common/dsp/own/parts/filters/dc_blocker.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
 #include "artv-common/dsp/own/parts/filters/zdf.hpp"
+#include "artv-common/dsp/own/parts/misc/slew_limiter.hpp"
 #include "artv-common/dsp/own/parts/oscillators/lfo.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/own/parts/waveshapers/sigmoid.hpp"
@@ -99,6 +101,42 @@ public:
   static constexpr auto get_parameter (lfo_depth_tag)
   {
     return float_param ("%", 0., 100., 50., 0.001);
+  }
+  //----------------------------------------------------------------------------
+  struct env_depth_tag {};
+  void set (env_depth_tag, float v)
+  {
+    v *= 0.01;
+    _param.env_depth = v;
+  }
+  //----------------------------------------------------------------------------
+  static constexpr auto get_parameter (env_depth_tag)
+  {
+    return float_param ("%", -100., 100., 0., 0.001);
+  }
+  //----------------------------------------------------------------------------
+  struct env_speed_tag {};
+  void set (env_speed_tag, float v)
+  {
+    v *= 0.01;
+    if (v == _param.env_speed) {
+      return;
+    }
+    _param.env_speed = v;
+    v += 0.005;
+    _env.reset_coeffs<env::fast> (
+      vec_set<2> (0.0003f + v * 0.05f), vec_set<2> (0.0009f + v), _ctrl_t_spl);
+    _env.reset_coeffs<env::slow> (
+      vec_set<2> (0.0006f + v * 0.4f),
+      vec_set<2> (0.0018f + v * 8.f),
+      _ctrl_t_spl);
+    xspan_memcpy (
+      _env.get_coeffs<env::smooth1>(), _env.get_coeffs<env::fast>());
+  }
+  //----------------------------------------------------------------------------
+  static constexpr auto get_parameter (env_speed_tag)
+  {
+    return float_param ("%", 0., 100., 20., 0.001);
   }
   //----------------------------------------------------------------------------
   struct lfo_wave_tag {};
@@ -326,13 +364,14 @@ public:
     _n_processed_samples = 0;
     uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
-    _lfo_t_spl           = _t_spl * (_control_rate_mask + 1);
+    _ctrl_t_spl          = _t_spl * (_control_rate_mask + 1);
     _1spl_fb             = decltype (_1spl_fb) {};
 
     _phaser.reset_states_cascade();
     _fb_filters.reset_states_cascade();
     _feedback.reset_states_cascade();
     _onepole.reset_states_cascade();
+    _env.reset_states_cascade();
     _param_smooth.reset (_t_spl, 10.f);
     _del_spls.reset (_t_spl, 10.f);
 
@@ -350,6 +389,8 @@ public:
     _rnd_lfo.set_phase (phase {phase::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
     _rnd_lfo.set_freq (vec_set<4> (0.3f), _t_spl);
     _tremolo_lfo.reset();
+    _env.reset_coeffs<env::smooth2> (
+      vec_set<2> (1.f), vec_set<2> (0.05f), _ctrl_t_spl);
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -400,7 +441,9 @@ public:
     spread_tag,
     b_tag,
     depth_tag,
-    mode_tag>;
+    mode_tag,
+    env_depth_tag,
+    env_speed_tag>;
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
@@ -442,7 +485,7 @@ private:
       break;
     }
 
-    _sweep_lfo.set_freq (vec_set<2> (hz), _lfo_t_spl);
+    _sweep_lfo.set_freq (vec_set<2> (hz), _ctrl_t_spl);
     _tremolo_lfo.set_freq (vec_set<4> (hz), _t_spl);
     auto stereo_ph
       = phase<1> {phase_tag::degrees {}, pars.lfo_stereo}.get_raw (0);
@@ -487,21 +530,47 @@ private:
       lfov = _sweep_lfo.tick_saw();
       break;
     }
-    return lfov;
+    return lfov * pars.lfo_depth;
   }
   //----------------------------------------------------------------------------
-  void run_phaser_mod (
+  sweep_lfo_value run_env (all_parameters const& pars, sweep_lfo_value in)
+  {
+    if (pars.env_depth == 0.f) {
+      return sweep_lfo_value {};
+    }
+    auto fast = _env.tick<env::fast> (in * in);
+    auto slow = _env.tick<env::slow> (in * in);
+    fast -= slow; // bipolar
+    slow = zero_to_lowest (slow); // NaN "sweep_lfo_value" is based on builtins
+    auto ret   = fast / slow;
+    ret        = _env.tick<env::smooth1> (ret);
+    ret        = _env.tick<env::smooth2> (ret);
+    float fact = (pars.env_depth < 0) ? -4.f : 4.f;
+    ret *= pars.env_depth * pars.env_depth * fact;
+    ret = vec_clamp (ret, -1.f, 1.f);
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  sweep_lfo_value run_mod_srcs (all_parameters const& pars, T l, T r)
+  {
+    auto lfov = run_lfo (pars);
+    auto envv = run_env (pars, f32_x2 {(float) l, (float) r});
+    return vec_clamp (lfov + envv, -1.f, 1.f);
+  }
+  //----------------------------------------------------------------------------
+  void compute_mod (
     float           centerf,
     float           spread,
     float           lfo_depth,
     float           spread_ratio,
     uint            n_stages,
-    sweep_lfo_value lfo)
+    sweep_lfo_value mod)
   {
     float modlim = std::min (centerf, 0.5f);
     modlim       = std::min (1.f - centerf, modlim);
 
-    sweep_lfo_value mod    = lfo * lfo_depth * modlim;
+    mod *= modlim;
     sweep_lfo_value center = centerf + mod;
     // detune by a ramp
     sweep_lfo_value detuned = (1.f - abs (spread * spread_ratio)) * center;
@@ -534,13 +603,13 @@ private:
         float stages = 1.f + pars.stages * (max_phaser_stages - 1);
         _n_stages    = (uint) stages;
 
-        run_phaser_mod (
+        compute_mod (
           pars.center,
           pars.spread,
           pars.lfo_depth,
           0.07f,
           _n_stages,
-          run_lfo (pars));
+          run_mod_srcs (pars, ins[0][i], ins[1][i]));
 
         for (uint s = 0; s < _n_stages; ++s) {
           f32_x4 v = vec_from_array (_mod[s]);
@@ -558,14 +627,15 @@ private:
         for (uint s = _n_stages; s < max_phaser_stages; ++s) {
           _phaser.reset_states_on_idx (s);
         }
-        f32_x4 f {450.f, 460.f, 670.f, 680.f};
-        f *= vec_from_array (_mod[0]);
+        f32_x4 f {250.f, 250.f, 340.f, 341.f};
+        f *= 1.5f + vec_from_array (_mod[0]);
         _onepole.reset_coeffs<0> (f, _t_spl);
       }
 
-      f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
-      auto   onep_out = _onepole.tick<0> (wet);
-      wet             = vec_shuffle (wet, onep_out, 0, 1, 4, 5);
+      auto   mid = (ins[0][i] + ins[1][i]) * 0.5f;
+      f32_x4 wet {ins[0][i], ins[1][i], mid, mid};
+      auto   hp_out = _onepole.tick<0> (wet)[1];
+      wet           = vec_shuffle (wet, hp_out, 0, 1, 6, 7);
 
       // obtain response for the phaser
       zdf::response<f32_x4> aps_resp {};
@@ -624,13 +694,14 @@ private:
       if ((_n_processed_samples & _control_rate_mask) == 0) {
         float stages = 2.f + pars.stages * (max_scho_stages - 2);
         _n_stages    = ((uint) stages) / 2;
-        run_phaser_mod (
+
+        compute_mod (
           (1.f - pars.center) / _n_stages,
           pars.spread,
           pars.lfo_depth,
           0.55f,
           _n_stages,
-          run_lfo (pars));
+          run_mod_srcs (pars, ins[0][i], ins[1][i]));
 
         for (uint s = 0; s < _n_stages; ++s) {
           for (uint j = 0; j < 2; ++j) {
@@ -665,7 +736,7 @@ private:
       _del_spls.tick();
 
       f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
-      wet = _onepole.tick<0> (wet);
+      wet = _onepole.tick<0> (wet)[0];
       wet -= _1spl_fb * pars.feedback;
 
       std::array<f32_x2, 2> sig {{{wet[0], wet[2]}, {wet[1], wet[3]}}};
@@ -748,13 +819,14 @@ private:
         _n_stages += 1; // fractional stage
 
         float ratefact = pars.lfo_rate * 0.01f;
-        run_phaser_mod (
+
+        compute_mod (
           0.05f * rndlfo[0] + 0.85f - pars.center, // reverse range lf to hf
           pars.spread,
           pars.lfo_depth * (0.45f + 0.2f * pars.center + 0.25f * ratefact),
           0.3f + 0.1f * rndlfo[0] + 0.5f * pars.center,
           _n_stages,
-          run_lfo (pars));
+          run_mod_srcs (pars, ins[0][i], ins[1][i]));
 
         for (uint s = 0; s < (_n_stages * 2); ++s) {
           constexpr float msec_offset = 15.f;
@@ -796,7 +868,7 @@ private:
       }
       // create some difference on the inputs
       f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
-      wet = _onepole.tick<0> (wet);
+      wet = _onepole.tick<0> (wet)[0];
 
       _del_spls.tick();
       auto& del_spls = _del_spls.get();
@@ -910,13 +982,13 @@ private:
       *((unsmoothed_parameters*) &pars) = _param;
 
       if ((_n_processed_samples & _control_rate_mask) == 0) {
-        run_phaser_mod (
+        compute_mod (
           1.f - pars.center, // reverse range lf to hf
           pars.spread,
           pars.lfo_depth,
           0.45f,
           1, // flanger is always one stage
-          run_lfo (pars));
+          run_mod_srcs (pars, ins[0][i], ins[1][i]));
 
         for (uint s = 0; s < flan_stages; ++s) {
           static_assert (flan_stages == 2, "this loop assumes s < 2");
@@ -944,8 +1016,10 @@ private:
       }
       _del_spls.tick();
 
-      f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
-      wet = _onepole.tick<0> (wet);
+      auto   mid = (ins[0][i] + ins[1][i]) * 0.5f;
+      f32_x4 wet {ins[0][i], ins[1][i], mid, mid};
+      auto   hp_out = _onepole.tick<0> (wet)[1];
+      wet           = vec_shuffle (wet, hp_out, 0, 1, 6, 7);
       wet -= _1spl_fb * pars.feedback;
 
       auto& del_spls = _del_spls.get();
@@ -1131,6 +1205,8 @@ private:
     u32   mode;
     float feedback_locut;
     float feedback_hicut;
+    float env_speed;
+    float env_depth;
     bool  lfo_off; // The lfo is smoothed, this signals if the lfo is off
   };
   //----------------------------------------------------------------------------
@@ -1168,10 +1244,17 @@ private:
 
   using sinc_t = sinc_interp<8, 96>;
 
-  part_classes<mp_list<zdf_type>, f32_x4>                   _feedback;
-  part_class_array<allpass_type, f32_x4, max_phaser_stages> _phaser;
-  part_classes<filters_list, f32_x4>                        _fb_filters;
-  part_classes<mp_list<onepole_allpass>, f32_x4>            _onepole;
+  struct env {
+    enum { fast, slow, smooth1, smooth2, count };
+  };
+  part_classes<
+    mp_list<slew_limiter, slew_limiter, slew_limiter, andy::smoother>,
+    sweep_lfo_value>
+                                                                    _env;
+  part_classes<mp_list<zdf_type>, f32_x4>                           _feedback;
+  part_class_array<allpass_type, f32_x4, max_phaser_stages>         _phaser;
+  part_classes<filters_list, f32_x4>                                _fb_filters;
+  part_classes<mp_list<onepole<allpass_tag, highpass_tag>>, f32_x4> _onepole;
 #if ARTV_MOD_SCHO_TIRAN
   modulable_thiran1_delay_line<f32_x2, 4, true, false> _scho {};
 #else
@@ -1210,7 +1293,7 @@ private:
   uint           _control_rate_mask;
   uint           _n_stages;
   float          _n_stages_frac;
-  float          _lfo_t_spl;
+  float          _ctrl_t_spl;
   float          _t_spl;
   float          _srate;
   float          _lp_smooth_coeff;

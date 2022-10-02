@@ -18,7 +18,7 @@
 // rely on with --ffast-math enabled, as it is not their use case. I'd trust
 // more something built-in on the compiler.
 
-#define XSIMD_DISABLED 1
+#define XSIMD_DISABLED      1
 #define XSIMD_NEW_INTERFACE 1
 
 #include <array>
@@ -455,7 +455,7 @@ static inline void vec_load (V& dst, vec_value_type_t<V> const* src)
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline V vec_load (xspan<const vec_value_type_t<V>> src)
+static inline V vec_load (xspan<vec_value_type_t<V> const> src)
 {
   constexpr auto traits = vec_traits<V>();
   assert (src.size() >= traits.size);
@@ -469,7 +469,7 @@ static inline vec<T, N> vec_load (xspan<const T> src)
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline void vec_load (V& dst, xspan<const vec_value_type_t<V>> src)
+static inline void vec_load (V& dst, xspan<vec_value_type_t<V> const> src)
 {
   dst = vec_load<V> (src);
 }
@@ -496,7 +496,7 @@ static inline void vec_load_unaligned (V& dst, vec_value_type_t<V> const* src)
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline V vec_load_unaligned (xspan<const vec_value_type_t<V>> src)
+static inline V vec_load_unaligned (xspan<vec_value_type_t<V> const> src)
 {
   constexpr auto traits = vec_traits<V>();
   assert (src.size() >= traits.size);
@@ -512,7 +512,7 @@ static inline vec<T, N> vec_load_unaligned (xspan<const T> src)
 template <class V, enable_if_vec_t<V>* = nullptr>
 static inline void vec_load_unaligned (
   V&                               dst,
-  xspan<const vec_value_type_t<V>> src)
+  xspan<vec_value_type_t<V> const> src)
 {
   dst = vec_load_unaligned<V> (src);
 }
@@ -1331,10 +1331,7 @@ static inline auto vec_atan2 (vec_value_type_t<V> x, V&& y)
 template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
 static inline auto vec_abs (V&& x)
 {
-  return detail::call_vec_function (
-    std::forward<V> (x),
-    [] (auto&& v) { return xsimd::abs (std::forward<decltype (v)> (v)); },
-    [] (auto&& v) { return abs (v); });
+  return (x < (vec_value_type_t<V>) 0) ? -x : x;
 }
 //------------------------------------------------------------------------------
 template <
@@ -1390,17 +1387,7 @@ template <
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2> && is_vec_v<V3>>* = nullptr>
 static inline auto vec_clamp (V1&& x, V2&& min, V3&& max)
 {
-  return detail::call_vec_function (
-    std::forward<V1> (x),
-    std::forward<V2> (min),
-    std::forward<V3> (max),
-    [] (auto&& v1, auto&& v2, auto&& v3) {
-      return xsimd::clip (
-        std::forward<decltype (v1)> (v1),
-        std::forward<decltype (v2)> (v2),
-        std::forward<decltype (v3)> (v3));
-    },
-    [] (auto&& v1, auto&& v2, auto&& v3) { return std::clamp (v1, v2, v3); });
+  return vec_min (vec_max (x, min), max);
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
@@ -1547,6 +1534,14 @@ template <class V, enable_if_vec_t<V>* = nullptr>
 bool vec_is_all_ones (V v)
 {
   return !(~vec_inner_and (v));
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_vec_t<V>* = nullptr>
+V zero_to_lowest (V v)
+{
+  using T         = vec_value_type_t<V>;
+  constexpr T min = -std::numeric_limits<T>::lowest();
+  return (v != (T) 0) ? v : vec_set<V> (min);
 }
 //------------------------------------------------------------------------------
 // common functions

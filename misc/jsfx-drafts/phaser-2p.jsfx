@@ -187,35 +187,52 @@ g_hardness = (fb_scaled > lim_hardness) ? fb_scaled / lim_hardness : 1;
 fb_scaled = (feedback < 0) ? -fb_scaled : fb_scaled;
 
 
-envl.slew_limiter_init(0.0003 + env_speed * 0.05, 0.0009 + env_speed * 0.6, srate);
-envr.slew_limiter_init(0.0003 + env_speed * 0.05, 0.0009 + env_speed * 0.6, srate);
+envl_fast.slew_limiter_init(0.0003 + env_speed * 0.05, 0.0009 + env_speed, srate);
+envr_fast.slew_limiter_init(0.0003 + env_speed * 0.05, 0.0009 + env_speed, srate);
 
-envlfilt.cytomic_smooth1_init (15, 0.9, srate);
-envrfilt.cytomic_smooth1_init (15, 0.9, srate);
+envl_slow.slew_limiter_init(0.0003 + env_speed * 0.4, 0.0009 + env_speed * 8, srate);
+envr_slow.slew_limiter_init(0.0003 + env_speed * 0.4, 0.0009 + env_speed * 8, srate);
+
+envl.slew_limiter_init(0.0003 + env_speed * 0.05, 0.0009 + env_speed * 2, srate);
+envr.slew_limiter_init(0.0003 + env_speed * 0.05, 0.0009 + env_speed * 2, srate);
+
+envlfilt.cytomic_smooth1_init (1, 0.05, srate);
+envrfilt.cytomic_smooth1_init (1, 0.05, srate);
 
 @sample
 
 out0 = spl0;
 out1 = spl1;
 
-efl = envl.slew_limiter_tick (out0 * out0);
-efr = envl.slew_limiter_tick (out1 * out1);
-efl = envlfilt.cytomic_smooth1_tick (efl);
-efr = envlfilt.cytomic_smooth1_tick (efr);
-efl = sqrt (efl);
-efr = sqrt (efr);
+efl = envl_fast.slew_limiter_tick (out0 * out0);
+efr = envl_fast.slew_limiter_tick (out1 * out1);
+efl_s = envl_slow.slew_limiter_tick (out0 * out0);
+efr_s = envr_slow.slew_limiter_tick (out0 * out0);
+
+efl -= efl_s;
+efr -= efr_s;
+
+ef_rat_l = efl / efl_s;
+ef_rat_r = efr / efr_s;
+
+ef_rat_l = envr.slew_limiter_tick (ef_rat_l);
+ef_rat_r = envr.slew_limiter_tick (ef_rat_r);
+
+ef_rat_l = envlfilt.cytomic_smooth1_tick(ef_rat_l);
+ef_rat_r = envrfilt.cytomic_smooth1_tick(ef_rat_r);
+
+ef_rat_l *= env_depth * env_depth * 4 * sign (env_depth);
+ef_rat_r *= env_depth * env_depth * 4 * sign (env_depth);
+
+ef_rat_l = clamp (ef_rat_l, -1, 1);
+ef_rat_r = clamp (ef_rat_r, -1, 1);
 
 lfo.lfo_bank_tick_tri (lfov.ptr, 0);
 
-efl *= env_depth * env_depth * 24 * sign(env_depth);
-efr *= env_depth * env_depth * 24 * sign(env_depth);
-efl = clamp (efl, -1, 1);
-efr = clamp (efr, -1, 1);
-
 lfol = lfov.ptr[0] * lfo_depth;
 lfor = lfov.ptr[1] * lfo_depth;
-modl = clamp (lfol + efl, -1, 1);
-modr = clamp (lfor + efr, -1, 1);
+modl = clamp (lfol + ef_rat_l, -1, 1);
+modr = clamp (lfor + ef_rat_r, -1, 1);
 
 get_coeffs_ws(
   freqs_l.ptr, qs_l.ptr, modr, n_stages, f_center, f_mode, f_detune, f_width
