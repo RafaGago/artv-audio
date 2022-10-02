@@ -330,7 +330,7 @@ public:
     }
     default:
       assert (false);
-      break;
+      return;
     }
     if (_param.mode == mode::chorus) {
       // avoid high delay_spls values on change
@@ -339,6 +339,7 @@ public:
       }
       _del_spls.set_all_from_target();
     }
+    _delay.reset (_mem_delay, 1);
     _1spl_fb             = vec_set<4> (0.f);
     _n_processed_samples = 0; // trigger the control block on first sample
     _param.mode          = v;
@@ -356,11 +357,35 @@ public:
       16);
   }
   //----------------------------------------------------------------------------
+  static constexpr uint max_delay_4ths = 8;
+  struct delay_quarter_beats_tag {};
+  void set (delay_quarter_beats_tag, float v)
+  {
+    _param_smooth.target().del_4beats = v;
+  }
+
+  static constexpr auto get_parameter (delay_quarter_beats_tag)
+  {
+    return float_param ("Quart", 0., max_delay_4ths, 0., 0.001);
+  }
+  //----------------------------------------------------------------------------
+  struct delay_gain_tag {};
+  void set (delay_gain_tag, float v)
+  {
+    _param_smooth.target().del_gain = v * 0.01f;
+  }
+
+  static constexpr auto get_parameter (delay_gain_tag)
+  {
+    return float_param ("%", -100., 100, 0., 0.1);
+  }
+  //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
     _srate               = pc.get_sample_rate();
     _t_spl               = 1.f / _srate;
     _beat_hz             = pc.get_play_state().bpm * (1.f / 60.f);
+    _beat_spls           = (1.f / _beat_hz) * _srate;
     _n_processed_samples = 0;
     uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
@@ -375,15 +400,6 @@ public:
     _param_smooth.reset (_t_spl, 10.f);
     _del_spls.reset (_t_spl, 10.f);
 
-    mp11::mp_for_each<parameters> ([&] (auto param) {
-      set (param, get_parameter (param).min);
-      if constexpr (!is_choice<decltype (get_parameter (param))>) {
-        set (param, get_parameter (param).max); // max might be not yet impl.
-      }
-      set (param, get_parameter (param).defaultv);
-    });
-    _param_smooth.set_all_from_target();
-
     reset_mem();
     using phase = decltype (_rnd_lfo)::phase_type;
     _rnd_lfo.set_phase (phase {phase::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
@@ -391,6 +407,18 @@ public:
     _tremolo_lfo.reset();
     _env.reset_coeffs<env::smooth2> (
       vec_set<2> (1.f), vec_set<2> (0.05f), _ctrl_t_spl);
+
+    mp11::mp_for_each<parameters> ([&] (auto param) {
+      set (param, get_parameter (param).min);
+      if constexpr (!is_choice<decltype (get_parameter (param))>) {
+        set (param, get_parameter (param).max); // max might be not yet impl.
+      }
+      else {
+        set (param, get_parameter (param).min + 1);
+      }
+      set (param, get_parameter (param).defaultv);
+    });
+    _param_smooth.set_all_from_target();
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -443,7 +471,9 @@ public:
     depth_tag,
     mode_tag,
     env_depth_tag,
-    env_speed_tag>;
+    env_speed_tag,
+    delay_quarter_beats_tag,
+    delay_gain_tag>;
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
@@ -634,8 +664,12 @@ private:
 
       auto   mid = (ins[0][i] + ins[1][i]) * 0.5f;
       f32_x4 wet {ins[0][i], ins[1][i], mid, mid};
-      auto   hp_out = _onepole.tick<0> (wet)[1];
-      wet           = vec_shuffle (wet, hp_out, 0, 1, 6, 7);
+      if (pars.del_gain != 0.f) {
+        auto delayed = _delay.get (_beat_spls * 0.25f * pars.del_4beats, 0);
+        wet += vec_cat (delayed, delayed);
+      }
+      auto hp_out = _onepole.tick<0> (wet)[1];
+      wet         = vec_shuffle (wet, hp_out, 0, 1, 6, 7);
 
       // obtain response for the phaser
       zdf::response<f32_x4> aps_resp {};
@@ -666,6 +700,14 @@ private:
       fbv      = zdf_type::nonlin::tick (
         fbv, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
       _fb_filters.tick_cascade (fbv);
+
+      if (pars.del_gain != 0.f) {
+        auto max_del_gain = 0.999999f - abs (pars.feedback);
+        auto del          = f32_x2 {wet[0], wet[1]};
+        del *= max_del_gain
+          * std::copysign (pars.del_gain * pars.del_gain, pars.del_gain);
+        _delay.push (xspan {&del, 1});
+      }
 
       auto out = mix (
         wet,
@@ -736,6 +778,10 @@ private:
       _del_spls.tick();
 
       f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
+      if (pars.del_gain != 0.f) {
+        auto delayed = _delay.get (_beat_spls * 0.25f * pars.del_4beats, 0);
+        wet += vec_cat (delayed, delayed);
+      }
       wet = _onepole.tick<0> (wet)[0];
       wet -= _1spl_fb * pars.feedback;
 
@@ -784,10 +830,19 @@ private:
         wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
 
-      auto out = mix (
+      if (pars.del_gain != 0.f) {
+        auto max_del_gain = 0.999999f - abs (pars.feedback);
+        auto del          = f32_x2 {_1spl_fb[0], _1spl_fb[1]};
+        del *= max_del_gain
+          * std::copysign (pars.del_gain * pars.del_gain, pars.del_gain);
+        _delay.push (xspan {&del, 1});
+      }
+
+      auto fb_gain = get_fb_gain (pars.feedback, pars.drive);
+      auto out     = mix (
         wet,
         f64_x2 {ins[0][i], ins[1][i]},
-        pars.depth / get_fb_gain (pars.feedback, pars.drive),
+        pars.depth / fb_gain,
         1.f - pars.depth,
         1.f);
       outs[0][i] = out[0];
@@ -868,6 +923,10 @@ private:
       }
       // create some difference on the inputs
       f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
+      if (pars.del_gain != 0.f) {
+        auto delayed = _delay.get (_beat_spls * 0.25f * pars.del_4beats, 0);
+        wet += vec_cat (delayed, delayed);
+      }
       wet = _onepole.tick<0> (wet)[0];
 
       _del_spls.tick();
@@ -956,6 +1015,14 @@ private:
       auto ffwd4     = f32_x4 {ffwd[0], ffwd[1], ffwd[0], ffwd[1]} * ffwd_gain;
       wet += ffwd4;
 
+      if (pars.del_gain != 0.f) {
+        auto max_del_gain = 0.999999f;
+        auto del          = f32_x2 {wet[0], wet[1]};
+        del *= max_del_gain
+          * std::copysign (pars.del_gain * pars.del_gain, pars.del_gain);
+        _delay.push (xspan {&del, 1});
+      }
+
       auto out = mix (
         wet,
         f64_x2 {dry[0], dry[1]},
@@ -1018,8 +1085,12 @@ private:
 
       auto   mid = (ins[0][i] + ins[1][i]) * 0.5f;
       f32_x4 wet {ins[0][i], ins[1][i], mid, mid};
-      auto   hp_out = _onepole.tick<0> (wet)[1];
-      wet           = vec_shuffle (wet, hp_out, 0, 1, 6, 7);
+      if (pars.del_gain != 0.f) {
+        auto delayed = _delay.get (_beat_spls * 0.25f * pars.del_4beats, 0);
+        wet += vec_cat (delayed, delayed);
+      }
+      auto hp_out = _onepole.tick<0> (wet)[1];
+      wet         = vec_shuffle (wet, hp_out, 0, 1, 6, 7);
       wet -= _1spl_fb * pars.feedback;
 
       auto& del_spls = _del_spls.get();
@@ -1047,6 +1118,14 @@ private:
       n_spls       = std::clamp (
         n_spls, (float) _dry.min_delay_spls(), (float) _dry.max_delay_spls());
       dry = _dry.get (n_spls, 0);
+
+      if (pars.del_gain != 0.f) {
+        auto max_del_gain = 0.999999f - abs (pars.feedback);
+        auto del          = f32_x2 {_1spl_fb[0], _1spl_fb[1]};
+        del *= max_del_gain
+          * std::copysign (pars.del_gain * pars.del_gain, pars.del_gain);
+        _delay.push (xspan {&del, 1});
+      }
 
       auto out = mix (
         wet,
@@ -1100,22 +1179,29 @@ private:
     uint dry_size = std::ceil (max_dry_delay_ms * 0.001f * _srate);
     dry_size      = _dry.n_required_elems (dry_size + 1, n_channels);
 
+    float spls_beat = (1.f / _beat_hz) * _srate;
+    uint  dly_size  = std::ceil (max_delay_4ths * 4.f * spls_beat);
+    dly_size        = _delay.n_required_elems (dly_size + 1, 1);
+
     using T_mem = decltype (_mem)::value_type;
 #if !ARTV_MOD_CHO_FLAN_TIRAN
     using T_sinc = decltype (_sinc_co)::value_type;
 #endif
-    using T_scho = decltype (_scho)::value_type;
-    using T_chor = decltype (_chor)::value_type;
-    using T_flan = decltype (_flan)::value_type;
-    using T_dry  = decltype (_dry)::value_type;
+    using T_scho  = decltype (_scho)::value_type;
+    using T_chor  = decltype (_chor)::value_type;
+    using T_flan  = decltype (_flan)::value_type;
+    using T_dry   = decltype (_dry)::value_type;
+    using T_delay = decltype (_delay)::value_type;
 
     schroeder_size *= vec_traits_t<T_scho>::size;
     chor_size *= vec_traits_t<T_chor>::size;
     dry_size *= vec_traits_t<T_dry>::size;
     flan_size *= vec_traits_t<T_flan>::size;
+    dly_size *= vec_traits_t<T_delay>::size;
 
-    auto max_size = std::max (schroeder_size, chor_size + dry_size);
-    max_size      = std::max (max_size, flan_size + dry_size);
+    auto max_size
+      = std::max (schroeder_size + dly_size, chor_size + dry_size + dly_size);
+    max_size = std::max (max_size, flan_size + dry_size + dly_size);
 
     _mem.clear();
 #if !ARTV_MOD_CHO_FLAN_TIRAN
@@ -1130,10 +1216,11 @@ private:
     // overaligned to 128, so the tables aren't on cache line boundaries
     _sinc_co = mem.cut_head (sinc_t::n_coeffs);
 #endif
-    _mem_scho = mem.get_head (schroeder_size).cast<T_scho>();
-    _mem_dry  = mem.cut_head (dry_size).cast<T_dry>();
-    _mem_chor = mem.get_head (chor_size).cast<T_chor>();
-    _mem_flan = mem.get_head (flan_size).cast<T_flan>();
+    _mem_delay = mem.cut_head (dly_size).cast<T_scho>();
+    _mem_scho  = mem.get_head (schroeder_size).cast<T_scho>();
+    _mem_dry   = mem.cut_head (dry_size).cast<T_dry>();
+    _mem_chor  = mem.get_head (chor_size).cast<T_chor>();
+    _mem_flan  = mem.get_head (flan_size).cast<T_flan>();
 
 #if !ARTV_MOD_CHO_FLAN_TIRAN
     // initialize windowed sinc table
@@ -1215,15 +1302,20 @@ private:
     float lfo_depth;
     float lfo_warp;
     float lfo_stereo;
+
     float center;
     float a;
     float b;
     float depth; // aka mix (make explicit?)
+
     float feedback;
     float drive;
     float drive_curve;
     float spread;
+
     float stages;
+    float del_4beats;
+    float del_gain;
   };
   //----------------------------------------------------------------------------
   struct all_parameters : public unsmoothed_parameters,
@@ -1269,6 +1361,7 @@ private:
   interpolated_delay_line<f32_x2, sinc_t, true, false, true> _dry;
   interpolated_delay_line<f32_x2, sinc_t, true, false, true> _flan;
 #endif
+  interpolated_delay_line<f32_x2, linear_interp, false, false> _delay;
   value_smoother<
     float,
     std::array<float, std::max (max_scho_stages, max_chor_stages)>>
@@ -1298,9 +1391,11 @@ private:
   float          _srate;
   float          _lp_smooth_coeff;
   float          _beat_hz;
+  float          _beat_spls;
 #if !ARTV_MOD_CHO_FLAN_TIRAN
   xspan<float> _sinc_co;
 #endif
+  xspan<f32_x2> _mem_delay;
   xspan<f32_x2> _mem_dry;
   xspan<f32_x1> _mem_chor;
   xspan<f32_x2> _mem_flan;

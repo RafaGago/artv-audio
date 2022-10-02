@@ -27,6 +27,10 @@ slider37:trim_db=0<0, 30, 0.1>Trim(dB)
 slider38:dc_block=0<0, 1, 1>DC blocker
 slider39:onepole=0<0, 1, 1>Single Pole
 
+slider41:del_msec=0<0, 1500, 1>Delay ms
+slider42:del_decay=0<-1, 1, 0.0001>Decay (%)
+slider43:del_mix=0<0, 1, 0.001>Delay mix
+
 in_pin:left input
 in_pin:right input
 out_pin:left output
@@ -36,6 +40,7 @@ import _delay-line.jsfx-inc
 import _lfo.jsfx-inc
 import _filters.jsfx-inc
 import _dynamics.jsfx-inc
+import _reverb.jsfx-inc
 
 @init
 
@@ -62,6 +67,7 @@ qs_r.array_init(k.n_stages);
 l_dc.tpt_1p_reset (20., srate);
 r_dc.tpt_1p_reset (20., srate);
 
+del.delay_line_init (round_next_pow2 (ceil (1.5 * srate)), 1);
 
 function get_coeffs_ws(
   f_ptr,
@@ -186,6 +192,9 @@ lim_hardness = 1 / sqrt (hardness);
 g_hardness = (fb_scaled > lim_hardness) ? fb_scaled / lim_hardness : 1;
 fb_scaled = (feedback < 0) ? -fb_scaled : fb_scaled;
 
+delay_spls = srate * del_msec * 0.001;
+max_fb_gain = 0.999999999 - abs (fb_scaled);
+del_fb_gain = max_fb_gain * del_decay * del_decay * sign(del_decay);
 
 envl_fast.slew_limiter_init(0.0003 + env_speed * 0.05, 0.0009 + env_speed, srate);
 envr_fast.slew_limiter_init(0.0003 + env_speed * 0.05, 0.0009 + env_speed, srate);
@@ -248,6 +257,12 @@ q = 0.0001 + focus * 0.2;
 ga = 6;
 l_pre_emph.svf_bell_bp (l_half_stages, q, ga, srate);
 r_pre_emph.svf_bell_bp (r_half_stages, q, ga, srate);
+
+del.delay_line_advance();
+delspl = del.delay_line_get_linterp (delay_spls, 0);
+delspl *= del_fb_gain;
+out0 += delspl * del_mix;
+out1 += delspl * del_mix;
 
 out0 = l_pre_emph.svf_tick (out0);
 out1 = r_pre_emph.svf_tick (out1);
@@ -347,6 +362,8 @@ fbr = out1 * fb_scaled;
   l_hshelf.hshelf_1p_tick (l_lshelf.lshelf_1p_tick (fbl));
   r_hshelf.hshelf_1p_tick (r_lshelf.lshelf_1p_tick (fbr));
 );
+
+del.delay_line_set (out0, 0, 0);
 
 g_wet = mix * g_hardness;
 g_dry = (1 - mix) * (1 + abs (fb_scaled));

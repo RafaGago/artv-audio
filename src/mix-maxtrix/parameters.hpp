@@ -7425,6 +7425,26 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  mod_delay_quaterterbeats,
+  n_stereo_busses,
+  param_common (
+    "Del 4ths",
+    declptr<upsampled<mod>>(),
+    declptr<mod::delay_quarter_beats_tag>()),
+  mod::get_parameter (mod::delay_quarter_beats_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  mod_delay_gain,
+  n_stereo_busses,
+  param_common (
+    "Del Amt",
+    declptr<upsampled<mod>>(),
+    declptr<mod::delay_gain_tag>()),
+  mod::get_parameter (mod::delay_gain_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   mod_oversampling,
   n_stereo_busses,
   param_common (
@@ -7455,6 +7475,8 @@ using mod_params = mp_list<
 
   mod_mode,
   mod_stages,
+  mod_delay_gain,
+  mod_delay_quaterterbeats,
   mod_lfo_wave,
   mod_lfo_time_base,
   mod_oversampling>;
