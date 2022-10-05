@@ -842,7 +842,7 @@ private:
         sig[0]                       = -sig[0];
         sig[1]                       = -sig[1];
 #else
-        // pairs of Nested allpasses, not that different from the regular
+        // Cascaded Nested N=2 allpasses, not that different from the regular
         // allpass...
         std::array<f32_x2, 2> fwd {};
         for (uint s = 0; s < _n_stages; ++s) {
@@ -946,7 +946,7 @@ private:
           auto            m        = _mod[s][1];
           auto            gv       = pars.b;
           auto            negf     = neg ? 1.f : -1.f;
-          _g.chor[s][0]            = gv * gv * 0.87f + m * g_factor * gv;
+          _g.chor[s][0]            = gv * gv * 0.407f + m * g_factor * gv;
           _g.chor[s][0] *= neg;
           _rnd_lfo.set_freq (vec_set<4> (0.8f + abs (pars.b)), _t_spl);
 
@@ -988,12 +988,17 @@ private:
       // pan position   | L             R
       // stage ordering | 1 3 2 4 4 2 3 1
 
-      constexpr auto kpanl = make_array (0.f, 0.07f, 0.3f, 0.15f);
-      static_assert (kpanl.size() == (max_chor_stages / 2));
+      auto tremolo      = _tremolo_lfo.tick_sine() * pars.b;
+      auto tr_crossfade = (tremolo + 1.f) * 0.5f;
+
+      constexpr auto kpanl1 = f32_x4 {0.f, 0.07f, 0.3f, 0.15f};
+      constexpr auto kpanl2 = f32_x4 {0.3f, 0.15f, 0.07f, 0.f};
+
+      auto panlv = (1.f - tr_crossfade) * kpanl1;
+      panlv += tr_crossfade * kpanl2;
 
       auto rndmod = (rndlfo * 0.05f * abs (pars.b)) + 0.95f;
 
-      auto panlv = vec_from_array (kpanl);
       // crossfade towards 0.5 (center panning)
       auto stereo_norm = abs (pars.stereo);
       panlv *= stereo_norm;
@@ -1043,13 +1048,6 @@ private:
       wet = prev + (wet - prev) * _n_stages_frac;
       _chor.push (to_push);
 
-      // naive saturation
-      wet = zdf_type::nonlin::tick (
-        wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve) * rndmod);
-      wet = _fb_filters.tick_cascade (wet);
-
-      auto tremolo = _tremolo_lfo.tick_sine() * pars.b;
-
       // dry feedforward signal based
       f32_x2 dry {ins[0][i], ins[1][i]};
       _dry.push (xspan {&dry, 1});
@@ -1066,8 +1064,16 @@ private:
       ffwd4 *= 1.f - tremolo;
       wet += ffwd4;
 
+      // naive saturation
+      wet = zdf_type::nonlin::tick (
+        wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve) * rndmod);
+      wet = _fb_filters.tick_cascade (wet);
+
+      auto gain_wet
+        = 1.f / (_n_stages_frac + (float) (_n_stages - 1) + abs (ffwd_gain));
+
       if (pars.del_gain != 0.f) {
-        auto max_del_gain = 0.999999f;
+        auto max_del_gain = 0.97f * gain_wet;
         auto del          = f32_x2 {wet[0], wet[1]};
         del *= max_del_gain
           * std::copysign (pars.del_gain * pars.del_gain, pars.del_gain);
@@ -1077,8 +1083,7 @@ private:
       auto out = mix (
         wet,
         f64_x2 {dry[0], dry[1]},
-        pars.depth
-          / (_n_stages_frac + (float) (_n_stages - 1) + abs (ffwd_gain)),
+        pars.depth * gain_wet,
         (1.f - pars.depth),
         pars.b);
 
