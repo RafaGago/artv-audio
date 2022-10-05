@@ -7320,13 +7320,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  mod_lfo_stereo,
+  mod_stereo,
   n_stereo_busses,
   param_common (
-    "LFO Stereo",
+    "Stereo",
     declptr<upsampled<mod>>(),
-    declptr<mod::lfo_stereo_tag>()),
-  mod::get_parameter (mod::lfo_stereo_tag {}),
+    declptr<mod::stereo_tag>()),
+  mod::get_parameter (mod::stereo_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -7467,7 +7467,7 @@ using mod_params = mp_list<
   mod_env_depth,
   mod_env_speed,
   mod_mod_warp,
-  mod_lfo_stereo,
+  mod_stereo,
   mod_drive,
   mod_drive_curve,
   mod_feedback_locut,

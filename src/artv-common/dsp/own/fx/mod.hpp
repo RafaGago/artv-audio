@@ -17,6 +17,7 @@
 #include "artv-common/dsp/own/parts/filters/zdf.hpp"
 #include "artv-common/dsp/own/parts/misc/slew_limiter.hpp"
 #include "artv-common/dsp/own/parts/oscillators/lfo.hpp"
+#include "artv-common/dsp/own/parts/oscillators/phasor.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/own/parts/waveshapers/sigmoid.hpp"
 #include "artv-common/dsp/types.hpp"
@@ -155,12 +156,12 @@ public:
       10);
   }
   //----------------------------------------------------------------------------
-  struct lfo_stereo_tag {};
-  void set (lfo_stereo_tag, float v) { _param_smooth.target().lfo_stereo = v; }
+  struct stereo_tag {};
+  void set (stereo_tag, float v) { _param_smooth.target().stereo = v * 0.01f; }
 
-  static constexpr auto get_parameter (lfo_stereo_tag)
+  static constexpr auto get_parameter (stereo_tag)
   {
-    return float_param ("deg", 0., 360., 0., 0.1);
+    return float_param ("%", -100., 100., 0., 0.1);
   }
   //----------------------------------------------------------------------------
   struct center_tag {};
@@ -460,7 +461,7 @@ public:
     lfo_depth_tag,
     mod_warp_tag,
     lfo_wave_tag,
-    lfo_stereo_tag,
+    stereo_tag,
     center_tag,
     a_tag,
     feedback_tag,
@@ -520,7 +521,7 @@ private:
     _sweep_lfo.set_freq (vec_set<2> (hz), _ctrl_t_spl);
     _tremolo_lfo.set_freq (vec_set<4> (hz), _t_spl);
     auto stereo_ph
-      = phase<1> {phase_tag::degrees {}, pars.lfo_stereo}.get_raw (0);
+      = phase<1> {phase_tag::shifted_bipolar {}, pars.stereo}.get_raw (0);
     if (!pars.lfo_off) {
       // updating stereo phase diff.
       auto ph = _sweep_lfo.get_phase();
@@ -605,6 +606,7 @@ private:
 
     auto mod_unipolar = 0.5f + mod * 0.5f;
     mod_unipolar      = (spread_mod < 0) ? 1.f - mod_unipolar : mod_unipolar;
+    spread_mod        = abs (spread_mod);
     auto spread_r     = (1.f - spread_mod) + (spread_mod * mod_unipolar);
     spread_r *= spread_ratio;
 
@@ -910,9 +912,6 @@ private:
 
       auto rndlfo = _rnd_lfo.tick_filt_sample_and_hold();
 
-      auto stereo_norm
-        = pars.lfo_stereo * (1.f / get_parameter (lfo_stereo_tag {}).max);
-
       if ((_n_processed_samples & _control_rate_mask) == 0) {
         // stages are in pairs (TODO check)
         float stages
@@ -928,7 +927,7 @@ private:
           pars.spread,
           pars.lfo_depth * (0.45f + 0.2f * pars.center + 0.25f * ratefact),
           0.3f + 0.1f * rndlfo[0] + 0.5f * pars.center,
-          stereo_norm * 0.5f,
+          pars.stereo * 0.5f,
           _n_stages,
           run_mod_srcs (pars, ins[0][i], ins[1][i]));
 
@@ -995,6 +994,8 @@ private:
       auto rndmod = (rndlfo * 0.05f * abs (pars.b)) + 0.95f;
 
       auto panlv = vec_from_array (kpanl);
+      // crossfade towards 0.5 (center panning)
+      auto stereo_norm = abs (pars.stereo);
       panlv *= stereo_norm;
       panlv += (1.f - stereo_norm) * 0.5f;
       // using -x^2+2x as a cheap approximation of the sin(x*pi/2) pan law.
@@ -1353,7 +1354,7 @@ private:
     float lfo_rate;
     float lfo_depth;
     float mod_warp;
-    float lfo_stereo;
+    float stereo;
 
     float center;
     float a;
