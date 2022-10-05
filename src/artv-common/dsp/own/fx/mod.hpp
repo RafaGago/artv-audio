@@ -988,7 +988,7 @@ private:
       // pan position   | L             R
       // stage ordering | 1 3 2 4 4 2 3 1
 
-      constexpr auto kpanl = make_array (0.f, 2.f / 7.f, 1.f / 7.f, 3.f / 7.f);
+      constexpr auto kpanl = make_array (0.f, 0.07f, 0.3f, 0.15f);
       static_assert (kpanl.size() == (max_chor_stages / 2));
 
       auto rndmod = (rndlfo * 0.05f * abs (pars.b)) + 0.95f;
