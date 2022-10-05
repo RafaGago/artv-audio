@@ -1380,6 +1380,13 @@ static inline auto vec_max (vec_value_type_t<V> x, V&& y)
   return vec_max (vec_set<Vv> (x), std::forward<V> (y));
 }
 //------------------------------------------------------------------------------
+template <class V, enable_if_vec_t<V>* = nullptr>
+static inline auto vec_sgn (V x)
+{
+  using T = vec_value_type_t<V>;
+  return (x < (T) 0) ? vec_set<V> (-1) : vec_set<V> (1);
+}
+//------------------------------------------------------------------------------
 template <
   class V1,
   class V2,

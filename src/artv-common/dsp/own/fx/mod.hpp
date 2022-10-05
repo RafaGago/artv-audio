@@ -180,12 +180,14 @@ public:
   }
   //----------------------------------------------------------------------------
   struct feedback_tag {};
-  void set (feedback_tag, float v)
+  void set (feedback_tag, float in)
   {
-    bool neg = v < 0.f;
+    auto v = abs (in);
     v *= 0.01;
-    v = sqrt (sqrt (abs (v))); // something cheaper?
-    v = neg ? -v : v;
+    // parabola
+    v -= 1.f;
+    v = 1.f - v * v;
+    v = std::copysign (v, in);
 
     _param_smooth.target().feedback = v * 0.98f;
   }
@@ -480,11 +482,11 @@ private:
   static constexpr uint max_phaser_stages = 21;
   static constexpr uint max_scho_stages   = 22;
   static constexpr uint max_scho_delay_ms = 30;
-  static constexpr uint max_chor_delay_ms = 55;
+  static constexpr uint max_chor_delay_ms = 45;
   static constexpr uint max_chor_stages   = 8;
   static constexpr uint max_flan_delay_ms = 21;
   static constexpr uint flan_stages       = 2;
-  static constexpr uint max_dry_delay_ms  = max_chor_delay_ms / 2;
+  static constexpr uint max_dry_delay_ms  = 30;
   static constexpr uint n_channels        = 2;
   static constexpr uint n_ap_channels     = 4;
   //----------------------------------------------------------------------------
@@ -594,16 +596,22 @@ private:
     float           spread,
     float           lfo_depth,
     float           spread_ratio,
+    float           spread_mod,
     uint            n_stages,
     sweep_lfo_value mod)
   {
     float modlim = std::min (centerf, 0.5f);
     modlim       = std::min (1.f - centerf, modlim);
 
+    auto mod_unipolar = 0.5f + mod * 0.5f;
+    mod_unipolar      = (spread_mod < 0) ? 1.f - mod_unipolar : mod_unipolar;
+    auto spread_r     = (1.f - spread_mod) + (spread_mod * mod_unipolar);
+    spread_r *= spread_ratio;
+
     mod *= modlim;
     sweep_lfo_value center = centerf + mod;
     // detune by a ramp
-    sweep_lfo_value detuned = (1.f - abs (spread * spread_ratio)) * center;
+    sweep_lfo_value detuned = (1.f - vec_abs (spread * spread_r)) * center;
     sweep_lfo_value diff    = (center - detuned) / (float) (n_stages * 2);
     sweep_lfo_value start   = (spread > 0.f) ? detuned : center;
     diff                    = (spread > 0.f) ? diff : -diff;
@@ -638,6 +646,7 @@ private:
           pars.spread,
           pars.lfo_depth,
           0.07f,
+          0.f,
           _n_stages,
           run_mod_srcs (pars, ins[0][i], ins[1][i]));
 
@@ -741,9 +750,18 @@ private:
           (1.f - pars.center) / _n_stages,
           pars.spread,
           pars.lfo_depth,
-          0.55f,
+          0.5f,
+          pars.b,
           _n_stages,
           run_mod_srcs (pars, ins[0][i], ins[1][i]));
+
+        constexpr float min_g         = 0.0001f;
+        constexpr float max_g         = 0.88f;
+        auto const      g             = pars.a * max_g + min_g;
+        auto const      mod_right_max = max_g - g;
+        auto const      mod_left_max  = -g;
+        auto            modmax = (pars.b < 0.f) ? mod_left_max : mod_right_max;
+        modmax *= pars.b * pars.b;
 
         for (uint s = 0; s < _n_stages; ++s) {
           for (uint j = 0; j < 2; ++j) {
@@ -757,13 +775,11 @@ private:
               (float) _scho.min_delay_spls(),
               (float) _scho.max_delay_spls());
             _del_spls.target()[idx] = t;
-            f32_x2          v       = (j == 0) ? f32_x2 {_mod[s][1], _mod[s][3]}
+            f32_x2 v                = (j == 0) ? f32_x2 {_mod[s][1], _mod[s][3]}
                                                : f32_x2 {_mod[s][0], _mod[s][2]};
-            constexpr float min_g   = 0.0001f;
-            auto            g       = pars.a * 0.88f + min_g;
-            // gain mod
-            v            = (1.f - g) * (v - 0.5f) * 1.8f * pars.b * pars.b;
-            _g.scho[idx] = g + v;
+            auto   mod              = v * v * 1.5f * modmax;
+            mod                     = vec_min (modmax, mod);
+            _g.scho[idx]            = g + mod;
           }
         }
         for (uint s = (_n_stages * 2); s < _del_spls.target().size(); ++s) {
@@ -800,6 +816,7 @@ private:
         }
       }
       else {
+#if 1
         // Nested, as e.g. a lattice
         std::array<f32_x2, 2> fwd {};
         for (uint c = 0; c < n_channels; ++c) {
@@ -807,7 +824,7 @@ private:
           auto yn  = _scho.get (del_spls[idx], idx);
 
           fwd[c] = sig[c] + yn * _g.scho[idx];
-          sig[c] = yn + fwd[c] * -_g.scho[idx];
+          sig[c] = yn - fwd[c] * _g.scho[idx];
         }
         for (uint s = 1; s < _n_stages; ++s) {
           for (uint c = 0; c < n_channels; ++c) {
@@ -815,13 +832,41 @@ private:
             auto yn  = _scho.get (del_spls[idx], idx);
 
             fwd[c] += yn * _g.scho[idx];
-            to_push[idx - 2] = yn + fwd[c] * -_g.scho[idx];
+            to_push[idx - 2] = yn - fwd[c] * _g.scho[idx];
           }
         }
         to_push[(_n_stages * 2) - 2] = fwd[0];
         to_push[(_n_stages * 2) - 1] = fwd[1];
         sig[0]                       = -sig[0];
         sig[1]                       = -sig[1];
+#else
+        // pairs of Nested allpasses, not that different from the regular
+        // allpass...
+        std::array<f32_x2, 2> fwd {};
+        for (uint s = 0; s < _n_stages; ++s) {
+          for (uint c = 0; c < n_channels; ++c) {
+            uint idx = s * 2 + c;
+            if ((s % 2) == 0) {
+              auto yn = _scho.get (del_spls[idx], idx);
+              auto g  = _g.scho[idx];
+              fwd[c]  = sig[c] + yn * g;
+              sig[c]  = yn - fwd[c] * g;
+            }
+            else {
+              auto yn = _scho.get (del_spls[idx], idx);
+              auto g  = _g.scho[idx];
+              fwd[c] += yn * g;
+              to_push[idx - 2] = yn - fwd[c] * g;
+              to_push[idx]     = fwd[c];
+            }
+          }
+        }
+        if ((_n_stages % 2) != 0) {
+          // last stage is not nested
+          to_push[(_n_stages * 2) - 2] = fwd[0];
+          to_push[(_n_stages * 2) - 1] = fwd[1];
+        }
+#endif
       }
       _scho.push (to_push);
       wet = vec_shuffle (sig[0], sig[1], 0, 2, 1, 3);
@@ -865,6 +910,9 @@ private:
 
       auto rndlfo = _rnd_lfo.tick_filt_sample_and_hold();
 
+      auto stereo_norm
+        = pars.lfo_stereo * (1.f / get_parameter (lfo_stereo_tag {}).max);
+
       if ((_n_processed_samples & _control_rate_mask) == 0) {
         // stages are in pairs (TODO check)
         float stages
@@ -880,6 +928,7 @@ private:
           pars.spread,
           pars.lfo_depth * (0.45f + 0.2f * pars.center + 0.25f * ratefact),
           0.3f + 0.1f * rndlfo[0] + 0.5f * pars.center,
+          stereo_norm * 0.5f,
           _n_stages,
           run_mod_srcs (pars, ins[0][i], ins[1][i]));
 
@@ -946,9 +995,8 @@ private:
       auto rndmod = (rndlfo * 0.05f * abs (pars.b)) + 0.95f;
 
       auto panlv = vec_from_array (kpanl);
-      auto st = pars.lfo_stereo * (1.f / get_parameter (lfo_stereo_tag {}).max);
-      panlv *= st;
-      panlv += (1.f - st) * 0.5f;
+      panlv *= stereo_norm;
+      panlv += (1.f - stereo_norm) * 0.5f;
       // using -x^2+2x as a cheap approximation of the sin(x*pi/2) pan law.
       panlv = -panlv * panlv + 2.f * panlv;
       // some randomization
@@ -1000,7 +1048,6 @@ private:
       wet = _fb_filters.tick_cascade (wet);
 
       auto tremolo = _tremolo_lfo.tick_sine() * pars.b;
-      wet *= 1.f - tremolo;
 
       // dry feedforward signal based
       f32_x2 dry {ins[0][i], ins[1][i]};
@@ -1011,8 +1058,11 @@ private:
       n_spls       = std::clamp (
         n_spls, (float) _dry.min_delay_spls(), (float) _dry.max_delay_spls());
       auto ffwd      = _dry.get (n_spls, 0);
-      auto ffwd_gain = abs (pars.feedback) * (float) _n_stages;
+      auto fbg       = abs (pars.feedback);
+      auto ffwd_gain = fbg * fbg * fbg * fbg * (float) _n_stages;
+      ffwd_gain      = std::copysign (ffwd_gain, pars.feedback);
       auto ffwd4     = f32_x4 {ffwd[0], ffwd[1], ffwd[0], ffwd[1]} * ffwd_gain;
+      ffwd4 *= 1.f - tremolo;
       wet += ffwd4;
 
       if (pars.del_gain != 0.f) {
@@ -1026,7 +1076,8 @@ private:
       auto out = mix (
         wet,
         f64_x2 {dry[0], dry[1]},
-        pars.depth / (_n_stages_frac + (float) (_n_stages - 1) + ffwd_gain),
+        pars.depth
+          / (_n_stages_frac + (float) (_n_stages - 1) + abs (ffwd_gain)),
         (1.f - pars.depth),
         pars.b);
 
@@ -1054,6 +1105,7 @@ private:
           pars.spread,
           pars.lfo_depth,
           0.45f,
+          0.f,
           1, // flanger is always one stage
           run_mod_srcs (pars, ins[0][i], ins[1][i]));
 
