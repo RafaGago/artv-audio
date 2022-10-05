@@ -7263,7 +7263,7 @@ parameter_cpp_class_define (
   mod_mod_warp,
   n_stereo_busses,
   param_common (
-    "LFO Warp",
+    "Mod Warp",
     declptr<upsampled<mod>>(),
     declptr<mod::mod_warp_tag>()),
   mod::get_parameter (mod::mod_warp_tag {}),
