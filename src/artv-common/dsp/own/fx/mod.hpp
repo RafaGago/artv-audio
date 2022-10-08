@@ -89,7 +89,7 @@ public:
 
   static constexpr auto get_parameter (mod_warp_tag)
   {
-    return float_param ("%", -100., 100., 0., 0.01);
+    return float_param ("%", -100., 100., 50., 0.01);
   }
   //----------------------------------------------------------------------------
   struct lfo_depth_tag {};
@@ -353,12 +353,12 @@ public:
   struct delay_quarter_beats_tag {};
   void set (delay_quarter_beats_tag, float v)
   {
-    _param_smooth.target().del_4beats = v;
+    _param_smooth.target().del_4beats = std::max (v, 0.02f);
   }
 
   static constexpr auto get_parameter (delay_quarter_beats_tag)
   {
-    return float_param ("Quart", 0., max_delay_4ths, 0., 0.001);
+    return float_param ("Quart", 0., max_delay_4ths, 3., 0.001);
   }
   //----------------------------------------------------------------------------
   struct delay_gain_tag {};
@@ -369,7 +369,7 @@ public:
 
   static constexpr auto get_parameter (delay_gain_tag)
   {
-    return float_param ("%", -100., 100, 0., 0.1);
+    return float_param ("%", -100., 100, 50., 0.1);
   }
   //----------------------------------------------------------------------------
   struct delay_mode_tag {};
@@ -377,6 +377,7 @@ public:
 
   struct delay_mode {
     enum {
+      off,
       stereo,
       stereo_inverted,
       pingpong_l,
@@ -391,6 +392,7 @@ public:
     return choice_param (
       0,
       make_cstr_array (
+        "Off",
         "Stereo",
         "Stereo-inv",
         "Ping-Pong L",
@@ -407,7 +409,7 @@ public:
     _beat_hz             = pc.get_play_state().bpm * (1.f / 60.f);
     _beat_spls           = (1.f / _beat_hz) * _srate;
     _n_processed_samples = 0;
-    uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 3;
+    uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 5;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
     _ctrl_t_spl          = _t_spl * (_control_rate_mask + 1);
     _1spl_fb             = decltype (_1spl_fb) {};
@@ -449,21 +451,47 @@ public:
 #endif
     assert (outs.size() >= (n_outputs * (uint) bus_type));
     assert (ins.size() >= (n_inputs * (uint) bus_type));
+
     switch (_param.mode) {
     case mode::zdf:
-      tick_phaser<T> (outs, ins, samples);
+      tick<T> (
+        outs,
+        ins,
+        samples,
+        [this] (auto&&... args) { phaser_control_block<T> (args...); },
+        [this] (auto&&... args) { phaser_tick<T> (args...); });
       break;
     case mode::schroeder:
-      tick_schroeder<T, false> (outs, ins, samples);
+      tick<T> (
+        outs,
+        ins,
+        samples,
+        [this] (auto&&... args) { schroeder_control_block<T> (args...); },
+        [this] (auto&&... args) { schroeder_tick<T, false> (args...); });
       break;
     case mode::schroeder_nested:
-      tick_schroeder<T, true> (outs, ins, samples);
+      tick<T> (
+        outs,
+        ins,
+        samples,
+        [this] (auto&&... args) { schroeder_control_block<T> (args...); },
+        [this] (auto&&... args) { schroeder_tick<T, true> (args...); });
       break;
     case mode::flanger:
-      tick_flanger<T> (outs, ins, samples);
+      tick<T> (
+        outs,
+        ins,
+        samples,
+        [this] (auto&&... args) { flanger_control_block<T> (args...); },
+        [this] (auto&&... args) { flanger_tick<T> (args...); });
       break;
     case mode::chorus:
-      tick_chorus<T> (outs, ins, samples);
+      tick<T> (
+        outs,
+        ins,
+        samples,
+        [this] (auto&&... args) { chorus_control_block<T> (args...); },
+        [this] (auto&&... args) { chorus_tick<T> (args...); });
       break;
     default:
       assert (false);
@@ -496,6 +524,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
+  static constexpr uint max_block_size    = 16;
   static constexpr uint max_phaser_stages = 21;
   static constexpr uint max_scho_stages   = 22;
   static constexpr uint max_scho_delay_ms = 30;
@@ -508,26 +537,31 @@ private:
   static constexpr uint n_ap_channels     = 4;
   //----------------------------------------------------------------------------
   struct all_parameters;
+  struct unsmoothed_parameters;
+  struct smoothed_parameters;
+  //----------------------------------------------------------------------------
   using sweep_lfo_type  = lfo<n_channels>;
   using sweep_lfo_value = sweep_lfo_type::value_type;
   //----------------------------------------------------------------------------
-  sweep_lfo_value run_lfo (all_parameters const& pars)
+  sweep_lfo_value run_lfo (
+    unsmoothed_parameters const& par,
+    smoothed_parameters const&   s_par)
   {
     float hz;
-    switch (pars.lfo_time_base) {
+    switch (par.lfo_time_base) {
     case lfo_time_base::free: {
-      float lfo_rate = pars.lfo_rate * 0.01f;
+      float lfo_rate = s_par.lfo_rate * 0.01f;
       lfo_rate       = 1.f - lfo_rate;
       lfo_rate *= lfo_rate * lfo_rate;
       hz = lfo_rate * 12.f;
     } break;
     case lfo_time_base::quarter_beat:
       // a quarter beat for each 10%
-      hz = (4.f * _beat_hz) / (1.f + pars.lfo_rate * 0.1f);
+      hz = (4.f * _beat_hz) / (1.f + s_par.lfo_rate * 0.1f);
       break;
     case lfo_time_base::two_beats:
       // two beats for each 10%
-      hz = (1 / 2.f * _beat_hz) / (1.f + pars.lfo_rate * 0.1f);
+      hz = (1 / 2.f * _beat_hz) / (1.f + s_par.lfo_rate * 0.1f);
       break;
     default:
       assert (false);
@@ -537,8 +571,8 @@ private:
     _sweep_lfo.set_freq (vec_set<2> (hz), _ctrl_t_spl);
     _tremolo_lfo.set_freq (vec_set<4> (hz), _t_spl);
     auto stereo_ph
-      = phase<1> {phase_tag::shifted_bipolar {}, pars.stereo}.get_raw (0);
-    if (!pars.lfo_off) {
+      = phase<1> {phase_tag::shifted_bipolar {}, s_par.stereo}.get_raw (0);
+    if (!par.lfo_off) {
       // updating stereo phase diff.
       auto ph = _sweep_lfo.get_phase();
       ph.set_raw (ph.get_raw (0) + stereo_ph, 1);
@@ -556,7 +590,7 @@ private:
     }
 
     sweep_lfo_value lfov;
-    switch (pars.lfo_wave) {
+    switch (par.lfo_wave) {
     case lfo_wave::sine:
       lfov = _sweep_lfo.tick_sine();
       break;
@@ -579,12 +613,12 @@ private:
       lfov = _sweep_lfo.tick_saw();
       break;
     }
-    return lfov * pars.lfo_depth;
+    return lfov * s_par.lfo_depth;
   }
   //----------------------------------------------------------------------------
-  sweep_lfo_value run_env (all_parameters const& pars, sweep_lfo_value in)
+  sweep_lfo_value run_env (unsmoothed_parameters const& par, sweep_lfo_value in)
   {
-    if (pars.env_depth == 0.f) {
+    if (par.env_depth == 0.f) {
       return sweep_lfo_value {};
     }
     auto fast = _env.tick<env::fast> (in * in);
@@ -594,17 +628,21 @@ private:
     auto ret   = fast / slow;
     ret        = _env.tick<env::smooth1> (ret);
     ret        = _env.tick<env::smooth2> (ret);
-    float fact = (pars.env_depth < 0) ? -4.f : 4.f;
-    ret *= pars.env_depth * pars.env_depth * fact;
+    float fact = (par.env_depth < 0) ? -4.f : 4.f;
+    ret *= par.env_depth * par.env_depth * fact;
     ret = vec_clamp (ret, -1.f, 1.f);
     return ret;
   }
   //----------------------------------------------------------------------------
   template <class T>
-  sweep_lfo_value run_mod_srcs (all_parameters const& pars, T l, T r)
+  sweep_lfo_value run_mod_srcs (
+    unsmoothed_parameters const& par,
+    smoothed_parameters const&   s_par,
+    T                            l,
+    T                            r)
   {
-    auto lfov = run_lfo (pars);
-    auto envv = run_env (pars, f32_x2 {(float) l, (float) r});
+    auto lfov = run_lfo (par, s_par);
+    auto envv = run_env (par, f32_x2 {(float) l, (float) r});
     return vec_clamp (lfov + envv, -1.f, 1.f);
   }
   //----------------------------------------------------------------------------
@@ -642,45 +680,42 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  void delay_mix (
-    all_parameters const&           pars,
-    std::array<f32_x1, n_channels>& taps_tail,
-    f32_x4&                         wet)
-  {
-    if (pars.del_gain == 0.f) {
-      return;
-    }
-    float spls   = _beat_spls * 0.25f * pars.del_4beats;
-    taps_tail[0] = _delay.get (spls, 0);
-    taps_tail[1] = _delay.get (spls, 1);
-    auto delay
-      = vec_cat (taps_tail[0], taps_tail[1], taps_tail[0], taps_tail[1]);
-    wet += delay;
-  }
-  //----------------------------------------------------------------------------
   template <class T>
   void delay_push (
-    float                                 max_gain,
-    float                                 gain,
-    uint                                  mode,
-    std::array<f32_x1, n_channels> const& taps_tail,
-    f32_x4                                wet,
-    std::array<T, 2>                      in)
+    xspan<smoothed_parameters const>            s_par,
+    uint                                        mode,
+    xspan<std::array<f32_x1, n_channels> const> taps_tail,
+    xspan<f32_x4 const>                         wet,
+    xspan<T const>                              inl,
+    xspan<T const>                              inr)
   {
-    if (gain == 0.f) {
-      return;
-    }
+    auto const block_size = wet.size();
+    auto const push
+      = [this, s_par] (std::array<f32_x1, n_channels> spls, uint i) {
+          float max_g    = 0.999999f - abs (s_par[i].feedback);
+          float g        = s_par[i].del_gain;
+          auto  del_gain = max_g * std::copysign (g * g, g);
+          spls[0] *= del_gain;
+          spls[1] *= del_gain;
+          _delay.push (spls);
+        };
     std::array<f32_x1, n_channels> spls;
     switch (mode) {
     case delay_mode::stereo:
       // tail already included in the signal
-      spls[0][0] = wet[0];
-      spls[1][0] = wet[1];
+      for (uint i = 0; i < block_size; ++i) {
+        spls[0][0] = wet[i][0];
+        spls[1][0] = wet[i][1];
+        push (spls, i);
+      }
       break;
     case delay_mode::stereo_inverted:
       // tail already included in the signal
-      spls[0][0] = wet[1];
-      spls[1][0] = wet[0];
+      for (uint i = 0; i < block_size; ++i) {
+        spls[0][0] = wet[i][1];
+        spls[1][0] = wet[i][0];
+        push (spls, i);
+      }
       break;
       // self note, this is not a regular delay but a modulation effect. Both
       // channels (L-R) are unconditionally pased through the fx chain, while
@@ -698,82 +733,160 @@ private:
       // is to take one of the sides. To get the mid channel a compromise has
       // to be made and to take opposite side dry.
     case delay_mode::pingpong_l:
-      spls[0][0] = wet[1];
-      spls[1]    = taps_tail[0];
+      for (uint i = 0; i < block_size; ++i) {
+        spls[0][0] = wet[i][1];
+        spls[1]    = taps_tail[i][0];
+        push (spls, i);
+      }
       break;
     case delay_mode::pingpong_r:
-      spls[0]    = taps_tail[1];
-      spls[1][0] = wet[0];
+      for (uint i = 0; i < block_size; ++i) {
+        spls[0]    = taps_tail[i][1];
+        spls[1][0] = wet[i][0];
+        push (spls, i);
+      }
       break;
     case delay_mode::pingpong:
-      spls[0][0] = wet[1] + in[0];
-      spls[1]    = taps_tail[0];
+      for (uint i = 0; i < block_size; ++i) {
+        spls[0][0] = wet[i][1] + inl[i];
+        spls[1]    = taps_tail[i][0];
+        push (spls, i);
+      }
       break;
     case delay_mode::pongping:
-      spls[0]    = taps_tail[1];
-      spls[1][0] = wet[0] + in[1];
+      for (uint i = 0; i < block_size; ++i) {
+        spls[0]    = taps_tail[i][1];
+        spls[1][0] = wet[i][0] + inr[i];
+        push (spls, i);
+      }
       break;
     }
-    auto del_gain = max_gain * std::copysign (gain * gain, gain);
-    spls[0] *= del_gain;
-    spls[1] *= del_gain;
-    _delay.push (spls);
+  }
+  //----------------------------------------------------------------------------
+  template <class T, class FC, class FP>
+  void tick (
+    xspan<T*>       outs,
+    xspan<T const*> ins,
+    uint            samples,
+    FC              control_func,
+    FP              process_func)
+  {
+    std::array<f32_x4, max_block_size>              wet;
+    array2d<f32_x1, n_channels, max_block_size>     delay_taps_tail;
+    std::array<smoothed_parameters, max_block_size> s_par;
+    // signal no changes/reloads on the whole block
+    unsmoothed_parameters par = _param;
+
+    auto inl  = xspan {ins[0], samples};
+    auto inr  = xspan {ins[1], samples};
+    auto outl = xspan {outs[0], samples};
+    auto outr = xspan {outs[1], samples};
+
+    while (inl.size()) {
+      uint n_next_ctrl = ~_n_processed_samples & _control_rate_mask;
+      bool run_ctrl    = (n_next_ctrl == _control_rate_mask); // was zero
+      n_next_ctrl += 1;
+      uint block_size = std::min<uint> (max_block_size, inl.size());
+      block_size      = std::min<uint> (block_size, n_next_ctrl);
+
+      if (run_ctrl) {
+        control_func (par, _param_smooth.get(), inl[0], inr[0]);
+      }
+      if (par.delay_mode != delay_mode::off) {
+        for (uint i = 0; i < block_size; ++i) {
+          _param_smooth.tick();
+          s_par[i]   = _param_smooth.get();
+          auto& tail = delay_taps_tail[i];
+          float spls = _beat_spls * 0.25f * s_par[i].del_4beats;
+          spls       = std::max<float> (_delay.min_delay_spls(), spls - i);
+          tail[0]    = _delay.get (spls, 0);
+          tail[1]    = _delay.get (spls, 1);
+          wet[i]     = vec_cat (tail[0], tail[1], tail[0], tail[1]);
+        }
+      }
+      else {
+        memset (wet.data(), 0, sizeof wet);
+        for (uint i = 0; i < block_size; ++i) {
+          _param_smooth.tick();
+          s_par[i] = _param_smooth.get();
+        }
+      }
+      process_func (
+        outl.cut_head (block_size),
+        outr.cut_head (block_size),
+        xspan {wet.data(), block_size},
+        inl.cut_head (block_size),
+        inr.cut_head (block_size),
+        xspan {delay_taps_tail.data(), block_size},
+        par,
+        xspan {s_par.data(), block_size});
+
+      _n_processed_samples += block_size;
+    }
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void tick_phaser (xspan<T*> outs, xspan<T const*> ins, uint samples)
+  void phaser_control_block (
+    unsmoothed_parameters const& par,
+    smoothed_parameters const&   s_par,
+    T                            inl,
+    T                            inr)
   {
-    assert (outs.size() >= (n_outputs * (uint) bus_type));
-    assert (ins.size() >= (n_inputs * (uint) bus_type));
+    float stages = 1.f + s_par.stages * (max_phaser_stages - 1);
+    _n_stages    = (uint) stages;
 
-    for (uint i = 0; i < samples; ++i, ++_n_processed_samples) {
-      _param_smooth.tick();
-      // access parameters without caring if they are smoothed or not.
-      all_parameters pars;
-      *((smoothed_parameters*) &pars)   = _param_smooth.get();
-      *((unsmoothed_parameters*) &pars) = _param;
+    compute_mod (
+      s_par.center,
+      s_par.spread,
+      s_par.lfo_depth,
+      0.07f,
+      0.f,
+      _n_stages,
+      run_mod_srcs (par, s_par, inl, inr));
 
-      if ((_n_processed_samples & _control_rate_mask) == 0) {
-        float stages = 1.f + pars.stages * (max_phaser_stages - 1);
-        _n_stages    = (uint) stages;
+    for (uint s = 0; s < _n_stages; ++s) {
+      f32_x4 v = vec_from_array (_mod[s]);
+      auto   f = mod_freq_warp (v, 1.f - s_par.mod_warp);
+      auto   q = f;
+      f        = ((f * 0.9995f) + 0.0005f);
+      f *= f32_x4 {21200.f, 21200.f, 20000.f, 20000.f};
+      // A lot of freq-dependant weight on the Q when detuning
+      q = (1.f + 3.f * q * abs (s_par.spread));
+      q *= s_par.a * s_par.a * f32_x4 {1.f, 1.f, 1.6f, 1.6f};
+      q += 0.015f;
+      q *= 1.f + (_n_stages) * (1.1f / max_phaser_stages);
+      _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
+    }
+    for (uint s = _n_stages; s < max_phaser_stages; ++s) {
+      _phaser.reset_states_on_idx (s);
+    }
+    f32_x4 f {250.f, 250.f, 340.f, 341.f};
+    f *= 1.5f + vec_from_array (_mod[0]);
+    _onepole.reset_coeffs<0> (f, _t_spl);
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void phaser_tick (
+    xspan<T>       outl,
+    xspan<T>       outr,
+    xspan<f32_x4>  wet, // might contain the delay feedback
+    xspan<T const> inl,
+    xspan<T const> inr,
+    xspan<std::array<f32_x1, n_channels> const> taps_tail,
+    unsmoothed_parameters const&                par,
+    xspan<smoothed_parameters const>            s_par)
+  {
+    uint const block_size = wet.size();
 
-        compute_mod (
-          pars.center,
-          pars.spread,
-          pars.lfo_depth,
-          0.07f,
-          0.f,
-          _n_stages,
-          run_mod_srcs (pars, ins[0][i], ins[1][i]));
-
-        for (uint s = 0; s < _n_stages; ++s) {
-          f32_x4 v = vec_from_array (_mod[s]);
-          auto   f = mod_freq_warp (v, 1.f - pars.mod_warp);
-          auto   q = f;
-          f        = ((f * 0.9995f) + 0.0005f);
-          f *= f32_x4 {21200.f, 21200.f, 20000.f, 20000.f};
-          // A lot of freq-dependant weight on the Q when detuning
-          q = (1.f + 3.f * q * abs (pars.spread));
-          q *= pars.a * pars.a * f32_x4 {1.f, 1.f, 1.6f, 1.6f};
-          q += 0.015f;
-          q *= 1.f + (_n_stages) * (1.1f / max_phaser_stages);
-          _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
-        }
-        for (uint s = _n_stages; s < max_phaser_stages; ++s) {
-          _phaser.reset_states_on_idx (s);
-        }
-        f32_x4 f {250.f, 250.f, 340.f, 341.f};
-        f *= 1.5f + vec_from_array (_mod[0]);
-        _onepole.reset_coeffs<0> (f, _t_spl);
-      }
-
-      auto                           mid = (ins[0][i] + ins[1][i]) * 0.5f;
-      f32_x4                         wet {ins[0][i], ins[1][i], mid, mid};
-      std::array<f32_x1, n_channels> taps_tail;
-      delay_mix (pars, taps_tail, wet);
-      auto hp_out = _onepole.tick<0> (wet)[1];
-      wet         = vec_shuffle (wet, hp_out, 0, 1, 6, 7);
-
+    // gathering into vectors, summing with delay + hp block
+    for (uint i = 0; i < block_size; ++i) {
+      auto mid = (inl[i] + inr[i]) * 0.5f;
+      wet[i] += f32_x4 {inl[i], inr[i], mid, mid};
+      auto hp_out = _onepole.tick<0> (wet[i])[1];
+      wet[i]      = vec_shuffle (wet[i], hp_out, 0, 1, 6, 7);
+    }
+    // main filtering block
+    for (uint i = 0; i < block_size; ++i) {
       // obtain response for the phaser
       zdf::response<f32_x4> aps_resp {};
       for (uint s = 0; s < _n_stages; ++s) {
@@ -783,120 +896,125 @@ private:
       auto filt_resp
         = _fb_filters.tick<fb_filter::locut> (zdf::gs_coeffs_tag {});
       filt_resp *= _fb_filters.tick<fb_filter::hicut> (zdf::gs_coeffs_tag {});
-
       // Get ZDF feedback
-      wet = _feedback.tick (
-        wet,
+      wet[i] = _feedback.tick (
+        wet[i],
         aps_resp,
         filt_resp,
-        vec_set<4> (pars.feedback),
-        vec_set<4> (pars.drive),
+        vec_set<4> (s_par[i].feedback),
+        vec_set<4> (s_par[i].drive),
         vec_set<4> (tanh_like_hardness));
-
       // Run regular filter processing
       assert (_n_stages > 0);
       for (uint s = 0; s < _n_stages; ++s) {
-        wet = _phaser.tick_on_idx (s, wet);
+        wet[i] = _phaser.tick_on_idx (s, wet[i]);
       }
       // just running the shelves to update the states.
-      auto fbv = wet * pars.feedback;
+      auto fbv = wet[i] * s_par[i].feedback;
       fbv      = zdf_type::nonlin::tick (
-        fbv, vec_set<4> (pars.drive), vec_set<4> (tanh_like_hardness));
+        fbv, vec_set<4> (s_par[i].drive), vec_set<4> (tanh_like_hardness));
       _fb_filters.tick_cascade (fbv);
-
-      delay_push (
-        0.999999f - abs (pars.feedback),
-        pars.del_gain,
-        pars.delay_mode,
-        taps_tail,
-        wet,
-        make_array (ins[0][i], ins[1][i]));
-
+    }
+    // delay_block
+    if (par.delay_mode != delay_mode::off) {
+      delay_push (s_par, par.delay_mode, taps_tail, wet, inl, inr);
+    }
+    // final mixing
+    for (uint i = 0; i < block_size; ++i) {
       auto out = mix (
-        wet,
-        f64_x2 {ins[0][i], ins[1][i]},
-        pars.depth / get_fb_gain (pars.feedback, pars.drive),
-        1.f - pars.depth,
-        pars.b);
-      outs[0][i] = out[0];
-      outs[1][i] = out[1];
+        wet[i],
+        f64_x2 {inl[i], inr[i]},
+        s_par[i].depth / get_fb_gain (s_par[i].feedback, s_par[i].drive),
+        1.f - s_par[i].depth,
+        s_par[i].b);
+      outl[i] = out[0];
+      outr[i] = out[1];
     }
   }
   //----------------------------------------------------------------------------
-  template <class T, bool nested>
-  void tick_schroeder (xspan<T*> outs, xspan<T const*> ins, uint samples)
+  template <class T>
+  void schroeder_control_block (
+    unsmoothed_parameters const& par,
+    smoothed_parameters const&   s_par,
+    T                            inl,
+    T                            inr)
   {
-    assert (outs.size() >= (n_outputs * (uint) bus_type));
-    assert (ins.size() >= (n_inputs * (uint) bus_type));
+    float stages = 2.f + s_par.stages * (max_scho_stages - 2);
+    _n_stages    = ((uint) stages) / 2;
 
-    for (uint i = 0; i < samples; ++i, ++_n_processed_samples) {
-      _param_smooth.tick();
-      // access parameters without caring if they are smoother or not.
-      all_parameters pars;
-      *((smoothed_parameters*) &pars)   = _param_smooth.get();
-      *((unsmoothed_parameters*) &pars) = _param;
+    compute_mod (
+      (1.f - s_par.center) / _n_stages,
+      s_par.spread,
+      s_par.lfo_depth,
+      0.5f,
+      s_par.b,
+      _n_stages,
+      run_mod_srcs (par, s_par, inl, inr));
 
-      if ((_n_processed_samples & _control_rate_mask) == 0) {
-        float stages = 2.f + pars.stages * (max_scho_stages - 2);
-        _n_stages    = ((uint) stages) / 2;
+    constexpr float min_g         = 0.0001f;
+    constexpr float max_g         = 0.88f;
+    auto const      g             = s_par.a * max_g + min_g;
+    auto const      mod_right_max = max_g - g;
+    auto const      mod_left_max  = -g;
+    auto            modmax = (s_par.b < 0.f) ? mod_left_max : mod_right_max;
+    modmax *= s_par.b * s_par.b;
 
-        compute_mod (
-          (1.f - pars.center) / _n_stages,
-          pars.spread,
-          pars.lfo_depth,
-          0.5f,
-          pars.b,
-          _n_stages,
-          run_mod_srcs (pars, ins[0][i], ins[1][i]));
-
-        constexpr float min_g         = 0.0001f;
-        constexpr float max_g         = 0.88f;
-        auto const      g             = pars.a * max_g + min_g;
-        auto const      mod_right_max = max_g - g;
-        auto const      mod_left_max  = -g;
-        auto            modmax = (pars.b < 0.f) ? mod_left_max : mod_right_max;
-        modmax *= pars.b * pars.b;
-
-        for (uint s = 0; s < _n_stages; ++s) {
-          for (uint j = 0; j < 2; ++j) {
-            uint            idx        = s * 2 + j;
-            constexpr float sec_factor = (max_scho_delay_ms * 0.001f);
-            float           t          = _mod[s][j];
-            t                          = mod_time_warp (t, pars.mod_warp);
-            t                          = _srate * t * sec_factor;
-            t                          = std::clamp (
-              t,
-              (float) _scho.min_delay_spls(),
-              (float) _scho.max_delay_spls());
-            _del_spls.target()[idx] = t;
-            f32_x2 v                = (j == 0) ? f32_x2 {_mod[s][1], _mod[s][3]}
-                                               : f32_x2 {_mod[s][0], _mod[s][2]};
-            auto   mod              = v * v * 1.5f * modmax;
-            mod                     = vec_min (modmax, mod);
-            _g.scho[idx]            = g + mod;
-          }
-        }
-        for (uint s = (_n_stages * 2); s < _del_spls.target().size(); ++s) {
-          _del_spls.target()[s] = _del_spls.target()[s - 1];
-        }
-        f32_x4 fv {1460.f, 1460.f, 1670.f, 1780.f};
-        auto   f = vec_from_array (_mod[_n_stages / 2]);
-        f *= f;
-        f *= (1.f + pars.a) * fv;
-        _onepole.reset_coeffs<0> (f, _t_spl);
+    for (uint s = 0; s < _n_stages; ++s) {
+      for (uint j = 0; j < 2; ++j) {
+        uint            idx        = s * 2 + j;
+        constexpr float sec_factor = (max_scho_delay_ms * 0.001f);
+        float           t          = _mod[s][j];
+        t                          = mod_time_warp (t, s_par.mod_warp);
+        t                          = _srate * t * sec_factor;
+        t                          = std::clamp (
+          t, (float) _scho.min_delay_spls(), (float) _scho.max_delay_spls());
+        _del_spls.target()[idx] = t;
+        f32_x2 v                = (j == 0) ? f32_x2 {_mod[s][1], _mod[s][3]}
+                                           : f32_x2 {_mod[s][0], _mod[s][2]};
+        auto   mod              = v * v * 1.5f * modmax;
+        mod                     = vec_min (modmax, mod);
+        _g.scho[idx]            = g + mod;
       }
+    }
+    for (uint s = (_n_stages * 2); s < _del_spls.target().size(); ++s) {
+      _del_spls.target()[s] = _del_spls.target()[s - 1];
+    }
+    f32_x4 fv {1460.f, 1460.f, 1670.f, 1780.f};
+    auto   f = vec_from_array (_mod[_n_stages / 2]);
+    f *= f;
+    f *= (1.f + s_par.a) * fv;
+    _onepole.reset_coeffs<0> (f, _t_spl);
+  }
+  //----------------------------------------------------------------------------
+  template <class T, bool Nested>
+  void schroeder_tick (
+    xspan<T>       outl,
+    xspan<T>       outr,
+    xspan<f32_x4>  wet, // might contain the delay feedback
+    xspan<T const> inl,
+    xspan<T const> inr,
+    xspan<std::array<f32_x1, n_channels> const> taps_tail,
+    unsmoothed_parameters const&                par,
+    xspan<smoothed_parameters const>            s_par)
+  {
+    uint const block_size = wet.size();
+
+    std::array<decltype (_del_spls)::value_type, max_block_size> del_spls_arr;
+
+    for (uint i = 0; i < block_size; ++i) {
       _del_spls.tick();
+      del_spls_arr[i] = _del_spls.get();
+      wet[i] += f32_x4 {inl[i], inr[i], inl[i], inr[i]};
+      wet[i] = _onepole.tick<0> (wet[i])[0];
+    }
 
-      f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
-      std::array<f32_x1, n_channels> taps_tail;
-      delay_mix (pars, taps_tail, wet);
-      wet = _onepole.tick<0> (wet)[0];
-      wet -= _1spl_fb * pars.feedback;
-
-      std::array<f32_x2, 2> sig {{{wet[0], wet[2]}, {wet[1], wet[3]}}};
+    for (uint i = 0; i < block_size; ++i) {
       std::array<f32_x2, max_scho_stages> to_push {};
-      auto&                               del_spls = _del_spls.get();
-      if constexpr (!nested) {
+      wet[i] -= _1spl_fb * s_par[i].feedback;
+      std::array<f32_x2, 2> sig {
+        {{wet[i][0], wet[i][2]}, {wet[i][1], wet[i][3]}}};
+      auto& del_spls = del_spls_arr[i];
+      if constexpr (!Nested) {
         for (uint s = 0; s < _n_stages; ++s) {
           for (uint c = 0; c < n_channels; ++c) {
             uint idx     = s * 2 + c;
@@ -932,8 +1050,8 @@ private:
         sig[0]                       = -sig[0];
         sig[1]                       = -sig[1];
 #else
-        // Cascaded Nested N=2 allpasses, not that different from the regular
-        // allpass...
+        // Cascaded Nested N=2 allpasses, not that different from the
+        // regular allpass...
         std::array<f32_x2, 2> fwd {};
         for (uint s = 0; s < _n_stages; ++s) {
           for (uint c = 0; c < n_channels; ++c) {
@@ -961,123 +1079,132 @@ private:
 #endif
       }
       _scho.push (to_push);
-      wet = vec_shuffle (sig[0], sig[1], 0, 2, 1, 3);
+      wet[i] = vec_shuffle (sig[0], sig[1], 0, 2, 1, 3);
 
       auto fb_val = zdf_type::nonlin::tick (
-        wet, vec_set<4> (pars.drive), vec_set<4> (tanh_like_hardness));
+        wet[i], vec_set<4> (s_par[i].drive), vec_set<4> (tanh_like_hardness));
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
-
-      delay_push (
-        0.999999f - abs (pars.feedback),
-        pars.del_gain,
-        pars.delay_mode,
-        taps_tail,
-        wet,
-        make_array (ins[0][i], ins[1][i]));
-
-      auto fb_gain = get_fb_gain (pars.feedback, pars.drive);
-      auto out     = mix (
-        wet,
-        f64_x2 {ins[0][i], ins[1][i]},
-        pars.depth / fb_gain,
-        1.f - pars.depth,
+    }
+    // delay_block
+    if (par.delay_mode != delay_mode::off) {
+      delay_push (s_par, par.delay_mode, taps_tail, wet, inl, inr);
+    }
+    // final mixing
+    for (uint i = 0; i < block_size; ++i) {
+      auto out = mix (
+        wet[i],
+        f64_x2 {inl[i], inr[i]},
+        s_par[i].depth / get_fb_gain (s_par[i].feedback, s_par[i].drive),
+        1.f - s_par[i].depth,
         1.f);
-      outs[0][i] = out[0];
-      outs[1][i] = out[1];
+      outl[i] = out[0];
+      outr[i] = out[1];
     }
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void tick_chorus (xspan<T*> outs, xspan<T const*> ins, uint samples)
+  void chorus_control_block (
+    unsmoothed_parameters const& par,
+    smoothed_parameters const&   s_par,
+    T                            inl,
+    T                            inr)
   {
-    assert (outs.size() >= (n_outputs * (uint) bus_type));
-    assert (ins.size() >= (n_inputs * (uint) bus_type));
+    // stages are in pairs (TODO check)
+    float stages
+      = 1.f + s_par.stages * ((float) (max_chor_stages / 2) - 1.0000000001f);
+    _n_stages      = (uint) stages;
+    _n_stages_frac = stages - (float) _n_stages;
+    _n_stages += 1; // fractional stage
 
-    for (uint i = 0; i < samples; ++i, ++_n_processed_samples) {
-      _param_smooth.tick();
-      // access parameters without caring if they are smoother or not.
-      all_parameters pars;
-      *((smoothed_parameters*) &pars)   = _param_smooth.get();
-      *((unsmoothed_parameters*) &pars) = _param;
+    float ratefact = s_par.lfo_rate * 0.01f;
 
-      auto rndlfo = _rnd_lfo.tick_filt_sample_and_hold();
+    compute_mod (
+      0.05f * _rnd_lfo_last[0] + 0.85f - s_par.center, // reverse range lf to hf
+      s_par.spread,
+      s_par.lfo_depth * (0.45f + 0.2f * s_par.center + 0.25f * ratefact),
+      0.3f + 0.1f * _rnd_lfo_last[0] + 0.5f * s_par.center,
+      s_par.stereo * 0.5f,
+      _n_stages,
+      run_mod_srcs (par, s_par, inl, inr));
 
-      if ((_n_processed_samples & _control_rate_mask) == 0) {
-        // stages are in pairs (TODO check)
-        float stages
-          = 1.f + pars.stages * ((float) (max_chor_stages / 2) - 1.0000000001f);
-        _n_stages      = (uint) stages;
-        _n_stages_frac = stages - (float) _n_stages;
-        _n_stages += 1; // fractional stage
+    for (uint s = 0; s < (_n_stages * 2); ++s) {
+      constexpr float msec_offset = 15.f;
+      constexpr float sec_factor = ((max_chor_delay_ms - msec_offset) * 0.001f);
 
-        float ratefact = pars.lfo_rate * 0.01f;
+      bool  neg = !!((s / 2) % 2);
+      float t   = _mod[s][0];
+      t         = mod_time_warp (t, s_par.mod_warp);
+      t         = neg ? 1.f - t : t;
+      t         = _srate * (msec_offset * 0.001f + (t * sec_factor));
+      _del_spls.target()[s]    = t;
+      constexpr float g_factor = 0.1f;
+      auto            m        = _mod[s][1];
+      auto            gv       = s_par.b;
+      auto            negf     = neg ? 1.f : -1.f;
+      _g.chor[s][0]            = gv * gv * 0.407f + m * g_factor * gv;
+      _g.chor[s][0] *= neg;
+      _rnd_lfo.set_freq (vec_set<4> (0.8f + abs (s_par.b)), _t_spl);
 
-        compute_mod (
-          0.05f * rndlfo[0] + 0.85f - pars.center, // reverse range lf to hf
-          pars.spread,
-          pars.lfo_depth * (0.45f + 0.2f * pars.center + 0.25f * ratefact),
-          0.3f + 0.1f * rndlfo[0] + 0.5f * pars.center,
-          pars.stereo * 0.5f,
-          _n_stages,
-          run_mod_srcs (pars, ins[0][i], ins[1][i]));
+      // set the phasers (no feeedback)
+      auto v = vec_from_array (_mod[s]);
+      auto f = v * v;
+      auto q = v;
+      f      = ((f * (0.45f + 0.3f * _rnd_lfo_last)) + 0.15f);
+      f *= f32_x4 {21200.f, 21200.f, 17000.f, 17000.f};
+      q = (1.f + 2.f * q * abs (s_par.spread));
+      q += 0.09f;
+      _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
+    }
+    for (uint s = (_n_stages * 2); s < _del_spls.target().size(); ++s) {
+      _del_spls.target()[s] = _del_spls.target()[s - 1];
+    }
+    f32_x4 fv {460.f, 460.f, 970.f, 980.f};
+    auto   f = vec_from_array (_mod[_n_stages / 2]);
+    f *= f;
+    f *= (1.f + s_par.b) * fv;
+    _onepole.reset_coeffs<0> (f, _t_spl);
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void chorus_tick (
+    xspan<T>       outl,
+    xspan<T>       outr,
+    xspan<f32_x4>  wet, // might contain the delay feedback
+    xspan<T const> inl,
+    xspan<T const> inr,
+    xspan<std::array<f32_x1, n_channels> const> taps_tail,
+    unsmoothed_parameters const&                par,
+    xspan<smoothed_parameters>                  s_par)
+  {
+    uint const block_size = wet.size();
 
-        for (uint s = 0; s < (_n_stages * 2); ++s) {
-          constexpr float msec_offset = 15.f;
-          constexpr float sec_factor
-            = ((max_chor_delay_ms - msec_offset) * 0.001f);
+    std::array<decltype (_del_spls)::value_type, max_block_size> del_spls_arr;
+    std::array<decltype (_rnd_lfo_last), max_block_size>         tremolo;
+    array2d<
+      std::array<float, vec_traits_t<f32_x4>::size>,
+      n_channels,
+      max_block_size>
+                                                               pan;
+    array2d<float, vec_traits_t<f32_x4>::size, max_block_size> trnd;
 
-          bool  neg = !!((s / 2) % 2);
-          float t   = _mod[s][0];
-          t         = mod_time_warp (t, pars.mod_warp);
-          t         = neg ? 1.f - t : t;
-          t         = _srate * (msec_offset * 0.001f + (t * sec_factor));
-          _del_spls.target()[s]    = t;
-          constexpr float g_factor = 0.1f;
-          auto            m        = _mod[s][1];
-          auto            gv       = pars.b;
-          auto            negf     = neg ? 1.f : -1.f;
-          _g.chor[s][0]            = gv * gv * 0.407f + m * g_factor * gv;
-          _g.chor[s][0] *= neg;
-          _rnd_lfo.set_freq (vec_set<4> (0.8f + abs (pars.b)), _t_spl);
-
-          // set the phasers (no feeedback)
-          auto v = vec_from_array (_mod[s]);
-          auto f = v * v;
-          auto q = v;
-          f      = ((f * (0.45f + 0.3f * rndlfo)) + 0.15f);
-          f *= f32_x4 {21200.f, 21200.f, 17000.f, 17000.f};
-          q = (1.f + 2.f * q * abs (pars.spread));
-          q += 0.09f;
-          _phaser.reset_coeffs_on_idx (s, f, q, _t_spl);
-        }
-        for (uint s = (_n_stages * 2); s < _del_spls.target().size(); ++s) {
-          _del_spls.target()[s] = _del_spls.target()[s - 1];
-        }
-        f32_x4 fv {460.f, 460.f, 970.f, 980.f};
-        auto   f = vec_from_array (_mod[_n_stages / 2]);
-        f *= f;
-        f *= (1.f + pars.b) * fv;
-        _onepole.reset_coeffs<0> (f, _t_spl);
-      }
-      // create some difference on the inputs
-      f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
-      std::array<f32_x1, n_channels> taps_tail;
-      delay_mix (pars, taps_tail, wet);
-      wet = _onepole.tick<0> (wet)[0];
-
+    for (uint i = 0; i < block_size; ++i) {
+      wet[i] += f32_x4 {inl[i], inr[i], inl[i], inr[i]};
+      wet[i] = _onepole.tick<0> (wet[i])[0];
       _del_spls.tick();
-      auto& del_spls = _del_spls.get();
-      auto  chor_in  = vec1_array_wrap (vec_to_array (wet));
-      wet            = vec_set<4> (0.f);
+      del_spls_arr[i] = _del_spls.get();
+    }
 
+    for (uint i = 0; i < block_size; ++i) {
       // To allow stage crossfading constant panning positions are kept.
       // Processing is done in pairs.
       //
       // pan position   | L             R
       // stage ordering | 1 3 2 4 4 2 3 1
+      auto rndlfo   = _rnd_lfo.tick_filt_sample_and_hold();
+      _rnd_lfo_last = rndlfo;
 
-      auto tremolo      = _tremolo_lfo.tick_sine() * pars.b;
-      auto tr_crossfade = (tremolo + 1.f) * 0.5f;
+      tremolo[i]        = _tremolo_lfo.tick_sine() * s_par[i].b;
+      auto tr_crossfade = (tremolo[i] + 1.f) * 0.5f;
 
       constexpr auto kpanl1 = f32_x4 {0.f, 0.07f, 0.3f, 0.15f};
       constexpr auto kpanl2 = f32_x4 {0.3f, 0.15f, 0.07f, 0.f};
@@ -1085,35 +1212,42 @@ private:
       auto panlv = (1.f - tr_crossfade) * kpanl1;
       panlv += tr_crossfade * kpanl2;
 
-      auto rndmod = (rndlfo * 0.05f * abs (pars.b)) + 0.95f;
+      auto rndmod = (rndlfo * 0.05f * abs (s_par[i].b)) + 0.95f;
 
       // crossfade towards 0.5 (center panning)
-      auto stereo_norm = abs (pars.stereo);
+      auto stereo_norm = abs (s_par[i].stereo);
       panlv *= stereo_norm;
       panlv += (1.f - stereo_norm) * 0.5f;
-      // using -x^2+2x as a cheap approximation of the sin(x*pi/2) pan law.
+      // using -x^2+2x as a cheap approximation of the sin(x*pi/2) pan
+      // law.
       panlv = -panlv * panlv + 2.f * panlv;
       // some randomization
       panlv *= rndmod;
       auto panrv = 1.f - panlv;
 
-      auto panl = vec_to_array (panlv);
-      auto panr = vec_to_array (panrv);
+      pan[i][0] = vec_to_array (panlv);
+      pan[i][1] = vec_to_array (panrv);
+      trnd[i]   = vec_to_array (rndlfo * _srate * 0.0005f);
+    }
 
-      auto trnd = vec_to_array (rndlfo * _srate * 0.0005f);
-
-      auto                                prev = wet;
+    for (uint i = 0; i < block_size; ++i) {
+      auto& del_spls = del_spls_arr[i];
+      auto  chor_in  = vec1_array_wrap (vec_to_array (wet[i]));
+      wet[i]         = vec_set<4> (0.f);
+      auto                                prev = wet[i];
       std::array<f32_x1, max_chor_stages> to_push {};
-      for (uint s = 0; s < _n_stages; ++s) {
 
+      for (uint s = 0; s < _n_stages; ++s) {
         uint idx  = s * 2;
         uint lane = idx % vec_traits_t<f32_x4>::size;
 
         std::array<float, n_channels> channel;
 
+        // TODO: no feedback, delay lines can be read contiguosly
+
         for (uint j = 0; j < channel.size(); ++j, ++idx, ++lane) {
           auto n_spls = std::clamp (
-            del_spls[idx] + trnd[lane],
+            del_spls[idx] + trnd[i][lane],
             (float) _chor.min_delay_spls(),
             (float) _chor.max_delay_spls());
           auto g       = _g.chor[idx];
@@ -1122,164 +1256,179 @@ private:
           to_push[idx] = r.to_push;
           channel[j]   = r.out[0];
         }
-
-        float l = channel[0] * panl[s] + channel[1] * panr[s];
-        float r = channel[0] * panr[s] + channel[1] * panl[s];
+        auto& panl = pan[i][0];
+        auto& panr = pan[i][1];
+        float l    = channel[0] * panl[s] + channel[1] * panr[s];
+        float r    = channel[0] * panr[s] + channel[1] * panl[s];
 
         // TODO: probably run this on its own loop?
         f32_x4 v {l, r, l, r};
         v    = _phaser.tick_on_idx (s, v);
-        prev = wet;
-        wet += v;
+        prev = wet[i];
+        wet[i] += v;
       }
       //  crossfade last stage
-      wet = prev + (wet - prev) * _n_stages_frac;
+      wet[i] = prev + (wet[i] - prev) * _n_stages_frac;
       _chor.push (to_push);
+    }
 
-      // dry feedforward signal based
-      f32_x2 dry {ins[0][i], ins[1][i]};
+    // dry (from flanger) reused as a different mod line
+    for (uint i = 0; i < block_size; ++i) {
+      f32_x2 dry {inl[i], inr[i]};
       _dry.push (xspan {&dry, 1});
       constexpr auto ratio
         = (float) max_chor_delay_ms / (0.015f + (float) (max_dry_delay_ms));
-      float n_spls = del_spls[0] * ratio * pars.a;
+      float n_spls = del_spls_arr[i][0] * ratio * s_par[i].a;
       n_spls       = std::clamp (
         n_spls, (float) _dry.min_delay_spls(), (float) _dry.max_delay_spls());
       auto ffwd      = _dry.get (n_spls, 0);
-      auto fbg       = abs (pars.feedback);
+      auto fbg       = abs (s_par[i].feedback);
       auto ffwd_gain = fbg * fbg * fbg * fbg * (float) _n_stages;
-      ffwd_gain      = std::copysign (ffwd_gain, pars.feedback);
+      ffwd_gain      = std::copysign (ffwd_gain, s_par[i].feedback);
       auto ffwd4     = f32_x4 {ffwd[0], ffwd[1], ffwd[0], ffwd[1]} * ffwd_gain;
-      ffwd4 *= 1.f - tremolo;
-      wet += ffwd4;
+      ffwd4 *= 1.f - ((tremolo[i] + 1.f) * 0.5f);
+      wet[i] += ffwd4;
+      // gain compensation for all gains in the process before entering the
+      // saturation stage
+      wet[i] /= _n_stages_frac + (float) (_n_stages - 1) + abs (ffwd_gain);
+    }
 
-      // naive saturation
-      wet = zdf_type::nonlin::tick (
-        wet, vec_set<4> (pars.drive), vec_set<4> (tanh_like_hardness) * rndmod);
-      wet = _fb_filters.tick_cascade (wet);
-
-      auto gain_wet
-        = 1.f / (_n_stages_frac + (float) (_n_stages - 1) + abs (ffwd_gain));
-
-      delay_push (
-        0.9999f,
-        pars.del_gain,
-        pars.delay_mode,
-        taps_tail,
-        wet * gain_wet,
-        make_array (ins[0][i], ins[1][i]));
-
+    // saturation + filtering block
+    for (uint i = 0; i < block_size; ++i) {
+      wet[i] = zdf_type::nonlin::tick (
+        wet[i], vec_set<4> (s_par[i].drive), vec_set<4> (tanh_like_hardness));
+      wet[i] = _fb_filters.tick_cascade (wet[i]);
+    }
+    // delay_block
+    if (par.delay_mode != delay_mode::off) {
+      // this has no feedback, clear the parameter used for other purpuses for
+      // "delay_push" (hackish)
+      for (uint i = 0; i < block_size; ++i) {
+        s_par[i].feedback = 0.f;
+      }
+      delay_push (s_par, par.delay_mode, taps_tail, wet, inl, inr);
+    }
+    // dry signal delaying + mixing
+    for (uint i = 0; i < block_size; ++i) {
       auto out = mix (
-        wet,
-        f64_x2 {dry[0], dry[1]},
-        pars.depth * gain_wet,
-        (1.f - pars.depth),
-        pars.b);
-
-      outs[0][i] = out[0];
-      outs[1][i] = out[1];
+        wet[i],
+        f64_x2 {inl[i], inr[i]},
+        s_par[i].depth,
+        1.f - s_par[i].depth,
+        s_par[i].b);
+      outl[i] = out[0];
+      outr[i] = out[1];
     }
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void tick_flanger (xspan<T*> outs, xspan<T const*> ins, uint samples)
+  void flanger_control_block (
+    unsmoothed_parameters const& par,
+    smoothed_parameters const&   s_par,
+    T                            inl,
+    T                            inr)
   {
-    assert (outs.size() >= (n_outputs * (uint) bus_type));
-    assert (ins.size() >= (n_inputs * (uint) bus_type));
+    compute_mod (
+      1.f - s_par.center, // reverse range lf to hf
+      s_par.spread,
+      s_par.lfo_depth,
+      0.45f,
+      0.f,
+      1, // flanger is always one stage
+      run_mod_srcs (par, s_par, inl, inr));
 
-    for (uint i = 0; i < samples; ++i, ++_n_processed_samples) {
-      _param_smooth.tick();
-      // access parameters without caring if they are smoother or not.
-      all_parameters pars;
-      *((smoothed_parameters*) &pars)   = _param_smooth.get();
-      *((unsmoothed_parameters*) &pars) = _param;
+    for (uint s = 0; s < flan_stages; ++s) {
+      static_assert (flan_stages == 2, "this loop assumes s < 2");
+      constexpr float sec_factor = (max_flan_delay_ms * 0.001f);
 
-      if ((_n_processed_samples & _control_rate_mask) == 0) {
-        compute_mod (
-          1.f - pars.center, // reverse range lf to hf
-          pars.spread,
-          pars.lfo_depth,
-          0.45f,
-          0.f,
-          1, // flanger is always one stage
-          run_mod_srcs (pars, ins[0][i], ins[1][i]));
+      float t = _mod[0][s];
+      t       = mod_time_warp (t, s_par.mod_warp);
+      t       = _srate * t * sec_factor;
+      t       = std::clamp (
+        t, (float) _flan.min_delay_spls(), (float) _flan.max_delay_spls());
+      _del_spls.target()[s]    = t;
+      constexpr float g_factor = 0.1f;
+      auto            m        = _mod[0][2 + s];
+      auto            gv       = s_par.stages;
+      _g.flan[s][0]            = -gv * gv * 0.75f + m * m * g_factor * gv;
+    }
+    for (uint s = flan_stages; s < _del_spls.target().size(); ++s) {
+      _del_spls.target()[s] = _del_spls.target()[s - 1];
+    }
+    f32_x4 fv {460.f, 460.f, 970.f, 980.f};
+    auto   f = vec_from_array (_mod[0]);
+    f *= f;
+    f *= (1.f + s_par.feedback) * fv;
+    _onepole.reset_coeffs<0> (f, _t_spl);
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void flanger_tick (
+    xspan<T>       outl,
+    xspan<T>       outr,
+    xspan<f32_x4>  wet, // might contain the delay feedback
+    xspan<T const> inl,
+    xspan<T const> inr,
+    xspan<std::array<f32_x1, n_channels> const> taps_tail,
+    unsmoothed_parameters const&                par,
+    xspan<smoothed_parameters const>            s_par)
+  {
+    uint const block_size = wet.size();
 
-        for (uint s = 0; s < flan_stages; ++s) {
-          static_assert (flan_stages == 2, "this loop assumes s < 2");
-          constexpr float sec_factor = (max_flan_delay_ms * 0.001f);
+    std::array<decltype (_del_spls)::value_type, max_block_size> del_spls_arr;
 
-          float t = _mod[0][s];
-          t       = mod_time_warp (t, pars.mod_warp);
-          t       = _srate * t * sec_factor;
-          t       = std::clamp (
-            t, (float) _flan.min_delay_spls(), (float) _flan.max_delay_spls());
-          _del_spls.target()[s]    = t;
-          constexpr float g_factor = 0.1f;
-          auto            m        = _mod[0][2 + s];
-          auto            gv       = pars.stages;
-          _g.flan[s][0]            = -gv * gv * 0.75f + m * m * g_factor * gv;
-        }
-        for (uint s = flan_stages; s < _del_spls.target().size(); ++s) {
-          _del_spls.target()[s] = _del_spls.target()[s - 1];
-        }
-        f32_x4 fv {460.f, 460.f, 970.f, 980.f};
-        auto   f = vec_from_array (_mod[0]);
-        f *= f;
-        f *= (1.f + pars.feedback) * fv;
-        _onepole.reset_coeffs<0> (f, _t_spl);
-      }
+    for (uint i = 0; i < block_size; ++i) {
       _del_spls.tick();
+      del_spls_arr[i] = _del_spls.get();
+      auto mid        = (inl[i] + inr[i]) * 0.5f;
+      wet[i] += f32_x4 {inl[i], inr[i], mid, mid};
+      auto hp_out = _onepole.tick<0> (wet[i])[1];
+      wet[i]      = vec_shuffle (wet[i], hp_out, 0, 1, 6, 7);
+    }
 
-      auto                           mid = (ins[0][i] + ins[1][i]) * 0.5f;
-      f32_x4                         wet {ins[0][i], ins[1][i], mid, mid};
-      std::array<f32_x1, n_channels> taps_tail;
-      delay_mix (pars, taps_tail, wet);
-      auto hp_out = _onepole.tick<0> (wet)[1];
-      wet         = vec_shuffle (wet, hp_out, 0, 1, 6, 7);
-      wet -= _1spl_fb * pars.feedback;
+    for (uint i = 0; i < block_size; ++i) {
+      wet[i] -= _1spl_fb * s_par[i].feedback;
 
-      auto& del_spls = _del_spls.get();
-      auto  flan_in  = vec_split<flan_stages> (wet);
+      auto& del_spls = del_spls_arr[i];
+      auto  flan_in  = vec_split<flan_stages> (wet[i]);
 
       std::array<f32_x2, flan_stages> to_push {};
       for (uint s = 0; s < flan_stages; ++s) {
-        auto yn    = _flan.get (del_spls[s], s);
-        auto r     = allpass_fn::tick<f32_x2> (flan_in[s], yn, _g.flan[s]);
-        to_push[s] = r.to_push;
-        wet[0 + s] = r.out[0];
-        wet[2 + s] = r.out[1];
+        auto yn       = _flan.get (del_spls[s], s);
+        auto r        = allpass_fn::tick<f32_x2> (flan_in[s], yn, _g.flan[s]);
+        to_push[s]    = r.to_push;
+        wet[i][0 + s] = r.out[0];
+        wet[i][2 + s] = r.out[1];
       }
       _flan.push (to_push);
 
       auto fb_val = zdf_type::nonlin::tick (
-        wet, vec_set<4> (pars.drive), vec_set<4> (tanh_like_hardness));
+        wet[i], vec_set<4> (s_par[i].drive), vec_set<4> (tanh_like_hardness));
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
-
-      f32_x2 dry {ins[0][i], ins[1][i]};
+    }
+    // delay_block
+    if (par.delay_mode != delay_mode::off) {
+      delay_push (s_par, par.delay_mode, taps_tail, wet, inl, inr);
+    }
+    // dry signal delaying + mixing
+    for (uint i = 0; i < block_size; ++i) {
+      f32_x2 dry {inl[i], inr[i]};
       _dry.push (xspan {&dry, 1});
       constexpr float kdry
         = 0.001f * std::max (max_dry_delay_ms, max_flan_delay_ms / 2);
-      float n_spls = _srate * kdry * (1.f - pars.center) * pars.a;
+      float n_spls = _srate * kdry * (1.f - s_par[i].center) * s_par[i].a;
       n_spls       = std::clamp (
         n_spls, (float) _dry.min_delay_spls(), (float) _dry.max_delay_spls());
       dry = _dry.get (n_spls, 0);
 
-      delay_push (
-        0.999999f - abs (pars.feedback),
-        pars.del_gain,
-        pars.delay_mode,
-        taps_tail,
-        wet,
-        make_array (ins[0][i], ins[1][i]));
-
       auto out = mix (
-        wet,
+        wet[i],
         f64_x2 {dry[0], dry[1]},
-        pars.depth / get_fb_gain (pars.feedback, pars.drive),
-        1.f - pars.depth,
-        pars.b);
-
-      outs[0][i] = out[0];
-      outs[1][i] = out[1];
+        s_par[i].depth / get_fb_gain (s_par[i].feedback, s_par[i].drive),
+        1.f - s_par[i].depth,
+        s_par[i].b);
+      outl[i] = out[0];
+      outr[i] = out[1];
     }
   }
   //----------------------------------------------------------------------------
@@ -1462,9 +1611,6 @@ private:
     float del_gain;
   };
   //----------------------------------------------------------------------------
-  struct all_parameters : public unsmoothed_parameters,
-                          public smoothed_parameters {};
-  //----------------------------------------------------------------------------
   unsmoothed_parameters                      _param;
   value_smoother<float, smoothed_parameters> _param_smooth;
 
@@ -1524,20 +1670,21 @@ private:
   alignas (sse_bytes) array2d<float, n_ap_channels, max_phaser_stages> _mod;
 
   std::vector<float, overaligned_allocator<float, 128>> _mem;
-  sweep_lfo_type _sweep_lfo; // 0 = L, 1 = R, control rate
-  lfo<4>         _rnd_lfo; // 0 = L, 1 = R, audio rate
-  lfo<4>         _tremolo_lfo; // 0 = L, 1 = R, audio rate
-  f32_x4         _1spl_fb;
-  uint           _n_processed_samples;
-  uint           _control_rate_mask;
-  uint           _n_stages;
-  float          _n_stages_frac;
-  float          _ctrl_t_spl;
-  float          _t_spl;
-  float          _srate;
-  float          _lp_smooth_coeff;
-  float          _beat_hz;
-  float          _beat_spls;
+  sweep_lfo_type                  _sweep_lfo; // 0 = L, 1 = R, control rate
+  lfo<4>                          _rnd_lfo; // 0 = L, 1 = R, audio rate
+  lfo<4>                          _tremolo_lfo; // 0 = L, 1 = R, audio rate
+  uint                            _n_processed_samples;
+  uint                            _control_rate_mask;
+  uint                            _n_stages;
+  f32_x4                          _1spl_fb;
+  decltype (_rnd_lfo)::value_type _rnd_lfo_last;
+  float                           _lp_smooth_coeff;
+  float                           _n_stages_frac;
+  float                           _beat_hz;
+  float                           _beat_spls;
+  float                           _ctrl_t_spl;
+  float                           _t_spl;
+  float                           _srate;
 #if !ARTV_MOD_CHO_FLAN_TIRAN
   xspan<float> _sinc_co;
 #endif
