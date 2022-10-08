@@ -247,17 +247,6 @@ public:
     return float_param ("%", 0., 100, 0., 0.1);
   }
   //----------------------------------------------------------------------------
-  struct drive_curve_tag {};
-  void set (drive_curve_tag, float v)
-  {
-    _param_smooth.target().drive_curve = v *= 0.01f;
-  }
-
-  static constexpr auto get_parameter (drive_curve_tag)
-  {
-    return float_param ("%", 0., 100, 0., 0.1);
-  }
-  //----------------------------------------------------------------------------
   struct b_tag {};
   void set (b_tag, float v) { _param_smooth.target().b = v * 0.01f; }
 
@@ -496,7 +485,6 @@ public:
     feedback_locut_tag,
     feedback_hicut_tag,
     drive_tag,
-    drive_curve_tag,
     spread_tag,
     b_tag,
     depth_tag,
@@ -803,7 +791,7 @@ private:
         filt_resp,
         vec_set<4> (pars.feedback),
         vec_set<4> (pars.drive),
-        vec_set<4> (pars.drive_curve));
+        vec_set<4> (tanh_like_hardness));
 
       // Run regular filter processing
       assert (_n_stages > 0);
@@ -813,7 +801,7 @@ private:
       // just running the shelves to update the states.
       auto fbv = wet * pars.feedback;
       fbv      = zdf_type::nonlin::tick (
-        fbv, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
+        fbv, vec_set<4> (pars.drive), vec_set<4> (tanh_like_hardness));
       _fb_filters.tick_cascade (fbv);
 
       delay_push (
@@ -976,7 +964,7 @@ private:
       wet = vec_shuffle (sig[0], sig[1], 0, 2, 1, 3);
 
       auto fb_val = zdf_type::nonlin::tick (
-        wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
+        wet, vec_set<4> (pars.drive), vec_set<4> (tanh_like_hardness));
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
 
       delay_push (
@@ -1166,18 +1154,18 @@ private:
 
       // naive saturation
       wet = zdf_type::nonlin::tick (
-        wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve) * rndmod);
+        wet, vec_set<4> (pars.drive), vec_set<4> (tanh_like_hardness) * rndmod);
       wet = _fb_filters.tick_cascade (wet);
 
       auto gain_wet
         = 1.f / (_n_stages_frac + (float) (_n_stages - 1) + abs (ffwd_gain));
 
       delay_push (
-        1.97f * gain_wet,
+        0.9999f,
         pars.del_gain,
         pars.delay_mode,
         taps_tail,
-        wet,
+        wet * gain_wet,
         make_array (ins[0][i], ins[1][i]));
 
       auto out = mix (
@@ -1263,7 +1251,7 @@ private:
       _flan.push (to_push);
 
       auto fb_val = zdf_type::nonlin::tick (
-        wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
+        wet, vec_set<4> (pars.drive), vec_set<4> (tanh_like_hardness));
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
 
       f32_x2 dry {ins[0][i], ins[1][i]};
@@ -1467,10 +1455,9 @@ private:
 
     float feedback;
     float drive;
-    float drive_curve;
     float spread;
-
     float stages;
+
     float del_4beats;
     float del_gain;
   };
@@ -1486,7 +1473,9 @@ private:
   using zdf_type     = zdf::feedback<
     zdf::lin_pre_fb_node_nonlin_after_tag,
     zdf::lin_mystran_tag<2>,
-    sigmoid::mystran<4, true>>;
+    sigmoid::mystran<1, true>>;
+
+  static constexpr float tanh_like_hardness = 0.19f;
   struct fb_filter {
     enum { locut, hicut, count };
   };

@@ -7377,16 +7377,6 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  mod_drive_curve,
-  n_stereo_busses,
-  param_common (
-    "Drv Curve",
-    declptr<upsampled<mod>>(),
-    declptr<mod::drive_curve_tag>()),
-  mod::get_parameter (mod::drive_curve_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
   mod_param_a,
   n_stereo_busses,
   param_common ("Param A", declptr<upsampled<mod>>(), declptr<mod::a_tag>()),
@@ -7474,22 +7464,21 @@ using mod_params = mp_list<
   mod_param_a,
   mod_param_b,
 
-  mod_env_depth,
-  mod_env_speed,
   mod_mod_warp,
   mod_stereo,
   mod_drive,
-  mod_drive_curve,
+  mod_delay_mode,
+  mod_delay_gain,
+  mod_delay_quaterterbeats,
   mod_feedback_locut,
   mod_feedback_hicut,
 
   mod_mode,
   mod_stages,
+  mod_env_depth,
+  mod_env_speed,
   mod_lfo_wave,
   mod_lfo_time_base,
-  mod_delay_gain,
-  mod_delay_quaterterbeats,
-  mod_delay_mode,
   mod_oversampling>;
 //------------------------------------------------------------------------------
 

@@ -421,7 +421,7 @@ struct mystran_pre_shape {
     constexpr auto tbl = make_array<T> (
       (T) 0.5, // order 3
       (T) 0.375, // order 5
-      (T) 0.3125, // order 7, from now on even and odd
+      (T) 0.3125, // order 7
       (T) 0.2734375,
       (T) 0.24609375,
       (T) 0.2255859375,
