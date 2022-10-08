@@ -1310,12 +1310,10 @@ private:
     }
     // dry signal delaying + mixing
     for (uint i = 0; i < block_size; ++i) {
-      auto out = mix (
-        wet[i],
-        f64_x2 {inl[i], inr[i]},
-        s_par[i].depth,
-        1.f - s_par[i].depth,
-        s_par[i].b);
+      float depth = (s_par[i].depth - 1.f);
+      depth       = 1.f - depth * depth;
+      auto out
+        = mix (wet[i], f64_x2 {inl[i], inr[i]}, depth, 1.f - depth, s_par[i].b);
       outl[i] = out[0];
       outr[i] = out[1];
     }
