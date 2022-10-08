@@ -22,6 +22,7 @@
 - Editor: Comboboxes: Wrap around the list when using the arrows.
 - Editor: Knobs: Add keyboard data entry when pressing the Right mouse button.
 - Consoles: Fix bug when processing channel to channel sends.
+- Processor: Fix wrong channel inactive detection.
 
 1.8.1
 - Artv Phaser: Label the amount of stages by number of stages on the serial

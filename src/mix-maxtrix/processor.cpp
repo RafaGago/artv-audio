@@ -604,8 +604,8 @@ private:
       }
     });
     // clang-format on
-    bool has_receives;
-    bool has_inputs;
+    bool has_receives {};
+    bool has_inputs {};
     if (processors[0] == nullptr) {
       // dsp_class::dsp_type == dsp_types::console
       has_inputs = buffers.template mix<2, s8> (
