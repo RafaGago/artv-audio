@@ -463,7 +463,7 @@ static inline V vec_load (xspan<vec_value_type_t<V> const> src)
 }
 
 template <uint N, class T>
-static inline vec<T, N> vec_load (xspan<const T> src)
+static inline vec<T, N> vec_load (xspan<T const> src)
 {
   return vec_load<vec<T, N>> (src);
 }
@@ -504,7 +504,7 @@ static inline V vec_load_unaligned (xspan<vec_value_type_t<V> const> src)
 }
 
 template <uint N, class T>
-static inline vec<T, N> vec_load_unaligned (xspan<const T> src)
+static inline vec<T, N> vec_load_unaligned (xspan<T const> src)
 {
   return vec_load_unaligned<vec<T, N>> (src);
 }
@@ -717,15 +717,17 @@ using vec_array_type = std::array<vec_value_type_t<V>, vec_traits_t<V>::size>;
 template <class V, size_t N, enable_if_vec_t<V>* = nullptr>
 auto vec_cat (std::array<V, N> a)
 {
-  using T             = vec_value_type_t<V>;
-  using traits        = vec_traits_t<V>;
-  using V_dst         = vec<T, traits::size * 2>;
-  constexpr uint size = traits::size * N;
+  using T                 = vec_value_type_t<V>;
+  using traits            = vec_traits_t<V>;
+  constexpr uint vec_size = traits::size;
+  constexpr uint size     = traits::size * N;
   static_assert ((size % 2) == 0);
 
   vec<T, size> ret;
   for (uint i = 0; i < size; ++i) {
-    ret[i] = a[i / N][i % N];
+    auto const vec_idx  = i / vec_size;
+    auto const elem_idx = i % vec_size;
+    ret[i]              = a[vec_idx][elem_idx];
   }
   return ret;
 }
@@ -736,7 +738,7 @@ auto vec_cat (V v1, Ts&&... vecs)
 {
   constexpr size_t n_elems = 1 + sizeof...(Ts);
   static_assert ((n_elems % 2) == 0);
-  return vec_cat (std::array<V, n_elems> {v1, std::forward<Ts> (vecs)...});
+  return vec_cat (std::array<V, n_elems> {{v1, std::forward<Ts> (vecs)...}});
 }
 //------------------------------------------------------------------------------
 // split vector in an array of vectors of a smaller (divisible) vector type.
@@ -795,7 +797,7 @@ static inline auto vec_cast (V a)
 
   static_assert (src_traits.size == dst_traits {}.size, "sizes must match");
 
-  return __builtin_convertvector(a, typename dst_traits::type);
+  return __builtin_convertvector (a, typename dst_traits::type);
 }
 //------------------------------------------------------------------------------
 // SIMD functions
