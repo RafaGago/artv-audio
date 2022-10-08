@@ -332,6 +332,7 @@ public:
       _del_spls.set_all_from_target();
     }
     _delay.reset (_mem_delay, n_channels);
+    _delay.set_resync_delta (10.0);
     _1spl_fb             = vec_set<4> (0.f);
     _n_processed_samples = 0; // trigger the control block on first sample
     _param.mode          = v;
@@ -407,7 +408,7 @@ public:
     _srate               = pc.get_sample_rate();
     _t_spl               = 1.f / _srate;
     _beat_hz             = pc.get_play_state().bpm * (1.f / 60.f);
-    _beat_spls           = (1.f / _beat_hz) * _srate;
+    _1_4beat_spls        = (0.25f / _beat_hz) * _srate;
     _n_processed_samples = 0;
     uint sr_order        = get_samplerate_order (pc.get_sample_rate()) + 5;
     _control_rate_mask   = lsb_mask<uint> (sr_order);
@@ -797,10 +798,9 @@ private:
           _param_smooth.tick();
           s_par[i]   = _param_smooth.get();
           auto& tail = delay_taps_tail[i];
-          float spls = _beat_spls * 0.25f * s_par[i].del_4beats;
-          spls       = std::max<float> (_delay.min_delay_spls(), spls - i);
-          tail[0]    = _delay.get (spls, 0);
-          tail[1]    = _delay.get (spls, 1);
+          float spls = _1_4beat_spls * s_par[i].del_4beats;
+          tail[0]    = _delay.get (spls, 0, i);
+          tail[1]    = _delay.get (spls, 1, i);
           wet[i]     = vec_cat (tail[0], tail[1], tail[0], tail[1]);
         }
       }
@@ -1653,7 +1653,7 @@ private:
   interpolated_delay_line<f32_x2, sinc_t, true, false, true> _dry;
   interpolated_delay_line<f32_x2, sinc_t, true, false, true> _flan;
 #endif
-  interpolated_delay_line<f32_x1, linear_interp, false, false> _delay;
+  modulable_thiran1_delay_line<f32_x1, 4, false, false> _delay;
   value_smoother<
     float,
     std::array<float, std::max (max_scho_stages, max_chor_stages)>>
@@ -1681,7 +1681,7 @@ private:
   float                           _lp_smooth_coeff;
   float                           _n_stages_frac;
   float                           _beat_hz;
-  float                           _beat_spls;
+  float                           _1_4beat_spls;
   float                           _ctrl_t_spl;
   float                           _t_spl;
   float                           _srate;
