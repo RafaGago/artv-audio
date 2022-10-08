@@ -1155,62 +1155,65 @@ static constexpr preset presets[] = {
     <gui_data bus1_text="-12" bus2_text="+12" bus3_text="Dry Passthrough" bus4_text="" bus5_text="Pre-filter" bus6_text="Wet" bus7_text="Dry" bus8_text="" />
 </params>
      )END"},
-  {.name = "FX: Phaser DDL-ish (Drum/full mix)",
+  {.name = "FX: Cheapo Phaser-DDL",
    .xml = R"END(
 <?xml version="1.0" encoding="UTF-8"?>
 <params plugin_version="1009000">
     <PARAM id="in_selection_01" value="1.0" />
     <PARAM id="out_selection_01" value="1.0" />
-    <PARAM id="fx_mix_01" value="100.0" />
-    <PARAM id="fx_mix_02" value="100.0" />
-    <PARAM id="fx_type_01" value="0.0" />
-    <PARAM id="fx_type_02" value="23.0" />
-    <PARAM id="mixer_sends" value="6.0" />
-    <PARAM id="out_selection_02" value="0.0" />
-    <PARAM id="wet_balance_02" value="0.0" />
-    <PARAM id="diffuse_delay_damp_04" value="0.0" />
-    <PARAM id="diffuse_delay_desync_04" value="64.79999542236328" />
-    <PARAM id="diffuse_delay_diffusion_04" value="7.069999694824219" />
-    <PARAM id="diffuse_delay_feedback_04" value="25.33000183105469" />
-    <PARAM id="diffuse_delay_freq_spread_04" value="84.0" />
-    <PARAM id="diffuse_delay_hipass_04" value="43.0" />
-    <PARAM id="diffuse_delay_mod_depth_04" value="1.209999918937683" />
-    <PARAM id="diffuse_delay_mod_freq_04" value="0.1410000026226044" />
-    <PARAM id="diffuse_delay_mod_mode_04" value="2.0" />
-    <PARAM id="diffuse_delay_mode_04" value="2.0" />
-    <PARAM id="diffuse_delay_sixteenths_04" value="5.96999979019165" />
-    <PARAM id="diffuse_delay_transients_04" value="-64.80000305175781" />
-    <PARAM id="eq4x_band1_freq_02" value="102.4850311279297" />
-    <PARAM id="eq4x_band1_gain_02" value="12.0" />
-    <PARAM id="eq4x_band1_q_02" value="0.126800000667572" />
-    <PARAM id="eq4x_band1_type_02" value="1.0" />
-    <PARAM id="fx_mix_04" value="12.00000095367432" />
-    <PARAM id="fx_type_03" value="52.0" />
-    <PARAM id="fx_type_04" value="51.0" />
-    <PARAM id="global_volume" />
-    <PARAM id="in_selection_02" value="1.0" />
-    <PARAM id="mod_center_03" value="50.00000381469727" />
-    <PARAM id="mod_depth_03" value="100.0" />
-    <PARAM id="mod_drive_03" value="33.20000076293945" />
-    <PARAM id="mod_env_depth_03" value="4.800003051757812" />
-    <PARAM id="mod_feedback_03" value="42.80000305175781" />
-    <PARAM id="mod_feedback_hicut_03" value="0.0" />
-    <PARAM id="mod_feedback_locut_03" value="10.80000019073486" />
-    <PARAM id="mod_lfo_depth_03" value="100.0" />
-    <PARAM id="mod_lfo_rate_03" value="79.45000457763672" />
-    <PARAM id="mod_lfo_stereo_03" value="21.0" />
-    <PARAM id="mod_mod_warp_03" value="79.64999389648438" />
-    <PARAM id="mod_lfo_wave_03" value="1.0" />
-    <PARAM id="mod_mode_03" value="1.0" />
-    <PARAM id="mod_param_a_03" value="30.20000076293945" />
-    <PARAM id="mod_param_b_03" value="80.5" />
-    <PARAM id="mod_spread_03" value="-34.40000152587891" />
-    <PARAM id="mod_stages_03" value="26.59000205993652" />
-    <PARAM id="out_selection_04" value="1.0" />
-    <PARAM id="routing" />
-    <PARAM id="volume_02" value="-12.20000076293945" />
-    <PARAM id="volume_04" value="-5.670001983642578" />
-    <gui_data bus1_text="Dry" bus2_text="Pre-eq" bus3_text="Phaser" bus4_text="Delay" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
+    <PARAM id="fx_type_01" value="52.0" />
+    <PARAM id="mod_delay_gain_01" value="78.40000915527344" />
+    <PARAM id="mod_delay_mode_01" value="2.0" />
+    <PARAM id="mod_delay_quaterterbeats_01" value="1.53600001335144" />
+    <PARAM id="mod_depth_01" value="26.40000152587891" />
+    <PARAM id="mod_drive_01" value="31.20000076293945" />
+    <PARAM id="mod_feedback_01" value="54.0" />
+    <PARAM id="mod_feedback_hicut_01" value="15.60000038146973" />
+    <PARAM id="mod_feedback_locut_01" value="4.800000190734863" />
+    <PARAM id="mod_lfo_depth_01" value="100.0" />
+    <PARAM id="mod_lfo_rate_01" value="76.49000549316406" />
+    <PARAM id="mod_lfo_wave_01" value="1.0" />
+    <PARAM id="mod_mod_warp_01" value="81.51998901367188" />
+    <PARAM id="mod_mode_01" value="1.0" />
+    <PARAM id="mod_param_a_01" value="22.60000038146973" />
+    <PARAM id="mod_param_b_01" value="-41.59999847412109" />
+    <PARAM id="mod_spread_01" value="51.19999694824219" />
+    <PARAM id="mod_stages_01" value="28.20000076293945" />
+    <PARAM id="mod_stereo_01" value="8.0" />
+    <gui_data bus1_text="FlangerPhaser" bus2_text="-" bus3_text="-" bus4_text="" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
+</params>
+     )END"},
+  {.name = "FX: Chorus Became Delay",
+   .xml = R"END(
+<?xml version="1.0" encoding="UTF-8"?>
+<params plugin_version="1009000">
+    <PARAM id="in_selection_01" value="1.0" />
+    <PARAM id="out_selection_01" value="1.0" />
+    <PARAM id="fx_type_01" value="52.0" />
+    <PARAM id="mixer_sends" />
+    <PARAM id="mod_center_01" value="65.20000457763672" />
+    <PARAM id="mod_delay_gain_01" value="77.30000305175781" />
+    <PARAM id="mod_delay_mode_01" value="5.0" />
+    <PARAM id="mod_delay_quaterterbeats_01" value="3.000000238418579" />
+    <PARAM id="mod_depth_01" value="62.80000305175781" />
+    <PARAM id="mod_drive_01" value="0.0" />
+    <PARAM id="mod_env_depth_01" value="-15.99999237060547" />
+    <PARAM id="mod_env_speed_01" value="6.400000095367432" />
+    <PARAM id="mod_feedback_01" value="-56.39999771118164" />
+    <PARAM id="mod_feedback_hicut_01" value="36.0" />
+    <PARAM id="mod_feedback_locut_01" value="38.79999923706055" />
+    <PARAM id="mod_lfo_depth_01" value="48.40000152587891" />
+    <PARAM id="mod_lfo_rate_01" value="28.20000076293945" />
+    <PARAM id="mod_lfo_wave_01" value="0.0" />
+    <PARAM id="mod_mod_warp_01" value="26.79999542236328" />
+    <PARAM id="mod_mode_01" value="4.0" />
+    <PARAM id="mod_oversampling_01" value="1.0" />
+    <PARAM id="mod_param_a_01" value="71.40000152587891" />
+    <PARAM id="mod_param_b_01" value="76.80000305175781" />
+    <PARAM id="mod_spread_01" value="41.60000610351562" />
+    <PARAM id="mod_stages_01" value="35.0" />
+    <PARAM id="mod_stereo_01" value="100.0" />
+    <gui_data bus1_text="ChorusDelay" bus2_text="" bus3_text="" bus4_text="" bus5_text="" bus6_text="" bus7_text="" bus8_text="" />
 </params>
      )END"},
 };
