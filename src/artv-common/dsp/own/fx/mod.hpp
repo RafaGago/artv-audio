@@ -1184,8 +1184,9 @@ private:
       std::array<float, vec_traits_t<f32_x4>::size>,
       n_channels,
       max_block_size>
-                                                               pan;
-    array2d<float, vec_traits_t<f32_x4>::size, max_block_size> trnd;
+                                                                pan;
+    array2d<float, vec_traits_t<f32_x4>::size, max_block_size>  trnd;
+    array2d<f32_x1, vec_traits_t<f32_x4>::size, max_block_size> chor_in;
 
     for (uint i = 0; i < block_size; ++i) {
       wet[i] += f32_x4 {inl[i], inr[i], inl[i], inr[i]};
@@ -1228,48 +1229,45 @@ private:
       pan[i][0] = vec_to_array (panlv);
       pan[i][1] = vec_to_array (panrv);
       trnd[i]   = vec_to_array (rndlfo * _srate * 0.0005f);
+
+      chor_in[i] = vec1_array_wrap (vec_to_array (wet[i]));
+      wet[i]     = vec_set<4> (0.f);
     }
 
-    for (uint i = 0; i < block_size; ++i) {
-      auto& del_spls = del_spls_arr[i];
-      auto  chor_in  = vec1_array_wrap (vec_to_array (wet[i]));
-      wet[i]         = vec_set<4> (0.f);
-      auto                                prev = wet[i];
-      std::array<f32_x1, max_chor_stages> to_push {};
-
+    {
+      array2d<f32_x1, max_chor_stages, max_block_size> to_push {};
       for (uint s = 0; s < _n_stages; ++s) {
         uint idx  = s * 2;
         uint lane = idx % vec_traits_t<f32_x4>::size;
 
-        std::array<float, n_channels> channel;
-
-        // TODO: no feedback, delay lines can be read contiguosly
-
-        for (uint j = 0; j < channel.size(); ++j, ++idx, ++lane) {
-          auto n_spls = std::clamp (
-            del_spls[idx] + trnd[i][lane],
-            (float) _chor.min_delay_spls(),
-            (float) _chor.max_delay_spls());
-          auto g       = _g.chor[idx];
-          auto yn      = _chor.get (n_spls, idx);
-          auto r       = allpass_fn::tick<f32_x1> (chor_in[lane], yn, g);
-          to_push[idx] = r.to_push;
-          channel[j]   = r.out[0];
+        for (uint i = 0; i < block_size; ++i) {
+          std::array<float, n_channels> channel;
+          for (uint c = 0; c < n_channels; ++c, ++idx, ++lane) {
+            auto n_spls = std::clamp (
+              del_spls_arr[i][idx] + trnd[i][lane],
+              (float) _chor.min_delay_spls(),
+              (float) _chor.max_delay_spls());
+            auto g  = _g.chor[idx];
+            auto yn = _chor.get (n_spls, idx, i);
+            auto r  = allpass_fn::tick<f32_x1> (chor_in[i][lane], yn, g);
+            to_push[i][idx] = r.to_push;
+            channel[c]      = r.out[0];
+          }
+          auto& panl = pan[i][0];
+          auto& panr = pan[i][1];
+          float l    = channel[0] * panl[s] + channel[1] * panr[s];
+          float r    = channel[0] * panr[s] + channel[1] * panl[s];
+          auto  v    = _phaser.tick_on_idx (s, f32_x4 {l, r, l, r});
+          // crossfade last stage
+          v *= (s != (_n_stages - 1)) ? 1.f : _n_stages_frac;
+          wet[i] += v;
+          idx -= n_channels;
+          lane -= n_channels;
         }
-        auto& panl = pan[i][0];
-        auto& panr = pan[i][1];
-        float l    = channel[0] * panl[s] + channel[1] * panr[s];
-        float r    = channel[0] * panr[s] + channel[1] * panl[s];
-
-        // TODO: probably run this on its own loop?
-        f32_x4 v {l, r, l, r};
-        v    = _phaser.tick_on_idx (s, v);
-        prev = wet[i];
-        wet[i] += v;
       }
-      //  crossfade last stage
-      wet[i] = prev + (wet[i] - prev) * _n_stages_frac;
-      _chor.push (to_push);
+      for (uint i = 0; i < block_size; ++i) {
+        _chor.push (to_push[i]);
+      }
     }
 
     // dry (from flanger) reused as a different mod line
