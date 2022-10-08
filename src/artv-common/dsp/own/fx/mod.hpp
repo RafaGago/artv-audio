@@ -342,7 +342,7 @@ public:
       }
       _del_spls.set_all_from_target();
     }
-    _delay.reset (_mem_delay, 1);
+    _delay.reset (_mem_delay, n_channels);
     _1spl_fb             = vec_set<4> (0.f);
     _n_processed_samples = 0; // trigger the control block on first sample
     _param.mode          = v;
@@ -381,6 +381,34 @@ public:
   static constexpr auto get_parameter (delay_gain_tag)
   {
     return float_param ("%", -100., 100, 0., 0.1);
+  }
+  //----------------------------------------------------------------------------
+  struct delay_mode_tag {};
+  void set (delay_mode_tag, int v) { _param.delay_mode = v; }
+
+  struct delay_mode {
+    enum {
+      stereo,
+      stereo_inverted,
+      pingpong_l,
+      pingpong_r,
+      pingpong,
+      pongping
+    };
+  };
+
+  static constexpr auto get_parameter (delay_mode_tag)
+  {
+    return choice_param (
+      0,
+      make_cstr_array (
+        "Stereo",
+        "Stereo-inv",
+        "Ping-Pong L",
+        "Ping-Pong R",
+        "Ping-Pong",
+        "Pong-Ping"),
+      20);
   }
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
@@ -626,6 +654,84 @@ private:
     }
   }
   //----------------------------------------------------------------------------
+  void delay_mix (
+    all_parameters const&           pars,
+    std::array<f32_x1, n_channels>& taps_tail,
+    f32_x4&                         wet)
+  {
+    if (pars.del_gain == 0.f) {
+      return;
+    }
+    float spls   = _beat_spls * 0.25f * pars.del_4beats;
+    taps_tail[0] = _delay.get (spls, 0);
+    taps_tail[1] = _delay.get (spls, 1);
+    auto delay
+      = vec_cat (taps_tail[0], taps_tail[1], taps_tail[0], taps_tail[1]);
+    wet += delay;
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void delay_push (
+    float                                 max_gain,
+    float                                 gain,
+    uint                                  mode,
+    std::array<f32_x1, n_channels> const& taps_tail,
+    f32_x4                                wet,
+    std::array<T, 2>                      in)
+  {
+    if (gain == 0.f) {
+      return;
+    }
+    std::array<f32_x1, n_channels> spls;
+    switch (mode) {
+    case delay_mode::stereo:
+      // tail already included in the signal
+      spls[0][0] = wet[0];
+      spls[1][0] = wet[1];
+      break;
+    case delay_mode::stereo_inverted:
+      // tail already included in the signal
+      spls[0][0] = wet[1];
+      spls[1][0] = wet[0];
+      break;
+      // self note, this is not a regular delay but a modulation effect. Both
+      // channels (L-R) are unconditionally pased through the fx chain, while
+      // a real ping pong delay would only get (mid) signal on one of the
+      // lanes.
+      //
+      // The requirements are:
+      // -The channels at the feedback point (this call) have to be a stereo
+      //  phaser/flanger/chorus
+      // -The effects have to be on the feedback loop of the delay.
+      //
+      // As the whole FX chain has to be run as stereo, the possibility to do
+      // feed the mid signal is lost, as the other channel is also mixed with
+      // the input, so the only way to get ping pong with the full wet signal
+      // is to take one of the sides. To get the mid channel a compromise has
+      // to be made and to take opposite side dry.
+    case delay_mode::pingpong_l:
+      spls[0][0] = wet[1];
+      spls[1]    = taps_tail[0];
+      break;
+    case delay_mode::pingpong_r:
+      spls[0]    = taps_tail[1];
+      spls[1][0] = wet[0];
+      break;
+    case delay_mode::pingpong:
+      spls[0][0] = wet[1] + in[0];
+      spls[1]    = taps_tail[0];
+      break;
+    case delay_mode::pongping:
+      spls[0]    = taps_tail[1];
+      spls[1][0] = wet[0] + in[1];
+      break;
+    }
+    auto del_gain = max_gain * std::copysign (gain * gain, gain);
+    spls[0] *= del_gain;
+    spls[1] *= del_gain;
+    _delay.push (spls);
+  }
+  //----------------------------------------------------------------------------
   template <class T>
   void tick_phaser (xspan<T*> outs, xspan<T const*> ins, uint samples)
   {
@@ -673,12 +779,10 @@ private:
         _onepole.reset_coeffs<0> (f, _t_spl);
       }
 
-      auto   mid = (ins[0][i] + ins[1][i]) * 0.5f;
-      f32_x4 wet {ins[0][i], ins[1][i], mid, mid};
-      if (pars.del_gain != 0.f) {
-        auto delayed = _delay.get (_beat_spls * 0.25f * pars.del_4beats, 0);
-        wet += vec_cat (delayed, delayed);
-      }
+      auto                           mid = (ins[0][i] + ins[1][i]) * 0.5f;
+      f32_x4                         wet {ins[0][i], ins[1][i], mid, mid};
+      std::array<f32_x1, n_channels> taps_tail;
+      delay_mix (pars, taps_tail, wet);
       auto hp_out = _onepole.tick<0> (wet)[1];
       wet         = vec_shuffle (wet, hp_out, 0, 1, 6, 7);
 
@@ -712,13 +816,13 @@ private:
         fbv, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
       _fb_filters.tick_cascade (fbv);
 
-      if (pars.del_gain != 0.f) {
-        auto max_del_gain = 0.999999f - abs (pars.feedback);
-        auto del          = f32_x2 {wet[0], wet[1]};
-        del *= max_del_gain
-          * std::copysign (pars.del_gain * pars.del_gain, pars.del_gain);
-        _delay.push (xspan {&del, 1});
-      }
+      delay_push (
+        0.999999f - abs (pars.feedback),
+        pars.del_gain,
+        pars.delay_mode,
+        taps_tail,
+        wet,
+        make_array (ins[0][i], ins[1][i]));
 
       auto out = mix (
         wet,
@@ -796,10 +900,8 @@ private:
       _del_spls.tick();
 
       f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
-      if (pars.del_gain != 0.f) {
-        auto delayed = _delay.get (_beat_spls * 0.25f * pars.del_4beats, 0);
-        wet += vec_cat (delayed, delayed);
-      }
+      std::array<f32_x1, n_channels> taps_tail;
+      delay_mix (pars, taps_tail, wet);
       wet = _onepole.tick<0> (wet)[0];
       wet -= _1spl_fb * pars.feedback;
 
@@ -877,13 +979,13 @@ private:
         wet, vec_set<4> (pars.drive), vec_set<4> (pars.drive_curve));
       _1spl_fb = _fb_filters.tick_cascade (fb_val);
 
-      if (pars.del_gain != 0.f) {
-        auto max_del_gain = 0.999999f - abs (pars.feedback);
-        auto del          = f32_x2 {_1spl_fb[0], _1spl_fb[1]};
-        del *= max_del_gain
-          * std::copysign (pars.del_gain * pars.del_gain, pars.del_gain);
-        _delay.push (xspan {&del, 1});
-      }
+      delay_push (
+        0.999999f - abs (pars.feedback),
+        pars.del_gain,
+        pars.delay_mode,
+        taps_tail,
+        wet,
+        make_array (ins[0][i], ins[1][i]));
 
       auto fb_gain = get_fb_gain (pars.feedback, pars.drive);
       auto out     = mix (
@@ -971,10 +1073,8 @@ private:
       }
       // create some difference on the inputs
       f32_x4 wet {ins[0][i], ins[1][i], ins[0][i], ins[1][i]};
-      if (pars.del_gain != 0.f) {
-        auto delayed = _delay.get (_beat_spls * 0.25f * pars.del_4beats, 0);
-        wet += vec_cat (delayed, delayed);
-      }
+      std::array<f32_x1, n_channels> taps_tail;
+      delay_mix (pars, taps_tail, wet);
       wet = _onepole.tick<0> (wet)[0];
 
       _del_spls.tick();
@@ -1072,13 +1172,13 @@ private:
       auto gain_wet
         = 1.f / (_n_stages_frac + (float) (_n_stages - 1) + abs (ffwd_gain));
 
-      if (pars.del_gain != 0.f) {
-        auto max_del_gain = 0.97f * gain_wet;
-        auto del          = f32_x2 {wet[0], wet[1]};
-        del *= max_del_gain
-          * std::copysign (pars.del_gain * pars.del_gain, pars.del_gain);
-        _delay.push (xspan {&del, 1});
-      }
+      delay_push (
+        1.97f * gain_wet,
+        pars.del_gain,
+        pars.delay_mode,
+        taps_tail,
+        wet,
+        make_array (ins[0][i], ins[1][i]));
 
       auto out = mix (
         wet,
@@ -1141,12 +1241,10 @@ private:
       }
       _del_spls.tick();
 
-      auto   mid = (ins[0][i] + ins[1][i]) * 0.5f;
-      f32_x4 wet {ins[0][i], ins[1][i], mid, mid};
-      if (pars.del_gain != 0.f) {
-        auto delayed = _delay.get (_beat_spls * 0.25f * pars.del_4beats, 0);
-        wet += vec_cat (delayed, delayed);
-      }
+      auto                           mid = (ins[0][i] + ins[1][i]) * 0.5f;
+      f32_x4                         wet {ins[0][i], ins[1][i], mid, mid};
+      std::array<f32_x1, n_channels> taps_tail;
+      delay_mix (pars, taps_tail, wet);
       auto hp_out = _onepole.tick<0> (wet)[1];
       wet         = vec_shuffle (wet, hp_out, 0, 1, 6, 7);
       wet -= _1spl_fb * pars.feedback;
@@ -1177,13 +1275,13 @@ private:
         n_spls, (float) _dry.min_delay_spls(), (float) _dry.max_delay_spls());
       dry = _dry.get (n_spls, 0);
 
-      if (pars.del_gain != 0.f) {
-        auto max_del_gain = 0.999999f - abs (pars.feedback);
-        auto del          = f32_x2 {_1spl_fb[0], _1spl_fb[1]};
-        del *= max_del_gain
-          * std::copysign (pars.del_gain * pars.del_gain, pars.del_gain);
-        _delay.push (xspan {&del, 1});
-      }
+      delay_push (
+        0.999999f - abs (pars.feedback),
+        pars.del_gain,
+        pars.delay_mode,
+        taps_tail,
+        wet,
+        make_array (ins[0][i], ins[1][i]));
 
       auto out = mix (
         wet,
@@ -1239,7 +1337,7 @@ private:
 
     float spls_beat = (1.f / _beat_hz) * _srate;
     uint  dly_size  = std::ceil (max_delay_4ths * 4.f * spls_beat);
-    dly_size        = _delay.n_required_elems (dly_size + 1, 1);
+    dly_size        = _delay.n_required_elems (dly_size + 1, n_channels);
 
     using T_mem = decltype (_mem)::value_type;
 #if !ARTV_MOD_CHO_FLAN_TIRAN
@@ -1274,7 +1372,7 @@ private:
     // overaligned to 128, so the tables aren't on cache line boundaries
     _sinc_co = mem.cut_head (sinc_t::n_coeffs);
 #endif
-    _mem_delay = mem.cut_head (dly_size).cast<T_scho>();
+    _mem_delay = mem.cut_head (dly_size).cast<T_delay>();
     _mem_scho  = mem.get_head (schroeder_size).cast<T_scho>();
     _mem_dry   = mem.cut_head (dry_size).cast<T_dry>();
     _mem_chor  = mem.get_head (chor_size).cast<T_chor>();
@@ -1348,6 +1446,7 @@ private:
     u32   lfo_wave;
     u32   lfo_time_base;
     u32   mode;
+    u32   delay_mode;
     float feedback_locut;
     float feedback_hicut;
     float env_speed;
@@ -1419,7 +1518,7 @@ private:
   interpolated_delay_line<f32_x2, sinc_t, true, false, true> _dry;
   interpolated_delay_line<f32_x2, sinc_t, true, false, true> _flan;
 #endif
-  interpolated_delay_line<f32_x2, linear_interp, false, false> _delay;
+  interpolated_delay_line<f32_x1, linear_interp, false, false> _delay;
   value_smoother<
     float,
     std::array<float, std::max (max_scho_stages, max_chor_stages)>>
@@ -1453,7 +1552,7 @@ private:
 #if !ARTV_MOD_CHO_FLAN_TIRAN
   xspan<float> _sinc_co;
 #endif
-  xspan<f32_x2> _mem_delay;
+  xspan<f32_x1> _mem_delay;
   xspan<f32_x2> _mem_dry;
   xspan<f32_x1> _mem_chor;
   xspan<f32_x2> _mem_flan;
