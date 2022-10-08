@@ -1267,8 +1267,8 @@ private:
         prev = wet[i];
         wet[i] += v;
       }
-      //  crossfade last stage
-      wet[i] = prev + (wet[i] - prev) * _n_stages_frac;
+      auto last_stage = wet[i] - prev;
+      wet[i]          = prev + last_stage * _n_stages_frac;
       _chor.push (to_push);
     }
 
