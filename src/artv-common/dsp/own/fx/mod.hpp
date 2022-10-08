@@ -351,15 +351,15 @@ public:
   }
   //----------------------------------------------------------------------------
   static constexpr uint max_delay_4ths = 8;
-  struct delay_quarter_beats_tag {};
-  void set (delay_quarter_beats_tag, float v)
+  struct delay_time_tag {};
+  void set (delay_time_tag, float v)
   {
     _param_smooth.target().del_4beats = std::max (v, 0.02f);
   }
 
-  static constexpr auto get_parameter (delay_quarter_beats_tag)
+  static constexpr auto get_parameter (delay_time_tag)
   {
-    return float_param ("Quart", 0., max_delay_4ths, 3., 0.001);
+    return float_param ("quarters", 0., max_delay_4ths, 3., 0.001);
   }
   //----------------------------------------------------------------------------
   struct delay_gain_tag {};
@@ -520,7 +520,7 @@ public:
     mode_tag,
     env_depth_tag,
     env_speed_tag,
-    delay_quarter_beats_tag,
+    delay_time_tag,
     delay_gain_tag>;
   //----------------------------------------------------------------------------
 private:

@@ -7415,13 +7415,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  mod_delay_quaterterbeats,
+  mod_delay_time,
   n_stereo_busses,
   param_common (
-    "Del 4ths",
+    "Del Time",
     declptr<upsampled<mod>>(),
-    declptr<mod::delay_quarter_beats_tag>()),
-  mod::get_parameter (mod::delay_quarter_beats_tag {}),
+    declptr<mod::delay_time_tag>()),
+  mod::get_parameter (mod::delay_time_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -7469,7 +7469,7 @@ using mod_params = mp_list<
   mod_drive,
   mod_delay_mode,
   mod_delay_gain,
-  mod_delay_quaterterbeats,
+  mod_delay_time,
   mod_feedback_locut,
   mod_feedback_hicut,
 

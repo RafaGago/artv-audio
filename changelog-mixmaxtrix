@@ -1,10 +1,19 @@
 1.9.0
 - Artv Mod: Add modulation effect fixing quirks on the phaser. It has the next
   modes:
-  1. 2-pole ZDF phaser.
-  2. Schroeder phaser (flangerphaser, sometimes reminescent of the Ensoniq DP/4).
+  1. 2-pole phaser (ZDF).
+  2. Schroeder (reverb allpass) phaser/flangeroids.
   3. Chorus.
   4. Flanger.
+  It is modulated via LFO and envelope follower.
+
+  A bit uncommon is that it has two parallel feedback loops: the regular unit
+  sample delay (or Zero Delay for the phaser) used for the Phaser/Flanger
+  feedbacks and an additional delay line. As both feedbacks run in parallel, to
+  keep stability the maximum amount of feedback of the delay depends on the
+  modulation FX feedback amount (the most FX feedback, the least Delay feedback
+  available).
+
 - Artv Phaser: Gain compensate "parallel" knob/parameter.
 - Artv Phaser: Gain compensate "delay feedback" knob/parameter.
 - Artv Phaser: Add feedback Lowpass/Hipass.
@@ -17,12 +26,12 @@
   distribution modes had one of the frequencies on the parallel path out of
   range and the groupings were wrong. Unfortunately this changes the sound of
   the phaser (for good). Be sure to render old projects.
+- Editor: Knobs: Add keyboard data entry when pressing the Right mouse button.
 - Editor: Comboboxes: Fix arrow buttons behavior when some items are disabled.
   Now disabled items are skipped.
 - Editor: Comboboxes: Wrap around the list when using the arrows.
-- Editor: Knobs: Add keyboard data entry when pressing the Right mouse button.
 - Consoles: Fix bug when processing channel to channel sends.
-- Processor: Fix wrong channel inactive detection.
+- Processor: Fix wrong inactive channel FX detection.
 
 1.8.1
 - Artv Phaser: Label the amount of stages by number of stages on the serial
