@@ -7008,7 +7008,7 @@ parameter_cpp_class_define (
   diffuse_delay_sixteenths,
   n_stereo_busses,
   param_common (
-    "Sixteenths",
+    "Time",
     declptr<diffuse_delay>(),
     declptr<diffuse_delay::sixteenths_tag>()),
   diffuse_delay::get_parameter (diffuse_delay::sixteenths_tag {}),
