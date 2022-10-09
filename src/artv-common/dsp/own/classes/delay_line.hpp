@@ -45,7 +45,7 @@ public:
   V get (uint idx) const { return get_abs (_pos - idx); }
   V operator[] (uint idx) const { return get (idx); }
   //----------------------------------------------------------------------------
-  void push (const V& value)
+  void push (V const& value)
   {
     ++_pos;
     _mem[_pos & _mask] = value;
@@ -107,7 +107,7 @@ public:
   //----------------------------------------------------------------------------
   V operator[] (uint idx) const { return get (idx); }
   //----------------------------------------------------------------------------
-  void push (const V& value)
+  void push (V const& value)
   {
     ++_pos;
     _pos       = _pos < _size ? _pos : 0;
@@ -534,7 +534,7 @@ public:
   void reset_interpolator (
     uint           channel,
     bool           reset_state,
-    xspan<const T> external_coeffs)
+    xspan<T const> external_coeffs)
   {
     static_assert (std::is_same_v<T, coeffs_type>);
     if (channel == 0) {
@@ -690,7 +690,7 @@ private:
     xspan<builtin_type>>;
 
   using ext_interp_coeffs_type = std::
-    conditional_t<interp_global_co_ext, xspan<const coeffs_type>, null_type>;
+    conditional_t<interp_global_co_ext, xspan<coeffs_type const>, null_type>;
 
   mem_storage_type       _mem {};
   ext_interp_coeffs_type _ext_coeffs {};
@@ -947,7 +947,7 @@ struct raw_allpass_interp {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V>          co,
+    xspan<V const>          co,
     xspan<V>                st,
     std::array<V, n_points> y_points,
     V                       x)
@@ -1012,7 +1012,7 @@ struct thiran_interp_1 {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V>          co,
+    xspan<V const>          co,
     xspan<V>                st,
     std::array<V, n_points> y_points,
     V                       x [[maybe_unused]])
@@ -1091,7 +1091,7 @@ struct thiran_interp_2_df1 {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V>          co,
+    xspan<V const>          co,
     xspan<V>                st,
     std::array<V, n_points> y_points,
     V                       x [[maybe_unused]])
@@ -1155,7 +1155,13 @@ public:
   // Not so sure of the resync feature, on delays with low modulation it has
   // been good enough to set this value high and only run with recomputation of
   // coefficients.
-  void set_resync_delta (float spls) { _resync_delta = spls; }
+  void set_resync_delta (float spls) { _resync_delta = abs (spls); }
+  //----------------------------------------------------------------------------
+  // The delay time sample difference against last call's delay time that
+  // triggers a coefficient reset on the interpolator. Useful e.g. when the
+  // sample delay is externally smoothed by a lowpass, which never hits the
+  // target value.
+  void set_interp_delta (float spls) { _epsilon = abs (spls); }
   //----------------------------------------------------------------------------
   // when calling blockwise a block of samples is fetched, processed, stored
   // and then a block of the same size is inserted.
@@ -1167,25 +1173,29 @@ public:
   {
     assert (channel < n_channels());
 
-    auto diff = delay_spls - this->get_delay_spls (channel) - delay_spls_offset;
-    auto diff_abs = abs (diff);
-    if (unlikely (diff_abs == 0.f)) {
-      // no modulation, not the main use case for this...
-      return base::get (channel);
-    }
+    auto del_prev    = this->get_delay_spls (channel);
+    auto epsilon     = delay_spls - del_prev;
+    auto epsilon_abs = abs (epsilon);
 
+    if (unlikely (epsilon_abs <= _epsilon)) {
+      // Not the main use case for this
+      uint  spls = (uint) delay_spls;
+      float frac = delay_spls - (float) spls;
+      spls -= delay_spls_offset;
+      return base::get_interpolated_unchecked (spls, frac, channel);
+    }
     uint  spls = (uint) delay_spls;
     float frac = delay_spls - (float) spls;
     this->reset_interpolator (delay_spls, frac, channel, false);
     spls -= delay_spls_offset;
     assert (spls >= min_delay_spls());
 
-    if (diff_abs >= _resync_delta) {
+    if (epsilon_abs >= _resync_delta) {
       // hack the previous states to linear interpolation as a starting point
       std::array<value_type, raw_interp::n_points> z;
 
-      bool delay_is_increasing = diff > 0.f;
-      // TODO: is the direction thing correct
+      bool delay_is_increasing = epsilon > 0.f;
+      // TODO: is the direction thing correct?
       if (delay_is_increasing) {
         // move in increasing direction: away from the write pointer (idx 0)
         for (uint i = z.size() - 1; i < z.size(); --i) {
@@ -1239,6 +1249,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   float _resync_delta {};
+  float _epsilon {};
 };
 } // namespace detail
 
@@ -1342,7 +1353,7 @@ public:
   static_assert (std::is_floating_point_v<T>);
   //----------------------------------------------------------------------------
   template <class U>
-  xspan<value_type> reset (xspan<value_type> mem, xspan<const U> sizes)
+  xspan<value_type> reset (xspan<value_type> mem, xspan<U const> sizes)
   {
     static_assert (std::is_unsigned_v<U>);
 
@@ -1401,7 +1412,7 @@ public:
   static_assert (std::is_floating_point_v<T>);
   //----------------------------------------------------------------------------
   template <class U>
-  xspan<value_type> reset (xspan<value_type> mem, xspan<const U> sizes)
+  xspan<value_type> reset (xspan<value_type> mem, xspan<U const> sizes)
   {
     static_assert (std::is_unsigned_v<U>);
 
@@ -1442,7 +1453,7 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  static constexpr uint n_required_elems (xspan<const uint> sizes)
+  static constexpr uint n_required_elems (xspan<uint const> sizes)
   {
     return std::accumulate (sizes.begin(), sizes.end(), 0);
   }
