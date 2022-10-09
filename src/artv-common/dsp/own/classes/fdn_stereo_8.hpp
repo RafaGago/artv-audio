@@ -881,11 +881,6 @@ private:
     for (uint i = 0; i < _cfg.late.n_samples.size(); ++i) {
       _late_n_spls_master[i] = (float) (_cfg.late.n_samples[i]);
     }
-#if ARTV_FDNST8_USE_THIRAN
-    for (auto& dl : _late) {
-      dl.set_resync_delta (50.f);
-    }
-#endif
   }
   //----------------------------------------------------------------------------
   void reset_mod_freq()

@@ -289,17 +289,11 @@ public:
     case mode::schroeder_nested:
       using TS = decltype (_scho)::value_type;
       _scho.reset (_mem_scho, max_scho_stages);
-#if ARTV_MOD_SCHO_TIRAN
-      _scho.set_resync_delta (10.0);
-#endif
       break;
     case mode::flanger: {
       _flan.reset (_mem_flan, flan_stages);
       _dry.reset (_mem_dry, 1);
-#if ARTV_MOD_CHO_FLAN_TIRAN
-      _flan.set_resync_delta (10.0);
-      _dry.set_resync_delta (10.0);
-#else
+#if !ARTV_MOD_CHO_FLAN_TIRAN
       // pass the shared sinc interpolator coefficients
       _flan.reset_interpolator (0, false, _sinc_co.to_const());
       _dry.reset_interpolator (0, false, _sinc_co.to_const());
@@ -310,10 +304,7 @@ public:
     case mode::chorus: {
       _chor.reset (_mem_chor, max_chor_stages);
       _dry.reset (_mem_dry, 1);
-#if ARTV_MOD_CHO_FLAN_TIRAN
-      _chor.set_resync_delta (10.0);
-      _dry.set_resync_delta (10.0);
-#else
+#if !ARTV_MOD_CHO_FLAN_TIRAN
       // pass the shared sinc interpolator coefficients
       _chor.reset_interpolator (0, false, _sinc_co.to_const());
       _dry.reset_interpolator (0, false, _sinc_co.to_const());
@@ -332,7 +323,6 @@ public:
       _del_spls.set_all_from_target();
     }
     _delay.reset (_mem_delay, n_channels);
-    _delay.set_resync_delta (10.0);
     _1spl_fb             = vec_set<4> (0.f);
     _n_processed_samples = 0; // trigger the control block on first sample
     _param.mode          = v;

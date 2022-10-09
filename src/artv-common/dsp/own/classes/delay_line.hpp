@@ -1159,8 +1159,9 @@ public:
   //----------------------------------------------------------------------------
   // The delay time sample difference against last call's delay time that
   // triggers a coefficient reset on the interpolator. Useful e.g. when the
-  // sample delay is externally smoothed by a lowpass, which never hits the
-  // target value.
+  // sample delay is externally smoothed by a lowpass never hitting the
+  // target value. Very small values are required to not be audible, at maximum
+  // probably around "0.00001f".
   void set_interp_delta (float spls) { _epsilon = abs (spls); }
   //----------------------------------------------------------------------------
   // when calling blockwise a block of samples is fetched, processed, stored
@@ -1248,8 +1249,8 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  float _resync_delta {};
-  float _epsilon {};
+  float _resync_delta {50.f};
+  float _epsilon {1e-30};
 };
 } // namespace detail
 

@@ -373,7 +373,6 @@ public:
 
     // setting up delay
     reset_memory_parts();
-    _delay.set_resync_delta (10.0);
   }
   //----------------------------------------------------------------------------
   template <class T>

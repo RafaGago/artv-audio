@@ -32,8 +32,8 @@
 // is not that bad on the Thiran ones and they don't require tables, so favoring
 // those.
 
-#define DIFFUSE_DELAY_USE_THIRAN_TAPS 1
-#define DIFFUSE_DELAY_USE_SINC_TAPS 0
+#define DIFFUSE_DELAY_USE_THIRAN_TAPS      1
+#define DIFFUSE_DELAY_USE_SINC_TAPS        0
 #define DIFFUSE_DELAY_USE_THIRAN_DIFFUSORS 1
 namespace artv {
 
@@ -478,9 +478,6 @@ public:
       phases += 0.01f;
       _ap_lfo[i].set_freq (vec_set<n_serial_diffusors> (0.247f), t_spl);
     }
-#if DIFFUSE_DELAY_USE_THIRAN_TAPS
-    _delay.set_resync_delta (10.0);
-#endif
 #if DIFFUSE_DELAY_USE_SINC_TAPS
     _delay.reset_interpolator (0, false, 0.45f, 140.f);
 #endif
