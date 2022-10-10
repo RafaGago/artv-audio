@@ -11,7 +11,7 @@
 #include <type_traits>
 #include <variant>
 #include <vector>
-//#include <stdio.h>
+// #include <stdio.h>
 
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
@@ -354,7 +354,9 @@ private:
   void adjust_positions()
   {
     auto b = getBounds();
-    _edit.setText (getTextFromValue (getValue()), juce::dontSendNotification);
+    _edit.setText (
+      filter_number (getTextFromValue (getValue())),
+      juce::dontSendNotification);
     b = b.withSizeKeepingCentre (
       std::max (
         b.getWidth(),
@@ -372,6 +374,35 @@ private:
     }
     _edit_win->setBounds (b);
     _edit.setBounds (b);
+  }
+
+  static juce::String filter_number (juce::String const& s)
+  {
+    bool has_dot = false;
+    int  last    = 0;
+    for (; last < s.length(); ++last) {
+      if (s[last] == '.') {
+        has_dot = true;
+        continue;
+      }
+      if (!std::isdigit (s[last])) {
+        if (s[last] == '-' && last == 0) {
+          continue;
+        }
+        break;
+      }
+    }
+    if (!has_dot) {
+      // not a number.
+      return s;
+    }
+    auto num  = s.substring (0, last);
+    auto tail = s.substring (last, s.length());
+    if (tail.startsWith ("kHz")) {
+      // hack, only for Hz
+      num = juce::String {num.getDoubleValue() * 1000.};
+    }
+    return num;
   }
 
   std::optional<resizable_win_destroyed_clicking> _edit_win;
