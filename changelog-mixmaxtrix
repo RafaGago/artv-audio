@@ -1,3 +1,8 @@
+1.9.1
+- Sonic Enhancer (Liteon): Fix envelope follower tracking on high samplerates.
+- Editor: Remove suffixes/units when editing sliders with the Right Mouse
+  Button.
+
 1.9.0
 - Artv Mod: Add modulation effect fixing quirks on the phaser. It has the next
   modes:

@@ -1,5 +1,3 @@
-- Chore: Check correct usage of crange<const T> vs const crange<T>.
-
 - Chore: Use vec_set<1> instead of vec_set<x1_type>.
 
 - Chore: Protect all choice variables against loading of presets from more
@@ -12,8 +10,6 @@
   Will it work with clang-cl? Update: it is indeed a chore.
 
 - Fix order and buffering tests and probably errors. Should they arise.
-
-- Feature: Add single pole allpass on Phaser.
 
 - Feature: Check csound's ZDF filters(?).
 
