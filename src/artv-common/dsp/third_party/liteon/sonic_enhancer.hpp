@@ -240,14 +240,14 @@ public:
     set (low_contour_tag {}, 0.);
     set (process_tag {}, 0.);
     set (cv_tag {}, 40.);
+    fs       = pc.get_sample_rate();
     r_6      = 1. / 6.;
     nf_k     = std::pow (2., -96. * r_6);
-    rc0_k0   = 0.0003;
+    rc0_k0   = 0.0003 * 48000. / fs;
     rc0_k1   = 1. - rc0_k0;
     lp_fc    = std::tan (3.141592653589793 * 0.48);
     lp_r1pfc = 1. / (1. + lp_fc);
     fc       = 700.;
-    fs       = pc.get_sample_rate();
     pi2      = 2. * 3.141592653589793;
     q        = 0.23;
     omega    = pi2 * fc / fs;
