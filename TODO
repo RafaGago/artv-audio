@@ -93,9 +93,6 @@
   -https://www.kvraudio.com/forum/viewtopic.php?f=33&t=532048&p=7524831#p7524831
   -https://www.kvraudio.com/forum/viewtopic.php?f=33&t=510794
 
-- Optimization: JSFX: "jsfx_invsqrt" is using Quake invsqrt instead of sse
-  intrinsics + newton rhapson iterations (or equivalent).
-
 - Feature: Save window size on state.
 
 - Chore: Fix clang format issues, e.g. column alignments bigger than 3 or 4

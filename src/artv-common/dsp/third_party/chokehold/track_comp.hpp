@@ -44,20 +44,8 @@ private:
   {
     return std::pow (lhs, rhs);
   }
-  static double jsfx_invsqrt (double v)
-  {
-    double       y  = v;
-    double       x2 = y * 0.5;
-    std::int64_t i
-      = *(std::int64_t*) &y; /* The magic number is for doubles is from
-                                https://cs.uwaterloo.ca/~m32rober/rsqrt.pdf */
-    i = 0x5fe6eb50c7b537a9 - (i >> 1);
-    y = *(double*) &i;
-    y = y * (1.5 - (x2 * y * y));
-    y = y * (1.5 - (x2 * y * y));
-    return y;
-  }
-  double jsfx_sign (double value)
+  static double jsfx_invsqrt (double v) { return 1. / sqrt (v); }
+  double        jsfx_sign (double value)
   {
     auto v = *((uint64_t*) ((void*) &value));
     return (v == 0) ? 0. : (v & (1ull << 63)) ? -1. : 1.;

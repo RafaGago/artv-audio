@@ -50,19 +50,7 @@ private:
     heapmem.resize (s);
     std::memset (heapmem.data(), 0, heapmem.size() * sizeof heapmem[0]);
   }
-  static double jsfx_invsqrt (double v)
-  {
-    double       y  = v;
-    double       x2 = y * 0.5;
-    std::int64_t i
-      = *(std::int64_t*) &y; /* The magic number is for doubles is from
-                                https://cs.uwaterloo.ca/~m32rober/rsqrt.pdf */
-    i = 0x5fe6eb50c7b537a9 - (i >> 1);
-    y = *(double*) &i;
-    y = y * (1.5 - (x2 * y * y));
-    y = y * (1.5 - (x2 * y * y));
-    return y;
-  }
+  static double jsfx_invsqrt (double v) { return 1. / sqrt (v); }
   static double jsfx_rand (double maxv = 1.)
   { /* Notice that in some plugins you might require mt19937_64 or    similar.
        This is not a good random generator. */
