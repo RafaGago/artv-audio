@@ -117,6 +117,50 @@ function delay_line_advance() global()(
     this.pos < 0 ? (this.pos = this.mask);
 );
 //------------------------------------------------------------------------------
+// thiran order 1 interpolation addon/inheritance/monkey patching to a
+//  "delay_line". Usage:
+//
+// del.delay_line_init (size, samples);
+// del.delay_line_thiran1_add (100000);
+
+function delay_line_thiran1_add() global() local (ptr ,i)(
+    // each dynamic thiran array uses these indexes.
+    // 1 = y1,
+    this.thiran.array_init (this.n_channels * 1);
+);
+
+function delay_line_thiran1_get (pos, channel)
+    local (z0, z1, idx, a, ptr, y)
+    global()(
+    // each dynamic thiran array uses these indexes.
+    // 1 = y1,
+    ptr = this.thiran.ptr + channel * 1;
+
+    pos = clamp (pos, 0, this.mask - 1);
+    idx = floor (pos);
+    a = pos - idx;
+    // See https://dafx09.como.polimi.it/proceedings/papers/paper_72.pdf
+    // chapter 6.
+    a += 0.418;
+    a  = (1 - a) / (1 + a);
+
+    z0 = this.delay_line_get (idx, channel);
+    z1 = this.delay_line_get (idx + 1, channel);
+
+    y = z0 * a + z1 - a * ptr[0/*y1*/];
+    ptr[0/*y1*/] = y;
+    y;
+);
+
+function delay_line_thiran1_get_all (dst_ptr, times_ptr)
+    global() local (i)(
+    i = 0;
+    loop(this.n_channels,
+        dst_ptr[i] = this.delay_line_thiran1_get (times_ptr[i], i);
+        i += 1;
+    );
+);
+//------------------------------------------------------------------------------
 // thiran order 2 interpolation addon/inheritance/monkey patching to a
 //  "delay_line". Usage:
 //
@@ -126,6 +170,8 @@ function delay_line_advance() global()(
 // "delta_sync" number of samples distane between consecutive calls that will
 // make the previous states of the thiran biquad to be recalculated. In practice
 // as the Z states are always correct the filter doesn't really blow up.
+//
+// Note: probably better to use thiran 1
 function delay_line_thiran2_add (delta_sync) global()(
     // each dynamic thiran array uses these indexes.
     // 0 = a1,

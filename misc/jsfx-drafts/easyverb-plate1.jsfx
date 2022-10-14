@@ -1,0 +1,228 @@
+slider1:decay_p=0.8<0,1,0.01> Decay
+
+slider3:spin=0.5<0,1,0.01> Spin
+slider4:wander=0.5<0,1,0.01> Wander
+
+slider6:damp=0.2<0,1,0.01> Damping
+slider7:hp=0<0,1,0.01> HP
+
+slider9:stereo=1<0,1, 0.01> Stereo
+
+slider20:db_dry=0<-60, 0,0.1> Dry dB
+slider21:db_wet=-15<-40, 0,0.1> Wet dB
+
+import _core.jsfx-inc
+import _delay-line.jsfx-inc
+import _reverb.jsfx-inc
+import _lfo.jsfx-inc
+import _fir.jsfx-inc
+
+// ratios starting point
+// http://www.voxangelica.net/transfer/magic%20numbers%20for%20reverb%20design%203b.pdf
+//
+// Not really used, but at least this script provides set of primes to do manual
+// tuning work.
+//
+// #!/usr/bin/env python
+// from math import *
+// import sympy as sp
+//
+// def print_delay(v):
+//   print (f'// {v}[{sp.prevprime (v)},{sp.nextprime (v)}]')
+//
+// def get_start_times(del_spls, n_ap):
+//   def f(x):
+//     return 1 / (x + 1 - log(2))
+//   print_delay(del_spls)
+//   for i in range (n_ap):
+//     print_delay (del_spls * f (i + 1))
+//
+// def get_start_times2(del_spls, n_ap):
+//   print_delay(del_spls)
+//   print_delay(del_spls / 2)
+//   for i in range (n_ap):
+//     idx = int(i / 2) + 1
+//     if (i % 2) == 0:
+//       print_delay (del_spls * (2 / (1 + 2 * idx)))
+//     else:
+//       print_delay (del_spls * (4 / (3 + 2 * idx)))
+//
+// get_start_times2(12000, 102)
+
+@init
+
+// SRC stuff -------------------------------------------------------------------
+BYPASS_SRC = 0;
+
+k.src.kaiser_att_db = 210;
+k.src.taps_branch = 32;
+k.src.taps_branch_frac = 16;
+k.src.cutoff = 15000;
+k.src.srate = BYPASS_SRC ? srate : 33600;
+
+src.down.resampler_2c_init(
+  k.src.srate,
+  srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.up.resampler_2c_init(
+  srate,
+  k.src.srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.out_q.deque_init(
+  src.up.resampler_2c_max_n_out_samples() * 2
+  );
+
+src.ins.array_init (src.down.resampler_2c_max_n_out_samples() * 2);
+src.outs.array_init (src.up.resampler_2c_max_n_out_samples() * 2);
+
+src.ins.array_clear();
+src.outs.array_clear();
+
+// TODO how many?
+loop(floor (srate / 44100) * 2,
+  src.out_q.deque_push (0);
+  src.out_q.deque_push (0);
+);
+
+// Actual reverb stuff ---------------------------------------------------------
+n_lines = 50; // more than we need
+max_delay = 3000;
+delay_line_idx = 0; // to avoid passing parameters
+del.delay_line_init (round_next_pow2 (max_delay), n_lines);
+del.delay_line_init (round_next_pow2 (max_delay), n_lines);
+del.delay_line_thiran1_add();
+
+n_lfos = 2;
+lfo.lfo_bank_init (n_lfos, 1);
+lfo.ret.array_init (n_lfos);
+lfo.lfo_bank_reset_phase (0);
+
+function ap (in, spls, g) local (yn, u, x) global (del*, delay_line_idx) (
+  yn = del.delay_line_get (spls, delay_line_idx);
+  u = in + yn * g;
+  x = yn - u * g;
+  del.delay_line_set (u, 0, delay_line_idx);
+  delay_line_idx += 1;
+  x;
+);
+
+function ap_mod (in, spls, g, lfo, maxlfo) local (yn, u, x) global (del*, delay_line_idx) (
+  spls += lfo * maxlfo;
+  yn = del.delay_line_thiran1_get (spls, delay_line_idx);
+  u = in + yn * g;
+  x = yn - u * g;
+  del.delay_line_set (u, 0, delay_line_idx);
+  delay_line_idx += 1;
+  x;
+);
+
+// TODO: nested lattice
+function delay (in, spls) local (x) global (del*, delay_line_idx) (
+  x = del.delay_line_get (spls, delay_line_idx);
+  del.delay_line_set (in, 0, delay_line_idx);
+  delay_line_idx += 1;
+  x;
+);
+
+function dampfilter (in, g)  local (y1) global() (
+  in = (1 - g) * in + this.y1 * g; 
+  this.y1 = in;
+);
+
+feedback = 0;
+
+@slider
+
+// TODO: predelay
+
+decay = 0.3 + (decay_p * decay_p) * 0.69;
+
+lfo.lfo_bank_reset_freq (0, 0.1 + spin * 1.2, k.src.srate);
+mod_amt = wander * wander *  (0.5 + (1 - spin) * 0.5);
+
+dry_gain  = db_to_lin (db_dry);
+wet_gain = db_to_lin (db_wet);
+
+kdamp = (1 - damp) ;
+kdamp = 1 - kdamp * kdamp;
+kdamp *= 0.4;
+
+hp_fact = 1 - hp * hp;
+hp_fact *= 0.399;
+hp_fact += 0.6;
+
+character_neg = 1 - character;
+
+@sample
+
+n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
+
+(n_spls_down) ? (
+
+  x = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5;
+  lp = lp1.dampfilter (x, hp_fact);
+  x = x - lp;
+
+  x = ap (x, 147, -0.707);
+  x = ap (x, 183, 0.707);
+  x = ap (x, 389, -0.6);
+  x = ap (x, 401, 0.6);
+
+  in = x;
+ 
+  lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
+
+  x = ap_mod (in + f2 * decay, 977, 0.707, lfo.ret.ptr[0], 21 + 31 * mod_amt);
+  x = delay (x, 2819);
+  x = damp1.dampfilter (x, kdamp);
+  x = ap (x * decay, 863, -0.707);
+  x = delay (x, 1021);
+//  x = ap (x * decay, 509, -0.707);
+//  x = delay(x, 3691);
+  x = ap (x * decay, 1453, 0.618);
+  x = delay (x, 787);
+  l = x;
+
+  x = ap_mod (in + f1 * decay, 947, 0.707, lfo.ret.ptr[1], 27 + 40 * mod_amt);
+  x = delay (x, 3191);
+  x = damp2.dampfilter (x, kdamp);
+  x = ap (x * decay, 887, -0.707); // 0.618 to 0.707 -> explosion
+  x = delay (x, 1049);
+//  x = ap (x * decay, 617, -0.707);
+//  x = delay(x, 3697);
+  x = ap (x * decay, 1367, 0.618);
+  x = delay (x, 647);
+  f2 = x;
+  r = x;
+  f1 = l;
+
+  // prepare next iteration
+  del.delay_line_advance();
+  delay_line_idx = 0;
+
+  l = r * (1 - stereo) + l * stereo;
+  n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);
+  i = 0;
+  loop (n_spls_up * 2, // *2 : two channels
+    src.out_q.deque_push (src.outs.ptr[i]);
+    i += 1;
+  );
+);
+
+spl0 *= dry_gain;
+spl1 *= dry_gain;
+spl0 += src.out_q.deque_pop() * wet_gain;
+spl1 += src.out_q.deque_pop() * wet_gain;
+
