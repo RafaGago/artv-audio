@@ -1,15 +1,15 @@
 slider1:decay_p=0.8<0,1,0.01> Decay
 
-slider3:spin=0.5<0,1,0.01> Spin
-slider4:wander=0.5<0,1,0.01> Wander
+slider3:mod=0.5<0,1,0.01> Mod
+slider4:character=0.5<0,1,0.01> Character
 
-slider6:damp=0.2<0,1,0.01> Damping
+slider6:damp=0.3<0,1,0.01> Damping
 slider7:hp=0<0,1,0.01> HP
 
 slider9:stereo=1<0,1, 0.01> Stereo
 
 slider20:db_dry=0<-60, 0,0.1> Dry dB
-slider21:db_wet=-15<-40, 0,0.1> Wet dB
+slider21:db_wet=-12<-40, 0,0.1> Wet dB
 
 import _core.jsfx-inc
 import _delay-line.jsfx-inc
@@ -137,7 +137,7 @@ function delay (in, spls) local (x) global (del*, delay_line_idx) (
 );
 
 function dampfilter (in, g)  local (y1) global() (
-  in = (1 - g) * in + this.y1 * g; 
+  in = (1 - g) * in + this.y1 * g;
   this.y1 = in;
 );
 
@@ -147,23 +147,28 @@ feedback = 0;
 
 // TODO: predelay
 
-decay = 0.3 + (decay_p * decay_p) * 0.69;
+decay = 1 - decay_p;
+decay = 1 - decay * decay;
+decay = 0.6 + decay  * 0.39;
 
-lfo.lfo_bank_reset_freq (0, 0.1 + spin * 1.2, k.src.srate);
+max_amt = 0.75 * (1 - mod * mod) + 0.25;
+mod_amt = mod * max_amt;
+lfo.lfo_bank_reset_freq (0, 0.1 + mod * 1.2, k.src.srate);
+
 mod_amt = wander * wander *  (0.5 + (1 - spin) * 0.5);
 
 dry_gain  = db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
 
-kdamp = (1 - damp) ;
+kdamp = (0.9 - damp * 0.9);
 kdamp = 1 - kdamp * kdamp;
 kdamp *= 0.4;
 
 hp_fact = 1 - hp * hp;
-hp_fact *= 0.399;
+hp_fact *= 0.39;
 hp_fact += 0.6;
 
-character_neg = 1 - character;
+g_character = 0.618 + ((0.707 - 0.618) * 2) * character;
 
 @sample
 
@@ -181,13 +186,13 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   x = ap (x, 401, 0.6);
 
   in = x;
- 
+
   lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
 
-  x = ap_mod (in + f2 * decay, 977, 0.707, lfo.ret.ptr[0], 21 + 31 * mod_amt);
+  x = ap_mod (in + f2 * decay, 977, g_character, lfo.ret.ptr[0], 21 + 31 * mod_amt);
   x = delay (x, 2819);
   x = damp1.dampfilter (x, kdamp);
-  x = ap (x * decay, 863, -0.707);
+  x = ap (x * decay, 863, -g_character);
   x = delay (x, 1021);
 //  x = ap (x * decay, 509, -0.707);
 //  x = delay(x, 3691);
@@ -195,10 +200,10 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   x = delay (x, 787);
   l = x;
 
-  x = ap_mod (in + f1 * decay, 947, 0.707, lfo.ret.ptr[1], 27 + 40 * mod_amt);
+  x = ap_mod (in + f1 * decay, 947, g_character, lfo.ret.ptr[1], 27 + 40 * mod_amt);
   x = delay (x, 3191);
   x = damp2.dampfilter (x, kdamp);
-  x = ap (x * decay, 887, -0.707); // 0.618 to 0.707 -> explosion
+  x = ap (x * decay, 887, -g_character); // 0.618 to 0.707 -> explosion
   x = delay (x, 1049);
 //  x = ap (x * decay, 617, -0.707);
 //  x = delay(x, 3697);
@@ -225,4 +230,3 @@ spl0 *= dry_gain;
 spl1 *= dry_gain;
 spl0 += src.out_q.deque_pop() * wet_gain;
 spl1 += src.out_q.deque_pop() * wet_gain;
-
