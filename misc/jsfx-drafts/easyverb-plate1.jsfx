@@ -8,8 +8,10 @@ slider7:hp=0<0,1,0.01> HP
 
 slider9:stereo=1<0,1, 0.01> Stereo
 
-slider20:db_dry=0<-60, 0,0.1> Dry dB
+slider11:er_fact=0.2<0,1,0.01> ER
+
 slider21:db_wet=-12<-40, 0,0.1> Wet dB
+slider20:db_dry=0<-60, 0,0.1> Dry dB
 
 import _core.jsfx-inc
 import _delay-line.jsfx-inc
@@ -109,6 +111,25 @@ lfo.lfo_bank_init (n_lfos, 1);
 lfo.ret.array_init (n_lfos);
 lfo.lfo_bank_reset_phase (0);
 
+er_lfo.lfo_bank_init (n_lfos, 1);
+er_lfo.ret.array_init (n_lfos);
+er_lfo.lfo_bank_reset_phase (0);
+
+// TODO: nested lattice
+function delay (in, spls) local (x) global (del*, delay_line_idx) (
+  x = del.delay_line_get (spls, delay_line_idx);
+  del.delay_line_set (in, 0, delay_line_idx);
+  delay_line_idx += 1;
+  x;
+);
+
+function delay_mod (in, spls, lfo, max_lfo) local (x) global (del*, delay_line_idx) (
+  x = del.delay_line_thiran1_get (spls, delay_line_idx);
+  del.delay_line_set (in, 0, delay_line_idx);
+  delay_line_idx += 1;
+  x;
+);
+
 function ap (in, spls, g) local (yn, u, x) global (del*, delay_line_idx) (
   yn = del.delay_line_get (spls, delay_line_idx);
   u = in + yn * g;
@@ -124,14 +145,6 @@ function ap_mod (in, spls, g, lfo, maxlfo) local (yn, u, x) global (del*, delay_
   u = in + yn * g;
   x = yn - u * g;
   del.delay_line_set (u, 0, delay_line_idx);
-  delay_line_idx += 1;
-  x;
-);
-
-// TODO: nested lattice
-function delay (in, spls) local (x) global (del*, delay_line_idx) (
-  x = del.delay_line_get (spls, delay_line_idx);
-  del.delay_line_set (in, 0, delay_line_idx);
   delay_line_idx += 1;
   x;
 );
@@ -154,6 +167,7 @@ decay = 0.6 + decay  * 0.39;
 max_amt = 0.75 * (1 - mod * mod) + 0.25;
 mod_amt = mod * max_amt;
 lfo.lfo_bank_reset_freq (0, 0.1 + mod * 1.2, k.src.srate);
+er_lfo.lfo_bank_reset_freq (0, 0.3 + mod * 0.3, k.src.srate);
 
 mod_amt = wander * wander *  (0.5 + (1 - spin) * 0.5);
 
@@ -170,26 +184,40 @@ hp_fact += 0.6;
 
 g_character = 0.618 + ((0.707 - 0.618) * 2) * character;
 
+er_amt = er_fact * er_fact;
+
 @sample
 
+// Downsampling
 n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
 (n_spls_down) ? (
 
+  // in + hp
   x = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5;
-  lp = lp1.dampfilter (x, hp_fact);
-  x = x - lp;
-
+  // diffusion
   x = ap (x, 147, -0.707);
   x = ap (x, 183, 0.707);
   x = ap (x, 389, -0.6);
   x = ap (x, 401, 0.6);
+  late_in = x;
 
-  in = x;
+  // ER
+  er_lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
+  x = ap_mod (x * decay + er_fb, 1367, 0.35, lfo.ret.ptr[1], 71 + er_amt * 70);
+  x = erdamp.dampfilter (x, 0.0001 + 0.17 * damp);
+  er1 = x;
+  x = delay_mod (x * decay, 1787, lfo.ret.ptr[0], 261);
+  er2 = x;
+  er_fb = x * decay * 0.2;
+
+  // late
+  lp = lp1.dampfilter (late_in, hp_fact);
+  late_in = late_in - lp;
 
   lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
-
-  x = ap_mod (in + f2 * decay, 977, g_character, lfo.ret.ptr[0], 21 + 31 * mod_amt);
+  loop_in = late_in + f2 * decay - (er1 + er2) * er_amt * 0.4;
+  x = ap_mod (loop_in, 977, g_character, lfo.ret.ptr[0], 51 * mod_amt);
   x = delay (x, 2819);
   x = damp1.dampfilter (x, kdamp);
   x = ap (x * decay, 863, -g_character);
@@ -200,7 +228,8 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   x = delay (x, 787);
   l = x;
 
-  x = ap_mod (in + f1 * decay, 947, g_character, lfo.ret.ptr[1], 27 + 40 * mod_amt);
+ loop_in = late_in + f1 * decay + (er1 - er2) * er_amt * 0.4;
+  x = ap_mod (loop_in, 947, g_character, lfo.ret.ptr[1], 67 * mod_amt);
   x = delay (x, 3191);
   x = damp2.dampfilter (x, kdamp);
   x = ap (x * decay, 887, -g_character); // 0.618 to 0.707 -> explosion
@@ -217,7 +246,13 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   del.delay_line_advance();
   delay_line_idx = 0;
 
+  // Mixdown
+  l += (-er1 * 0.825 - er2 * 0.423) * er_amt;
+  r += (-er1 * 0.855 + er2 * 0.443) * er_amt;
+
   l = r * (1 - stereo) + l * stereo;
+
+  // Upsampling
   n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);
   i = 0;
   loop (n_spls_up * 2, // *2 : two channels
