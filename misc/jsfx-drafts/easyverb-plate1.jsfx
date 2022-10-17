@@ -6,7 +6,7 @@ slider4:character=0.5<0,1,0.01> Character
 slider6:damp=0.3<0,1,0.01> Damping
 slider7:hp=0<0,1,0.01> HP
 
-slider9:stereo=1<0,1, 0.01> Stereo
+slider9:stereo=1<-1,1, 0.01> Stereo
 
 slider11:er_fact=0.2<0,1,0.01> ER
 
@@ -160,6 +160,8 @@ feedback = 0;
 
 // TODO: predelay
 
+// TODO: dc block?
+
 decay = 1 - decay_p;
 decay = 1 - decay * decay;
 decay = 0.6 + decay  * 0.39;
@@ -250,7 +252,12 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   l += (-er1 * 0.825 - er2 * 0.423) * er_amt;
   r += (-er1 * 0.855 + er2 * 0.443) * er_amt;
 
-  l = r * (1 - stereo) + l * stereo;
+  l = r * (1 - abs (stereo)) + l * abs (stereo);
+  stereo < 1 ? (
+    tmp = r;
+    r = l;
+    l = tmp;
+  );
 
   // Upsampling
   n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);

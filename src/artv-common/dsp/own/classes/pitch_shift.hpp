@@ -25,8 +25,8 @@ class pitch_shift_sin {
 public:
   //----------------------------------------------------------------------------
   struct reader {
-    fixed_point<20, 22, false> pos {}; // u64
-    fixed_point<10, 22, false> delta {}; // u32
+    fixed_point_int<0, 20, 22, false> pos {}; // u64
+    fixed_point_int<0, 10, 22, false> delta {}; // u32
   };
   //----------------------------------------------------------------------------
   void reset (xspan<V> mem) // has a latency of "mem.size() / 2"
@@ -40,9 +40,9 @@ public:
   // many shift factors can be read from the same buffer.
   void set_reader (reader& r, float amt_semitones, bool resync = true)
   {
-    r.delta = exp (amt_semitones * (1. / 12.) * M_LN2);
+    r.delta.load_float (exp (amt_semitones * (1. / 12.) * M_LN2));
     if (resync) {
-      r.pos = _mem.abs_pos();
+      r.pos.load_int (_mem.abs_pos());
     }
   }
   //----------------------------------------------------------------------------
@@ -56,11 +56,11 @@ public:
       tk.pos += tk.delta;
     }
     else {
-      tk.pos = wpos;
-      tk.pos.mul (tk.delta);
+      tk.pos.load_int (wpos);
+      tk.pos *= tk.delta;
     }
 
-    auto rint  = tk.pos.integer();
+    auto rint  = tk.pos.as_int();
     auto rfrac = tk.pos.fraction();
 
     V p1  = _mem.get_abs (rint);

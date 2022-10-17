@@ -107,7 +107,7 @@ using vec_u = typename simd_vector_traits<T, N>::type_u;
 //------------------------------------------------------------------------------
 template <uint size_of, class T>
 static inline constexpr auto get_traits (
-  T __attribute__ ((vector_size (size_of), __may_alias__)))
+  T __attribute__ ((vector_size (size_of))))
 {
   return simd_vector_traits<T, size_of / sizeof (T)> {};
 }
@@ -132,8 +132,7 @@ static constexpr bool is_vec (T)
 }
 
 template <uint size_of, class T>
-static constexpr bool is_vec (
-  T __attribute__ ((vector_size (size_of), __may_alias__)))
+static constexpr bool is_vec (T __attribute__ ((vector_size (size_of))))
 {
   return true;
 }
