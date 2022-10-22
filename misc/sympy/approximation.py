@@ -39,7 +39,8 @@ pprint (err)
 def pan(x):
     return sin(x*1.5707963267948966)
 
-print("Pan") # Not Remez but a one liner
+print("Pan") # Not Remez but a one liner. At this point probably lolremez or
+             # some python Remez implementation is also worth trying
 chebyshev, err = mp.chebyfit(pan, [0, 1], 3, error=True)
 pprint (Poly(chebyshev, v).as_expr())
 
