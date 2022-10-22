@@ -5,9 +5,11 @@
 #include <limits>
 
 #include "artv-common/dsp/own/classes/misc.hpp"
+#include "artv-common/misc/fixed_point.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv {
@@ -19,6 +21,7 @@ struct normalized {}; // 0 to 1
 struct normalized_bipolar {}; // -1 to 1
 
 // these all map degrees from -180 to 180. So they start and end at pi (3pi)
+struct shifted_dregrees {}; // range = -180 to 180
 struct shifted {}; // 0 to 1
 struct shifted_bipolar {}; // -1 to 1
 } // namespace phase_tag
@@ -44,6 +47,13 @@ public:
 
   using raw_uint = typename vec_traits_t<phase_uint>::value_type;
   using raw_int  = typename vec_traits_t<phase_int>::value_type;
+
+  using fp_trait = single_fp_type_trait<phase_int, phase_uint, float_vec, N>;
+
+  template <uint S, uint I, uint F>
+  using fixpt_type      = fixpt<S, I, F, false, vec_fp_types_trait<N>>;
+  using fixpt_type_uint = fixpt_type<0, 0, sizeof (raw_uint) * 8>;
+  using fixpt_type_int  = fixpt_type<1, 0, (sizeof (raw_uint) * 8) - 1>;
   //----------------------------------------------------------------------------
   phase() : _v {0} {}
   //----------------------------------------------------------------------------
@@ -198,66 +208,60 @@ public:
   static phase_uint to_uint (phase_uint x) { return x; }
   phase_uint        to_uint() const { return to_uint (_v); }
   //----------------------------------------------------------------------------
-  static phase_int to_int (phase_uint x) // -INT32_MAX to +INT32_MAX
-  {
-    return make_symetric_int ((phase_int) x);
-  }
-  phase_int to_int() const // -INT32_MAX to +INT32_MAX
+  // discontinuty at half the range 0 to max, -max to 0.
+  static phase_int to_int (phase_uint x) { return (phase_int) x; }
+  phase_int        to_int() const // discontinuty at half the range
   {
     return to_int (_v);
   }
   //----------------------------------------------------------------------------
-  // 0 to 360
+  // 0 to 2pi -> 0 to 360
   static float_vec to_degrees (phase_uint x)
   {
-    to_normalized (x) * vec_set<N> (360.f);
+    return vec_cast<float> (x) * (1.f / deg_step);
   }
   float_vec to_degrees() const { to_degrees (_v); }
   //----------------------------------------------------------------------------
-  // 0 to 1,
+  // 0 to 2pi -> 0 to 1
   static float_vec to_normalized (phase_uint x)
   {
-    constexpr auto pstep
-      = 1. / ((double) std::numeric_limits<phase_uint>::max());
-    vec<double, N> v = vec_cast<double> (x);
-    return vec_cast<float> (v * pstep);
+    return vec_cast<float> (x) * (1.f / range_step);
   }
   float_vec to_normalized() const { return to_normalized (_v); }
   //----------------------------------------------------------------------------
-  // -1 to 1, mapping from 0 to 360deg
+  // 0 to 2pi -> -1 to 1
   static float_vec to_normalized_bipolar (phase_uint x)
   {
-    constexpr auto pstep
-      = 1. / ((double) std::numeric_limits<raw_uint>::max() * 2.);
-    vec<double, N> v = vec_cast<double> (x);
-    return vec_cast<float> (v * pstep) - 1.f;
+    return to_shifted_bipolar (x - half_range_uint);
   }
   float_vec to_normalized_bipolar() const { return to_normalized_bipolar (_v); }
   //----------------------------------------------------------------------------
-  // 0 to 1, mapping from -180 to 180deg. 0 degrees at 0.5.
+  // 0 to 2pi -> -180 to 180
+  static float_vec to_shifted_degrees (phase_uint x)
+  {
+    return vec_cast<float> (vec_cast<raw_int> (x)) * (1.f / half_deg_step);
+  }
+  float_vec to_shifted_degrees() const { return to_shifted_degrees (_v); }
+  //----------------------------------------------------------------------------
+  // 0 to 2pi -> [0.5 to 1] [0 to 0.5]
   static float_vec to_shifted (phase_uint x)
   {
-    constexpr auto half = std::numeric_limits<raw_uint>::max() / 2;
-    return to_normalized (x + half);
+    return to_normalized (x + half_range_uint);
   }
   float_vec to_shifted() const { return to_shifted (_v); }
   //----------------------------------------------------------------------------
-  // 0 to 1, mapping from -180 to 180deg. 0 degrees at 0.5.
+  // 0 to 2pi -> [0 to 1] [-1 to 0]
   static float_vec to_shifted_bipolar (phase_uint x)
   {
-    constexpr auto half = std::numeric_limits<raw_uint>::max() / 2;
-    return to_normalized_bipolar (x + half);
+    return vec_cast<float> (vec_cast<raw_int> (x)) * (1.f / half_range_step);
   }
   float_vec to_shifted_bipolar() const { return to_shifted_bipolar (_v); }
   //----------------------------------------------------------------------------
-  static phase_int make_symetric_int (phase_int v)
-  {
-    // avoid UB, this value has no positive equivalent on a signed int, but we
-    // still want phases to have a symmetric scaling on the outside. This
-    // introduces an extremely small non accumulative error.
-    v += (v == std::numeric_limits<phase_int>::min());
-    return v;
-  }
+  // o to 360
+  fixpt_type_int to_fixpt() { return fixpt_type_int::from (_v); }
+  //----------------------------------------------------------------------------
+  // o to 180, -180 to 0
+  fixpt_type_uint to_fixpt_unsigned() { return fixpt_type_uint::from (_v); }
   //----------------------------------------------------------------------------
   raw_uint get_raw (uint channel) const
   {
@@ -272,48 +276,51 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  // C++ **** for being able to make constexpr constructors on an unevaluated
-  // context (TODO: this wasn't using vector types previously. It seems that
-  // vector types break constexprness, if at some point on the future they
-  // don't, then add constexprness back).
-  phase_uint from_degrees (float_vec deg)
-  {
-    constexpr auto pstep
-      = ((double) std::numeric_limits<raw_uint>::max()) / 360.;
-    vec<double, N> deg_dbl = vec_cast<double> (deg);
-    return vec_cast<raw_uint> (deg_dbl * pstep);
-  }
+  static constexpr auto deg_step
+    = (float) (((double) std::numeric_limits<raw_uint>::max()) / 360.);
 
-  phase_uint from_normalized (float_vec norm)
-  {
-    constexpr auto pstep = (double) std::numeric_limits<raw_uint>::max();
-    return vec_cast<raw_uint> (vec_cast<double> (norm) * pstep);
-  }
+  static constexpr auto half_deg_step
+    = (float) (((double) std::numeric_limits<raw_uint>::max()) / 180.);
 
-  phase_uint from_normalized_bipolar (float_vec bnorm)
-  {
-    constexpr auto pstep
-      = ((double) (std::numeric_limits<raw_uint>::max() / 2));
-    return vec_cast<raw_uint> (vec_cast<double> (bnorm + 1.) * pstep);
-  }
+  static constexpr auto range_step
+    = (float) std::numeric_limits<raw_uint>::max();
 
-  phase_uint from_shifted (float_vec norm)
-  {
-    constexpr auto half = std::numeric_limits<raw_uint>::max() / 2;
-    phase_uint     n    = from_normalized (norm);
-    return n - half;
-  }
+  static constexpr auto half_range_uint = std::numeric_limits<raw_uint>::max();
 
-  phase_uint from_shifted_bipolar (float_vec bnorm)
+  static constexpr auto half_range_step = (float) (half_range_uint / 2);
+  //----------------------------------------------------------------------------
+  phase_uint from_degrees (float_vec v) // 0 to 360 -> 0 to 2pi
   {
-    constexpr auto half = std::numeric_limits<raw_uint>::max() / 2;
-    phase_uint     n    = from_normalized_bipolar (bnorm);
-    return n - half;
+    return vec_cast<raw_uint> (v * deg_step);
   }
   //----------------------------------------------------------------------------
-  phase_uint _v;
+  phase_uint from_normalized (float_vec v) // 0 to 1 -> 0 to 2pi
+  {
+    return vec_cast<raw_uint> (v * range_step);
+  }
+  //----------------------------------------------------------------------------
+  phase_uint from_normalized_bipolar (float_vec v) // -1 to 1 -> 0 to 2pi
+  {
+    return from_shifted_bipolar (v) - half_range_uint;
+  }
+  //----------------------------------------------------------------------------
+  phase_uint from_shifted_degrees (float_vec v) // -180 to 180 -> 1 to 3pi
+  {
+    return vec_cast<raw_uint> (vec_cast<raw_int> (v * half_deg_step));
+  }
+  //----------------------------------------------------------------------------
+  phase_uint from_shifted (float_vec v) // 0 to 1 -> 1 to 3pi
+  {
+    return from_normalized (v) + half_range_uint;
+  }
+  //----------------------------------------------------------------------------
+  phase_uint from_shifted_bipolar (float_vec v) // -1 to 1 -> 1 to 3pi
+  {
+    return vec_cast<raw_uint> (vec_cast<raw_int> (v * half_range_step));
+  }
+  //----------------------------------------------------------------------------
+  phase_uint _v; // 0 to 2pi
 };
-
 //------------------------------------------------------------------------------
 template <uint N = 1>
 class int_phasor {

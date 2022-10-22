@@ -62,23 +62,46 @@ public:
     return (negative ? dsinf : -dsinf);
   }
   //----------------------------------------------------------------------------
+  auto tick_sine_fixpt (uint n = 1)
+  {
+    // As above k1 = 1.27323954 * pi (3.9999999851240475) and
+    //          k2 = 0.405284735 * pi * pi (4.000000004250334)
+    // the coeffient to be 4 (left shift of 2).
+    // so 4 (x + x^2)
+
+    auto phase    = _phasor.tick (n).to_fixpt(); // 32bit, -1 to 0.99999
+    using fp_type = decltype (phase);
+    auto negative = phase < fp_type::from_int (0);
+    auto p        = select (negative, phase, -phase);
+    auto sinv     = (p + p * p) << 2; // -p + p * p tops at -0.25
+    return select (negative, phase, -phase);
+  }
+  //----------------------------------------------------------------------------
   value_type tick_saw (uint n = 1)
   {
     return _phasor.tick (n).to_normalized_bipolar();
   }
+  //----------------------------------------------------------------------------
+  auto tick_saw_fixpt (uint n = 1) { return _phasor.tick (n).to_fpixpt(); }
   //----------------------------------------------------------------------------
   value_type tick_square (uint n = 1)
   {
     return _phasor.tick (n).to_int() < 0 ? -1.f : 1.f;
   }
   //----------------------------------------------------------------------------
+  auto tick_square_fixpt (uint n = 1)
+  {
+    auto v = _phasor.tick (n).to_fpixpt();
+    return select (v < vec_set<decltype (v)> (0), v.min(), v.max());
+  }
+  //----------------------------------------------------------------------------
   value_type tick_triangle (uint n = 1)
   {
     // triangle by abs of phase (saw) + scaling. Adding a quarter cycle so its
     // starts at 0
-    const auto quarter_cycle
+    auto const quarter_cycle
       = phase<N> {typename phase<N>::degrees {}, vec_set<N> (90.f)};
-    const auto quarter_range = quarter_cycle.to_uint();
+    auto const quarter_range = quarter_cycle.to_uint();
 
     auto ph = _phasor.tick (n);
     ph += quarter_cycle;
@@ -91,6 +114,18 @@ public:
       = 2. / (double) std::numeric_limits<typename phase<N>::raw_int>::max();
 
     return vec_cast<float> (vec_cast<double> (ph_int) * step);
+  }
+  //----------------------------------------------------------------------------
+  auto tick_triangle_fixpt (uint n = 1)
+  {
+    // triangle by abs of phase (saw) + scaling. Adding a quarter cycle so its
+    // starts at 0
+    auto phu = _phasor.tick (n).to_fixpt_uint(); // 0 to 1
+    phu += decltype (phu)::from_float (vec_set<N> (0.25f)); // overflow no UB
+    auto ph = phu.to_signed(); // -0.5 to 0.5
+    ph      = fixpt_abs (ph); // 0 to 0.5
+    ph -= decltype (ph)::from_float (vec_set<N> (0.25f)); // -0.25 to 0.25
+    return ph << 2; // -1 to 1
   }
   //----------------------------------------------------------------------------
   // A trapezoid done by clipping a triangle and rescaling to -1 to 1.

@@ -1,3 +1,10 @@
+- TODO: big refactor of SIMD types so they are more compatible with builtins:
+  - Increase the case where a vector is passed the builtin types work too. E.g.
+    vec_set working for builtin types (forwarding), math functions dropping the
+    vec prefix, etc.
+  - wrapped type traits that also work for vector types as with builtin types:
+    is_signed, is_integral, is_floating_point, ...
+
 - Chore: Use vec_set<1> instead of vec_set<x1_type>.
 
 - Chore: Protect all choice variables against loading of presets from more

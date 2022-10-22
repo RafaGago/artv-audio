@@ -25,13 +25,13 @@ class pitch_shift_sin {
 public:
   //----------------------------------------------------------------------------
   struct reader {
-    fixed_point_int<0, 20, 22, false> pos {}; // u64
-    fixed_point_int<0, 10, 22, false> delta {}; // u32
+    fixpt<0, 20, 22, 0> pos {}; // u64
+    fixpt<0, 10, 22, 0> delta {}; // u32
   };
   //----------------------------------------------------------------------------
   void reset (xspan<V> mem) // has a latency of "mem.size() / 2"
   {
-    assert (mem.size() <= (decltype (reader::pos)::int_max) + 1);
+    assert (mem.size() <= (decltype (reader::pos)::max_int()) + 1);
 
     _mem.reset (mem);
     _size_recip = 1. / (float) mem.size();
