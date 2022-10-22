@@ -6,7 +6,7 @@
 
 #include "artv-common/misc/fixed_point.hpp"
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 
 namespace artv {
 

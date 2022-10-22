@@ -6,7 +6,7 @@
 
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 
 //------------------------------------------------------------------------------
 namespace artv {
@@ -32,7 +32,7 @@ struct iir_dc_blocker {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> c, xspan<V> s, V x)
+  static V tick (xspan<V const> c, xspan<V> s, V x)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();
@@ -42,7 +42,7 @@ struct iir_dc_blocker {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const vec_value_type_t<V>> c, xspan<V> s, V x)
+  static V tick (xspan<vec_value_type_t<V> const> c, xspan<V> s, V x)
   {
     assert (c.size() >= n_coeffs);
     return tick (s, x, vec_set<V> (c[R]));
@@ -87,7 +87,7 @@ struct mystran_dc_blocker {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> c, xspan<V> s, V x)
+  static V tick (xspan<V const> c, xspan<V> s, V x)
   {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
@@ -99,7 +99,7 @@ struct mystran_dc_blocker {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const vec_value_type_t<V>> c, // single coeff set
+    xspan<vec_value_type_t<V> const> c, // single coeff set
     xspan<V>                         s,
     V                                x)
   {
@@ -142,7 +142,7 @@ struct mystran_dc_blocker_2pole {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> c, xspan<V> s, V x)
+  static V tick (xspan<V const> c, xspan<V> s, V x)
   {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
@@ -156,7 +156,7 @@ struct mystran_dc_blocker_2pole {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const vec_value_type_t<V>> c, // single coeff set
+    xspan<vec_value_type_t<V> const> c, // single coeff set
     xspan<V>                         s,
     V                                x)
   {

@@ -7,7 +7,7 @@
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
@@ -58,7 +58,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static lr_crossover_out<V> tick (
-    xspan<const V> c, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> c, // coeffs (interleaved, SIMD aligned)
     xspan<V>       s, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -78,7 +78,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V apply_correction (
-    xspan<const V> c, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> c, // coeffs (interleaved, SIMD aligned)
     xspan<V>       extern_s, // coeffs "
     V              in)
   {
@@ -125,7 +125,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static lr_crossover_out<V> tick (
-    xspan<const V> c, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> c, // coeffs (interleaved, SIMD aligned)
     xspan<V>       s, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -142,7 +142,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V apply_correction (
-    xspan<const V> c, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> c, // coeffs (interleaved, SIMD aligned)
     xspan<V>       extern_s, // coeffs "
     V              in)
   {
@@ -194,7 +194,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static lr_crossover_out<V> tick (
-    xspan<const V> c, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> c, // coeffs (interleaved, SIMD aligned)
     xspan<V>       s, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -255,7 +255,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V apply_correction (
-    xspan<const V> c, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> c, // coeffs (interleaved, SIMD aligned)
     xspan<V>       extern_s, // coeffs "
     V              in)
   {
@@ -330,7 +330,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static lr_crossover_out<V> tick (
-    xspan<const V> c,
+    xspan<V const> c,
     xspan<V>       s,
     V              in,
     uint           order)
@@ -353,7 +353,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V apply_correction (
-    xspan<const V> c,
+    xspan<V const> c,
     xspan<V>       extern_s,
     V              in,
     uint           order)

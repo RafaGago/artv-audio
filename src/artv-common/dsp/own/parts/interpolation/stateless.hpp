@@ -3,7 +3,7 @@
 #include "artv-common/dsp/own/classes/windowed_sync.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv {
@@ -33,7 +33,7 @@ struct zero_order_hold {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V>, xspan<V>, std::array<V, n_points> y, V x)
+  static V tick (xspan<V const>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
   }
@@ -65,7 +65,7 @@ struct linear_interp {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V>, xspan<V>, std::array<V, n_points> y, V x)
+  static V tick (xspan<V const>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
   }
@@ -114,7 +114,7 @@ struct lagrange_interp<2> {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V>, xspan<V>, std::array<V, n_points> y, V x)
+  static V tick (xspan<V const>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
   }
@@ -160,7 +160,7 @@ struct lagrange_interp<3> {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V>, xspan<V>, std::array<V, n_points> y, V x)
+  static V tick (xspan<V const>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
   }
@@ -197,7 +197,7 @@ struct hermite_interp {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V>, xspan<V>, std::array<V, n_points> y, V x)
+  static V tick (xspan<V const>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
   }
@@ -239,7 +239,7 @@ struct catmull_rom_interp {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V>, xspan<V>, std::array<V, n_points> y, V x)
+  static V tick (xspan<V const>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
   }
@@ -290,7 +290,7 @@ struct sinc_interp {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const vec_value_type_t<V>> co,
+    xspan<vec_value_type_t<V> const> co,
     xspan<V>,
     std::array<V, n_points> y,
     V                       x)

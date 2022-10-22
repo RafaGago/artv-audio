@@ -7,8 +7,8 @@
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
-#include "artv-common/misc/simd_complex.hpp"
+#include "artv-common/misc/vec_complex.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/composite/cascade.hpp"
@@ -129,7 +129,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const vec_value_type_t<V>> co, // coeffs (single set)
+    xspan<vec_value_type_t<V> const> co, // coeffs (single set)
     xspan<V>                         st, // states (interleaved, SIMD aligned)
     V                                in,
     uint                             order)
@@ -140,7 +140,7 @@ public:
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
     V              in,
     uint           order)
@@ -184,7 +184,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const vec_value_type_t<V>> co, // coeffs (single set)
+    xspan<vec_value_type_t<V> const> co, // coeffs (single set)
     xspan<V>                         st, // states (interleaved, SIMD aligned)
     V                                in)
   {
@@ -193,7 +193,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -299,7 +299,7 @@ struct butterworth_lp_complex {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V gain (const xspan<vec_complex<V>> poles, uint order)
+  static V gain (xspan<vec_complex<V>> const poles, uint order)
   {
     using T               = vec_value_type_t<V>;
     constexpr auto traits = vec_traits<V>();

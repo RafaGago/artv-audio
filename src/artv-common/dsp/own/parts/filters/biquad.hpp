@@ -6,8 +6,8 @@
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
-#include "artv-common/misc/simd_complex.hpp"
+#include "artv-common/misc/vec_complex.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv {
@@ -616,7 +616,7 @@ struct biquad {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> co, xspan<V> st, V x)
+  static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);
@@ -629,7 +629,7 @@ struct biquad {
   //----------------------------------------------------------------------------
   // Running with revesed zeros.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> co, xspan<V> st, V x, rev_zeros_tag)
+  static V tick (xspan<V const> co, xspan<V> st, V x, rev_zeros_tag)
   {
     assert (co.size() >= b2 + 1);
     assert (st.size() >= n_states);
@@ -642,7 +642,7 @@ struct biquad {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void get_zeros (
-    xspan<const V>        co,
+    xspan<V const>        co,
     xspan<vec_complex<V>> zeros,
     V&                    zeros_gain)
   {
@@ -652,7 +652,7 @@ struct biquad {
     zeros_gain = co[b0];
   } //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static void get_poles (xspan<vec_complex<V>> poles, xspan<const V> co)
+  static void get_poles (xspan<vec_complex<V>> poles, xspan<V const> co)
   {
     assert (poles.size() >= 2);
 

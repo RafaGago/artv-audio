@@ -1,7 +1,7 @@
 #pragma once
 
-#include "artv-common/misc/simd.hpp"
-#include "artv-common/misc/simd_complex.hpp"
+#include "artv-common/misc/vec_complex.hpp"
+#include "artv-common/misc/vec_math.hpp"
 
 namespace artv {
 
@@ -28,7 +28,7 @@ struct czero {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static vec_complex<V> tick (xspan<const V> co, xspan<V> st, vec_complex<V> x)
+  static vec_complex<V> tick (xspan<V const> co, xspan<V> st, vec_complex<V> x)
   {
     assert (co.size() >= vec_complex<V>::vec_size);
     assert (st.size() >= vec_complex<V>::vec_size);
@@ -66,7 +66,7 @@ struct cpole {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static vec_complex<V> tick (xspan<const V> co, xspan<V> st, vec_complex<V> x)
+  static vec_complex<V> tick (xspan<V const> co, xspan<V> st, vec_complex<V> x)
   {
     assert (co.size() >= vec_complex<V>::vec_size);
     assert (st.size() >= vec_complex<V>::vec_size);
@@ -102,7 +102,7 @@ struct rzero {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> co, xspan<V> st, V x)
+  static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);
@@ -135,7 +135,7 @@ struct rpole {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> co, xspan<V> st, V x)
+  static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);
@@ -172,7 +172,7 @@ struct ccpole_pair {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> co, xspan<V> st, V x)
+  static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);
@@ -205,7 +205,7 @@ struct rpole_rzero {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> co, xspan<V> st, V x)
+  static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     V out = rpole::tick (co, st, x);
     co.cut_head (rpole::n_coeffs);
@@ -239,7 +239,7 @@ struct ccpole_pair_rzero_pair {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> co, xspan<V> st, V x)
+  static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     V out = ccpole_pair::tick (co, st, x);
     co.cut_head (ccpole_pair::n_coeffs);
@@ -283,7 +283,7 @@ struct czero_pair {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> co, xspan<V> st, V x)
+  static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);
@@ -329,7 +329,7 @@ struct cpole_pair {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> co, xspan<V> st, V x)
+  static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);
@@ -380,7 +380,7 @@ struct cpole_pair_czero_pair {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> co, xspan<V> st, V x)
+  static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     V out = x;
     out   = czero_pair::tick (co, st, out);

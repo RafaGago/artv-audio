@@ -23,7 +23,7 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace chow {
@@ -48,17 +48,17 @@ public:
     // component values
     // R = jmax (1.0f, R);
     constexpr double C  = (float) 25e-9;
-    const double     RC = R * C;
+    double const     RC = R * C;
 
     // analog coefs
-    const double b0s = RC;
-    const double b1s = -1.0f;
-    const double a0s = b0s;
-    const double a1s = 1.0f;
+    double const b0s = RC;
+    double const b1s = -1.0f;
+    double const a0s = b0s;
+    double const a1s = 1.0f;
 
     // bilinear transform
-    const double K  = 2.0f * fs;
-    const double a0 = a0s * K + a1s;
+    double const K  = 2.0f * fs;
+    double const a0 = a0s * K + a1s;
     c[b0]           = (b0s * K + b1s) / a0;
     c[b1]           = (-b0s * K + b1s) / a0;
     // a0: unused
@@ -73,7 +73,7 @@ public:
   }
   //----------------------------------------------------------------------------
   static float tick (
-    xspan<const value_type> c, // coeffs
+    xspan<value_type const> c, // coeffs
     xspan<value_type>       s, // state
     value_type              x,
     float                   n_stages)
@@ -95,7 +95,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   static value_type tick_stage (
-    xspan<const value_type> c, // coeffs
+    xspan<value_type const> c, // coeffs
     xspan<value_type>       s, // state,
     value_type              x,
     uint                    stage)
@@ -144,24 +144,24 @@ public:
     // component values
     // R = jmax (1.0f, R);
     constexpr double C  = (float) 15e-9;
-    const double     RC = R * C;
+    double const     RC = R * C;
 
     // analog coefs
-    const double b0s = RC * RC;
-    const double b1s = -2.0f * RC;
-    const double b2s = 1.0f;
-    const double a0s = b0s * (1.0f + fbAmt);
-    const double a1s = -b1s * (1.0f - fbAmt);
-    const double a2s = 1.0f + fbAmt;
+    double const b0s = RC * RC;
+    double const b1s = -2.0f * RC;
+    double const b2s = 1.0f;
+    double const a0s = b0s * (1.0f + fbAmt);
+    double const a1s = -b1s * (1.0f - fbAmt);
+    double const a2s = 1.0f + fbAmt;
 
     // frequency warping
     using fastmath   = juce::dsp::FastMathApproximations;
-    const double wc  = calc_pole_freq (a0s, a1s, a2s);
-    const double K   = (wc == 0.0f) ? 2.0f * fs : wc / tan (wc / (2.0 * fs));
-    const double KSq = K * K;
+    double const wc  = calc_pole_freq (a0s, a1s, a2s);
+    double const K   = (wc == 0.0f) ? 2.0f * fs : wc / tan (wc / (2.0 * fs));
+    double const KSq = K * K;
 
     // bilinear transform
-    const double a0 = a0s * KSq + a1s * K + a2s;
+    double const a0 = a0s * KSq + a1s * K + a2s;
     // c[a0]          = a0 / a0;
     c[a1] = 2.0f * (a2s - a0s * KSq) / a0;
     c[a2] = (a0s * KSq - a1s * K + a2s) / a0;
@@ -182,7 +182,7 @@ public:
   }
   //----------------------------------------------------------------------------
   static float tick (
-    xspan<const value_type> c, // coeffs
+    xspan<value_type const> c, // coeffs
     xspan<value_type>       s, // state
     value_type              x,
     float                   d1,
@@ -194,7 +194,7 @@ public:
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);
 
-    auto dc_coeffs = c.advanced (n_own_coeffs).cast<const x1_vec>();
+    auto dc_coeffs = c.advanced (n_own_coeffs).cast<x1_vec const>();
     auto dc_states = s.advanced (n_own_states).cast (x1_vec {});
 
     double y      = s[z1] + x * c[b0];

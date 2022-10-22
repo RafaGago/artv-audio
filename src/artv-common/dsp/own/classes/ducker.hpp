@@ -7,7 +7,7 @@
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/misc/envelope.hpp"

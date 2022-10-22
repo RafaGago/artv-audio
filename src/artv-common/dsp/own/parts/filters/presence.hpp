@@ -6,7 +6,7 @@
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 //------------------------------------------------------------------------------
@@ -173,7 +173,7 @@ struct presence_high_shelf {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const vec_value_type_t<V>> co, // coeffs (1 set)
+    xspan<vec_value_type_t<V> const> co, // coeffs (1 set)
     xspan<V>                         st, // states (interleaved, SIMD aligned)
     V                                in)
   {
@@ -203,7 +203,7 @@ struct presence_high_shelf {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (
-    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
     V              in)
   {

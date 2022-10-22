@@ -13,7 +13,7 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace andy {
@@ -241,13 +241,13 @@ struct svf_multimode {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static auto tick (xspan<const V> co, xspan<V> st, V in)
+  static auto tick (xspan<V const> co, xspan<V> st, V in)
   {
     return tick_impl<V, V> (co, st, in);
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static auto tick (xspan<const vec_value_type_t<V>> co, xspan<V> st, V in)
+  static auto tick (xspan<vec_value_type_t<V> const> co, xspan<V> st, V in)
   {
     return tick_impl<V, vec_value_type_t<V>> (co, st, in);
   }
@@ -386,14 +386,14 @@ public:
   using base::tick;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static auto tick (xspan<const V> co, xspan<V> st, zdf::gs_coeffs_tag)
+  static auto tick (xspan<V const> co, xspan<V> st, zdf::gs_coeffs_tag)
   {
     return tick_impl<V, V> (co, st, zdf::gs_coeffs_tag {});
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (
-    xspan<const vec_value_type_t<V>> co,
+    xspan<vec_value_type_t<V> const> co,
     xspan<V>                         st,
     zdf::gs_coeffs_tag)
   {
@@ -406,7 +406,7 @@ private:
   template <class V, class VT, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick_impl (
     xspan<const VT> co, // coeffs (V builtin type (single set) or V (SIMD))
-    xspan<const V>  st, // states (interleaved, SIMD aligned)
+    xspan<V const>  st, // states (interleaved, SIMD aligned)
     zdf::gs_coeffs_tag)
   {
     using T = vec_value_type_t<V>;
@@ -869,7 +869,7 @@ struct svf {
   // states version
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const vec_value_type_t<V>> c, // coeffs (1 set)
+    xspan<vec_value_type_t<V> const> c, // coeffs (1 set)
     xspan<V>                         s, // states (interleaved, SIMD aligned)
     V                                v0)
   {
@@ -893,7 +893,7 @@ struct svf {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> c, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> c, // coeffs (interleaved, SIMD aligned)
     xspan<V>       s, // states (interleaved, SIMD aligned)
     V              v0)
   {

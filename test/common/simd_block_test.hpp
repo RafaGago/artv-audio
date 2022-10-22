@@ -5,7 +5,7 @@
 
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/misc/misc.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv {
@@ -38,7 +38,7 @@ public:
     for (uint i = 0; i < res_scalar.size(); ++i) {
       scalar_type in = _whitenoise (1.);
       res_scalar[i]  = Dsp::tick (
-        xspan<const scalar_type> {scalar_coeffs}, xspan {scalar_states}, in);
+        xspan<scalar_type const> {scalar_coeffs}, xspan {scalar_states}, in);
       res_vec[i] = Dsp::tick_simd (
         vector_coeffs, vector_states, vec_set<vector_type> (in))[0];
     }

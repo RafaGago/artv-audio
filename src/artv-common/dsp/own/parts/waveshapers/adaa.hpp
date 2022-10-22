@@ -10,7 +10,7 @@
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace adaa {
@@ -41,7 +41,7 @@ public:
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V>, xspan<V>, V x)
+  static V tick (xspan<V const>, xspan<V>, V x)
   {
     return functions::fn (x);
   }
@@ -64,7 +64,7 @@ public:
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V>, xspan<V> st, V x)
+  static V tick (xspan<V const>, xspan<V> st, V x)
   {
     // as this has to calculate both branches, it might not be worth bothering.
     using T = vec_value_type_t<V>;
@@ -117,7 +117,7 @@ public:
   //----------------------------------------------------------------------------
   // kept as an impl reference if going for it.
   template <class T>
-  static T tick (xspan<const T>, xspan<T> st, T x)
+  static T tick (xspan<T const>, xspan<T> st, T x)
   {
     using fns = functions;
 
@@ -152,7 +152,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V>, xspan<V> st, V x)
+  static V tick (xspan<V const>, xspan<V> st, V x)
   {
     // Real SIMD: TODO. Might not be worth because of the high number of
     // branches.
@@ -223,7 +223,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> c, xspan<V> st, V x)
+  static V tick (xspan<V const> c, xspan<V> st, V x)
   {
     assert (c.size() >= n_coeffs);
     assert (st.size() >= n_states);
@@ -248,7 +248,7 @@ struct null_shaper {
   enum state { n_states };
 
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> c, xspan<V> st, V x)
+  static V tick (xspan<V const> c, xspan<V> st, V x)
   {
     return x;
   }

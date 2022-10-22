@@ -4,7 +4,7 @@
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/biquad.hpp"
@@ -51,7 +51,7 @@ struct thiran_interp<1> {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V>          co,
+    xspan<V const>          co,
     xspan<V>                st,
     std::array<V, n_points> y,
     V                       x [[maybe_unused]])
@@ -96,7 +96,7 @@ struct thiran_interp<2> {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V>          co,
+    xspan<V const>          co,
     xspan<V>                st,
     std::array<V, n_points> y,
     V                       x [[maybe_unused]])

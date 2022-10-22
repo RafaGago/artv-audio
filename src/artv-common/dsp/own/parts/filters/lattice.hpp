@@ -6,7 +6,7 @@
 #include "artv-common/dsp/own/parts/traits.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 //------------------------------------------------------------------------------
@@ -40,7 +40,7 @@ struct lattice {
   }
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> co, xspan<V> st, V in)
+  static V tick (xspan<V const> co, xspan<V> st, V in)
   {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);

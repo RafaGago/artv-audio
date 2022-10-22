@@ -7,7 +7,7 @@
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv { namespace zdf {
@@ -52,7 +52,7 @@ struct response {
   ~response()                           = default;
   //----------------------------------------------------------------------------
   // mul: serial/cascade connection
-  constexpr response& operator*= (const response& r)
+  constexpr response& operator*= (response const& r)
   {
     G *= r.G;
     S *= r.G;
@@ -78,7 +78,7 @@ struct response {
   }
   //----------------------------------------------------------------------------
   // add: parallel connection
-  constexpr response& operator+= (const response& r)
+  constexpr response& operator+= (response const& r)
   {
     G += r.G;
     S += r.S;
@@ -86,7 +86,7 @@ struct response {
   }
   //----------------------------------------------------------------------------
   // sub: parallel connection
-  constexpr response& operator-= (const response& r)
+  constexpr response& operator-= (response const& r)
   {
     G -= r.G;
     S -= r.S;
@@ -221,7 +221,7 @@ struct feedback<linear_tag, Any1, Any2> {
   {}
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V>, xspan<V>, V in, response<V> resp, V k)
+  static V tick (xspan<V const>, xspan<V>, V in, response<V> resp, V k)
   {
     using T = vec_value_type_t<V>;
     resp *= k;
@@ -270,7 +270,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, class... Ts, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V>,
+    xspan<V const>,
     xspan<V>    st,
     V           in,
     response<V> resp,
@@ -345,7 +345,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, class... Ts, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V>,
+    xspan<V const>,
     xspan<V>    st,
     V           in,
     response<V> resp,
@@ -426,7 +426,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, class... Ts, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V>,
+    xspan<V const>,
     xspan<V>    st,
     V           in,
     response<V> r1,

@@ -5,7 +5,7 @@
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv {
@@ -15,7 +15,7 @@ template <uint N>
 struct householder_matrix {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (xspan<const V> x)
+  static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
 
@@ -34,10 +34,10 @@ struct householder_matrix {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (xspan<const T> x)
+  static std::array<T, N> tick (xspan<T const> x)
   {
     using vectype = vec<T, 1>;
-    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<vectype const>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -52,7 +52,7 @@ class hadamard_matrix {
 public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (xspan<const V> x)
+  static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
     using T                      = vec_value_type_t<V>;
@@ -66,10 +66,10 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (xspan<const T> x)
+  static std::array<T, N> tick (xspan<T const> x)
   {
     using vectype = vec<T, 1>;
-    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<vectype const>()));
   }
   //----------------------------------------------------------------------------
 private:
@@ -78,7 +78,7 @@ private:
   friend class hadamard_matrix;
 
   template <class V>
-  static std::array<V, N> tick_raw (xspan<const V> x)
+  static std::array<V, N> tick_raw (xspan<V const> x)
   {
     if constexpr (N > 1) {
       constexpr int half_n = N / 2;
@@ -114,7 +114,7 @@ struct almost_hadamard_matrix<6> {
   static constexpr uint N = 6;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (xspan<const V> x)
+  static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
     static constexpr double norm = 1. / 3. * gcem::sqrt (2.);
@@ -149,10 +149,10 @@ struct almost_hadamard_matrix<6> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (xspan<const T> x)
+  static std::array<T, N> tick (xspan<T const> x)
   {
     using vectype = vec<T, 1>;
-    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<vectype const>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -164,7 +164,7 @@ struct almost_hadamard_matrix<7> {
   static constexpr uint N = 7;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (xspan<const V> x)
+  static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
     static constexpr double A = -0.26120387496374144251476820691706;
@@ -185,10 +185,10 @@ struct almost_hadamard_matrix<7> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (xspan<const T> x)
+  static std::array<T, N> tick (xspan<T const> x)
   {
     using vectype = vec<T, 1>;
-    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<vectype const>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -203,7 +203,7 @@ struct rotation_matrix<4> {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static std::array<V, N> tick (
-    xspan<const V>                x,
+    xspan<V const>                x,
     xspan<const std::array<V, 2>> w)
   {
     assert (x.size() >= N);
@@ -246,12 +246,12 @@ struct rotation_matrix<4> {
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static std::array<T, N> tick (
-    xspan<const T>                x,
+    xspan<T const>                x,
     xspan<const std::array<T, 2>> w)
   {
     using vectype = vec<T, 1>;
     return vec1_array_unwrap (tick<vectype> (
-      x.template cast<const vectype>(),
+      x.template cast<vectype const>(),
       w.template cast<const std::array<vectype, 2>>()));
   }
   //----------------------------------------------------------------------------
@@ -264,7 +264,7 @@ struct rotation_matrix<8> {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static std::array<V, N> tick (
-    xspan<const V>                x,
+    xspan<V const>                x,
     xspan<const std::array<V, 2>> w)
   {
     assert (x.size() >= N);
@@ -328,12 +328,12 @@ struct rotation_matrix<8> {
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static std::array<T, N> tick (
-    xspan<const T>                x,
+    xspan<T const>                x,
     xspan<const std::array<T, 2>> w)
   {
     using vectype = vec<T, 1>;
     return vec1_array_unwrap (tick<vectype> (
-      x.template cast<const vectype>(),
+      x.template cast<vectype const>(),
       w.template cast<const std::array<vectype, 2>>()));
   }
   //----------------------------------------------------------------------------
@@ -346,7 +346,7 @@ struct rotation_matrix<16> {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static std::array<V, N> tick (
-    xspan<const V>                x,
+    xspan<V const>                x,
     xspan<const std::array<V, 2>> w)
   {
     assert (x.size() >= N);
@@ -446,12 +446,12 @@ struct rotation_matrix<16> {
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   static std::array<T, N> tick (
-    xspan<const T>                x,
+    xspan<T const>                x,
     xspan<const std::array<T, 2>> w)
   {
     using vectype = vec<T, 1>;
     return vec1_array_unwrap (tick<vectype> (
-      x.template cast<const vectype>(),
+      x.template cast<vectype const>(),
       w.template cast<const std::array<vectype, 2>>()));
   }
   //----------------------------------------------------------------------------
@@ -474,7 +474,7 @@ struct rochebois_matrix<4> {
   static constexpr uint N = 4;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (xspan<const V> x)
+  static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
     static constexpr double norm = 1. / gcem::sqrt (3.);
@@ -494,10 +494,10 @@ struct rochebois_matrix<4> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (xspan<const T> x)
+  static std::array<T, N> tick (xspan<T const> x)
   {
     using vectype = vec<T, 1>;
-    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<vectype const>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -510,7 +510,7 @@ struct rochebois_matrix<6> {
   static constexpr uint N = 6;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (xspan<const V> x)
+  static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
     static constexpr double norm = 1. / gcem::sqrt (5.);
@@ -540,10 +540,10 @@ struct rochebois_matrix<6> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (xspan<const T> x)
+  static std::array<T, N> tick (xspan<T const> x)
   {
     using vectype = vec<T, 1>;
-    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<vectype const>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -556,7 +556,7 @@ struct rochebois_matrix<8> {
   static constexpr uint N = 8;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (xspan<const V> x)
+  static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
     static constexpr double norm = 1. / gcem::sqrt (7.);
@@ -585,10 +585,10 @@ struct rochebois_matrix<8> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (xspan<const T> x)
+  static std::array<T, N> tick (xspan<T const> x)
   {
     using vectype = vec<T, 1>;
-    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<vectype const>()));
   }
   //----------------------------------------------------------------------------
 };
@@ -601,7 +601,7 @@ struct rochebois_matrix<10> {
   static constexpr uint N = 10;
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static std::array<V, N> tick (xspan<const V> x)
+  static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
     static constexpr double norm = 1. / 3.; // 1/sqrt(9)
@@ -639,10 +639,10 @@ struct rochebois_matrix<10> {
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  static std::array<T, N> tick (xspan<const T> x)
+  static std::array<T, N> tick (xspan<T const> x)
   {
     using vectype = vec<T, 1>;
-    return vec1_array_unwrap (tick<vectype> (x.template cast<const vectype>()));
+    return vec1_array_unwrap (tick<vectype> (x.template cast<vectype const>()));
   }
   //----------------------------------------------------------------------------
 };

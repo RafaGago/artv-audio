@@ -8,8 +8,8 @@
 #include <type_traits>
 
 #include "artv-common/dsp/own/parts/filters/poles_zeros.hpp"
-#include "artv-common/misc/simd.hpp"
-#include "artv-common/misc/simd_complex.hpp"
+#include "artv-common/misc/vec_complex.hpp"
+#include "artv-common/misc/vec_math.hpp"
 
 namespace artv {
 //------------------------------------------------------------------------------
@@ -84,7 +84,7 @@ struct t_rev_single {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static value_type<V> tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     value_type<V>  in,
     uint           n_stages,
@@ -114,7 +114,7 @@ struct t_rev_single {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static xspan<value_type<V>> tick (
-    xspan<const V>       co,
+    xspan<V const>       co,
     xspan<V>             st,
     xspan<value_type<V>> io, // ins on call, outs when returning
     uint                 n_stages,
@@ -180,7 +180,7 @@ struct t_rev_conjugate {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     V              in_re,
     uint           n_stages, // sample counter (external)
@@ -194,7 +194,7 @@ struct t_rev_conjugate {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static xspan<V> tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     xspan<V>       io, // ins on call, outs when returning
     uint           n_stages, // sample counter (external)
@@ -276,7 +276,7 @@ struct t_rev_pfe_pole_pair {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     V              in,
     uint           n_stages,
@@ -323,7 +323,7 @@ struct t_rev_pfe_pole_pair {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static xspan<V> tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     xspan<V>       io, // ins on call, outs when returning
     uint           n_stages,
@@ -599,8 +599,8 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co,
-    xspan<const V> co_int,
+    xspan<V const> co,
+    xspan<V const> co_int,
     xspan<V>       st,
     V              in,
     uint           n_stages,
@@ -622,8 +622,8 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static xspan<V> tick (
-    xspan<const V> co,
-    xspan<const V> co_int,
+    xspan<V const> co,
+    xspan<V const> co_int,
     xspan<V>       st,
     xspan<V>       io, // ins on call, outs when returning
     uint           n_stages,
@@ -647,7 +647,7 @@ private:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick_pfe (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     V              in,
     uint           n_stages,
@@ -688,7 +688,7 @@ private:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static xspan<V> tick_pfe (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     xspan<V>       io, // ins on call, outs when returning
     uint           n_stages,
@@ -751,7 +751,7 @@ private:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick_cc (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     V              in,
     uint           n_stages,
@@ -789,7 +789,7 @@ private:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static xspan<V> tick_cc (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     xspan<V>       io, // ins on call, outs when returning
     uint           n_stages,
@@ -879,7 +879,7 @@ struct t_rev_rpole_rzero {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     V              x,
     uint           n_stages,
@@ -893,7 +893,7 @@ struct t_rev_rpole_rzero {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static xspan<V> tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     xspan<V>       io, // ins on call, outs when returning
     uint           n_stages,
@@ -942,7 +942,7 @@ struct t_rev_ccpole_pair_rzero_eq_pair {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     V              x,
     uint           n_stages,
@@ -964,7 +964,7 @@ struct t_rev_ccpole_pair_rzero_eq_pair {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static xspan<V> tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     xspan<V>       io, // ins on call, outs when returning
     uint           n_stages,

@@ -2,7 +2,7 @@
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 
 namespace artv::taylor {
 //------------------------------------------------------------------------------

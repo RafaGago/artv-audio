@@ -3,7 +3,7 @@
 #include <limits>
 
 #include "artv-common/misc/approximations.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 
 namespace artv { namespace sigmoid {
 //------------------------------------------------------------------------------

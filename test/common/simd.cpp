@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 
 #include "artv-common/misc/mp11.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 
 namespace artv {
 

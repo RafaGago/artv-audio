@@ -8,7 +8,7 @@
 #include "artv-common/dsp/own/parts/oscillators/phasor.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv {

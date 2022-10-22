@@ -5,8 +5,8 @@
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
-#include "artv-common/misc/simd_complex.hpp"
+#include "artv-common/misc/vec_complex.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/parts/filters/onepole.hpp"
@@ -66,7 +66,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     V              v,
     uint           n_stages,
@@ -90,7 +90,7 @@ public:
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     xspan<V>       io, // ins on call, outs when returning
     uint           n_stages,
@@ -181,7 +181,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     V              v,
     uint           order,
@@ -208,7 +208,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     xspan<V>       io, // ins on call, outs when returning
     uint           order,
@@ -293,7 +293,7 @@ struct linear_iir_butterworth_lowpass_any_order {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static auto tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     V              v,
     uint           order,
@@ -312,7 +312,7 @@ struct linear_iir_butterworth_lowpass_any_order {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static void tick (
-    xspan<const V> co,
+    xspan<V const> co,
     xspan<V>       st,
     xspan<V>       io,
     uint           order,

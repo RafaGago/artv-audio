@@ -25,7 +25,7 @@
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/overaligned_allocator.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 // Both thiran and sinc of different sizes consume the same CPU, the sound

@@ -4,7 +4,7 @@
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv {
@@ -35,7 +35,7 @@ struct moving_average {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V>,
+    xspan<V const>,
     xspan<V> z, // state 'z1' 1 to N
     V        in) // in' 1 to N
   {

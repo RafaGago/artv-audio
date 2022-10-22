@@ -4,7 +4,7 @@
 
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv {
@@ -50,7 +50,7 @@ struct slew_limiter {
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> c, xspan<V> s, V in)
+  static V tick (xspan<V const> c, xspan<V> s, V in)
   {
     assert (c.size() >= n_coeffs);
     assert (s.size() >= n_states);

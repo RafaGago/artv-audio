@@ -8,7 +8,7 @@
 #include "artv-common/misc/primes_table.hpp"
 #include "artv-common/misc/random_table.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 #include "artv-common/dsp/own/classes/delay_line.hpp"
@@ -46,9 +46,9 @@ public:
   template <class T, class Time_type, class Delay_line>
   static void tick (
     xspan<T>               out,
-    xspan<const T>         in,
-    xspan<const Time_type> delay,
-    xspan<const T>         gain,
+    xspan<T const>         in,
+    xspan<Time_type const> delay,
+    xspan<T const>         gain,
     Delay_line&            dl)
   {
     assert (out.size() >= dl.n_channels());
@@ -71,8 +71,8 @@ public:
   template <class T, class Time_type, class Delay_line>
   static T tick (
     T                      in,
-    xspan<const Time_type> delay,
-    xspan<const T>         gain,
+    xspan<Time_type const> delay,
+    xspan<T const>         gain,
     Delay_line&            dl)
   {
     assert (delay.size() >= dl.n_channels());

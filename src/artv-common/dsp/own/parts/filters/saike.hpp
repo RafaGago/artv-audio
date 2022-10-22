@@ -8,7 +8,7 @@
 #include "artv-common/dsp/own/parts/waveshapers/sigmoid.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
-#include "artv-common/misc/simd.hpp"
+#include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"
 //------------------------------------------------------------------------------
 namespace artv { namespace saike {
@@ -45,9 +45,9 @@ inline V f_dg_asym (V v)
   return v > (T) 0 ? ((v > (T) 1.) ? vec_set<V> (0.) : vec_set<V> (1.))
                    : ((v < (T) -4.) ? vec_set<V> (0.) : vec_set<V> (.25));
 }
-//##############################################################################
-// MS20 /K35: base
-//##############################################################################
+// ##############################################################################
+//  MS20 /K35: base
+// ##############################################################################
 struct ms20_base {
   // From Saike's FM Filter2 (Yutani).
   // SHA b1c1952c5f798d968ff15714bca6a5c694e06d82
@@ -93,9 +93,9 @@ protected:
   static constexpr uint   max_iter = 6;
 };
 } // namespace detail
-//##############################################################################
-// MS20 /K35: "MS20_nonlin_tanh" in the original sources.
-//##############################################################################
+// ##############################################################################
+//  MS20 /K35: "MS20_nonlin_tanh" in the original sources.
+// ##############################################################################
 struct ms20_lowpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
@@ -111,7 +111,7 @@ struct ms20_lowpass : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -186,7 +186,7 @@ struct ms20_highpass : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -262,7 +262,7 @@ struct ms20_bandpass : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -338,7 +338,7 @@ struct ms20_notch : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -397,9 +397,9 @@ struct ms20_notch : public detail::ms20_base {
   }
   //----------------------------------------------------------------------------
 };
-//##############################################################################
-// MS20 /K35: "MS20_nonlin_asym_tanh" in the original sources.
-//##############################################################################
+// ##############################################################################
+//  MS20 /K35: "MS20_nonlin_asym_tanh" in the original sources.
+// ##############################################################################
 //----------------------------------------------------------------------------
 struct ms20_asym_lowpass : public detail::ms20_base {
   //----------------------------------------------------------------------------
@@ -416,7 +416,7 @@ struct ms20_asym_lowpass : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -497,7 +497,7 @@ struct ms20_asym_highpass : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -573,7 +573,7 @@ struct ms20_asym_bandpass : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -654,7 +654,7 @@ struct ms20_asym_notch : public detail::ms20_base {
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -713,9 +713,9 @@ struct ms20_asym_notch : public detail::ms20_base {
   }
   //----------------------------------------------------------------------------
 };
-//##############################################################################
-// Steiner: base
-//##############################################################################
+// ##############################################################################
+//  Steiner: base
+// ##############################################################################
 namespace detail {
 
 struct steiner_base {
@@ -844,15 +844,15 @@ protected:
 };
 } // namespace detail
 
-//##############################################################################
-// Steiner1: Crazy filter!!! (eval_steiner).
-//##############################################################################
+// ##############################################################################
+//  Steiner1: Crazy filter!!! (eval_steiner).
+// ##############################################################################
 struct steiner_1 : public detail::steiner_base {
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -922,15 +922,15 @@ struct steiner_1 : public detail::steiner_base {
   }
   //----------------------------------------------------------------------------
 };
-//##############################################################################
-// Steiner1: Crazy still!!! (eval_steiner_asym).
-//##############################################################################
+// ##############################################################################
+//  Steiner1: Crazy still!!! (eval_steiner_asym).
+// ##############################################################################
 struct steiner_2 : public detail::steiner_base {
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
   static V tick (
-    xspan<const V> co, // coeffs (interleaved, SIMD aligned)
+    xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
     V              in)
   {
@@ -1001,9 +1001,9 @@ struct steiner_2 : public detail::steiner_base {
   }
   //----------------------------------------------------------------------------
 };
-//##############################################################################
-// Moog.
-//##############################################################################
+// ##############################################################################
+//  Moog.
+// ##############################################################################
 struct moog_1 {
   // From Saike's FM Filter2 (Yutani).
   // SHA b1c1952c5f798d968ff15714bca6a5c694e06d82
@@ -1103,7 +1103,7 @@ struct moog_1 {
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> co, xspan<const V> co_int, xspan<V> st, V in)
+  static V tick (xspan<V const> co, xspan<V const> co_int, xspan<V> st, V in)
   {
     using T = vec_value_type_t<V>;
 
@@ -1283,9 +1283,9 @@ private:
     co_int[choice] = vec_set<V> ((T) filter_type);
   }
 };
-//##############################################################################
-// Moog2. (ladder)
-//##############################################################################
+// ##############################################################################
+//  Moog2. (ladder)
+// ##############################################################################
 struct moog_2 {
   // From Saike's FM Filter2 (Yutani).
   // SHA b1c1952c5f798d968ff15714bca6a5c694e06d82
@@ -1352,7 +1352,7 @@ struct moog_2 {
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
   template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
-  static V tick (xspan<const V> co, xspan<const V> co_int, xspan<V> st, V in)
+  static V tick (xspan<V const> co, xspan<V const> co_int, xspan<V> st, V in)
   {
     using T = vec_value_type_t<V>;
 
