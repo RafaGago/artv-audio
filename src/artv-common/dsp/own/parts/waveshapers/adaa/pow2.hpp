@@ -15,13 +15,13 @@ namespace artv {
 // clang-format on
 struct pow2_functions {
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V fn (V x)
   {
     return vec_abs (x) * x;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V int_fn (V x)
   {
     using T = vec_value_type_t<V>;
@@ -29,7 +29,7 @@ struct pow2_functions {
     return vec_abs (x * x * x * (T) (1. / 3.));
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V int2_fn (V x)
   {
     using T = vec_value_type_t<V>;
@@ -56,18 +56,18 @@ public:
   enum coeffs_int { n_coeffs_int };
   enum state { x1, x1_pow2, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<const V>,
     xspan<V> st,

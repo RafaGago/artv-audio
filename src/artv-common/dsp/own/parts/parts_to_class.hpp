@@ -259,7 +259,7 @@ private:
 template <class Part, class Vect, uint Size = 1, bool dynamic_mem = false>
 struct part_class_array {
 public:
-  static_assert (is_vec_of_float_type_v<Vect>, "");
+  static_assert (is_floatpt_vec_v<Vect>, "");
   static_assert (Size > 0, "");
   //----------------------------------------------------------------------------
   using part                     = Part;
@@ -416,7 +416,7 @@ private:
 template <class Part, class Vect, uint Size = 1, bool dynamic_mem = false>
 struct part_class_array_coeffs_global {
 public:
-  static_assert (is_vec_of_float_type_v<Vect>, "");
+  static_assert (is_floatpt_vec_v<Vect>, "");
   static_assert (Size > 0, "");
   //----------------------------------------------------------------------------
   using part                     = Part;
@@ -557,7 +557,7 @@ template <
 struct part_classes<List<Parts...>, Vect, dynamic_mem> {
 public:
   static_assert (sizeof...(Parts) > 0);
-  static_assert (is_vec_of_float_type_v<Vect>, "");
+  static_assert (is_floatpt_vec_v<Vect>, "");
   //----------------------------------------------------------------------------
   using parts                   = mp_list<Parts...>;
   using value_type              = Vect;
@@ -796,7 +796,7 @@ template <
   class... Parts>
 struct parts_union_array<List<Parts...>, Vect, CoeffType, Size, dynamic_mem> {
 public:
-  static_assert (is_vec_of_float_type_v<Vect>, "");
+  static_assert (is_floatpt_vec_v<Vect>, "");
   static_assert (Size > 0, "");
   //----------------------------------------------------------------------------
   using parts                   = mp_list<Parts...>;

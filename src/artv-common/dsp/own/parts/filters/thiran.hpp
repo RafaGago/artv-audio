@@ -24,7 +24,7 @@ public:
   enum coeffs_int { n_coeffs_int };
   enum state { y1, x1, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -37,7 +37,7 @@ public:
     co[a]   = (d - (T) 1) / (d + (T) 1);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V freq, vec_value_type_t<V> t_spl)
   {
     // as allpass filter (negative coeff)
@@ -46,7 +46,7 @@ public:
     co[a]   = (d - (T) 1) / (d + (T) 1);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V fractional)
   {
     // as interpolator
@@ -72,14 +72,14 @@ public:
 #endif
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
@@ -104,7 +104,7 @@ public:
   enum coeffs_int { n_coeffs_int };
   enum state { y1, y2, x1, x2, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V fractional)
   {
     // as interpolator
@@ -143,14 +143,14 @@ public:
 #endif
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)

@@ -140,7 +140,7 @@ using allpass = detail::allpass<
 //------------------------------------------------------------------------------
 // Basic reverb building block. Strictly not a delay line. Not sure if it
 // belongs here. It probably needs to be moved.
-template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 class allpass_with_params {
 public:
   //----------------------------------------------------------------------------
@@ -164,7 +164,7 @@ private:
   V                _gain {};
 };
 //------------------------------------------------------------------------------
-template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 static V delay_get_feedback_gain_for_time (
   vec_value_type_t<V> time_sec, // desired
   vec_value_type_t<V> gain, // db_to_gain (-60). for RT60
@@ -178,7 +178,7 @@ static V delay_get_feedback_gain_for_time (
   return vec_pow (gain, delay_spls / (time_sec * srate));
 }
 //------------------------------------------------------------------------------
-template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 static V delay_get_feedback_gain_for_rt60_time (
   vec_value_type_t<V> time_sec, // desired
   vec_value_type_t<V> srate,

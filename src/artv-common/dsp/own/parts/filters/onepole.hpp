@@ -20,7 +20,7 @@ struct onepole_smoother {
   enum coeffs_int { n_coeffs_int };
   enum state { y1, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> c, V freq, vec_value_type_t<V> t_spl)
   {
     using T              = vec_value_type_t<V>;
@@ -29,14 +29,14 @@ struct onepole_smoother {
     c[b1] = vec_exp (-pi_x2 * freq * t_spl);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<vec_value_type_t<V> const> c, // coeffs (1 set)
     xspan<V>                         st, // states (interleaved, SIMD aligned)
@@ -54,7 +54,7 @@ struct onepole_smoother {
     return st[y1];
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> c, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
@@ -99,7 +99,7 @@ struct onepole {
   enum coeffs_int { n_coeffs_int };
   enum state { s, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   // raw overload
   static void reset_coeffs (xspan<V> co, V g)
   {
@@ -112,7 +112,7 @@ struct onepole {
     }
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V freq, vec_value_type_t<V> t_spl)
   {
     static_assert (!has_shelves);
@@ -120,7 +120,7 @@ struct onepole {
     reset_coeffs (co, vec_tan ((T) M_PI * freq * t_spl));
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -133,7 +133,7 @@ struct onepole {
   }
   //----------------------------------------------------------------------------
   // raw overload
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V g, V k_)
   {
     static_assert (has_shelves);
@@ -146,7 +146,7 @@ struct onepole {
     }
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -160,7 +160,7 @@ struct onepole {
       co, (T) M_PI * freq * t_spl, vec_exp (db * (T) (M_LN10 / 20.)) - (T) 1);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -175,20 +175,20 @@ struct onepole {
       vec_exp (db * (T) (M_LN10 / 20.)) - (T) 1);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick (xspan<V const> co, xspan<V> st, V in)
   {
     return tick_impl<V, V> (co, st, in);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick (xspan<vec_value_type_t<V> const> co, xspan<V> st, V in)
   {
     return tick_impl<V, vec_value_type_t<V>> (co, st, in);
@@ -196,7 +196,7 @@ struct onepole {
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  template <class V, class VT, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, class VT, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick_impl (
     xspan<const VT> co, // coeffs (V builtin type (single set) or V (SIMD))
     xspan<V>        st, // states (interleaved, SIMD aligned)
@@ -313,13 +313,13 @@ public:
   using base::reset_states;
   using base::tick;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick (xspan<V const> co, xspan<V> st, zdf::gs_coeffs_tag)
   {
     return tick_impl<V, V> (co, st, zdf::gs_coeffs_tag {});
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick (
     xspan<vec_value_type_t<V> const> co,
     xspan<V>                         st,
@@ -331,7 +331,7 @@ public:
 private:
   //----------------------------------------------------------------------------
   // return G and S for each mode
-  template <class V, class VT, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, class VT, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick_impl (
     xspan<const VT> co, // coeffs (V builtin type (single set) or V (SIMD))
     xspan<V>        st, // states (interleaved, SIMD aligned)
@@ -455,7 +455,7 @@ private:
   //----------------------------------------------------------------------------
   friend class detail::onepole<onepole_zdf<Tags...>, Tags...>;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static inline void after_reset_coeffs (xspan<V> co, V g)
   {
     using T = vec_value_type_t<V>;
@@ -505,7 +505,7 @@ struct onepole_tdf2 {
     return r;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, sub_coeffs<V> wn, lowpass_tag)
   {
     using T = vec_value_type_t<V>;
@@ -516,7 +516,7 @@ struct onepole_tdf2 {
     co[a1] = wn.n * (wn.w - (T) 1.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, sub_coeffs<V> wn, highpass_tag)
   {
     using T = vec_value_type_t<V>;
@@ -527,7 +527,7 @@ struct onepole_tdf2 {
     co[a1] = wn.n * (wn.w - (T) 1.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, sub_coeffs<V> wn, allpass_tag)
   {
     using T = vec_value_type_t<V>;
@@ -539,7 +539,7 @@ struct onepole_tdf2 {
     co[a1] = co[b0];
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -549,7 +549,7 @@ struct onepole_tdf2 {
     reset_coeffs (co, get_sub_coeffs (freq, t_spl), t);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -559,7 +559,7 @@ struct onepole_tdf2 {
     reset_coeffs (co, get_sub_coeffs (freq, t_spl), t);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -569,7 +569,7 @@ struct onepole_tdf2 {
     reset_coeffs (co, get_sub_coeffs (freq, t_spl), t);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V> co,
     V        d, // 0 to 1
@@ -584,7 +584,7 @@ struct onepole_tdf2 {
     co[b1] = vec_set<V> ((T) 0);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V a1v, V b0v, V b1v, raw_tag)
   {
     co[a1] = a1v;
@@ -592,7 +592,7 @@ struct onepole_tdf2 {
     co[b1] = b1v;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
@@ -601,7 +601,7 @@ struct onepole_tdf2 {
   //----------------------------------------------------------------------------
   // 1 set of coeffs, N outs. (E.g. stereo filter using double). Interleaved
   // states version
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<vec_value_type_t<V> const> co, // coeffs (1 set)
     xspan<V>                         st, // states (interleaved, SIMD aligned)
@@ -620,7 +620,7 @@ struct onepole_tdf2 {
     return out;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)

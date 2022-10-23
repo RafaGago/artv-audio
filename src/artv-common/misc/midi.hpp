@@ -33,7 +33,7 @@ static double midi_note_to_hz (double note)
   return is_zero ? 0. : hz;
 }
 //------------------------------------------------------------------------------
-template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 static V midi_note_to_hz (V note)
 {
   using T = vec_value_type_t<V>;
@@ -47,7 +47,7 @@ static double hz_to_midi_note (double hz)
   return (12. * log2 (hz * (1. / 440.))) + 69.;
 }
 //------------------------------------------------------------------------------
-template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 static V hz_to_midi_note (V hz)
 {
   using T = vec_value_type_t<V>;

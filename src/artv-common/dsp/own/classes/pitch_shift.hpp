@@ -17,10 +17,7 @@ namespace artv {
 // Based on "sin" crosfading between two buffers. It has a latency of half the
 // buffer size. Only for buffers with power of 2 sizes.
 //------------------------------------------------------------------------------
-template <
-  class V,
-  bool Free_running,
-  enable_if_vec_of_float_point_t<V>* = nullptr>
+template <class V, bool Free_running, enable_if_floatpt_vec_t<V>* = nullptr>
 class pitch_shift_sin {
 public:
   //----------------------------------------------------------------------------
@@ -61,7 +58,7 @@ public:
     }
 
     auto rint  = tk.pos.as_int();
-    auto rfrac = tk.pos.fraction();
+    auto rfrac = tk.pos.float_fractional();
 
     V p1  = _mem.get_abs (rint);
     V p2  = _mem.get_abs (rint + 1);

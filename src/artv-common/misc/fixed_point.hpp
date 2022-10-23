@@ -10,17 +10,27 @@
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/vec.hpp"
+#include "artv-common/misc/vec_bits.hpp"
 
 namespace artv {
 
 //------------------------------------------------------------------------------
-template <class S, class U, class F, uint N_bits = sizeof (S) * 8>
+template <class S, class U, class F>
 struct fp_int_promotion_step {
+
+  using tsigned   = S;
+  using tunsigned = U;
+  using tfloat    = F;
+
+  using scalar_signed   = vec_value_type_t<S>;
+  using scalar_unsigned = vec_value_type_t<U>;
+  using scalar_float    = vec_value_type_t<F>;
+
+  static constexpr size_t n_bits      = sizeof (scalar_signed) * 8;
+  static constexpr size_t vector_size = vec_traits_t<tsigned>::size;
+
   static_assert (sizeof (S) == sizeof (U));
-  using tsigned                  = S;
-  using tunsigned                = U;
-  using tfloat                   = F;
-  static constexpr size_t n_bits = N_bits; // might be a vector type
+  static_assert (vector_size == vec_traits_t<tfloat>::size);
 };
 //------------------------------------------------------------------------------
 struct std_fp_types_trait {
@@ -31,7 +41,6 @@ struct std_fp_types_trait {
     fp_int_promotion_step<s64, u64, long double>
     // fp_int_promotion_step<s128, u128, long double>
     >;
-  static constexpr uint vector_size = 0;
 };
 //------------------------------------------------------------------------------
 template <uint N>
@@ -39,14 +48,12 @@ struct vec_fp_types_trait {
   using promotions = mp_list<
     fp_int_promotion_step<vec<s32, N>, vec<u32, N>, vec<float, N>>,
     fp_int_promotion_step<vec<s64, N>, vec<u64, N>, vec<double, N>>>;
-  static constexpr uint vector_size = N;
 };
 //------------------------------------------------------------------------------
 template <class T_signed, class T_unsigned, class T_float, uint Vec_Size = 0>
 struct single_fp_type_trait {
   using promotions
     = mp_list<fp_int_promotion_step<T_signed, T_unsigned, T_float>>;
-  static constexpr uint vector_size = Vec_Size;
 };
 
 //------------------------------------------------------------------------------
@@ -174,21 +181,19 @@ private:
 
   //----------------------------------------------------------------------------
 public:
-  using type          = mp11::mp_at<promotions, type_idx>;
-  using unsigned_type = typename type::tunsigned;
-  using signed_type   = typename type::tsigned;
-  using float_type    = typename type::tfloat;
-  using value_type = std::conditional_t<is_signed, signed_type, unsigned_type>;
+  using type         = mp11::mp_at<promotions, type_idx>;
+  using uint_type    = typename type::tunsigned;
+  using sint_type    = typename type::tsigned;
+  using float_type   = typename type::tfloat;
+  using scalar_sint  = typename type::scalar_signed;
+  using scalar_uint  = typename type::scalar_unsigned;
+  using scalar_float = typename type::scalar_float;
 
-  static constexpr uint vector_size    = traits::vector_size;
-  static constexpr uint builtin_sizeof = (vector_size == 0)
-    ? sizeof (value_type)
-    : sizeof (value_type) / vector_size;
+  using value_type  = std::conditional_t<is_signed, sint_type, uint_type>;
+  using scalar_type = std::conditional_t<is_signed, scalar_sint, scalar_uint>;
 
-  using builtin_signed   = int_for_size<builtin_sizeof>;
-  using builtin_unsigned = uint_for_size<builtin_sizeof>;
-  using builtin
-    = std::conditional_t<is_signed, builtin_signed, builtin_unsigned>;
+  static constexpr uint vector_size = type::vector_size;
+  static constexpr uint scalar_bits = type::n_bits;
 
   using near_lossless = fixpt<n_sign, n_int, n_frac, true, traits>;
   using near_lossy    = fixpt<n_sign, n_int, n_frac, false, traits>;
@@ -199,6 +204,7 @@ public:
     !n_int ? (n_frac - n_sign) : n_frac,
     is_lossless,
     traits>;
+  using with_sign = fixpt<1, n_int, n_frac, is_lossless, traits>;
   //----------------------------------------------------------------------------
   constexpr fixpt() { _v = decltype (_v) {}; }
 
@@ -231,14 +237,14 @@ public:
     // Assertions probably not 100% correct/verified, as the non-constant
     // float/double resolution makes this a non-trivial test. For the
     // meantime this might be enough to catch most mistakes. TODO
-    if constexpr (traits::vector_size == 0) {
+    if constexpr (vector_size == 0) {
       assert (flt <= flt_max);
       assert (flt >= flt_min);
     }
     else {
       auto lte_max = flt <= flt_max;
       auto gte_min = flt >= flt_min;
-      for (uint i = 0; i < traits::vector_size; ++i) {
+      for (uint i = 0; i < vector_size; ++i) {
         assert (lte_max[i]);
         assert (gte_min[i]);
       }
@@ -258,14 +264,14 @@ public:
     assert (intv <= int_max);
     assert (intv >= int_min);
 
-    if constexpr (traits::vector_size == 0) {
+    if constexpr (vector_size == 0) {
       assert (intv <= int_max);
       assert (intv >= int_min);
     }
     else {
       auto lte_max = intv <= int_max;
       auto gte_min = intv >= int_min;
-      for (uint i = 0; i < traits::vector_size; ++i) {
+      for (uint i = 0; i < vector_size; ++i) {
         assert (lte_max[i]);
         assert (gte_min[i]);
       }
@@ -316,12 +322,10 @@ public:
   }
   //----------------------------------------------------------------------------
   constexpr near_lossless to_lossless() const { return cast<near_lossless>(); };
-  //----------------------------------------------------------------------------
-  constexpr near_lossy to_lossy() const { return cast<near_lossy>(); };
-  //----------------------------------------------------------------------------
-  constexpr near_signed to_signed() const { return cast<near_signed>(); };
-  //----------------------------------------------------------------------------
+  constexpr near_lossy    to_lossy() const { return cast<near_lossy>(); };
+  constexpr near_signed   to_signed() const { return cast<near_signed>(); };
   constexpr near_unsigned to_unsigned() const { return cast<near_unsigned>(); };
+  constexpr with_sign     add_sign() const { return cast<with_sign>(); };
   //----------------------------------------------------------------------------
   // Add or remove resolution both on the integer and fractional part
   template <int Int, int Frac = 0>
@@ -331,6 +335,12 @@ public:
     static_assert (Frac >= 0 ? true : (-Frac <= n_frac));
     return cast (compatiblefp<n_int + Int, n_frac - Frac> {});
   }
+  // Add or remove resolution both on the integer and fractional part
+  template <uint Int, uint Frac = 0>
+  constexpr auto set_size() const
+  {
+    return cast (compatiblefp<Int, Frac> {});
+  }
   //----------------------------------------------------------------------------
   constexpr float_type as_float() const
   {
@@ -338,12 +348,19 @@ public:
     return factor * (float_type) (_v);
   }
   //----------------------------------------------------------------------------
+  // equivalent to floor
   constexpr value_type as_int() const { return (_v >> n_frac); }
   //----------------------------------------------------------------------------
-  constexpr float_type fraction() const
+  constexpr fixpt<n_sign, 0, n_frac, is_lossless, traits> fractional() const
+  {
+    return fixpt<n_sign, 0, n_frac, is_lossless, traits>::from (
+      lsb_mask<uint_type> (n_sign + n_frac) & _v);
+  }
+  //----------------------------------------------------------------------------
+  constexpr float_type float_fractional() const
   {
     constexpr double factor = (float_type) 1. / float_factor;
-    return factor * (float_type) (_v & lsb_mask<unsigned_type> (n_frac));
+    return factor * (float_type) (_v & lsb_mask<uint_type> (n_frac));
   }
   //----------------------------------------------------------------------------
   // useful E.g. after random loads to check that the value is in range.
@@ -535,47 +552,76 @@ public:
   constexpr fixpt  operator<< (uint n) { return from (ashl (_v, n)); }
   constexpr fixpt  operator>> (uint n) { return from (ashr (_v, n)); }
   //----------------------------------------------------------------------------
-  static constexpr fixpt      max() { return from (raw_max); };
-  static constexpr fixpt      min() { return from (raw_min); };
-  static constexpr value_type max_raw() { return raw_max; }
-  static constexpr value_type min_raw() { return raw_min; }
-  static constexpr value_type max_int() { return int_max; }
-  static constexpr value_type min_int() { return int_min; }
-  static constexpr float_type max_float() { return raw_max; }
-  static constexpr float_type min_float() { return raw_min; }
-  static constexpr float_type factor() { return float_factor; }
+  static constexpr fixpt max()
+  {
+    return from (vec_set<vector_size> (raw_max));
+  };
+  static constexpr fixpt min()
+  {
+    return from (vec_set<vector_size> (raw_min));
+  };
+  static constexpr value_type max_raw()
+  {
+    return vec_set<vector_size> (raw_max);
+  }
+  static constexpr value_type min_raw()
+  {
+    return vec_set<vector_size> (raw_min);
+  }
+  static constexpr value_type max_int()
+  {
+    return vec_set<vector_size> (int_max);
+  }
+  static constexpr value_type min_int()
+  {
+    return vec_set<vector_size> (int_min);
+  }
+  static constexpr float_type max_float()
+  {
+    return vec_set<vector_size> (raw_max);
+  }
+  static constexpr float_type min_float()
+  {
+    return vec_set<vector_size> (raw_min);
+  }
+  static constexpr float_type factor()
+  {
+    return vec_set<vector_size> (float_factor);
+  }
   // TODO: Binary Logic Ops.
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  static constexpr unsigned_type unsigned_zeroes = unsigned_type {};
-  static constexpr unsigned_type unsigned_ones   = unsigned_type {} - 1U;
-  static constexpr unsigned_type unsigned_one    = unsigned_type {} + 1U;
+  static constexpr scalar_uint unsigned_zeroes = ((scalar_uint) 0);
+  static constexpr scalar_uint unsigned_ones   = ((scalar_uint) 0) - 1u;
+  static constexpr scalar_uint unsigned_one    = ((scalar_uint) 0) + 1u;
 
-  static constexpr auto float_factor = (float_type) (unsigned_one << n_frac);
+  static constexpr scalar_type raw_max
+    = (value_type) (unsigned_ones >> (scalar_bits - n_bits)) >> n_sign;
 
-  static constexpr value_type raw_max
-    = (value_type) (unsigned_ones >> ((builtin_sizeof * 8) - n_bits)) >> n_sign;
-
-  static constexpr value_type raw_min
+  static constexpr scalar_type raw_min
     = is_signed ? -raw_max - 1 : value_type {};
 
-  static constexpr value_type int_max
-    = (value_type) (~(unsigned_ones << (n_int + n_sign)));
+  static constexpr scalar_type int_max
+    = (scalar_type) (~(unsigned_ones << (n_int + n_sign)));
 
-  static constexpr value_type int_min
-    = is_signed ? -int_max - 1 : value_type {};
+  static constexpr scalar_type int_min
+    = is_signed ? -int_max - 1 : scalar_type {};
 
   // these limits might not always be precise depending on the floating point
   // type
-  static constexpr float_type float_one  = float_type {} + 1.f;
-  static constexpr float_type float_imin = float_type {} + int_min;
-  static constexpr float_type float_imax = float_type {} + int_max;
+  static constexpr auto float_one  = ((scalar_float) 1);
+  static constexpr auto float_imin = ((scalar_float) int_min);
+  static constexpr auto float_imax = ((scalar_float) int_max);
 
-  static constexpr float_type flt_max
+  static constexpr auto float_factor = (n_frac < scalar_bits)
+    ? (scalar_float) (unsigned_one << n_frac)
+    : ((scalar_float) int_max) + scalar_float {1};
+
+  static constexpr scalar_float flt_max
     = float_imax + float_one - float_one / float_factor;
 
-  static constexpr float_type flt_min = (is_signed)
+  static constexpr scalar_float flt_min = (is_signed)
     ? float_imin - float_one + float_one / float_factor
     : float_type {};
   //----------------------------------------------------------------------------
@@ -596,8 +642,8 @@ private:
 template <uint S, uint I, uint F, class Traits = std_fp_types_trait>
 using fixpt_np = fixpt<
   S,
-  // round up to the capacity of the builtin type
-  (fixpt<S, I, F, false, Traits>::builtin_sizeof * 8) - F - S,
+  // round up to the capacity of the scalar type
+  fixpt<S, I, F, false, Traits>::scalar_bits - F - S,
   F,
   false,
   Traits>;
@@ -629,7 +675,7 @@ template <class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
 constexpr auto fixpt_abs (T v)
 {
   if constexpr (v.is_signed) {
-    constexpr uint shift = (v.builtin_sizeof * 8) - 1;
+    constexpr uint shift = v.scalar_bits - 1;
 
     auto raw  = v.value();
     auto mask = raw >> shift;

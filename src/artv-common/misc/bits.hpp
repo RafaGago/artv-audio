@@ -8,10 +8,11 @@
 
 namespace artv {
 //------------------------------------------------------------------------------
-template <class T>
+template <
+  class T,
+  std::enable_if_t<std::is_integral_v<T> && std::is_unsigned_v<T>>* = nullptr>
 constexpr T lsb_mask (uint bits)
 {
-  static_assert (std::is_integral_v<T> && std::is_unsigned_v<T>, "");
   constexpr T ones      = (T) ~0ull;
   constexpr T type_bits = sizeof (T) * 8;
 
@@ -19,18 +20,16 @@ constexpr T lsb_mask (uint bits)
   return ones >> (type_bits - bits);
 }
 //------------------------------------------------------------------------------
-template <class T>
+template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 constexpr T bit (uint bit, T value = 1)
 {
-  static_assert (std::is_integral_v<T>, "");
   assert (bit < sizeof (T) * 8);
   return value << bit;
 }
 //------------------------------------------------------------------------------
-template <class T>
+template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 constexpr void set_bit (T& v, uint bit_idx, bool on = true)
 {
-  static_assert (std::is_integral_v<T>, "");
   assert (bit_idx < sizeof (T) * 8);
 
   auto clear_mask = bit<T> (bit_idx);
@@ -39,87 +38,50 @@ constexpr void set_bit (T& v, uint bit_idx, bool on = true)
   v |= set_mask;
 }
 //------------------------------------------------------------------------------
-#if defined(__GNUC__)
-
-#if 0 // quick and dirty. don't feel like doing proper integer type
-      // (clusterfuck) type wrapping now.
-inline unsigned first_bit_set (int v)
+namespace detail {
+template <class T, class F, class FL, class FLL>
+T unary_int_func_dispatch (T v, F&& f, FL&& fl, FLL&& fll)
 {
-    return __builtin_ffs (v);
+  if constexpr (std::is_same_v<T, int> || std::is_same_v<T, unsigned int>) {
+    return f (v);
+  }
+  else if constexpr (
+    std::is_same_v<T, long> || std::is_same_v<T, unsigned long>) {
+    return fl (v);
+  }
+  else if constexpr (
+    std::is_same_v<T, long long> || std::is_same_v<T, unsigned long long>) {
+    return fll (v);
+  }
+  else {
+    static_assert (sizeof v != 0, "unsupported type");
+  }
 }
-
-inline unsigned first_bit_set (long v)
-{
-    return __builtin_ffsl (v);
-}
-
-inline unsigned last_bit_set (int v)
-{
-  return v ? (sizeof v * 8) - __builtin_clz (v) : 0;
-}
-
-inline unsigned last_bit_set (long v)
-{
-    return v ? (sizeof v * 8) - __builtin_clzl (v) : 0;
-}
-
-#endif
+} // namespace detail
 //------------------------------------------------------------------------------
-// returns 1 based indexes, 0 for no bits set
-inline unsigned first_bit_set (long long v)
+// 1-based indexes
+template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+inline T first_bit_set (T v)
 {
-  return __builtin_ffsll (v);
-}
-//------------------------------------------------------------------------------
-// returns 1 based indexes, 0 for no bits set
-inline unsigned last_bit_set (long long v)
-{
-  return v ? (sizeof v * 8) - __builtin_clzll (v) : 0;
+  return detail::unary_int_func_dispatch (
+    v,
+    [] (auto v) { return __builtin_ffs (v); },
+    [] (auto v) { return __builtin_ffsl (v); },
+    [] (auto v) { return __builtin_ffsll (v); });
 }
 //------------------------------------------------------------------------------
-#elif defined(_MSC_VER)
-
-} // namespace artv
-
-#include <intrin.h>
-
-namespace artv {
-
-// returns 1 based indexes, 0 for no bits set
-inline unsigned first_bit_set (u32 v)
+// 1-based indexes
+template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+inline T last_bit_set (T v)
 {
-  unsigned long index;
-  char          r = _BitScanForward (&index, v);
-  return r ? index + 1 : 0;
+  return detail::unary_int_func_dispatch (
+    v,
+    [] (auto v) { return v ? (sizeof v * 8) - __builtin_clz (v) : 0; },
+    [] (auto v) { return v ? (sizeof v * 8) - __builtin_clzl (v) : 0; },
+    [] (auto v) { return v ? (sizeof v * 8) - __builtin_clzll (v) : 0; });
 }
-
-inline unsigned first_bit_set (u64 v)
-{
-  unsigned long index;
-  char          r = _BitScanForward (&index, v);
-  return r ? index + 1 : 0;
-}
-
-// returns 1 based indexes, 0 for no bits set
-inline unsigned last_bit_set (u32 v)
-{
-  unsigned long index;
-  char          r = _BitScanReverse (&index, v);
-  return r ? index + 1 : 0;
-}
-
-inline unsigned last_bit_set (u64 v)
-{
-  unsigned long index;
-  char          r = _BitScanReverse (&index, v);
-  return r ? index + 1 : 0;
-}
-
-#else
-static_assert (false, "TBI");
-#endif
 //------------------------------------------------------------------------------
-template <class T, class F>
+template <class T, class F, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 void iterate_set_bits (T v, F f)
 {
   unsigned pos = 0;
@@ -130,39 +92,34 @@ void iterate_set_bits (T v, F f)
   }
 }
 //------------------------------------------------------------------------------
-#if 0 // unused, would need a MSVC/Clang-cl impl
-// TODO: set -march
-#if defined(__GNUC__)
-inline int popcount (uint x)
+template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+inline auto popcount (T v)
 {
-  return __builtin_popcount (x);
+  return detail::unary_int_func_dispatch (
+    v,
+    [] (auto v) { return __builtin_popcount (v); },
+    [] (auto v) { return __builtin_popcountl (v); },
+    [] (auto v) { return __builtin_popcountll (v); });
 }
-#else
-static_assert (false, "To be implemented");
-#endif
-#endif
 //------------------------------------------------------------------------------
-template <class T>
+template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 inline constexpr bool is_pow2 (T v)
 {
-  static_assert (std::is_integral_v<T>, "");
   return (v != 0) && ((v & (v - 1)) == 0);
 }
 //------------------------------------------------------------------------------
-template <class T>
+template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 inline T pow2_round_floor (T v)
 {
-  static_assert (std::is_integral_v<T>, "");
   uint lsb = last_bit_set (v);
   return lsb ? bit<T> (lsb - 1) : v;
 }
 //------------------------------------------------------------------------------
-template <class T>
+template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 inline T pow2_round_ceil (T v)
 {
   using overload_type = std::conditional_t<sizeof (T) == 8, u64, u32>;
-  static_assert (std::is_integral_v<T>, "");
-  uint lsb = last_bit_set ((overload_type) v);
+  uint lsb            = last_bit_set ((overload_type) v);
   return (is_pow2 (v) || !v) ? v : bit<T> (lsb);
 }
 //------------------------------------------------------------------------------
@@ -174,56 +131,49 @@ inline T pow2_round_ceil (T v)
 //   of two as shifts.
 // - For unsigned types the optimizer is able to deduce to a plain shift, so
 //   not bothering writing versions for both signedness types.
-
+//------------------------------------------------------------------------------
 // Arithmetic (complement 2 respecting) Shift Right
-template <class T>
+template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 inline constexpr T ashr (T v, uint n)
 {
-  if constexpr (std::is_integral_v<T>) {
-    // might be a vector type (hence the weird write to write the shifts below)
-    assert (n < (sizeof (T) * 8));
-  }
+
+  // might be a vector type (hence the weird write to write the shifts
+  // below)
+  assert (n < (sizeof (T) * 8));
   return v / ((T {} + 1) << (T {} + n));
 }
 
-template <uint N, class T>
+template <uint N, class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 inline constexpr T ashr (T v)
 {
-  if constexpr (std::is_integral_v<T>) {
-    // might be a vector type
-    static_assert (N < (sizeof (T) * 8)); // just making the assertion comptime
-  }
+  static_assert (N < (sizeof (T) * 8)); // just making the assertion comptime
   return ashr (v, N);
 }
+//------------------------------------------------------------------------------
 // Arithmetic (complement 2 respecting) Shift Left
-template <class T>
+template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 inline constexpr T ashl (T v, uint n)
 {
-  if constexpr (std::is_integral_v<T>) {
-    // might be a vector type (hence the weird write to write the shifts below)
-    assert (n < (sizeof (T) * 8));
-  }
+  assert (n < (sizeof (T) * 8));
   return v * ((T {} + 1) << (T {} + n));
 }
 
-template <uint N, class T>
+template <uint N, class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 inline constexpr T ashl (T v)
 {
-  if constexpr (std::is_integral_v<T>) {
-    // might be a vector type
-    static_assert (N < (sizeof (T) * 8)); // just making the assertion comptime
-  }
+  static_assert (N < (sizeof (T) * 8));
   return ashl (v, N);
 }
+//------------------------------------------------------------------------------
 // Arithmetic (complement 2 respecting) Shift. Positive values increase the
 // result (shift left). Negative ones decrease it (shift right).
-template <class T>
+template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 inline constexpr T ash (T v, int n)
 {
-  return v >= 0 ? ashl (v, n) : ashr (v, -n);
+  return n >= 0 ? ashl (v, n) : ashr (v, -n);
 }
 
-template <int N, class T>
+template <int N, class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 inline constexpr T ash (T v)
 {
   if constexpr (N >= 0) {
@@ -235,34 +185,9 @@ inline constexpr T ash (T v)
 }
 //------------------------------------------------------------------------------
 // Arithmetic (complement 2 respecting) LSB mask
-template <class T>
+template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 inline constexpr T alsb_mask (T v, uint bits)
 {
-  static_assert (std::is_integral_v<T>);
-  using T_u = std::make_unsigned_t<T>;
-
-  auto const mask = lsb_mask<T_u> (bits);
-  if constexpr (std::is_unsigned_v<T>) {
-    return v & mask;
-  }
-  else {
-    if (v >= 0) {
-      // masking a positive is filling the MSBs with 0's
-      return (T) ((T_u) v & mask);
-    }
-    else {
-      // masking a negative is filling the MSBs with 1's
-      return (T) ((T_u) v | ~mask);
-    }
-  }
-}
-
-template <class T, uint size_of>
-inline constexpr T alsb_mask (
-  T __attribute__ ((vector_size (size_of))) v,
-  uint bits)
-{
-  static_assert (std::is_integral_v<T>);
   using T_u = std::make_unsigned_t<T>;
 
   auto const mask = lsb_mask<T_u> (bits);

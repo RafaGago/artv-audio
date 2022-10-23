@@ -936,17 +936,17 @@ struct raw_allpass_interp {
   static constexpr bool coeffs_are_global = false; // 1 set per channel
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V fractional)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     st[y1] = vec_set<V> ((vec_value_type_t<V>) 0);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const>          co,
     xspan<V>                st,
@@ -974,7 +974,7 @@ struct thiran_interp_1 {
   static constexpr bool coeffs_are_global = false; // 1 set per channel
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V freq, vec_value_type_t<V> srate)
   {
     using T = vec_value_type_t<V>;
@@ -982,7 +982,7 @@ struct thiran_interp_1 {
     co[a]   = ((T) 1 - d) / ((T) 1 + d);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V fractional)
   {
     using T = vec_value_type_t<V>;
@@ -1007,11 +1007,11 @@ struct thiran_interp_1 {
 #endif
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const>          co,
     xspan<V>                st,
@@ -1039,7 +1039,7 @@ struct thiran_interp_2_df1 {
   static constexpr bool coeffs_are_global = false; // 1 set per channel
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V freq, vec_value_type_t<V> srate)
   {
     using T = vec_value_type_t<V>;
@@ -1048,7 +1048,7 @@ struct thiran_interp_2_df1 {
     co[a2]  = ((d - 1) * (d - 2)) / ((d + 1) * (d + 2));
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V fractional)
   {
     using T = vec_value_type_t<V>;
@@ -1086,11 +1086,11 @@ struct thiran_interp_2_df1 {
 #endif
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const>          co,
     xspan<V>                st,

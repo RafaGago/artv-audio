@@ -7550,14 +7550,14 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 0
+#define TWEAK_BUILD 1
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  bbe_params>;
+  diffuse_delay_params>;
 
 static constexpr auto fx_choices
   = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "Mod");

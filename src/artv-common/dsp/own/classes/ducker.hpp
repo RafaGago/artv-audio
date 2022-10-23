@@ -16,7 +16,7 @@
 namespace artv {
 // ducker, for e.g. usage on reverbs/echoes
 //------------------------------------------------------------------------------
-template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 class ducker {
 public:
   //----------------------------------------------------------------------------

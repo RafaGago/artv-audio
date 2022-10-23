@@ -32,15 +32,15 @@ public:
   enum coeffs_int { n_coeffs_int };
   enum state { n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const>, xspan<V>, V x)
   {
     return functions::fn (x);
@@ -55,15 +55,15 @@ public:
   enum coeffs_int { n_coeffs_int };
   enum state { x1, x1_int, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const>, xspan<V> st, V x)
   {
     // as this has to calculate both branches, it might not be worth bothering.
@@ -104,11 +104,11 @@ public:
   enum coeffs_int { n_coeffs_int };
   enum state { x1, x2, x2_der, x1_int2, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
@@ -151,7 +151,7 @@ public:
     return ret;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const>, xspan<V> st, V x)
   {
     // Real SIMD: TODO. Might not be worth because of the high number of
@@ -202,7 +202,7 @@ public:
     n_states          = impl_states_idx + Impl<1, Ts...>::n_states
   };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> c)
   {
     using T = vec_value_type_t<V>;
@@ -215,14 +215,14 @@ public:
     thiran<1>::reset_coeffs (c, vec_set<V> ((T) 0.5));
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> s)
   {
     // maybe memset delay line and boxcar?
     Impl<1, Ts...>::template reset_states<V> (s.advanced (impl_states_idx));
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> c, xspan<V> st, V x)
   {
     assert (c.size() >= n_coeffs);
@@ -247,7 +247,7 @@ struct null_shaper {
   enum coeffs { n_coeffs };
   enum state { n_states };
 
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> c, xspan<V> st, V x)
   {
     return x;

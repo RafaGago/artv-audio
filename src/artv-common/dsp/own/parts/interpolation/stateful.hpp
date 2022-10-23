@@ -31,7 +31,7 @@ struct thiran_interp<1> {
   static constexpr bool coeffs_are_global = false; // 1 set per channel
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V fractional)
   {
     using T     = vec_value_type_t<V>;
@@ -42,14 +42,14 @@ struct thiran_interp<1> {
 #endif
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const>          co,
     xspan<V>                st,
@@ -79,7 +79,7 @@ struct thiran_interp<2> {
   static constexpr bool coeffs_are_global = false; // 1 set per channel
   static constexpr bool states_are_vec    = true;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V fractional)
   {
     biquad::reset_coeffs (co, fractional, thiran_tag {});
@@ -88,13 +88,13 @@ struct thiran_interp<2> {
 #endif
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     biquad::reset_states (st);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const>          co,
     xspan<V>                st,

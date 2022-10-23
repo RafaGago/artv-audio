@@ -86,7 +86,7 @@ template <
   class Table,
   uint N_terms,
   class V,
-  enable_if_vec_of_float_point_t<V>* = nullptr>
+  enable_if_floatpt_vec_t<V>* = nullptr>
 static V get (V x)
 {
   using T = vec_value_type_t<V>;

@@ -22,7 +22,7 @@ struct slew_limiter {
   enum coeffs_int { n_coeffs_int };
   enum state { prev, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   attack_sec,
@@ -41,7 +41,7 @@ struct slew_limiter {
     c[release] = release_sec != zero ? rel : zero;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
@@ -49,7 +49,7 @@ struct slew_limiter {
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> c, xspan<V> s, V in)
   {
     assert (c.size() >= n_coeffs);

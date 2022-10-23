@@ -212,15 +212,15 @@ struct feedback<linear_tag, Any1, Any2> {
   //----------------------------------------------------------------------------
   using nonlin = Any2;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> c)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const>, xspan<V>, V in, response<V> resp, V k)
   {
     using T = vec_value_type_t<V>;
@@ -257,18 +257,18 @@ public:
   //----------------------------------------------------------------------------
   using nonlin = Nonlin;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> c)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     st[lin] = vec_set<V> (1);
   }
   //----------------------------------------------------------------------------
-  template <class V, class... Ts, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, class... Ts, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const>,
     xspan<V>    st,
@@ -332,18 +332,18 @@ public:
   //----------------------------------------------------------------------------
   using nonlin = Nonlin;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> c)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     st[lin] = vec_set<V> (1);
   }
   //----------------------------------------------------------------------------
-  template <class V, class... Ts, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, class... Ts, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const>,
     xspan<V>    st,
@@ -413,18 +413,18 @@ public:
   //----------------------------------------------------------------------------
   using nonlin = Nonlin;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> c)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     st[lin] = vec_set<V> (1);
   }
   //----------------------------------------------------------------------------
-  template <class V, class... Ts, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, class... Ts, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const>,
     xspan<V>    st,

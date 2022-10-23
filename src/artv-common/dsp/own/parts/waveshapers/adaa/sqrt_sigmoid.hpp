@@ -16,7 +16,7 @@ namespace artv {
 // https://www.kvraudio.com/forum/viewtopic.php?f=33&t=521377&sid=18fa45082ea11269f4c29c3ccf36becd
 struct sqrt_sigmoid_functions {
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V fn (V x)
   {
     using T = vec_value_type_t<V>;
@@ -24,7 +24,7 @@ struct sqrt_sigmoid_functions {
     return x / vec_sqrt (x * x + (T) 1.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V int_fn (V x)
   {
     using T = vec_value_type_t<V>;
@@ -32,7 +32,7 @@ struct sqrt_sigmoid_functions {
     return vec_sqrt (x * x + (T) 1.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V int2_fn (V x)
   {
     using T = vec_value_type_t<V>;
@@ -54,18 +54,18 @@ public:
   enum coeffs_int { n_coeffs_int };
   enum state { x1, x1_sqrt, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const>, xspan<V> st, V x)
   {
     using T               = vec_value_type_t<V>;

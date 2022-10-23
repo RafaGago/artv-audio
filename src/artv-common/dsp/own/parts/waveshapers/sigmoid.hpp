@@ -40,19 +40,19 @@ static constexpr auto epsilon = (T) 1e-20;
 struct passthrough {
   static constexpr uint n_params = 0;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (V x)
   {
     return x;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_div_in (V)
   {
     return vec_set<V> (1);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V limit_inf()
   {
     using T = vec_value_type_t<V>;
@@ -70,20 +70,20 @@ template <>
 struct rsqrt<false> {
   static constexpr uint n_params = 0;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (V in)
   {
     return tick_div_in (in) * in;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_div_in (V in)
   {
     using T = vec_value_type_t<V>;
     return vec_set<V> (1) / vec_sqrt (in * in + (T) 1);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V limit_inf()
   {
     return vec_set<V> (1);
@@ -97,13 +97,13 @@ template <>
 struct rsqrt<true> {
   static constexpr uint n_params = 1;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (V in, V drive)
   {
     return in * tick_div_in (in, drive);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_div_in (V in, V drive)
   {
     using T  = vec_value_type_t<V>;
@@ -115,7 +115,7 @@ struct rsqrt<true> {
     return one;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V limit_inf (V drive) // drive has to be positive
   {
     using T         = vec_value_type_t<V>;
@@ -128,7 +128,7 @@ struct rsqrt<true> {
     return vec_set<V> (inf);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static bool is_linear (V drive)
   {
     return vec_is_all_ones (drive == 0.f);
@@ -143,20 +143,20 @@ template <>
 struct tanh<false> {
   static constexpr uint n_params = 0;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (V in)
   {
     return vec_tanh (in);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_div_in (V in)
   {
     using T = vec_value_type_t<V>;
     return (in != (T) 0) ? (vec_tanh (in) / in) : vec_set<V> (1);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V limit_inf()
   {
     return vec_set<V> (1);
@@ -170,7 +170,7 @@ template <>
 struct tanh<true> {
   static constexpr uint n_params = 1;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (V in, V drive)
   {
     using T = vec_value_type_t<V>;
@@ -185,7 +185,7 @@ struct tanh<true> {
     return in;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_div_in (V in, V drive)
   {
     using T = vec_value_type_t<V>;
@@ -202,7 +202,7 @@ struct tanh<true> {
     return one;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V limit_inf (V drive)
   {
     using T         = vec_value_type_t<V>;
@@ -218,7 +218,7 @@ struct tanh<true> {
     return vec_set<V> (inf);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static bool is_linear (V drive)
   {
     using T = vec_value_type_t<V>;
@@ -234,13 +234,13 @@ template <>
 struct tanh_vaneev<false> {
   static constexpr uint n_params = 0;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (V in)
   {
     return in * tick_div_in (in);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_div_in (V in)
   {
     using T = vec_value_type_t<V>;
@@ -257,7 +257,7 @@ struct tanh_vaneev<false> {
     return num / den;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V limit_inf()
   {
     return vec_set<V> (1.00808198701850);
@@ -274,7 +274,7 @@ struct tanh_vaneev<true> {
   template <class T>
   static constexpr auto epsilon = detail::epsilon<T>;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (V in, V drive)
   {
     using T = vec_value_type_t<V>;
@@ -290,7 +290,7 @@ struct tanh_vaneev<true> {
     return in;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_div_in (V in, V drive)
   {
     using T  = vec_value_type_t<V>;
@@ -307,7 +307,7 @@ struct tanh_vaneev<true> {
     return one;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V limit_inf (V drive) // drive has to be positive
   {
     using T         = vec_value_type_t<V>;
@@ -323,7 +323,7 @@ struct tanh_vaneev<true> {
     return vec_set<V> (inf);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static bool is_linear (V drive)
   {
     using T = vec_value_type_t<V>;
@@ -347,21 +347,21 @@ template <uint N_terms>
 struct tanh_mystran<N_terms, false> {
   static constexpr uint n_params = 0;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (V in)
   {
     return sigmoid::rsqrt<false>::tick (
       taylor::get<taylor::sinh_zero, N_terms> (in));
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_div_in (V in)
   {
     return sigmoid::rsqrt<false>::tick_div_in (
       taylor::get<taylor::sinh_zero, N_terms> (in));
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V limit_inf()
   {
     return sigmoid::rsqrt<false>::limit_inf<V>();
@@ -375,27 +375,27 @@ template <uint N_terms>
 struct tanh_mystran<N_terms, true> {
   static constexpr uint n_params = 1;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (V in, V drive)
   {
     return sigmoid::rsqrt<true>::tick (
       taylor::get<taylor::sinh_zero, N_terms> (in), drive);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_div_in (V in, V drive)
   {
     return sigmoid::rsqrt<true>::tick_div_in (
       taylor::get<taylor::sinh_zero, N_terms> (in), drive);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V limit_inf (V drive)
   {
     return sigmoid::rsqrt<true>::limit_inf (drive);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static bool is_linear (V drive)
   {
     using T = vec_value_type_t<V>;
@@ -414,7 +414,7 @@ namespace detail {
 //
 // How to scale with the drive was found empirically
 struct mystran_pre_shape {
-  template <uint N_terms, class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <uint N_terms, class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static constexpr V tick (V x, V drive, V hardness)
   {
     using T            = vec_value_type_t<V>;
@@ -467,21 +467,21 @@ template <uint N_terms>
 struct mystran<N_terms, false> {
   static constexpr uint n_params = 1;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (V in, V hardness)
   {
     return sigmoid::rsqrt<false>::tick (
       detail::mystran_pre_shape::tick<N_terms> (in, vec_set<V> (1), hardness));
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_div_in (V in, V hardness)
   {
     return sigmoid::rsqrt<false>::tick_div_in (
       detail::mystran_pre_shape::tick<N_terms> (in, vec_set<V> (1), hardness));
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V limit_inf (V)
   {
     return sigmoid::rsqrt<false>::limit_inf<V>();
@@ -495,27 +495,27 @@ template <uint N_terms>
 struct mystran<N_terms, true> {
   static constexpr uint n_params = 2;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (V in, V drive, V hardness)
   {
     return sigmoid::rsqrt<true>::tick (
       detail::mystran_pre_shape::tick<N_terms> (in, drive, hardness), drive);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_div_in (V in, V drive, V hardness)
   {
     return sigmoid::rsqrt<true>::tick_div_in (
       detail::mystran_pre_shape::tick<N_terms> (in, drive, hardness), drive);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V limit_inf (V drive, V)
   {
     return sigmoid::rsqrt<true>::limit_inf (drive);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static bool is_linear (V drive, V hardness)
   {
     using T = vec_value_type_t<V>;

@@ -22,7 +22,7 @@ struct iir_dc_blocker {
   //----------------------------------------------------------------------------
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> c, V freq, vec_value_type_t<V> t_spl)
   {
     using T = vec_value_type_t<V>;
@@ -31,7 +31,7 @@ struct iir_dc_blocker {
     c[R] = (T) 1. - ((T) M_PI * (T) 2. * freq * t_spl);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> c, xspan<V> s, V x)
   {
     using T               = vec_value_type_t<V>;
@@ -41,7 +41,7 @@ struct iir_dc_blocker {
     return tick (s, x, c[R]);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<vec_value_type_t<V> const> c, xspan<V> s, V x)
   {
     assert (c.size() >= n_coeffs);
@@ -50,7 +50,7 @@ struct iir_dc_blocker {
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V> s, V x, V Rv)
   {
     assert (s.size() >= n_states);
@@ -73,20 +73,20 @@ struct mystran_dc_blocker {
   //----------------------------------------------------------------------------
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> c, V freq, vec_value_type_t<V> t_spl)
   {
     onepole_smoother::reset_coeffs (c, freq, t_spl);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> c, xspan<V> s, V x)
   {
     assert (c.size() >= n_coeffs);
@@ -97,7 +97,7 @@ struct mystran_dc_blocker {
     return x - prev_lp_out;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<vec_value_type_t<V> const> c, // single coeff set
     xspan<V>                         s,
@@ -124,7 +124,7 @@ struct mystran_dc_blocker_2pole {
   //----------------------------------------------------------------------------
   // warning, if going to very low frequencies, use "double".
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> c, V freq, vec_value_type_t<V> t_spl)
   {
     using T                   = vec_value_type_t<V>;
@@ -134,14 +134,14 @@ struct mystran_dc_blocker_2pole {
       c, freq, vec_set<V> (butterworth_q), t_spl);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> c, xspan<V> s, V x)
   {
     assert (c.size() >= n_coeffs);
@@ -154,7 +154,7 @@ struct mystran_dc_blocker_2pole {
     return x - prev_lp_out;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<vec_value_type_t<V> const> c, // single coeff set
     xspan<V>                         s,

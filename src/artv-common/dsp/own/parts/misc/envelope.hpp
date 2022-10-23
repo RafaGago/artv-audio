@@ -21,7 +21,7 @@ struct envelope {
   enum coeffs_int { n_coeffs_int };
   enum state { prev, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> c, V time_sec, vec_value_type_t<V> t_spl)
   {
     using T = vec_value_type_t<V>;
@@ -32,7 +32,7 @@ struct envelope {
     c[time_k] = k != zero ? k : zero;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
@@ -40,7 +40,7 @@ struct envelope {
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> c, xspan<V> s, V in)
   {
     assert (c.size() >= n_coeffs);
@@ -51,7 +51,7 @@ struct envelope {
   }
   //----------------------------------------------------------------------------
   struct rms_tag {};
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> c, xspan<V> s, V in, rms_tag)
   {
     using T = vec_value_type_t<V>;

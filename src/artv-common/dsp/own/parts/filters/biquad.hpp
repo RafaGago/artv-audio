@@ -181,7 +181,7 @@ struct biquad {
   // Robert Bristow Jhonson's
   // https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -207,7 +207,7 @@ struct biquad {
     co[a2]          = ((T) 1 - alpha) * norm;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -233,7 +233,7 @@ struct biquad {
     co[a2]          = ((T) 1 - alpha) * norm;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -260,7 +260,7 @@ struct biquad {
     co[a2] = ((T) 1 - alpha) * norm;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -285,7 +285,7 @@ struct biquad {
     co[a2]          = ((T) 1 - alpha) * norm;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -310,7 +310,7 @@ struct biquad {
     co[b2]          = vec_set<V> ((T) 1); // 1 + alpha / a0
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -339,7 +339,7 @@ struct biquad {
     co[a2]          = ((T) 1 - alpha_div_A) * norm;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -369,7 +369,7 @@ struct biquad {
     co[a2] = ((A + (T) 1) + (A - (T) 1) * cosw0 - g) * norm;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -402,7 +402,7 @@ struct biquad {
   // Martin Vicanek's loose fit versions
   // https://www.mvic.de/articles/BiquadFits.pdf
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -428,7 +428,7 @@ struct biquad {
     co[b2] = vec_set<V> (0.0);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -454,7 +454,7 @@ struct biquad {
     co[b2] = co[b0];
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -486,7 +486,7 @@ struct biquad {
   // Martin Vicanek's tight fit versions
   // https://www.mvic.de/articles/BiquadFits.pdf
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -513,7 +513,7 @@ struct biquad {
     co[b2] = vec_set<V> (0.0);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -538,7 +538,7 @@ struct biquad {
     co[b2] = co[b0];
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -568,7 +568,7 @@ struct biquad {
     co[b2] = -co[b0] - co[b1];
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -608,14 +608,14 @@ struct biquad {
   //----------------------------------------------------------------------------
   // processing functions
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     assert (co.size() >= n_coeffs);
@@ -628,7 +628,7 @@ struct biquad {
   }
   //----------------------------------------------------------------------------
   // Running with revesed zeros.
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> co, xspan<V> st, V x, rev_zeros_tag)
   {
     assert (co.size() >= b2 + 1);
@@ -640,7 +640,7 @@ struct biquad {
     return out;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void get_zeros (
     xspan<V const>        co,
     xspan<vec_complex<V>> zeros,
@@ -651,7 +651,7 @@ struct biquad {
     get_quadratic_roots (zeros[0], zeros[1], co[b0], co[b1], co[b2]);
     zeros_gain = co[b0];
   } //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void get_poles (xspan<vec_complex<V>> poles, xspan<V const> co)
   {
     assert (poles.size() >= 2);
@@ -666,7 +666,7 @@ private:
   //----------------------------------------------------------------------------
   // quadratic equation roots:
   // (a * x^2) + (b * x) + c = a * (x - r1) * (x - r2)
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void get_quadratic_roots (
     vec_complex<V>& r1,
     vec_complex<V>& r2,
@@ -699,7 +699,7 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void get_impulse_invariance_poles (V& a1, V& a2, V f0, V q)
   {
     using T = vec_value_type_t<V>;
@@ -712,7 +712,7 @@ private:
     get_impulse_invariance_a1 (a1, w0, i2q, exp_mq_w0);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void get_impulse_invariance_a1 (V& a1, V w0, V i2q, V exp_mq_w0)
   {
     using T = vec_value_type_t<V>;

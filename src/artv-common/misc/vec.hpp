@@ -78,6 +78,32 @@ struct simd_vector_traits {
   static_assert ((bytes & (bytes - 1)) == 0, "bytes is not a power of 2.");
 };
 
+template <class T>
+struct simd_vector_traits<T, 0> {
+  static_assert (std::is_arithmetic_v<T>, "");
+
+  using value_type            = T;
+  static constexpr uint size  = 0; // not a vector
+  static constexpr uint bytes = sizeof (T);
+
+  static constexpr uint alignment = alignof (T);
+
+  using type   = T;
+  using type_u = T;
+
+  template <class U>
+  using rebind = U;
+
+  using same_size_int_type  = rebind<same_size_int<T>>;
+  using same_size_uint_type = rebind<same_size_uint<T>>;
+
+  template <class U>
+  using rebind_traits_same_bytes = simd_vector_traits<U, 0>;
+
+  template <class U>
+  using rebind_traits_same_size = simd_vector_traits<U, 0>;
+};
+
 namespace detail {
 //------------------------------------------------------------------------------
 template <class T, uint N>
@@ -89,10 +115,23 @@ template <uint size_of, class T>
 static inline constexpr auto get_traits (
   T __attribute__ ((vector_size (size_of))))
 {
+  // a vector
   return simd_vector_traits<T, size_of / sizeof (T)> {};
 }
 
-template <uint size_of, class T>
+template <
+  uint size_of,
+  class T,
+  std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
+static inline constexpr auto get_traits (T)
+{
+  return simd_vector_traits<T, 0> {};
+}
+
+template <
+  uint size_of,
+  class T,
+  std::enable_if_t<!std::is_arithmetic_v<T>>* = nullptr>
 static inline constexpr auto get_traits (T)
 {
   return nullptr;
@@ -149,18 +188,23 @@ struct vec_vt_enabler<V, true> {
 };
 
 template <class V>
-using vec_value_type_t = typename vec_vt_enabler<V, is_vec_v<V>>::type;
+using vec_value_type_t =
+  typename vec_vt_enabler<V, is_vec_v<V> || std::is_arithmetic_v<V>>::type;
 
 } // namespace detail
 
 //------------------------------------------------------------------------------
 // TYPES
 //------------------------------------------------------------------------------
+// Typedef for a native vector type of type T and size N. If N is 0 a plain
+// scalar is returned.
+
 template <class T, uint N>
 using vec = detail::vec<T, N>;
 
 // Gets the vector traits (see "simd_vector_traits") of a vector type "V".
-// removes references and CV qualification on "V"
+// removes references and CV qualification on "V". Notice that scalar types
+// return vector types of size 0.
 template <class V>
 using vec_traits_t = detail::vec_traits_t<V>;
 
@@ -169,17 +213,56 @@ using vec_traits_t = detail::vec_traits_t<V>;
 template <class V>
 using vec_value_type_t = detail::vec_value_type_t<V>;
 
-// gets if "V" is a vector. removes references and CV qualification on "V".
+// Gets if "V" is a vector. removes references and CV qualification on "V".
+// This returns false for scalar types (vectors of size 0)
 template <class V>
 static constexpr bool is_vec_v = detail::is_vec_v<V>;
 
 // gets if "V" is a floating point vector. removes references and CV
-// qualification on "V".
-// clang-format off
+// qualification on "V". Returns false for scalar types (vectors of size 0)
+
 template <class V>
-static constexpr bool is_vec_of_float_type_v
+static constexpr bool is_floatpt_vec_v
   = is_vec_v<V> && std::is_floating_point_v<vec_value_type_t<V>>;
-// clang-format on
+
+// gets if "V" is a integral vector. removes references and CV qualification on
+// "V". Returns false for scalar types (vectors of size 0)
+template <class V>
+static constexpr bool is_any_int_vec_v
+  = is_vec_v<V> && std::is_integral_v<vec_value_type_t<V>>;
+
+// gets if "V" is a signed integer vector. removes references and CV
+// qualification on "V". Returns false for scalar types (vectors of size 0)
+template <class V>
+static constexpr bool is_sint_vec_v
+  = is_any_int_vec_v<V> && std::is_signed_v<vec_value_type_t<V>>;
+
+// gets if "V" is an unsigned integer vector. removes references and CV
+// qualification on "V". Returns false for scalar types (vectors of size 0)
+template <class V>
+static constexpr bool is_uint_vec_v
+  = is_any_int_vec_v<V> && std::is_unsigned_v<vec_value_type_t<V>>;
+
+// scalar-compatible ones
+template <class T>
+static constexpr bool is_vec_or_scalar_v
+  = is_vec_v<T> || std::is_arithmetic_v<T>;
+
+template <class T>
+static constexpr bool is_floatpt_vec_or_scalar_v
+  = is_floatpt_vec_v<T> || std::is_floating_point_v<T>;
+
+template <class T>
+static constexpr bool is_any_int_vec_or_scalar_v
+  = is_any_int_vec_v<T> || std::is_integral_v<T>;
+
+template <class T>
+static constexpr bool is_sint_vec_or_scalar_v
+  = is_any_int_vec_v<T> || (std::is_integral_v<T> && std::is_signed_v<T>);
+
+template <class T>
+static constexpr bool is_uint_vec_or_scalar_v
+  = is_any_int_vec_v<T> || (std::is_integral_v<T> && std::is_unsigned_v<T>);
 
 using float_x1 = vec<float, 1>;
 using f32_x1   = float_x1;
@@ -246,34 +329,48 @@ template <class V>
 using enable_if_vec_t = std::enable_if_t<is_vec_v<V>>;
 
 template <class V>
-using enable_if_vec_of_float_point_t
-  = std::enable_if_t<is_vec_of_float_type_v<V>>;
+using enable_if_floatpt_vec_t = std::enable_if_t<is_floatpt_vec_v<V>>;
+
+template <class V>
+using enable_if_any_int_vec_t = std::enable_if_t<is_any_int_vec_v<V>>;
+
+template <class V>
+using enable_if_int_vec_t = std::enable_if_t<is_sint_vec_v<V>>;
+
+template <class V>
+using enable_if_uint_vec_t = std::enable_if_t<is_uint_vec_v<V>>;
+
+template <class V>
+using enable_if_vec_or_scalar_t = std::enable_if_t<is_vec_or_scalar_v<V>>;
+
+template <class V>
+using enable_if_floatpt_vec_or_scalar_t
+  = std::enable_if_t<is_floatpt_vec_or_scalar_v<V>>;
+
+template <class V>
+using enable_if_any_int_vec_or_scalar_int_t
+  = std::enable_if_t<is_any_int_vec_or_scalar_v<V>>;
+
+template <class V>
+using enable_if_sint_vec_or_scalar_t
+  = std::enable_if_t<is_sint_vec_or_scalar_v<V>>;
+
+template <class V>
+using enable_if_uint_vec_or_scalar_t
+  = std::enable_if_t<is_uint_vec_or_scalar_v<V>>;
 
 template <class V, class T>
 using enable_if_vec_value_type_t
   = std::enable_if_t<is_vec_v<V> && std::is_same_v<vec_value_type_t<V>, T>>;
 
 //------------------------------------------------------------------------------
-// TODO: As of now this is only done for x64, but it can be easily ifdefed
-//------------------------------------------------------------------------------
-// Notice:
-//
-// - All these loads, stores and casts could be done with "memcpy" but I
-//   lazily went with __may_alias__ and type punning to avoid verifying that
-//   memcpy does the right thing.
-// - No object orientation, as it would defeat the purpuse of using the
-//   builtin compiler wrappers.
-//------------------------------------------------------------------------------
-// FUNCTIONS
-//------------------------------------------------------------------------------
-// returns a "simd_vector_traits"
-template <class V, enable_if_vec_t<V>* = nullptr>
+template <class V, enable_if_vec_or_scalar_t<V>* = nullptr>
 static constexpr auto vec_traits()
 {
   return vec_traits_t<V> {};
 }
 
-template <class V, enable_if_vec_t<V>* = nullptr>
+template <class V, enable_if_vec_or_scalar_t<V>* = nullptr>
 static constexpr auto vec_traits (V)
 {
   return vec_traits<V>();

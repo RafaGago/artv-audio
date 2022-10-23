@@ -65,19 +65,19 @@ So 4 "exp" calls are needed, alternatively 2 exp calls and 2 divisions.
 // clang-format on
 struct tanh_functions {
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V fn (V x)
   {
     return vec_tanh (x);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V int_fn (V x)
   {
     return vec_log (vec_cosh (x));
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V int2_fn (V x)
   {
     // not solveable analitically in a practical/easy way.
@@ -110,12 +110,12 @@ public:
   enum coeffs_int { n_coeffs_int };
   enum state { x1, x1_exp, x1_int, n_states };
   //----------------------------------------------------------------------------
-  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, :enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V>)
   {
   }
   //----------------------------------------------------------------------------
-  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, :enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
@@ -125,7 +125,7 @@ public:
     st[x1_int] = vec_set ((T) 0.6931471805599453); // log (2);
   }
   //----------------------------------------------------------------------------
-  template <class V, :enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, :enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_simd (
     xspan<const V>,
     xspan<V> st,

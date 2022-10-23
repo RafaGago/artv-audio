@@ -41,7 +41,7 @@ public:
   //----------------------------------------------------------------------------
   static constexpr uint get_latency (uint n_stages) { return 1 << n_stages; }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V freq, vec_value_type_t<V> t_spl)
   {
     vec_complex<V> poles, zeros;
@@ -56,7 +56,7 @@ public:
     fwd_1pole::reset_coeffs (co, freq, t_spl);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st, uint stages)
   {
     uint numstates = get_n_states (stages);
@@ -64,7 +64,7 @@ public:
     memset (st.data(), 0, sizeof (V) * numstates);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick (
     xspan<V const> co,
     xspan<V>       st,
@@ -88,7 +88,7 @@ public:
     return out;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void tick (
     xspan<V const> co,
     xspan<V>       st,
@@ -146,7 +146,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
     return ((1 << n_stages) + 1) * n_2poles;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -171,7 +171,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
     fwd_2pole::reset_coeffs (co, freq, t_spl, order / 2);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st, uint order, uint stages)
   {
     uint numstates = get_n_states (order, stages);
@@ -179,7 +179,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
     memset (st.data(), 0, sizeof (V) * numstates);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick (
     xspan<V const> co,
     xspan<V>       st,
@@ -206,7 +206,7 @@ struct linear_iir_butterworth_2pole_cascade_lowpass {
     return fwd_2pole::tick (co, st, out, order / 2);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void tick (
     xspan<V const> co,
     xspan<V>       st,
@@ -274,7 +274,7 @@ struct linear_iir_butterworth_lowpass_any_order {
       {vec_real (pole)[0], vec_imag (pole)[0]}, snr_db);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co, // coeffs (interleaved, SIMD aligned)
     V                   freq,
@@ -291,7 +291,7 @@ struct linear_iir_butterworth_lowpass_any_order {
     }
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick (
     xspan<V const> co,
     xspan<V>       st,
@@ -310,7 +310,7 @@ struct linear_iir_butterworth_lowpass_any_order {
     }
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void tick (
     xspan<V const> co,
     xspan<V>       st,

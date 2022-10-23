@@ -191,7 +191,7 @@ struct svf_multimode {
   enum coeffs_int { n_coeffs_int };
   enum state { s1, s2, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> c, V freq, V q, vec_value_type_t<V> t_spl)
   {
     assert (c.size() >= n_coeffs);
@@ -209,7 +209,7 @@ struct svf_multimode {
     }
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   freq,
@@ -233,20 +233,20 @@ struct svf_multimode {
     }
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick (xspan<V const> co, xspan<V> st, V in)
   {
     return tick_impl<V, V> (co, st, in);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick (xspan<vec_value_type_t<V> const> co, xspan<V> st, V in)
   {
     return tick_impl<V, vec_value_type_t<V>> (co, st, in);
@@ -254,7 +254,7 @@ struct svf_multimode {
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  template <class V, class VT, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, class VT, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick_impl (
     xspan<const VT> co, // coeffs (V builtin type (single set) or V (SIMD))
     xspan<V>        st, // states (interleaved, SIMD aligned)
@@ -385,13 +385,13 @@ public:
   using base::reset_states;
   using base::tick;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick (xspan<V const> co, xspan<V> st, zdf::gs_coeffs_tag)
   {
     return tick_impl<V, V> (co, st, zdf::gs_coeffs_tag {});
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick (
     xspan<vec_value_type_t<V> const> co,
     xspan<V>                         st,
@@ -403,7 +403,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   // return G and S for each mode
-  template <class V, class VT, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, class VT, enable_if_floatpt_vec_t<V>* = nullptr>
   static auto tick_impl (
     xspan<const VT> co, // coeffs (V builtin type (single set) or V (SIMD))
     xspan<V const>  st, // states (interleaved, SIMD aligned)
@@ -590,7 +590,7 @@ private:
   //----------------------------------------------------------------------------
   friend class detail::svf_multimode<svf_multimode_zdf<Tags...>, Tags...>;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static inline void after_reset_coeffs (xspan<V> co, detail::svf_coeffs<V> c)
   {
     assert (co.size() >= n_coeffs);
@@ -627,7 +627,7 @@ struct svf {
   enum coeffs_int { n_coeffs_int };
   enum state { s1, s2, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   freq,
@@ -647,7 +647,7 @@ struct svf {
     c[m2] = vec_set<V> ((T) 1.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   freq,
@@ -667,7 +667,7 @@ struct svf {
     c[m2] = vec_set<V> ((T) -1.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   freq,
@@ -688,7 +688,7 @@ struct svf {
     c[m2] = vec_set<V> ((T) 0.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   freq,
@@ -709,7 +709,7 @@ struct svf {
     c[m2] = vec_set<V> ((T) 0.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   freq,
@@ -730,7 +730,7 @@ struct svf {
     c[m2] = vec_set<V> ((T) -2.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   freq,
@@ -750,7 +750,7 @@ struct svf {
     c[m2] = vec_set<V> ((T) 0.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   freq,
@@ -770,7 +770,7 @@ struct svf {
     c[m2] = vec_set<V> ((T) 0.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   freq,
@@ -792,7 +792,7 @@ struct svf {
     c[m2] = vec_set<V> ((T) 0.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   freq,
@@ -814,7 +814,7 @@ struct svf {
     c[m2] = vec_set<V> ((T) 0.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   freq,
@@ -836,7 +836,7 @@ struct svf {
     c[m2] = (coeffs.A * coeffs.A) - (T) 1.;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   freq,
@@ -858,7 +858,7 @@ struct svf {
     c[m2] = (T) 1. - (coeffs.A * coeffs.A);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
@@ -867,7 +867,7 @@ struct svf {
   //----------------------------------------------------------------------------
   // 1 set of coeffs, N outs. (E.g. stereo filter using double). Interleaved
   // states version
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<vec_value_type_t<V> const> c, // coeffs (1 set)
     xspan<V>                         s, // states (interleaved, SIMD aligned)
@@ -891,7 +891,7 @@ struct svf {
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> c, // coeffs (interleaved, SIMD aligned)
     xspan<V>       s, // states (interleaved, SIMD aligned)

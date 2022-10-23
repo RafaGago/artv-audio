@@ -95,7 +95,7 @@ public:
   static constexpr uint n_coeffs_int = cascade_type::n_coeffs_int;
   static constexpr uint n_states     = cascade_type::n_states;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co, // coeffs interleaved
     V                   freq,
@@ -121,13 +121,13 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st, uint order)
   {
     cascade_type::reset_states (st, order);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<vec_value_type_t<V> const> co, // coeffs (single set)
     xspan<V>                         st, // states (interleaved, SIMD aligned)
@@ -138,7 +138,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // N sets of coeffs, N outs calculated at once.
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
@@ -166,7 +166,7 @@ public:
   static constexpr uint n_coeffs_int = butterworth_type::n_coeffs_int;
   static constexpr uint n_coeffs     = butterworth_type::n_coeffs;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co, // coeffs (interleaved, SIMD aligned)
     V                   freq,
@@ -176,13 +176,13 @@ public:
     butterworth_type::reset_coeffs (co, freq, t_spl, order);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     butterworth_type::reset_states (st, order);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<vec_value_type_t<V> const> co, // coeffs (single set)
     xspan<V>                         st, // states (interleaved, SIMD aligned)
@@ -191,7 +191,7 @@ public:
     return butterworth_type::tick (co, st, in, order);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
@@ -214,7 +214,7 @@ struct butterworth_lp_complex {
   //  - positive imaginary
   //  - negative imaginary / conjugates
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void poles (
     xspan<vec_complex<V>> poles,
     V                     freq,
@@ -281,7 +281,7 @@ struct butterworth_lp_complex {
   //----------------------------------------------------------------------------
   // just a formality. All zeroes are real at -1.
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void zeros (
     xspan<vec_complex<V>> zeros,
     V,
@@ -298,7 +298,7 @@ struct butterworth_lp_complex {
     }
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V gain (xspan<vec_complex<V>> const poles, uint order)
   {
     using T               = vec_value_type_t<V>;

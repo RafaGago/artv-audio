@@ -1184,7 +1184,7 @@ private:
   }
   //----------------------------------------------------------------------------
   // This is wrong! not updated to keep some existing patches sounding the same
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V delay_get_feedback_gain_for_time_broken (
     vec_value_type_t<V> time_sec, // desired
     vec_value_type_t<V> gain, // -60. for RT60

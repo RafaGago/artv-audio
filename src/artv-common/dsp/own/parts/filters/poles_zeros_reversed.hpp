@@ -66,7 +66,7 @@ struct t_rev_single {
     return ((1u << n_stages) - 1u) * factor;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, value_type<V> pole_or_zero)
   {
     assert (co.size() >= n_coeffs);
@@ -74,7 +74,7 @@ struct t_rev_single {
     *c     = pole_or_zero;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
@@ -82,7 +82,7 @@ struct t_rev_single {
     memset (st.data(), 0, sizeof (V) * numstates);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static value_type<V> tick (
     xspan<V const> co,
     xspan<V>       st,
@@ -112,7 +112,7 @@ struct t_rev_single {
     return y;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static xspan<value_type<V>> tick (
     xspan<V const>       co,
     xspan<V>             st,
@@ -162,7 +162,7 @@ struct t_rev_conjugate {
     return base::get_n_states (n_stages);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, vec_complex<V> pole_or_zero)
   {
     assert (co.size() >= n_coeffs);
@@ -170,7 +170,7 @@ struct t_rev_conjugate {
     co[ratio] = pole_or_zero.re / pole_or_zero.im;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
@@ -178,7 +178,7 @@ struct t_rev_conjugate {
     memset (st.data(), 0, sizeof (V) * numstates);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> co,
     xspan<V>       st,
@@ -192,7 +192,7 @@ struct t_rev_conjugate {
     return y.re + co[ratio] * y.im;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static xspan<V> tick (
     xspan<V const> co,
     xspan<V>       st,
@@ -249,7 +249,7 @@ struct t_rev_pfe_pole_pair {
     return base::get_n_states (n_stages) * 2;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>      co,
     value_type<V> pole1,
@@ -266,7 +266,7 @@ struct t_rev_pfe_pole_pair {
     co_ptr[co_k2]    = (T) 1 / ((T) 1 - pole1 / pole2);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
@@ -274,7 +274,7 @@ struct t_rev_pfe_pole_pair {
     memset (st.data(), 0, sizeof (V) * numstates);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> co,
     xspan<V>       st,
@@ -321,7 +321,7 @@ struct t_rev_pfe_pole_pair {
     }
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static xspan<V> tick (
     xspan<V const> co,
     xspan<V>       st,
@@ -422,7 +422,7 @@ struct t_rev_naive_cascade_pair {
     return base::get_n_states (n_stages) * 2;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>     co,
     value_type<V> zero_or_pole1,
@@ -433,7 +433,7 @@ struct t_rev_naive_cascade_pair {
     base::reset_coeffs (co, zero_or_pole2);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
@@ -441,7 +441,7 @@ struct t_rev_naive_cascade_pair {
     memset (st.data(), 0, sizeof (V) * numstates);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<const V> co,
     xspan<V>       st,
@@ -461,7 +461,7 @@ struct t_rev_naive_cascade_pair {
     }
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static xspan<V> tick (
     xspan<const V> co,
     xspan<V>       st,
@@ -544,7 +544,7 @@ public:
     return t_rev_rpole::get_n_states (n_stages) * 3;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>       co,
     xspan<V>       co_int,
@@ -589,7 +589,7 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
@@ -597,7 +597,7 @@ public:
     memset (st.data(), 0, sizeof (V) * numstates);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> co,
     xspan<V const> co_int,
@@ -620,7 +620,7 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static xspan<V> tick (
     xspan<V const> co,
     xspan<V const> co_int,
@@ -645,7 +645,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_pfe (
     xspan<V const> co,
     xspan<V>       st,
@@ -686,7 +686,7 @@ private:
     return pfe;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static xspan<V> tick_pfe (
     xspan<V const> co,
     xspan<V>       st,
@@ -749,7 +749,7 @@ private:
     return io; // forwarding
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick_cc (
     xspan<V const> co,
     xspan<V>       st,
@@ -787,7 +787,7 @@ private:
     return y.re + ratio * y.im;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static xspan<V> tick_cc (
     xspan<V const> co,
     xspan<V>       st,
@@ -861,7 +861,7 @@ struct t_rev_rpole_rzero {
     return rzero::n_states + t_rev_rpole::get_n_states (n_stages);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V re_pole, V re_zero)
   {
     t_rev_rpole::reset_coeffs (co, re_pole);
@@ -869,7 +869,7 @@ struct t_rev_rpole_rzero {
     rzero::reset_coeffs (co, re_zero);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
@@ -877,7 +877,7 @@ struct t_rev_rpole_rzero {
     memset (st.data(), 0, sizeof (V) * numstates);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> co,
     xspan<V>       st,
@@ -891,7 +891,7 @@ struct t_rev_rpole_rzero {
     return rzero::tick (co, st, out);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static xspan<V> tick (
     xspan<V const> co,
     xspan<V>       st,
@@ -924,7 +924,7 @@ struct t_rev_ccpole_pair_rzero_eq_pair {
     return 2 * rzero::n_states + t_rev_ccpole_pair::get_n_states (n_stages);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, vec_complex<V> pole, V re_zero)
   {
     t_rev_ccpole_pair::reset_coeffs (co, pole);
@@ -932,7 +932,7 @@ struct t_rev_ccpole_pair_rzero_eq_pair {
     rzero::reset_coeffs (co, re_zero);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st, uint n_stages)
   {
     uint numstates = get_n_states (n_stages);
@@ -940,7 +940,7 @@ struct t_rev_ccpole_pair_rzero_eq_pair {
     memset (st.data(), 0, sizeof (V) * numstates);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> co,
     xspan<V>       st,
@@ -962,7 +962,7 @@ struct t_rev_ccpole_pair_rzero_eq_pair {
     return out;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static xspan<V> tick (
     xspan<V const> co,
     xspan<V>       st,

@@ -26,13 +26,13 @@ struct zero_order_hold {
   static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (std::array<V, n_points> y, V x)
   {
     return y[0];
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
@@ -58,13 +58,13 @@ struct linear_interp {
   static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (std::array<V, n_points> y, V x)
   {
     return y[0] + x * (y[1] - y[0]);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
@@ -95,7 +95,7 @@ struct lagrange_interp<2> {
   static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (std::array<V, n_points> y, V x)
   {
     using T = vec_value_type_t<V>;
@@ -113,7 +113,7 @@ struct lagrange_interp<2> {
     return y[0] * c1 + y[1] * c2 + y[2] * c3;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
@@ -140,7 +140,7 @@ struct lagrange_interp<3> {
   static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (std::array<V, n_points> y, V x)
   {
     using T = vec_value_type_t<V>;
@@ -159,7 +159,7 @@ struct lagrange_interp<3> {
     return y[0] * c1 + y[1] * c2 + y[2] * c3 + y[3] * c4;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
@@ -185,7 +185,7 @@ struct hermite_interp {
   static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (std::array<V, n_points> y, V x)
   {
     using T = vec_value_type_t<V>;
@@ -196,7 +196,7 @@ struct hermite_interp {
     return ((a * x + b) * x + c) * x + y[1];
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
@@ -222,7 +222,7 @@ struct catmull_rom_interp {
   static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (std::array<V, n_points> y, V x)
   {
     using T = vec_value_type_t<V>;
@@ -238,7 +238,7 @@ struct catmull_rom_interp {
     return r;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const>, xspan<V>, std::array<V, n_points> y, V x)
   {
     return tick (y, x);
@@ -288,7 +288,7 @@ struct sinc_interp {
   static void reset_states (xspan<T>)
   {}
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<vec_value_type_t<V> const> co,
     xspan<V>,

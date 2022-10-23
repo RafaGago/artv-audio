@@ -12,7 +12,7 @@ struct czero {
   enum coeffs_int { n_coeffs_int };
   enum state { z1_re, z1_im, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, vec_complex<V> zero)
   {
     assert (co.size() >= vec_complex<V>::size);
@@ -20,14 +20,14 @@ struct czero {
     vec_store (co.data(), zero);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static vec_complex<V> tick (xspan<V const> co, xspan<V> st, vec_complex<V> x)
   {
     assert (co.size() >= vec_complex<V>::vec_size);
@@ -50,7 +50,7 @@ struct cpole {
   enum coeffs_int { n_coeffs_int };
   enum state { y1_re, y1_im, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, vec_complex<V> pole)
   {
     assert (co.size() >= vec_complex<V>::size);
@@ -58,14 +58,14 @@ struct cpole {
     vec_store (co.data(), pole);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static vec_complex<V> tick (xspan<V const> co, xspan<V> st, vec_complex<V> x)
   {
     assert (co.size() >= vec_complex<V>::vec_size);
@@ -87,21 +87,21 @@ struct rzero {
   enum coeffs_int { n_coeffs_int };
   enum state { z1, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V re_zero)
   {
     assert (co.size() >= n_coeffs);
     co[re] = re_zero;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     assert (co.size() >= n_coeffs);
@@ -120,21 +120,21 @@ struct rpole {
   enum coeffs_int { n_coeffs_int };
   enum state { y1, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V re_zero)
   {
     assert (co.size() >= n_coeffs);
     co[re] = re_zero;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     assert (co.size() >= n_coeffs);
@@ -157,21 +157,21 @@ struct ccpole_pair {
   enum coeffs_int { n_coeffs_int };
   enum state { n_states = cpole::n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, vec_complex<V> pole)
   {
     cpole::reset_coeffs (co, pole);
     co[ratio] = vec_real (pole) / vec_imag (pole);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     assert (co.size() >= n_coeffs);
@@ -189,7 +189,7 @@ struct rpole_rzero {
   enum coeffs_int { n_coeffs_int = rzero::n_coeffs_int + rpole::n_coeffs_int };
   enum state { n_states = rzero::n_states + rpole::n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, V re_pole, V re_zero)
   {
     rpole::reset_coeffs (co, re_pole);
@@ -197,14 +197,14 @@ struct rpole_rzero {
     rzero::reset_coeffs (co, re_zero);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     V out = rpole::tick (co, st, x);
@@ -223,7 +223,7 @@ struct ccpole_pair_rzero_pair {
   };
   enum state { n_states = 2 * rzero::n_states + ccpole_pair::n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (xspan<V> co, vec_complex<V> pole, V re_zero)
   {
     ccpole_pair::reset_coeffs (co, pole);
@@ -231,14 +231,14 @@ struct ccpole_pair_rzero_pair {
     rzero::reset_coeffs (co, re_zero);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     V out = ccpole_pair::tick (co, st, x);
@@ -263,7 +263,7 @@ struct czero_pair {
   enum coeffs_int { n_coeffs_int };
   enum state { z1_c1_re, z1_c2_re, z1_c2_im, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>       co,
     vec_complex<V> zero1,
@@ -275,14 +275,14 @@ struct czero_pair {
     vec_store (&co[c2_re], zero2);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     assert (co.size() >= n_coeffs);
@@ -309,7 +309,7 @@ struct cpole_pair {
   enum coeffs_int { n_coeffs_int };
   enum state { y1_c1_re, y1_c1_im, y1_c2_re, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>       co,
     vec_complex<V> pole1,
@@ -321,14 +321,14 @@ struct cpole_pair {
     vec_store (&co[c2_re], pole2);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     assert (co.size() >= n_coeffs);
@@ -356,7 +356,7 @@ struct cpole_pair_czero_pair {
   };
   enum state { n_states = cpole_pair::n_states + czero_pair::n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>       co,
     vec_complex<V> pole1,
@@ -371,7 +371,7 @@ struct cpole_pair_czero_pair {
     cpole_pair::reset_coeffs (co, pole1, pole2);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     czero_pair::reset_states (st);
@@ -379,7 +379,7 @@ struct cpole_pair_czero_pair {
     cpole_pair::reset_states (st);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> co, xspan<V> st, V x)
   {
     V out = x;

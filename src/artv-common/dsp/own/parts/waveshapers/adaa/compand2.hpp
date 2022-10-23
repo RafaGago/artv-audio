@@ -17,7 +17,7 @@ namespace artv {
 template <uint Num, uint Den>
 struct power_functions {
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V fn (V x)
   {
     using T          = vec_value_type_t<V>;
@@ -25,7 +25,7 @@ struct power_functions {
     return vec_sgn_no_zero (x) * vec_pow (vec_abs (x), frac);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V int_fn (V x)
   {
     using T              = vec_value_type_t<V>;
@@ -35,7 +35,7 @@ struct power_functions {
     return vec_pow (vec_abs (x), int_frac) * (1. / int_frac);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V int2_fn (V x)
   {
     using T               = vec_value_type_t<V>;

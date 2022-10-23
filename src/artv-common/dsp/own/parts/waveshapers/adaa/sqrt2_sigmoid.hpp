@@ -17,7 +17,7 @@ namespace artv {
 // code as with the "ccode" function
 struct sqrt2_sigmoid_functions {
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V fn (V x)
   {
     // "x / sqrt (2 * x^2 + 1)" is the result of cascading
@@ -30,7 +30,7 @@ struct sqrt2_sigmoid_functions {
     return num / den;
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V int_fn (V x)
   {
     using T = vec_value_type_t<V>;
@@ -39,7 +39,7 @@ struct sqrt2_sigmoid_functions {
     return k * vec_sqrt ((T) 2. * x * x + (T) 1.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V int2_fn (V x)
   {
     using T = vec_value_type_t<V>;

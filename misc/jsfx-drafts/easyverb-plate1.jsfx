@@ -166,12 +166,9 @@ decay = 1 - decay_p;
 decay = 1 - decay * decay;
 decay = 0.6 + decay  * 0.39;
 
-max_amt = 0.75 * (1 - mod * mod) + 0.25;
-mod_amt = mod * max_amt;
+mod_amt = 0.75 * (1 - mod) + 0.25;
 lfo.lfo_bank_reset_freq (0, 0.1 + mod * 1.2, k.src.srate);
 er_lfo.lfo_bank_reset_freq (0, 0.3 + mod * 0.3, k.src.srate);
-
-mod_amt = wander * wander *  (0.5 + (1 - spin) * 0.5);
 
 dry_gain  = db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
@@ -219,7 +216,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
   loop_in = late_in + f2 * decay - (er1 + er2) * er_amt * 0.4;
-  x = ap_mod (loop_in, 977, g_character, lfo.ret.ptr[0], 51 * mod_amt);
+  x = ap_mod (loop_in, 977, g_character, lfo.ret.ptr[0], 71 * mod_amt);
   x = delay (x, 2819);
   x = damp1.dampfilter (x, kdamp);
   x = ap (x * decay, 863, -g_character);
@@ -231,7 +228,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   l = x;
 
  loop_in = late_in + f1 * decay + (er1 - er2) * er_amt * 0.4;
-  x = ap_mod (loop_in, 947, g_character, lfo.ret.ptr[1], 67 * mod_amt);
+  x = ap_mod (loop_in, 947, g_character, lfo.ret.ptr[1], 47 * mod_amt);
   x = delay (x, 3191);
   x = damp2.dampfilter (x, kdamp);
   x = ap (x * decay, 887, -g_character); // 0.618 to 0.707 -> explosion

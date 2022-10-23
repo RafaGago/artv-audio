@@ -48,10 +48,10 @@ public:
   using raw_uint = typename vec_traits_t<phase_uint>::value_type;
   using raw_int  = typename vec_traits_t<phase_int>::value_type;
 
-  using fp_trait = single_fp_type_trait<phase_int, phase_uint, float_vec, N>;
+  using fp_trait = single_fp_type_trait<phase_int, phase_uint, float_vec>;
 
   template <uint S, uint I, uint F>
-  using fixpt_type      = fixpt<S, I, F, false, vec_fp_types_trait<N>>;
+  using fixpt_type      = fixpt_np<S, I, F, vec_fp_types_trait<N>>;
   using fixpt_type_uint = fixpt_type<0, 0, sizeof (raw_uint) * 8>;
   using fixpt_type_int  = fixpt_type<1, 0, (sizeof (raw_uint) * 8) - 1>;
   //----------------------------------------------------------------------------
@@ -358,6 +358,25 @@ public:
     using ph_uint = typename phase<N>::phase_uint;
     _phase += phase<N> (_increment) * vec_set<ph_uint> (n);
     return _phase;
+  }
+  //----------------------------------------------------------------------------
+  void set_at_uniform_spacing()
+  {
+    constexpr float      step = 1.f / N;
+    std::array<float, N> pos;
+    for (uint i = 0; i < pos.size(); ++i) {
+      pos[i] = i * step;
+    }
+    _phase = decltype (_phase) {phase_tag::normalized {}, pos};
+  }
+  //----------------------------------------------------------------------------
+  void set_at_uniform_spacing_from (uint reference_index)
+  {
+    assert (reference_index < N);
+    auto old = _phase.to_uint();
+    old      = vec_set<decltype (old)> (old[reference_index]);
+    set_at_uniform_spacing();
+    _phase += old;
   }
   //----------------------------------------------------------------------------
   struct tick_ext_ret {

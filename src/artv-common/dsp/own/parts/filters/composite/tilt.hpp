@@ -22,7 +22,7 @@ public:
   static constexpr uint n_coeffs_int = 2 * andy::svf::n_coeffs_int;
   static constexpr uint n_states     = 2 * andy::svf::n_states;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   freq,
@@ -36,14 +36,14 @@ public:
     andy::svf::reset_coeffs (co, freq, q, -gain_db, t_spl, highshelf_tag {});
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<vec_value_type_t<V> const> co, // coeffs (single set)
     xspan<V>                         st, // states (interleaved, SIMD aligned)
@@ -60,7 +60,7 @@ public:
     return andy::svf::tick (co, st, in);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> co, // states (interleaved, SIMD aligned)
     xspan<V>       st, // states (interleaved, SIMD aligned)
@@ -89,7 +89,7 @@ public:
 
   static_assert (N >= 2);
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   f0,
@@ -131,7 +131,7 @@ public:
   //----------------------------------------------------------------------------
   // "fc", the point of 0dB gain will be off unless high orders +20 are used.
   // Best effort.
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            co,
     V                   fc,
@@ -152,14 +152,14 @@ public:
     gains[N - 1] *= vec_exp (half_db_range * (T) (1. / 20.) * (T) M_LN10);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     assert (st.size() >= n_states);
     memset (st.data(), 0, sizeof (V) * n_states);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (xspan<V const> co, xspan<V> st, V in)
   {
     assert (co.size() >= n_coeffs);

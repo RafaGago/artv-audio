@@ -18,7 +18,7 @@ public:
   enum coeffs_int { n_coeffs_int };
   enum state { z0, z1, n_states };
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_coeffs (
     xspan<V>            c,
     V                   freq,
@@ -31,14 +31,14 @@ public:
     c[a] = (T) 2. * vec_sin ((T) M_PI * freq * t_spl);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st)
   {
     using T = vec_value_type_t<V>;
     reset_states (st, vec_set<V> ((T) 1.0));
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static void reset_states (xspan<V> st, V bipolar_ampl)
   {
     assert (st.size() >= n_states);
@@ -47,7 +47,7 @@ public:
     st[z1] = vec_set<V> ((T) 0.);
   }
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static V tick (
     xspan<V const> co, // coeffs (interleaved, SIMD aligned)
     xspan<V>       st) // states (interleaved, SIMD aligned)

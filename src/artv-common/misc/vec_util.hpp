@@ -243,15 +243,15 @@ static inline void vec_store_unaligned (xspan<vec_value_type_t<V>> dst, V src)
 }
 //------------------------------------------------------------------------------
 // vec_set: broadcast a value to a vector
-template <class V, enable_if_vec_t<V>* = nullptr>
-static inline void vec_set (V& dst, vec_value_type_t<V> v)
+template <class V, enable_if_vec_or_scalar_t<V>* = nullptr>
+static constexpr inline void vec_set (V& dst, vec_value_type_t<V> v)
 {
   constexpr auto traits = vec_traits<V>();
   dst                   = v - V {}; // convoluted but works.
 }
 
-template <class V, enable_if_vec_t<V>* = nullptr>
-static inline V vec_set (vec_value_type_t<V> v)
+template <class V, enable_if_vec_or_scalar_t<V>* = nullptr>
+static constexpr inline V vec_set (vec_value_type_t<V> v)
 {
   V ret;
   vec_set (ret, v);
@@ -259,7 +259,7 @@ static inline V vec_set (vec_value_type_t<V> v)
 }
 
 template <uint N, class T>
-static inline vec<T, N> vec_set (T v)
+static constexpr inline vec<T, N> vec_set (T v)
 {
   vec<T, N> ret;
   vec_set (ret, v);
@@ -491,7 +491,7 @@ static inline auto vec_cast (V a)
   return __builtin_convertvector (a, typename dst_traits::type);
 }
 //------------------------------------------------------------------------------
-template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 static inline auto vec_abs (V&& x)
 {
   return (x < (vec_value_type_t<V>) 0) ? -x : x;

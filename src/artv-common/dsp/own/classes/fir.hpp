@@ -53,7 +53,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // interleaved input
-  void push (xspan<const T> v)
+  void push (xspan<T const> v)
   {
     assert (v.size() >= n_channels);
 
@@ -67,7 +67,7 @@ public:
     });
   }
 
-  void push (xspan<const T> v, uint count)
+  void push (xspan<T const> v, uint count)
   {
     assert (v.size() >= (n_channels * count));
     for (uint i = 0; i < count; ++i) {
@@ -78,7 +78,7 @@ public:
   // instead of "push" "push_leading" and "copy_trailing" can be used. This is
   // for probable cache-friendliness, so the tail is written near the last
   // touched memory location.
-  void push_leading (xspan<const T> v)
+  void push_leading (xspan<T const> v)
   {
     assert (v.size() >= n_channels);
 
@@ -100,7 +100,7 @@ public:
     });
   }
 
-  void prepare_trailing (xspan<const T> v)
+  void prepare_trailing (xspan<T const> v)
   {
     assert (v.size() >= n_channels);
 
@@ -111,7 +111,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // sparse input (all the leading/trailing functions TBD if required)
-  void push (std::array<xspan<const T>, n_channels> v, uint count = 1)
+  void push (std::array<xspan<T const>, n_channels> v, uint count = 1)
   {
     for (auto& r : v) {
       assert (r.size() >= count);
@@ -128,9 +128,9 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  std::array<const T * artv_restrict, n_channels> samples() const
+  std::array<T const * artv_restrict, n_channels> samples() const
   {
-    std::array<const T * artv_restrict, n_channels> ret;
+    std::array<T const * artv_restrict, n_channels> ret;
 
     mp_foreach_idx<n_channels> ([&] (auto chnl) {
       ret[chnl] = _z + _head + (chnl * _size * 2);
@@ -160,7 +160,7 @@ public:
   using value_type                 = T;
   static constexpr uint n_channels = channels;
   //----------------------------------------------------------------------------
-  void reset (xspan<const T> kernel_mem) { _h = kernel_mem.data(); }
+  void reset (xspan<T const> kernel_mem) { _h = kernel_mem.data(); }
   //----------------------------------------------------------------------------
   std::array<T, n_channels> tick (
     convolution_delay_line<T, n_channels> const& dl)
@@ -214,7 +214,7 @@ public:
   using value_type                 = T;
   static constexpr uint n_channels = channels;
   //----------------------------------------------------------------------------
-  void reset (xspan<const T> kernel_mem, xspan<T> delay_line_mem)
+  void reset (xspan<T const> kernel_mem, xspan<T> delay_line_mem)
   {
     _impl.reset (kernel_mem);
     _dl.reset (delay_line_mem, kernel_mem.size());
@@ -237,7 +237,7 @@ private:
 // on a lth-band filter.
 struct lth_band {
   template <class T>
-  static bool verify_coeffs (const xspan<T> kernel, uint ratio)
+  static bool verify_coeffs (xspan<T> const kernel, uint ratio)
   {
     for (uint i = 0; i < kernel.size(); ++i) {
       if (i % ratio) {
@@ -288,7 +288,7 @@ public:
   using value_type                 = T;
   static constexpr uint n_channels = channels;
   //----------------------------------------------------------------------------
-  void reset (xspan<const T> kernel, uint ratio)
+  void reset (xspan<T const> kernel, uint ratio)
   {
     constexpr uint overalign = alignment / sizeof (T);
 
@@ -313,7 +313,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // inputs spread.
-  std::array<T, n_channels> tick (std::array<xspan<const T>, n_channels> in)
+  std::array<T, n_channels> tick (std::array<xspan<T const>, n_channels> in)
   {
     for (auto& r : in) {
       assert (r.size() >= _ratio);
@@ -323,7 +323,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // inputs interleaved
-  std::array<T, n_channels> tick (xspan<const T> in)
+  std::array<T, n_channels> tick (xspan<T const> in)
   {
     assert (in.size() >= _ratio * n_channels);
     _delay.push (in, _ratio);
@@ -350,7 +350,7 @@ public:
   using value_type                 = T;
   static constexpr uint n_channels = channels;
   //----------------------------------------------------------------------------
-  void reset (xspan<const T> kernel, uint ratio)
+  void reset (xspan<T const> kernel, uint ratio)
   {
     assert (lth_band::verify_coeffs (kernel, ratio));
 
@@ -405,7 +405,7 @@ public:
     _delays[1].reset (xspan {dst, zero_dl_size}, zero_dl_elems);
   }
   //----------------------------------------------------------------------------
-  std::array<T, n_channels> tick (std::array<xspan<const T>, n_channels> in)
+  std::array<T, n_channels> tick (std::array<xspan<T const>, n_channels> in)
   {
     _delays[1].push (in);
     for (auto& r : in) {
@@ -416,7 +416,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // interleaved version
-  std::array<T, n_channels> tick (xspan<const T> in)
+  std::array<T, n_channels> tick (xspan<T const> in)
   {
     _delays[1].push (in.get_head (1));
     _delays[0].push (in.advanced (n_channels), _ratio - 1);
@@ -467,7 +467,7 @@ public:
   // in a way that the skipping the zeroed branch is trivial, so it doesn't have
   // a separate implementation as the decimator does.
   void reset (
-    xspan<const T> kernel,
+    xspan<T const> kernel,
     uint           ratio,
     bool           enable_lth_band_optimization = false)
   {
@@ -516,7 +516,7 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  void tick (std::array<xspan<T>, n_channels> out, xspan<const T> in)
+  void tick (std::array<xspan<T>, n_channels> out, xspan<T const> in)
   {
     for (auto& r : out) {
       assert (r.size() >= _ratio);
@@ -545,7 +545,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // interleaved out
-  void tick (xspan<T> out, xspan<const T> in)
+  void tick (xspan<T> out, xspan<T const> in)
   {
     assert (out.size() >= (_ratio * n_channels));
     assert (in.size() >= n_channels);
@@ -831,7 +831,7 @@ public:
   // to contain "next_tick_n_spls_out" multichannel elements.
   uint tick (
     xspan<value_type>       out,
-    xspan<const value_type> ins,
+    xspan<value_type const> ins,
     uint                    block_size = 1)
   {
     auto in     = ins.get_head (block_size * n_channels);
@@ -1090,7 +1090,7 @@ public:
   //----------------------------------------------------------------------------
   uint tick_upsampler (
     xspan<value_type>       out,
-    xspan<const value_type> in,
+    xspan<value_type const> in,
     uint                    block_size)
   {
     assert (_max_samples != 1);
@@ -1116,7 +1116,7 @@ public:
       auto& interpolator = std::get<interpolator_type> (_integer);
       auto  ratio        = interpolator.ratio();
 
-      xspan<const value_type> in_int;
+      xspan<value_type const> in_int;
       if (n_spls != 0) {
         in_int = xspan {fracbf.data(), n_spls * n_channels};
       }
@@ -1139,7 +1139,7 @@ public:
   //----------------------------------------------------------------------------
   uint tick_downsampler (
     xspan<value_type>       out,
-    xspan<const value_type> in,
+    xspan<value_type const> in,
     uint                    block_size)
   {
     assert (_max_samples == 1);
@@ -1183,7 +1183,7 @@ public:
     }
     if (_fractional) {
       if (n_spls || !processed) {
-        xspan<const value_type> in_frac;
+        xspan<value_type const> in_frac;
         uint                    bsz;
 
         if (processed) {
@@ -1211,7 +1211,7 @@ public:
     return n_spls;
   }
   //----------------------------------------------------------------------------
-  uint tick (xspan<value_type> out, xspan<const value_type> in, uint block_size)
+  uint tick (xspan<value_type> out, xspan<value_type const> in, uint block_size)
   {
     if (_max_samples == 1) {
       return tick_downsampler (out, in, block_size);

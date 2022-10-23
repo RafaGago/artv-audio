@@ -14,7 +14,7 @@ namespace artv {
 template <uint N>
 struct householder_matrix {
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
@@ -51,7 +51,7 @@ template <uint N>
 class hadamard_matrix {
 public:
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
@@ -113,7 +113,7 @@ struct almost_hadamard_matrix<6> {
   //----------------------------------------------------------------------------
   static constexpr uint N = 6;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
@@ -163,7 +163,7 @@ template <>
 struct almost_hadamard_matrix<7> {
   static constexpr uint N = 7;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
@@ -201,7 +201,7 @@ struct rotation_matrix<4> {
   //----------------------------------------------------------------------------
   static constexpr uint N = 4;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static std::array<V, N> tick (
     xspan<V const>                x,
     xspan<const std::array<V, 2>> w)
@@ -262,7 +262,7 @@ struct rotation_matrix<8> {
   //----------------------------------------------------------------------------
   static constexpr uint N = 8;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static std::array<V, N> tick (
     xspan<V const>                x,
     xspan<const std::array<V, 2>> w)
@@ -344,7 +344,7 @@ struct rotation_matrix<16> {
   //----------------------------------------------------------------------------
   static constexpr uint N = 16;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static std::array<V, N> tick (
     xspan<V const>                x,
     xspan<const std::array<V, 2>> w)
@@ -473,7 +473,7 @@ struct rochebois_matrix<4> {
   //----------------------------------------------------------------------------
   static constexpr uint N = 4;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
@@ -509,7 +509,7 @@ struct rochebois_matrix<6> {
   //----------------------------------------------------------------------------
   static constexpr uint N = 6;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
@@ -555,7 +555,7 @@ struct rochebois_matrix<8> {
   //----------------------------------------------------------------------------
   static constexpr uint N = 8;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
@@ -600,7 +600,7 @@ struct rochebois_matrix<10> {
   //----------------------------------------------------------------------------
   static constexpr uint N = 10;
   //----------------------------------------------------------------------------
-  template <class V, enable_if_vec_of_float_point_t<V>* = nullptr>
+  template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
   static std::array<V, N> tick (xspan<V const> x)
   {
     assert (x.size() >= N);
