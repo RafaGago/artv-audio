@@ -642,8 +642,10 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class T>
-  void process_block (xspan<std::array<T, 2>> io)
+  void process_block (xspan<std::array<T, 2>> block)
   {
+    assert (block.size() <= blocksize);
+
     auto const allpass_sizes = get_diffusor_delay_spls();
 
     std::array<vec_type, blocksize>               n_spls;
@@ -652,290 +654,280 @@ private:
     array2d<arith_type, 2, blocksize>             ducker_gain;
     array2d<float, n_serial_diffusors, blocksize> ap_spls;
 
-    while (io.size()) {
-      auto block = io.cut_head (std::min<uint> (io.size(), blocksize));
-      // delay samples lfo
-      auto depth      = (arith_type) (main_mod_samples * _extpar.mod_depth);
-      auto delay_spls = _param.delay_spls;
-      switch (_extpar.mod_mode) {
-      // TODO enum instead of magic nums
-      case 0:
-        for (uint i = 0; i < block.size(); ++i) {
-          n_spls[i] = delay_spls;
-          n_spls[i] += _mod_lfo.tick_filt_sample_and_hold() * depth;
-        }
-        break;
-      case 1:
-        for (uint i = 0; i < block.size(); ++i) {
-          n_spls[i] = delay_spls;
-          n_spls[i] += _mod_lfo.tick_sine() * depth;
-        }
-        break;
-      case 2:
-        for (uint i = 0; i < block.size(); ++i) {
-          n_spls[i] = delay_spls;
-          n_spls[i] += _mod_lfo.tick_triangle() * depth;
-        }
-        break;
-      case 3:
-        for (uint i = 0; i < block.size(); ++i) {
-          n_spls[i] = delay_spls;
-          n_spls[i]
-            += _mod_lfo.tick_trapezoid (vec_set<n_taps> (0.75f)) * depth;
-        }
-        break;
-      default:
-        assert (false);
-        break;
-      };
-      // smoothing and clamping the delay in samples after modulation
-      auto min_spls = vec_set<f32_x4> (_delay.min_delay_spls() + blocksize);
+    // delay samples lfo
+    auto depth      = (arith_type) (main_mod_samples * _extpar.mod_depth);
+    auto delay_spls = _param.delay_spls;
+    switch (_extpar.mod_mode) {
+    // TODO enum instead of magic nums
+    case 0:
       for (uint i = 0; i < block.size(); ++i) {
-        n_spls[i] = _n_spls_smoother.tick (n_spls[i]);
-        n_spls[i] = vec_max (n_spls[i], min_spls);
+        n_spls[i] = delay_spls;
+        n_spls[i] += _mod_lfo.tick_filt_sample_and_hold() * depth;
       }
-      // fill the tail samples, with feedback gain applied
-      auto fb_gain = _param.fb_gain;
-      for (uint t = 0; t < n_taps; ++t) {
-        for (uint i = 0; i < block.size(); ++i) {
+      break;
+    case 1:
+      for (uint i = 0; i < block.size(); ++i) {
+        n_spls[i] = delay_spls;
+        n_spls[i] += _mod_lfo.tick_sine() * depth;
+      }
+      break;
+    case 2:
+      for (uint i = 0; i < block.size(); ++i) {
+        n_spls[i] = delay_spls;
+        n_spls[i] += _mod_lfo.tick_triangle() * depth;
+      }
+      break;
+    case 3:
+      for (uint i = 0; i < block.size(); ++i) {
+        n_spls[i] = delay_spls;
+        n_spls[i] += _mod_lfo.tick_trapezoid (vec_set<n_taps> (0.75f)) * depth;
+      }
+      break;
+    default:
+      assert (false);
+      break;
+    };
+    // smoothing and clamping the delay in samples after modulation
+    auto min_spls = vec_set<f32_x4> (_delay.min_delay_spls() + blocksize);
+    for (uint i = 0; i < block.size(); ++i) {
+      n_spls[i] = _n_spls_smoother.tick (n_spls[i]);
+      n_spls[i] = vec_max (n_spls[i], min_spls);
+    }
+    // fill the tail samples, with feedback gain applied
+    auto fb_gain = _param.fb_gain;
+    for (uint t = 0; t < n_taps; ++t) {
+      for (uint i = 0; i < block.size(); ++i) {
 #if DIFFUSE_DELAY_USE_THIRAN_TAPS
-          tap_tail[i][t] = _delay.get (n_spls[i][t], t, i)[0] * fb_gain[t];
+        tap_tail[i][t] = _delay.get (n_spls[i][t], t, i)[0] * fb_gain[t];
 #else
-          tap_tail[i][t] = _delay.get (n_spls[i][t] - i, t)[0] * fb_gain[t];
+        tap_tail[i][t] = _delay.get (n_spls[i][t] - i, t)[0] * fb_gain[t];
 #endif
-        }
       }
-      // tilt inputs
+    }
+    // tilt inputs
+    for (uint i = 0; i < block.size(); ++i) {
+      auto&  lr = block[i];
+      f64_x2 ins {lr[0], lr[1]};
+      auto   gain       = _ducker.tick (ins);
+      ins               = _tilt.tick (ins);
+      ducker_gain[i][0] = (arith_type) gain[0];
+      ducker_gain[i][1] = (arith_type) gain[1];
+      lr[0]             = (arith_type) ins[0];
+      lr[1]             = (arith_type) ins[1];
+    }
+
+    // transient shaping
+    _transients.process (block);
+    // specific interleaving
+    switch (_extpar.mode) {
+    case m_stereo:
+      stereo_interleaving<T> (tap_head.data(), block, tap_tail.data());
+      break;
+    case m_ping_pong:
+      pingpong_interleaving<T> (tap_head.data(), block, tap_tail.data());
+      break;
+    case m_ping_pong_stereo:
+      pingpong_stereo_interleaving<T> (tap_head.data(), block, tap_tail.data());
+      break;
+    case m_123:
+    case m_132:
+      x3_interleaving<T> (tap_head.data(), block, tap_tail.data());
+      break;
+    case m_1223:
+    case m_1234:
+    case m_2413:
+    case m_1324:
+    case m_2314:
+    case m_1423:
+      x4_interleaving<T> (tap_head.data(), block, tap_tail.data());
+      break;
+    case m_chorus:
+      self_feed_interleaving<T> (tap_head.data(), block, tap_tail.data());
+      break;
+    default:
+      assert (false);
+      break;
+    }
+    // diffusion by allpass
+    auto gain            = make_vec (_extpar.diffusion * -0.5f);
+    auto diffusor_enable = _param.diffusor_enable;
+    auto diffusor_range  = _param.diffusor_range;
+
+    for (uint t = 0; t < n_taps; ++t) {
+      std::array<std::array<float, n_serial_diffusors>, blocksize> ap_spls;
+
+      auto ap_spls_f = vec_cast<float> (vec_from_array (allpass_sizes[t]));
       for (uint i = 0; i < block.size(); ++i) {
-        auto&  lr = block[i];
-        f64_x2 ins {lr[0], lr[1]};
-        auto   gain       = _ducker.tick (ins);
-        ins               = _tilt.tick (ins);
-        ducker_gain[i][0] = (arith_type) gain[0];
-        ducker_gain[i][1] = (arith_type) gain[1];
-        lr[0]             = (arith_type) ins[0];
-        lr[1]             = (arith_type) ins[1];
+        auto ap_lfo_f = _ap_lfo[t].tick_sine() * diffusor_mod_range;
+        ap_lfo_f *= diffusor_range;
+        ap_spls[i] = vec_to_array (ap_spls_f - ap_lfo_f);
       }
 
-      // transient shaping
-      _transients.process (block);
-      // specific interleaving
-      switch (_extpar.mode) {
-      case m_stereo:
-        stereo_interleaving<T> (tap_head.data(), block, tap_tail.data());
-        break;
-      case m_ping_pong:
-        pingpong_interleaving<T> (tap_head.data(), block, tap_tail.data());
-        break;
-      case m_ping_pong_stereo:
-        pingpong_stereo_interleaving<T> (
-          tap_head.data(), block, tap_tail.data());
-        break;
-      case m_123:
-      case m_132:
-        x3_interleaving<T> (tap_head.data(), block, tap_tail.data());
-        break;
-      case m_1223:
-      case m_1234:
-      case m_2413:
-      case m_1324:
-      case m_2314:
-      case m_1423:
-        x4_interleaving<T> (tap_head.data(), block, tap_tail.data());
-        break;
-      case m_chorus:
-        self_feed_interleaving<T> (tap_head.data(), block, tap_tail.data());
-        break;
-      default:
-        assert (false);
-        break;
-      }
-      // diffusion by allpass
-      auto gain            = make_vec (_extpar.diffusion * -0.5f);
-      auto diffusor_enable = _param.diffusor_enable;
-      auto diffusor_range  = _param.diffusor_range;
-
-      for (uint t = 0; t < n_taps; ++t) {
-        std::array<std::array<float, n_serial_diffusors>, blocksize> ap_spls;
-
-        auto ap_spls_f = vec_cast<float> (vec_from_array (allpass_sizes[t]));
+      for (uint d = 0; d < n_serial_diffusors; ++d) {
+        bool enabled = !!(diffusor_enable & bit<u16> (t * n_taps + d));
+        // As of now this is still run when disabled to ensure smooth
+        // transitions, it might not be necessary.
         for (uint i = 0; i < block.size(); ++i) {
-          auto ap_lfo_f = _ap_lfo[t].tick_sine() * diffusor_mod_range;
-          ap_lfo_f *= diffusor_range;
-          ap_spls[i] = vec_to_array (ap_spls_f - ap_lfo_f);
-        }
-
-        for (uint d = 0; d < n_serial_diffusors; ++d) {
-          bool enabled = !!(diffusor_enable & bit<u16> (t * n_taps + d));
-          // As of now this is still run when disabled to ensure smooth
-          // transitions, it might not be necessary.
-          for (uint i = 0; i < block.size(); ++i) {
-            auto v = allpass_fn::tick<vec1_type, float> (
-              make_vec (tap_head[i][t]),
-              ap_spls[i][d],
-              gain,
-              _diffusor[t][d])[0];
-            tap_head[i][t] = enabled ? v : tap_head[i][t];
-          }
+          auto v = allpass_fn::tick<vec1_type, float> (
+            make_vec (tap_head[i][t]), ap_spls[i][d], gain, _diffusor[t][d])[0];
+          tap_head[i][t] = enabled ? v : tap_head[i][t];
         }
       }
-      // diffusion by a 4-wide rotation matrix between taps
-      for (uint i = 0; i < block.size(); ++i) {
-        tap_head[i] = rotation_matrix<4>::tick<arith_type> (
-          tap_head[i], _param.mtx_angle);
+    }
+    // diffusion by a 4-wide rotation matrix between taps
+    for (uint i = 0; i < block.size(); ++i) {
+      tap_head[i]
+        = rotation_matrix<4>::tick<arith_type> (tap_head[i], _param.mtx_angle);
+    }
+    // Feedback FX
+    float bp_drive = _extpar.bp_drive;
+    float bp_wet   = _param.bp_wetdry;
+    float bp_dry   = 1.f - abs (_param.bp_wetdry);
+    float hp_gain  = fb_gain[0];
+    hp_gain *= exp (_param.max_hp_mod * ((3.5f * _extpar.damp_ratio) - 2.5f));
+
+    for (uint i = 0; i < block.size(); ++i) {
+      auto taps = vec_from_array (tap_head[i]);
+      // measuring feedback input power
+      auto dry_rms = _env.tick<rms_dry_idx> (taps, envelope::rms_tag {});
+      dry_rms      = vec_max (1e-30, dry_rms);
+
+      // filter cutoff modulation by signal
+      auto l         = block[i][0];
+      auto r         = block[i][1];
+      auto input     = f32_x4 {(float) l, (float) r, (float) r, (float) r};
+      auto input_env = _env.tick<peakfollow_idx> (input, envelope::rms_tag {});
+      if ((bp_wet != 0.f) && ((_bp_update_spls & 15) == 0)) {
+        auto freq = _param.bp_freqs;
+        freq *= vec_exp (input_env * _extpar.bp_envfollow * 14.f);
+        constexpr float filt_stability = 0.27f;
+        freq = vec_min (freq, (float) (((tgt_srate / 2) - 1)) * filt_stability);
+        _filters.reset_coeffs<bp_idx> (freq, get_scaled_reso (freq), t_spl);
       }
-      // Feedback FX
-      float bp_drive = _extpar.bp_drive;
-      float bp_wet   = _param.bp_wetdry;
-      float bp_dry   = 1.f - abs (_param.bp_wetdry);
-      float hp_gain  = fb_gain[0];
-      hp_gain *= exp (_param.max_hp_mod * ((3.5f * _extpar.damp_ratio) - 2.5f));
+      ++_bp_update_spls;
+      // Damp + HP/DC
+      taps    = _filters.tick<hp_idx> (taps);
+      auto lp = _filters.tick<lp_idx> (taps);
+      auto hp = (taps - lp) * hp_gain; // hishelf
+      taps    = lp + hp;
 
-      for (uint i = 0; i < block.size(); ++i) {
-        auto taps = vec_from_array (tap_head[i]);
-        // measuring feedback input power
-        auto dry_rms = _env.tick<rms_dry_idx> (taps, envelope::rms_tag {});
-        dry_rms      = vec_max (1e-30, dry_rms);
-
-        // filter cutoff modulation by signal
-        auto l     = block[i][0];
-        auto r     = block[i][1];
-        auto input = f32_x4 {(float) l, (float) r, (float) r, (float) r};
-        auto input_env
-          = _env.tick<peakfollow_idx> (input, envelope::rms_tag {});
-        if ((bp_wet != 0.f) && ((_bp_update_spls & 15) == 0)) {
-          auto freq = _param.bp_freqs;
-          freq *= vec_exp (input_env * _extpar.bp_envfollow * 14.f);
-          constexpr float filt_stability = 0.27f;
-          freq
-            = vec_min (freq, (float) (((tgt_srate / 2) - 1)) * filt_stability);
-          _filters.reset_coeffs<bp_idx> (freq, get_scaled_reso (freq), t_spl);
-        }
-        ++_bp_update_spls;
-        // Damp + HP/DC
-        taps    = _filters.tick<hp_idx> (taps);
-        auto lp = _filters.tick<lp_idx> (taps);
-        auto hp = (taps - lp) * hp_gain; // hishelf
-        taps    = lp + hp;
-
-        // bping EQ FX
-        if (bp_wet != 0.f) {
-          auto wet = taps;
-          wet *= bp_drive;
-          wet = _filters.tick<bp_idx> (wet);
-          wet *= bp_wet;
-          taps *= bp_dry;
-          taps += wet;
-        }
-        // measuring output power and gain riding the feedback gain
-        auto wet_rms = _env.tick<rms_wet_idx> (taps, envelope::rms_tag {});
-        wet_rms      = vec_max (1e-30, wet_rms);
-        auto ratio   = dry_rms / (wet_rms);
-        taps *= ratio;
-        auto arr_x1 = vec1_array_wrap (vec_to_array (taps));
-        _delay.push (arr_x1);
+      // bping EQ FX
+      if (bp_wet != 0.f) {
+        auto wet = taps;
+        wet *= bp_drive;
+        wet = _filters.tick<bp_idx> (wet);
+        wet *= bp_wet;
+        taps *= bp_dry;
+        taps += wet;
       }
+      // measuring output power and gain riding the feedback gain
+      auto wet_rms = _env.tick<rms_wet_idx> (taps, envelope::rms_tag {});
+      wet_rms      = vec_max (1e-30, wet_rms);
+      auto ratio   = dry_rms / (wet_rms);
+      taps *= ratio;
+      auto arr_x1 = vec1_array_wrap (vec_to_array (taps));
+      _delay.push (arr_x1);
+    }
 
-      // specific output selection
-      std::array<std::array<float, 2>, n_taps> tap_mul;
+    // specific output selection
+    std::array<std::array<float, 2>, n_taps> tap_mul;
 
-      constexpr auto pan_l    = get_pan (0.f);
-      constexpr auto pan_l_x2 = get_pan (0.f, 2.f);
-      constexpr auto pan_cl   = get_pan (0.333333f);
-      constexpr auto pan_c    = get_pan (0.5f);
-      constexpr auto pan_cr   = get_pan (0.666666f);
-      constexpr auto pan_r    = get_pan (1.f);
-      constexpr auto pan_r_x2 = get_pan (1.f, 2.f);
-      constexpr auto zero     = get_pan (1.f, 0.f);
-      switch (_extpar.mode) {
-      case m_stereo:
-      case m_ping_pong:
-        tap_mul[0] = pan_l;
-        tap_mul[1] = pan_l;
-        tap_mul[2] = pan_r;
-        tap_mul[3] = pan_r;
-        break;
-      case m_ping_pong_stereo:
-        tap_mul[0] = pan_l_x2;
-        tap_mul[1] = zero;
-        tap_mul[2] = zero;
-        tap_mul[3] = pan_r_x2;
-        break;
-      case m_123:
-        tap_mul[0] = pan_l;
-        tap_mul[1] = zero;
-        tap_mul[2] = pan_c;
-        tap_mul[3] = pan_r;
-        break;
-      case m_132:
-        tap_mul[0] = pan_l;
-        tap_mul[1] = zero;
-        tap_mul[2] = pan_r;
-        tap_mul[3] = pan_c;
-        break;
-      case m_1223:
-        tap_mul[0] = pan_l;
-        tap_mul[1] = pan_c;
-        tap_mul[2] = pan_c;
-        tap_mul[3] = pan_r;
-        break;
-      case m_1234:
-        tap_mul[0] = pan_l;
-        tap_mul[1] = pan_cl;
-        tap_mul[2] = pan_cr;
-        tap_mul[3] = pan_r;
-        break;
-      case m_2413:
-        tap_mul[0] = pan_cl;
-        tap_mul[1] = pan_r;
-        tap_mul[2] = pan_l;
-        tap_mul[3] = pan_cr;
-        break;
-      case m_1324:
-        tap_mul[0] = pan_l;
-        tap_mul[1] = pan_cr;
-        tap_mul[2] = pan_cl;
-        tap_mul[3] = pan_r;
-        break;
-      case m_2314:
-        tap_mul[0] = pan_cl;
-        tap_mul[1] = pan_cr;
-        tap_mul[2] = pan_l;
-        tap_mul[3] = pan_r;
-        break;
-      case m_1423:
-        tap_mul[0] = pan_l;
-        tap_mul[1] = pan_r;
-        tap_mul[2] = pan_cl;
-        tap_mul[3] = pan_cr;
-        break;
-      case m_chorus: {
-        constexpr auto pan_l_2  = get_pan (0.f, 0.5f);
-        constexpr auto pan_cl_2 = get_pan (0.333333f, 0.5f);
-        constexpr auto pan_cr_2 = get_pan (0.666666f, 0.5f);
-        constexpr auto pan_r_2  = get_pan (1.f, 0.5f);
-        tap_mul[0]              = pan_l_2;
-        tap_mul[1]              = pan_cl_2;
-        tap_mul[2]              = pan_cr_2;
-        tap_mul[3]              = pan_r_2;
-      } break;
-      default:
-        assert (false);
-        break;
+    constexpr auto pan_l    = get_pan (0.f);
+    constexpr auto pan_l_x2 = get_pan (0.f, 2.f);
+    constexpr auto pan_cl   = get_pan (0.333333f);
+    constexpr auto pan_c    = get_pan (0.5f);
+    constexpr auto pan_cr   = get_pan (0.666666f);
+    constexpr auto pan_r    = get_pan (1.f);
+    constexpr auto pan_r_x2 = get_pan (1.f, 2.f);
+    constexpr auto zero     = get_pan (1.f, 0.f);
+    switch (_extpar.mode) {
+    case m_stereo:
+    case m_ping_pong:
+      tap_mul[0] = pan_l;
+      tap_mul[1] = pan_l;
+      tap_mul[2] = pan_r;
+      tap_mul[3] = pan_r;
+      break;
+    case m_ping_pong_stereo:
+      tap_mul[0] = pan_l_x2;
+      tap_mul[1] = zero;
+      tap_mul[2] = zero;
+      tap_mul[3] = pan_r_x2;
+      break;
+    case m_123:
+      tap_mul[0] = pan_l;
+      tap_mul[1] = zero;
+      tap_mul[2] = pan_c;
+      tap_mul[3] = pan_r;
+      break;
+    case m_132:
+      tap_mul[0] = pan_l;
+      tap_mul[1] = zero;
+      tap_mul[2] = pan_r;
+      tap_mul[3] = pan_c;
+      break;
+    case m_1223:
+      tap_mul[0] = pan_l;
+      tap_mul[1] = pan_c;
+      tap_mul[2] = pan_c;
+      tap_mul[3] = pan_r;
+      break;
+    case m_1234:
+      tap_mul[0] = pan_l;
+      tap_mul[1] = pan_cl;
+      tap_mul[2] = pan_cr;
+      tap_mul[3] = pan_r;
+      break;
+    case m_2413:
+      tap_mul[0] = pan_cl;
+      tap_mul[1] = pan_r;
+      tap_mul[2] = pan_l;
+      tap_mul[3] = pan_cr;
+      break;
+    case m_1324:
+      tap_mul[0] = pan_l;
+      tap_mul[1] = pan_cr;
+      tap_mul[2] = pan_cl;
+      tap_mul[3] = pan_r;
+      break;
+    case m_2314:
+      tap_mul[0] = pan_cl;
+      tap_mul[1] = pan_cr;
+      tap_mul[2] = pan_l;
+      tap_mul[3] = pan_r;
+      break;
+    case m_1423:
+      tap_mul[0] = pan_l;
+      tap_mul[1] = pan_r;
+      tap_mul[2] = pan_cl;
+      tap_mul[3] = pan_cr;
+      break;
+    case m_chorus: {
+      constexpr auto pan_l_2  = get_pan (0.f, 0.5f);
+      constexpr auto pan_cl_2 = get_pan (0.333333f, 0.5f);
+      constexpr auto pan_cr_2 = get_pan (0.666666f, 0.5f);
+      constexpr auto pan_r_2  = get_pan (1.f, 0.5f);
+      tap_mul[0]              = pan_l_2;
+      tap_mul[1]              = pan_cl_2;
+      tap_mul[2]              = pan_cr_2;
+      tap_mul[3]              = pan_r_2;
+    } break;
+    default:
+      assert (false);
+      break;
+    }
+    // final tap acummulaton + gain
+    auto main_gain = _param.main_gain;
+    for (uint i = 0; i < block.size(); ++i) {
+      // This is now tilted...
+      block[i][0] = 0.f;
+      block[i][1] = 0.f;
+      for (uint t = 0; t < n_taps; ++t) {
+        block[i][0] += tap_tail[i][t] * tap_mul[t][0];
+        block[i][1] += tap_tail[i][t] * tap_mul[t][1];
       }
-      // final tap acummulaton + gain
-      auto main_gain = _param.main_gain;
-      for (uint i = 0; i < block.size(); ++i) {
-        // This is now tilted...
-        block[i][0] = 0.f;
-        block[i][1] = 0.f;
-        for (uint t = 0; t < n_taps; ++t) {
-          block[i][0] += tap_tail[i][t] * tap_mul[t][0];
-          block[i][1] += tap_tail[i][t] * tap_mul[t][1];
-        }
-        block[i][0] *= main_gain * ducker_gain[i][0];
-        block[i][1] *= main_gain * ducker_gain[i][1];
-      }
+      block[i][0] *= main_gain * ducker_gain[i][0];
+      block[i][1] *= main_gain * ducker_gain[i][1];
     }
   }
   //----------------------------------------------------------------------------

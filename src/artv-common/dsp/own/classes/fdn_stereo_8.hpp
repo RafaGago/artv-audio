@@ -466,8 +466,9 @@ private:
     return ret;
   }
   //----------------------------------------------------------------------------
-  void process_block (xspan<std::array<float, 2>> io)
+  void process_block (xspan<std::array<float, 2>> block)
   {
+    assert (block.size() <= blocksize);
     // hardcoding 2's to ease readability, as this will be always be stereo so
     // "static_asserting"
     static_assert (n_channels == 2);
@@ -484,14 +485,189 @@ private:
     array2d<float, 2, blocksize>                           early_then_late;
     alignas (vec<float, 16>) array2d<float, 16, blocksize> late_mtx;
 
-    while (io.size()) {
-      auto block = io.cut_head (std::min<uint> (io.size(), blocksize));
+    // pre diffusor ----------------------------------------------------------
 
-      // pre diffusor ----------------------------------------------------------
+    // AP gain LFO
+    auto mod_g     = xspan {tmp};
+    uint late_wave = _late_wave; // telling the optimizer to ignore changes
+    for (uint i = 0; i < block.size(); ++i) {
+      vec<float, 2> mod;
+      if (late_wave == modwv_sh) {
+        mod = _int_dif_lfo.tick_filt_sample_and_hold();
+      }
+      else {
+        mod = _int_dif_lfo.tick_sine();
+      }
+      vec<float, 2> g = vec_set<2> (_pre_dif_g);
+      g += mod * _cfg.pre_dif.g_mod_depth;
+      mod_g[i] = vec_to_array (g);
+    }
+    // hardcoding 2's to avoid unreadability, so "static_asserting"
+    static_assert (n_channels == 2);
+    if (_pre_delay_spls > _pre_delay_lat_spls) {
+      uint pre_delay_spls = _pre_delay_spls - _pre_delay_lat_spls;
+      for (uint i = 0; i < block.size(); ++i) {
+        _pre_delay.push (block[i]);
+        pre_dif[i][0] = _pre_delay.get (pre_delay_spls, 0);
+        pre_dif[i][1] = _pre_delay.get (pre_delay_spls, 1);
+      }
+    }
+    else {
+      xspan_copy<std::array<float, 2>> (pre_dif, block);
+    }
 
-      // AP gain LFO
-      auto mod_g     = xspan {tmp};
+    for (uint st = 0; st < _pre_dif.size(); ++st) {
+      for (uint i = 0; i < block.size(); ++i) {
+        allpass_stage_tick (
+          pre_dif[i], _pre_dif[st], mod_g[i], _cfg.pre_dif.n_samples[st]);
+      }
+    }
+
+    // early -----------------------------------------------------------------
+    // the stages are expanded blockwise manually as a perf optimization
+    static_assert (early_cfg::n_stages == 4);
+
+    // building the 4-wide matrices
+    for (uint i = 0; i < block.size(); ++i) {
+      early_mtx[i][0] = pre_dif[i][0];
+      early_mtx[i][1] = pre_dif[i][1];
+      early_mtx[i][2] = (early_mtx[i][0] + early_mtx[i][1]) * 0.5f; // mid
+      early_mtx[i][3] = early_mtx[i][2];
+
+      er[i][0] = 0.f;
+      er[i][1] = 0.f;
+    }
+
+    if (_early_gain != 0.f || _er_2_late != 0.f) {
+      float stage_gain = 0.7f;
+      for (uint stage = 0; stage < early_cfg::n_stages; ++stage) {
+        // allpass
+        auto g = array_broadcast<4> (_cfg.early.stage[stage].g);
+        for (uint i = 0; i < block.size(); ++i) {
+          allpass_stage_tick (
+            early_mtx[i], _early[stage], g, _early_delay_spls[stage]);
+        }
+        // diffusion
+        if (stage < 3) {
+          for (uint i = 0; i < block.size(); ++i) {
+            early_mtx[i] = hadamard_matrix<4>::tick<float> (early_mtx[i]);
+          }
+        }
+        else {
+          for (uint i = 0; i < block.size(); ++i) {
+            early_mtx[i] = householder_matrix<4>::tick<float> (early_mtx[i]);
+          }
+        }
+        // rotation + storage
+        for (uint i = 0; i < block.size(); ++i) {
+          std::rotate (
+            early_mtx[i].begin(), early_mtx[i].begin() + 1, early_mtx[i].end());
+          er[i][(stage & 1) == 0] += early_mtx[i][0] * stage_gain;
+          er[i][(stage & 1) == 1] += early_mtx[i][1] * stage_gain;
+        }
+        stage_gain *= stage_gain;
+      }
+    }
+    else {
+      xspan_memset (block, 0);
+    }
+    // gap -------------------------------------------------------------------
+    if (_gap_spls > _gap_lat_spls) {
+      uint gap_spls = _gap_spls - _gap_lat_spls;
+
+      for (uint i = 0; i < block.size(); ++i) {
+        std::array<float, 4> gap_spl {
+          pre_dif[i][0], pre_dif[i][1], er[i][0], er[i][1]};
+
+        _gap.push (gap_spl);
+
+        pre_dif[i][0]         = _gap.get (gap_spls, 0);
+        pre_dif[i][1]         = _gap.get (gap_spls, 1);
+        early_then_late[i][0] = _gap.get (gap_spls, 2);
+        early_then_late[i][1] = _gap.get (gap_spls, 3);
+      }
+    }
+    else {
+      xspan_copy<std::array<float, 2>> (early_then_late, block);
+    }
+    // late
+    // -----------------------------------------------------------------------
+    if (_late_gain != 0.f) {
+
+      // feedback chorus lfo
       uint late_wave = _late_wave; // telling the optimizer to ignore changes
+      for (uint i = 0; i < block.size(); ++i) {
+        vec<float, 16> mod;
+        switch (late_wave) {
+        case modwv_sh:
+          mod = _late_lfo.tick_filt_sample_and_hold();
+          break;
+        case modwv_sin:
+          mod = _late_lfo.tick_sine();
+          break;
+        case modwv_tri:
+          mod = _late_lfo.tick_triangle();
+          break;
+        case modwv_tra:
+          mod = _late_lfo.tick_trapezoid (vec_set<16> (0.75f));
+          break;
+        default:
+          assert (false);
+          break;
+        };
+        auto n_spls_mod = mod * _mod_depth_spls;
+        auto n_spls     = n_spls_mod + _late_n_spls;
+        for (uint j = 0; j < 16; ++j) {
+          assert (n_spls[j] >= 0.f);
+        }
+#if !ARTV_FDNST8_USE_THIRAN
+        n_spls -= (float) i;
+#endif
+        late_mtx[i] = vec_to_array (n_spls);
+      }
+
+#if ARTV_FDNST8_USE_THIRAN
+      array2d<float, late_cfg::n_channels, blocksize> past_spls;
+      for (uint c = 0; c < late_cfg::n_channels; ++c) {
+        for (uint i = 0; i < block.size(); ++i) {
+          past_spls[i][c] = _late[c].get (late_mtx[i][c], 0, i)[0];
+        }
+      }
+      for (uint i = 0; i < block.size(); ++i) {
+        auto spls = vec_from_array (past_spls[i]);
+        auto lp   = _filters.tick<lp_idx> (spls);
+        lp        = _filters.tick<dc_idx> (lp);
+        auto hp   = (spls - lp) * _filter_hp_att;
+
+        // Final attenuation
+        lp *= _rt60_att_l;
+        hp *= _rt60_att_h;
+
+        auto join   = lp + hp;
+        late_mtx[i] = vec_to_array (join);
+      }
+#else
+      // chorus + dc + filtering in one stage to avoid multiple vector to
+      // array conversions
+      for (uint i = 0; i < block.size(); ++i) {
+        auto mod_spls   = _late.get (late_mtx[i]);
+        auto unmod_spls = _late.get (vec_to_array (_late_n_spls - (float) i));
+
+        auto lp = _filters.tick<lp_idx> (vec_from_array (unmod_spls));
+        lp      = _filters.tick<dc_idx> (lp);
+        // YOLO hipass from different signals
+        auto hp = (vec_from_array (mod_spls) - lp) * _filter_hp_att;
+
+        // Final attenuation
+        lp *= _rt60_att_l;
+        hp *= _rt60_att_h;
+
+        auto join   = lp + hp;
+        late_mtx[i] = vec_to_array (join);
+      }
+#endif
+      // internal diffusor lfo.
+      mod_g = xspan {tmp};
       for (uint i = 0; i < block.size(); ++i) {
         vec<float, 2> mod;
         if (late_wave == modwv_sh) {
@@ -500,311 +676,130 @@ private:
         else {
           mod = _int_dif_lfo.tick_sine();
         }
-        vec<float, 2> g = vec_set<2> (_pre_dif_g);
-        g += mod * _cfg.pre_dif.g_mod_depth;
+        vec<float, 2> g = vec_set<2> (_cfg.int_dif.g_base);
+        g += mod * _cfg.int_dif.g_mod_depth;
         mod_g[i] = vec_to_array (g);
       }
-      // hardcoding 2's to avoid unreadability, so "static_asserting"
-      static_assert (n_channels == 2);
-      if (_pre_delay_spls > _pre_delay_lat_spls) {
-        uint pre_delay_spls = _pre_delay_spls - _pre_delay_lat_spls;
-        for (uint i = 0; i < block.size(); ++i) {
-          _pre_delay.push (block[i]);
-          pre_dif[i][0] = _pre_delay.get (pre_delay_spls, 0);
-          pre_dif[i][1] = _pre_delay.get (pre_delay_spls, 1);
+      // internal diffusor
+      for (uint i = 0; i < block.size(); ++i) {
+        std::array<float, 2> diffused;
+        diffused[0] = late_mtx[i][_cfg.int_dif.channel_l];
+        diffused[1] = late_mtx[i][_cfg.int_dif.channel_r];
+
+        for (uint st = 0; st < _int_dif.size(); ++st) {
+          allpass_stage_tick (
+            diffused, _int_dif[st], mod_g[i], _cfg.int_dif.n_samples[st]);
         }
+        late_mtx[i][_cfg.int_dif.channel_l] = diffused[0];
+        late_mtx[i][_cfg.int_dif.channel_r] = diffused[1];
       }
-      else {
-        xspan_copy<std::array<float, 2>> (pre_dif, block);
+      // end of feedback path. Starting feedforward
+      for (uint i = 0; i < block.size(); ++i) {
+        // reminder "early_then_late" contains the unscaled early reflections
+        late_mtx[i][0] += pre_dif[i][0] * _in_2_late;
+        late_mtx[i][1] += early_then_late[i][1] * _er_2_late;
+        late_mtx[i][14] += early_then_late[i][0] * _er_2_late;
+        late_mtx[i][15] += pre_dif[i][1] * _in_2_late;
       }
 
-      for (uint st = 0; st < _pre_dif.size(); ++st) {
+      for (uint i = 0; i < block.size(); ++i) {
+        auto lm = xspan {late_mtx[i]};
+        // diffusion
+        auto l
+          = rotation_matrix<8>::tick<float> (lm.get_head (8), _late_l_angle);
+        xspan_copy<float> (lm.get_head (8), l);
+
+        auto r
+          = rotation_matrix<8>::tick<float> (lm.advanced (8), _late_r_angle);
+        xspan_copy<float> (lm.advanced (8), r);
+
+        auto midch = rotation_matrix<8>::tick<float> (
+          lm.advanced (4).get_head (8), _late_lr_angle);
+        xspan_copy<float> (lm.advanced (4).get_head (8), midch);
+      }
+
+      for (uint i = 0; i < block.size(); ++i) {
+        early_then_late[i][0] = late_mtx[i][11];
+        early_then_late[i][1] = late_mtx[i][4];
+
+        std::rotate (
+          late_mtx[i].begin() + 5,
+          late_mtx[i].begin() + 6,
+          late_mtx[i].begin() + 11);
+
+#if ARTV_FDNST8_USE_THIRAN
+        for (uint c = 0; c < late_cfg::n_channels; ++c) {
+          auto vec_x1 = make_array (make_vec (late_mtx[i][c]));
+          _late[c].push (vec_x1);
+        }
+#else
+        _late.push (late_mtx[i]);
+#endif
+      }
+      // stereo comb
+      // ---------------------------------------------------------------------
+      uint st_delay
+        = _cfg.stereo.max_samples * _mod_depth_factor * _mod_depth_factor;
+      st_delay += blocksize;
+      for (uint i = 0; i < block.size(); ++i) {
+        vec<float, 1> stmod;
+        if (late_wave == modwv_sh) {
+          stmod = _stereo_lfo.tick_filt_sample_and_hold();
+        }
+        else {
+          stmod = _stereo_lfo.tick_sine();
+        }
+        stmod *= _cfg.stereo.g_base * _mod_stereo;
+
+        early_then_late[i][0] = _stereo_allpass[0].tick (
+          make_vec (early_then_late[i][0]),
+          st_delay,
+          vec_set<1> (0.f),
+          stmod)[0];
+        early_then_late[i][1] = _stereo_allpass[1].tick (
+          make_vec (early_then_late[i][1]),
+          st_delay,
+          vec_set<1> (0.f),
+          -stmod)[0];
+      }
+      // output diffusion
+      // ---------------------------------------------------------------------
+      std::array<float, 2> g_arr {_out_dif_g, _out_dif_g};
+      for (uint st = 0; st < _out_dif.size(); ++st) {
         for (uint i = 0; i < block.size(); ++i) {
           allpass_stage_tick (
-            pre_dif[i], _pre_dif[st], mod_g[i], _cfg.pre_dif.n_samples[st]);
+            early_then_late[i],
+            _out_dif[st],
+            g_arr,
+            _cfg.out_dif.n_samples[st]);
         }
       }
-
-      // early -----------------------------------------------------------------
-      // the stages are expanded blockwise manually as a perf optimization
-      static_assert (early_cfg::n_stages == 4);
-
-      // building the 4-wide matrices
+      // mixing late + early + stereo
       for (uint i = 0; i < block.size(); ++i) {
-        early_mtx[i][0] = pre_dif[i][0];
-        early_mtx[i][1] = pre_dif[i][1];
-        early_mtx[i][2] = (early_mtx[i][0] + early_mtx[i][1]) * 0.5f; // mid
-        early_mtx[i][3] = early_mtx[i][2];
+        // previously early had no gain scaling (optimization to remove the
+        // need for an intermediate buffer)
+        er[i][0] *= _early_gain;
+        er[i][1] *= _early_gain;
 
-        er[i][0] = 0.f;
-        er[i][1] = 0.f;
+        auto gain_duck = _ducker.tick (f64_x2 {block[i][0], block[i][1]});
+
+        block[i][0] = er[i][0];
+        block[i][1] = er[i][1];
+
+        // only ducking the tail, not er...
+        block[i][0] += early_then_late[i][0] * _late_gain * gain_duck[0];
+        block[i][1] += early_then_late[i][1] * _late_gain * gain_duck[1];
+
+        block[i][1] = block[i][1] * _stereo + block[i][0] * (1.f - _stereo);
       }
+    }
+    else {
+      // scale the early reflections + stereo
+      for (uint i = 0; i < block.size(); ++i) {
+        er[i][0] *= _early_gain;
+        er[i][1] *= _early_gain;
 
-      if (_early_gain != 0.f || _er_2_late != 0.f) {
-        float stage_gain = 0.7f;
-        for (uint stage = 0; stage < early_cfg::n_stages; ++stage) {
-          // allpass
-          auto g = array_broadcast<4> (_cfg.early.stage[stage].g);
-          for (uint i = 0; i < block.size(); ++i) {
-            allpass_stage_tick (
-              early_mtx[i], _early[stage], g, _early_delay_spls[stage]);
-          }
-          // diffusion
-          if (stage < 3) {
-            for (uint i = 0; i < block.size(); ++i) {
-              early_mtx[i] = hadamard_matrix<4>::tick<float> (early_mtx[i]);
-            }
-          }
-          else {
-            for (uint i = 0; i < block.size(); ++i) {
-              early_mtx[i] = householder_matrix<4>::tick<float> (early_mtx[i]);
-            }
-          }
-          // rotation + storage
-          for (uint i = 0; i < block.size(); ++i) {
-            std::rotate (
-              early_mtx[i].begin(),
-              early_mtx[i].begin() + 1,
-              early_mtx[i].end());
-            er[i][(stage & 1) == 0] += early_mtx[i][0] * stage_gain;
-            er[i][(stage & 1) == 1] += early_mtx[i][1] * stage_gain;
-          }
-          stage_gain *= stage_gain;
-        }
-      }
-      else {
-        xspan_memset (block, 0);
-      }
-      // gap -------------------------------------------------------------------
-      if (_gap_spls > _gap_lat_spls) {
-        uint gap_spls = _gap_spls - _gap_lat_spls;
-
-        for (uint i = 0; i < block.size(); ++i) {
-          std::array<float, 4> gap_spl {
-            pre_dif[i][0], pre_dif[i][1], er[i][0], er[i][1]};
-
-          _gap.push (gap_spl);
-
-          pre_dif[i][0]         = _gap.get (gap_spls, 0);
-          pre_dif[i][1]         = _gap.get (gap_spls, 1);
-          early_then_late[i][0] = _gap.get (gap_spls, 2);
-          early_then_late[i][1] = _gap.get (gap_spls, 3);
-        }
-      }
-      else {
-        xspan_copy<std::array<float, 2>> (early_then_late, block);
-      }
-      // late
-      // -----------------------------------------------------------------------
-      if (_late_gain != 0.f) {
-
-        // feedback chorus lfo
-        uint late_wave = _late_wave; // telling the optimizer to ignore changes
-        for (uint i = 0; i < block.size(); ++i) {
-          vec<float, 16> mod;
-          switch (late_wave) {
-          case modwv_sh:
-            mod = _late_lfo.tick_filt_sample_and_hold();
-            break;
-          case modwv_sin:
-            mod = _late_lfo.tick_sine();
-            break;
-          case modwv_tri:
-            mod = _late_lfo.tick_triangle();
-            break;
-          case modwv_tra:
-            mod = _late_lfo.tick_trapezoid (vec_set<16> (0.75f));
-            break;
-          default:
-            assert (false);
-            break;
-          };
-          auto n_spls_mod = mod * _mod_depth_spls;
-          auto n_spls     = n_spls_mod + _late_n_spls;
-          for (uint j = 0; j < 16; ++j) {
-            assert (n_spls[j] >= 0.f);
-          }
-#if !ARTV_FDNST8_USE_THIRAN
-          n_spls -= (float) i;
-#endif
-          late_mtx[i] = vec_to_array (n_spls);
-        }
-
-#if ARTV_FDNST8_USE_THIRAN
-        array2d<float, late_cfg::n_channels, blocksize> past_spls;
-        for (uint c = 0; c < late_cfg::n_channels; ++c) {
-          for (uint i = 0; i < block.size(); ++i) {
-            past_spls[i][c] = _late[c].get (late_mtx[i][c], 0, i)[0];
-          }
-        }
-        for (uint i = 0; i < block.size(); ++i) {
-          auto spls = vec_from_array (past_spls[i]);
-          auto lp   = _filters.tick<lp_idx> (spls);
-          lp        = _filters.tick<dc_idx> (lp);
-          auto hp   = (spls - lp) * _filter_hp_att;
-
-          // Final attenuation
-          lp *= _rt60_att_l;
-          hp *= _rt60_att_h;
-
-          auto join   = lp + hp;
-          late_mtx[i] = vec_to_array (join);
-        }
-#else
-        // chorus + dc + filtering in one stage to avoid multiple vector to
-        // array conversions
-        for (uint i = 0; i < block.size(); ++i) {
-          auto mod_spls   = _late.get (late_mtx[i]);
-          auto unmod_spls = _late.get (vec_to_array (_late_n_spls - (float) i));
-
-          auto lp = _filters.tick<lp_idx> (vec_from_array (unmod_spls));
-          lp      = _filters.tick<dc_idx> (lp);
-          // YOLO hipass from different signals
-          auto hp = (vec_from_array (mod_spls) - lp) * _filter_hp_att;
-
-          // Final attenuation
-          lp *= _rt60_att_l;
-          hp *= _rt60_att_h;
-
-          auto join   = lp + hp;
-          late_mtx[i] = vec_to_array (join);
-        }
-#endif
-        // internal diffusor lfo.
-        mod_g = xspan {tmp};
-        for (uint i = 0; i < block.size(); ++i) {
-          vec<float, 2> mod;
-          if (late_wave == modwv_sh) {
-            mod = _int_dif_lfo.tick_filt_sample_and_hold();
-          }
-          else {
-            mod = _int_dif_lfo.tick_sine();
-          }
-          vec<float, 2> g = vec_set<2> (_cfg.int_dif.g_base);
-          g += mod * _cfg.int_dif.g_mod_depth;
-          mod_g[i] = vec_to_array (g);
-        }
-        // internal diffusor
-        for (uint i = 0; i < block.size(); ++i) {
-          std::array<float, 2> diffused;
-          diffused[0] = late_mtx[i][_cfg.int_dif.channel_l];
-          diffused[1] = late_mtx[i][_cfg.int_dif.channel_r];
-
-          for (uint st = 0; st < _int_dif.size(); ++st) {
-            allpass_stage_tick (
-              diffused, _int_dif[st], mod_g[i], _cfg.int_dif.n_samples[st]);
-          }
-          late_mtx[i][_cfg.int_dif.channel_l] = diffused[0];
-          late_mtx[i][_cfg.int_dif.channel_r] = diffused[1];
-        }
-        // end of feedback path. Starting feedforward
-        for (uint i = 0; i < block.size(); ++i) {
-          // reminder "early_then_late" contains the unscaled early reflections
-          late_mtx[i][0] += pre_dif[i][0] * _in_2_late;
-          late_mtx[i][1] += early_then_late[i][1] * _er_2_late;
-          late_mtx[i][14] += early_then_late[i][0] * _er_2_late;
-          late_mtx[i][15] += pre_dif[i][1] * _in_2_late;
-        }
-
-        for (uint i = 0; i < block.size(); ++i) {
-          auto lm = xspan {late_mtx[i]};
-          // diffusion
-          auto l
-            = rotation_matrix<8>::tick<float> (lm.get_head (8), _late_l_angle);
-          xspan_copy<float> (lm.get_head (8), l);
-
-          auto r
-            = rotation_matrix<8>::tick<float> (lm.advanced (8), _late_r_angle);
-          xspan_copy<float> (lm.advanced (8), r);
-
-          auto midch = rotation_matrix<8>::tick<float> (
-            lm.advanced (4).get_head (8), _late_lr_angle);
-          xspan_copy<float> (lm.advanced (4).get_head (8), midch);
-        }
-
-        for (uint i = 0; i < block.size(); ++i) {
-          early_then_late[i][0] = late_mtx[i][11];
-          early_then_late[i][1] = late_mtx[i][4];
-
-          std::rotate (
-            late_mtx[i].begin() + 5,
-            late_mtx[i].begin() + 6,
-            late_mtx[i].begin() + 11);
-
-#if ARTV_FDNST8_USE_THIRAN
-          for (uint c = 0; c < late_cfg::n_channels; ++c) {
-            auto vec_x1 = make_array (make_vec (late_mtx[i][c]));
-            _late[c].push (vec_x1);
-          }
-#else
-          _late.push (late_mtx[i]);
-#endif
-        }
-        // stereo comb
-        // ---------------------------------------------------------------------
-        uint st_delay
-          = _cfg.stereo.max_samples * _mod_depth_factor * _mod_depth_factor;
-        st_delay += blocksize;
-        for (uint i = 0; i < block.size(); ++i) {
-          vec<float, 1> stmod;
-          if (late_wave == modwv_sh) {
-            stmod = _stereo_lfo.tick_filt_sample_and_hold();
-          }
-          else {
-            stmod = _stereo_lfo.tick_sine();
-          }
-          stmod *= _cfg.stereo.g_base * _mod_stereo;
-
-          early_then_late[i][0] = _stereo_allpass[0].tick (
-            make_vec (early_then_late[i][0]),
-            st_delay,
-            vec_set<1> (0.f),
-            stmod)[0];
-          early_then_late[i][1] = _stereo_allpass[1].tick (
-            make_vec (early_then_late[i][1]),
-            st_delay,
-            vec_set<1> (0.f),
-            -stmod)[0];
-        }
-        // output diffusion
-        // ---------------------------------------------------------------------
-        std::array<float, 2> g_arr {_out_dif_g, _out_dif_g};
-        for (uint st = 0; st < _out_dif.size(); ++st) {
-          for (uint i = 0; i < block.size(); ++i) {
-            allpass_stage_tick (
-              early_then_late[i],
-              _out_dif[st],
-              g_arr,
-              _cfg.out_dif.n_samples[st]);
-          }
-        }
-        // mixing late + early + stereo
-        for (uint i = 0; i < block.size(); ++i) {
-          // previously early had no gain scaling (optimization to remove the
-          // need for an intermediate buffer)
-          er[i][0] *= _early_gain;
-          er[i][1] *= _early_gain;
-
-          auto gain_duck = _ducker.tick (f64_x2 {block[i][0], block[i][1]});
-
-          block[i][0] = er[i][0];
-          block[i][1] = er[i][1];
-
-          // only ducking the tail, not er...
-          block[i][0] += early_then_late[i][0] * _late_gain * gain_duck[0];
-          block[i][1] += early_then_late[i][1] * _late_gain * gain_duck[1];
-
-          block[i][1] = block[i][1] * _stereo + block[i][0] * (1.f - _stereo);
-        }
-      }
-      else {
-        // scale the early reflections + stereo
-        for (uint i = 0; i < block.size(); ++i) {
-          er[i][0] *= _early_gain;
-          er[i][1] *= _early_gain;
-
-          block[i][1] = er[i][1] * _stereo + er[i][0] * (1.f - _stereo);
-        }
+        block[i][1] = er[i][1] * _stereo + er[i][0] * (1.f - _stereo);
       }
     }
   }
