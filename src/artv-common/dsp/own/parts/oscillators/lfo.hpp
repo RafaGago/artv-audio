@@ -72,9 +72,9 @@ public:
     auto phase    = _phasor.tick (n).to_fixpt(); // 32bit, -1 to 0.99999
     using fp_type = decltype (phase);
     auto negative = phase < fp_type::from_int (0);
-    auto p        = select (negative, phase, -phase);
+    auto p        = fixpt_select (negative, phase, -phase);
     auto sinv     = (p + p * p) << 2; // -p + p * p tops at -0.25
-    return select (negative, phase, -phase);
+    return fixpt_select (negative, phase, -phase);
   }
   //----------------------------------------------------------------------------
   value_type tick_saw (uint n = 1)
@@ -91,8 +91,8 @@ public:
   //----------------------------------------------------------------------------
   auto tick_square_fixpt (uint n = 1)
   {
-    auto v = _phasor.tick (n).to_fpixpt();
-    return select (v < vec_set<decltype (v)> (0), v.min(), v.max());
+    auto v = _phasor.tick (n).to_fixpt();
+    return fixpt_select (v < (vec_set<decltype (v)> (0)), v.min(), v.max());
   }
   //----------------------------------------------------------------------------
   value_type tick_triangle (uint n = 1)
@@ -110,8 +110,8 @@ public:
     // make it bipolar
     ph_int -= quarter_range; // -INT32_MAX/2 to INT32_MAX/2
 
-    static constexpr double step
-      = 2. / (double) std::numeric_limits<typename phase<N>::raw_int>::max();
+    static constexpr double step = 2.
+      / (double) std::numeric_limits<typename phase<N>::scalar_sint>::max();
 
     return vec_cast<float> (vec_cast<double> (ph_int) * step);
   }

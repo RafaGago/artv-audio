@@ -17,6 +17,17 @@ TEST (fixed_point, float_set_and_cast)
   EXPECT_NEAR (a.as_float(), 0.6, 0.0001);
 }
 //------------------------------------------------------------------------------
+TEST (fixed_point, limits)
+{
+  using T = fixpt<1, 0, 15>;
+  EXPECT_EQ (T::min_raw(), std::numeric_limits<s16>::min());
+  EXPECT_EQ (T::max_raw(), std::numeric_limits<s16>::max());
+  EXPECT_EQ (T::min_int(), -1);
+  EXPECT_EQ (T::max_int(), 0);
+  EXPECT_NEAR (T::min_float(), -1., 0.0001);
+  EXPECT_NEAR (T::max_float(), 1., 0.0001);
+}
+//------------------------------------------------------------------------------
 TEST (fixed_point, add_equal_frac_bits)
 {
   auto a = fixpt<1, 0, 15>::from_float (0.6);

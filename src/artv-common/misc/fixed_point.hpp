@@ -1,7 +1,7 @@
 #pragma once
 
 #include <algorithm>
-#include <assert.h>
+#include <cassert>
 #include <gcem.hpp>
 #include <type_traits>
 
@@ -65,6 +65,21 @@ struct first_type_n_bits_gt_n {
   using fn = mp11::mp_bool<U::n_bits >= N>;
 };
 } // namespace detail
+
+//------------------------------------------------------------------------------
+// a class to easily create constants that automatically get the type of the
+// fixed point operand they are applied to.
+template <class T>
+struct fixpt_k {
+  T value;
+};
+
+#if defined(__cpp_deduction_guides)
+template <class T>
+fixpt_k (T) -> fixpt_k<T>;
+#else
+#error "This span implementation requires __cpp_deduction_guides"
+#endif
 //------------------------------------------------------------------------------
 template <
   uint N_sign,
@@ -139,6 +154,39 @@ public:
   using promotions                  = typename Traits::promotions;
   //----------------------------------------------------------------------------
 private:
+  template <class T, uint Fail = -1u>
+  static constexpr uint fixpt_sign()
+  {
+    if constexpr (is_fixpt_v<T>) {
+      return T::n_sign;
+    }
+    else {
+      return Fail;
+    }
+  }
+
+  template <class T, uint Fail = -1u>
+  static constexpr uint fixpt_n_int()
+  {
+    if constexpr (is_fixpt_v<T>) {
+      return T::n_int;
+    }
+    else {
+      return Fail;
+    }
+  }
+
+  template <class T, uint Fail = -1u>
+  static constexpr uint fixpt_n_frac()
+  {
+    if constexpr (is_fixpt_v<T>) {
+      return T::n_frac;
+    }
+    else {
+      return Fail;
+    }
+  }
+
   using type_idx
     = mp11::mp_find_if_q<promotions, detail::first_type_n_bits_gt_n<n_bits>>;
 
@@ -158,11 +206,12 @@ private:
 
   template <class T>
   static constexpr bool rhs_is_compatible
-    = fixpt_are_compatible_v<T, mytype> && (n_sign == T::n_sign);
+    = fixpt_are_compatible_v<T, mytype> && (n_sign == fixpt_sign<T>());
 
   template <class T>
   static constexpr bool rhs_is_assign_compat = rhs_is_compatible<T>
-    && (is_lossless || (n_frac >= T::n_frac && n_int >= T::n_int));
+    && (is_lossless
+        || (n_frac >= fixpt_n_frac<T>() && n_int >= fixpt_n_int<T>()));
 
   template <class T>
   using enable_if_rhs_is_compat = std::enable_if_t<rhs_is_compatible<T>>;
@@ -232,18 +281,27 @@ public:
   }
   //----------------------------------------------------------------------------
   // lossy conversion from float to fixed point
-  static constexpr fixpt from_float (float_type flt)
+  template <
+    class T,
+    std::enable_if_t<
+      std::is_same_v<T, float_type> || std::is_floating_point_v<T>>* = nullptr>
+  static constexpr fixpt from_float (T flt)
   {
     // Assertions probably not 100% correct/verified, as the non-constant
     // float/double resolution makes this a non-trivial test. For the
     // meantime this might be enough to catch most mistakes. TODO
+
+    auto mmax = max_float();
+    auto mmin = min_float();
+
+    auto lte_max = (flt <= max_float());
+    auto gte_min = (flt >= min_float());
+
     if constexpr (vector_size == 0) {
-      assert (flt <= flt_max);
-      assert (flt >= flt_min);
+      assert (lte_max);
+      assert (gte_min);
     }
     else {
-      auto lte_max = flt <= flt_max;
-      auto gte_min = flt >= flt_min;
       for (uint i = 0; i < vector_size; ++i) {
         assert (lte_max[i]);
         assert (gte_min[i]);
@@ -251,7 +309,7 @@ public:
     }
 
     fixpt                r;
-    float_type           v = flt * float_factor;
+    float_type           v = vec_cast<scalar_float> (flt * factor());
     constexpr float_type zero {};
     v += float_type {(v > zero) ? (zero + 0.5f) : (zero - 0.5f)}; // rounding
     r._v = (value_type) v;
@@ -259,24 +317,27 @@ public:
   }
   //----------------------------------------------------------------------------
   // conversion from integer to fixed point (just the integer part)
-  static constexpr fixpt from_int (value_type intv)
+  template <
+    class T,
+    std::enable_if_t<
+      std::is_same_v<T, value_type> || std::is_integral_v<T>>* = nullptr>
+  static constexpr fixpt from_int (T intv)
   {
-    assert (intv <= int_max);
-    assert (intv >= int_min);
+    auto lte_max = intv <= max_int();
+    auto gte_min = intv >= min_int();
 
     if constexpr (vector_size == 0) {
-      assert (intv <= int_max);
-      assert (intv >= int_min);
+      assert (lte_max);
+      assert (gte_min);
     }
     else {
-      auto lte_max = intv <= int_max;
-      auto gte_min = intv >= int_min;
       for (uint i = 0; i < vector_size; ++i) {
         assert (lte_max[i]);
         assert (gte_min[i]);
       }
     }
-    return fixpt::from (ashl<n_frac> (intv));
+    return fixpt::from (
+      ashl<n_frac> (vec_cast<scalar_type> (vec_set<vector_size> (intv))));
   }
   //----------------------------------------------------------------------------
   constexpr void load (value_type v) { *this = from (v); }
@@ -307,7 +368,9 @@ public:
     return ret;
   }
   //----------------------------------------------------------------------------
-  template <class T>
+  template <
+    class T,
+    std::enable_if_t<fixpt_are_compatible_v<T, mytype>>* = nullptr>
   constexpr T cast() const
   {
     return cast (T {});
@@ -316,9 +379,27 @@ public:
   template <
     class T,
     std::enable_if_t<fixpt_are_compatible_v<T, mytype>>* = nullptr>
+  constexpr operator T() const
+  {
+    return cast (T {});
+  }
+  //----------------------------------------------------------------------------
+  template <
+    class T,
+    std::enable_if_t<
+      std::is_same_v<T, float_type> || std::is_floating_point_v<T>>* = nullptr>
   explicit constexpr operator T() const
   {
-    return cast<T>();
+    return vec_cast<vec_value_type_t<T>> (as_float());
+  }
+  //----------------------------------------------------------------------------
+  template <
+    class T,
+    std::enable_if_t<
+      std::is_same_v<T, value_type> || std::is_integral_v<T>>* = nullptr>
+  explicit constexpr operator T() const
+  {
+    return vec_cast<vec_value_type_t<T>> (as_int());
   }
   //----------------------------------------------------------------------------
   constexpr near_lossless to_lossless() const { return cast<near_lossless>(); };
@@ -344,8 +425,8 @@ public:
   //----------------------------------------------------------------------------
   constexpr float_type as_float() const
   {
-    constexpr float_type factor = (float_type) 1. / float_factor;
-    return factor * (float_type) (_v);
+    constexpr scalar_float factor = (scalar_float) 1. / float_factor;
+    return factor * vec_cast<scalar_float> (_v);
   }
   //----------------------------------------------------------------------------
   // equivalent to floor
@@ -359,8 +440,8 @@ public:
   //----------------------------------------------------------------------------
   constexpr float_type float_fractional() const
   {
-    constexpr double factor = (float_type) 1. / float_factor;
-    return factor * (float_type) (_v & lsb_mask<uint_type> (n_frac));
+    constexpr scalar_float factor = (float_type) 1. / float_factor;
+    return factor * vec_cast<scalar_float> (_v & lsb_mask<uint_type> (n_frac));
   }
   //----------------------------------------------------------------------------
   // useful E.g. after random loads to check that the value is in range.
@@ -379,13 +460,27 @@ public:
     return *this;
   }
   //----------------------------------------------------------------------------
+  template <class T, enable_if_any_int_vec_or_scalar_t<T>* = nullptr>
+  constexpr fixpt& operator= (fixpt_k<T> rhs)
+  {
+    _v = from_int (rhs);
+    return *this;
+  }
+  //----------------------------------------------------------------------------
+  template <class T, enable_if_floatpt_vec_or_scalar_t<T>* = nullptr>
+  constexpr fixpt& operator= (fixpt_k<T> rhs)
+  {
+    _v = from_float (rhs);
+    return *this;
+  }
+  //----------------------------------------------------------------------------
   template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
   constexpr auto& operator+= (T rhs)
   {
     _v = bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a + b; });
     return *this;
   }
-  //----------------------------------------------------------------------------
+
   template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
   constexpr auto operator+ (T rhs) const
   {
@@ -393,7 +488,7 @@ public:
     ret += rhs;
     return ret;
   }
-  //----------------------------------------------------------------------------
+
   template <class T, enable_if_lhs_is_lossless<T>* = nullptr>
   constexpr auto operator+ (T rhs) const
   {
@@ -409,7 +504,7 @@ public:
     _v = bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a - b; });
     return *this;
   }
-  //----------------------------------------------------------------------------
+
   template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
   constexpr auto operator- (T rhs) const
   {
@@ -417,7 +512,7 @@ public:
     ret -= rhs;
     return ret;
   }
-  //----------------------------------------------------------------------------
+
   template <class T, enable_if_lhs_is_lossless<T>* = nullptr>
   constexpr auto operator- (T rhs) const
   {
@@ -435,13 +530,13 @@ public:
     constexpr uint int_b  = n_int + T::n_frac;
     constexpr uint frac_b = n_frac;
 
-    using dst_type = compatiblefp<int_b, frac_b>;
-    using bigger   = typename dst_type::value_type;
-    this->_v
-      = (value_type) ashr<T::n_frac> ((bigger) this->_v * (bigger) rhs._v);
+    using dst_type      = compatiblefp<int_b, frac_b>;
+    using bigger_scalar = typename dst_type::scalar_type;
+    auto mul = vec_cast<bigger_scalar> (_v) * vec_cast<bigger_scalar> (rhs._v);
+    _v       = vec_cast<scalar_type> (ashr<T::n_frac> (mul));
     return *this;
   }
-  //----------------------------------------------------------------------------
+
   template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
   constexpr auto operator* (T rhs) const
   {
@@ -449,7 +544,7 @@ public:
     ret *= rhs;
     return ret;
   }
-  //----------------------------------------------------------------------------
+
   template <class T, enable_if_lhs_is_lossless<T>* = nullptr>
   constexpr auto operator* (T rhs) const
   {
@@ -473,7 +568,7 @@ public:
     this->_v = (value_type) (ashl<T::n_frac> (tmp._v) / rhs._v);
     return *this;
   }
-  //----------------------------------------------------------------------------
+
   template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
   constexpr auto operator/ (T rhs) const
   {
@@ -481,7 +576,7 @@ public:
     ret /= rhs;
     return ret;
   }
-  //----------------------------------------------------------------------------
+
   template <class T, enable_if_lhs_is_lossless<T>* = nullptr>
   constexpr auto operator/ (T rhs) const
   {
@@ -578,11 +673,11 @@ public:
   }
   static constexpr float_type max_float()
   {
-    return vec_set<vector_size> (raw_max);
+    return vec_set<vector_size> (flt_max);
   }
   static constexpr float_type min_float()
   {
-    return vec_set<vector_size> (raw_min);
+    return vec_set<vector_size> (flt_min);
   }
   static constexpr float_type factor()
   {
@@ -597,33 +692,26 @@ private:
   static constexpr scalar_uint unsigned_one    = ((scalar_uint) 0) + 1u;
 
   static constexpr scalar_type raw_max
-    = (value_type) (unsigned_ones >> (scalar_bits - n_bits)) >> n_sign;
+    = (scalar_type) ((unsigned_ones >> (scalar_bits - n_bits)) >> n_sign);
 
   static constexpr scalar_type raw_min
-    = is_signed ? -raw_max - 1 : value_type {};
+    = is_signed ? -raw_max - 1 : scalar_type {};
 
-  static constexpr scalar_type int_max
-    = (scalar_type) (~(unsigned_ones << (n_int + n_sign)));
+  static constexpr scalar_type int_max = (n_frac >= scalar_bits)
+    ? scalar_type {}
+    : (scalar_type) (((scalar_uint) raw_max) >> n_frac);
 
   static constexpr scalar_type int_min
     = is_signed ? -int_max - 1 : scalar_type {};
 
   // these limits might not always be precise depending on the floating point
   // type
-  static constexpr auto float_one  = ((scalar_float) 1);
-  static constexpr auto float_imin = ((scalar_float) int_min);
-  static constexpr auto float_imax = ((scalar_float) int_max);
-
   static constexpr auto float_factor = (n_frac < scalar_bits)
     ? (scalar_float) (unsigned_one << n_frac)
     : ((scalar_float) int_max) + scalar_float {1};
 
-  static constexpr scalar_float flt_max
-    = float_imax + float_one - float_one / float_factor;
-
-  static constexpr scalar_float flt_min = (is_signed)
-    ? float_imin - float_one + float_one / float_factor
-    : float_type {};
+  static constexpr scalar_float flt_max = (scalar_float) raw_max / float_factor;
+  static constexpr scalar_float flt_min = (scalar_float) raw_min / float_factor;
   //----------------------------------------------------------------------------
   template <uint Int, uint Frac, class F, class T>
   constexpr auto bin_op (T other, F&& fn) const
@@ -637,6 +725,151 @@ private:
 
   value_type _v;
 };
+//------------------------------------------------------------------------------
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<T> && is_any_int_vec_or_scalar_v<U>>* = nullptr>
+auto operator+ (T lhs, fixpt_k<U> rhs)
+{
+  return lhs + lhs.from_int (rhs.value);
+}
+
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<T> && is_floatpt_vec_or_scalar_v<U>>* = nullptr>
+auto operator+ (T lhs, fixpt_k<U> rhs)
+{
+  return lhs + lhs.from_float (rhs.value);
+}
+
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<U> && is_any_int_vec_or_scalar_v<T>>* = nullptr>
+auto operator+ (fixpt_k<T> lhs, U rhs)
+{
+  return rhs.from_int (lhs.value) + rhs;
+}
+
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<U> && is_floatpt_vec_or_scalar_v<T>>* = nullptr>
+auto operator+ (fixpt_k<T> lhs, U rhs)
+{
+  return rhs.from_float (lhs.value) + rhs;
+}
+//------------------------------------------------------------------------------
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<T> && is_any_int_vec_or_scalar_v<U>>* = nullptr>
+auto operator- (T lhs, fixpt_k<U> rhs)
+{
+  return lhs - lhs.from_int (rhs.value);
+}
+
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<T> && is_floatpt_vec_or_scalar_v<U>>* = nullptr>
+auto operator- (T lhs, fixpt_k<U> rhs)
+{
+  return lhs - lhs.from_float (rhs.value);
+}
+
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<U> && is_any_int_vec_or_scalar_v<T>>* = nullptr>
+auto operator- (fixpt_k<T> lhs, U rhs)
+{
+  return rhs.from_int (lhs.value) - rhs;
+}
+
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<U> && is_floatpt_vec_or_scalar_v<T>>* = nullptr>
+auto operator- (fixpt_k<T> lhs, U rhs)
+{
+  return rhs.from_float (lhs.value) - rhs;
+}
+//------------------------------------------------------------------------------
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<T> && is_any_int_vec_or_scalar_v<U>>* = nullptr>
+auto operator* (T lhs, fixpt_k<U> rhs)
+{
+  return lhs * lhs.from_int (rhs.value);
+}
+
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<T> && is_floatpt_vec_or_scalar_v<U>>* = nullptr>
+auto operator* (T lhs, fixpt_k<U> rhs)
+{
+  return lhs * lhs.from_float (rhs.value);
+}
+
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<U> && is_any_int_vec_or_scalar_v<T>>* = nullptr>
+auto operator* (fixpt_k<T> lhs, U rhs)
+{
+  return rhs.from_int (lhs.value) * rhs;
+}
+
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<U> && is_floatpt_vec_or_scalar_v<T>>* = nullptr>
+auto operator* (fixpt_k<T> lhs, U rhs)
+{
+  return rhs.from_float (lhs.value) * rhs;
+}
+//------------------------------------------------------------------------------
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<T> && is_any_int_vec_or_scalar_v<U>>* = nullptr>
+auto operator/ (T lhs, fixpt_k<U> rhs)
+{
+  return lhs / lhs.from_int (rhs.value);
+}
+
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<T> && is_floatpt_vec_or_scalar_v<U>>* = nullptr>
+auto operator/ (T lhs, fixpt_k<U> rhs)
+{
+  return lhs / lhs.from_float (rhs.value);
+}
+
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<U> && is_any_int_vec_or_scalar_v<T>>* = nullptr>
+auto operator/ (fixpt_k<T> lhs, U rhs)
+{
+  return rhs.from_int (lhs.value) / rhs;
+}
+
+template <
+  class T,
+  class U,
+  std::enable_if_t<is_fixpt_v<U> && is_floatpt_vec_or_scalar_v<T>>* = nullptr>
+auto operator/ (fixpt_k<T> lhs, U rhs)
+{
+  return rhs.from_float (lhs.value) / rhs;
+}
+// TODO: all comparison operators
 //------------------------------------------------------------------------------
 // fixed point type with no promotions
 template <uint S, uint I, uint F, class Traits = std_fp_types_trait>
@@ -687,5 +920,4 @@ constexpr auto fixpt_abs (T v)
 }
 // TODO: fixpt_ceil, fixpt_floor, fixpt_round, fixpt_exp2...
 //------------------------------------------------------------------------------
-
 }; // namespace artv

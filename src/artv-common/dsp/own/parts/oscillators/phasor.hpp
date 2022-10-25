@@ -45,15 +45,15 @@ public:
 
   using float_vec = vec<float, N>;
 
-  using raw_uint = typename vec_traits_t<phase_uint>::value_type;
-  using raw_int  = typename vec_traits_t<phase_int>::value_type;
+  using scalar_uint = typename vec_traits_t<phase_uint>::value_type;
+  using scalar_sint = typename vec_traits_t<phase_int>::value_type;
 
   using fp_trait = single_fp_type_trait<phase_int, phase_uint, float_vec>;
 
   template <uint S, uint I, uint F>
   using fixpt_type      = fixpt_np<S, I, F, vec_fp_types_trait<N>>;
-  using fixpt_type_uint = fixpt_type<0, 0, sizeof (raw_uint) * 8>;
-  using fixpt_type_int  = fixpt_type<1, 0, (sizeof (raw_uint) * 8) - 1>;
+  using fixpt_type_uint = fixpt_type<0, 0, sizeof (scalar_uint) * 8>;
+  using fixpt_type_int  = fixpt_type<1, 0, (sizeof (scalar_uint) * 8) - 1>;
   //----------------------------------------------------------------------------
   phase() : _v {0} {}
   //----------------------------------------------------------------------------
@@ -239,7 +239,7 @@ public:
   // 0 to 2pi -> -180 to 180
   static float_vec to_shifted_degrees (phase_uint x)
   {
-    return vec_cast<float> (vec_cast<raw_int> (x)) * (1.f / half_deg_step);
+    return vec_cast<float> (vec_cast<scalar_sint> (x)) * (1.f / half_deg_step);
   }
   float_vec to_shifted_degrees() const { return to_shifted_degrees (_v); }
   //----------------------------------------------------------------------------
@@ -253,7 +253,8 @@ public:
   // 0 to 2pi -> [0 to 1] [-1 to 0]
   static float_vec to_shifted_bipolar (phase_uint x)
   {
-    return vec_cast<float> (vec_cast<raw_int> (x)) * (1.f / half_range_step);
+    return vec_cast<float> (vec_cast<scalar_sint> (x))
+      * (1.f / half_range_step);
   }
   float_vec to_shifted_bipolar() const { return to_shifted_bipolar (_v); }
   //----------------------------------------------------------------------------
@@ -263,40 +264,55 @@ public:
   // o to 180, -180 to 0
   fixpt_type_uint to_fixpt_unsigned() { return fixpt_type_uint::from (_v); }
   //----------------------------------------------------------------------------
-  raw_uint get_raw (uint channel) const
+  scalar_uint get_raw (uint channel) const
   {
     assert (channel < N);
     return _v[channel];
   }
   //----------------------------------------------------------------------------
-  void set_raw (raw_uint v, uint channel)
+  void set_raw (scalar_uint v, uint channel)
   {
     assert (channel < N);
     _v[channel] = v;
   }
   //----------------------------------------------------------------------------
+  phase<N> set_at_uniform_spacing() { return set_at_uniform_spacing_from (0); }
+  //----------------------------------------------------------------------------
+  phase<N> set_at_uniform_spacing_from (uint reference_index)
+  {
+    constexpr scalar_uint step = std::numeric_limits<scalar_uint>::max() / N;
+    assert (reference_index < N);
+    auto old = _v;
+    for (uint i = 0; i < N; ++i) {
+      _v[i] = i * step;
+    }
+    _v += old[reference_index];
+    return *this;
+  }
+  //----------------------------------------------------------------------------
 private:
   static constexpr auto deg_step
-    = (float) (((double) std::numeric_limits<raw_uint>::max()) / 360.);
+    = (float) (((double) std::numeric_limits<scalar_uint>::max()) / 360.);
 
   static constexpr auto half_deg_step
-    = (float) (((double) std::numeric_limits<raw_uint>::max()) / 180.);
+    = (float) (((double) std::numeric_limits<scalar_uint>::max()) / 180.);
 
   static constexpr auto range_step
-    = (float) std::numeric_limits<raw_uint>::max();
+    = (float) std::numeric_limits<scalar_uint>::max();
 
-  static constexpr auto half_range_uint = std::numeric_limits<raw_uint>::max();
+  static constexpr auto half_range_uint
+    = std::numeric_limits<scalar_uint>::max();
 
   static constexpr auto half_range_step = (float) (half_range_uint / 2);
   //----------------------------------------------------------------------------
   phase_uint from_degrees (float_vec v) // 0 to 360 -> 0 to 2pi
   {
-    return vec_cast<raw_uint> (v * deg_step);
+    return vec_cast<scalar_uint> (v * deg_step);
   }
   //----------------------------------------------------------------------------
   phase_uint from_normalized (float_vec v) // 0 to 1 -> 0 to 2pi
   {
-    return vec_cast<raw_uint> (v * range_step);
+    return vec_cast<scalar_uint> (v * range_step);
   }
   //----------------------------------------------------------------------------
   phase_uint from_normalized_bipolar (float_vec v) // -1 to 1 -> 0 to 2pi
@@ -306,7 +322,7 @@ private:
   //----------------------------------------------------------------------------
   phase_uint from_shifted_degrees (float_vec v) // -180 to 180 -> 1 to 3pi
   {
-    return vec_cast<raw_uint> (vec_cast<raw_int> (v * half_deg_step));
+    return vec_cast<scalar_uint> (vec_cast<scalar_sint> (v * half_deg_step));
   }
   //----------------------------------------------------------------------------
   phase_uint from_shifted (float_vec v) // 0 to 1 -> 1 to 3pi
@@ -316,7 +332,7 @@ private:
   //----------------------------------------------------------------------------
   phase_uint from_shifted_bipolar (float_vec v) // -1 to 1 -> 1 to 3pi
   {
-    return vec_cast<raw_uint> (vec_cast<raw_int> (v * half_range_step));
+    return vec_cast<scalar_uint> (vec_cast<scalar_sint> (v * half_range_step));
   }
   //----------------------------------------------------------------------------
   phase_uint _v; // 0 to 2pi
@@ -339,7 +355,7 @@ public:
   void set_freq (vec<float, N> f, float t_spl)
   {
     constexpr auto pmax
-      = (float) std::numeric_limits<typename phase<N>::raw_uint>::max();
+      = (float) std::numeric_limits<typename phase<N>::scalar_uint>::max();
     set_increment (phase<N> {vec_cast<u32> (pmax * t_spl * f)});
   }
   //----------------------------------------------------------------------------
@@ -360,25 +376,6 @@ public:
     return _phase;
   }
   //----------------------------------------------------------------------------
-  void set_at_uniform_spacing()
-  {
-    constexpr float      step = 1.f / N;
-    std::array<float, N> pos;
-    for (uint i = 0; i < pos.size(); ++i) {
-      pos[i] = i * step;
-    }
-    _phase = decltype (_phase) {phase_tag::normalized {}, pos};
-  }
-  //----------------------------------------------------------------------------
-  void set_at_uniform_spacing_from (uint reference_index)
-  {
-    assert (reference_index < N);
-    auto old = _phase.to_uint();
-    old      = vec_set<decltype (old)> (old[reference_index]);
-    set_at_uniform_spacing();
-    _phase += old;
-  }
-  //----------------------------------------------------------------------------
   struct tick_ext_ret {
     phase<N> ph;
     typename vec_traits_t<typename phase<N>::phase_uint>::same_size_int_type
@@ -389,8 +386,8 @@ public:
   {
     for (uint i = 0; i < N; ++i) {
       assert (
-        (((double) _increment.to_uint()[i]) * n)
-          < ((double) std::numeric_limits<typename phase<N>::raw_uint>::max())
+        (((double) _increment.to_uint()[i]) * n) < ((
+          double) std::numeric_limits<typename phase<N>::scalar_uint>::max())
         && "Phase increment too big for new cycle detection to work reliably");
     }
 
