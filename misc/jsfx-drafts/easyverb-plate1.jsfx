@@ -192,7 +192,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
 (n_spls_down) ? (
 
-  // in + hp
+  // in
   x = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5;
   // diffusion
   x = ap (x, 147, -0.707);
@@ -203,14 +203,15 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   // ER
   er_lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
-  x = ap_mod (x * decay + er_fb, 1367, 0.35, lfo.ret.ptr[1], 71 + er_amt * 70);
+  x = ap_mod (decay * (x + er_fb), 1367, 0.35, lfo.ret.ptr[1], 71 + er_amt * 70);
   x = erdamp.dampfilter (x, 0.0001 + 0.17 * damp);
   er1 = x;
   x = delay_mod (x * decay, 1787, lfo.ret.ptr[0], 261);
+  x = delay (x, 33); // just to enable block processing
   er2 = x;
-  er_fb = x * decay * 0.2;
+  er_fb = x * 0.2;
 
-  // late
+  // late + hp
   lp = lp1.dampfilter (late_in, hp_fact);
   late_in = late_in - lp;
 
@@ -250,7 +251,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   r += (-er1 * 0.855 + er2 * 0.443) * er_amt;
 
   l = r * (1 - abs (stereo)) + l * abs (stereo);
-  stereo < 1 ? (
+  stereo < 0 ? (
     tmp = r;
     r = l;
     l = tmp;

@@ -83,6 +83,7 @@
 #include "artv-common/dsp/own/fx/eq4x.hpp"
 #include "artv-common/dsp/own/fx/filter2x.hpp"
 #include "artv-common/dsp/own/fx/lin_eq4x.hpp"
+#include "artv-common/dsp/own/fx/lofiverb.hpp"
 #include "artv-common/dsp/own/fx/mod.hpp"
 #include "artv-common/dsp/own/fx/phaser.hpp"
 #include "artv-common/dsp/own/fx/pitch_shifter.hpp"
@@ -7481,7 +7482,78 @@ using mod_params = mp_list<
   mod_lfo_time_base,
   mod_oversampling>;
 //------------------------------------------------------------------------------
+parameter_cpp_class_define (
+  lofiverb_mode,
+  n_stereo_busses,
+  param_common ("Mode", declptr<lofiverb>(), declptr<lofiverb::mode_tag>()),
+  lofiverb::get_parameter (lofiverb::mode_tag {}),
+  slider_ext);
 
+parameter_cpp_class_define (
+  lofiverb_character,
+  n_stereo_busses,
+  param_common (
+    "Character",
+    declptr<lofiverb>(),
+    declptr<lofiverb::character_tag>()),
+  lofiverb::get_parameter (lofiverb::character_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lofiverb_damp,
+  n_stereo_busses,
+  param_common ("Damp", declptr<lofiverb>(), declptr<lofiverb::damp_tag>()),
+  lofiverb::get_parameter (lofiverb::damp_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lofiverb_decay,
+  n_stereo_busses,
+  param_common ("Decay", declptr<lofiverb>(), declptr<lofiverb::decay_tag>()),
+  lofiverb::get_parameter (lofiverb::decay_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lofiverb_predelay,
+  n_stereo_busses,
+  param_common (
+    "Predelay",
+    declptr<lofiverb>(),
+    declptr<lofiverb::predelay_tag>()),
+  lofiverb::get_parameter (lofiverb::predelay_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lofiverb_tilt,
+  n_stereo_busses,
+  param_common ("Tilt", declptr<lofiverb>(), declptr<lofiverb::tilt_tag>()),
+  lofiverb::get_parameter (lofiverb::tilt_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lofiverb_er,
+  n_stereo_busses,
+  param_common ("ER", declptr<lofiverb>(), declptr<lofiverb::er_tag>()),
+  lofiverb::get_parameter (lofiverb::er_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lofiverb_mod,
+  n_stereo_busses,
+  param_common ("Mod", declptr<lofiverb>(), declptr<lofiverb::mod_tag>()),
+  lofiverb::get_parameter (lofiverb::mod_tag {}),
+  slider_ext);
+
+using lofiverb_params = mp_list<
+  lofiverb_mode,
+  lofiverb_predelay,
+  lofiverb_decay,
+  lofiverb_damp,
+  lofiverb_er,
+  lofiverb_character,
+  lofiverb_tilt,
+  lofiverb_mod>;
+//------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
   polyphase_fir_test_gain,
@@ -7557,11 +7629,10 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  diffuse_delay_params,
-  reverb_params>;
+  lofiverb_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "Del", "Verb");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "Verb");
 #else
 // clang-format off
 using all_fx_typelists = mp_list<
