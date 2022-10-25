@@ -348,7 +348,7 @@ using enable_if_floatpt_vec_or_scalar_t
   = std::enable_if_t<is_floatpt_vec_or_scalar_v<V>>;
 
 template <class V>
-using enable_if_any_int_vec_or_scalar_int_t
+using enable_if_any_int_vec_or_scalar_t
   = std::enable_if_t<is_any_int_vec_or_scalar_v<V>>;
 
 template <class V>
@@ -365,13 +365,13 @@ using enable_if_vec_value_type_t
 
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_or_scalar_t<V>* = nullptr>
-static constexpr auto vec_traits()
+constexpr inline auto vec_traits()
 {
   return vec_traits_t<V> {};
 }
 
 template <class V, enable_if_vec_or_scalar_t<V>* = nullptr>
-static constexpr auto vec_traits (V)
+constexpr inline auto vec_traits (V)
 {
   return vec_traits<V>();
 }

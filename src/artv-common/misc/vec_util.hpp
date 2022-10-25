@@ -43,7 +43,7 @@ using make_vector_t = typename make_vector<T>::type;
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline auto vec_to_intrin (V simdvec)
+constexpr inline auto vec_to_intrin (V simdvec)
 {
   constexpr auto traits = vec_traits<V>();
   using T               = vec_value_type_t<V>;
@@ -78,7 +78,7 @@ static inline auto vec_to_intrin (V simdvec)
 //------------------------------------------------------------------------------
 // slice N elements from vec as a new vector of the appropiate size
 template <uint N, class V, enable_if_vec_t<V>* = nullptr>
-static inline auto vec_slice (V src, uint offset)
+constexpr inline auto vec_slice (V src, uint offset)
 {
   using T               = vec_value_type_t<V>;
   constexpr auto traits = vec_traits<V>();
@@ -99,7 +99,7 @@ template <
   class V1,
   class V2,
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
-static inline auto vec_cp_slice (V1& dst, V2 src, uint offset)
+constexpr inline auto vec_cp_slice (V1& dst, V2 src, uint offset)
 {
   using T = vec_value_type_t<V1>;
   static_assert (std::is_same_v<T, vec_value_type_t<V2>>);
@@ -126,26 +126,26 @@ static inline auto vec_cp_slice (V1& dst, V2 src, uint offset)
 //   builtin compiler wrappers.
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline V vec_load (vec_value_type_t<V> const* src)
+constexpr inline V vec_load (vec_value_type_t<V> const* src)
 {
   vec_traits<V>(); // check type validity only
   return *reinterpret_cast<V const*> (src);
 }
 
 template <uint N, class T>
-static inline vec<T, N> vec_load (T const* src)
+constexpr inline vec<T, N> vec_load (T const* src)
 {
   return vec_load<vec<T, N>> (src);
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline void vec_load (V& dst, vec_value_type_t<V> const* src)
+constexpr inline void vec_load (V& dst, vec_value_type_t<V> const* src)
 {
   dst = vec_load<V> (src);
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline V vec_load (xspan<vec_value_type_t<V> const> src)
+constexpr inline V vec_load (xspan<vec_value_type_t<V> const> src)
 {
   constexpr auto traits = vec_traits<V>();
   assert (src.size() >= traits.size);
@@ -153,19 +153,19 @@ static inline V vec_load (xspan<vec_value_type_t<V> const> src)
 }
 
 template <uint N, class T>
-static inline vec<T, N> vec_load (xspan<T const> src)
+constexpr inline vec<T, N> vec_load (xspan<T const> src)
 {
   return vec_load<vec<T, N>> (src);
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline void vec_load (V& dst, xspan<vec_value_type_t<V> const> src)
+constexpr inline void vec_load (V& dst, xspan<vec_value_type_t<V> const> src)
 {
   dst = vec_load<V> (src);
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline V vec_load_unaligned (vec_value_type_t<V> const* src)
+constexpr inline V vec_load_unaligned (vec_value_type_t<V> const* src)
 {
   constexpr auto traits = vec_traits<V>();
   using vec_u_type      = typename decltype (traits)::type_u;
@@ -174,19 +174,21 @@ static inline V vec_load_unaligned (vec_value_type_t<V> const* src)
 }
 
 template <uint N, class T>
-static inline vec<T, N> vec_load_unaligned (T const* src)
+constexpr inline vec<T, N> vec_load_unaligned (T const* src)
 {
   return vec_load_unaligned<vec<T, N>> (src);
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline void vec_load_unaligned (V& dst, vec_value_type_t<V> const* src)
+constexpr inline void vec_load_unaligned (
+  V&                         dst,
+  vec_value_type_t<V> const* src)
 {
   dst = vec_load_unaligned<V> (src);
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline V vec_load_unaligned (xspan<vec_value_type_t<V> const> src)
+constexpr inline V vec_load_unaligned (xspan<vec_value_type_t<V> const> src)
 {
   constexpr auto traits = vec_traits<V>();
   assert (src.size() >= traits.size);
@@ -194,13 +196,13 @@ static inline V vec_load_unaligned (xspan<vec_value_type_t<V> const> src)
 }
 
 template <uint N, class T>
-static inline vec<T, N> vec_load_unaligned (xspan<T const> src)
+constexpr inline vec<T, N> vec_load_unaligned (xspan<T const> src)
 {
   return vec_load_unaligned<vec<T, N>> (src);
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline void vec_load_unaligned (
+constexpr inline void vec_load_unaligned (
   V&                               dst,
   xspan<vec_value_type_t<V> const> src)
 {
@@ -208,7 +210,7 @@ static inline void vec_load_unaligned (
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline void vec_store (vec_value_type_t<V>* dst, V src)
+constexpr inline void vec_store (vec_value_type_t<V>* dst, V src)
 {
   constexpr auto traits = vec_traits<V>();
   using T               = vec_value_type_t<V>;
@@ -217,7 +219,7 @@ static inline void vec_store (vec_value_type_t<V>* dst, V src)
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline void vec_store (xspan<vec_value_type_t<V>> dst, V src)
+constexpr inline void vec_store (xspan<vec_value_type_t<V>> dst, V src)
 {
   constexpr auto traits = vec_traits<V>();
   assert (dst.size() >= traits.size);
@@ -225,7 +227,7 @@ static inline void vec_store (xspan<vec_value_type_t<V>> dst, V src)
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline void vec_store_unaligned (vec_value_type_t<V>* dst, V src)
+constexpr inline void vec_store_unaligned (vec_value_type_t<V>* dst, V src)
 {
   constexpr auto traits = vec_traits<V>();
   using vec_u_type      = typename decltype (traits)::type_u;
@@ -235,7 +237,9 @@ static inline void vec_store_unaligned (vec_value_type_t<V>* dst, V src)
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline void vec_store_unaligned (xspan<vec_value_type_t<V>> dst, V src)
+constexpr inline void vec_store_unaligned (
+  xspan<vec_value_type_t<V>> dst,
+  V                          src)
 {
   constexpr auto traits = vec_traits<V>();
   assert (dst.size() >= traits.size);
@@ -244,14 +248,14 @@ static inline void vec_store_unaligned (xspan<vec_value_type_t<V>> dst, V src)
 //------------------------------------------------------------------------------
 // vec_set: broadcast a value to a vector
 template <class V, enable_if_vec_or_scalar_t<V>* = nullptr>
-static constexpr inline void vec_set (V& dst, vec_value_type_t<V> v)
+constexpr inline void vec_set (V& dst, vec_value_type_t<V> v)
 {
   constexpr auto traits = vec_traits<V>();
   dst                   = v - V {}; // convoluted but works.
 }
 
 template <class V, enable_if_vec_or_scalar_t<V>* = nullptr>
-static constexpr inline V vec_set (vec_value_type_t<V> v)
+constexpr inline V vec_set (vec_value_type_t<V> v)
 {
   V ret;
   vec_set (ret, v);
@@ -259,7 +263,7 @@ static constexpr inline V vec_set (vec_value_type_t<V> v)
 }
 
 template <uint N, class T>
-static constexpr inline vec<T, N> vec_set (T v)
+constexpr inline vec<T, N> vec_set (T v)
 {
   vec<T, N> ret;
   vec_set (ret, v);
@@ -282,7 +286,7 @@ static constexpr inline vec<T, N> vec_set (T v)
 template <
   class T,
   std::enable_if_t<std::is_arithmetic_v<T> && !is_vec_v<T>>* = nullptr>
-auto make_vec (T v)
+constexpr inline auto make_vec (T v)
 {
   return vec_set<1> (v);
 }
@@ -292,14 +296,14 @@ template <
   class Dst_vec,
   class T,
   std::enable_if_t<std::is_arithmetic_v<T> && is_vec_v<Dst_vec>>* = nullptr>
-auto make_vec (T v)
+constexpr inline auto make_vec (T v)
 {
   return vec_set<Dst_vec> (static_cast<vec_value_type_t<Dst_vec>> (v));
 }
 
 // passthrough
 template <class V, enable_if_vec_t<V>* = nullptr>
-V make_vec (V v)
+constexpr inline V make_vec (V v)
 {
   return v;
 }
@@ -308,7 +312,7 @@ V make_vec (V v)
 // convenience functions. Created basically to deal with vectors of size 1
 // conversion, so they should result in no-ops after optimization.
 template <uint VecN, class T, size_t Size>
-static constexpr auto vec_array_wrap (std::array<T, Size> v)
+constexpr inline auto vec_array_wrap (std::array<T, Size> v)
 {
   static_assert (Size % VecN == 0);
 
@@ -322,7 +326,7 @@ static constexpr auto vec_array_wrap (std::array<T, Size> v)
 }
 
 template <class VecType, size_t Size>
-static constexpr auto vec_array_unwrap (std::array<VecType, Size> v)
+constexpr inline auto vec_array_unwrap (std::array<VecType, Size> v)
 {
   static_assert (is_vec_v<VecType>);
   using traits     = vec_traits_t<VecType>;
@@ -339,20 +343,20 @@ static constexpr auto vec_array_unwrap (std::array<VecType, Size> v)
 }
 
 template <class T, size_t Size>
-static constexpr auto vec1_array_wrap (std::array<T, Size> v)
+constexpr inline auto vec1_array_wrap (std::array<T, Size> v)
 {
   return vec_array_wrap<1> (v);
 }
 
 template <class VecType, size_t Size>
-static constexpr auto vec1_array_unwrap (std::array<VecType, Size> v)
+constexpr inline auto vec1_array_unwrap (std::array<VecType, Size> v)
 {
   return vec_array_unwrap (v);
 }
 
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
-static constexpr auto vec_to_array (V v)
+constexpr inline auto vec_to_array (V v)
 {
   using T = vec_value_type_t<V>;
   std::array<T, vec_traits_t<V>::size> arr;
@@ -364,7 +368,7 @@ static constexpr auto vec_to_array (V v)
 }
 
 template <class T, size_t Size>
-static constexpr auto vec_from_array (std::array<T, Size> arr)
+constexpr inline auto vec_from_array (std::array<T, Size> arr)
 {
   vec<T, Size> v;
   // no memcpy, memory ordering is unspecified
@@ -384,7 +388,7 @@ static constexpr auto vec_from_array (std::array<T, Size> arr)
 #define vec_shuffle __builtin_shufflevector
 #else
 template <class V, class... Ts>
-static inline V vec_shuffle (V a, V b, Ts... indexes)
+inline V vec_shuffle (V a, V b, Ts... indexes)
 {
   constexpr auto traits = vec_traits<V>();
   using common_t        = std::common_type_t<Ts...>;
@@ -406,7 +410,7 @@ using vec_array_type = std::array<vec_value_type_t<V>, vec_traits_t<V>::size>;
 //------------------------------------------------------------------------------
 // "vec_cat" from an array
 template <class V, size_t N, enable_if_vec_t<V>* = nullptr>
-auto vec_cat (std::array<V, N> a)
+constexpr inline auto vec_cat (std::array<V, N> a)
 {
   using T                 = vec_value_type_t<V>;
   using traits            = vec_traits_t<V>;
@@ -425,7 +429,7 @@ auto vec_cat (std::array<V, N> a)
 
 // "vec_cat" from an array
 template <class V, class... Ts, enable_if_vec_t<V>* = nullptr>
-auto vec_cat (V v1, Ts&&... vecs)
+constexpr inline auto vec_cat (V v1, Ts&&... vecs)
 {
   constexpr size_t n_elems = 1 + sizeof...(Ts);
   static_assert ((n_elems % 2) == 0);
@@ -434,7 +438,7 @@ auto vec_cat (V v1, Ts&&... vecs)
 //------------------------------------------------------------------------------
 // split vector in an array of vectors of a smaller (divisible) vector type.
 template <uint N, class V, enable_if_vec_t<V>* = nullptr>
-static inline auto vec_split (V src)
+constexpr inline auto vec_split (V src)
 {
   using T               = vec_value_type_t<V>;
   constexpr auto traits = vec_traits<V>();
@@ -454,7 +458,7 @@ static inline auto vec_split (V src)
 //------------------------------------------------------------------------------
 // init a vector from scalars, type deduced from the first element
 template <class T, class... Ts>
-auto vec_init (T&& a, Ts&&... b)
+constexpr inline auto vec_init (T&& a, Ts&&... b)
 {
   constexpr uint n_elems = sizeof...(Ts) + 1;
   static_assert (!is_vec_v<T>);
@@ -479,20 +483,28 @@ auto vec_init (T&& a, Ts&&... b)
 // of a different size than V::value_type "-Wpsabi" warnings might be generated.
 // The ABI-related warnings are no problem if there are no vectors in shared
 // interfaces. Suppressing has to be done globally or in place unfortunately.
-template <class T, class V>
-static inline auto vec_cast (V a)
+template <class T, class V, enable_if_vec_or_scalar_t<V>* = nullptr>
+constexpr inline auto vec_cast (V a)
 {
+  static_assert (std::is_arithmetic_v<T>);
+
   constexpr auto src_traits = vec_traits<V>();
   using src_traits_t        = decltype (src_traits);
   using dst_traits = typename src_traits_t::template rebind_traits_same_size<T>;
 
   static_assert (src_traits.size == dst_traits {}.size, "sizes must match");
 
-  return __builtin_convertvector (a, typename dst_traits::type);
+  if constexpr (src_traits.size != 0) {
+    return __builtin_convertvector (a, typename dst_traits::type);
+  }
+  else {
+    // not a vector (vector of size 0)
+    return static_cast<T> (a);
+  }
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
-static inline auto vec_abs (V&& x)
+constexpr inline auto vec_abs (V&& x)
 {
   return (x < (vec_value_type_t<V>) 0) ? -x : x;
 }
@@ -501,20 +513,20 @@ template <
   class V1,
   class V2,
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
-static inline auto vec_min (V1&& x, V2&& y)
+constexpr inline auto vec_min (V1&& x, V2&& y)
 {
   return x < y ? x : y;
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline auto vec_min (V&& x, vec_value_type_t<V> y)
+constexpr inline auto vec_min (V&& x, vec_value_type_t<V> y)
 {
   using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
   return vec_min (std::forward<V> (x), vec_set<Vv> (y));
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline auto vec_min (vec_value_type_t<V> x, V&& y)
+constexpr inline auto vec_min (vec_value_type_t<V> x, V&& y)
 {
   using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
   return vec_min (vec_set<Vv> (x), std::forward<V> (y));
@@ -524,27 +536,27 @@ template <
   class V1,
   class V2,
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
-static inline auto vec_max (V1&& x, V2&& y)
+constexpr inline auto vec_max (V1&& x, V2&& y)
 {
   return x > y ? x : y;
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline auto vec_max (V&& x, vec_value_type_t<V> y)
+constexpr inline auto vec_max (V&& x, vec_value_type_t<V> y)
 {
   using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
   return vec_max (std::forward<V> (x), vec_set<Vv> (y));
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline auto vec_max (vec_value_type_t<V> x, V&& y)
+constexpr inline auto vec_max (vec_value_type_t<V> x, V&& y)
 {
   using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
   return vec_max (vec_set<Vv> (x), std::forward<V> (y));
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline auto vec_sgn (V x)
+constexpr inline auto vec_sgn (V x)
 {
   using T = vec_value_type_t<V>;
   return (x < (T) 0) ? vec_set<V> (-1) : vec_set<V> (1);
@@ -555,13 +567,13 @@ template <
   class V2,
   class V3,
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2> && is_vec_v<V3>>* = nullptr>
-static inline auto vec_clamp (V1&& x, V2&& min, V3&& max)
+constexpr inline auto vec_clamp (V1&& x, V2&& min, V3&& max)
 {
   return vec_min (vec_max (x, min), max);
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline auto vec_clamp (
+constexpr inline auto vec_clamp (
   V&&                 x,
   vec_value_type_t<V> y,
   vec_value_type_t<V> z)
@@ -574,7 +586,7 @@ template <
   class V1,
   class V2,
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
-static inline auto vec_clamp (V1&& x, V2&& y, vec_value_type_t<V1> z)
+constexpr inline auto vec_clamp (V1&& x, V2&& y, vec_value_type_t<V1> z)
 {
   using Vv = std::remove_reference_t<std::remove_cv_t<V1>>;
   return vec_clamp (
@@ -585,7 +597,7 @@ template <
   class V1,
   class V2,
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
-static inline auto vec_clamp (V1&& x, vec_value_type_t<V1> y, V2&& z)
+constexpr inline auto vec_clamp (V1&& x, vec_value_type_t<V1> y, V2&& z)
 {
   using Vv = std::remove_reference_t<std::remove_cv_t<V1>>;
   return vec_clamp (
@@ -596,7 +608,7 @@ template <
   class V1,
   class V2,
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
-static inline auto vec_clamp (vec_value_type_t<V1> x, V1&& y, V2&& z)
+constexpr inline auto vec_clamp (vec_value_type_t<V1> x, V1&& y, V2&& z)
 {
   using Vv = std::remove_reference_t<std::remove_cv_t<V1>>;
   return vec_clamp (
@@ -604,7 +616,7 @@ static inline auto vec_clamp (vec_value_type_t<V1> x, V1&& y, V2&& z)
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline auto vec_clamp (
+constexpr inline auto vec_clamp (
   vec_value_type_t<V> x,
   vec_value_type_t<V> y,
   V&&                 z)
@@ -614,7 +626,7 @@ static inline auto vec_clamp (
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
-static inline auto vec_clamp (
+constexpr inline auto vec_clamp (
   vec_value_type_t<V> x,
   V&&                 y,
   vec_value_type_t<V> z)
@@ -629,7 +641,7 @@ template <
   class V2 = std::decay_t<V1>,
   class V3 = std::decay_t<V1>,
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2> && is_vec_v<V3>>* = nullptr>
-static inline auto vec_sgn_no_zero (
+constexpr inline auto vec_sgn_no_zero (
   V1&& x,
   V2&& neg      = vec_set<std::decay_t<V1>> ((vec_value_type_t<V1>) -1.),
   V3&& pos_zero = vec_set<std::decay_t<V1>> ((vec_value_type_t<V1>) 1.))
@@ -641,7 +653,7 @@ static inline auto vec_sgn_no_zero (
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
-auto vec_inner_and (V v)
+constexpr inline auto vec_inner_and (V v)
 {
   constexpr auto traits = vec_traits<V>();
   using T               = vec_value_type_t<V>;
@@ -655,7 +667,7 @@ auto vec_inner_and (V v)
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
-auto vec_inner_or (V v)
+constexpr inline auto vec_inner_or (V v)
 {
   constexpr auto traits = vec_traits<V>();
   using T               = vec_value_type_t<V>;
@@ -669,7 +681,7 @@ auto vec_inner_or (V v)
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
-auto vec_inner_add (V v)
+constexpr inline auto vec_inner_add (V v)
 {
   constexpr auto traits = vec_traits<V>();
   using T               = vec_value_type_t<V>;
@@ -682,7 +694,7 @@ auto vec_inner_add (V v)
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
-auto vec_inner_mul (V v)
+constexpr inline auto vec_inner_mul (V v)
 {
   constexpr auto traits = vec_traits<V>();
   using T               = vec_value_type_t<V>;
@@ -695,19 +707,19 @@ auto vec_inner_mul (V v)
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
-bool vec_is_all_zeros (V v)
+constexpr inline bool vec_is_all_zeros (V v)
 {
   return !vec_inner_or (v);
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
-bool vec_is_all_ones (V v)
+constexpr inline bool vec_is_all_ones (V v)
 {
   return !(~vec_inner_and (v));
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
-V zero_to_lowest (V v)
+constexpr inline V zero_to_lowest (V v)
 {
   using T         = vec_value_type_t<V>;
   constexpr T min = -std::numeric_limits<T>::lowest();
