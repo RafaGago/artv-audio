@@ -519,10 +519,10 @@ private:
   //----------------------------------------------------------------------------
   void process_block (xspan<std::array<float, 2>> io)
   {
-    // TODO: test __fp16 (half-precision float storage)
+    // TODO: test __fp16 (half-precision float storage).
     assert (io.size() <= max_block_size);
 
-    // clip + convert  to u16
+    // clip + convert to u16
     using fixptype = q0_15;
     array2d<fixptype, 2, max_block_size> fixedp;
     loop_parameters                      pars;
@@ -598,8 +598,7 @@ private:
   //----------------------------------------------------------------------------
   void process_rev1 (xspan<std::array<q0_15, 2>> io, loop_parameters& par)
   {
-    auto&          rev = std::get<rev1_type> (_modes);
-    constexpr auto one = q0_15::max();
+    auto& rev = std::get<rev1_type> (_modes);
 
     using fixptarr    = std::array<q0_15, max_block_size>;
     using fixptarr_fb = std::array<q0_15, max_block_size + 1>;
@@ -616,13 +615,13 @@ private:
       auto lfo = _lfo_er.tick_sine_fixpt().spec_cast<q0_15>().value();
       lfo1[i].load (lfo[0]);
       lfo2[i].load (lfo[1]);
-      auto half   = q0_15::max() >> 1;
-      auto er_amt = (q0_15) (half + (par.er[i] >> 2));
-      lfo2[i]     = (q0_15) (lfo2[i] * er_amt);
+      constexpr auto half   = q1_14::max() >> 1;
+      auto           er_amt = (q1_14) (half + (par.er[i] >> 2));
+      lfo2[i]               = (q0_15) (lfo2[i] * er_amt);
       // decay fixup
-      auto decay   = (q0_15) (one - par.decay[i]);
-      decay        = (q0_15) (one - decay * decay);
-      par.decay[i] = (q0_15) (fixpt_k {0.6f} + decay * fixpt_k {0.39f});
+      auto decay   = (q1_14) (fixpt_k {1} - par.decay[i]);
+      decay        = (q1_14) (fixpt_k {1} - decay * decay);
+      par.decay[i] = (q1_14) (fixpt_k {0.6f} + decay * fixpt_k {0.39f});
     }
 
     // diffusion -----------------------------
@@ -679,8 +678,8 @@ private:
 
     for (uint i = 0; i < io.size(); ++i) {
       // clang-format off
-      auto mod = (q0_15)
-        (fixpt_k {0.25} + (one - par.mod[i]) * fixpt_k {0.75});
+      auto mod = (q1_14)
+        (fixpt_k {0.25} + (fixpt_k {1} - par.mod[i]) * fixpt_k {0.75});
       // clang-format on
       auto lfo = _lfo.tick_sine_fixpt().spec_cast<q0_15>().value();
       lfo1[i].load (lfo[0]);
@@ -702,10 +701,11 @@ private:
     }
     r.cut_head (1); // drop feedback sample from previous block
 
-    auto late_damp = q0_15::from_float (_param.damp);
-    late_damp      = (q0_15) (fixpt_k {0.9} - (fixpt_k {0.9} * late_damp));
-    late_damp      = (q0_15) (one - late_damp * late_damp);
-    late_damp      = (q0_15) (late_damp * fixpt_k {0.4});
+    auto late_damp_1 = q1_14::from_float (_param.damp);
+    late_damp_1      = (q1_14) (fixpt_k {0.9} - (fixpt_k {0.9} * late_damp_1));
+    late_damp_1      = (q1_14) (fixpt_k {1} - late_damp_1 * late_damp_1);
+    late_damp_1      = (q1_14) (late_damp_1 * fixpt_k {0.4});
+    auto late_damp   = (q0_15) late_damp_1;
 
     // hp skipped for now.
     rev.run_mod<8> (late, lfo1, g);
