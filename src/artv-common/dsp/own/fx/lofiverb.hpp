@@ -111,12 +111,11 @@ public:
     static_assert (get_delay_size (Idx) == 1);
 
     for (uint i = 0; i < io.size(); ++i) {
-      auto y1          = T::from (_stage[Idx].z[0]);
-      auto gv          = (g.value() == 0) ? dd.g : g;
-      auto v           = (T) ((gv.max() - gv) * io[i]);
-      v                = (T) (v + y1 * gv);
-      _stage[Idx].z[0] = v.value();
-      io[i]            = v;
+      auto y1 = T::from (_stage[Idx].z[0]);
+      auto gv = (g.value() == 0) ? dd.g : g;
+      auto v  = (T) ((gv.max() - gv) * io[i]);
+      v       = (T) (v + y1 * gv);
+      io[i]   = v;
     }
   }
   //----------------------------------------------------------------------------
@@ -127,12 +126,11 @@ public:
     static_assert (get_delay_size (Idx) == 1);
 
     for (uint i = 0; i < io.size(); ++i) {
-      auto y1          = T::from (_stage[Idx].z[0]);
-      auto gv          = (g.value() == 0) ? dd.g : g;
-      auto v           = (T) ((gv.max() - gv) * io[i]);
-      v                = (T) (v + y1 * gv);
-      _stage[Idx].z[0] = v.value();
-      io[i]            = (T) (io[i] - v);
+      auto y1 = T::from (_stage[Idx].z[0]);
+      auto gv = (g.value() == 0) ? dd.g : g;
+      auto v  = (T) ((gv.max() - gv) * io[i]);
+      v       = (T) (v + y1 * gv);
+      io[i]   = (T) (io[i] - v);
     }
   }
   //----------------------------------------------------------------------------
