@@ -27,6 +27,7 @@ namespace artv {
 namespace detail { namespace lofiverb {
 //------------------------------------------------------------------------------
 using q0_15          = fixpt_dt<1, 0, 15>;
+using q0_15r         = fixpt_dr<1, 0, 15>;
 using q1_14          = fixpt_dt<1, 1, 14>;
 using fixpt_spls     = fixpt_dt<0, 14, 0>;
 using fixpt_spls_mod = fixpt_dt<0, 9, 0>;
@@ -77,6 +78,7 @@ static constexpr auto get_rev1_delays()
     make_dd (887, -0.5 /*overridden*/), // AP with variable gain
     make_dd (1049), // Delay
     make_dd (1367, 0.618), // Delay + chorus
+    make_dd (0, 0.98), // fixed highpass filter
     make_dd (647)); // delay (allows block processing)
 }
 
@@ -135,13 +137,13 @@ public:
     auto y1 = T::from (_stage[Idx].z[0]);
 
     for (uint i = 0; i < io.size(); ++i) {
-      auto gv = (g.value() == 0) ? dd.g : g;
-      auto v  = (T) ((gv.max() - gv) * io[i]);
-      v       = (T) (v + y1 * gv);
-      y1      = v;
-      io[i]   = (T) (io[i] - v);
+      auto gv          = (g.value() == 0) ? dd.g : g;
+      auto v           = (T) ((gv.max() - gv) * io[i]);
+      v                = (T) (v + y1 * gv);
+      y1               = v;
+      _stage[Idx].z[0] = v.value();
+      io[i]            = (T) (io[i] - v);
     }
-    _stage[Idx].z[0] = io.back().value();
   }
   //----------------------------------------------------------------------------
   // Pure delays with "size > blocksize" are placed before feedback loops to
@@ -447,17 +449,21 @@ public:
   struct tilt_tag {};
   void set (tilt_tag, float v)
   {
-    if (v == _param.tilt_db) {
+    v *= 0.01f;
+    if (v == _param.tilt) {
       return;
     }
-    _param.tilt_db = v;
+    _param.tilt = v;
     _tilt.reset_coeffs (
-      vec_set<2> (330.f), vec_set<2> (0.5f), vec_set<2> ((float) -v), t_spl);
+      vec_set<2> (330.f),
+      vec_set<2> (0.5f),
+      vec_set<2> ((float) v * -14.f),
+      t_spl);
   }
 
   static constexpr auto get_parameter (tilt_tag)
   {
-    return float_param ("dB", -14., 14., 0., 0.1);
+    return float_param ("%", -100, 100., 0., 0.1);
   }
   //----------------------------------------------------------------------------
   static constexpr uint max_predelay_qb = 4;
@@ -560,8 +566,15 @@ public:
     stereo_tag>;
   //----------------------------------------------------------------------------
 private:
-  using q0_15 = detail::lofiverb::q0_15;
-  using q1_14 = detail::lofiverb::q1_14;
+  // q0_15 truncates when dropping fractional bits (leaky).
+  // q0_15r rounds to the nearest (never reaches full zero).
+  //
+  // Using q0_15 as default, with q0_15r at some points compensate the
+  // truncating leakage.
+
+  using q0_15  = detail::lofiverb::q0_15;
+  using q0_15r = detail::lofiverb::q0_15r;
+  using q1_14  = detail::lofiverb::q1_14;
   //----------------------------------------------------------------------------
   static constexpr uint  max_block_size = 32;
   static constexpr uint  n_channels     = 2;
@@ -700,8 +713,8 @@ private:
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       // apply ER feedback
-      er1[i] = (q0_15) (er2[i] * num {0.2});
-      er1[i] = (q0_15) ((late_in[i] + er1[i]) * par.decay[i]);
+      er1[i] = (q0_15r) (er2[i] * num {0.2});
+      er1[i] = (q0_15r) ((late_in[i] + er1[i]) * par.decay[i]);
     }
     er2.cut_head (1); // drop feedback sample from previous block
 
@@ -724,7 +737,7 @@ private:
 
     // feedback handling
     rev.fetch_block_plus_one<14> (l);
-    rev.fetch_block_plus_one<21> (r);
+    rev.fetch_block_plus_one<22> (r);
 
     for (uint i = 0; i < io.size(); ++i) {
       // clang-format off
@@ -737,11 +750,11 @@ private:
       lfo2[i].load (lfo[1]);
       lfo2[i] = (q0_15) (lfo1[i] * mod);
       // prepare input with feedback
-      late[i] = (q0_15) (late_in[i] + r[i] * par.decay[i]);
+      late[i] = (q0_15r) (late_in[i] + r[i] * par.decay[i]);
       // add ER blend to late in
       auto fact  = (q0_15) (par.er[i] * num {0.4});
-      auto er_in = (q0_15) ((er1[i] + er2[i]) * fact);
-      late[i]    = (q0_15) (late[i] + er_in);
+      auto er_in = (q0_15r) ((er1[i] + er2[i]) * fact);
+      late[i]    = (q0_15r) (late[i] + er_in);
 
       // g character
       // clang-format off
@@ -757,8 +770,7 @@ private:
     late_damp_1      = (q1_14) (late_damp_1 * num {0.4});
     auto late_damp   = (q0_15) late_damp_1;
 
-    // hp skipped for now.
-    rev.run_mod<8> (late, lfo1, g);
+    rev.run_mod<8> (late.cast<q0_15r>(), lfo1, g);
     rev.run<9> (late);
     rev.run_lp<10> (late, late_damp);
     std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
@@ -770,23 +782,24 @@ private:
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       // prepare input with feedback
-      late[i] = (q0_15) (late_in[i] + l[i] * par.decay[i]);
+      late[i] = (q0_15r) (late_in[i] + l[i] * par.decay[i]);
 
       auto fact  = (q0_15) (par.er[i] * num {0.4});
-      auto er_in = (q0_15) ((er1[i] - er2[i]) * fact);
-      late[i]    = (q0_15) (late[i] + er_in);
+      auto er_in = (q0_15r) ((er1[i] - er2[i]) * fact);
+      late[i]    = (q0_15r) (late[i] + er_in);
     }
     l.cut_head (1); // drop feedback sample from previous block
 
     std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
-    rev.run_mod<15> (late, lfo2, g);
+    rev.run_mod<15> (late.cast<q0_15r>(), lfo2, g);
     rev.run<16> (late);
     rev.run_lp<17> (late, late_damp);
     std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
     rev.run<18> (late, g);
     rev.run<19> (late);
     rev.run<20> (late);
-    rev.push<21> (late.to_const()); // feedback point
+    rev.run_hp<21> (late);
+    rev.push<22> (late.to_const()); // feedback point
 
     // Mixdown
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
@@ -816,7 +829,7 @@ private:
   struct unsmoothed_parameters {
     u32   mode;
     float mode_headroom_gain;
-    float tilt_db;
+    float tilt;
     float predelay;
     float damp;
   };
