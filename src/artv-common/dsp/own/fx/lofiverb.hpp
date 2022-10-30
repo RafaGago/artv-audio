@@ -49,9 +49,6 @@ static constexpr detail::lofiverb::delay_data make_dd (
     q0_15::from_float (g)};
 }
 //------------------------------------------------------------------------------
-static constexpr auto dummy = q0_15::from_float (-0.707);
-
-//------------------------------------------------------------------------------
 static constexpr auto get_rev1_delays()
 {
   return make_array<delay_data> (
@@ -88,7 +85,7 @@ struct rev1_spec {
 };
 //------------------------------------------------------------------------------
 template <class Spec>
-class reverb_loop_helper {
+class reverb_tool {
 public:
   //----------------------------------------------------------------------------
   static constexpr uint get_required_size()
@@ -114,11 +111,12 @@ public:
     static_assert (get_delay_size (Idx) == 1);
 
     for (uint i = 0; i < io.size(); ++i) {
-      auto y1 = T::from (_stage[Idx].z[0]);
-      auto gv = (g.value() == 0) ? dd.g : g;
-      auto v  = (T) ((gv.max() - gv) * io[i]);
-      v       = (T) (v + y1 * gv);
-      io[i]   = v;
+      auto y1          = T::from (_stage[Idx].z[0]);
+      auto gv          = (g.value() == 0) ? dd.g : g;
+      auto v           = (T) ((gv.max() - gv) * io[i]);
+      v                = (T) (v + y1 * gv);
+      _stage[Idx].z[0] = v.value();
+      io[i]            = v;
     }
   }
   //----------------------------------------------------------------------------
@@ -129,11 +127,12 @@ public:
     static_assert (get_delay_size (Idx) == 1);
 
     for (uint i = 0; i < io.size(); ++i) {
-      auto y1 = T::from (_stage[Idx].z[0]);
-      auto gv = (g.value() == 0) ? dd.g : g;
-      auto v  = (T) ((gv.max() - gv) * io[i]);
-      v       = (T) (v + y1 * gv);
-      io[i]   = (T) (io[i] - v);
+      auto y1          = T::from (_stage[Idx].z[0]);
+      auto gv          = (g.value() == 0) ? dd.g : g;
+      auto v           = (T) ((gv.max() - gv) * io[i]);
+      v                = (T) (v + y1 * gv);
+      _stage[Idx].z[0] = v.value();
+      io[i]            = (T) (io[i] - v);
     }
   }
   //----------------------------------------------------------------------------
@@ -800,8 +799,7 @@ private:
 
   std::array<q0_15, 8> _feedback;
 
-  using rev1_type
-    = detail::lofiverb::reverb_loop_helper<detail::lofiverb::rev1_spec>;
+  using rev1_type = detail::lofiverb::reverb_tool<detail::lofiverb::rev1_spec>;
   std::variant<rev1_type> _modes;
 
   uint  _n_processed_samples;
