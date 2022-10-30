@@ -26,10 +26,10 @@
 namespace artv {
 namespace detail { namespace lofiverb {
 //------------------------------------------------------------------------------
-using q0_15          = fixpt_p<1, 0, 15>;
-using q1_14          = fixpt_p<1, 1, 14>;
-using fixpt_spls     = fixpt_p<0, 14, 0>;
-using fixpt_spls_mod = fixpt_p<0, 9, 0>;
+using q0_15          = fixpt_dt<1, 0, 15>;
+using q1_14          = fixpt_dt<1, 1, 14>;
+using fixpt_spls     = fixpt_dt<0, 14, 0>;
+using fixpt_spls_mod = fixpt_dt<0, 9, 0>;
 //------------------------------------------------------------------------------
 struct delay_data {
   fixpt_spls     spls;
@@ -294,11 +294,11 @@ private:
 
     auto fixpt_spls  = dd.spls.add_sign() + (lfo * dd.mod.add_sign());
     auto n_spls      = fixpt_spls.to_int();
-    auto n_spls_frac = fixpt_spls.fractional().to_lossless();
+    auto n_spls_frac = fixpt_spls.fractional().to_dynamic();
     auto d           = n_spls_frac + num {0.418f};
-    auto one         = fixpt_p<1, 1, 0>::from_int (1);
+    auto one         = fixpt_dt<1, 1, 0>::from_int (1);
     auto co_thiran   = (one - d) / (one + d); // 0.4104 to -1
-    auto a           = co_thiran.cast<fixpt_p<1, 0, 23>>();
+    auto a           = co_thiran.cast<fixpt<1, 0, 23>>();
 
     auto z0 = get<Idx, T> (n_spls - 1);
     auto z1 = get<Idx, T> (n_spls);

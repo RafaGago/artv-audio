@@ -7,6 +7,7 @@
 
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/compiler.hpp"
+#include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/vec.hpp"
@@ -81,20 +82,29 @@ num (T) -> num<T>;
 #error "This span implementation requires __cpp_deduction_guides"
 #endif
 //------------------------------------------------------------------------------
+// fixed point flags
+// dynamic: Arithmetic operations may expand the factor (fixed point location)
+//   and precission. When disabled truncation to the original type happens after
+//   each operation.
+static constexpr uint fixpt_dynamic = 1 << 0;
+// ronding: Conversions of fixed point types do round to the nearest instead of
+// truncating
+static constexpr uint fixpt_rounding = 1 << 1;
+
 template <
   uint N_sign,
   uint N_int,
   uint N_frac,
-  bool Is_lossless = true,
-  class Traits     = std_fp_types_trait>
+  uint Flags   = fixpt_dynamic,
+  class Traits = std_fp_types_trait>
 class fixpt;
 
 // check if a type is a fixed point int
 template <class T>
 struct is_fixpt : public std::false_type {};
 
-template <uint N_sign, uint N_int, uint N_frac, bool Is_lossless, class Traits>
-struct is_fixpt<fixpt<N_sign, N_int, N_frac, Is_lossless, Traits>>
+template <uint N_sign, uint N_int, uint N_frac, uint Flags, class Traits>
+struct is_fixpt<fixpt<N_sign, N_int, N_frac, Flags, Traits>>
   : public std::true_type {};
 
 template <class T>
@@ -111,13 +121,12 @@ template <
   uint N_int2,
   uint N_frac1,
   uint N_frac2,
-  bool Is_lossless1,
-  bool Is_lossless2,
+  uint Flags1,
+  uint Flags2,
   class Traits>
 struct fixpt_are_compatible<
-  fixpt<N_sign1, N_int1, N_frac1, Is_lossless1, Traits>,
-  fixpt<N_sign2, N_int2, N_frac2, Is_lossless2, Traits>>
-  : public std::true_type {};
+  fixpt<N_sign1, N_int1, N_frac1, Flags1, Traits>,
+  fixpt<N_sign2, N_int2, N_frac2, Flags2, Traits>> : public std::true_type {};
 
 template <class T1, class T2>
 static constexpr bool fixpt_are_compatible_v
@@ -125,33 +134,36 @@ static constexpr bool fixpt_are_compatible_v
 
 //------------------------------------------------------------------------------
 // A fixed point arithmetic class that can use native GCC/clang vector types.
+// crafted for audio DSP duties.
 //
-// When "Is_lossless" is true the returned types on arithmetic operations expand
+// When "Is_dynamic" is true the returned types on arithmetic operations expand
 // its type to represent the range incresases. In other words, type promotions
 // happen.
 //
-// When "Is_lossless" is false there are no type promotions, but resoultion
+// When "Is_dynamic" is false there are no type promotions, but resoultion
 // loss.
 //
-// Notice that for non-lossless types it can make sense to reduce the range as
+// Notice that for non-dynamic types it can make sense to reduce the range as
 // much as you know, e.g. using a Q3.7 (16-bit variable), as the (possible)
 // range will expand automatically with most arithmetic operations.
 //
 // "Traits" is a description of the underlying types that can be used, see e.g.
 //  "std_fp_types_trait" and "vec_fp_types_trait"
 //------------------------------------------------------------------------------
-template <uint N_sign, uint N_int, uint N_frac, bool Is_lossless, class Traits>
+template <uint N_sign, uint N_int, uint N_frac, uint Flags, class Traits>
 class fixpt {
 public:
   //----------------------------------------------------------------------------
-  static constexpr uint n_int       = N_int;
-  static constexpr uint n_frac      = N_frac;
-  static constexpr uint n_sign      = N_sign;
-  static constexpr uint n_bits      = n_sign + n_int + n_frac;
-  static constexpr uint is_signed   = (n_sign == 1);
-  static constexpr bool is_lossless = Is_lossless;
-  using traits                      = Traits;
-  using promotions                  = typename Traits::promotions;
+  static constexpr uint n_int          = N_int;
+  static constexpr uint n_frac         = N_frac;
+  static constexpr uint n_sign         = N_sign;
+  static constexpr uint n_bits         = n_sign + n_int + n_frac;
+  static constexpr uint is_signed      = (n_sign == 1);
+  static constexpr uint flags          = Flags;
+  static constexpr bool is_dynamic     = (Flags & fixpt_dynamic) != 0;
+  static constexpr bool rounds_nearest = (Flags & fixpt_rounding) != 0;
+  using traits                         = Traits;
+  using promotions                     = typename Traits::promotions;
   //----------------------------------------------------------------------------
 private:
   template <class T, uint Fail = -1u>
@@ -199,10 +211,7 @@ private:
   using enable_if_int_same_signedness = std::enable_if_t<
     std::is_integral_v<T> && std::is_signed_v<T> == (bool) n_sign>;
 
-  template <uint N_intb, uint N_fracb>
-  using compatiblefp = fixpt<n_sign, N_intb, N_fracb, is_lossless, traits>;
-
-  using mytype = compatiblefp<n_int, n_frac>;
+  using mytype = fixpt<n_sign, n_int, n_frac, flags, traits>;
 
   template <class T>
   static constexpr bool rhs_is_compatible
@@ -210,7 +219,7 @@ private:
 
   template <class T>
   static constexpr bool rhs_is_assign_compat = rhs_is_compatible<T>
-    && (is_lossless
+    && (is_dynamic
         || (n_frac >= fixpt_n_frac<T>() && n_int >= fixpt_n_int<T>()));
 
   template <class T>
@@ -221,12 +230,12 @@ private:
     = std::enable_if_t<rhs_is_assign_compat<T>>;
 
   template <class T>
-  using enable_if_lhs_is_lossless
-    = std::enable_if_t<rhs_is_compatible<T> && is_lossless>;
+  using enable_if_lhs_is_dynamic
+    = std::enable_if_t<rhs_is_compatible<T> && is_dynamic>;
 
   template <class T>
-  using enable_if_lhs_is_lossy
-    = std::enable_if_t<rhs_is_compatible<T> && !is_lossless>;
+  using enable_if_lhs_is_static
+    = std::enable_if_t<rhs_is_compatible<T> && !is_dynamic>;
 
   //----------------------------------------------------------------------------
 public:
@@ -244,16 +253,48 @@ public:
   static constexpr uint vector_size = type::vector_size;
   static constexpr uint scalar_bits = type::n_bits;
 
-  using near_lossless = fixpt<n_sign, n_int, n_frac, true, traits>;
-  using near_lossy    = fixpt<n_sign, n_int, n_frac, false, traits>;
-  using near_unsigned = fixpt<0, n_int + n_sign, n_frac, is_lossless, traits>;
+  static_assert (
+    is_dynamic || n_bits == scalar_bits,
+    "Static/lossy types have to use all bits of the underlying integral type");
+
+  // only used because static types always need an amount of bits equal to the
+  // scalar type
+  template <uint N_intb, uint N_fracb>
+  using compatible_dynamic
+    = fixpt<n_sign, N_intb, N_fracb, flags | fixpt_dynamic, traits>;
+
+  // compatible_static doesn't allow unused bits. N_intb might be rounded up.
+  template <uint N_intb, uint N_fracb>
+  using compatible_static = fixpt<
+    n_sign,
+    compatible_dynamic<N_intb, N_fracb>::scalar_bits - n_sign - N_fracb,
+    N_fracb,
+    flags & ~fixpt_dynamic,
+    traits>;
+
+  template <uint N_intb, uint N_fracb>
+  using compatible = std::conditional_t<
+    is_dynamic,
+    compatible_dynamic<N_intb, N_fracb>,
+    compatible_static<N_intb, N_fracb>>;
+
+  using near_dynamic
+    = fixpt<n_sign, n_int, n_frac, flags | fixpt_dynamic, traits>;
+  using near_static
+    = fixpt<n_sign, n_int, n_frac, flags & ~fixpt_dynamic, traits>;
+  using near_rounding
+    = fixpt<n_sign, n_int, n_frac, flags | fixpt_rounding, traits>;
+  using near_truncating
+    = fixpt<n_sign, n_int, n_frac, flags & ~fixpt_rounding, traits>;
+  using near_unsigned = fixpt<0, n_int + n_sign, n_frac, flags, traits>;
   using near_signed   = fixpt<
     1,
     !!n_int ? (n_int - n_sign) : 0,
     !n_int ? (n_frac - n_sign) : n_frac,
-    is_lossless,
+    flags,
     traits>;
-  using with_sign = fixpt<1, n_int, n_frac, is_lossless, traits>;
+  using with_sign = fixpt<1, n_int, n_frac, is_dynamic, traits>;
+
   //----------------------------------------------------------------------------
   constexpr fixpt() noexcept { _v = decltype (_v) {}; }
 
@@ -354,7 +395,7 @@ public:
   constexpr void load_int (value_type v) noexcept { *this = from_int (v); }
   //----------------------------------------------------------------------------
   // cast to any fixp, same caveats that static casting regular integers
-  // apply e.g. signedess and range issues.
+  // apply e.g. signedness and range issues.
   template <
     class T,
     std::enable_if_t<fixpt_are_compatible_v<T, mytype>>* = nullptr>
@@ -363,14 +404,16 @@ public:
     // notice that the casts are ignoring the sign...
     constexpr auto shift = (int) (T::n_frac - n_frac);
     T              ret;
-    using int_type = typename T::value_type;
+    using scalar = typename T::scalar_type;
     if constexpr (shift > 0) {
       // dst has more fractional bits
-      ret._v = ashl<shift> ((int_type) _v);
+      ret._v = ashl<shift> (vec_cast<scalar> (_v));
+    }
+    else if constexpr (shift < 0) {
+      ret._v = vec_cast<scalar> (ashr_truncate<-shift, scalar_type> (_v));
     }
     else {
-      // instance has more or equal fractional bits
-      ret._v = (int_type) ashr<-shift> (_v);
+      ret._v = vec_cast<scalar> (_v);
     }
     return ret;
   }
@@ -389,7 +432,7 @@ public:
   constexpr auto spec_cast (T) const noexcept
   {
     return cast (
-      fixpt<T::n_sign, T::n_int, T::n_frac, T::is_lossless, traits> {});
+      fixpt<T::n_sign, T::n_int, T::n_frac, T::is_dynamic, traits> {});
   }
   //----------------------------------------------------------------------------
   template <class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
@@ -398,11 +441,24 @@ public:
     return spec_cast (T {});
   }
   //----------------------------------------------------------------------------
-  constexpr near_lossless to_lossless() const noexcept
+  constexpr near_dynamic to_dynamic() const noexcept
   {
-    return cast<near_lossless>();
+    return cast<near_dynamic>();
   };
-  constexpr near_lossy to_lossy() const noexcept { return cast<near_lossy>(); };
+  constexpr near_static to_static() const noexcept
+  {
+    return cast<near_static>();
+  };
+
+  constexpr near_truncating to_truncating() const noexcept
+  {
+    return cast<near_truncating>();
+  };
+  constexpr near_rounding to_rounding() const noexcept
+  {
+    return cast<near_rounding>();
+  };
+
   constexpr near_signed to_signed() const noexcept
   {
     return cast<near_signed>();
@@ -419,13 +475,13 @@ public:
   {
     static_assert (Int >= 0 ? true : (-Int <= n_int));
     static_assert (Frac >= 0 ? true : (-Frac <= n_frac));
-    return cast (compatiblefp<n_int + Int, n_frac + Frac> {});
+    return cast (compatible<n_int + Int, n_frac + Frac> {});
   }
   // Add or remove resolution both on the integer and fractional part
   template <uint Int, uint Frac = 0>
   constexpr auto set_size() const noexcept
   {
-    return cast (compatiblefp<Int, Frac> {});
+    return cast (compatible<Int, Frac> {});
   }
   //----------------------------------------------------------------------------
   constexpr float_type to_float() const noexcept
@@ -438,8 +494,7 @@ public:
   constexpr value_type to_int() const noexcept { return ashr<n_frac> (_v); }
   //----------------------------------------------------------------------------
   // returns the fractional part only. for signed types it might be negative.
-  constexpr fixpt<n_sign, 0, n_frac, is_lossless, traits> fractional()
-    const noexcept
+  constexpr fixpt<n_sign, 0, n_frac, flags, traits> fractional() const noexcept
   {
     auto v = _v;
     if constexpr (is_signed) {
@@ -453,17 +508,14 @@ public:
     else {
       v &= frac_mask;
     }
-    return fixpt<n_sign, 0, n_frac, is_lossless, traits>::from (v);
+    return fixpt<n_sign, 0, n_frac, flags, traits>::from (v);
   }
   //----------------------------------------------------------------------------
   // useful E.g. after random loads to check that the value is in range.
   // Ideally should happen after each load, store, constructor, assignment,
   // etc from external sources, unfortunately this is a numeric/performace
   // sensitive class.
-  constexpr fixpt normalize() noexcept
-  {
-    return from (alsb_mask (_v, n_frac + n_int));
-  }
+  constexpr void normalize() noexcept { _v = alsb_mask (_v, n_bits); }
   //----------------------------------------------------------------------------
   constexpr bool is_normalized() const noexcept
   {
@@ -580,14 +632,14 @@ public:
     return vec_cast<vec_value_type_t<T>> (to_int());
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
+  template <class T, enable_if_lhs_is_static<T>* = nullptr>
   constexpr auto& operator+= (T rhs) noexcept
   {
     _v = bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a + b; });
     return *this;
   }
 
-  template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
+  template <class T, enable_if_lhs_is_static<T>* = nullptr>
   constexpr auto operator+ (T rhs) const noexcept
   {
     auto ret {*this};
@@ -595,24 +647,24 @@ public:
     return ret;
   }
 
-  template <class T, enable_if_lhs_is_lossless<T>* = nullptr>
+  template <class T, enable_if_lhs_is_dynamic<T>* = nullptr>
   constexpr auto operator+ (T rhs) const noexcept
   {
     assert (rhs.is_normalized()); // making sure it is in range
     constexpr uint int_b  = std::max (n_int, T::n_int) + 1;
     constexpr uint frac_b = std::max (n_frac, T::n_frac);
-    return compatiblefp<int_b, frac_b>::from (
+    return compatible<int_b, frac_b>::from (
       bin_op<int_b, frac_b> (rhs, [] (auto a, auto b) { return a + b; }));
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
+  template <class T, enable_if_lhs_is_static<T>* = nullptr>
   constexpr auto& operator-= (T rhs) noexcept
   {
     _v = bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a - b; });
     return *this;
   }
 
-  template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
+  template <class T, enable_if_lhs_is_static<T>* = nullptr>
   constexpr auto operator- (T rhs) const noexcept
   {
     auto ret {*this};
@@ -620,17 +672,17 @@ public:
     return ret;
   }
 
-  template <class T, enable_if_lhs_is_lossless<T>* = nullptr>
+  template <class T, enable_if_lhs_is_dynamic<T>* = nullptr>
   constexpr auto operator- (T rhs) const noexcept
   {
     assert (rhs.is_normalized()); // making sure it is in range
     constexpr uint int_b  = std::max (n_int, T::n_int) + n_sign;
     constexpr uint frac_b = std::max (n_frac, T::n_frac);
-    return compatiblefp<int_b, frac_b>::from (
+    return compatible<int_b, frac_b>::from (
       bin_op<int_b, frac_b> (rhs, [] (auto a, auto b) { return a - b; }));
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
+  template <class T, enable_if_lhs_is_static<T>* = nullptr>
   constexpr auto& operator*= (T rhs) noexcept
   {
     // only make space to handle (and revert) the shift caused by
@@ -638,14 +690,15 @@ public:
     constexpr uint int_b  = n_int + T::n_frac;
     constexpr uint frac_b = n_frac;
 
-    using dst_type      = compatiblefp<int_b, frac_b>;
+    using dst_type      = compatible<int_b, frac_b>;
     using bigger_scalar = typename dst_type::scalar_type;
     auto mul = vec_cast<bigger_scalar> (_v) * vec_cast<bigger_scalar> (rhs._v);
-    _v       = vec_cast<scalar_type> (ashr<T::n_frac> (mul));
+
+    _v = vec_cast<scalar_type> (ashr_truncate<T::n_frac, bigger_scalar> (mul));
     return *this;
   }
 
-  template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
+  template <class T, enable_if_lhs_is_static<T>* = nullptr>
   constexpr auto operator* (T rhs) const noexcept
   {
     auto ret {*this};
@@ -653,7 +706,7 @@ public:
     return ret;
   }
 
-  template <class T, enable_if_lhs_is_lossless<T>* = nullptr>
+  template <class T, enable_if_lhs_is_dynamic<T>* = nullptr>
   constexpr auto operator* (T rhs) const noexcept
   {
     assert (rhs.is_normalized()); // making sure it is in range
@@ -661,26 +714,27 @@ public:
     constexpr uint int_b  = n_int + T::n_int;
     constexpr uint frac_b = n_frac + T::n_frac;
 
-    using lossless_type = compatiblefp<int_b, frac_b>;
-    using VT            = typename lossless_type::value_type;
-    return lossless_type::from ((VT) _v * (VT) rhs._v);
+    using lossless_type = compatible<int_b, frac_b>;
+    using scalar        = typename lossless_type::scalar_type;
+    return lossless_type::from (
+      vec_cast<scalar> (_v) * vec_cast<scalar> (rhs._v));
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
+  template <class T, enable_if_lhs_is_static<T>* = nullptr>
   constexpr auto& operator/= (T rhs) noexcept
   {
     // only make space to handle the pre-shift required for dividing while
     // keeping the same scaling.
     constexpr uint int_b  = n_int + T::n_frac;
     constexpr uint frac_b = n_frac;
-    using dst_type        = compatiblefp<int_b, frac_b>;
+    using dst_type        = compatible<int_b, frac_b>;
 
     auto tmp = cast<dst_type>();
-    this->_v = (value_type) (ashl<T::n_frac> (tmp._v) / rhs._v);
+    this->_v = vec_cast<scalar_type> (ashl<T::n_frac> (tmp._v) / rhs._v);
     return *this;
   }
 
-  template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
+  template <class T, enable_if_lhs_is_static<T>* = nullptr>
   constexpr auto operator/ (T rhs) const noexcept
   {
     auto ret {*this};
@@ -688,7 +742,7 @@ public:
     return ret;
   }
 
-  template <class T, enable_if_lhs_is_lossless<T>* = nullptr>
+  template <class T, enable_if_lhs_is_dynamic<T>* = nullptr>
   constexpr auto operator/ (T rhs) const noexcept
   {
     assert (rhs.is_normalized()); // making sure it is in range
@@ -696,7 +750,7 @@ public:
     constexpr uint int_b  = n_int + T::n_frac;
     constexpr uint frac_b = n_frac + T::n_int;
 
-    using lossless_type = compatiblefp<int_b, frac_b>;
+    using lossless_type = compatible<int_b, frac_b>;
 
     auto ret = cast<lossless_type>();
     ret._v   = ashl<T::n_frac> (ret._v);
@@ -763,7 +817,24 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  static constexpr auto frac_mask = lsb_mask<scalar_uint> (n_frac);
+  template <uint N, class T_scalar, class T>
+  static constexpr auto ashr_truncate (T v)
+  {
+    if constexpr (rounds_nearest) {
+      constexpr auto roundval = bit<T_scalar> (N - 1);
+      if constexpr (std::is_signed_v<T_scalar>) {
+        constexpr auto roundv = vec_set<vec_traits_t<T>::size> (roundval);
+        v += (v >= 0) ? roundv : -roundv;
+      }
+      else {
+        v += roundval;
+      }
+    }
+    return ashr<N> (v);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr auto frac_mask
+    = n_frac != 0 ? lsb_mask<scalar_uint> (n_frac) : scalar_uint {};
 
   static constexpr scalar_uint unsigned_zeroes = ((scalar_uint) 0);
   static constexpr scalar_uint unsigned_ones   = ((scalar_uint) 0) - 1u;
@@ -794,15 +865,43 @@ private:
   template <uint Int, uint Frac, class F, class T>
   constexpr auto bin_op (T other, F&& fn) const noexcept
   {
-    using lossless_type = compatiblefp<Int, Frac>;
+    using lossless_type = compatible<Int, Frac>;
     return fn (cast (lossless_type {})._v, other.cast (lossless_type {})._v);
   }
   //----------------------------------------------------------------------------
-  template <uint, uint, uint, bool, class>
+  template <uint, uint, uint, uint, class>
   friend class fixpt;
 
   value_type _v;
 };
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// Static (arithmetic ops don't change the type). Truncation when dropping bits.
+template <uint S, uint I, uint F, class Traits = std_fp_types_trait>
+using fixpt_st = fixpt<S, I, F, 0, Traits>;
+
+// Dynamic (arithmetic ops expand the type). Truncation when dropping bits.
+template <uint S, uint I, uint F, class Traits = std_fp_types_trait>
+using fixpt_dt = fixpt<S, I, F, fixpt_dynamic, Traits>;
+
+// Static (arithmetic ops don't change the type). Rounding when dropping bits.
+template <uint S, uint I, uint F, class Traits = std_fp_types_trait>
+using fixpt_sr = fixpt<S, I, F, fixpt_dynamic | fixpt_rounding, Traits>;
+
+// Dynamic (arithmetic ops expand the type). Rounding when dropping bits.
+template <uint S, uint I, uint F, class Traits = std_fp_types_trait>
+using fixpt_dr = fixpt<S, I, F, fixpt_dynamic | fixpt_rounding, Traits>;
+//------------------------------------------------------------------------------
+template <bool Sign, class T, class = void>
+struct is_fixpt_with_signedness : public std::false_type {};
+
+template <bool Sign, class T>
+struct is_fixpt_with_signedness<Sign, T, std::enable_if_t<is_fixpt_v<T>>>
+  : public std::integral_constant<bool, T::is_signed == Sign> {};
+
+template <bool Signedness, class T>
+static constexpr bool is_fixpt_with_signedness_v
+  = is_fixpt_with_signedness<Signedness, T>::value;
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 template <
@@ -984,32 +1083,6 @@ constexpr bool operator> (num<T> lhs, U rhs) noexcept
 {
   return U {lhs} > rhs;
 }
-//------------------------------------------------------------------------------
-//------------------------------------------------------------------------------
-// fixed point type with no promotions
-template <uint S, uint I, uint F, class Traits = std_fp_types_trait>
-using fixpt_np = fixpt<
-  S,
-  // round up to the capacity of the scalar type
-  fixpt<S, I, F, false, Traits>::scalar_bits - F - S,
-  F,
-  false,
-  Traits>;
-
-// fixed point type with automatic promotions/range increases
-template <uint S, uint I, uint F, class Traits = std_fp_types_trait>
-using fixpt_p = fixpt<S, I, F, true, Traits>;
-//------------------------------------------------------------------------------
-template <bool Sign, class T, class = void>
-struct is_fixpt_with_signedness : public std::false_type {};
-
-template <bool Sign, class T>
-struct is_fixpt_with_signedness<Sign, T, std::enable_if_t<is_fixpt_v<T>>>
-  : public std::integral_constant<bool, T::is_signed == Sign> {};
-
-template <bool Signedness, class T>
-static constexpr bool is_fixpt_with_signedness_v
-  = is_fixpt_with_signedness<Signedness, T>::value;
 //------------------------------------------------------------------------------
 // ternary operators can't be overloaded. This is mostly done for native vector
 // types.

@@ -22,8 +22,8 @@ class pitch_shift_sin {
 public:
   //----------------------------------------------------------------------------
   struct reader {
-    fixpt<0, 20, 22, 0> pos {}; // u64
-    fixpt<0, 10, 22, 0> delta {}; // u32
+    fixpt_st<0, 42, 22> pos {};
+    fixpt_st<0, 10, 22> delta {};
   };
   //----------------------------------------------------------------------------
   void reset (xspan<V> mem) // has a latency of "mem.size() / 2"
