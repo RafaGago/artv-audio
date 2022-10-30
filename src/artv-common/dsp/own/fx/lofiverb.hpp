@@ -250,7 +250,7 @@ private:
     auto fixpt_spls  = dd.spls.add_sign() + (lfo * dd.mod.add_sign());
     auto n_spls      = fixpt_spls.to_int();
     auto n_spls_frac = fixpt_spls.fractional().to_lossless();
-    auto d           = n_spls_frac + fixpt_k {0.418f};
+    auto d           = n_spls_frac + num {0.418f};
     auto one         = fixpt_p<1, 1, 0>::from_int (1);
     auto co_thiran   = (one - d) / (one + d); // 0.4104 to -1
     auto a           = co_thiran.cast<fixpt_p<1, 0, 23>>();
@@ -619,9 +619,9 @@ private:
       auto           er_amt = (q1_14) (half + (par.er[i] >> 2));
       lfo2[i]               = (q0_15) (lfo2[i] * er_amt);
       // decay fixup
-      auto decay   = (q1_14) (fixpt_k {1} - par.decay[i]);
-      decay        = (q1_14) (fixpt_k {1} - decay * decay);
-      par.decay[i] = (q1_14) (fixpt_k {0.6f} + decay * fixpt_k {0.39f});
+      auto decay   = (q1_14) (num {1} - par.decay[i]);
+      decay        = (q1_14) (num {1} - decay * decay);
+      par.decay[i] = (q1_14) (num {0.6f} + decay * num {0.39f});
     }
 
     // diffusion -----------------------------
@@ -646,7 +646,7 @@ private:
 
     for (uint i = 0; i < io.size(); ++i) {
       // apply ER feedback
-      er1[i] = (q0_15) (er2[i] * fixpt_k {0.2});
+      er1[i] = (q0_15) (er2[i] * num {0.2});
       er1[i] = (q0_15) ((late_in[i] + er1[i]) * par.decay[i]);
     }
     er2.cut_head (1); // drop feedback sample from previous block
@@ -679,7 +679,7 @@ private:
     for (uint i = 0; i < io.size(); ++i) {
       // clang-format off
       auto mod = (q1_14)
-        (fixpt_k {0.25} + (fixpt_k {1} - par.mod[i]) * fixpt_k {0.75});
+        (num {0.25} + (num {1} - par.mod[i]) * num {0.75});
       // clang-format on
       auto lfo = _lfo.tick_sine_fixpt().spec_cast<q0_15>().value();
       lfo1[i].load (lfo[0]);
@@ -689,22 +689,22 @@ private:
       // prepare input with feedback
       late[i] = (q0_15) (late_in[i] + r[i] * par.decay[i]);
       // add ER blend to late in
-      auto fact  = (q0_15) (par.er[i] * fixpt_k {0.4});
+      auto fact  = (q0_15) (par.er[i] * num {0.4});
       auto er_in = (q0_15) ((er1[i] + er2[i]) * fact);
       late[i]    = (q0_15) (late[i] + er_in);
 
       // g character
       // clang-format off
       g[i] = (q0_15)
-        (fixpt_k {0.618} + par.character[i] * fixpt_k {(0.707 - 0.618) * 2.});
+        (num {0.618} + par.character[i] * num {(0.707 - 0.618) * 2.});
       // clang-format on
     }
     r.cut_head (1); // drop feedback sample from previous block
 
     auto late_damp_1 = q1_14::from_float (_param.damp);
-    late_damp_1      = (q1_14) (fixpt_k {0.9} - (fixpt_k {0.9} * late_damp_1));
-    late_damp_1      = (q1_14) (fixpt_k {1} - late_damp_1 * late_damp_1);
-    late_damp_1      = (q1_14) (late_damp_1 * fixpt_k {0.4});
+    late_damp_1      = (q1_14) (num {0.9} - (num {0.9} * late_damp_1));
+    late_damp_1      = (q1_14) (num {1} - late_damp_1 * late_damp_1);
+    late_damp_1      = (q1_14) (late_damp_1 * num {0.4});
     auto late_damp   = (q0_15) late_damp_1;
 
     // hp skipped for now.
@@ -721,7 +721,7 @@ private:
       // prepare input with feedback
       late[i] = (q0_15) (late_in[i] + l[i] * par.decay[i]);
 
-      auto fact  = (q0_15) (par.er[i] * fixpt_k {0.4});
+      auto fact  = (q0_15) (par.er[i] * num {0.4});
       auto er_in = (q0_15) ((er1[i] - er2[i]) * fact);
       late[i]    = (q0_15) (late[i] + er_in);
     }
@@ -739,13 +739,13 @@ private:
 
     // Mixdown
     for (uint i = 0; i < io.size(); ++i) {
-      io[i][0] = (q0_15) (-er1[i] * fixpt_k {0.825f});
-      io[i][0] = (q0_15) (io[i][0] - er2[i] * fixpt_k {0.423});
+      io[i][0] = (q0_15) (-er1[i] * num {0.825f});
+      io[i][0] = (q0_15) (io[i][0] - er2[i] * num {0.423});
       io[i][0] = (q0_15) (io[i][0] * par.er[i]);
       io[i][0] = (q0_15) (io[i][0] + l[i]);
 
-      io[i][1] = (q0_15) (-er1[i] * fixpt_k {0.855f});
-      io[i][1] = (q0_15) (io[i][1] + er2[i] * fixpt_k {0.443});
+      io[i][1] = (q0_15) (-er1[i] * num {0.855f});
+      io[i][1] = (q0_15) (io[i][1] + er2[i] * num {0.443});
       io[i][1] = (q0_15) (io[i][1] * par.er[i]);
       io[i][1] = (q0_15) (io[i][1] + r[i]);
     }

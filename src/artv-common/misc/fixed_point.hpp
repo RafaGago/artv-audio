@@ -67,16 +67,16 @@ struct first_type_n_bits_gt_n {
 } // namespace detail
 
 //------------------------------------------------------------------------------
-// a class to easily create values that automatically get the type of the
-// fixed point operand they are applied to.
+// A number wrapper, intended to easily create values that automatically get the
+// type of the fixed point operand they are applied to.
 template <class T>
-struct fixpt_k {
+struct num {
   T value;
 };
 
 #if defined(__cpp_deduction_guides)
 template <class T>
-fixpt_k (T) -> fixpt_k<T>;
+num (T) -> num<T>;
 #else
 #error "This span implementation requires __cpp_deduction_guides"
 #endif
@@ -264,7 +264,7 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T, enable_if_vec_or_scalar_t<T>* = nullptr>
-  constexpr fixpt (fixpt_k<T> v) noexcept
+  constexpr fixpt (num<T> v) noexcept
   {
     *this = v;
   }
@@ -278,7 +278,6 @@ public:
   // fixpt(fixpt&&) = default
   // fixpt& operator= (fixpt&&) = default;
   ~fixpt() = default;
-
   //----------------------------------------------------------------------------
   // raw value load
   static constexpr fixpt from (value_type raw_val) noexcept
@@ -468,8 +467,7 @@ public:
   constexpr fixpt<n_sign, 0, n_frac, is_lossless, traits> fractional()
     const noexcept
   {
-    // TODO
-    auto v = lsb_mask<uint_type> (n_frac) & _v;
+    auto v = _v;
     if constexpr (is_signed) {
       if (v >= 0) {
         v &= frac_mask;
@@ -518,14 +516,14 @@ public:
   }
   //----------------------------------------------------------------------------
   template <class T, enable_if_any_int_vec_or_scalar_t<T>* = nullptr>
-  constexpr fixpt& operator= (fixpt_k<T> rhs) noexcept
+  constexpr fixpt& operator= (num<T> rhs) noexcept
   {
     *this = from_int (rhs.value);
     return *this;
   }
   //----------------------------------------------------------------------------
   template <class T, enable_if_floatpt_vec_or_scalar_t<T>* = nullptr>
-  constexpr fixpt& operator= (fixpt_k<T> rhs) noexcept
+  constexpr fixpt& operator= (num<T> rhs) noexcept
   {
     *this = from_float (rhs.value);
     return *this;
@@ -794,7 +792,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<T> && is_vec_or_scalar_v<U>>* = nullptr>
-constexpr auto operator+ (T lhs, fixpt_k<U> rhs) noexcept
+constexpr auto operator+ (T lhs, num<U> rhs) noexcept
 {
   return lhs + T {rhs};
 }
@@ -803,7 +801,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<U> && is_vec_or_scalar_v<T>>* = nullptr>
-constexpr auto operator+ (fixpt_k<T> lhs, U rhs) noexcept
+constexpr auto operator+ (num<T> lhs, U rhs) noexcept
 {
   return U {lhs} + rhs;
 }
@@ -812,7 +810,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<T> && is_vec_or_scalar_v<U>>* = nullptr>
-constexpr auto operator- (T lhs, fixpt_k<U> rhs) noexcept
+constexpr auto operator- (T lhs, num<U> rhs) noexcept
 {
   return lhs - T {rhs};
 }
@@ -821,7 +819,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<U> && is_vec_or_scalar_v<T>>* = nullptr>
-constexpr auto operator- (fixpt_k<T> lhs, U rhs) noexcept
+constexpr auto operator- (num<T> lhs, U rhs) noexcept
 {
   return U {lhs} - rhs;
 }
@@ -830,7 +828,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<T> && is_vec_or_scalar_v<U>>* = nullptr>
-constexpr auto operator* (T lhs, fixpt_k<U> rhs) noexcept
+constexpr auto operator* (T lhs, num<U> rhs) noexcept
 {
   return lhs * T {rhs};
 }
@@ -839,7 +837,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<U> && is_vec_or_scalar_v<T>>* = nullptr>
-constexpr auto operator* (fixpt_k<T> lhs, U rhs) noexcept
+constexpr auto operator* (num<T> lhs, U rhs) noexcept
 {
   return U {lhs} * rhs;
 }
@@ -848,7 +846,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<T> && is_vec_or_scalar_v<U>>* = nullptr>
-constexpr auto operator/ (T lhs, fixpt_k<U> rhs) noexcept
+constexpr auto operator/ (T lhs, num<U> rhs) noexcept
 {
   return lhs / T {rhs};
 }
@@ -857,7 +855,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<U> && is_vec_or_scalar_v<T>>* = nullptr>
-constexpr auto operator/ (fixpt_k<T> lhs, U rhs) noexcept
+constexpr auto operator/ (num<T> lhs, U rhs) noexcept
 {
   return U {lhs} / rhs;
 }
@@ -866,7 +864,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<T> && is_vec_or_scalar_v<U>>* = nullptr>
-constexpr bool operator== (T lhs, fixpt_k<U> rhs) noexcept
+constexpr bool operator== (T lhs, num<U> rhs) noexcept
 {
   return lhs == T {rhs};
 }
@@ -875,7 +873,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<U> && is_vec_or_scalar_v<T>>* = nullptr>
-constexpr bool operator== (fixpt_k<T> lhs, U rhs) noexcept
+constexpr bool operator== (num<T> lhs, U rhs) noexcept
 {
   return U {lhs} == rhs;
 }
@@ -884,7 +882,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<T> && is_vec_or_scalar_v<U>>* = nullptr>
-constexpr bool operator!= (T lhs, fixpt_k<U> rhs) noexcept
+constexpr bool operator!= (T lhs, num<U> rhs) noexcept
 {
   return lhs != T {rhs};
 }
@@ -893,7 +891,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<U> && is_vec_or_scalar_v<T>>* = nullptr>
-constexpr bool operator!= (fixpt_k<T> lhs, U rhs) noexcept
+constexpr bool operator!= (num<T> lhs, U rhs) noexcept
 {
   return U {lhs} != rhs;
 }
@@ -902,7 +900,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<T> && is_vec_or_scalar_v<U>>* = nullptr>
-constexpr bool operator<= (T lhs, fixpt_k<U> rhs) noexcept
+constexpr bool operator<= (T lhs, num<U> rhs) noexcept
 {
   return lhs <= T {rhs};
 }
@@ -911,7 +909,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<U> && is_vec_or_scalar_v<T>>* = nullptr>
-constexpr bool operator<= (fixpt_k<T> lhs, U rhs) noexcept
+constexpr bool operator<= (num<T> lhs, U rhs) noexcept
 {
   return U {lhs} <= rhs;
 }
@@ -920,7 +918,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<T> && is_vec_or_scalar_v<U>>* = nullptr>
-constexpr bool operator>= (T lhs, fixpt_k<U> rhs) noexcept
+constexpr bool operator>= (T lhs, num<U> rhs) noexcept
 {
   return lhs >= T {rhs};
 }
@@ -929,7 +927,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<U> && is_vec_or_scalar_v<T>>* = nullptr>
-constexpr bool operator>= (fixpt_k<T> lhs, U rhs) noexcept
+constexpr bool operator>= (num<T> lhs, U rhs) noexcept
 {
   return U {lhs} >= rhs;
 }
@@ -938,7 +936,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<T> && is_vec_or_scalar_v<U>>* = nullptr>
-constexpr bool operator<(T lhs, fixpt_k<U> rhs) noexcept
+constexpr bool operator<(T lhs, num<U> rhs) noexcept
 {
   return lhs < T {rhs};
 }
@@ -947,7 +945,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<U> && is_vec_or_scalar_v<T>>* = nullptr>
-constexpr bool operator<(fixpt_k<T> lhs, U rhs) noexcept
+constexpr bool operator<(num<T> lhs, U rhs) noexcept
 {
   return U {lhs} < rhs;
 }
@@ -956,7 +954,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<T> && is_vec_or_scalar_v<U>>* = nullptr>
-constexpr bool operator> (T lhs, fixpt_k<U> rhs) noexcept
+constexpr bool operator> (T lhs, num<U> rhs) noexcept
 {
   return lhs > T {rhs};
 }
@@ -965,7 +963,7 @@ template <
   class T,
   class U,
   std::enable_if_t<is_fixpt_v<U> && is_vec_or_scalar_v<T>>* = nullptr>
-constexpr bool operator> (fixpt_k<T> lhs, U rhs) noexcept
+constexpr bool operator> (num<T> lhs, U rhs) noexcept
 {
   return U {lhs} > rhs;
 }
