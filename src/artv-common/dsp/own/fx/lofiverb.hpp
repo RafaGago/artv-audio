@@ -110,13 +110,17 @@ public:
     constexpr delay_data dd = Spec::values[Idx];
     static_assert (get_delay_size (Idx) == 1);
 
+    assert (io);
+
+    auto y1 = T::from (_stage[Idx].z[0]);
     for (uint i = 0; i < io.size(); ++i) {
-      auto y1 = T::from (_stage[Idx].z[0]);
       auto gv = (g.value() == 0) ? dd.g : g;
       auto v  = (T) ((gv.max() - gv) * io[i]);
       v       = (T) (v + y1 * gv);
+      y1      = v;
       io[i]   = v;
     }
+    _stage[Idx].z[0] = io.back().value();
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -125,13 +129,17 @@ public:
     constexpr delay_data dd = Spec::values[Idx];
     static_assert (get_delay_size (Idx) == 1);
 
+    assert (io);
+
+    auto y1 = T::from (_stage[Idx].z[0]);
     for (uint i = 0; i < io.size(); ++i) {
-      auto y1 = T::from (_stage[Idx].z[0]);
       auto gv = (g.value() == 0) ? dd.g : g;
       auto v  = (T) ((gv.max() - gv) * io[i]);
       v       = (T) (v + y1 * gv);
+      y1      = v;
       io[i]   = (T) (io[i] - v);
     }
+    _stage[Idx].z[0] = io.back().value();
   }
   //----------------------------------------------------------------------------
   // Pure delays with "size > blocksize" are placed before feedback loops to
