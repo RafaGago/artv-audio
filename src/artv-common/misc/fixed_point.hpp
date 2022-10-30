@@ -398,32 +398,6 @@ public:
     return spec_cast (T {});
   }
   //----------------------------------------------------------------------------
-  template <
-    class T,
-    std::enable_if_t<fixpt_are_compatible_v<T, mytype>>* = nullptr>
-  constexpr operator T() const noexcept
-  {
-    return cast (T {});
-  }
-  //----------------------------------------------------------------------------
-  template <
-    class T,
-    std::enable_if_t<
-      std::is_same_v<T, float_type> || std::is_floating_point_v<T>>* = nullptr>
-  explicit constexpr operator T() const noexcept
-  {
-    return vec_cast<vec_value_type_t<T>> (to_float());
-  }
-  //----------------------------------------------------------------------------
-  template <
-    class T,
-    std::enable_if_t<
-      std::is_same_v<T, value_type> || std::is_integral_v<T>>* = nullptr>
-  explicit constexpr operator T() const noexcept
-  {
-    return vec_cast<vec_value_type_t<T>> (to_int());
-  }
-  //----------------------------------------------------------------------------
   constexpr near_lossless to_lossless() const noexcept
   {
     return cast<near_lossless>();
@@ -490,7 +464,17 @@ public:
   {
     return from (alsb_mask (_v, n_frac + n_int));
   }
-  // Comple signed
+  //----------------------------------------------------------------------------
+  constexpr bool is_normalized() const noexcept
+  {
+    auto v = (_v >= raw_min) && (_v <= raw_max);
+    if constexpr (vector_size == 0) {
+      return v;
+    }
+    else {
+      return vec_is_all_ones (v);
+    }
+  }
   //----------------------------------------------------------------------------
   // complement-2 signed integers have more range on the negative part by 1 ulp.
   // This function clamps the negative part
@@ -504,8 +488,49 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  // raw value
+  // raw underlying integer value(s)
   constexpr value_type value() const noexcept { return _v; }
+  //----------------------------------------------------------------------------
+  static constexpr fixpt max() noexcept
+  {
+    return from (vec_set<vector_size> (raw_max));
+  };
+  static constexpr fixpt min() noexcept
+  {
+    return from (vec_set<vector_size> (raw_min));
+  };
+  static constexpr fixpt epsilon() noexcept
+  {
+    return from (vec_set<vector_size> ((scalar_type) 1));
+  }
+  static constexpr value_type max_raw() noexcept
+  {
+    return vec_set<vector_size> (raw_max);
+  }
+  static constexpr value_type min_raw() noexcept
+  {
+    return vec_set<vector_size> (raw_min);
+  }
+  static constexpr value_type max_int() noexcept
+  {
+    return vec_set<vector_size> (int_max);
+  }
+  static constexpr value_type min_int() noexcept
+  {
+    return vec_set<vector_size> (int_min);
+  }
+  static constexpr float_type max_float() noexcept
+  {
+    return vec_set<vector_size> (flt_max);
+  }
+  static constexpr float_type min_float() noexcept
+  {
+    return vec_set<vector_size> (flt_min);
+  }
+  static constexpr float_type factor() noexcept
+  {
+    return vec_set<vector_size> (float_factor);
+  }
   //----------------------------------------------------------------------------
   template <class T, enable_if_rhs_is_assign_compat<T>* = nullptr>
   constexpr fixpt& operator= (T rhs) noexcept
@@ -514,19 +539,45 @@ public:
     assert (to_int() == rhs.to_int());
     return *this;
   }
-  //----------------------------------------------------------------------------
+
   template <class T, enable_if_any_int_vec_or_scalar_t<T>* = nullptr>
   constexpr fixpt& operator= (num<T> rhs) noexcept
   {
     *this = from_int (rhs.value);
     return *this;
   }
-  //----------------------------------------------------------------------------
+
   template <class T, enable_if_floatpt_vec_or_scalar_t<T>* = nullptr>
   constexpr fixpt& operator= (num<T> rhs) noexcept
   {
     *this = from_float (rhs.value);
     return *this;
+  }
+  //----------------------------------------------------------------------------
+  template <
+    class T,
+    std::enable_if_t<fixpt_are_compatible_v<T, mytype>>* = nullptr>
+  constexpr operator T() const noexcept
+  {
+    return cast (T {});
+  }
+  //----------------------------------------------------------------------------
+  template <
+    class T,
+    std::enable_if_t<
+      std::is_same_v<T, float_type> || std::is_floating_point_v<T>>* = nullptr>
+  explicit constexpr operator T() const noexcept
+  {
+    return vec_cast<vec_value_type_t<T>> (to_float());
+  }
+  //----------------------------------------------------------------------------
+  template <
+    class T,
+    std::enable_if_t<
+      std::is_same_v<T, value_type> || std::is_integral_v<T>>* = nullptr>
+  explicit constexpr operator T() const noexcept
+  {
+    return vec_cast<vec_value_type_t<T>> (to_int());
   }
   //----------------------------------------------------------------------------
   template <class T, enable_if_lhs_is_lossy<T>* = nullptr>
@@ -547,6 +598,7 @@ public:
   template <class T, enable_if_lhs_is_lossless<T>* = nullptr>
   constexpr auto operator+ (T rhs) const noexcept
   {
+    assert (rhs.is_normalized()); // making sure it is in range
     constexpr uint int_b  = std::max (n_int, T::n_int) + 1;
     constexpr uint frac_b = std::max (n_frac, T::n_frac);
     return compatiblefp<int_b, frac_b>::from (
@@ -571,6 +623,7 @@ public:
   template <class T, enable_if_lhs_is_lossless<T>* = nullptr>
   constexpr auto operator- (T rhs) const noexcept
   {
+    assert (rhs.is_normalized()); // making sure it is in range
     constexpr uint int_b  = std::max (n_int, T::n_int) + n_sign;
     constexpr uint frac_b = std::max (n_frac, T::n_frac);
     return compatiblefp<int_b, frac_b>::from (
@@ -603,10 +656,13 @@ public:
   template <class T, enable_if_lhs_is_lossless<T>* = nullptr>
   constexpr auto operator* (T rhs) const noexcept
   {
+    assert (rhs.is_normalized()); // making sure it is in range
+
     constexpr uint int_b  = n_int + T::n_int;
     constexpr uint frac_b = n_frac + T::n_frac;
-    using lossless_type   = compatiblefp<int_b, frac_b>;
-    using VT              = typename lossless_type::value_type;
+
+    using lossless_type = compatiblefp<int_b, frac_b>;
+    using VT            = typename lossless_type::value_type;
     return lossless_type::from ((VT) _v * (VT) rhs._v);
   }
   //----------------------------------------------------------------------------
@@ -635,6 +691,8 @@ public:
   template <class T, enable_if_lhs_is_lossless<T>* = nullptr>
   constexpr auto operator/ (T rhs) const noexcept
   {
+    assert (rhs.is_normalized()); // making sure it is in range
+
     constexpr uint int_b  = n_int + T::n_frac;
     constexpr uint frac_b = n_frac + T::n_int;
 
@@ -701,48 +759,7 @@ public:
   constexpr fixpt& operator>>= (uint n) noexcept { _v = ashr (_v, n); }
   constexpr fixpt  operator<< (uint n) noexcept { return from (ashl (_v, n)); }
   constexpr fixpt  operator>> (uint n) noexcept { return from (ashr (_v, n)); }
-  //----------------------------------------------------------------------------
-  static constexpr fixpt max() noexcept
-  {
-    return from (vec_set<vector_size> (raw_max));
-  };
-  static constexpr fixpt min() noexcept
-  {
-    return from (vec_set<vector_size> (raw_min));
-  };
-  static constexpr fixpt epsilon() noexcept
-  {
-    return from (vec_set<vector_size> ((scalar_type) 1));
-  }
-  static constexpr value_type max_raw() noexcept
-  {
-    return vec_set<vector_size> (raw_max);
-  }
-  static constexpr value_type min_raw() noexcept
-  {
-    return vec_set<vector_size> (raw_min);
-  }
-  static constexpr value_type max_int() noexcept
-  {
-    return vec_set<vector_size> (int_max);
-  }
-  static constexpr value_type min_int() noexcept
-  {
-    return vec_set<vector_size> (int_min);
-  }
-  static constexpr float_type max_float() noexcept
-  {
-    return vec_set<vector_size> (flt_max);
-  }
-  static constexpr float_type min_float() noexcept
-  {
-    return vec_set<vector_size> (flt_min);
-  }
-  static constexpr float_type factor() noexcept
-  {
-    return vec_set<vector_size> (float_factor);
-  }
-  // TODO: Binary Logic Ops.
+  // TODO: Binary Logic Ops. Do they make sense.
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------

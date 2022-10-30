@@ -615,9 +615,11 @@ private:
       auto lfo = _lfo_er.tick_sine_fixpt().spec_cast<q0_15>().value();
       lfo1[i].load (lfo[0]);
       lfo2[i].load (lfo[1]);
-      constexpr auto half   = q1_14::max() >> 1;
-      auto           er_amt = (q1_14) (half + (par.er[i] >> 2));
-      lfo2[i]               = (q0_15) (lfo2[i] * er_amt);
+      auto er_amt       = (q1_14) (num {0.5} + (par.er[i] >> 2));
+      auto lfo2final    = lfo2[i] * er_amt;
+      auto lfo2finalflt = lfo2final.to_float();
+
+      lfo2[i] = (q0_15) (lfo2final);
       // decay fixup
       auto decay   = (q1_14) (num {1} - par.decay[i]);
       decay        = (q1_14) (num {1} - decay * decay);
