@@ -7544,6 +7544,13 @@ parameter_cpp_class_define (
   lofiverb::get_parameter (lofiverb::mod_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  lofiverb_stereo,
+  n_stereo_busses,
+  param_common ("Stereo", declptr<lofiverb>(), declptr<lofiverb::stereo_tag>()),
+  lofiverb::get_parameter (lofiverb::stereo_tag {}),
+  slider_ext);
+
 using lofiverb_params = mp_list<
   lofiverb_mode,
   lofiverb_predelay,
@@ -7552,7 +7559,8 @@ using lofiverb_params = mp_list<
   lofiverb_er,
   lofiverb_character,
   lofiverb_tilt,
-  lofiverb_mod>;
+  lofiverb_mod,
+  lofiverb_stereo>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (

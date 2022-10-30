@@ -262,6 +262,19 @@ public:
   {
     *this = other;
   }
+  //----------------------------------------------------------------------------
+  template <class T, enable_if_any_int_vec_or_scalar_t<T>* = nullptr>
+  constexpr fixpt (fixpt_k<T> v)
+  {
+    *this = v;
+  }
+  //----------------------------------------------------------------------------
+  template <class T, enable_if_floatpt_vec_or_scalar_t<T>* = nullptr>
+  constexpr fixpt (fixpt_k<T> v)
+  {
+    *this = v;
+  }
+  //----------------------------------------------------------------------------
   // TODO, FIX:
   //
   // error: type 'artv::fixpt<1, 0, 15, true> &' cannot be used prior to
@@ -271,6 +284,7 @@ public:
   // fixpt(fixpt&&) = default
   // fixpt& operator= (fixpt&&) = default;
   ~fixpt() = default;
+
   //----------------------------------------------------------------------------
   // raw value load
   static constexpr fixpt from (value_type raw_val)
@@ -376,6 +390,21 @@ public:
     return cast (T {});
   }
   //----------------------------------------------------------------------------
+  // cast for the specification, but keeping the traits (internal types), as
+  // traits conversion is not possible
+  template <class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+  constexpr auto spec_cast (T) const
+  {
+    return cast (
+      fixpt<T::n_sign, T::n_int, T::n_frac, T::is_lossless, traits> {});
+  }
+  //----------------------------------------------------------------------------
+  template <class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+  constexpr auto spec_cast() const
+  {
+    return spec_cast (T {});
+  }
+  //----------------------------------------------------------------------------
   template <
     class T,
     std::enable_if_t<fixpt_are_compatible_v<T, mytype>>* = nullptr>
@@ -390,7 +419,7 @@ public:
       std::is_same_v<T, float_type> || std::is_floating_point_v<T>>* = nullptr>
   explicit constexpr operator T() const
   {
-    return vec_cast<vec_value_type_t<T>> (as_float());
+    return vec_cast<vec_value_type_t<T>> (to_float());
   }
   //----------------------------------------------------------------------------
   template <
@@ -399,7 +428,7 @@ public:
       std::is_same_v<T, value_type> || std::is_integral_v<T>>* = nullptr>
   explicit constexpr operator T() const
   {
-    return vec_cast<vec_value_type_t<T>> (as_int());
+    return vec_cast<vec_value_type_t<T>> (to_int());
   }
   //----------------------------------------------------------------------------
   constexpr near_lossless to_lossless() const { return cast<near_lossless>(); };
@@ -414,7 +443,7 @@ public:
   {
     static_assert (Int >= 0 ? true : (-Int <= n_int));
     static_assert (Frac >= 0 ? true : (-Frac <= n_frac));
-    return cast (compatiblefp<n_int + Int, n_frac - Frac> {});
+    return cast (compatiblefp<n_int + Int, n_frac + Frac> {});
   }
   // Add or remove resolution both on the integer and fractional part
   template <uint Int, uint Frac = 0>
@@ -423,32 +452,52 @@ public:
     return cast (compatiblefp<Int, Frac> {});
   }
   //----------------------------------------------------------------------------
-  constexpr float_type as_float() const
+  constexpr float_type to_float() const
   {
     constexpr scalar_float factor = (scalar_float) 1. / float_factor;
     return factor * vec_cast<scalar_float> (_v);
   }
   //----------------------------------------------------------------------------
   // equivalent to floor
-  constexpr value_type as_int() const { return (_v >> n_frac); }
+  constexpr value_type to_int() const { return ashr<n_frac> (_v); }
   //----------------------------------------------------------------------------
+  // returns the fractional part only. for signed types it might be negative.
   constexpr fixpt<n_sign, 0, n_frac, is_lossless, traits> fractional() const
   {
-    return fixpt<n_sign, 0, n_frac, is_lossless, traits>::from (
-      lsb_mask<uint_type> (n_sign + n_frac) & _v);
-  }
-  //----------------------------------------------------------------------------
-  constexpr float_type float_fractional() const
-  {
-    constexpr scalar_float factor = (float_type) 1. / float_factor;
-    return factor * vec_cast<scalar_float> (_v & lsb_mask<uint_type> (n_frac));
+    // TODO
+    auto v = lsb_mask<uint_type> (n_frac) & _v;
+    if constexpr (is_signed) {
+      if (v >= 0) {
+        v &= frac_mask;
+      }
+      else {
+        v |= ~frac_mask;
+      }
+    }
+    else {
+      v &= frac_mask;
+    }
+    return fixpt<n_sign, 0, n_frac, is_lossless, traits>::from (v);
   }
   //----------------------------------------------------------------------------
   // useful E.g. after random loads to check that the value is in range.
   // Ideally should happen after each load, store, constructor, assignment,
   // etc from external sources, unfortunately this is a numeric/performace
   // sensitive class.
-  constexpr void normalize() { _v = alsb_mask (_v, n_frac + n_int); }
+  constexpr fixpt normalize() { return from (alsb_mask (_v, n_frac + n_int)); }
+  // Comple signed
+  //----------------------------------------------------------------------------
+  // complement-2 signed integers have more range on the negative part by 1 ulp.
+  // This function clamps the negative part
+  constexpr fixpt symmetric_clamp()
+  {
+    if constexpr (is_signed) {
+      return from (_v ^ ((_v == raw_min) & 1));
+    }
+    else {
+      return *this;
+    }
+  }
   //----------------------------------------------------------------------------
   // raw value
   constexpr value_type value() const { return _v; }
@@ -463,14 +512,14 @@ public:
   template <class T, enable_if_any_int_vec_or_scalar_t<T>* = nullptr>
   constexpr fixpt& operator= (fixpt_k<T> rhs)
   {
-    _v = from_int (rhs);
+    *this = from_int (rhs.value);
     return *this;
   }
   //----------------------------------------------------------------------------
   template <class T, enable_if_floatpt_vec_or_scalar_t<T>* = nullptr>
   constexpr fixpt& operator= (fixpt_k<T> rhs)
   {
-    _v = from_float (rhs);
+    *this = from_float (rhs.value);
     return *this;
   }
   //----------------------------------------------------------------------------
@@ -655,6 +704,10 @@ public:
   {
     return from (vec_set<vector_size> (raw_min));
   };
+  static constexpr fixpt epsilon()
+  {
+    return from (vec_set<vector_size> ((scalar_type) 1));
+  }
   static constexpr value_type max_raw()
   {
     return vec_set<vector_size> (raw_max);
@@ -687,6 +740,8 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
+  static constexpr auto frac_mask = lsb_mask<scalar_uint> (n_frac);
+
   static constexpr scalar_uint unsigned_zeroes = ((scalar_uint) 0);
   static constexpr scalar_uint unsigned_ones   = ((scalar_uint) 0) - 1u;
   static constexpr scalar_uint unsigned_one    = ((scalar_uint) 0) + 1u;

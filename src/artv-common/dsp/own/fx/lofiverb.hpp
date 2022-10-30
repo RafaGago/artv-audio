@@ -12,6 +12,8 @@
 #include "artv-common/dsp/own/classes/value_smoother.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/types.hpp"
+#include "artv-common/juce/parameter_definitions.hpp"
+#include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/fixed_point.hpp"
 #include "artv-common/misc/misc.hpp"
@@ -25,6 +27,7 @@ namespace artv {
 namespace detail { namespace lofiverb {
 //------------------------------------------------------------------------------
 using q0_15          = fixpt_p<1, 0, 15>;
+using q1_14          = fixpt_p<1, 1, 14>;
 using fixpt_spls     = fixpt_p<0, 14, 0>;
 using fixpt_spls_mod = fixpt_p<0, 9, 0>;
 //------------------------------------------------------------------------------
@@ -53,30 +56,30 @@ static constexpr auto get_rev1_delays()
 {
   return make_array<delay_data> (
     // diffusors
-    make_dd (147, -0.707),
-    make_dd (183, 0.707),
-    make_dd (389, -0.6),
-    make_dd (401, 0.6),
+    make_dd (147, -0.707), // AP
+    make_dd (183, 0.707), // AP
+    make_dd (389, -0.6), // AP
+    make_dd (401, 0.6), // AP
     // er
-    make_dd (1367, 0.35, 71 + 70),
-    make_dd (1), // damp filter
-    make_dd (1787, 0., 261),
+    make_dd (1367, 0.35, 71 + 70), // AP + chorus
+    make_dd (0), // damp filter
+    make_dd (1787, 0., 261), // Delay + chorus
     make_dd (33), // delay to allow block processing
     // loop1
-    make_dd (977, 0.5 /*overridden*/, 51),
-    make_dd (2819),
-    make_dd (1), // damp filter
-    make_dd (863, -0.5 /*overridden*/),
-    make_dd (1021),
-    make_dd (1453, 0.618),
+    make_dd (977, 0.5 /*overridden*/, 51), // AP with variable gain + chorus
+    make_dd (2819), // Delay
+    make_dd (0), // damp filter
+    make_dd (863, -0.5 /*overridden*/), // AP with variable gain
+    make_dd (1021), // Delay
+    make_dd (1453, 0.618), // Delay + chorus
     make_dd (787), // delay (allows block processing)
     // loop2
-    make_dd (947, 0.5 /*overridden*/, 67),
-    make_dd (3191),
-    make_dd (1), // damp filter
-    make_dd (887, -0.5 /*overridden*/),
-    make_dd (1049),
-    make_dd (1367, 0.618),
+    make_dd (947, 0.5 /*overridden*/, 67), // AP with variable gain + chorus
+    make_dd (3191), // Delay
+    make_dd (0), // damp filter
+    make_dd (887, -0.5 /*overridden*/), // AP with variable gain
+    make_dd (1049), // Delay
+    make_dd (1367, 0.618), // Delay + chorus
     make_dd (647)); // delay (allows block processing)
 }
 
@@ -108,6 +111,7 @@ public:
   void run_lp (xspan<T> io, q0_15 g = q0_15 {})
   {
     constexpr delay_data dd = Spec::values[Idx];
+    static_assert (get_delay_size (Idx) == 1);
 
     for (uint i = 0; i < io.size(); ++i) {
       auto y1 = T::from (_stage[Idx].z[0]);
@@ -122,6 +126,7 @@ public:
   void run_hp (xspan<T> io, q0_15 g = q0_15 {})
   {
     constexpr delay_data dd = Spec::values[Idx];
+    static_assert (get_delay_size (Idx) == 1);
 
     for (uint i = 0; i < io.size(); ++i) {
       auto y1 = T::from (_stage[Idx].z[0]);
@@ -146,7 +151,7 @@ public:
     assert (sz >= dst.size());
 
     for (uint i = 0; i < dst.size(); ++i) {
-      dst[i] = get<Idx, T> (dd.spls.as_int() - 1);
+      dst[i] = get<Idx, T> (dd.spls.to_int() - i);
     }
   }
   // see comment on fetch
@@ -199,7 +204,7 @@ public:
     static_assert (dd.mod.value() != 0);
 
     for (uint i = 0; i < io.size(); ++i) {
-      // no interpolation
+      // interpolation
       T push {io[i]};
       T out = run_thiran<Idx, T> (lfo[i]);
 
@@ -232,7 +237,7 @@ private:
   T run_plain_delay()
   {
     constexpr delay_data dd = Spec::values[Idx];
-    return get<Idx, T> (dd.spls.as_int());
+    return get<Idx, T> (dd.spls.to_int());
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -242,19 +247,20 @@ private:
     constexpr auto       sz     = get_delay_size (Idx);
     constexpr auto       y1_pos = sz;
 
-    auto fixpt_spls  = dd.spls.add_sign() * (lfo * dd.mod.add_sign());
-    auto n_spls      = fixpt_spls.as_int();
+    auto fixpt_spls  = dd.spls.add_sign() + (lfo * dd.mod.add_sign());
+    auto n_spls      = fixpt_spls.to_int();
     auto n_spls_frac = fixpt_spls.fractional().to_lossless();
     auto d           = n_spls_frac + fixpt_k {0.418f};
     auto one         = fixpt_p<1, 1, 0>::from_int (1);
     auto co_thiran   = (one - d) / (one + d); // 0.4104 to -1
     auto a           = co_thiran.cast<fixpt_p<1, 0, 23>>();
 
-    auto z0 = get<Idx, T> (n_spls);
-    auto z1 = get<Idx, T> (n_spls - 1);
+    auto z0 = get<Idx, T> (n_spls - 1);
+    auto z1 = get<Idx, T> (n_spls);
     auto y1 = T::from (_stage[Idx].z[y1_pos]);
 
     auto ret              = (T) (z0 * a + z1 - a * y1);
+    auto ret_dbg          = ret.to_float();
     _stage[Idx].z[y1_pos] = ret.value();
     return ret;
   }
@@ -264,6 +270,8 @@ private:
   {
     constexpr delay_data dd = Spec::values[Idx];
     constexpr auto       sz = get_delay_size (Idx);
+
+    assert (delay_spls < sz);
 
     uint z = _stage[Idx].pos - delay_spls;
     z += (z >= sz) ? sz : 0;
@@ -280,9 +288,8 @@ private:
   //----------------------------------------------------------------------------
   static constexpr uint get_delay_size (uint i)
   {
-    uint ret = Spec::values[i].spls.as_int() + 1;
-    ret += Spec::values[i].mod.as_int();
-    ret += (uint) Spec::values[i].mod.value() != 0;
+    uint ret = Spec::values[i].spls.to_int() + 1; // spls + 1 = size
+    ret += Spec::values[i].mod.to_int(); // add mod spls to the size
     return ret;
   }
   //----------------------------------------------------------------------------
@@ -318,8 +325,10 @@ public:
     switch (v) {
     case mode::rev1: {
       _param.mode_headroom_gain = 2.f + 0.8f + 0.855f + 0.443f;
-      auto rev                  = _modes.emplace<rev1_type>();
+      auto& rev                 = _modes.emplace<rev1_type>();
       rev.reset_memory (_mem_reverb);
+    } break;
+    case mode::dummy: {
     } break;
     default:
       return;
@@ -330,12 +339,12 @@ public:
     xspan_memset (xspan {_feedback}, 0);
   }
   struct mode {
-    enum { rev1 };
+    enum { rev1, dummy };
   };
 
   static constexpr auto get_parameter (mode_tag)
   {
-    return choice_param (0, make_cstr_array ("Reverb 1"), 48);
+    return choice_param (0, make_cstr_array ("Reverb 1", "Dummy!"), 48);
   }
   //----------------------------------------------------------------------------
   struct decay_tag {};
@@ -422,9 +431,9 @@ public:
   struct stereo_tag {};
   void set (stereo_tag, float v) { _param_smooth.target().stereo = v * 0.01f; }
 
-  static constexpr auto get_parametstereo (stereo_tag)
+  static constexpr auto get_parameter (stereo_tag)
   {
-    return float_param ("%", -100., 100., 0., 0.01);
+    return float_param ("%", -100., 100., 100., 0.01);
   }
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
@@ -456,7 +465,7 @@ public:
     _mem.clear();
     _mem.resize (predelay_spls + rev_spls);
     _mem_reverb = xspan {_mem};
-    _predelay.reset (_mem_reverb.cut_head (predelay_spls), 21);
+    _predelay.reset (_mem_reverb.cut_head (predelay_spls), 2);
 
     // set defaults
     mp11::mp_for_each<parameters> ([&] (auto param) {
@@ -493,10 +502,12 @@ public:
     predelay_tag,
     tilt_tag,
     er_tag,
-    mod_tag>;
+    mod_tag,
+    stereo_tag>;
   //----------------------------------------------------------------------------
 private:
   using q0_15 = detail::lofiverb::q0_15;
+  using q1_14 = detail::lofiverb::q1_14;
   //----------------------------------------------------------------------------
   static constexpr uint  max_block_size = 32;
   static constexpr uint  n_channels     = 2;
@@ -569,8 +580,8 @@ private:
     auto gain = _param.mode_headroom_gain;
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto l = fixedp[i][0].as_float();
-      auto r = fixedp[i][1].as_float();
+      auto l = fixedp[i][0].to_float();
+      auto r = fixedp[i][1].to_float();
       l      = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
       if (pars.stereo[i] < 0) {
         io[i][0] = r * gain;
@@ -602,7 +613,7 @@ private:
       // to MS
       late_in[i] = ((io[i][0] + io[i][1]) >> 1).resize<-1>();
       // ER lfo
-      auto lfo = _lfo_er.tick_sine_fixpt().value();
+      auto lfo = _lfo_er.tick_sine_fixpt().spec_cast<q0_15>().value();
       lfo1[i].load (lfo[0]);
       lfo2[i].load (lfo[1]);
       auto half   = q0_15::max() >> 1;
@@ -671,7 +682,7 @@ private:
       auto mod = (q0_15)
         (fixpt_k {0.25} + (one - par.mod[i]) * fixpt_k {0.75});
       // clang-format on
-      auto lfo = _lfo.tick_sine_fixpt().value();
+      auto lfo = _lfo.tick_sine_fixpt().spec_cast<q0_15>().value();
       lfo1[i].load (lfo[0]);
       lfo1[i] = (q0_15) (lfo1[i] * mod);
       lfo2[i].load (lfo[1]);
@@ -682,6 +693,7 @@ private:
       auto fact  = (q0_15) (par.er[i] * fixpt_k {0.4});
       auto er_in = (q0_15) ((er1[i] + er2[i]) * fact);
       late[i]    = (q0_15) (late[i] + er_in);
+
       // g character
       // clang-format off
       g[i] = (q0_15)
@@ -707,7 +719,8 @@ private:
 
     for (uint i = 0; i < io.size(); ++i) {
       // prepare input with feedback
-      late[i]    = (q0_15) (late_in[i] + l[i] * par.decay[i]);
+      late[i] = (q0_15) (late_in[i] + l[i] * par.decay[i]);
+
       auto fact  = (q0_15) (par.er[i] * fixpt_k {0.4});
       auto er_in = (q0_15) ((er1[i] - er2[i]) * fact);
       late[i]    = (q0_15) (late[i] + er_in);
@@ -766,10 +779,10 @@ private:
   };
   //----------------------------------------------------------------------------
   struct loop_parameters {
-    std::array<q0_15, max_block_size> er;
-    std::array<q0_15, max_block_size> decay;
-    std::array<q0_15, max_block_size> character;
-    std::array<q0_15, max_block_size> mod;
+    std::array<q1_14, max_block_size> er;
+    std::array<q1_14, max_block_size> decay;
+    std::array<q1_14, max_block_size> character;
+    std::array<q1_14, max_block_size> mod;
     std::array<float, max_block_size> stereo;
   };
   //----------------------------------------------------------------------------

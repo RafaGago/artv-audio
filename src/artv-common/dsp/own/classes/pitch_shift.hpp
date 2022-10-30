@@ -57,7 +57,7 @@ public:
       tk.pos *= tk.delta;
     }
 
-    auto rint  = tk.pos.as_int();
+    auto rint  = tk.pos.to_int();
     auto rfrac = tk.pos.float_fractional();
 
     V p1  = _mem.get_abs (rint);

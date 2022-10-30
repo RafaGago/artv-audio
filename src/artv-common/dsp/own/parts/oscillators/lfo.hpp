@@ -64,17 +64,19 @@ public:
   //----------------------------------------------------------------------------
   auto tick_sine_fixpt (uint n = 1)
   {
-    // As above k1 = 1.27323954 * pi (3.9999999851240475) and
-    //          k2 = 0.405284735 * pi * pi (4.000000004250334)
+    // As above k1 = 1.27323954 * pi = 3.9999999851240475 and
+    //          k2 = 0.405284735 * pi * pi = 4.000000004250334
     // the coeffient to be 4 (left shift of 2).
     // so 4 (x + x^2)
 
     auto phase    = _phasor.tick (n).to_fixpt(); // 32bit, -1 to 0.99999
     using fp_type = decltype (phase);
     auto negative = phase < fp_type::from_int (0);
-    auto p        = fixpt_select (negative, phase, -phase);
+    auto p        = fixpt_select (negative, phase, -phase); // abs
     auto sinv     = (p + p * p) << 2; // -p + p * p tops at -0.25
-    return fixpt_select (negative, phase, -phase);
+    sinv          = sinv.symmetric_clamp(); // avoid out of range when negating
+    sinv          = fixpt_select (negative, sinv, -sinv);
+    return sinv;
   }
   //----------------------------------------------------------------------------
   value_type tick_saw (uint n = 1)
