@@ -108,11 +108,12 @@ public:
   void run_lp (xspan<T> io, q0_15 g = q0_15 {})
   {
     constexpr delay_data dd = Spec::values[Idx];
-    static_assert (get_delay_size (Idx) == 1);
+    static_assert (get_delay_size (Idx) >= 1);
 
     assert (io);
 
     auto y1 = T::from (_stage[Idx].z[0]);
+
     for (uint i = 0; i < io.size(); ++i) {
       auto gv = (g.value() == 0) ? dd.g : g;
       auto v  = (T) ((gv.max() - gv) * io[i]);
@@ -127,11 +128,12 @@ public:
   void run_hp (xspan<T> io, q0_15 g = q0_15 {})
   {
     constexpr delay_data dd = Spec::values[Idx];
-    static_assert (get_delay_size (Idx) == 1);
+    static_assert (get_delay_size (Idx) >= 1);
 
     assert (io);
 
     auto y1 = T::from (_stage[Idx].z[0]);
+
     for (uint i = 0; i < io.size(); ++i) {
       auto gv = (g.value() == 0) ? dd.g : g;
       auto v  = (T) ((gv.max() - gv) * io[i]);
@@ -146,18 +148,40 @@ public:
   // enable block processing, so it is possible to fetch the future
   // feedbacks/outputs (minus the first) at once and then to push them all at
   // once. This is exactly what fetch/push accomplish.
+  //
+  // dst has to contain one element more at the head, where the previous output
+  // will be placed. Once the feedback is applied to a current input, this head
+  // feedback sample (last output) can be dropped.
   template <uint Idx, class T>
-  void fetch (xspan<T> dst)
+  void fetch_block_plus_one (xspan<T> dst)
   {
     constexpr delay_data dd = Spec::values[Idx];
     constexpr auto       sz = get_delay_size (Idx);
     static_assert (dd.g.value() == 0, "Not possible on allpasses");
     static_assert (dd.mod.value() == 0, "Not possible on Modulated delays");
+    assert (dst && dst.size());
     assert (sz >= dst.size());
 
-    for (uint i = 0; i < dst.size(); ++i) {
-      dst[i] = get<Idx, T> (dd.spls.to_int() - i);
+    constexpr auto out_prev = 1;
+
+    uint block1 = _stage[Idx].pos - dd.spls.to_int() - out_prev;
+    block1 += (block1 >= sz) ? sz : 0;
+    uint end = _stage[Idx].pos - dd.spls.to_int() + dst.size() - out_prev - 1;
+    end += (end >= sz) ? sz : 0;
+
+    uint block1sz, block2sz;
+    if (block1 < end) {
+      // contiguous
+      block1sz = dst.size();
+      block2sz = 0;
     }
+    else {
+      // truncated
+      block1sz = sz - block1;
+      block2sz = dst.size() - block1sz;
+    }
+    memcpy (dst.data(), &_stage[Idx].z[block1], block1sz * sizeof dst[0]);
+    memcpy (dst.data() + block1sz, &_stage[Idx].z[0], block2sz * sizeof dst[0]);
   }
   // see comment on fetch
   //----------------------------------------------------------------------------
@@ -168,12 +192,28 @@ public:
     constexpr auto       sz = get_delay_size (Idx);
     static_assert (dd.g.value() == 0, "Not possible on allpasses");
     static_assert (dd.mod.value() == 0, "Not possible on Modulated delays");
+    assert (src && src.size());
     assert (sz >= src.size());
 
-    for (uint i = 0; i < src.size(); ++i) {
-      _stage[Idx].z[_stage[Idx].pos] = src[i].value();
-      advance_pos<Idx>();
+    uint block1 = _stage[Idx].pos;
+    uint end    = block1 + src.size() - 1;
+    end -= (end >= sz) ? sz : 0;
+    _stage[Idx].pos = end;
+    advance_pos<Idx>();
+
+    uint block1sz, block2sz;
+    if (block1 < end) {
+      // contiguous
+      block1sz = src.size();
+      block2sz = 0;
     }
+    else {
+      // truncated
+      block1sz = sz - block1;
+      block2sz = src.size() - block1sz;
+    }
+    memcpy (&_stage[Idx].z[block1], src.data(), block1sz * sizeof src[0]);
+    memcpy (&_stage[Idx].z[0], src.data() + block1sz, block2sz * sizeof src[0]);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -294,6 +334,11 @@ private:
   static constexpr uint get_delay_size (uint i)
   {
     uint ret = Spec::values[i].spls.to_int() + 1; // spls + 1 = size
+    // pure delays have 1 extra sample to be able to return the previous output
+    // (delaying one cycle the time it is overwritten).
+    auto mod_val = Spec::values[i].mod.value();
+    auto g_val   = Spec::values[i].g.value();
+    ret += (uint) (mod_val == 0 && g_val == 0);
     ret += Spec::values[i].mod.to_int(); // add mod spls to the size
     return ret;
   }
@@ -301,7 +346,7 @@ private:
   static constexpr uint get_buffer_size (uint i)
   {
     uint ret = get_delay_size (i);
-    ret += (uint) Spec::values[i].mod.value() != 0; // thiran state
+    ret += (uint) (Spec::values[i].mod.value() != 0); // thiran state
     return ret;
   }
   //----------------------------------------------------------------------------
@@ -313,6 +358,11 @@ private:
 };
 }} // namespace detail::lofiverb
 //------------------------------------------------------------------------------
+// A reverb using 16-bit fixed-point arithmetic on the main loop. One design
+// criteria has been for it to be extremely CPU friendly.
+// Notice: __fp16 (half-precision floating point storage) could achieve the
+// same memory savings with more dynamic range. This is still kept as a 16-bit
+// fixed-point reverb.
 class lofiverb {
 public:
   //----------------------------------------------------------------------------
@@ -341,7 +391,6 @@ public:
     _param.mode          = v;
     _n_processed_samples = 0; // trigger the control block on first sample
     xspan_memset (_mem_reverb, 0);
-    xspan_memset (xspan {_feedback}, 0);
   }
   struct mode {
     enum { rev1, dummy };
@@ -524,7 +573,6 @@ private:
   //----------------------------------------------------------------------------
   void process_block (xspan<std::array<float, 2>> io)
   {
-    // TODO: test __fp16 (half-precision float storage).
     assert (io.size() <= max_block_size);
 
     // clip + convert to u16
@@ -647,10 +695,9 @@ private:
     auto er2 = xspan {early2_arr.data(), io.size() + 1}; // +1: Feedback on head
 
     // feedback handling
-    er2[0] = _feedback[0];
-    rev.fetch<7> (er2.advanced (1));
-    _feedback[0] = er2.back();
+    rev.fetch_block_plus_one<7> (er2);
 
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       // apply ER feedback
       er1[i] = (q0_15) (er2[i] * num {0.2});
@@ -676,12 +723,8 @@ private:
     auto r    = xspan {r_arr.data(), io.size() + 1}; // +1: Feedback on head
 
     // feedback handling
-    l[0] = _feedback[1];
-    r[0] = _feedback[2];
-    rev.fetch<14> (l.advanced (1));
-    rev.fetch<21> (r.advanced (1));
-    _feedback[1] = l.back();
-    _feedback[2] = r.back();
+    rev.fetch_block_plus_one<14> (l);
+    rev.fetch_block_plus_one<21> (r);
 
     for (uint i = 0; i < io.size(); ++i) {
       // clang-format off
@@ -724,6 +767,7 @@ private:
     rev.run<13> (late);
     rev.push<14> (late.to_const()); // feedback point
 
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       // prepare input with feedback
       late[i] = (q0_15) (late_in[i] + l[i] * par.decay[i]);
@@ -745,6 +789,7 @@ private:
     rev.push<21> (late.to_const()); // feedback point
 
     // Mixdown
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       io[i][0] = (q0_15) (-er1[i] * num {0.825f});
       io[i][0] = (q0_15) (io[i][0] - er2[i] * num {0.423});
@@ -802,8 +847,6 @@ private:
 
   lfo<2> _lfo;
   lfo<2> _lfo_er;
-
-  std::array<q0_15, 8> _feedback;
 
   using rev1_type = detail::lofiverb::reverb_tool<detail::lofiverb::rev1_spec>;
   std::variant<rev1_type> _modes;
