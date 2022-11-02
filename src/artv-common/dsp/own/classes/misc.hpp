@@ -1,26 +1,46 @@
 #pragma once
 
+#include "artv-common/misc/short_ints.hpp"
+#include <array>
+
 namespace artv {
 
 //------------------------------------------------------------------------------
-// https://www.musicdsp.org/en/latest/Synthesis/216-fast-whitenoise-generator.html
+// Using a high quality hash function with a counter.
+// https://www.kvraudio.com/forum/viewtopic.php?p=8096257
 class white_noise_generator {
 public:
-  float operator() (float flevel) // will generate from -flevel to +flevel
+  //----------------------------------------------------------------------------
+  std::array<float, 2> operator()() // -1 to 1
   {
-    flevel *= g_fScale;
-    g_x1 ^= g_x2;
-    float ret = g_x2 * flevel;
-    g_x2 += g_x1;
-    return ret;
+    constexpr float scale = 1.0f / 0xffff;
+
+    auto v = raw();
+    return {scale * (s16) v, scale * (s16) (v >> 16)};
   }
-  // TODO: make a double version
-
+  //----------------------------------------------------------------------------
+  float get() // wastes resolutin
+  {
+    constexpr float scale = 1.0f / (float) 0xffffffff;
+    return scale * (s32) raw();
+  }
+  //----------------------------------------------------------------------------
+  u32 raw() { return lowbias32 (++_c); }
+  //----------------------------------------------------------------------------
 private:
-  static constexpr double g_fScale = 2.0f / 4294967296.f;
-
-  int g_x1 = 0x67452301;
-  int g_x2 = 0xefcdab89;
+  //----------------------------------------------------------------------------
+  // from https://github.com/skeeto/hash-prospector
+  u32 lowbias32 (u32 x)
+  {
+    x ^= x >> 15;
+    x *= 0xd168aaadu;
+    x ^= x >> 15;
+    x *= 0xaf723597u;
+    x ^= x >> 15;
+    return x;
+  }
+  //----------------------------------------------------------------------------
+  u32 _c {};
 };
 //------------------------------------------------------------------------------
 

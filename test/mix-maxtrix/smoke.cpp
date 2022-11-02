@@ -22,7 +22,7 @@ extern juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter();
 
 namespace artv {
 
-std::string get_file_contents (const char* filename)
+std::string get_file_contents (char const* filename)
 {
   std::ifstream in (filename, std::ios::in | std::ios::binary);
   if (!in) {
@@ -128,7 +128,7 @@ public:
     auto l = audio.getWritePointer (0);
     auto r = audio.getWritePointer (1);
     for (uint i = 0; i < audio.getNumSamples(); ++i, ++l, ++r) {
-      *l = noise (max_level);
+      *l = noise()[0] * max_level;
       *r = *l;
     }
   }

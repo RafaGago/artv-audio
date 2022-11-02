@@ -36,7 +36,7 @@ public:
     std::array<scalar_type, 2048> res_scalar, res_vec;
 
     for (uint i = 0; i < res_scalar.size(); ++i) {
-      scalar_type in = _whitenoise (1.);
+      scalar_type in = _whitenoise()[0];
       res_scalar[i]  = Dsp::tick (
         xspan<scalar_type const> {scalar_coeffs}, xspan {scalar_states}, in);
       res_vec[i] = Dsp::tick_simd (

@@ -7,7 +7,7 @@
 #include <cstdlib>
 #include <limits>
 
-//#error "For some non obvious reason this one sounds broken"
+// #error "For some non obvious reason this one sounds broken"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -484,8 +484,9 @@ public:
       spl0       = ins[0][i];
       spl1       = ins[1][i];
 
-      spl0 += whitenoise (1e-24);
-      spl1 += whitenoise (1e-24);
+      auto wn = whitenoise();
+      spl0 += wn[0] * 1e-24;
+      spl1 += wn[1] * 1e-24;
 
       ch0 = spl0 * ingain;
       ch1 = spl1 * ingain;

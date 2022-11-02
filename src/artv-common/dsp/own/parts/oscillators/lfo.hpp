@@ -145,7 +145,7 @@ public:
     auto new_cycle = _phasor.tick_ext (n).new_cycle;
     for (uint i = 0; i < N; ++i) {
       if (new_cycle[i]) {
-        _specific_data[i] = _whitenoise (1.f);
+        _specific_data[i] = _whitenoise()[0];
       }
     }
     return _specific_data;
