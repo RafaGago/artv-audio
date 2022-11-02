@@ -7,6 +7,7 @@
 
 #include "artv-common/dsp/own/classes/block_resampler.hpp"
 #include "artv-common/dsp/own/classes/delay_line.hpp"
+#include "artv-common/dsp/own/classes/ducker.hpp"
 #include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/value_smoother.hpp"
@@ -496,6 +497,37 @@ public:
     return float_param ("%", -100., 100., 100., 0.01);
   }
   //----------------------------------------------------------------------------
+  struct ducking_threshold_tag {};
+  void set (ducking_threshold_tag, float v)
+  {
+    if (v == _param.ducking_threshold) {
+      return;
+    }
+    _param.ducking_threshold = v;
+    _ducker.set_threshold (vec_set<2> (v));
+  }
+
+  static constexpr auto get_parameter (ducking_threshold_tag)
+  {
+    return float_param ("dB", -40.f, 12.f, 12.f, 0.01f);
+  }
+  //----------------------------------------------------------------------------
+  struct ducking_speed_tag {};
+  void set (ducking_speed_tag, float v)
+  {
+    if (v == _param.ducking_speed) {
+      return;
+    }
+    _param.ducking_speed = v;
+    v *= 0.01f;
+    _ducker.set_speed (vec_set<2> (v * v), t_spl);
+  }
+
+  static constexpr auto get_parameter (ducking_speed_tag)
+  {
+    return float_param ("%", 0.f, 100.f, 10.f, 0.01f);
+  }
+  //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
     auto beat_hz         = pc.get_play_state().bpm * (1.f / 60.f);
@@ -515,6 +547,7 @@ public:
       6 * 1024);
 
     _tilt.reset_states();
+    _ducker.reset();
 
     // resize memory
     uint predelay_spls = std::ceil (_1_4beat_spls * max_predelay_qb) * 2;
@@ -563,7 +596,9 @@ public:
     tilt_tag,
     er_tag,
     mod_tag,
-    stereo_tag>;
+    stereo_tag,
+    ducking_threshold_tag,
+    ducking_speed_tag>;
   //----------------------------------------------------------------------------
 private:
   // q0_15 truncates when dropping fractional bits (leaky).
@@ -591,12 +626,15 @@ private:
     // clip + convert to u16
     using fixptype = q0_15;
     array2d<fixptype, 2, max_block_size> fixedp;
+    std::array<f32_x2, max_block_size>   ducker_gain;
     loop_parameters                      pars;
 
     // tilt! + param smoothing + int conversion
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      io[i] = vec_to_array (_tilt.tick (vec_from_array (io[i])));
+      f32_x2 ins     = {io[i][0], io[i][1]};
+      ducker_gain[i] = _ducker.tick (ins);
+      io[i]          = vec_to_array (_tilt.tick (vec_from_array (io[i])));
       _param_smooth.tick();
       pars.stereo[i] = _param_smooth.get().stereo;
       pars.er[i].load_float (_param_smooth.get().er);
@@ -646,16 +684,16 @@ private:
     auto gain = _param.mode_headroom_gain;
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto l = fixedp[i][0].to_float();
-      auto r = fixedp[i][1].to_float();
+      auto l = fixedp[i][0].to_float() * gain * ducker_gain[i][0];
+      auto r = fixedp[i][1].to_float() * gain * ducker_gain[i][1];
       l      = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
       if (pars.stereo[i] < 0) {
-        io[i][0] = r * gain;
-        io[i][1] = l * gain;
+        io[i][0] = r;
+        io[i][1] = l;
       }
       else {
-        io[i][0] = l * gain;
-        io[i][1] = r * gain;
+        io[i][0] = l;
+        io[i][1] = r;
       }
     }
   }
@@ -832,6 +870,8 @@ private:
     float tilt;
     float predelay;
     float damp;
+    float ducking_threshold;
+    float ducking_speed;
   };
   //----------------------------------------------------------------------------
   struct smoothed_parameters {
@@ -863,6 +903,7 @@ private:
 
   using rev1_type = detail::lofiverb::reverb_tool<detail::lofiverb::rev1_spec>;
   std::variant<rev1_type> _modes;
+  ducker<f32_x2>          _ducker;
 
   uint  _n_processed_samples;
   float _1_4beat_spls;

@@ -823,8 +823,7 @@ private:
     if constexpr (rounds_nearest) {
       constexpr auto roundval = bit<T_scalar> (N - 1);
       if constexpr (std::is_signed_v<T_scalar>) {
-        constexpr auto roundv = vec_set<vec_traits_t<T>::size> (roundval);
-        v += (v >= 0) ? roundv : -roundv;
+        v += (v >= 0) ? roundval : -roundval;
       }
       else {
         v += roundval;

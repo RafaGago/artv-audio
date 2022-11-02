@@ -7551,6 +7551,26 @@ parameter_cpp_class_define (
   lofiverb::get_parameter (lofiverb::stereo_tag {}),
   slider_ext);
 
+parameter_cpp_class_define (
+  lofiverb_ducking_speed,
+  n_stereo_busses,
+  param_common (
+    "Duck Spd",
+    declptr<lofiverb>(),
+    declptr<lofiverb::ducking_speed_tag>()),
+  lofiverb::get_parameter (lofiverb::ducking_speed_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lofiverb_ducking_threshold,
+  n_stereo_busses,
+  param_common (
+    "Duck Thres",
+    declptr<lofiverb>(),
+    declptr<lofiverb::ducking_threshold_tag>()),
+  lofiverb::get_parameter (lofiverb::ducking_threshold_tag {}),
+  slider_ext);
+
 using lofiverb_params = mp_list<
   lofiverb_mode,
   lofiverb_predelay,
@@ -7560,6 +7580,8 @@ using lofiverb_params = mp_list<
   lofiverb_character,
   lofiverb_tilt,
   lofiverb_mod,
+  lofiverb_ducking_threshold,
+  lofiverb_ducking_speed,
   lofiverb_stereo>;
 //------------------------------------------------------------------------------
 #if 0
