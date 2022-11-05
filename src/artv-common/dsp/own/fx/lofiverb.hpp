@@ -3,6 +3,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <type_traits>
 #include <vector>
 
 #include "artv-common/dsp/own/classes/block_resampler.hpp"
@@ -17,6 +18,7 @@
 #include "artv-common/juce/parameter_types.hpp"
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/fixed_point.hpp"
+#include "artv-common/misc/float.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/overaligned_allocator.hpp"
@@ -107,46 +109,6 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T>
-  void run_lp (xspan<T> io, q0_15 g = q0_15 {})
-  {
-    constexpr delay_data dd = Spec::values[Idx];
-    static_assert (get_delay_size (Idx) >= 1);
-
-    assert (io);
-
-    auto y1 = T::from (_stage[Idx].z[0]);
-
-    for (uint i = 0; i < io.size(); ++i) {
-      auto gv = (g.value() == 0) ? dd.g : g;
-      auto v  = (T) ((gv.max() - gv) * io[i]);
-      v       = (T) (v + y1 * gv);
-      y1      = v;
-      io[i]   = v;
-    }
-    _stage[Idx].z[0] = io.back().value();
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class T>
-  void run_hp (xspan<T> io, q0_15 g = q0_15 {})
-  {
-    constexpr delay_data dd = Spec::values[Idx];
-    static_assert (get_delay_size (Idx) >= 1);
-
-    assert (io);
-
-    auto y1 = T::from (_stage[Idx].z[0]);
-
-    for (uint i = 0; i < io.size(); ++i) {
-      auto gv          = (g.value() == 0) ? dd.g : g;
-      auto v           = (T) ((gv.max() - gv) * io[i]);
-      v                = (T) (v + y1 * gv);
-      y1               = v;
-      _stage[Idx].z[0] = v.value();
-      io[i]            = (T) (io[i] - v);
-    }
-  }
-  //----------------------------------------------------------------------------
   // Pure delays with "size > blocksize" are placed before feedback loops to
   // enable block processing, so it is possible to fetch the future
   // feedbacks/outputs (minus the first) at once and then to push them all at
@@ -183,8 +145,20 @@ public:
       block1sz = sz - block1;
       block2sz = dst.size() - block1sz;
     }
-    memcpy (dst.data(), &_stage[Idx].z[block1], block1sz * sizeof dst[0]);
-    memcpy (dst.data() + block1sz, &_stage[Idx].z[0], block2sz * sizeof dst[0]);
+    if constexpr (is_fixpt_v<T>) {
+      // 16 bit fixed point
+      memcpy (dst.data(), &_stage[Idx].z[block1], block1sz * sizeof dst[0]);
+      memcpy (
+        dst.data() + block1sz, &_stage[Idx].z[0], block2sz * sizeof dst[0]);
+    }
+    else {
+      for (uint i = 0; i < block1sz; ++i) {
+        dst[i] = float16::decode (_stage[Idx].z[block1 + i]);
+      }
+      for (uint i = 0; i < block2sz; ++i) {
+        dst[i + block1sz] = float16::decode (_stage[Idx].z[i]);
+      }
+    }
   }
   // see comment on fetch
   //----------------------------------------------------------------------------
@@ -215,11 +189,101 @@ public:
       block1sz = sz - block1;
       block2sz = src.size() - block1sz;
     }
-    memcpy (&_stage[Idx].z[block1], src.data(), block1sz * sizeof src[0]);
-    memcpy (&_stage[Idx].z[0], src.data() + block1sz, block2sz * sizeof src[0]);
+    if constexpr (is_fixpt_v<T>) {
+      // 16 bit fixed point
+      memcpy (&_stage[Idx].z[block1], src.data(), block1sz * sizeof src[0]);
+      memcpy (
+        &_stage[Idx].z[0], src.data() + block1sz, block2sz * sizeof src[0]);
+    }
+    else {
+      for (uint i = 0; i < block1sz; ++i) {
+        _stage[Idx].z[block1 + i] = float16::encode (src[i]);
+      }
+      for (uint i = 0; i < block2sz; ++i) {
+        _stage[Idx].z[i] = float16::encode (src[i + block1sz]);
+      }
+    }
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T>
+  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+  void run_lp (xspan<T> io, q0_15 g = q0_15 {})
+  {
+    constexpr delay_data dd = Spec::values[Idx];
+    static_assert (get_delay_size (Idx) >= 1);
+
+    assert (io);
+
+    auto y1 = T::from (_stage[Idx].z[0]);
+
+    for (uint i = 0; i < io.size(); ++i) {
+      auto gv = (g.value() == 0) ? dd.g : g;
+      auto v  = (T) ((gv.max() - gv) * io[i]);
+      v       = (T) (v + y1 * gv);
+      y1      = v;
+      io[i]   = v;
+    }
+    _stage[Idx].z[0] = y1.value();
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx>
+  void run_lp (xspan<float> io, float g = 0.f)
+  {
+    constexpr delay_data dd = Spec::values[Idx];
+    static_assert (get_delay_size (Idx) >= 1);
+
+    assert (io);
+
+    auto y1 = float16::decode (_stage[Idx].z[0]);
+    for (uint i = 0; i < io.size(); ++i) {
+      auto gv = (g == 0.f) ? dd.g.to_float() : g;
+      auto v  = (1.f - gv) * io[i];
+      v       = v + y1 * gv;
+      y1      = v;
+      io[i]   = v;
+    }
+    _stage[Idx].z[0] = float16::encode (y1);
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+  void run_hp (xspan<T> io, q0_15 g = q0_15 {})
+  {
+    constexpr delay_data dd = Spec::values[Idx];
+    static_assert (get_delay_size (Idx) >= 1);
+
+    assert (io);
+
+    auto y1 = T::from (_stage[Idx].z[0]);
+
+    for (uint i = 0; i < io.size(); ++i) {
+      auto gv = (g.value() == 0) ? dd.g : g;
+      auto v  = (T) ((gv.max() - gv) * io[i]);
+      v       = (T) (v + y1 * gv);
+      y1      = v;
+      io[i]   = (T) (io[i] - v);
+    }
+    _stage[Idx].z[0] = y1.value();
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx>
+  void run_hp (xspan<float> io, float g = 0.f)
+  {
+    constexpr delay_data dd = Spec::values[Idx];
+    static_assert (get_delay_size (Idx) >= 1);
+
+    assert (io);
+
+    auto y1 = float16::decode (_stage[Idx].z[0]);
+    for (uint i = 0; i < io.size(); ++i) {
+      auto gv = (g == 0.f) ? dd.g.to_float() : g;
+      auto v  = (1.f - gv) * io[i];
+      v       = v + y1 * gv;
+      y1      = v;
+      io[i]   = io[i] - v;
+    }
+    _stage[Idx].z[0] = float16::encode (y1);
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
   void run (xspan<T> io, xspan<q0_15> g = xspan<q0_15> {})
   {
     constexpr delay_data dd = Spec::values[Idx];
@@ -243,7 +307,32 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T>
+  template <uint Idx>
+  void run (xspan<float> io, xspan<float> g = xspan<float> {})
+  {
+    constexpr delay_data dd = Spec::values[Idx];
+    constexpr auto       sz = get_delay_size (Idx);
+
+    static_assert (dd.mod.value() == 0);
+
+    for (uint i = 0; i < io.size(); ++i) {
+      // no interpolation
+      float push {io[i]};
+      float out = run_plain_delay<Idx, float>();
+
+      if constexpr (dd.g.value() != 0) {
+        auto [outv, pushv]
+          = run_allpass<Idx> (push, out, g ? g[i] : dd.g.to_float());
+        out  = outv;
+        push = pushv;
+      }
+      io[i]                          = out;
+      _stage[Idx].z[_stage[Idx].pos] = float16::encode (push);
+      advance_pos<Idx>();
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
   auto run_mod (xspan<T> io, xspan<q0_15> lfo, xspan<q0_15> g = xspan<q0_15> {})
   {
     constexpr delay_data dd = Spec::values[Idx];
@@ -263,6 +352,34 @@ public:
       }
       io[i]                          = out;
       _stage[Idx].z[_stage[Idx].pos] = push.value();
+      advance_pos<Idx>();
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx>
+  auto run_mod (
+    xspan<float> io,
+    xspan<float> lfo,
+    xspan<float> g = xspan<float> {})
+  {
+    constexpr delay_data dd = Spec::values[Idx];
+    constexpr auto       sz = get_delay_size (Idx);
+
+    static_assert (dd.mod.value() != 0);
+
+    for (uint i = 0; i < io.size(); ++i) {
+      // interpolation
+      float push {io[i]};
+      float out = run_thiran<Idx> (lfo[i]);
+
+      if constexpr (dd.g.value() != 0) {
+        auto [outv, pushv]
+          = run_allpass<Idx> (push, out, g ? g[i] : dd.g.to_float());
+        out  = outv;
+        push = pushv;
+      }
+      io[i]                          = out;
+      _stage[Idx].z[_stage[Idx].pos] = float16::encode (push);
       advance_pos<Idx>();
     }
   }
@@ -288,9 +405,12 @@ private:
     return get<Idx, T> (dd.spls.to_int());
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T>
+  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
   T run_thiran (q0_15 lfo)
   {
+    // y1 doesn't need to be converted once per sample, can be done per
+    // block (at the expense of one extra buffer). Small blocks would then be
+    // more noisy!
     constexpr delay_data dd     = Spec::values[Idx];
     constexpr auto       sz     = get_delay_size (Idx);
     constexpr auto       y1_pos = sz;
@@ -308,8 +428,32 @@ private:
     auto y1 = T::from (_stage[Idx].z[y1_pos]);
 
     auto ret              = (T) (z0 * a + z1 - a * y1);
-    auto ret_dbg          = ret.to_float();
     _stage[Idx].z[y1_pos] = ret.value();
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx>
+  float run_thiran (float lfo)
+  {
+    constexpr delay_data dd     = Spec::values[Idx];
+    constexpr auto       sz     = get_delay_size (Idx);
+    constexpr auto       y1_pos = sz;
+
+    // y1 doesn't need to be converted once per sample, can be done per
+    // block (at the expense of one extra buffer). Small blocks would then be
+    // more noisy!
+    float fixpt_spls  = dd.spls.to_float() + (lfo * dd.mod.to_float());
+    uint  n_spls      = (uint) fixpt_spls;
+    float n_spls_frac = fixpt_spls - n_spls;
+    float d           = n_spls_frac + 0.418f;
+    float a           = (1.f - d) / (1.f + d); // 0.4104 to -1
+
+    float z0 = get<Idx, float> (n_spls - 1);
+    float z1 = get<Idx, float> (n_spls);
+    float y1 = float16::decode (_stage[Idx].z[y1_pos]);
+
+    float ret             = z0 * a + z1 - a * y1;
+    _stage[Idx].z[y1_pos] = float16::encode (ret);
     return ret;
   }
   //----------------------------------------------------------------------------
@@ -323,15 +467,28 @@ private:
 
     uint z = _stage[Idx].pos - delay_spls;
     z += (z >= sz) ? sz : 0;
-    return T::from (_stage[Idx].z[z]);
+    if constexpr (std::is_floating_point_v<T>) {
+      return float16::decode (_stage[Idx].z[z]);
+    }
+    else {
+      return T::from (_stage[Idx].z[z]);
+    }
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T>
+  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
   auto run_allpass (T in, T yn, q0_15 g)
   {
     auto u = in + yn * g;
     auto x = yn - u * g;
     return std::make_tuple (x.cast (T {}), u.cast (T {}));
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx>
+  auto run_allpass (float in, float yn, float g)
+  {
+    auto u = in + yn * g;
+    auto x = yn - u * g;
+    return std::make_tuple (x, u);
   }
   //----------------------------------------------------------------------------
   static constexpr uint get_delay_size (uint i)
@@ -353,6 +510,7 @@ private:
     return ret;
   }
   //----------------------------------------------------------------------------
+  using float16 = f16pack<5, -1, f16pack_dftz>;
   struct stage {
     s16* z {};
     uint pos {};
@@ -381,12 +539,11 @@ public:
       return;
     }
     switch (v) {
+    case mode::rev1_flt:
     case mode::rev1: {
       _param.mode_headroom_gain = 2.f + 0.8f + 0.855f + 0.443f;
       auto& rev                 = _modes.emplace<rev1_type>();
       rev.reset_memory (_mem_reverb);
-    } break;
-    case mode::dummy: {
     } break;
     default:
       return;
@@ -396,12 +553,12 @@ public:
     xspan_memset (_mem_reverb, 0);
   }
   struct mode {
-    enum { rev1, dummy };
+    enum { rev1_flt, rev1 };
   };
 
   static constexpr auto get_parameter (mode_tag)
   {
-    return choice_param (0, make_cstr_array ("Reverb 1", "Dummy!"), 48);
+    return choice_param (0, make_cstr_array ("Reverb1", "Reverb1 16-bit"), 48);
   }
   //----------------------------------------------------------------------------
   struct decay_tag {};
@@ -555,10 +712,14 @@ public:
     mp11::mp_for_each<decltype (_modes)> ([&] (auto mode) {
       rev_spls = std::max (mode.get_required_size(), rev_spls);
     });
+    uint predelay_flt = predelay_spls * (sizeof (float) / sizeof _mem[0]);
+
     _mem.clear();
-    _mem.resize (predelay_spls + rev_spls);
+    _mem.resize (predelay_spls + predelay_flt + rev_spls);
+
     _mem_reverb = xspan {_mem};
     _predelay.reset (_mem_reverb.cut_head (predelay_spls), 2);
+    _predelay_flt.reset (_mem_reverb.cut_head (predelay_flt).cast<float>(), 2);
 
     // set defaults
     mp11::mp_for_each<parameters> ([&] (auto param) {
@@ -583,7 +744,12 @@ public:
     assert (ins.size() >= (n_inputs * (uint) bus_type));
 
     _resampler.process (outs, ins, samples, [=] (auto io) {
-      process_block (io);
+      if ((_param.mode % 2) == 0) {
+        process_float (io);
+      }
+      else {
+        process_fixed_point (io);
+      }
     });
   }
   //----------------------------------------------------------------------------
@@ -606,7 +772,6 @@ private:
   //
   // Using q0_15 as default, with q0_15r at some points compensate the
   // truncating leakage.
-
   using q0_15  = detail::lofiverb::q0_15;
   using q0_15r = detail::lofiverb::q0_15r;
   using q1_14  = detail::lofiverb::q1_14;
@@ -619,21 +784,21 @@ private:
   struct unsmoothed_parameters;
   struct smoothed_parameters;
   //----------------------------------------------------------------------------
-  void process_block (xspan<std::array<float, 2>> io)
+  void process_fixed_point (xspan<std::array<float, 2>> io)
   {
     assert (io.size() <= max_block_size);
 
     // clip + convert to u16
     using fixptype = q0_15;
-    array2d<fixptype, 2, max_block_size> fixedp;
+    array2d<fixptype, 2, max_block_size> wet;
     std::array<f32_x2, max_block_size>   ducker_gain;
     loop_parameters                      pars;
 
     // tilt! + param smoothing + int conversion
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      f32_x2 ins     = {io[i][0], io[i][1]};
-      ducker_gain[i] = _ducker.tick (ins);
+      f32_x2 wet     = {io[i][0], io[i][1]};
+      ducker_gain[i] = _ducker.tick (wet);
       io[i]          = vec_to_array (_tilt.tick (vec_from_array (io[i])));
       _param_smooth.tick();
       pars.stereo[i] = _param_smooth.get().stereo;
@@ -650,15 +815,19 @@ private:
 
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
-        fixedp[i][0].load (_predelay.get (predelay_spls, 0));
-        fixedp[i][1].load (_predelay.get (predelay_spls, 1));
-        auto l = std::clamp (io[i][0], -0.98f, 0.98f);
-        auto r = std::clamp (io[i][1], -0.98f, 0.98f);
+        wet[i][0].load (_predelay.get (predelay_spls, 0));
+        wet[i][1].load (_predelay.get (predelay_spls, 1));
+        auto l = std::clamp (io[i][0], -0.98f, 0.98f) * gain;
+        auto r = std::clamp (io[i][1], -0.98f, 0.98f) * gain;
         // the maximum gain the loop has is computed theoretically and applied
         // before input, so fixed point scaling is not needed: no need for
         // integer bits.
-        l *= gain;
-        r *= gain;
+#if 0 // will process afterwards
+        auto            wn    = _whitenoise();
+        constexpr float scale = 1.f / 0xffff;
+        l += wn[0] + wn[1]; // TPDF
+        r += wn[0] - wn[1];
+#endif
         auto push = make_array (
           fixptype::from_float (l).value(), fixptype::from_float (r).value());
         _predelay.push (xspan {push});
@@ -668,24 +837,92 @@ private:
       float gain = 1.f / _param.mode_headroom_gain;
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
-        auto l = std::clamp (io[i][0], -0.98f, 0.98f);
-        auto r = std::clamp (io[i][1], -0.98f, 0.98f);
-        l *= gain;
-        r *= gain;
-        fixedp[i][0].load_float (l);
-        fixedp[i][1].load_float (r);
+        auto l = std::clamp (io[i][0], -0.98f, 0.98f) * gain;
+        auto r = std::clamp (io[i][1], -0.98f, 0.98f) * gain;
+        wet[i][0].load_float (l);
+        wet[i][1].load_float (r);
       }
     }
 
     // main loop
-    process_rev1 (xspan {fixedp.data(), io.size()}, pars);
+    process_rev1 (xspan {wet.data(), io.size()}, pars);
 
     // float conversion
     auto gain = _param.mode_headroom_gain;
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto l = fixedp[i][0].to_float() * gain * ducker_gain[i][0];
-      auto r = fixedp[i][1].to_float() * gain * ducker_gain[i][1];
+      auto l = wet[i][0].to_float() * gain * ducker_gain[i][0];
+      auto r = wet[i][1].to_float() * gain * ducker_gain[i][1];
+      l      = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
+      if (pars.stereo[i] < 0) {
+        io[i][0] = r;
+        io[i][1] = l;
+      }
+      else {
+        io[i][0] = l;
+        io[i][1] = r;
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  void process_float (xspan<std::array<float, 2>> io)
+  {
+    assert (io.size() <= max_block_size);
+
+    // clip + convert to u16
+    array2d<float, 2, max_block_size>  wet;
+    std::array<f32_x2, max_block_size> ducker_gain;
+    loop_parameters_flt                pars;
+
+    // tilt! + param smoothing + int conversion
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      f32_x2 wet     = {io[i][0], io[i][1]};
+      ducker_gain[i] = _ducker.tick (wet);
+      io[i]          = vec_to_array (_tilt.tick (vec_from_array (io[i])));
+      _param_smooth.tick();
+      pars.stereo[i]    = _param_smooth.get().stereo;
+      pars.er[i]        = _param_smooth.get().er;
+      pars.decay[i]     = _param_smooth.get().decay;
+      pars.character[i] = _param_smooth.get().character;
+      pars.mod[i]       = _param_smooth.get().mod;
+    }
+
+    // predelay + int conversion
+    if (_param.predelay != 0) {
+      uint  predelay_spls = _1_4beat_spls * _param.predelay;
+      float gain          = 1.f / _param.mode_headroom_gain;
+
+      ARTV_LOOP_UNROLL_SIZE_HINT (16)
+      for (uint i = 0; i < io.size(); ++i) {
+        wet[i][0] = _predelay_flt.get (predelay_spls, 0);
+        wet[i][1] = _predelay_flt.get (predelay_spls, 1);
+        auto l    = std::clamp (io[i][0], -0.999f, 0.999f) * gain;
+        auto r    = std::clamp (io[i][1], -0.999f, 0.999f) * gain;
+        auto push = make_array (l, r);
+        _predelay_flt.push (xspan {push});
+      }
+    }
+    else {
+      float gain = 1.f / _param.mode_headroom_gain;
+
+      ARTV_LOOP_UNROLL_SIZE_HINT (16)
+      for (uint i = 0; i < io.size(); ++i) {
+        auto l    = std::clamp (io[i][0], -0.999f, 0.999f) * gain;
+        auto r    = std::clamp (io[i][1], -0.999f, 0.999f) * gain;
+        wet[i][0] = l;
+        wet[i][1] = r;
+      }
+    }
+
+    // main loop
+    process_rev1_flt (xspan {wet.data(), io.size()}, pars);
+
+    auto gain = _param.mode_headroom_gain;
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      auto l = wet[i][0] * ducker_gain[i][0] * gain;
+      auto r = wet[i][1] * ducker_gain[i][1] * gain;
       l      = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
       if (pars.stereo[i] < 0) {
         io[i][0] = r;
@@ -704,12 +941,12 @@ private:
   {
     auto& rev = std::get<rev1_type> (_modes);
 
-    using fixptarr    = std::array<q0_15, max_block_size>;
-    using fixptarr_fb = std::array<q0_15, max_block_size + 1>;
+    using arr    = std::array<q0_15, max_block_size>;
+    using arr_fb = std::array<q0_15, max_block_size + 1>;
 
-    fixptarr late_in_arr;
-    fixptarr lfo1;
-    fixptarr lfo2;
+    arr late_in_arr;
+    arr lfo1;
+    arr lfo2;
 
     auto late_in = xspan {late_in_arr.data(), io.size()};
     for (uint i = 0; i < io.size(); ++i) {
@@ -719,11 +956,9 @@ private:
       auto lfo = _lfo_er.tick_sine_fixpt().spec_cast<q0_15>().value();
       lfo1[i].load (lfo[0]);
       lfo2[i].load (lfo[1]);
-      auto er_amt       = (q1_14) (num {0.5} + (par.er[i] >> 2));
-      auto lfo2final    = lfo2[i] * er_amt;
-      auto lfo2finalflt = lfo2final.to_float();
-
-      lfo2[i] = (q0_15) (lfo2final);
+      auto er_amt    = (q1_14) (num {0.5} + (par.er[i] >> 1));
+      auto lfo2final = lfo2[i] * er_amt;
+      lfo2[i]        = (q0_15) (lfo2final);
       // decay fixup
       auto decay   = (q1_14) (num {1} - par.decay[i]);
       decay        = (q1_14) (num {1} - decay * decay);
@@ -737,9 +972,9 @@ private:
     rev.run<3> (late_in);
 
     // ER -----------------------------
-    fixptarr    early1_arr;
-    fixptarr    early1b_arr;
-    fixptarr_fb early2_arr;
+    arr    early1_arr;
+    arr    early1b_arr;
+    arr_fb early2_arr;
 
     auto er1  = xspan {early1_arr.data(), io.size()};
     auto er1b = xspan {early1b_arr.data(), io.size()};
@@ -756,17 +991,17 @@ private:
     }
     er2.cut_head (1); // drop feedback sample from previous block
 
-    rev.run_mod<4> (er1, lfo1);
+    rev.run_mod<4> (er1, lfo2);
     rev.run_lp<5> (er1, q0_15::from_float (0.0001f + 0.17f * _param.damp));
     xspan_memcpy (er1b, er1);
-    rev.run_mod<6> (er1b, lfo2);
+    rev.run_mod<6> (er1b, lfo1);
     rev.push<7> (er1b.to_const()); // feedback point
 
     // Late -----------------------------
-    fixptarr    late_arr;
-    fixptarr_fb l_arr;
-    fixptarr_fb r_arr;
-    fixptarr    g_arr;
+    arr    late_arr;
+    arr_fb l_arr;
+    arr_fb r_arr;
+    arr    g_arr;
 
     auto late = xspan {late_arr.data(), io.size()};
     auto g    = xspan {g_arr.data(), io.size()};
@@ -792,7 +1027,7 @@ private:
       // add ER blend to late in
       auto fact  = (q0_15) (par.er[i] * num {0.4});
       auto er_in = (q0_15r) ((er1[i] + er2[i]) * fact);
-      late[i]    = (q0_15r) (late[i] + er_in);
+      late[i]    = (q0_15r) (late[i] - er_in);
 
       // g character
       // clang-format off
@@ -854,6 +1089,129 @@ private:
     }
   }
   //----------------------------------------------------------------------------
+  struct loop_parameters_flt;
+  void process_rev1_flt (
+    xspan<std::array<float, 2>> io,
+    loop_parameters_flt&        par)
+  {
+    auto& rev = std::get<rev1_type> (_modes);
+
+    using arr    = std::array<float, max_block_size>;
+    using arr_fb = std::array<float, max_block_size + 1>;
+
+    arr late_in_arr;
+    arr lfo1;
+    arr lfo2;
+
+    auto late_in = xspan {late_in_arr.data(), io.size()};
+    for (uint i = 0; i < io.size(); ++i) {
+      // to MS
+      late_in[i] = (io[i][0] + io[i][1]) * 0.5f;
+      // ER lfo
+      auto lfo = _lfo_er.tick_sine();
+      lfo1[i]  = lfo[0];
+      lfo2[i]  = lfo[1] * (0.5f + par.er[i] * 0.5f);
+      // decay fixup
+      auto decay   = 1.f - par.decay[i];
+      decay        = 1.f - decay * decay;
+      par.decay[i] = 0.6f + decay * 0.39f;
+    }
+
+    // diffusion -----------------------------
+    rev.run<0> (late_in);
+    rev.run<1> (late_in);
+    rev.run<2> (late_in);
+    rev.run<3> (late_in);
+
+    // ER -----------------------------
+    arr    early1_arr;
+    arr    early1b_arr;
+    arr_fb early2_arr;
+
+    auto er1  = xspan {early1_arr.data(), io.size()};
+    auto er1b = xspan {early1b_arr.data(), io.size()};
+    auto er2 = xspan {early2_arr.data(), io.size() + 1}; // +1: Feedback on head
+
+    // feedback handling
+    rev.fetch_block_plus_one<7> (er2);
+
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      er1[i] = (late_in[i] + er2[i] * 0.2f) * par.decay[i]; // apply ER feedback
+    }
+    er2.cut_head (1); // drop feedback sample from previous block
+
+    rev.run_mod<4> (er1, lfo1);
+    rev.run_lp<5> (er1, 0.0001f + 0.17f * _param.damp);
+    xspan_memcpy (er1b, er1);
+    rev.run_mod<6> (er1b, lfo2);
+    rev.push<7> (er1b.to_const()); // feedback point
+
+    // Late -----------------------------
+    arr    late_arr;
+    arr_fb l_arr;
+    arr_fb r_arr;
+    arr    g_arr;
+
+    auto late = xspan {late_arr.data(), io.size()};
+    auto g    = xspan {g_arr.data(), io.size()};
+    auto l    = xspan {l_arr.data(), io.size() + 1}; // +1: Feedback on head
+    auto r    = xspan {r_arr.data(), io.size() + 1}; // +1: Feedback on head
+
+    // feedback handling
+    rev.fetch_block_plus_one<14> (l);
+    rev.fetch_block_plus_one<22> (r);
+
+    for (uint i = 0; i < io.size(); ++i) {
+      auto mod = 0.25f + (1.f - par.mod[i]) * 0.75f;
+      auto lfo = _lfo.tick_sine();
+      lfo1[i]  = lfo[0] * mod;
+      lfo2[i]  = lfo[1] * mod;
+      late[i]  = late_in[i] + r[i] * par.decay[i];
+      late[i] -= (er1[i] + er2[i]) * par.er[i] * 0.4f;
+      g[i] = 0.618f + par.character[i] * (0.707f - 0.618f) * 2.f;
+    }
+    r.cut_head (1); // drop feedback sample from previous block
+
+    float late_damp = (0.9f - _param.damp * 0.9f);
+    late_damp       = 1.f - late_damp * late_damp;
+    late_damp *= 0.4f;
+
+    rev.run_mod<8> (late, lfo1, g);
+    rev.run<9> (late);
+    rev.run_lp<10> (late, late_damp);
+    std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
+    rev.run<11> (late, g);
+    rev.run<12> (late);
+    rev.run<13> (late);
+    rev.push<14> (late.to_const()); // feedback point
+
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      late[i] = late_in[i] + l[i] * par.decay[i];
+      late[i] += (er1[i] + er2[i]) * par.er[i] * 0.4f;
+    }
+    l.cut_head (1); // drop feedback sample from previous block
+
+    std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
+    rev.run_mod<15> (late, lfo2, g);
+    rev.run<16> (late);
+    rev.run_lp<17> (late, late_damp);
+    std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
+    rev.run<18> (late, g);
+    rev.run<19> (late);
+    rev.run<20> (late);
+    rev.run_hp<21> (late);
+    rev.push<22> (late.to_const()); // feedback point
+
+    // Mixdown
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      io[i][0] = l[i] + (-er1[i] * 0.825f - er2[i] * 0.423f) * par.er[i];
+      io[i][1] = r[i] + (-er1[i] * 0.855f + er2[i] * 0.443f) * par.er[i];
+    }
+  }
+  //----------------------------------------------------------------------------
   void update_mod()
   {
     auto mod = _param_smooth.target().mod;
@@ -890,13 +1248,21 @@ private:
     std::array<q1_14, max_block_size> mod;
     std::array<float, max_block_size> stereo;
   };
+  struct loop_parameters_flt {
+    std::array<float, max_block_size> er;
+    std::array<float, max_block_size> decay;
+    std::array<float, max_block_size> character;
+    std::array<float, max_block_size> mod;
+    std::array<float, max_block_size> stereo;
+  };
   //----------------------------------------------------------------------------
   unsmoothed_parameters                      _param;
   value_smoother<float, smoothed_parameters> _param_smooth;
 
-  block_resampler<float, 2>            _resampler {};
-  part_class_array<tilt_eq, f32_x2>    _tilt {};
-  static_delay_line<s16, false, false> _predelay;
+  block_resampler<float, 2>              _resampler {};
+  part_class_array<tilt_eq, f32_x2>      _tilt {};
+  static_delay_line<s16, false, false>   _predelay;
+  static_delay_line<float, false, false> _predelay_flt;
 
   lfo<2> _lfo;
   lfo<2> _lfo_er;
@@ -910,6 +1276,9 @@ private:
 
   std::vector<s16, overaligned_allocator<s16, 16>> _mem;
   xspan<s16>                                       _mem_reverb;
+#if 0
+  white_noise_generator                            _whitenoise;
+#endif
 };
 //------------------------------------------------------------------------------
 } // namespace artv
