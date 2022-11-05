@@ -42,19 +42,19 @@ namespace detail {
 template <class T, class F, class FL, class FLL>
 T unary_int_func_dispatch (T v, F&& f, FL&& fl, FLL&& fll)
 {
-  if constexpr (std::is_same_v<T, int> || std::is_same_v<T, unsigned int>) {
-    return f (v);
+  static_assert (std::is_integral_v<T>);
+  if constexpr (sizeof v <= sizeof (int)) {
+    return f ((unsigned int) v);
   }
-  else if constexpr (
-    std::is_same_v<T, long> || std::is_same_v<T, unsigned long>) {
-    return fl (v);
+  else if constexpr (sizeof v <= sizeof (long)) {
+    return fl ((unsigned long) v);
   }
-  else if constexpr (
-    std::is_same_v<T, long long> || std::is_same_v<T, unsigned long long>) {
-    return fll (v);
+  else if constexpr (sizeof v <= sizeof (long long)) {
+    return fll ((unsigned long long) v);
   }
   else {
-    static_assert (sizeof v != 0, "unsupported type");
+    static_assert (sizeof v == 0, "unsupported type");
+    return T {};
   }
 }
 } // namespace detail
