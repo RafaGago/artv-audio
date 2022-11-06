@@ -37,8 +37,8 @@ using fixpt_spls_mod = fixpt_dt<0, 9, 0>;
 //------------------------------------------------------------------------------
 struct delay_data {
   fixpt_spls     spls;
-  fixpt_spls_mod mod; // in samples
-  q0_15          g;
+  fixpt_spls_mod mod; // In samples. If 0 the delay is not modulated
+  q0_15          g; // If 0 the delay has no allpass
 };
 //------------------------------------------------------------------------------
 static constexpr detail::lofiverb::delay_data make_dd (
@@ -46,14 +46,15 @@ static constexpr detail::lofiverb::delay_data make_dd (
   float g   = 0.,
   u16   mod = 0)
 {
-  assert (spls < 8 * 1024);
+  assert (spls < fixpt_spls::max_int());
+  assert (mod < fixpt_spls_mod::max_int());
   return delay_data {
     fixpt_spls::from_int (spls),
     fixpt_spls_mod::from_int (mod),
     q0_15::from_float (g)};
 }
 //------------------------------------------------------------------------------
-static constexpr auto get_rev1_delays()
+static constexpr auto get_rev1_spec()
 {
   return make_array<delay_data> (
     // diffusors
@@ -86,7 +87,7 @@ static constexpr auto get_rev1_delays()
 }
 
 struct rev1_spec {
-  static constexpr auto values {get_rev1_delays()};
+  static constexpr auto values {get_rev1_spec()};
 };
 //------------------------------------------------------------------------------
 template <class Spec, uint Max_block_size>
@@ -122,7 +123,11 @@ public:
   template <uint Idx, class T>
   void fetch_block_plus_one (xspan<T> dst)
   {
-    fetch_block<Idx> (dst, 1);
+    constexpr delay_data dd = Spec::values[Idx];
+    static_assert (dd.g.value() == 0, "Not possible on allpasses");
+    static_assert (dd.mod.value() == 0, "Not possible on Modulated delays");
+    assert (dst);
+    decode_read (dst, get_read_buffers<Idx> (dst.size(), 1));
   }
   // see comment on fetch_block_plus_one
   //----------------------------------------------------------------------------
@@ -133,23 +138,7 @@ public:
     static_assert (dd.g.value() == 0, "Not possible on allpasses");
     static_assert (dd.mod.value() == 0, "Not possible on Modulated delays");
     assert (src);
-
-    auto buf = prepare_block_insertion<Idx> (src.size());
-    if constexpr (is_fixpt_v<T>) {
-      // 16 bit fixed point
-      static_assert (sizeof (T) == sizeof buf[0][0]);
-      xspan_memdump (buf[0].data(), src.reduced (buf[1].size()));
-      xspan_memdump (buf[1].data(), src.advanced (buf[0].size()));
-    }
-    else {
-      for (uint i = 0; i < buf[0].size(); ++i) {
-        buf[0][i] = float16::encode (src[i]);
-      }
-      src.cut_head (buf[0].size());
-      for (uint i = 0; i < buf[1].size(); ++i) {
-        buf[1][i] = float16::encode (src[i]);
-      }
-    }
+    encode_write (prepare_block_insertion<Idx> (src.size()), src);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
@@ -159,9 +148,8 @@ public:
     static_assert (get_delay_size (Idx) >= 1);
 
     assert (io);
-
-    auto y1 = T::from (_stage[Idx].z[0]);
-
+    T y1;
+    decode_read (y1, _stage[Idx].z[0]);
     for (uint i = 0; i < io.size(); ++i) {
       auto gv = (g.value() == 0) ? dd.g : g;
       auto v  = (T) ((gv.max() - gv) * io[i]);
@@ -169,7 +157,7 @@ public:
       y1      = v;
       io[i]   = v;
     }
-    _stage[Idx].z[0] = y1.value();
+    encode_write (_stage[Idx].z[0], y1);
   }
   //----------------------------------------------------------------------------
   template <uint Idx>
@@ -179,8 +167,8 @@ public:
     static_assert (get_delay_size (Idx) >= 1);
 
     assert (io);
-
-    auto y1 = float16::decode (_stage[Idx].z[0]);
+    float y1;
+    decode_read (y1, _stage[Idx].z[0]);
     for (uint i = 0; i < io.size(); ++i) {
       auto gv = (g == 0.f) ? dd.g.to_float() : g;
       auto v  = (1.f - gv) * io[i];
@@ -188,7 +176,7 @@ public:
       y1      = v;
       io[i]   = v;
     }
-    _stage[Idx].z[0] = float16::encode (y1);
+    encode_write (_stage[Idx].z[0], y1);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
@@ -199,8 +187,8 @@ public:
 
     assert (io);
 
-    auto y1 = T::from (_stage[Idx].z[0]);
-
+    T y1;
+    decode_read (y1, _stage[Idx].z[0]);
     for (uint i = 0; i < io.size(); ++i) {
       auto gv = (g.value() == 0) ? dd.g : g;
       auto v  = (T) ((gv.max() - gv) * io[i]);
@@ -208,7 +196,7 @@ public:
       y1      = v;
       io[i]   = (T) (io[i] - v);
     }
-    _stage[Idx].z[0] = y1.value();
+    encode_write (_stage[Idx].z[0], y1);
   }
   //----------------------------------------------------------------------------
   template <uint Idx>
@@ -219,7 +207,8 @@ public:
 
     assert (io);
 
-    auto y1 = float16::decode (_stage[Idx].z[0]);
+    float y1;
+    decode_read (y1, _stage[Idx].z[0]);
     for (uint i = 0; i < io.size(); ++i) {
       auto gv = (g == 0.f) ? dd.g.to_float() : g;
       auto v  = (1.f - gv) * io[i];
@@ -227,110 +216,98 @@ public:
       y1      = v;
       io[i]   = io[i] - v;
     }
-    _stage[Idx].z[0] = float16::encode (y1);
+    encode_write (_stage[Idx].z[0], y1);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
-  void run (xspan<T> io, xspan<q0_15> g = xspan<q0_15> {})
+  template <uint Idx, class T, class U = T>
+  void run (xspan<T> io, xspan<U> g = xspan<U> {})
   {
-    constexpr delay_data dd = Spec::values[Idx];
-    constexpr auto       sz = get_delay_size (Idx);
-
-    static_assert (dd.mod.value() == 0);
-    for (uint i = 0; i < io.size(); ++i) {
-      // no interpolation
-      T push {io[i]};
-      T out = run_plain_delay<Idx, T>();
-
-      if constexpr (dd.g.value() != 0) {
-        auto [outv, pushv] = run_allpass<Idx, T> (push, out, g ? g[i] : dd.g);
-        out                = outv;
-        push               = pushv;
-      }
-      io[i]                          = out;
-      _stage[Idx].z[_stage[Idx].pos] = push.value();
-      advance_pos<Idx>();
-    }
+    run_impl<Idx> (io, g, xspan<U> {});
   }
   //----------------------------------------------------------------------------
-  template <uint Idx>
-  void run (xspan<float> io, xspan<float> g = xspan<float> {})
+  template <uint Idx, class T, class U>
+  auto run_mod (xspan<T> io, xspan<U> lfo, xspan<U> g = xspan<U> {})
   {
-    constexpr delay_data dd = Spec::values[Idx];
-    constexpr auto       sz = get_delay_size (Idx);
-
-    static_assert (dd.mod.value() == 0);
-
-    for (uint i = 0; i < io.size(); ++i) {
-      // no interpolation
-      float push {io[i]};
-      float out = run_plain_delay<Idx, float>();
-
-      if constexpr (dd.g.value() != 0) {
-        auto [outv, pushv]
-          = run_allpass<Idx> (push, out, g ? g[i] : dd.g.to_float());
-        out  = outv;
-        push = pushv;
-      }
-      io[i]                          = out;
-      _stage[Idx].z[_stage[Idx].pos] = float16::encode (push);
-      advance_pos<Idx>();
-    }
+    run_impl<Idx> (io, g, lfo);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
-  auto run_mod (xspan<T> io, xspan<q0_15> lfo, xspan<q0_15> g = xspan<q0_15> {})
+  template <uint Idx, class T, class U, std::size_t N>
+  auto run_mod (xspan<T> io, std::array<U, N>& lfo, xspan<U> g = xspan<U> {})
   {
-    constexpr delay_data dd = Spec::values[Idx];
-    constexpr auto       sz = get_delay_size (Idx);
-
-    static_assert (dd.mod.value() != 0);
-
-    for (uint i = 0; i < io.size(); ++i) {
-      // interpolation
-      T push {io[i]};
-      T out = run_thiran<Idx, T> (lfo[i]);
-
-      if constexpr (dd.g.value() != 0) {
-        auto [outv, pushv] = run_allpass<Idx, T> (push, out, g ? g[i] : dd.g);
-        out                = outv;
-        push               = pushv;
-      }
-      io[i]                          = out;
-      _stage[Idx].z[_stage[Idx].pos] = push.value();
-      advance_pos<Idx>();
-    }
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx>
-  auto run_mod (
-    xspan<float> io,
-    xspan<float> lfo,
-    xspan<float> g = xspan<float> {})
-  {
-    constexpr delay_data dd = Spec::values[Idx];
-    constexpr auto       sz = get_delay_size (Idx);
-
-    static_assert (dd.mod.value() != 0);
-
-    for (uint i = 0; i < io.size(); ++i) {
-      // interpolation
-      float push {io[i]};
-      float out = run_thiran<Idx> (lfo[i]);
-
-      if constexpr (dd.g.value() != 0) {
-        auto [outv, pushv]
-          = run_allpass<Idx> (push, out, g ? g[i] : dd.g.to_float());
-        out  = outv;
-        push = pushv;
-      }
-      io[i]                          = out;
-      _stage[Idx].z[_stage[Idx].pos] = float16::encode (push);
-      advance_pos<Idx>();
-    }
+    run_impl<Idx> (io, g, xspan {lfo});
   }
   //----------------------------------------------------------------------------
 private:
+  //----------------------------------------------------------------------------
+  template <class T>
+  void decode_read (T& dst, s16 src)
+  {
+    if constexpr (is_fixpt_v<T>) {
+      // 16 bit fixed point
+      static_assert (sizeof dst == sizeof src);
+      memcpy (&dst, &src, sizeof src);
+    }
+    else {
+      static_assert (std::is_same_v<T, float>);
+      dst = float16::decode (src);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void decode_read (xspan<T> dst, std::array<xspan<s16>, 2> src)
+  {
+    assert (dst.size() == (src[0].size() + src[1].size()));
+    if constexpr (is_fixpt_v<T>) {
+      // 16 bit fixed point
+      static_assert (sizeof (T) == sizeof src[0][0]);
+      xspan_memdump (dst.data(), src[0]);
+      xspan_memdump (dst.data() + src[0].size(), src[1]);
+    }
+    else {
+      for (uint i = 0; i < src[0].size(); ++i) {
+        dst[i] = float16::decode (src[0][i]);
+      }
+      dst.cut_head (src[0].size());
+      for (uint i = 0; i < src[1].size(); ++i) {
+        dst[i] = float16::decode (src[1][i]);
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void encode_write (s16& dst, T src)
+  {
+    if constexpr (is_fixpt_v<T>) {
+      // 16 bit fixed point
+      static_assert (sizeof dst == sizeof src);
+      memcpy (&dst, &src, sizeof src);
+    }
+    else {
+      static_assert (std::is_same_v<T, float>);
+      dst = float16::encode (src);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void encode_write (std::array<xspan<s16>, 2> dst, xspan<T const> src)
+  {
+    assert (src.size() == (dst[0].size() + dst[1].size()));
+    if constexpr (is_fixpt_v<T>) {
+      // 16 bit fixed point
+      static_assert (sizeof (T) == sizeof dst[0][0]);
+      xspan_memdump (dst[0].data(), src.reduced (dst[1].size()));
+      xspan_memdump (dst[1].data(), src.advanced (dst[0].size()));
+    }
+    else {
+      for (uint i = 0; i < dst[0].size(); ++i) {
+        dst[0][i] = float16::encode (src[i]);
+      }
+      src.cut_head (dst[0].size());
+      for (uint i = 0; i < dst[1].size(); ++i) {
+        dst[1][i] = float16::encode (src[i]);
+      }
+    }
+  }
   //----------------------------------------------------------------------------
   template <uint Idx>
   void advance_pos()
@@ -345,62 +322,71 @@ private:
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
-  T run_plain_delay()
+  T read_next()
   {
     constexpr delay_data dd = Spec::values[Idx];
     return get<Idx, T> (dd.spls.to_int());
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
-  T run_thiran (q0_15 lfo)
+  template <uint Idx, class T>
+  void push (T v)
   {
-    // y1 doesn't need to be converted once per sample, can be done per
-    // block (at the expense of one extra buffer). Small blocks would then be
-    // more noisy!
+    encode_write (_stage[Idx].z[_stage[Idx].pos], v);
+    advance_pos();
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+  void run_thiran (xspan<T> dst, xspan<q0_15> lfo)
+  {
     constexpr delay_data dd     = Spec::values[Idx];
     constexpr auto       sz     = get_delay_size (Idx);
     constexpr auto       y1_pos = sz;
 
-    auto fixpt_spls  = dd.spls.add_sign() + (lfo * dd.mod.add_sign());
-    auto n_spls      = fixpt_spls.to_int();
-    auto n_spls_frac = fixpt_spls.fractional().to_dynamic();
-    auto d           = n_spls_frac + num {0.418f};
-    auto one         = fixpt_dt<1, 1, 0>::from_int (1);
-    auto co_thiran   = (one - d) / (one + d); // 0.4104 to -1
-    auto a           = co_thiran.cast<fixpt<1, 0, 23>>();
+    T y1;
+    decode_read (y1, _stage[Idx].z[y1_pos]);
+    for (uint i = 0; i < dst.size(); ++i) {
+      auto fixpt_spls
+        = dd.spls.add_sign() + (lfo[i] * dd.mod.add_sign()) - num {i};
+      auto n_spls      = fixpt_spls.to_int();
+      auto n_spls_frac = fixpt_spls.fractional().to_dynamic();
+      auto d           = n_spls_frac + num {0.418f};
+      auto one         = fixpt_dt<1, 1, 0>::from_int (1);
 
-    auto z0 = get<Idx, T> (n_spls - 1);
-    auto z1 = get<Idx, T> (n_spls);
-    auto y1 = T::from (_stage[Idx].z[y1_pos]);
+      auto co_thiran = (one - d) / (one + d); // 0.4104 to -1
+      auto a         = co_thiran.cast<fixpt<1, 0, 23>>();
 
-    auto ret              = (T) (z0 * a + z1 - a * y1);
-    _stage[Idx].z[y1_pos] = ret.value();
-    return ret;
+      auto z0 = get<Idx, T> (n_spls - 1);
+      auto z1 = get<Idx, T> (n_spls);
+      y1      = (T) (z0 * a + z1 - a * y1);
+      dst[i]  = y1;
+    }
+    encode_write (_stage[Idx].z[y1_pos], y1);
   }
   //----------------------------------------------------------------------------
   template <uint Idx>
-  float run_thiran (float lfo)
+  void run_thiran (xspan<float> dst, xspan<float> lfo)
   {
     constexpr delay_data dd     = Spec::values[Idx];
     constexpr auto       sz     = get_delay_size (Idx);
     constexpr auto       y1_pos = sz;
 
-    // y1 doesn't need to be converted once per sample, can be done per
-    // block (at the expense of one extra buffer). Small blocks would then be
-    // more noisy!
-    float fixpt_spls  = dd.spls.to_float() + (lfo * dd.mod.to_float());
-    uint  n_spls      = (uint) fixpt_spls;
-    float n_spls_frac = fixpt_spls - n_spls;
-    float d           = n_spls_frac + 0.418f;
-    float a           = (1.f - d) / (1.f + d); // 0.4104 to -1
+    float y1;
+    decode_read (y1, _stage[Idx].z[y1_pos]);
+    for (uint i = 0; i < dst.size(); ++i) {
+      float fixpt_spls  = dd.spls.to_float() + (lfo[i] * dd.mod.to_float());
+      uint  n_spls      = (uint) fixpt_spls;
+      float n_spls_frac = fixpt_spls - n_spls;
+      n_spls -= i;
 
-    float z0 = get<Idx, float> (n_spls - 1);
-    float z1 = get<Idx, float> (n_spls);
-    float y1 = float16::decode (_stage[Idx].z[y1_pos]);
+      float d = n_spls_frac + 0.418f;
+      float a = (1.f - d) / (1.f + d); // 0.4104 to -1
 
-    float ret             = z0 * a + z1 - a * y1;
-    _stage[Idx].z[y1_pos] = float16::encode (ret);
-    return ret;
+      float z0 = get<Idx, float> (n_spls - 1);
+      float z1 = get<Idx, float> (n_spls);
+      y1       = z0 * a + z1 - a * y1;
+      dst[i]   = y1;
+    }
+    encode_write (_stage[Idx].z[y1_pos], y1);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -413,28 +399,72 @@ private:
 
     uint z = _stage[Idx].pos - delay_spls;
     z += (z >= sz) ? sz : 0;
-    if constexpr (std::is_floating_point_v<T>) {
-      return float16::decode (_stage[Idx].z[z]);
+    T ret;
+    decode_read (ret, _stage[Idx].z[z]);
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class U>
+  auto run_allpass (T in, T yn, U g)
+  {
+    auto u = in + yn * g;
+    auto x = yn - u * g;
+    return std::make_tuple (static_cast<T> (x), static_cast<T> (u));
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class U>
+  void run_impl (xspan<T> io, xspan<U> g, xspan<U> lfo)
+  {
+    constexpr delay_data dd             = Spec::values[Idx];
+    constexpr auto       sz             = get_delay_size (Idx);
+    constexpr auto       minsz          = sz - dd.mod.to_int();
+    constexpr auto       has_allpass    = dd.g.value() != 0;
+    constexpr auto       has_modulation = dd.mod.value() != 0;
+
+    if constexpr (minsz >= max_block_size) {
+      // no overlap, can run in blocks
+      std::array<T, max_block_size> iocp_mem;
+      xspan                         iocp {iocp_mem.data(), io.size()};
+      xspan_memcpy (iocp, io);
+
+      if constexpr (has_modulation) {
+        run_thiran<Idx> (io, lfo);
+      }
+      else {
+        decode_read (io, get_read_buffers<Idx> (io.size(), 0));
+      }
+      if constexpr (has_allpass) {
+        for (uint i = 0; i < io.size(); ++i) {
+          auto [out, push]
+            = run_allpass<Idx, T> (iocp[i], io[i], g ? g[i] : (U) dd.g);
+          io[i]   = out;
+          iocp[i] = push;
+        }
+      }
+      encode_write (prepare_block_insertion<Idx> (io.size()), iocp.to_const());
     }
     else {
-      return T::from (_stage[Idx].z[z]);
+      // overlap, needs single sample iteration
+      for (uint i = 0; i < io.size(); ++i) {
+        T qv;
+        if constexpr (has_modulation) {
+          qv = run_thiran<Idx> (xspan {&io[i], 1}, xspan {&lfo[i], 1});
+        }
+        else {
+          T qv = read_next<Idx>();
+        }
+        if constexpr (has_allpass) {
+          auto [out, push]
+            = run_allpass<Idx, T> (io[i], qv, g ? g[i] : (U) dd.g);
+          push<Idx> (push);
+          io[i] = out;
+        }
+        else {
+          push<Idx> (io[i]);
+          io[i] = qv;
+        }
+      }
     }
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
-  auto run_allpass (T in, T yn, q0_15 g)
-  {
-    auto u = in + yn * g;
-    auto x = yn - u * g;
-    return std::make_tuple (x.cast (T {}), u.cast (T {}));
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx>
-  auto run_allpass (float in, float yn, float g)
-  {
-    auto u = in + yn * g;
-    auto x = yn - u * g;
-    return std::make_tuple (x, u);
   }
   //----------------------------------------------------------------------------
   static constexpr uint get_delay_size (uint i)
@@ -516,33 +546,6 @@ private:
       xspan {&_stage[Idx].z[0], block2sz}};
   }
   //----------------------------------------------------------------------------
-  // fetch a block starting at the configured delay - offset.
-  template <uint Idx, class T>
-  void fetch_block (xspan<T> dst, uint neg_offset)
-  {
-    constexpr delay_data dd = Spec::values[Idx];
-    static_assert (dd.g.value() == 0, "Not possible on allpasses");
-    static_assert (dd.mod.value() == 0, "Not possible on Modulated delays");
-
-    auto buf = get_read_buffers<Idx> (dst.size(), neg_offset);
-
-    if constexpr (is_fixpt_v<T>) {
-      // 16 bit fixed point
-      static_assert (sizeof (T) == sizeof buf[0][0]);
-      xspan_memdump (dst.data(), buf[0]);
-      xspan_memdump (dst.data() + buf[0].size(), buf[1]);
-    }
-    else {
-      for (uint i = 0; i < buf[0].size(); ++i) {
-        dst[i] = float16::decode (buf[0][i]);
-      }
-      dst.cut_head (buf[0].size());
-      for (uint i = 0; i < buf[1].size(); ++i) {
-        dst[i] = float16::decode (buf[1][i]);
-      }
-    }
-  }
-  //----------------------------------------------------------------------------
   using float16 = f16pack<5, -1, f16pack_dftz>;
   struct stage {
     s16* z {};
@@ -571,10 +574,14 @@ public:
     if (v == _param.mode) {
       return;
     }
+    // reminder. "normalization_gain" is the gain such that if the reverb is fed
+    // values in the [-1,1] range will make it output values at most at the
+    // [-1,1] range. This is important for fixed-point and truncated float
+    // scaling.
     switch (v) {
     case mode::rev1_flt:
     case mode::rev1: {
-      _param.mode_headroom_gain = 2.f + 0.8f + 0.855f + 0.443f;
+      _param.normalization_gain = 2.f + 0.8f + 0.855f + 0.443f;
       auto& rev                 = _modes.emplace<rev1_type>();
       rev.reset_memory (_mem_reverb);
     } break;
@@ -846,7 +853,7 @@ private:
     // predelay + int conversion
     if (_param.predelay != 0) {
       uint  predelay_spls = _1_4beat_spls * _param.predelay;
-      float gain          = 1.f / _param.mode_headroom_gain;
+      float gain          = 1.f / _param.normalization_gain;
 
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
@@ -854,9 +861,6 @@ private:
         wet[i][1].load (_predelay.get (predelay_spls, 1));
         auto l = std::clamp (io[i][0], -0.98f, 0.98f) * gain;
         auto r = std::clamp (io[i][1], -0.98f, 0.98f) * gain;
-        // the maximum gain the loop has is computed theoretically and applied
-        // before input, so fixed point scaling is not needed: no need for
-        // integer bits.
 #if 0 // will process afterwards
         auto            wn    = _whitenoise();
         constexpr float scale = 1.f / 0xffff;
@@ -869,7 +873,7 @@ private:
       }
     }
     else {
-      float gain = 1.f / _param.mode_headroom_gain;
+      float gain = 1.f / _param.normalization_gain;
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
         auto l = std::clamp (io[i][0], -0.98f, 0.98f) * gain;
@@ -883,7 +887,7 @@ private:
     process_rev1 (xspan {wet.data(), io.size()}, pars);
 
     // float conversion
-    auto gain = _param.mode_headroom_gain;
+    auto gain = _param.normalization_gain;
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       auto l = wet[i][0].to_float() * gain * ducker_gain[i][0];
@@ -926,7 +930,7 @@ private:
     // predelay + int conversion
     if (_param.predelay != 0) {
       uint  predelay_spls = _1_4beat_spls * _param.predelay;
-      float gain          = 1.f / _param.mode_headroom_gain;
+      float gain          = 1.f / _param.normalization_gain;
 
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
@@ -939,7 +943,7 @@ private:
       }
     }
     else {
-      float gain = 1.f / _param.mode_headroom_gain;
+      float gain = 1.f / _param.normalization_gain;
 
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
@@ -953,7 +957,7 @@ private:
     // main loop
     process_rev1_flt (xspan {wet.data(), io.size()}, pars);
 
-    auto gain = _param.mode_headroom_gain;
+    auto gain = _param.normalization_gain;
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       auto l = wet[i][0] * ducker_gain[i][0] * gain;
@@ -1259,7 +1263,7 @@ private:
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
     u32   mode;
-    float mode_headroom_gain;
+    float normalization_gain;
     float tilt;
     float predelay;
     float damp;
