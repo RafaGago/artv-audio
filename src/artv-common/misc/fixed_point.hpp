@@ -371,21 +371,18 @@ public:
       std::is_same_v<T, value_type> || std::is_integral_v<T>>* = nullptr>
   static constexpr fixpt from_int (T intv) noexcept
   {
-    auto lte_max = intv <= max_int();
-    auto gte_min = intv >= min_int();
-
+    auto casted = vec_set<vector_size> (vec_cast<scalar_type> (intv));
     if constexpr (vector_size == 0) {
-      assert (lte_max);
-      assert (gte_min);
+      assert (casted <= max_int());
+      assert (casted >= min_int());
+      assert (intv == (T) casted);
     }
     else {
-      for (uint i = 0; i < vector_size; ++i) {
-        assert (lte_max[i]);
-        assert (gte_min[i]);
-      }
+      assert (vec_is_all_ones (casted <= max_int()));
+      assert (vec_is_all_ones (casted >= min_int()));
+      assert (vec_is_all_ones (intv == vec_cast<T> (casted)));
     }
-    return fixpt::from (
-      ashl<n_frac> (vec_cast<scalar_type> (vec_set<vector_size> (intv))));
+    return fixpt::from (ashl<n_frac> (casted));
   }
   //----------------------------------------------------------------------------
   constexpr void load (value_type v) noexcept { *this = from (v); }
