@@ -359,7 +359,7 @@ static void xspan_memset (xspan<T> range, int value = 0)
 }
 //------------------------------------------------------------------------------
 template <class T, class U>
-static uint xspan_memcpy (xspan<T> dst, xspan<const U> src)
+static uint xspan_memcpy (xspan<T> dst, xspan<U const> src)
 {
   uint size = std::min (dst.size() * sizeof (T), src.size() * sizeof (U));
   memcpy (dst.data(), src.data(), size);
@@ -369,11 +369,26 @@ static uint xspan_memcpy (xspan<T> dst, xspan<const U> src)
 template <class T, class U>
 static uint xspan_memcpy (xspan<T> dst, xspan<U> src)
 {
-  return xspan_memcpy<T, const U> (dst, src);
+  return xspan_memcpy<T, U const> (dst, src);
+}
+//------------------------------------------------------------------------------
+// dangerous variant, but not more than memcpy itself, which I'm already using.
+template <class T, class U>
+static uint xspan_memdump (T* dst, xspan<U const> src)
+{
+  uint size = src.size() * sizeof (U);
+  memcpy (dst, src.data(), src.size() * sizeof (U));
+  return size;
+}
+// just for template deduction to work with const
+template <class T, class U>
+static uint xspan_memdump (T* dst, xspan<U> src)
+{
+  return xspan_memdump<T, U const> (dst, src);
 }
 //------------------------------------------------------------------------------
 template <class T>
-static uint xspan_copy (xspan<T> dst, const xspan<T> src)
+static uint xspan_copy (xspan<T> dst, xspan<T> const src)
 {
   return xspan_memcpy (dst, src) / sizeof (T);
 }
@@ -387,14 +402,14 @@ template <class T, size_t N>
 xspan (std::array<T, N>&) -> xspan<T>;
 
 template <class T, size_t N>
-xspan (std::array<T, N> const&) -> xspan<const T>;
+xspan (std::array<T, N> const&) -> xspan<T const>;
 
 template <class Container>
 xspan (Container&) -> xspan<
   std::remove_reference_t<decltype (*std::data (std::declval<Container&>()))>>;
 
 template <class Container>
-xspan (const Container&) -> xspan<const typename Container::value_type>;
+xspan (Container const&) -> xspan<const typename Container::value_type>;
 
 #else
 #error "This span implementation requires __cpp_deduction_guides"

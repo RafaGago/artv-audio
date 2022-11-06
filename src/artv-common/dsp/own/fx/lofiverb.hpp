@@ -89,9 +89,11 @@ struct rev1_spec {
   static constexpr auto values {get_rev1_delays()};
 };
 //------------------------------------------------------------------------------
-template <class Spec>
-class reverb_tool {
+template <class Spec, uint Max_block_size>
+class engine {
 public:
+  //----------------------------------------------------------------------------
+  static constexpr uint max_block_size = Max_block_size;
   //----------------------------------------------------------------------------
   static constexpr uint get_required_size()
   {
@@ -120,87 +122,32 @@ public:
   template <uint Idx, class T>
   void fetch_block_plus_one (xspan<T> dst)
   {
-    constexpr delay_data dd = Spec::values[Idx];
-    constexpr auto       sz = get_delay_size (Idx);
-    static_assert (dd.g.value() == 0, "Not possible on allpasses");
-    static_assert (dd.mod.value() == 0, "Not possible on Modulated delays");
-    assert (dst && dst.size());
-    assert (sz >= dst.size());
-
-    constexpr auto out_prev = 1;
-
-    uint block1 = _stage[Idx].pos - dd.spls.to_int() - out_prev;
-    block1 += (block1 >= sz) ? sz : 0;
-    uint end = _stage[Idx].pos - dd.spls.to_int() + dst.size() - out_prev - 1;
-    end += (end >= sz) ? sz : 0;
-
-    uint block1sz, block2sz;
-    if (block1 < end) {
-      // contiguous
-      block1sz = dst.size();
-      block2sz = 0;
-    }
-    else {
-      // truncated
-      block1sz = sz - block1;
-      block2sz = dst.size() - block1sz;
-    }
-    if constexpr (is_fixpt_v<T>) {
-      // 16 bit fixed point
-      memcpy (dst.data(), &_stage[Idx].z[block1], block1sz * sizeof dst[0]);
-      memcpy (
-        dst.data() + block1sz, &_stage[Idx].z[0], block2sz * sizeof dst[0]);
-    }
-    else {
-      for (uint i = 0; i < block1sz; ++i) {
-        dst[i] = float16::decode (_stage[Idx].z[block1 + i]);
-      }
-      for (uint i = 0; i < block2sz; ++i) {
-        dst[i + block1sz] = float16::decode (_stage[Idx].z[i]);
-      }
-    }
+    fetch_block<Idx> (dst, 1);
   }
-  // see comment on fetch
+  // see comment on fetch_block_plus_one
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
   void push (xspan<T const> src)
   {
     constexpr delay_data dd = Spec::values[Idx];
-    constexpr auto       sz = get_delay_size (Idx);
     static_assert (dd.g.value() == 0, "Not possible on allpasses");
     static_assert (dd.mod.value() == 0, "Not possible on Modulated delays");
-    assert (src && src.size());
-    assert (sz >= src.size());
+    assert (src);
 
-    uint block1 = _stage[Idx].pos;
-    uint end    = block1 + src.size() - 1;
-    end -= (end >= sz) ? sz : 0;
-    _stage[Idx].pos = end;
-    advance_pos<Idx>();
-
-    uint block1sz, block2sz;
-    if (block1 < end) {
-      // contiguous
-      block1sz = src.size();
-      block2sz = 0;
-    }
-    else {
-      // truncated
-      block1sz = sz - block1;
-      block2sz = src.size() - block1sz;
-    }
+    auto buf = prepare_block_insertion<Idx> (src.size());
     if constexpr (is_fixpt_v<T>) {
       // 16 bit fixed point
-      memcpy (&_stage[Idx].z[block1], src.data(), block1sz * sizeof src[0]);
-      memcpy (
-        &_stage[Idx].z[0], src.data() + block1sz, block2sz * sizeof src[0]);
+      static_assert (sizeof (T) == sizeof buf[0][0]);
+      xspan_memdump (buf[0].data(), src.reduced (buf[1].size()));
+      xspan_memdump (buf[1].data(), src.advanced (buf[0].size()));
     }
     else {
-      for (uint i = 0; i < block1sz; ++i) {
-        _stage[Idx].z[block1 + i] = float16::encode (src[i]);
+      for (uint i = 0; i < buf[0].size(); ++i) {
+        buf[0][i] = float16::encode (src[i]);
       }
-      for (uint i = 0; i < block2sz; ++i) {
-        _stage[Idx].z[i] = float16::encode (src[i + block1sz]);
+      src.cut_head (buf[0].size());
+      for (uint i = 0; i < buf[1].size(); ++i) {
+        buf[1][i] = float16::encode (src[i]);
       }
     }
   }
@@ -290,7 +237,6 @@ public:
     constexpr auto       sz = get_delay_size (Idx);
 
     static_assert (dd.mod.value() == 0);
-
     for (uint i = 0; i < io.size(); ++i) {
       // no interpolation
       T push {io[i]};
@@ -508,6 +454,93 @@ private:
     uint ret = get_delay_size (i);
     ret += (uint) (Spec::values[i].mod.value() != 0); // thiran state
     return ret;
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx>
+  std::array<xspan<s16>, 2> get_read_buffers (uint blocksize, uint neg_offset)
+  {
+    constexpr delay_data dd = Spec::values[Idx];
+    constexpr auto       sz = get_delay_size (Idx);
+    assert (blocksize);
+    assert (sz >= blocksize);
+
+    uint block1 = _stage[Idx].pos - dd.spls.to_int() - neg_offset;
+    block1 += (block1 >= sz) ? sz : 0;
+    uint end = _stage[Idx].pos - dd.spls.to_int() + blocksize - neg_offset - 1;
+    end += (end >= sz) ? sz : 0;
+
+    uint block1sz, block2sz;
+    if (block1 < end) {
+      // contiguous
+      block1sz = blocksize;
+      block2sz = 0;
+    }
+    else {
+      // truncated
+      block1sz = sz - block1;
+      block2sz = blocksize - block1sz;
+    }
+    return {
+      xspan {&_stage[Idx].z[block1], block1sz},
+      xspan {&_stage[Idx].z[0], block2sz}};
+  }
+  //----------------------------------------------------------------------------
+  // moves the write pointer and returns the locations to write
+  template <uint Idx>
+  std::array<xspan<s16>, 2> prepare_block_insertion (uint blocksize)
+  {
+    constexpr delay_data dd = Spec::values[Idx];
+    constexpr auto       sz = get_delay_size (Idx);
+    assert (blocksize);
+    assert (sz >= blocksize);
+
+    uint block1 = _stage[Idx].pos;
+    uint end    = block1 + blocksize - 1;
+    end -= (end >= sz) ? sz : 0;
+    _stage[Idx].pos = end;
+    advance_pos<Idx>();
+
+    uint block1sz, block2sz;
+    if (block1 < end) {
+      // contiguous
+      block1sz = blocksize;
+      block2sz = 0;
+    }
+    else {
+      // truncated
+      block1sz = sz - block1;
+      block2sz = blocksize - block1sz;
+    }
+    return {
+      xspan {&_stage[Idx].z[block1], block1sz},
+      xspan {&_stage[Idx].z[0], block2sz}};
+  }
+  //----------------------------------------------------------------------------
+  // fetch a block starting at the configured delay - offset.
+  template <uint Idx, class T>
+  void fetch_block (xspan<T> dst, uint neg_offset)
+  {
+    constexpr delay_data dd = Spec::values[Idx];
+    static_assert (dd.g.value() == 0, "Not possible on allpasses");
+    static_assert (dd.mod.value() == 0, "Not possible on Modulated delays");
+
+    auto buf = get_read_buffers<Idx> (dst.size(), neg_offset);
+
+    if constexpr (is_fixpt_v<T>) {
+      // 16 bit fixed point
+      static_assert (sizeof (T) == sizeof buf[0][0]);
+      xspan_memdump (dst.data(), buf[0]);
+      xspan_memdump (dst.data() + buf[0].size(), buf[1]);
+    }
+    else {
+      for (uint i = 0; i < buf[0].size(); ++i) {
+        dst[i] = float16::decode (buf[0][i]);
+      }
+      dst.cut_head (buf[0].size());
+      for (uint i = 0; i < buf[1].size(); ++i) {
+        dst[i] = float16::decode (buf[1][i]);
+      }
+    }
   }
   //----------------------------------------------------------------------------
   using float16 = f16pack<5, -1, f16pack_dftz>;
@@ -1268,7 +1301,8 @@ private:
 
   lfo<4> _lfo;
 
-  using rev1_type = detail::lofiverb::reverb_tool<detail::lofiverb::rev1_spec>;
+  using rev1_type
+    = detail::lofiverb::engine<detail::lofiverb::rev1_spec, max_block_size>;
   std::variant<rev1_type> _modes;
   ducker<f32_x2>          _ducker;
 
