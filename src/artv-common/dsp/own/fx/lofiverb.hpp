@@ -346,7 +346,7 @@ private:
     decode_read (y1, _stage[Idx].z[y1_pos]);
     for (uint i = 0; i < dst.size(); ++i) {
       auto fixpt_spls
-        = dd.spls.add_sign() + (lfo[i] * dd.mod.add_sign()) - num {i};
+        = (dd.spls.add_sign() + (lfo[i] * dd.mod.add_sign())) - num {i};
       auto n_spls      = fixpt_spls.to_int();
       auto n_spls_frac = fixpt_spls.fractional().to_dynamic();
       auto d           = n_spls_frac + num {0.418f};
@@ -581,7 +581,7 @@ public:
     switch (v) {
     case mode::rev1_flt:
     case mode::rev1: {
-      _param.normalization_gain = 2.f + 0.8f + 0.855f + 0.443f;
+      _param.normalization_gain = 1.f / (2.f + 0.8f + 0.855f + 0.443f);
       auto& rev                 = _modes.emplace<rev1_type>();
       rev.reset_memory (_mem_reverb);
     } break;
@@ -706,7 +706,7 @@ public:
 
   static constexpr auto get_parameter (ducking_threshold_tag)
   {
-    return float_param ("dB", -40.f, 12.f, 12.f, 0.01f);
+    return float_param ("dB", -60.f, 0.0f, 0.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   struct ducking_speed_tag {};
@@ -836,12 +836,15 @@ private:
     std::array<f32_x2, max_block_size>   ducker_gain;
     loop_parameters                      pars;
 
-    // tilt! + param smoothing + int conversion
+    // tilt + clamp + ducker measuring + param smoothing
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      f32_x2 wet     = {io[i][0], io[i][1]};
-      ducker_gain[i] = _ducker.tick (wet);
-      io[i]          = vec_to_array (_tilt.tick (vec_from_array (io[i])));
+      f32_x2 wetv    = _tilt.tick (vec_from_array (io[i]));
+      wetv           = vec_clamp (wetv, -0.98f, 0.98f);
+      ducker_gain[i] = _ducker.tick (wetv);
+      wetv *= _param.normalization_gain;
+      io[i] = vec_to_array (wetv);
+
       _param_smooth.tick();
       pars.stereo[i] = _param_smooth.get().stereo;
       pars.er[i].load_float (_param_smooth.get().er);
@@ -849,49 +852,35 @@ private:
       pars.character[i].load_float (_param_smooth.get().character);
       pars.mod[i].load_float (_param_smooth.get().mod);
     }
-
     // predelay + int conversion
     if (_param.predelay != 0) {
-      uint  predelay_spls = _1_4beat_spls * _param.predelay;
-      float gain          = 1.f / _param.normalization_gain;
-
+      uint predelay_spls = _1_4beat_spls * _param.predelay;
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
+        // TODO: block fetch?
         wet[i][0].load (_predelay.get (predelay_spls, 0));
         wet[i][1].load (_predelay.get (predelay_spls, 1));
-        auto l = std::clamp (io[i][0], -0.98f, 0.98f) * gain;
-        auto r = std::clamp (io[i][1], -0.98f, 0.98f) * gain;
-#if 0 // will process afterwards
-        auto            wn    = _whitenoise();
-        constexpr float scale = 1.f / 0xffff;
-        l += wn[0] + wn[1]; // TPDF
-        r += wn[0] - wn[1];
-#endif
         auto push = make_array (
-          fixptype::from_float (l).value(), fixptype::from_float (r).value());
+          fixptype::from_float (io[i][0]).value(),
+          fixptype::from_float (io[i][1]).value());
         _predelay.push (xspan {push});
       }
     }
     else {
-      float gain = 1.f / _param.normalization_gain;
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
-        auto l = std::clamp (io[i][0], -0.98f, 0.98f) * gain;
-        auto r = std::clamp (io[i][1], -0.98f, 0.98f) * gain;
-        wet[i][0].load_float (l);
-        wet[i][1].load_float (r);
+        wet[i][0].load_float (io[i][0]);
+        wet[i][1].load_float (io[i][0]);
       }
     }
-
     // main loop
     process_rev1 (xspan {wet.data(), io.size()}, pars);
 
     // float conversion
-    auto gain = _param.normalization_gain;
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto l = wet[i][0].to_float() * gain * ducker_gain[i][0];
-      auto r = wet[i][1].to_float() * gain * ducker_gain[i][1];
+      auto l = wet[i][0].to_float() * ducker_gain[i][0];
+      auto r = wet[i][1].to_float() * ducker_gain[i][1];
       l      = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
       if (pars.stereo[i] < 0) {
         io[i][0] = r;
@@ -909,16 +898,18 @@ private:
     assert (io.size() <= max_block_size);
 
     // clip + convert to u16
-    array2d<float, 2, max_block_size>  wet;
     std::array<f32_x2, max_block_size> ducker_gain;
     loop_parameters_flt                pars;
 
-    // tilt! + param smoothing + int conversion
+    // tilt + clamp + ducker measuring + param smoothing
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      f32_x2 wet     = {io[i][0], io[i][1]};
+      f32_x2 wet     = _tilt.tick (vec_from_array (io[i]));
+      wet            = vec_clamp (wet, -0.98f, 0.98f);
       ducker_gain[i] = _ducker.tick (wet);
-      io[i]          = vec_to_array (_tilt.tick (vec_from_array (io[i])));
+      wet *= _param.normalization_gain;
+      io[i] = vec_to_array (wet);
+
       _param_smooth.tick();
       pars.stereo[i]    = _param_smooth.get().stereo;
       pars.er[i]        = _param_smooth.get().er;
@@ -926,42 +917,26 @@ private:
       pars.character[i] = _param_smooth.get().character;
       pars.mod[i]       = _param_smooth.get().mod;
     }
-
-    // predelay + int conversion
+    // predelay
     if (_param.predelay != 0) {
-      uint  predelay_spls = _1_4beat_spls * _param.predelay;
-      float gain          = 1.f / _param.normalization_gain;
-
+      uint predelay_spls = _1_4beat_spls * _param.predelay;
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
-        wet[i][0] = _predelay_flt.get (predelay_spls, 0);
-        wet[i][1] = _predelay_flt.get (predelay_spls, 1);
-        auto l    = std::clamp (io[i][0], -0.999f, 0.999f) * gain;
-        auto r    = std::clamp (io[i][1], -0.999f, 0.999f) * gain;
-        auto push = make_array (l, r);
-        _predelay_flt.push (xspan {push});
+        // TODO: block fetch?
+        std::array<float, 2> spl;
+        spl[0] = _predelay_flt.get (predelay_spls, 0);
+        spl[1] = _predelay_flt.get (predelay_spls, 1);
+        _predelay_flt.push (xspan {io[i]});
+        io[i] = spl;
       }
     }
-    else {
-      float gain = 1.f / _param.normalization_gain;
-
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < io.size(); ++i) {
-        auto l    = std::clamp (io[i][0], -0.999f, 0.999f) * gain;
-        auto r    = std::clamp (io[i][1], -0.999f, 0.999f) * gain;
-        wet[i][0] = l;
-        wet[i][1] = r;
-      }
-    }
-
     // main loop
-    process_rev1_flt (xspan {wet.data(), io.size()}, pars);
+    process_rev1_flt (io, pars);
 
-    auto gain = _param.normalization_gain;
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto l = wet[i][0] * ducker_gain[i][0] * gain;
-      auto r = wet[i][1] * ducker_gain[i][1] * gain;
+      auto l = io[i][0] * ducker_gain[i][0];
+      auto r = io[i][1] * ducker_gain[i][1];
       l      = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
       if (pars.stereo[i] < 0) {
         io[i][0] = r;
@@ -1297,10 +1272,10 @@ private:
   unsmoothed_parameters                      _param;
   value_smoother<float, smoothed_parameters> _param_smooth;
 
-  block_resampler<float, 2>              _resampler {};
-  part_class_array<tilt_eq, f32_x2>      _tilt {};
-  static_delay_line<s16, false, false>   _predelay;
-  static_delay_line<float, false, false> _predelay_flt;
+  block_resampler<float, 2>             _resampler {};
+  part_class_array<tilt_eq, f32_x2>     _tilt {};
+  static_delay_line<s16, true, false>   _predelay;
+  static_delay_line<float, true, false> _predelay_flt;
 
   lfo<4> _lfo;
 
