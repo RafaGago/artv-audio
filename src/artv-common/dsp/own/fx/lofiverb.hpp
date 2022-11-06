@@ -644,22 +644,20 @@ public:
     return float_param ("%", 0., 100., 30., 0.001);
   }
   //----------------------------------------------------------------------------
-  struct tilt_tag {};
-  void set (tilt_tag, float v)
+  struct freq_balace_tag {};
+  void set (freq_balace_tag, float v)
   {
     v *= 0.01f;
     if (v == _param.tilt) {
       return;
     }
     _param.tilt = v;
-    _tilt.reset_coeffs (
-      vec_set<2> (330.f),
-      vec_set<2> (0.5f),
-      vec_set<2> ((float) v * -14.f),
-      t_spl);
+    auto db     = vec_set<2> ((float) v * -14.f);
+    _filt.reset_coeffs<0> (vec_set<2> (350.f), vec_set<2> (0.5f), db, t_spl);
+    _filt.reset_coeffs<1> (vec_set<2> (2200.f), db * -0.5f);
   }
 
-  static constexpr auto get_parameter (tilt_tag)
+  static constexpr auto get_parameter (freq_balace_tag)
   {
     return float_param ("%", -100, 100., 0., 0.1);
   }
@@ -743,7 +741,7 @@ public:
       max_block_size,
       6 * 1024);
 
-    _tilt.reset_states();
+    _filt.reset_states_cascade();
     _ducker.reset();
     _lfo.reset();
     _lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
@@ -801,7 +799,7 @@ public:
     damp_tag,
     decay_tag,
     predelay_tag,
-    tilt_tag,
+    freq_balace_tag,
     er_tag,
     mod_tag,
     stereo_tag,
@@ -839,7 +837,7 @@ private:
     // tilt + clamp + ducker measuring + param smoothing
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      f32_x2 wetv    = _tilt.tick (vec_from_array (io[i]));
+      f32_x2 wetv    = _filt.tick_cascade (vec_from_array (io[i]));
       wetv           = vec_clamp (wetv, -0.98f, 0.98f);
       ducker_gain[i] = _ducker.tick (wetv);
       wetv *= _param.normalization_gain;
@@ -904,7 +902,7 @@ private:
     // tilt + clamp + ducker measuring + param smoothing
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      f32_x2 wet     = _tilt.tick (vec_from_array (io[i]));
+      f32_x2 wet     = _filt.tick_cascade (vec_from_array (io[i]));
       wet            = vec_clamp (wet, -0.98f, 0.98f);
       ducker_gain[i] = _ducker.tick (wet);
       wet *= _param.normalization_gain;
@@ -1272,10 +1270,10 @@ private:
   unsmoothed_parameters                      _param;
   value_smoother<float, smoothed_parameters> _param_smooth;
 
-  block_resampler<float, 2>             _resampler {};
-  part_class_array<tilt_eq, f32_x2>     _tilt {};
-  static_delay_line<s16, true, false>   _predelay;
-  static_delay_line<float, true, false> _predelay_flt;
+  block_resampler<float, 2>                                       _resampler {};
+  part_classes<mp_list<tilt_eq, onepole_naive_highshelf>, f32_x2> _filt {};
+  static_delay_line<s16, true, false>                             _predelay;
+  static_delay_line<float, true, false>                           _predelay_flt;
 
   lfo<4> _lfo;
 

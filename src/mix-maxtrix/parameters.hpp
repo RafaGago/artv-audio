@@ -7524,10 +7524,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_tilt,
+  lofiverb_freq_balance,
   n_stereo_busses,
-  param_common ("Tilt", declptr<lofiverb>(), declptr<lofiverb::tilt_tag>()),
-  lofiverb::get_parameter (lofiverb::tilt_tag {}),
+  param_common (
+    "LF/HF",
+    declptr<lofiverb>(),
+    declptr<lofiverb::freq_balace_tag>()),
+  lofiverb::get_parameter (lofiverb::freq_balace_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -7578,7 +7581,7 @@ using lofiverb_params = mp_list<
   lofiverb_damp,
   lofiverb_er,
   lofiverb_character,
-  lofiverb_tilt,
+  lofiverb_freq_balance,
   lofiverb_mod,
   lofiverb_ducking_threshold,
   lofiverb_ducking_speed,
