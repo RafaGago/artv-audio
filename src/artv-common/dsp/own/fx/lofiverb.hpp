@@ -705,6 +705,8 @@ public:
 
     _tilt.reset_states();
     _ducker.reset();
+    _lfo.reset();
+    _lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
 
     // resize memory
     uint predelay_spls = std::ceil (_1_4beat_spls * max_predelay_qb) * 2;
@@ -947,18 +949,27 @@ private:
     arr late_in_arr;
     arr lfo1;
     arr lfo2;
+    arr lfo3;
+    arr lfo4;
 
     auto late_in = xspan {late_in_arr.data(), io.size()};
     for (uint i = 0; i < io.size(); ++i) {
       // to MS
       late_in[i] = ((io[i][0] + io[i][1]) >> 1).resize<-1>();
-      // ER lfo
-      auto lfo = _lfo_er.tick_sine_fixpt().spec_cast<q0_15>().value();
+
+      auto mod = (q1_14) (num {0.25} + (num {1} - par.mod[i]) * num {0.75});
+      // ER + late lfo
+      auto lfo = _lfo.tick_sine_fixpt().spec_cast<q0_15>().value();
       lfo1[i].load (lfo[0]);
       lfo2[i].load (lfo[1]);
       auto er_amt    = (q1_14) (num {0.5} + (par.er[i] >> 1));
       auto lfo2final = lfo2[i] * er_amt;
       lfo2[i]        = (q0_15) (lfo2final);
+      lfo3[i].load (lfo[2]);
+      lfo3[i] = (q0_15) (lfo3[i] * mod);
+      lfo4[i].load (lfo[3]);
+      lfo4[i] = (q0_15) (lfo4[i] * mod);
+
       // decay fixup
       auto decay   = (q1_14) (num {1} - par.decay[i]);
       decay        = (q1_14) (num {1} - decay * decay);
@@ -1013,15 +1024,6 @@ private:
     rev.fetch_block_plus_one<22> (r);
 
     for (uint i = 0; i < io.size(); ++i) {
-      // clang-format off
-      auto mod = (q1_14)
-        (num {0.25} + (num {1} - par.mod[i]) * num {0.75});
-      // clang-format on
-      auto lfo = _lfo.tick_sine_fixpt().spec_cast<q0_15>().value();
-      lfo1[i].load (lfo[0]);
-      lfo1[i] = (q0_15) (lfo1[i] * mod);
-      lfo2[i].load (lfo[1]);
-      lfo2[i] = (q0_15) (lfo1[i] * mod);
       // prepare input with feedback
       late[i] = (q0_15r) (late_in[i] + r[i] * par.decay[i]);
       // add ER blend to late in
@@ -1043,7 +1045,7 @@ private:
     late_damp_1      = (q1_14) (late_damp_1 * num {0.4});
     auto late_damp   = (q0_15) late_damp_1;
 
-    rev.run_mod<8> (late.cast<q0_15r>(), lfo1, g);
+    rev.run_mod<8> (late.cast<q0_15r>(), lfo3, g);
     rev.run<9> (late);
     rev.run_lp<10> (late, late_damp);
     std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
@@ -1064,7 +1066,7 @@ private:
     l.cut_head (1); // drop feedback sample from previous block
 
     std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
-    rev.run_mod<15> (late.cast<q0_15r>(), lfo2, g);
+    rev.run_mod<15> (late.cast<q0_15r>(), lfo4, g);
     rev.run<16> (late);
     rev.run_lp<17> (late, late_damp);
     std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
@@ -1102,15 +1104,20 @@ private:
     arr late_in_arr;
     arr lfo1;
     arr lfo2;
+    arr lfo3;
+    arr lfo4;
 
     auto late_in = xspan {late_in_arr.data(), io.size()};
     for (uint i = 0; i < io.size(); ++i) {
       // to MS
       late_in[i] = (io[i][0] + io[i][1]) * 0.5f;
-      // ER lfo
-      auto lfo = _lfo_er.tick_sine();
+      // ER + late lfo
+      auto mod = 0.25f + (1.f - par.mod[i]) * 0.75f;
+      auto lfo = _lfo.tick_sine();
       lfo1[i]  = lfo[0];
       lfo2[i]  = lfo[1] * (0.5f + par.er[i] * 0.5f);
+      lfo3[i]  = lfo[2] * mod;
+      lfo4[i]  = lfo[3] * mod;
       // decay fixup
       auto decay   = 1.f - par.decay[i];
       decay        = 1.f - decay * decay;
@@ -1163,11 +1170,7 @@ private:
     rev.fetch_block_plus_one<22> (r);
 
     for (uint i = 0; i < io.size(); ++i) {
-      auto mod = 0.25f + (1.f - par.mod[i]) * 0.75f;
-      auto lfo = _lfo.tick_sine();
-      lfo1[i]  = lfo[0] * mod;
-      lfo2[i]  = lfo[1] * mod;
-      late[i]  = late_in[i] + r[i] * par.decay[i];
+      late[i] = late_in[i] + r[i] * par.decay[i];
       late[i] -= (er1[i] + er2[i]) * par.er[i] * 0.4f;
       g[i] = 0.618f + par.character[i] * (0.707f - 0.618f) * 2.f;
     }
@@ -1177,7 +1180,7 @@ private:
     late_damp       = 1.f - late_damp * late_damp;
     late_damp *= 0.4f;
 
-    rev.run_mod<8> (late, lfo1, g);
+    rev.run_mod<8> (late, lfo3, g);
     rev.run<9> (late);
     rev.run_lp<10> (late, late_damp);
     std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
@@ -1194,7 +1197,7 @@ private:
     l.cut_head (1); // drop feedback sample from previous block
 
     std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
-    rev.run_mod<15> (late, lfo2, g);
+    rev.run_mod<15> (late, lfo4, g);
     rev.run<16> (late);
     rev.run_lp<17> (late, late_damp);
     std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
@@ -1214,12 +1217,11 @@ private:
   //----------------------------------------------------------------------------
   void update_mod()
   {
-    auto mod = _param_smooth.target().mod;
-    // TODO: Two Lfos are not required just to change sign (180 separation).
-    _lfo.set_freq (vec_set<2> (0.1f + mod * 1.2f), t_spl);
-    _lfo.set_phase (_lfo.get_phase().set_at_uniform_spacing());
-    _lfo_er.set_freq (vec_set<2> (0.3f + mod * 0.3f), t_spl);
-    _lfo_er.set_phase (_lfo_er.get_phase().set_at_uniform_spacing());
+    // Reminder, phase are at 0, 180, 0, 180 on reset.
+    auto mod    = _param_smooth.target().mod;
+    auto f_er   = 0.3f + mod * 0.3f;
+    auto f_late = 0.1f + mod * 1.2f;
+    _lfo.set_freq (f32_x4 {f_er, f_er, f_late, f_late}, t_spl);
   }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
@@ -1264,8 +1266,7 @@ private:
   static_delay_line<s16, false, false>   _predelay;
   static_delay_line<float, false, false> _predelay_flt;
 
-  lfo<2> _lfo;
-  lfo<2> _lfo_er;
+  lfo<4> _lfo;
 
   using rev1_type = detail::lofiverb::reverb_tool<detail::lofiverb::rev1_spec>;
   std::variant<rev1_type> _modes;

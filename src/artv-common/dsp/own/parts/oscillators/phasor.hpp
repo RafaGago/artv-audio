@@ -276,6 +276,10 @@ public:
     _v[channel] = v;
   }
   //----------------------------------------------------------------------------
+  phase_uint get_raw() const { return _v; }
+  //----------------------------------------------------------------------------
+  void set_raw (phase_uint v) const { return _v = v; }
+  //----------------------------------------------------------------------------
   phase<N> set_at_uniform_spacing() { return set_at_uniform_spacing_from (0); }
   //----------------------------------------------------------------------------
   phase<N> set_at_uniform_spacing_from (uint reference_index)
