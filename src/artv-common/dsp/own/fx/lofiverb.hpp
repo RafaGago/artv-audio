@@ -801,8 +801,10 @@ public:
     _mem.resize (predelay_spls + predelay_flt + rev_spls);
 
     _mem_reverb = xspan {_mem};
-    _predelay.reset (_mem_reverb.cut_head (predelay_spls), 2);
-    _predelay_flt.reset (_mem_reverb.cut_head (predelay_flt).cast<float>(), 2);
+    // reminder, hack, _mem_reverb is span<s16> and here it is casting to
+    // float. Do keep the predelay (float) first in the memory block to avoid
+    // alignment issues.
+    _predelay.reset (_mem_reverb.cut_head (predelay_flt).cast<float>(), 2);
 
     // set defaults
     mp11::mp_for_each<parameters> ([&] (auto param) {
@@ -899,13 +901,9 @@ private:
       uint predelay_spls = _1_4beat_spls * _param.predelay;
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
-        // TODO: block fetch?
-        wet[i][0].load (_predelay.get (predelay_spls, 0));
-        wet[i][1].load (_predelay.get (predelay_spls, 1));
-        auto push = make_array (
-          fixptype::from_float (io[i][0]).value(),
-          fixptype::from_float (io[i][1]).value());
-        _predelay.push (xspan {push});
+        wet[i][0].load_float (_predelay.get (predelay_spls, 0));
+        wet[i][1].load_float (_predelay.get (predelay_spls, 1));
+        _predelay.push (io[i]);
       }
     }
     else {
@@ -966,9 +964,9 @@ private:
       for (uint i = 0; i < io.size(); ++i) {
         // TODO: block fetch?
         std::array<float, 2> spl;
-        spl[0] = _predelay_flt.get (predelay_spls, 0);
-        spl[1] = _predelay_flt.get (predelay_spls, 1);
-        _predelay_flt.push (xspan {io[i]});
+        spl[0] = _predelay.get (predelay_spls, 0);
+        spl[1] = _predelay.get (predelay_spls, 1);
+        _predelay.push (xspan {io[i]});
         io[i] = spl;
       }
     }
@@ -1310,8 +1308,7 @@ private:
 
   block_resampler<float, 2>                                       _resampler {};
   part_classes<mp_list<tilt_eq, onepole_naive_highshelf>, f32_x2> _filt {};
-  static_delay_line<s16, true, false>                             _predelay;
-  static_delay_line<float, true, false>                           _predelay_flt;
+  static_delay_line<float, true, false>                           _predelay;
 
   lfo<4> _lfo;
 
