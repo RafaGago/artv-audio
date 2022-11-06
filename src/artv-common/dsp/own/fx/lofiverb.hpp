@@ -1076,11 +1076,10 @@ private:
     }
     r.cut_head (1); // drop feedback sample from previous block
 
-    auto late_damp_1 = q1_14::from_float (_param.damp);
-    late_damp_1      = (q1_14) (num {0.9} - (num {0.9} * late_damp_1));
-    late_damp_1      = (q1_14) (num {1} - late_damp_1 * late_damp_1);
-    late_damp_1      = (q1_14) (late_damp_1 * num {0.4});
-    auto late_damp   = (q0_15) late_damp_1;
+    float late_dampf = (0.9f - _param.damp * 0.9f);
+    late_dampf       = 1.f - late_dampf * late_dampf;
+    late_dampf *= 0.4f;
+    auto late_damp = q0_15::from_float (late_dampf);
 
     rev.run_mod<8> (late.cast<q0_15r>(), lfo3, g);
     rev.run<9> (late);
