@@ -147,7 +147,6 @@ public:
   template <uint Idx, class T, class U>
   void run_lp (xspan<T> io, U g)
   {
-    constexpr delay_data dd = Spec::values[Idx];
     static_assert (get_delay_size (Idx) >= 1);
 
     assert (io);
@@ -156,12 +155,12 @@ public:
     for (uint i = 0; i < io.size(); ++i) {
       T v;
       if constexpr (is_fixpt_v<T>) {
-        auto gv = (g.value() == 0) ? dd.g : g;
+        auto gv = (g.value() == 0) ? get_gain<Idx, T>() : g;
         v       = (T) ((gv.max() - gv) * io[i]);
         v       = (T) (v + y1 * gv);
       }
       else {
-        float gv = (g == 0.f) ? dd.g.to_float() : g;
+        float gv = (g == 0.f) ? get_gain<Idx, T>() : g;
         v        = (1.f - gv) * io[i];
         v        = v + y1 * gv;
       }
@@ -180,7 +179,6 @@ public:
   template <uint Idx, class T, class U>
   void run_hp (xspan<T> io, U g)
   {
-    constexpr delay_data dd = Spec::values[Idx];
     static_assert (get_delay_size (Idx) >= 1);
 
     assert (io);
@@ -189,12 +187,12 @@ public:
     for (uint i = 0; i < io.size(); ++i) {
       T v;
       if constexpr (is_fixpt_v<T>) {
-        auto gv = (g.value() == 0) ? dd.g : g;
+        auto gv = (g.value() == 0) ? get_gain<Idx, T>() : g;
         v       = (T) ((gv.max() - gv) * io[i]);
         v       = (T) (v + y1 * gv);
       }
       else {
-        float gv = (g == 0.f) ? dd.g.to_float() : g;
+        float gv = (g == 0.f) ? get_gain<Idx, T>() : g;
         v        = (1.f - gv) * io[i];
         v        = v + y1 * gv;
       }
@@ -213,31 +211,27 @@ public:
   template <uint Idx, class T>
   void run (xspan<T> io)
   {
-    run<Idx> (io, [] (auto&& g, uint i) {
-      return std::forward<decltype (g)> (g);
-    });
+    run<Idx> (io, [] (uint) { return get_gain<Idx, T>(); });
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class GF>
-  void run (xspan<T> io, GF&& g_transform)
+  void run (xspan<T> io, GF&& g_gen)
   {
-    run_impl<Idx> (io, std::forward<GF> (g_transform), nullptr);
+    run_impl<Idx> (io, std::forward<GF> (g_gen), nullptr);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
   void run (xspan<T> io, xspan<U> gs)
   {
     run_impl<Idx> (
-      io, [gs] (auto&&, uint i) { return gs[i]; }, nullptr);
+      io, [gs] (uint i) { return gs[i]; }, nullptr);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class LF>
   void run_mod (xspan<T> io, LF&& lfo)
   {
     run_impl<Idx> (
-      io,
-      [] (auto&& g, uint) { return std::forward<decltype (g)> (g); },
-      std::forward<LF> (lfo));
+      io, [] (uint) { return get_gain<Idx, T>(); }, std::forward<LF> (lfo));
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
@@ -247,22 +241,31 @@ public:
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class GF, class LF>
-  void run_mod (xspan<T> io, GF&& g_transform, LF&& lfo_provider)
+  void run_mod (xspan<T> io, GF&& g_gen, LF&& lfo_gen)
   {
-    run_impl<Idx> (
-      io, std::forward<GF> (g_transform), std::forward<LF> (lfo_provider));
+    run_impl<Idx> (io, std::forward<GF> (g_gen), std::forward<LF> (lfo_gen));
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U, class V>
   void run_mod (xspan<T> io, xspan<U> lfo, xspan<V> gs)
   {
     run_mod<Idx> (
-      io,
-      [gs] (auto&&, uint i) { return gs[i]; },
-      [lfo] (uint i) { return lfo[i]; });
+      io, [gs] (uint i) { return gs[i]; }, [lfo] (uint i) { return lfo[i]; });
   }
   //----------------------------------------------------------------------------
 private:
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T>
+  static constexpr auto get_gain()
+  {
+    constexpr delay_data dd = Spec::values[Idx];
+    if constexpr (is_fixpt_v<T>) {
+      return dd.g;
+    }
+    else {
+      return (float) dd.g;
+    }
+  }
   //----------------------------------------------------------------------------
   template <class T>
   void decode_read (T& dst, s16 src)
@@ -365,7 +368,7 @@ private:
     class T,
     class LF,
     std::enable_if_t<is_fixpt_v<T>>* = nullptr>
-  void run_thiran (xspan<T> dst, LF&& lfo_provider)
+  void run_thiran (xspan<T> dst, LF&& lfo_gen)
   {
     constexpr delay_data dd     = Spec::values[Idx];
     constexpr auto       sz     = get_delay_size (Idx);
@@ -375,8 +378,7 @@ private:
     decode_read (y1, _stage[Idx].z[y1_pos]);
     for (uint i = 0; i < dst.size(); ++i) {
       auto fixpt_spls
-        = (dd.spls.add_sign() + (lfo_provider (i) * dd.mod.add_sign()))
-        - num {i};
+        = (dd.spls.add_sign() + (lfo_gen (i) * dd.mod.add_sign())) - num {i};
       auto n_spls      = fixpt_spls.to_int();
       auto n_spls_frac = fixpt_spls.fractional().to_dynamic();
       auto d           = n_spls_frac + num {0.418f};
@@ -394,7 +396,7 @@ private:
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class LF>
-  void run_thiran (xspan<float> dst, LF&& lfo_provider)
+  void run_thiran (xspan<float> dst, LF&& lfo_gen)
   {
     constexpr delay_data dd     = Spec::values[Idx];
     constexpr auto       sz     = get_delay_size (Idx);
@@ -403,9 +405,8 @@ private:
     float y1;
     decode_read (y1, _stage[Idx].z[y1_pos]);
     for (uint i = 0; i < dst.size(); ++i) {
-      float fixpt_spls
-        = dd.spls.to_float() + (lfo_provider (i) * dd.mod.to_float());
-      uint  n_spls      = (uint) fixpt_spls;
+      float fixpt_spls = dd.spls.to_float() + (lfo_gen (i) * dd.mod.to_float());
+      uint  n_spls     = (uint) fixpt_spls;
       float n_spls_frac = fixpt_spls - n_spls;
       n_spls -= i;
 
@@ -443,8 +444,14 @@ private:
     return std::make_tuple (static_cast<T> (x), static_cast<T> (u));
   }
   //----------------------------------------------------------------------------
+  // Template function to run:
+  // - delays
+  // - modulated delays
+  // - allpasses
+  // - modulated allpasses.
+  //
   template <uint Idx, class T, class GF, class LF>
-  void run_impl (xspan<T> io, GF&& g_transform, LF&& lfo_provider)
+  void run_impl (xspan<T> io, GF&& g_gen, LF&& lfo_gen)
   {
     constexpr delay_data dd             = Spec::values[Idx];
     constexpr auto       sz             = get_delay_size (Idx);
@@ -452,32 +459,23 @@ private:
     constexpr auto       has_allpass    = dd.g.value() != 0;
     constexpr auto       has_modulation = dd.mod.value() != 0;
 
-    using g_type = std::
-      conditional_t<is_fixpt_v<T>, decltype (g_transform (dd.g, 0u)), float>;
-
     if constexpr (minsz >= max_block_size) {
-      // no overlap, can run in blocks
+      // no overlap, can run block-wise
+      assert (io.size() <= minsz);
+
       std::array<T, max_block_size> iocp_mem;
       xspan                         iocp {iocp_mem.data(), io.size()};
       xspan_memcpy (iocp, io);
 
       if constexpr (has_modulation) {
-        run_thiran<Idx> (io, std::forward<LF> (lfo_provider));
+        run_thiran<Idx> (io, std::forward<LF> (lfo_gen));
       }
       else {
         decode_read (io, get_read_buffers<Idx> (io.size(), 0));
       }
       if constexpr (has_allpass) {
         for (uint i = 0; i < io.size(); ++i) {
-
-          g_type g;
-          if constexpr (is_fixpt_v<T>) {
-            g = g_transform (dd.g, i);
-          }
-          else {
-            g = g_transform ((float) dd.g, i);
-          }
-          auto [out, push] = run_allpass<Idx, T> (iocp[i], io[i], g);
+          auto [out, push] = run_allpass<Idx, T> (iocp[i], io[i], g_gen (i));
           io[i]            = out;
           iocp[i]          = push;
         }
@@ -485,28 +483,22 @@ private:
       encode_write (prepare_block_insertion<Idx> (io.size()), iocp.to_const());
     }
     else {
-      // overlap, needs single sample iteration
+      // overlap, needs single-sample iteration
       for (uint i = 0; i < io.size(); ++i) {
         T qv;
         if constexpr (has_modulation) {
           // this is for completeness, modulations under the block size are
           // unlikely.
-          qv = run_thiran<Idx> (xspan {&io[i], 1}, [i, &lfo_provider] (uint) {
-            return lfo_provider (i);
+          qv = run_thiran<Idx> (xspan {&io[i], 1}, [i, &lfo_gen] (uint) {
+            return lfo_gen (i);
           });
         }
         else {
           T qv = read_next<Idx>();
         }
         if constexpr (has_allpass) {
-          g_type g;
-          if constexpr (is_fixpt_v<T>) {
-            g = g_transform (dd.g, i);
-          }
-          else {
-            g = g_transform ((float) dd.g, i);
-          }
-          auto [out, push] = run_allpass<Idx, T> (io[i], qv, g);
+          auto [out, push] = run_allpass<Idx, T> (
+            io[i], qv, [i, &g_gen] (uint) { return g_gen (i); });
           push<Idx> (push);
           io[i] = out;
         }
@@ -521,8 +513,8 @@ private:
   static constexpr uint get_delay_size (uint i)
   {
     uint ret = Spec::values[i].spls.to_int() + 1; // spls + 1 = size
-    // pure delays have 1 extra sample to be able to return the previous output
-    // (delaying one cycle the time it is overwritten).
+    // pure delays have 1 extra sample to be able to return the previous
+    // output (delaying one cycle the time it is overwritten).
     auto mod_val = Spec::values[i].mod.value();
     auto g_val   = Spec::values[i].g.value();
     ret += (uint) (mod_val == 0 && g_val == 0);
@@ -1109,8 +1101,7 @@ private:
     rev.run_mod<8> (late.cast<q0_15r>(), xspan {lfo3}, g);
     rev.run<9> (late);
     rev.run_lp<10> (late, late_damp);
-    std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
-    rev.run<11> (late, g);
+    rev.run<11> (late, [g] (uint i) { return -g[i]; });
     rev.run<12> (late);
     rev.run<13> (late);
     rev.push<14> (late.to_const()); // feedback point
@@ -1126,12 +1117,10 @@ private:
     }
     l.cut_head (1); // drop feedback sample from previous block
 
-    std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
     rev.run_mod<15> (late.cast<q0_15r>(), xspan {lfo4}, g);
     rev.run<16> (late);
     rev.run_lp<17> (late, late_damp);
-    std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
-    rev.run<18> (late, g);
+    rev.run<18> (late, [g] (uint i) { return -g[i]; });
     rev.run<19> (late);
     rev.run<20> (late);
     rev.run_hp<21> (late);
@@ -1244,7 +1233,7 @@ private:
     rev.run_mod<8> (late, xspan {lfo3}, g);
     rev.run<9> (late);
     rev.run_lp<10> (late, late_damp);
-    rev.run<11> (late, [g] (auto, uint i) { return -g[i]; });
+    rev.run<11> (late, [g] (uint i) { return -g[i]; });
     rev.run<12> (late);
     rev.run<13> (late);
     rev.push<14> (late.to_const()); // feedback point
@@ -1259,7 +1248,7 @@ private:
     rev.run_mod<15> (late, xspan {lfo4}, g);
     rev.run<16> (late);
     rev.run_lp<17> (late, late_damp);
-    rev.run<18> (late, [g] (auto, uint i) { return -g[i]; });
+    rev.run<18> (late, [g] (uint i) { return -g[i]; });
     rev.run<19> (late);
     rev.run<20> (late);
     rev.run_hp<21> (late);
