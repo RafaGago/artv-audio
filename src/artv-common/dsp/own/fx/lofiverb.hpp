@@ -90,6 +90,9 @@ struct rev1_spec {
   static constexpr auto values {get_rev1_spec()};
 };
 //------------------------------------------------------------------------------
+// A class to abstract 16-bit storage, queue access and common DSP operations
+// when building reverbs based on allpass loops. Both on fixed and floating
+// point.
 template <class Spec, uint Max_block_size>
 class engine {
 public:
@@ -207,22 +210,56 @@ public:
     run_hp<Idx> (io, T {});
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T, class U = T>
-  void run (xspan<T> io, xspan<U> g = xspan<U> {})
+  template <uint Idx, class T>
+  void run (xspan<T> io)
   {
-    run_impl<Idx> (io, g, xspan<U> {});
+    run<Idx> (io, [] (auto&& g, uint i) {
+      return std::forward<decltype (g)> (g);
+    });
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class GF>
+  void run (xspan<T> io, GF&& g_transform)
+  {
+    run_impl<Idx> (io, std::forward<GF> (g_transform), nullptr);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
-  auto run_mod (xspan<T> io, xspan<U> lfo, xspan<U> g = xspan<U> {})
+  void run (xspan<T> io, xspan<U> gs)
   {
-    run_impl<Idx> (io, g, lfo);
+    run_impl<Idx> (
+      io, [gs] (auto&&, uint i) { return gs[i]; }, nullptr);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T, class U, std::size_t N>
-  auto run_mod (xspan<T> io, std::array<U, N>& lfo, xspan<U> g = xspan<U> {})
+  template <uint Idx, class T, class LF>
+  void run_mod (xspan<T> io, LF&& lfo)
   {
-    run_impl<Idx> (io, g, xspan {lfo});
+    run_impl<Idx> (
+      io,
+      [] (auto&& g, uint) { return std::forward<decltype (g)> (g); },
+      std::forward<LF> (lfo));
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class U>
+  void run_mod (xspan<T> io, xspan<U> lfo)
+  {
+    run_mod<Idx> (io, [lfo] (uint i) { return lfo[i]; });
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class GF, class LF>
+  void run_mod (xspan<T> io, GF&& g_transform, LF&& lfo_provider)
+  {
+    run_impl<Idx> (
+      io, std::forward<GF> (g_transform), std::forward<LF> (lfo_provider));
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class U, class V>
+  void run_mod (xspan<T> io, xspan<U> lfo, xspan<V> gs)
+  {
+    run_mod<Idx> (
+      io,
+      [gs] (auto&&, uint i) { return gs[i]; },
+      [lfo] (uint i) { return lfo[i]; });
   }
   //----------------------------------------------------------------------------
 private:
@@ -323,8 +360,12 @@ private:
     advance_pos();
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
-  void run_thiran (xspan<T> dst, xspan<q0_15> lfo)
+  template <
+    uint Idx,
+    class T,
+    class LF,
+    std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+  void run_thiran (xspan<T> dst, LF&& lfo_provider)
   {
     constexpr delay_data dd     = Spec::values[Idx];
     constexpr auto       sz     = get_delay_size (Idx);
@@ -334,14 +375,15 @@ private:
     decode_read (y1, _stage[Idx].z[y1_pos]);
     for (uint i = 0; i < dst.size(); ++i) {
       auto fixpt_spls
-        = (dd.spls.add_sign() + (lfo[i] * dd.mod.add_sign())) - num {i};
+        = (dd.spls.add_sign() + (lfo_provider (i) * dd.mod.add_sign()))
+        - num {i};
       auto n_spls      = fixpt_spls.to_int();
       auto n_spls_frac = fixpt_spls.fractional().to_dynamic();
       auto d           = n_spls_frac + num {0.418f};
       auto one         = fixpt_dt<1, 1, 0>::from_int (1);
 
       auto co_thiran = (one - d) / (one + d); // 0.4104 to -1
-      auto a         = co_thiran.cast<fixpt<1, 0, 23>>();
+      auto a         = (fixpt<1, 0, 23>) co_thiran;
 
       auto z0 = get<Idx, T> (n_spls - 1);
       auto z1 = get<Idx, T> (n_spls);
@@ -351,8 +393,8 @@ private:
     encode_write (_stage[Idx].z[y1_pos], y1);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx>
-  void run_thiran (xspan<float> dst, xspan<float> lfo)
+  template <uint Idx, class LF>
+  void run_thiran (xspan<float> dst, LF&& lfo_provider)
   {
     constexpr delay_data dd     = Spec::values[Idx];
     constexpr auto       sz     = get_delay_size (Idx);
@@ -361,7 +403,8 @@ private:
     float y1;
     decode_read (y1, _stage[Idx].z[y1_pos]);
     for (uint i = 0; i < dst.size(); ++i) {
-      float fixpt_spls  = dd.spls.to_float() + (lfo[i] * dd.mod.to_float());
+      float fixpt_spls
+        = dd.spls.to_float() + (lfo_provider (i) * dd.mod.to_float());
       uint  n_spls      = (uint) fixpt_spls;
       float n_spls_frac = fixpt_spls - n_spls;
       n_spls -= i;
@@ -400,14 +443,17 @@ private:
     return std::make_tuple (static_cast<T> (x), static_cast<T> (u));
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T, class U>
-  void run_impl (xspan<T> io, xspan<U> g, xspan<U> lfo)
+  template <uint Idx, class T, class GF, class LF>
+  void run_impl (xspan<T> io, GF&& g_transform, LF&& lfo_provider)
   {
     constexpr delay_data dd             = Spec::values[Idx];
     constexpr auto       sz             = get_delay_size (Idx);
     constexpr auto       minsz          = sz - dd.mod.to_int();
     constexpr auto       has_allpass    = dd.g.value() != 0;
     constexpr auto       has_modulation = dd.mod.value() != 0;
+
+    using g_type = std::
+      conditional_t<is_fixpt_v<T>, decltype (g_transform (dd.g, 0u)), float>;
 
     if constexpr (minsz >= max_block_size) {
       // no overlap, can run in blocks
@@ -416,17 +462,24 @@ private:
       xspan_memcpy (iocp, io);
 
       if constexpr (has_modulation) {
-        run_thiran<Idx> (io, lfo);
+        run_thiran<Idx> (io, std::forward<LF> (lfo_provider));
       }
       else {
         decode_read (io, get_read_buffers<Idx> (io.size(), 0));
       }
       if constexpr (has_allpass) {
         for (uint i = 0; i < io.size(); ++i) {
-          auto [out, push]
-            = run_allpass<Idx, T> (iocp[i], io[i], g ? g[i] : (U) dd.g);
-          io[i]   = out;
-          iocp[i] = push;
+
+          g_type g;
+          if constexpr (is_fixpt_v<T>) {
+            g = g_transform (dd.g, i);
+          }
+          else {
+            g = g_transform ((float) dd.g, i);
+          }
+          auto [out, push] = run_allpass<Idx, T> (iocp[i], io[i], g);
+          io[i]            = out;
+          iocp[i]          = push;
         }
       }
       encode_write (prepare_block_insertion<Idx> (io.size()), iocp.to_const());
@@ -436,14 +489,24 @@ private:
       for (uint i = 0; i < io.size(); ++i) {
         T qv;
         if constexpr (has_modulation) {
-          qv = run_thiran<Idx> (xspan {&io[i], 1}, xspan {&lfo[i], 1});
+          // this is for completeness, modulations under the block size are
+          // unlikely.
+          qv = run_thiran<Idx> (xspan {&io[i], 1}, [i, &lfo_provider] (uint) {
+            return lfo_provider (i);
+          });
         }
         else {
           T qv = read_next<Idx>();
         }
         if constexpr (has_allpass) {
-          auto [out, push]
-            = run_allpass<Idx, T> (io[i], qv, g ? g[i] : (U) dd.g);
+          g_type g;
+          if constexpr (is_fixpt_v<T>) {
+            g = g_transform (dd.g, i);
+          }
+          else {
+            g = g_transform ((float) dd.g, i);
+          }
+          auto [out, push] = run_allpass<Idx, T> (io[i], qv, g);
           push<Idx> (push);
           io[i] = out;
         }
@@ -1001,10 +1064,10 @@ private:
     }
     er2.cut_head (1); // drop feedback sample from previous block
 
-    rev.run_mod<4> (er1, lfo2);
+    rev.run_mod<4> (er1, xspan {lfo2});
     rev.run_lp<5> (er1, q0_15::from_float (0.0001f + 0.17f * _param.damp));
     xspan_memcpy (er1b, er1);
-    rev.run_mod<6> (er1b, lfo1);
+    rev.run_mod<6> (er1b, xspan {lfo1});
     rev.push<7> (er1b.to_const()); // feedback point
 
     // Late -----------------------------
@@ -1043,7 +1106,7 @@ private:
     late_dampf *= 0.4f;
     auto late_damp = q0_15::from_float (late_dampf);
 
-    rev.run_mod<8> (late.cast<q0_15r>(), lfo3, g);
+    rev.run_mod<8> (late.cast<q0_15r>(), xspan {lfo3}, g);
     rev.run<9> (late);
     rev.run_lp<10> (late, late_damp);
     std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
@@ -1064,7 +1127,7 @@ private:
     l.cut_head (1); // drop feedback sample from previous block
 
     std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
-    rev.run_mod<15> (late.cast<q0_15r>(), lfo4, g);
+    rev.run_mod<15> (late.cast<q0_15r>(), xspan {lfo4}, g);
     rev.run<16> (late);
     rev.run_lp<17> (late, late_damp);
     std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
@@ -1146,10 +1209,10 @@ private:
     }
     er2.cut_head (1); // drop feedback sample from previous block
 
-    rev.run_mod<4> (er1, lfo1);
+    rev.run_mod<4> (er1, xspan {lfo1});
     rev.run_lp<5> (er1, 0.0001f + 0.17f * _param.damp);
     xspan_memcpy (er1b, er1);
-    rev.run_mod<6> (er1b, lfo2);
+    rev.run_mod<6> (er1b, xspan {lfo2});
     rev.push<7> (er1b.to_const()); // feedback point
 
     // Late -----------------------------
@@ -1178,11 +1241,10 @@ private:
     late_damp       = 1.f - late_damp * late_damp;
     late_damp *= 0.4f;
 
-    rev.run_mod<8> (late, lfo3, g);
+    rev.run_mod<8> (late, xspan {lfo3}, g);
     rev.run<9> (late);
     rev.run_lp<10> (late, late_damp);
-    std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
-    rev.run<11> (late, g);
+    rev.run<11> (late, [g] (auto, uint i) { return -g[i]; });
     rev.run<12> (late);
     rev.run<13> (late);
     rev.push<14> (late.to_const()); // feedback point
@@ -1194,12 +1256,10 @@ private:
     }
     l.cut_head (1); // drop feedback sample from previous block
 
-    std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
-    rev.run_mod<15> (late, lfo4, g);
+    rev.run_mod<15> (late, xspan {lfo4}, g);
     rev.run<16> (late);
     rev.run_lp<17> (late, late_damp);
-    std::for_each (g.begin(), g.end(), [] (auto& v) { v = -v; }); // g negate
-    rev.run<18> (late, g);
+    rev.run<18> (late, [g] (auto, uint i) { return -g[i]; });
     rev.run<19> (late);
     rev.run<20> (late);
     rev.run_hp<21> (late);
