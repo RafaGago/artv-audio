@@ -141,8 +141,8 @@ public:
     encode_write (prepare_block_insertion<Idx> (src.size()), src);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
-  void run_lp (xspan<T> io, q0_15 g = q0_15 {})
+  template <uint Idx, class T, class U>
+  void run_lp (xspan<T> io, U g)
   {
     constexpr delay_data dd = Spec::values[Idx];
     static_assert (get_delay_size (Idx) >= 1);
@@ -151,72 +151,60 @@ public:
     T y1;
     decode_read (y1, _stage[Idx].z[0]);
     for (uint i = 0; i < io.size(); ++i) {
-      auto gv = (g.value() == 0) ? dd.g : g;
-      auto v  = (T) ((gv.max() - gv) * io[i]);
-      v       = (T) (v + y1 * gv);
-      y1      = v;
-      io[i]   = v;
+      T v;
+      if constexpr (is_fixpt_v<T>) {
+        auto gv = (g.value() == 0) ? dd.g : g;
+        v       = (T) ((gv.max() - gv) * io[i]);
+        v       = (T) (v + y1 * gv);
+      }
+      else {
+        float gv = (g == 0.f) ? dd.g.to_float() : g;
+        v        = (1.f - gv) * io[i];
+        v        = v + y1 * gv;
+      }
+      y1    = v;
+      io[i] = v;
     }
     encode_write (_stage[Idx].z[0], y1);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx>
-  void run_lp (xspan<float> io, float g = 0.f)
+  template <uint Idx, class T>
+  void run_lp (xspan<T> io)
+  {
+    run_lp<Idx> (io, T {});
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class U>
+  void run_hp (xspan<T> io, U g)
   {
     constexpr delay_data dd = Spec::values[Idx];
     static_assert (get_delay_size (Idx) >= 1);
 
     assert (io);
-    float y1;
-    decode_read (y1, _stage[Idx].z[0]);
-    for (uint i = 0; i < io.size(); ++i) {
-      auto gv = (g == 0.f) ? dd.g.to_float() : g;
-      auto v  = (1.f - gv) * io[i];
-      v       = v + y1 * gv;
-      y1      = v;
-      io[i]   = v;
-    }
-    encode_write (_stage[Idx].z[0], y1);
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
-  void run_hp (xspan<T> io, q0_15 g = q0_15 {})
-  {
-    constexpr delay_data dd = Spec::values[Idx];
-    static_assert (get_delay_size (Idx) >= 1);
-
-    assert (io);
-
     T y1;
     decode_read (y1, _stage[Idx].z[0]);
     for (uint i = 0; i < io.size(); ++i) {
-      auto gv = (g.value() == 0) ? dd.g : g;
-      auto v  = (T) ((gv.max() - gv) * io[i]);
-      v       = (T) (v + y1 * gv);
-      y1      = v;
-      io[i]   = (T) (io[i] - v);
+      T v;
+      if constexpr (is_fixpt_v<T>) {
+        auto gv = (g.value() == 0) ? dd.g : g;
+        v       = (T) ((gv.max() - gv) * io[i]);
+        v       = (T) (v + y1 * gv);
+      }
+      else {
+        float gv = (g == 0.f) ? dd.g.to_float() : g;
+        v        = (1.f - gv) * io[i];
+        v        = v + y1 * gv;
+      }
+      y1    = v;
+      io[i] = io[i] - v;
     }
     encode_write (_stage[Idx].z[0], y1);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx>
-  void run_hp (xspan<float> io, float g = 0.f)
+  template <uint Idx, class T>
+  void run_hp (xspan<T> io)
   {
-    constexpr delay_data dd = Spec::values[Idx];
-    static_assert (get_delay_size (Idx) >= 1);
-
-    assert (io);
-
-    float y1;
-    decode_read (y1, _stage[Idx].z[0]);
-    for (uint i = 0; i < io.size(); ++i) {
-      auto gv = (g == 0.f) ? dd.g.to_float() : g;
-      auto v  = (1.f - gv) * io[i];
-      v       = v + y1 * gv;
-      y1      = v;
-      io[i]   = io[i] - v;
-    }
-    encode_write (_stage[Idx].z[0], y1);
+    run_hp<Idx> (io, T {});
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U = T>
@@ -765,9 +753,10 @@ public:
     mp11::mp_for_each<parameters> ([&] (auto param) {
       set (param, get_parameter (param).min);
       if constexpr (!is_choice<decltype (get_parameter (param))>) {
-        set (param, get_parameter (param).max); // max might be not yet impl.
+        set (param, get_parameter (param).max);
       }
       else {
+        // max might be not yet impl.
         set (param, get_parameter (param).min + 1);
       }
       set (param, get_parameter (param).defaultv);
