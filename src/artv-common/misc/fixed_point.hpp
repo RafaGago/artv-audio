@@ -9,6 +9,7 @@
 #include "artv-common/misc/compiler.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
+#include "artv-common/misc/num.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/vec.hpp"
 #include "artv-common/misc/vec_bits.hpp"
@@ -67,20 +68,6 @@ struct first_type_n_bits_gt_n {
 };
 } // namespace detail
 
-//------------------------------------------------------------------------------
-// A number wrapper, intended to easily create values that automatically get the
-// type of the fixed point operand they are applied to.
-template <class T>
-struct num {
-  T value;
-};
-
-#if defined(__cpp_deduction_guides)
-template <class T>
-num (T) -> num<T>;
-#else
-#error "This span implementation requires __cpp_deduction_guides"
-#endif
 //------------------------------------------------------------------------------
 // fixed point flags
 // dynamic: Arithmetic operations may expand the factor (fixed point location)
