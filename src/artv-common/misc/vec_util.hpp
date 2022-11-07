@@ -4,6 +4,7 @@
 
 #include <array>
 #include <immintrin.h>
+#include <type_traits>
 
 #include "artv-common/misc/hana.hpp"
 #include "artv-common/misc/misc.hpp"
@@ -479,26 +480,47 @@ constexpr inline auto vec_init (T&& a, Ts&&... b)
   return vec_load<V> (dst);
 };
 //------------------------------------------------------------------------------
-// Cast to a vector of another type with the same number of elements. If T is
-// of a different size than V::value_type "-Wpsabi" warnings might be generated.
-// The ABI-related warnings are no problem if there are no vectors in shared
-// interfaces. Suppressing has to be done globally or in place unfortunately.
-template <class T, class V, enable_if_vec_or_scalar_t<V>* = nullptr>
+// Vector cast.
+//
+// - If "V" is a vector and "T" is scalar it will cast the input parameter to a
+//   vector of the same size.
+//
+// - If "V" is scalar and "T" a vector, the function is equivalent to a
+//   static_cast to the value_type of "V" followed by a vector broadcast
+//  (setting all vector elements static_casted value).
+//
+// - If "V" and "T" are scalars, the function is equivalent to static_cast.
+//
+// - If "V" and "T" are vectors, both vectors have to be of the same size. In
+//   that case the result will be a vector cased to the value_type of "V".
+//
+// Notice that when one vector is scaled another requiring bigger SIMD with
+// "-Wpsabi" warnings might be generated. The ABI-related warnings are no
+// problem if there are no vectors in shared library interfaces. Suppressing has
+// to be done globally or in place unfortunately.
+//
+template <
+  class T,
+  class V,
+  std::enable_if_t<is_vec_or_scalar_v<T> && is_vec_or_scalar_v<V>>* = nullptr>
 constexpr inline auto vec_cast (V a)
 {
-  static_assert (std::is_arithmetic_v<T>);
+  using src_traits = vec_traits_t<V>;
+  using dst_traits = std::conditional_t<
+    std::is_arithmetic_v<T>,
+    typename src_traits::template rebind_traits_same_size<T>,
+    vec_traits_t<T>>;
 
-  constexpr auto src_traits = vec_traits<V>();
-  using src_traits_t        = decltype (src_traits);
-  using dst_traits = typename src_traits_t::template rebind_traits_same_size<T>;
-
-  static_assert (src_traits.size == dst_traits {}.size, "sizes must match");
-
-  if constexpr (src_traits.size != 0) {
+  if constexpr (src_traits::size != 0) {
+    static_assert (src_traits::size == dst_traits::size, "sizes must match");
     return __builtin_convertvector (a, typename dst_traits::type);
   }
+  else if constexpr (dst_traits::size != 0) {
+    // scalar to vector
+    return vec_set<T> (static_cast<vec_value_type_t<T>> (a));
+  }
   else {
-    // not a vector (vector of size 0)
+    // scalar to scalar (passthrough)
     return static_cast<T> (a);
   }
 }

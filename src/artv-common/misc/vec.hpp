@@ -213,6 +213,10 @@ using vec_traits_t = detail::vec_traits_t<V>;
 template <class V>
 using vec_value_type_t = detail::vec_value_type_t<V>;
 
+// Gets the size of a vector. (0 = scalar)
+template <class V>
+static constexpr uint vec_size_v = vec_traits_t<V>::size;
+
 // Gets if "V" is a vector. removes references and CV qualification on "V".
 // This returns false for scalar types (vectors of size 0)
 template <class V>
