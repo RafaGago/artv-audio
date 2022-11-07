@@ -31,11 +31,17 @@ constexpr inline U operator+ (num<T> a, U b)
 {
   return vec_cast<U> (a.value) + b;
 }
-//------------------------------------------------------------------------------
+
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
 constexpr inline U operator+ (U a, num<T> b)
 {
   return a + vec_cast<U> (b.value);
+}
+
+template <class T, class U>
+constexpr inline auto operator+ (num<T> a, num<U> b)
+{
+  return num {a.value + b.value};
 }
 //------------------------------------------------------------------------------
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
@@ -43,11 +49,17 @@ constexpr inline U operator- (num<T> a, U b)
 {
   return vec_cast<U> (a.value) - b;
 }
-//------------------------------------------------------------------------------
+
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
 constexpr inline U operator- (U a, num<T> b)
 {
   return a - vec_cast<U> (b.value);
+}
+
+template <class T, class U>
+constexpr inline auto operator- (num<T> a, num<U> b)
+{
+  return num {a.value - b.value};
 }
 //------------------------------------------------------------------------------
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
@@ -55,11 +67,17 @@ constexpr inline U operator* (num<T> a, U b)
 {
   return vec_cast<U> (a.value) * b;
 }
-//------------------------------------------------------------------------------
+
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
 constexpr inline U operator* (U a, num<T> b)
 {
   return a * vec_cast<U> (b.value);
+}
+
+template <class T, class U>
+constexpr inline auto operator* (num<T> a, num<U> b)
+{
+  return num {a.value * b.value};
 }
 //------------------------------------------------------------------------------
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
@@ -67,11 +85,17 @@ constexpr inline U operator/ (num<T> a, U b)
 {
   return vec_cast<U> (a.value) / b;
 }
-//------------------------------------------------------------------------------
+
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
 constexpr inline U operator/ (U a, num<T> b)
 {
   return a / vec_cast<U> (b.value);
+}
+
+template <class T, class U>
+constexpr inline auto operator/ (num<T> a, num<U> b)
+{
+  return num {a.value / b.value};
 }
 //------------------------------------------------------------------------------
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
@@ -79,11 +103,17 @@ constexpr inline U operator== (num<T> a, U b)
 {
   return vec_cast<U> (a.value) == b;
 }
-//------------------------------------------------------------------------------
+
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
 constexpr inline U operator== (U a, num<T> b)
 {
   return a == vec_cast<U> (b.value);
+}
+
+template <class T, class U>
+constexpr inline auto operator== (num<T> a, num<U> b)
+{
+  return a.value == b.value;
 }
 //------------------------------------------------------------------------------
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
@@ -91,11 +121,17 @@ constexpr inline U operator!= (num<T> a, U b)
 {
   return vec_cast<U> (a.value) != b;
 }
-//------------------------------------------------------------------------------
+
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
 constexpr inline U operator!= (U a, num<T> b)
 {
   return a != vec_cast<U> (b.value);
+}
+
+template <class T, class U>
+constexpr inline auto operator!= (num<T> a, num<U> b)
+{
+  return a.value != b.value;
 }
 //------------------------------------------------------------------------------
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
@@ -103,11 +139,17 @@ constexpr inline U operator<= (num<T> a, U b)
 {
   return vec_cast<U> (a.value) <= b;
 }
-//------------------------------------------------------------------------------
+
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
 constexpr inline U operator<= (U a, num<T> b)
 {
   return a <= vec_cast<U> (b.value);
+}
+
+template <class T, class U>
+constexpr inline auto operator<= (num<T> a, num<U> b)
+{
+  return a.value <= b.value;
 }
 //------------------------------------------------------------------------------
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
@@ -115,11 +157,17 @@ constexpr inline U operator<(num<T> a, U b)
 {
   return vec_cast<U> (a.value) < b;
 }
-//------------------------------------------------------------------------------
+
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
 constexpr inline U operator<(U a, num<T> b)
 {
   return a < vec_cast<U> (b.value);
+}
+
+template <class T, class U>
+constexpr inline auto operator<(num<T> a, num<U> b)
+{
+  return a.value < b.value;
 }
 //------------------------------------------------------------------------------
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
@@ -127,11 +175,17 @@ constexpr inline U operator>= (num<T> a, U b)
 {
   return vec_cast<U> (a.value) >= b;
 }
-//------------------------------------------------------------------------------
+
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
 constexpr inline U operator>= (U a, num<T> b)
 {
   return a >= vec_cast<U> (b.value);
+}
+
+template <class T, class U>
+constexpr inline auto operator>= (num<T> a, num<U> b)
+{
+  return a.value >= b.value;
 }
 //------------------------------------------------------------------------------
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
@@ -139,11 +193,17 @@ constexpr inline U operator> (num<T> a, U b)
 {
   return vec_cast<U> (a.value) > b;
 }
-//------------------------------------------------------------------------------
+
 template <class T, class U, std::enable_if_t<is_vec_or_scalar_v<U>>* = nullptr>
 constexpr inline U operator> (U a, num<T> b)
 {
   return a > vec_cast<U> (b.value);
+}
+
+template <class T, class U>
+constexpr inline auto operator> (num<T> a, num<U> b)
+{
+  return a.value > b.value;
 }
 //------------------------------------------------------------------------------
 } // namespace artv

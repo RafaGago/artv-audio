@@ -297,6 +297,8 @@ public:
     *this = v;
   }
   //----------------------------------------------------------------------------
+  constexpr explicit fixpt (value_type v) noexcept { _v = v; }
+  //----------------------------------------------------------------------------
   // TODO, FIX:
   //
   // error: type 'artv::fixpt<1, 0, 15, true> &' cannot be used prior to
@@ -310,9 +312,7 @@ public:
   // raw value load
   static constexpr fixpt from (value_type raw_val) noexcept
   {
-    fixpt r;
-    r._v = raw_val;
-    return r;
+    return fixpt {raw_val};
   }
   //----------------------------------------------------------------------------
   // lossy conversion from float to fixed point

@@ -943,7 +943,7 @@ private:
       }
     }
     // main loop
-    process_rev1_flt (io, pars);
+    process_rev1 (io, pars);
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
@@ -961,14 +961,13 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  struct loop_parameters;
-  //----------------------------------------------------------------------------
-  void process_rev1 (xspan<std::array<fixpt_t, 2>> io, loop_parameters& par)
+  template <class T, class Params>
+  void process_rev1 (xspan<std::array<T, 2>> io, Params& par)
   {
     auto& rev = std::get<rev1_type> (_modes);
 
-    using arr    = std::array<fixpt_t, max_block_size>;
-    using arr_fb = std::array<fixpt_t, max_block_size + 1>;
+    using arr    = std::array<T, max_block_size>;
+    using arr_fb = std::array<T, max_block_size + 1>;
 
     arr late_in_arr;
     arr lfo1;
@@ -979,15 +978,16 @@ private:
     auto late_in = xspan {late_in_arr.data(), io.size()};
     for (uint i = 0; i < io.size(); ++i) {
       // to MS
-      late_in[i] = (io[i][0] + io[i][1]) >> 1;
-      auto mod   = (fixpt_t) (num {0.25} + (num {1} - par.mod[i]) * num {0.75});
+
+      late_in[i] = half (io[i][0] + io[i][1]);
+      auto mod   = (T) (num {0.25} + (num {1} - par.mod[i]) * num {0.75});
       // ER + late lfo
-      auto lfo = _lfo.tick_sine_fixpt().spec_cast<fixpt_t>().value();
-      lfo1[i].load (lfo[0]);
-      lfo2[i].load (lfo[1]);
-      lfo3[i].load (lfo[2]);
-      lfo4[i].load (lfo[3]);
-      lfo2[i] *= num {0.5} + (par.er[i] >> 1);
+      auto lfo = tick_lfo<T>();
+      lfo1[i]  = T {lfo[0]};
+      lfo2[i]  = T {lfo[1]};
+      lfo3[i]  = T {lfo[2]};
+      lfo4[i]  = T {lfo[3]};
+      lfo2[i] *= num {0.5} + half (par.er[i]);
       lfo3[i] *= mod;
       lfo4[i] *= mod;
 
@@ -1023,7 +1023,7 @@ private:
     er2.cut_head (1); // drop feedback sample from previous block
 
     rev.run_mod<4> (er1, xspan {lfo2});
-    rev.run_lp<5> (er1, fixpt_t::from_float (0.0001f + 0.17f * _param.damp));
+    rev.run_lp<5> (er1, load_float<T> (0.0001f + 0.17f * _param.damp));
     xspan_memcpy (er1b, er1);
     rev.run_mod<6> (er1b, xspan {lfo1});
     rev.push<7> (er1b.to_const()); // feedback point
@@ -1046,17 +1046,14 @@ private:
     for (uint i = 0; i < io.size(); ++i) {
       late[i] = late_in[i] + r[i] * par.decay[i];
       late[i] -= (er1[i] + er2[i]) * par.er[i] * num {0.4};
-      // clang-format off
-      g[i] = (fixpt_t)
-        (num {0.618} + par.character[i] * num {(0.707 - 0.618) * 2.});
-      // clang-format on
+      g[i] = (T) (num {0.618} + par.character[i] * num {(0.707 - 0.618) * 2.});
     }
     r.cut_head (1); // drop feedback sample from previous block
 
     float late_dampf = (0.9f - _param.damp * 0.9f);
     late_dampf       = 1.f - late_dampf * late_dampf;
     late_dampf *= 0.4f;
-    auto late_damp = fixpt_t::from_float (late_dampf);
+    auto late_damp = load_float<T> (late_dampf);
 
     rev.run_mod<8> (late, xspan {lfo3}, g);
     rev.run<9> (late);
@@ -1093,124 +1090,37 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  struct loop_parameters_flt;
-  void process_rev1_flt (
-    xspan<std::array<float, 2>> io,
-    loop_parameters_flt&        par)
+  template <class T>
+  static T half (T v)
   {
-    auto& rev = std::get<rev1_type> (_modes);
-
-    using arr    = std::array<float, max_block_size>;
-    using arr_fb = std::array<float, max_block_size + 1>;
-
-    arr late_in_arr;
-    arr lfo1;
-    arr lfo2;
-    arr lfo3;
-    arr lfo4;
-
-    auto late_in = xspan {late_in_arr.data(), io.size()};
-    for (uint i = 0; i < io.size(); ++i) {
-      // to MS
-      late_in[i] = (io[i][0] + io[i][1]) * 0.5f;
-      // ER + late lfo
-      auto mod = 0.25f + (1.f - par.mod[i]) * 0.75f;
-      auto lfo = _lfo.tick_sine();
-      lfo1[i]  = lfo[0];
-      lfo2[i]  = lfo[1] * (0.5f + par.er[i] * 0.5f);
-      lfo3[i]  = lfo[2] * mod;
-      lfo4[i]  = lfo[3] * mod;
-      // decay fixup
-      auto decay   = 1.f - par.decay[i];
-      decay        = 1.f - decay * decay;
-      par.decay[i] = 0.6f + decay * 0.39f;
+    // TODO: check the compiler output and probably remove
+    if constexpr (std::is_same_v<fixpt_t, T>) {
+      return v >> 1;
     }
-
-    // diffusion -----------------------------
-    rev.run<0> (late_in);
-    rev.run<1> (late_in);
-    rev.run<2> (late_in);
-    rev.run<3> (late_in);
-
-    // ER -----------------------------
-    arr    early1_arr;
-    arr    early1b_arr;
-    arr_fb early2_arr;
-
-    auto er1  = xspan {early1_arr.data(), io.size()};
-    auto er1b = xspan {early1b_arr.data(), io.size()};
-    auto er2 = xspan {early2_arr.data(), io.size() + 1}; // +1: Feedback on head
-
-    // feedback handling
-    rev.fetch_block_plus_one<7> (er2);
-
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < io.size(); ++i) {
-      er1[i] = (late_in[i] + er2[i] * 0.2f) * par.decay[i]; // apply ER feedback
+    else {
+      return v * 0.5f;
     }
-    er2.cut_head (1); // drop feedback sample from previous block
-
-    rev.run_mod<4> (er1, xspan {lfo1});
-    rev.run_lp<5> (er1, 0.0001f + 0.17f * _param.damp);
-    xspan_memcpy (er1b, er1);
-    rev.run_mod<6> (er1b, xspan {lfo2});
-    rev.push<7> (er1b.to_const()); // feedback point
-
-    // Late -----------------------------
-    arr    late_arr;
-    arr_fb l_arr;
-    arr_fb r_arr;
-    arr    g_arr;
-
-    auto late = xspan {late_arr.data(), io.size()};
-    auto g    = xspan {g_arr.data(), io.size()};
-    auto l    = xspan {l_arr.data(), io.size() + 1}; // +1: Feedback on head
-    auto r    = xspan {r_arr.data(), io.size() + 1}; // +1: Feedback on head
-
-    // feedback handling
-    rev.fetch_block_plus_one<14> (l);
-    rev.fetch_block_plus_one<22> (r);
-
-    for (uint i = 0; i < io.size(); ++i) {
-      late[i] = late_in[i] + r[i] * par.decay[i];
-      late[i] -= (er1[i] + er2[i]) * par.er[i] * 0.4f;
-      g[i] = 0.618f + par.character[i] * (0.707f - 0.618f) * 2.f;
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  static T load_float (float v)
+  {
+    if constexpr (std::is_same_v<fixpt_t, T>) {
+      return fixpt_t::from_float (v);
     }
-    r.cut_head (1); // drop feedback sample from previous block
-
-    float late_damp = (0.9f - _param.damp * 0.9f);
-    late_damp       = 1.f - late_damp * late_damp;
-    late_damp *= 0.4f;
-
-    rev.run_mod<8> (late, xspan {lfo3}, g);
-    rev.run<9> (late);
-    rev.run_lp<10> (late, late_damp);
-    rev.run<11> (late, [g] (uint i) { return -g[i]; });
-    rev.run<12> (late);
-    rev.run<13> (late);
-    rev.push<14> (late.to_const()); // feedback point
-
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < io.size(); ++i) {
-      late[i] = late_in[i] + l[i] * par.decay[i];
-      late[i] += (er1[i] + er2[i]) * par.er[i] * 0.4f;
+    else {
+      return v;
     }
-    l.cut_head (1); // drop feedback sample from previous block
-
-    rev.run_mod<15> (late, xspan {lfo4}, g);
-    rev.run<16> (late);
-    rev.run_lp<17> (late, late_damp);
-    rev.run<18> (late, [g] (uint i) { return -g[i]; });
-    rev.run<19> (late);
-    rev.run<20> (late);
-    rev.run_hp<21> (late);
-    rev.push<22> (late.to_const()); // feedback point
-
-    // Mixdown
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < io.size(); ++i) {
-      io[i][0] = l[i] + (-er1[i] * 0.825f - er2[i] * 0.423f) * par.er[i];
-      io[i][1] = r[i] + (-er1[i] * 0.855f + er2[i] * 0.443f) * par.er[i];
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  auto tick_lfo()
+  {
+    if constexpr (std::is_same_v<fixpt_t, T>) {
+      return _lfo.tick_sine_fixpt().spec_cast<fixpt_t>().value();
+    }
+    else {
+      return _lfo.tick_sine();
     }
   }
   //----------------------------------------------------------------------------
