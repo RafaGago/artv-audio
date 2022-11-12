@@ -29,11 +29,11 @@
 namespace artv {
 namespace detail { namespace lofiverb {
 //------------------------------------------------------------------------------
-using fixpt_t        = fixpt_st<1, 3, 28>; // fixed point type for computation
-using fixpt_tr       = fixpt_sr<1, 3, 28>; // fixed point type for computation
-using fixpt_sto      = fixpt_st<1, 0, 15>; // fixed point type for storage
-using fixpt_spls     = fixpt_dt<0, 14, 0>;
-using fixpt_spls_mod = fixpt_dt<0, 9, 0>;
+using fixpt_t        = fixpt_s<1, 3, 28, fixpt_unsafe>;
+using fixpt_tr       = fixpt_s<1, 3, 28, fixpt_unsafe>;
+using fixpt_sto      = fixpt_s<1, 0, 15, fixpt_unsafe>;
+using fixpt_spls     = fixpt_d<0, 14, 0>;
+using fixpt_spls_mod = fixpt_d<0, 9, 0>;
 //------------------------------------------------------------------------------
 struct delay_data {
   fixpt_spls     spls;
@@ -379,8 +379,9 @@ private:
     float y1;
     decode_read (y1, _stage[Idx].z[y1_pos]);
     for (uint i = 0; i < dst.size(); ++i) {
-      float fixpt_spls = dd.spls.to_float() + (lfo_gen (i) * dd.mod.to_float());
-      uint  n_spls     = (uint) fixpt_spls;
+      float fixpt_spls
+        = dd.spls.to_floatp() + (lfo_gen (i) * dd.mod.to_floatp());
+      uint  n_spls      = (uint) fixpt_spls;
       float n_spls_frac = fixpt_spls - n_spls;
       n_spls -= i;
 
@@ -891,8 +892,8 @@ private:
     // float conversion
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto l = wet[i][0].to_float() * ducker_gain[i][0];
-      auto r = wet[i][1].to_float() * ducker_gain[i][1];
+      auto l = wet[i][0].to_floatp() * ducker_gain[i][0];
+      auto r = wet[i][1].to_floatp() * ducker_gain[i][1];
       l      = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
       if (pars.stereo[i] < 0) {
         io[i][0] = r;

@@ -48,10 +48,8 @@ public:
   using scalar_uint = typename vec_traits_t<phase_uint>::value_type;
   using scalar_sint = typename vec_traits_t<phase_int>::value_type;
 
-  using fp_trait = single_fp_type_trait<phase_int, phase_uint, float_vec>;
-
   template <uint S, uint I, uint F>
-  using fixpt_type      = fixpt_st<S, I, F, vec_fp_types_trait<N>>;
+  using fixpt_type      = fixpt_s<S, I, F, 0, vec_fp_types_trait<N>>;
   using fixpt_type_uint = fixpt_type<0, 0, sizeof (scalar_uint) * 8>;
   using fixpt_type_int  = fixpt_type<1, 0, (sizeof (scalar_uint) * 8) - 1>;
   //----------------------------------------------------------------------------

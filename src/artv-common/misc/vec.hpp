@@ -145,13 +145,13 @@ static constexpr auto get_traits()
 //------------------------------------------------------------------------------
 // Template specialization doesn't play nice with attributes, using constexpr...
 template <uint size_of, class T>
-static constexpr bool is_vec (T)
+static constexpr bool is_vec (T*)
 {
   return false;
 }
 
 template <uint size_of, class T>
-static constexpr bool is_vec (T __attribute__ ((vector_size (size_of))))
+static constexpr bool is_vec (T __attribute__ ((vector_size (size_of))) *)
 {
   return true;
 }
@@ -166,8 +166,8 @@ static constexpr bool is_vec (T __attribute__ ((vector_size (size_of))))
 // user errors, it's that the error message will be about constant expressions
 // instead of about non found vector functions, hence this comment to clarify.
 template <class T>
-static constexpr bool is_vec_v
-  = is_vec<sizeof (T)> (std::remove_reference_t<std::remove_cv_t<T>> {});
+static constexpr bool is_vec_v = is_vec<sizeof (T)> (
+  static_cast<std::remove_reference_t<std::remove_cv_t<T>>*> (nullptr));
 //------------------------------------------------------------------------------
 // for unevaluated contexts
 template <class V>

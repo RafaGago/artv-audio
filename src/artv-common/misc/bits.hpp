@@ -11,7 +11,7 @@ namespace artv {
 template <
   class T,
   std::enable_if_t<std::is_integral_v<T> && std::is_unsigned_v<T>>* = nullptr>
-constexpr T lsb_mask (uint bits)
+constexpr inline T lsb_mask (uint bits)
 {
   constexpr T ones      = (T) ~0ull;
   constexpr T type_bits = sizeof (T) * 8;
@@ -21,14 +21,14 @@ constexpr T lsb_mask (uint bits)
 }
 //------------------------------------------------------------------------------
 template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-constexpr T bit (uint bit, T value = 1)
+constexpr inline T bit (uint bit, T value = 1)
 {
   assert (bit < sizeof (T) * 8);
   return value << bit;
 }
 //------------------------------------------------------------------------------
 template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-constexpr void set_bit (T& v, uint bit_idx, bool on = true)
+constexpr inline void set_bit (T& v, uint bit_idx, bool on = true)
 {
   assert (bit_idx < sizeof (T) * 8);
 
@@ -40,7 +40,7 @@ constexpr void set_bit (T& v, uint bit_idx, bool on = true)
 //------------------------------------------------------------------------------
 namespace detail {
 template <class T, class F, class FL, class FLL>
-T unary_int_func_dispatch (T v, F&& f, FL&& fl, FLL&& fll)
+constexpr inline T unary_int_func_dispatch (T v, F&& f, FL&& fl, FLL&& fll)
 {
   static_assert (std::is_integral_v<T>);
   if constexpr (sizeof v <= sizeof (int)) {
@@ -61,7 +61,7 @@ T unary_int_func_dispatch (T v, F&& f, FL&& fl, FLL&& fll)
 //------------------------------------------------------------------------------
 // 1-based indexes
 template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-inline T first_bit_set (T v)
+constexpr inline T first_bit_set (T v) // TODO: rename to get_lsb_set
 {
   return detail::unary_int_func_dispatch (
     v,
@@ -72,7 +72,7 @@ inline T first_bit_set (T v)
 //------------------------------------------------------------------------------
 // 1-based indexes
 template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-inline T last_bit_set (T v)
+constexpr inline T last_bit_set (T v) // TODO: rename to get_msb_set (log2)
 {
   return detail::unary_int_func_dispatch (
     v,
@@ -93,7 +93,7 @@ void iterate_set_bits (T v, F f)
 }
 //------------------------------------------------------------------------------
 template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-inline auto popcount (T v)
+constexpr inline auto popcount (T v)
 {
   return detail::unary_int_func_dispatch (
     v,
@@ -103,20 +103,20 @@ inline auto popcount (T v)
 }
 //------------------------------------------------------------------------------
 template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-inline constexpr bool is_pow2 (T v)
+constexpr inline bool is_pow2 (T v)
 {
   return (v != 0) && ((v & (v - 1)) == 0);
 }
 //------------------------------------------------------------------------------
 template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-inline T pow2_round_floor (T v)
+constexpr inline T pow2_round_floor (T v)
 {
   uint lsb = last_bit_set (v);
   return lsb ? bit<T> (lsb - 1) : v;
 }
 //------------------------------------------------------------------------------
 template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-inline T pow2_round_ceil (T v)
+constexpr inline T pow2_round_ceil (T v)
 {
   using overload_type = std::conditional_t<sizeof (T) == 8, u64, u32>;
   uint lsb            = last_bit_set ((overload_type) v);
@@ -134,7 +134,7 @@ inline T pow2_round_ceil (T v)
 //------------------------------------------------------------------------------
 // Arithmetic (complement 2 respecting) Shift Right
 template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-inline constexpr T ashr (T v, uint n)
+constexpr inline T ashr (T v, uint n)
 {
 
   // might be a vector type (hence the weird write to write the shifts
@@ -144,7 +144,7 @@ inline constexpr T ashr (T v, uint n)
 }
 
 template <uint N, class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-inline constexpr T ashr (T v)
+constexpr inline T ashr (T v)
 {
   static_assert (N < (sizeof (T) * 8)); // just making the assertion comptime
   return ashr (v, N);
@@ -152,14 +152,14 @@ inline constexpr T ashr (T v)
 //------------------------------------------------------------------------------
 // Arithmetic (complement 2 respecting) Shift Left
 template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-inline constexpr T ashl (T v, uint n)
+constexpr inline T ashl (T v, uint n)
 {
   assert (n < (sizeof (T) * 8));
   return v * ((T {} + 1) << (T {} + n));
 }
 
 template <uint N, class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-inline constexpr T ashl (T v)
+constexpr inline T ashl (T v)
 {
   static_assert (N < (sizeof (T) * 8));
   return ashl (v, N);
@@ -168,13 +168,13 @@ inline constexpr T ashl (T v)
 // Arithmetic (complement 2 respecting) Shift. Positive values increase the
 // result (shift left). Negative ones decrease it (shift right).
 template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-inline constexpr T ash (T v, int n)
+constexpr inline T ash (T v, int n)
 {
   return n >= 0 ? ashl (v, n) : ashr (v, -n);
 }
 
 template <int N, class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-inline constexpr T ash (T v)
+constexpr inline T ash (T v)
 {
   if constexpr (N >= 0) {
     return ashl<N> (v);
@@ -186,7 +186,7 @@ inline constexpr T ash (T v)
 //------------------------------------------------------------------------------
 // Arithmetic (complement 2 respecting) LSB mask
 template <class T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-inline constexpr T alsb_mask (T v, uint bits)
+constexpr inline T alsb_mask (T v, uint bits)
 {
   using T_u = std::make_unsigned_t<T>;
 

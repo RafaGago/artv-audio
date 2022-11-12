@@ -17,9 +17,14 @@ using u64 = uint64_t;
 using s128 = __int128;
 using u128 = unsigned __int128;
 
+using uchar  = unsigned char;
+using ushort = unsigned short;
 using uint   = unsigned int;
 using ulong  = unsigned long;
 using u2long = unsigned long long;
+
+using schar  = signed char;
+using sshort = signed short;
 using sint   = signed int;
 using slong  = signed long;
 using s2long = signed long long;

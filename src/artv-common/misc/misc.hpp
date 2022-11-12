@@ -22,10 +22,10 @@
 namespace artv {
 
 #ifdef __GNUC__
-#define likely(x) __builtin_expect ((x), 1)
+#define likely(x)   __builtin_expect ((x), 1)
 #define unlikely(x) __builtin_expect ((x), 0)
 #else
-#define likely(x) x
+#define likely(x)   x
 #define unlikely(x) x
 #endif
 
@@ -34,9 +34,15 @@ namespace artv {
 #define PP_EXPAND(x) x
 #define PP_TO_STR(x) #x
 
-// usage error_with_template_type<whatever> v; The compiler will print the type.
+// usage print_type_as_error<whatever> v; The compiler will print the type.
 template <class... Ts>
-struct error_with_template_type;
+struct print_type_as_error;
+
+template <class T>
+static constexpr void print_type_as_error_f (T&& v)
+{
+  print_type_as_error<T> dummy;
+}
 //------------------------------------------------------------------------------
 #define array_elems(x) sizeof (x) / sizeof (x[0])
 
@@ -48,6 +54,7 @@ struct is_std_array<std::array<T, N>> : public std::true_type {};
 
 template <class T>
 static constexpr bool is_std_array_v = is_std_array<T>::value;
+
 //------------------------------------------------------------------------------
 // mostly to be used on decltype statements.
 template <class T, class... args>
@@ -88,7 +95,7 @@ template <template <class...> class T, class... Ts>
 struct is_same_template<T, T<Ts...>> : public std::true_type {};
 
 template <template <class...> class T, class... Ts>
-struct is_same_template<T, const T<Ts...>> : public std::true_type {};
+struct is_same_template<T, T<Ts...> const> : public std::true_type {};
 
 template <template <class...> class T, class U>
 using is_same_template_t = typename is_same_template<T, U>::type;

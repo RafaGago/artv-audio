@@ -15,7 +15,7 @@ namespace artv {
 TEST (fixed_point, float_set_and_cast)
 {
   auto a = fixpt<1, 0, 15>::from_float (0.6);
-  EXPECT_NEAR (a.to_float(), 0.6, 0.0001);
+  EXPECT_NEAR (a.to_floatp(), 0.6, 0.0001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, limits)
@@ -34,8 +34,9 @@ TEST (fixed_point, add_equal_frac_bits)
   auto a = fixpt<1, 0, 15>::from_float (0.6);
   auto b = a.from_float (-0.7f);
   auto c = a + b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 1, 15>>);
-  EXPECT_NEAR (c.to_float(), -0.1, 0.0001);
+  EXPECT_NEAR (c.to_floatp(), -0.1, 0.0001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, add_rhs_less_frac_bits)
@@ -43,8 +44,9 @@ TEST (fixed_point, add_rhs_less_frac_bits)
   auto a = fixpt<1, 0, 15>::from_float (0.6);
   auto b = fixpt<1, 3, 12>::from_float (-0.7);
   auto c = a + b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 15>>);
-  EXPECT_NEAR (c.to_float(), -0.1, 0.0001);
+  EXPECT_NEAR (c.to_floatp(), -0.1, 0.0001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, add_rhs_more_frac_bits)
@@ -52,8 +54,9 @@ TEST (fixed_point, add_rhs_more_frac_bits)
   auto a = fixpt<1, 3, 12>::from_float (0.6);
   auto b = fixpt<1, 0, 15>::from_float (-0.7);
   auto c = a + b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 15>>);
-  EXPECT_NEAR (c.to_float(), -0.1, 0.0001);
+  EXPECT_NEAR (c.to_floatp(), -0.1, 0.0001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, add_lossy)
@@ -61,8 +64,9 @@ TEST (fixed_point, add_lossy)
   auto a = fixpt<1, 3, 12, 0>::from_float (0.6);
   auto b = fixpt<1, 0, 15, 0>::from_float (-0.7);
   auto c = a + b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), decltype (a)>);
-  EXPECT_NEAR (c.to_float(), -0.1, 0.0002);
+  EXPECT_NEAR (c.to_floatp(), -0.1, 0.0002);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, add_rounding)
@@ -71,8 +75,9 @@ TEST (fixed_point, add_rounding)
   auto           a     = fixpt<1, 3, 12, flags>::from_float (0.6);
   auto           b     = fixpt<1, 0, 15, flags>::from_float (-0.7);
   auto           c     = a + b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 15, flags>>);
-  EXPECT_NEAR (c.to_float(), -0.1, 0.0001);
+  EXPECT_NEAR (c.to_floatp(), -0.1, 0.0001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, sub_equal_frac_bits)
@@ -80,8 +85,9 @@ TEST (fixed_point, sub_equal_frac_bits)
   auto a = fixpt<1, 0, 15>::from_float (0.6);
   auto b = fixpt<1, 0, 15>::from_float (-0.7);
   auto c = a - b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 1, 15>>);
-  EXPECT_NEAR (c.to_float(), 1.3, 0.0001);
+  EXPECT_NEAR (c.to_floatp(), 1.3, 0.0001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, sub_rhs_less_frac_bits)
@@ -89,8 +95,9 @@ TEST (fixed_point, sub_rhs_less_frac_bits)
   auto a = fixpt<1, 0, 15>::from_float (0.6);
   auto b = fixpt<1, 3, 12>::from_float (-0.7);
   auto c = a - b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 15>>);
-  EXPECT_NEAR (c.to_float(), 1.3, 0.0001);
+  EXPECT_NEAR (c.to_floatp(), 1.3, 0.0001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, sub_rhs_more_frac_bits)
@@ -98,8 +105,9 @@ TEST (fixed_point, sub_rhs_more_frac_bits)
   auto a = fixpt<1, 3, 12>::from_float (0.6);
   auto b = fixpt<1, 0, 15>::from_float (-0.7);
   auto c = a - b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 15>>);
-  EXPECT_NEAR (c.to_float(), 1.3, 0.0002);
+  EXPECT_NEAR (c.to_floatp(), 1.3, 0.0002);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, sub_lossy)
@@ -107,8 +115,9 @@ TEST (fixed_point, sub_lossy)
   auto a = fixpt<1, 2, 13, 0>::from_float (1.6);
   auto b = fixpt<1, 5, 10, 0>::from_float (-1.7);
   auto c = a + b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), decltype (a)>);
-  EXPECT_NEAR (c.to_float(), -0.1, 0.0005);
+  EXPECT_NEAR (c.to_floatp(), -0.1, 0.0005);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, sub_rounding)
@@ -117,8 +126,9 @@ TEST (fixed_point, sub_rounding)
   auto           a     = fixpt<1, 3, 12, flags>::from_float (0.6);
   auto           b     = fixpt<1, 0, 15, flags>::from_float (-0.7);
   auto           c     = a - b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 15, flags>>);
-  EXPECT_NEAR (c.to_float(), 1.3, 0.0002);
+  EXPECT_NEAR (c.to_floatp(), 1.3, 0.0002);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, mul_equal_frac_bits)
@@ -126,8 +136,9 @@ TEST (fixed_point, mul_equal_frac_bits)
   auto a = fixpt<1, 1, 14>::from_float (1.6);
   auto b = fixpt<1, 1, 14>::from_float (-1.7);
   auto c = a * b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 2, 28>>);
-  EXPECT_NEAR (c.to_float(), 1.6 * -1.7, 0.0001);
+  EXPECT_NEAR (c.to_floatp(), 1.6 * -1.7, 0.0001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, mul_rhs_less_frac_bits)
@@ -135,8 +146,9 @@ TEST (fixed_point, mul_rhs_less_frac_bits)
   auto a = fixpt<1, 1, 14>::from_float (1.6);
   auto b = fixpt<1, 3, 12>::from_float (-1.7);
   auto c = a * b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 26>>);
-  EXPECT_NEAR (c.to_float(), 1.6 * -1.7, 0.001);
+  EXPECT_NEAR (c.to_floatp(), 1.6 * -1.7, 0.001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, mul_rhs_more_frac_bits)
@@ -144,8 +156,9 @@ TEST (fixed_point, mul_rhs_more_frac_bits)
   auto a = fixpt<1, 3, 12>::from_float (1.6);
   auto b = fixpt<1, 1, 14>::from_float (-1.7);
   auto c = a * b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 26>>);
-  EXPECT_NEAR (c.to_float(), 1.6 * -1.7, 0.001);
+  EXPECT_NEAR (c.to_floatp(), 1.6 * -1.7, 0.001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, mul_lossy)
@@ -153,8 +166,9 @@ TEST (fixed_point, mul_lossy)
   auto a = fixpt<1, 3, 12, 0>::from_float (1.6);
   auto b = fixpt<1, 5, 10, 0>::from_float (-1.7);
   auto c = a * b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), decltype (a)>);
-  EXPECT_NEAR (c.to_float(), 1.6 * -1.7, 0.001);
+  EXPECT_NEAR (c.to_floatp(), 1.6 * -1.7, 0.001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, mul_rounding)
@@ -163,8 +177,9 @@ TEST (fixed_point, mul_rounding)
   auto           a     = fixpt<1, 3, 12, flags>::from_float (1.6);
   auto           b     = fixpt<1, 1, 14, flags>::from_float (-1.7);
   auto           c     = a * b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 26, flags>>);
-  EXPECT_NEAR (c.to_float(), 1.6 * -1.7, 0.001);
+  EXPECT_NEAR (c.to_floatp(), 1.6 * -1.7, 0.001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, div_equal_frac_bits)
@@ -172,8 +187,9 @@ TEST (fixed_point, div_equal_frac_bits)
   auto a = fixpt<1, 1, 14>::from_float (1.6);
   auto b = fixpt<1, 1, 14>::from_float (-1.7);
   auto c = a / b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 15, 15>>);
-  EXPECT_NEAR (c.to_float(), 1.6 / -1.7, 0.0001);
+  EXPECT_NEAR (c.to_floatp(), 1.6 / -1.7, 0.0001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, div_rhs_less_frac_bits)
@@ -181,8 +197,9 @@ TEST (fixed_point, div_rhs_less_frac_bits)
   auto a = fixpt<1, 1, 14>::from_float (1.6);
   auto b = fixpt<1, 3, 12>::from_float (-1.7);
   auto c = a / b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 13, 17>>);
-  EXPECT_NEAR (c.to_float(), 1.6 / -1.7, 0.001);
+  EXPECT_NEAR (c.to_floatp(), 1.6 / -1.7, 0.001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, div_rhs_more_frac_bits)
@@ -190,8 +207,9 @@ TEST (fixed_point, div_rhs_more_frac_bits)
   auto a = fixpt<1, 3, 12>::from_float (1.6);
   auto b = fixpt<1, 1, 14>::from_float (-1.7);
   auto c = a / b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 17, 13>>);
-  EXPECT_NEAR (c.to_float(), 1.6 / -1.7, 0.001);
+  EXPECT_NEAR (c.to_floatp(), 1.6 / -1.7, 0.001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, div_reciprocal)
@@ -199,8 +217,9 @@ TEST (fixed_point, div_reciprocal)
   auto a = fixpt<1, 1, 0>::from_int (1);
   auto b = fixpt<1, 0, 15>::from_float (-0.9999999999);
   auto c = a / b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), fixpt<1, 16, 0>>);
-  EXPECT_NEAR (b.to_float(), 1. / -0.9999999999, 0.001);
+  EXPECT_NEAR (b.to_floatp(), 1. / -0.9999999999, 0.001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, div_lossy)
@@ -208,8 +227,9 @@ TEST (fixed_point, div_lossy)
   auto a = fixpt<1, 3, 12, false>::from_float (1.6);
   auto b = fixpt<1, 1, 14, false>::from_float (-1.7);
   auto c = a / b;
+  c.normalize();
   static_assert (std::is_same_v<decltype (c), decltype (a)>);
-  EXPECT_NEAR (c.to_float(), 1.6 / -1.7, 0.001);
+  EXPECT_NEAR (c.to_floatp(), 1.6 / -1.7, 0.001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, div_rounding)
@@ -219,7 +239,7 @@ TEST (fixed_point, div_rounding)
   auto           b     = fixpt<1, 1, 14, flags>::from_float (-1.7);
   auto           c     = a / b;
   static_assert (std::is_same_v<decltype (c), fixpt<1, 17, 13, flags>>);
-  EXPECT_NEAR (c.to_float(), 1.6 / -1.7, 0.001);
+  EXPECT_NEAR (c.to_floatp(), 1.6 / -1.7, 0.001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, normalize)
@@ -240,8 +260,8 @@ TEST (fixed_point, normalize)
 TEST (fixed_point, fixed_point_cast)
 {
   auto a  = fixpt<1, 15, 16>::from_float (23.1123232456);
-  auto r1 = a.to_float();
-  auto r  = a.cast<fixpt<1, 5, 10>>().to_float();
+  auto r1 = a.to_floatp();
+  auto r  = a.cast<fixpt<1, 5, 10>>().to_floatp();
   EXPECT_NEAR (r, 23.1123232456, 0.001);
 }
 //------------------------------------------------------------------------------
@@ -253,5 +273,212 @@ TEST (fixed_point, fixed_point_cast_w_rounding)
   EXPECT_EQ (b.value(), 0x03); //                               _000 0011
 }
 //------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_pow2_ratio)
+{
+  auto fp = fixpt_from_ratio<1, 2>();
+  static_assert (fp.n_int == 0);
+  static_assert (fp.n_frac == 1);
+  EXPECT_EQ (static_cast<double> (fp), 0.5);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_decimals_ratio)
+{
+  auto fp = fixpt_from_ratio<1, 3>();
+  static_assert (fp.n_int == 0);
+  static_assert (fp.n_frac == 63);
+  EXPECT_NEAR (static_cast<double> (fp), .333333333333333333, .00000000001);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_pow2_ratio_add)
+{
+  auto a = fixpt<1, 15, 16>::from_float (23.);
+  auto b = a + ratio<1, 2>();
+  b.normalize();
+  static_assert (b.n_int == 16);
+  static_assert (b.n_frac == 16);
+  EXPECT_NEAR (b.to_floatp(), 23.5, .00000000001);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_infinite_decimals_ratio_add)
+{
+  auto a = fixpt<1, 15, 16, fixpt_mixed>::from_float (23.);
+  auto b = a + ratio<1, 3>();
+  b.normalize();
+  static_assert (b.n_int == 16);
+  static_assert (b.n_frac == 16);
+  EXPECT_NEAR (b.to_floatp(), 23.3333, .0001);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_pow2_ratio_sub)
+{
+  auto a = fixpt<1, 15, 16>::from_float (23.);
+  auto b = a - ratio<1, 2>();
+  b.normalize();
+  static_assert (b.n_int == 16);
+  static_assert (b.n_frac == 16);
+  EXPECT_NEAR (b.to_floatp(), 22.5, .00000000001);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_infinite_decimals_ratio_sub)
+{
+  auto a = fixpt<1, 15, 16, fixpt_mixed>::from_float (23.);
+  auto b = a - ratio<1, 3>();
+  b.normalize();
+  static_assert (b.n_int == 16);
+  static_assert (b.n_frac == 16);
+  EXPECT_NEAR (b.to_floatp(), 22.6666, .0001);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_pow2_ratio_mul)
+{
+  auto a = fixpt<1, 2, 0>::from_float (2.);
+  auto b = a * ratio<1, 2>();
+  b.normalize();
+  static_assert (b.n_int == 1);
+  static_assert (b.n_frac == 1);
+  EXPECT_EQ (b.to_floatp(), 1.);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_infinite_decimals_ratio_mul)
+{
+  using T = fixpt<1, 3, 0, fixpt_mixed>;
+  auto a  = T::max();
+  auto b  = a * ratio_fracb<1, 3, 15>(); // 15 bits of fraction
+  b.normalize();
+  static_assert (b.n_int == 2);
+  static_assert (b.n_frac == 15);
+  EXPECT_NEAR (b.to_floatp(), a.to_floatp() * (1. / 3.), .00015);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_integer_ratio_mul)
+{
+  using T = fixpt<1, 3, 1, fixpt_mixed>;
+  auto a  = T::max();
+  // 6 = 110. shifts 3 bits, reduces the fraction 1 bit (trailing 0)
+  auto b = a * ratio<6>();
+  b.normalize();
+  static_assert (b.n_int == 6);
+  static_assert (b.n_frac == 0);
+  EXPECT_NEAR (b.to_floatp(), a.to_floatp() * 6., .00015);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_integer_non_pure_ratio_mul)
+{
+  using T = fixpt<1, 3, 1, fixpt_mixed>;
+  auto a  = T::max();
+  auto b  = a * ratio_fracb<14, 10, 15>();
+  b.normalize();
+  static_assert (b.n_int == 4);
+  static_assert (b.n_frac == 16);
+  EXPECT_NEAR (b.to_floatp(), a.to_floatp() * 1.4, .00015);
+}
+//------------------------------------------------------------------------------
+// divisions are implemented as inverse multiplications, not a lot to test...
+TEST (fixed_point, fixed_point_pow2_ratio_div)
+{
+  auto a = fixpt<1, 15, 16>::from_float (2.);
+  auto b = a / ratio<1, 2>();
+  b.normalize();
+  static_assert (b.n_int == 16);
+  static_assert (b.n_frac == 15);
+  EXPECT_EQ (b.to_floatp(), 4.);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_infinite_decimals_ratio_div)
+{
+  auto a = fixpt<1, 3, 16, fixpt_mixed>::from_float (3.);
+  auto b = a / ratio<3, 1>();
+  b.normalize();
+  static_assert (b.n_int == 2);
+  static_assert (b.n_frac == 32);
+  EXPECT_NEAR (b.to_floatp(), 1., .00015);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_mixed_add_saturation)
+{
+  constexpr uint intb  = 62;
+  constexpr uint fracb = 1;
 
+  auto a = fixpt<1, intb, fracb, fixpt_mixed>::from_float (3.);
+  auto b = a + a;
+  static_assert (b.n_int == 63);
+  static_assert (b.n_frac == 0);
+  b.normalize();
+  EXPECT_NEAR (b.to_floatp(), 3 + 3, .00015);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_mixed_sub_saturation)
+{
+  constexpr uint intb  = 62;
+  constexpr uint fracb = 1;
+
+  auto a = fixpt<1, intb, fracb, fixpt_mixed>::from_float (3.);
+  auto b = a - fixpt<1, intb, fracb, fixpt_mixed>::from_float (-3.);
+  static_assert (b.n_int == 63);
+  static_assert (b.n_frac == 0);
+  b.normalize();
+  EXPECT_NEAR (b.to_floatp(), 3 - -3, .00015);
+  // auto c = b + a; // Triggers assert!
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_mixed_mul_saturation)
+{
+  constexpr uint intb  = 15;
+  constexpr uint fracb = 16;
+
+  auto a = fixpt<1, intb, fracb, fixpt_mixed>::from_float (3.);
+  auto b = a * a;
+  static_assert (b.n_int == (intb * 2));
+  static_assert (b.n_frac == (fracb * 2));
+  b.normalize();
+  EXPECT_NEAR (b.to_floatp(), 3 * 3, .00015);
+  auto c = b * a;
+  static_assert (c.n_int == (intb * 3));
+  static_assert (c.n_frac == (64 - (intb * 3) - 1));
+  c.normalize();
+  EXPECT_NEAR (c.to_floatp(), 3 * 3 * 3, .00015);
+  auto d = c * a;
+  static_assert (d.n_int == (intb * 4));
+  static_assert (d.n_frac == (64 - (intb * 4) - 1));
+  d.normalize();
+  EXPECT_NEAR (d.to_floatp(), 3 * 3 * 3 * 3, .00015);
+  // auto e = d * a; // Triggers assert!
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_mixed_div_saturation)
+{
+  constexpr uint intb  = 62;
+  constexpr uint fracb = 1;
+
+  auto a = fixpt<1, intb, fracb, fixpt_mixed>::from_float (3.);
+  auto b = a / a;
+  static_assert (b.n_int == 63);
+  static_assert (b.n_frac == 0);
+  b.normalize();
+  EXPECT_NEAR (b.to_floatp(), 3 / 3, .00015);
+  // auto c = b + a; // Triggers assert!
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, fixed_point_implicit_enabled)
+{
+  constexpr uint intb  = 62;
+  constexpr uint fracb = 1;
+
+  auto a = fixpt<1, 61, 2, fixpt_mixed | fixpt_implicit>::from_float (3.);
+  auto b = a + 3;
+  static_assert (b.n_int == 62);
+  static_assert (b.n_frac == 1);
+  b.normalize();
+  EXPECT_NEAR (b.to_floatp(), 3 + 3, .00015);
+  auto c = b + 3.;
+  static_assert (c.n_int == 63);
+  static_assert (c.n_frac == 0);
+  b.normalize();
+  EXPECT_NEAR (c.to_floatp(), 3 + 3 + 3, .00015);
+  a = 7.f;
+  EXPECT_NEAR (a.to_floatp(), 7, .00015);
+  a = 4;
+  EXPECT_NEAR (a.to_floatp(), 4, .00015);
+}
+//------------------------------------------------------------------------------
 } // namespace artv
