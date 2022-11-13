@@ -256,24 +256,25 @@ private:
   // by default unsigned are compatible with signed, but not the other way
   // around
   template <class T>
-  static constexpr bool rhs_is_compatible
-    = fixpt_are_compatible_v<T, mytype> && (n_sign >= fixpt_sign<T>());
+  static constexpr bool rhs_is_compatible = fixpt_are_compatible_v<T, mytype>;
 
   template <class T>
-  static constexpr bool rhs_is_assign_compat = rhs_is_compatible<T>
+  static constexpr bool rhs_is_assign_compat
+    = rhs_is_compatible<T> && (n_sign >= fixpt_sign<T>())
     && (relaxed_frac_assign || (n_frac >= fixpt_n_frac<T>()))
     && (relaxed_int_assign || (n_int >= fixpt_n_int<T>()));
 
   template <class T>
-  using enable_if_rhs_is_compat = std::enable_if_t<rhs_is_compatible<T>>;
+  using enable_if_comparable
+    = std::enable_if_t<rhs_is_compatible<T> && (n_sign == fixpt_sign<T>())>;
 
   template <class T>
-  using enable_if_rhs_is_dynamic_compat
+  using enable_if_operable_w_dynamic
     = std::enable_if_t<rhs_is_compatible<T> && is_dynamic>;
 
   template <class T>
-  using enable_if_rhs_is_static_compat
-    = std::enable_if_t<rhs_is_compatible<T> && !is_dynamic>;
+  using enable_if_operable_w_static = std::enable_if_t<
+    rhs_is_compatible<T> && (n_sign >= fixpt_sign<T>()) && !is_dynamic>;
   //----------------------------------------------------------------------------
   template <uint N_intb, uint N_fracb, uint N_signv, uint Flagsv>
   static constexpr auto convert_impl()
@@ -339,8 +340,8 @@ public:
 
   // convert to a type with a different amount of bits but the same signedness
   // and behavior
-  template <uint N_intb, uint N_fracb>
-  using convert = convert_raw<N_intb, N_fracb>;
+  template <uint N_intb, uint N_fracb, uint N_signv = n_sign>
+  using convert = convert_raw<N_intb, N_fracb, N_signv>;
 
   // sign related instatiations
   using unsigned_twin = fixpt<0, n_int + n_sign, n_frac, flags, traits>;
@@ -820,14 +821,14 @@ public:
     return vec_cast<vec_value_type_t<T>> (to_int());
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_rhs_is_static_compat<T>* = nullptr>
+  template <class T, enable_if_operable_w_static<T>* = nullptr>
   constexpr auto& operator+= (T rhs) noexcept
   {
     _v = bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a + b; });
     return *this;
   }
 
-  template <class T, enable_if_rhs_is_static_compat<T>* = nullptr>
+  template <class T, enable_if_operable_w_static<T>* = nullptr>
   constexpr auto operator+ (T rhs) const noexcept
   {
     auto ret {*this};
@@ -835,27 +836,28 @@ public:
     return ret;
   }
 
-  template <class T, enable_if_rhs_is_dynamic_compat<T>* = nullptr>
+  template <class T, enable_if_operable_w_dynamic<T>* = nullptr>
   constexpr auto operator+ (T rhs) const noexcept
   {
     assert (rhs.is_normalized()); // making sure it is in range
     constexpr uint int_b  = std::max (n_int, T::n_int) + 1;
     constexpr uint frac_b = std::max (n_frac, T::n_frac);
+    constexpr uint sign   = n_sign | T::n_sign;
 
-    (void) get_and_assert_saturation<int_b, frac_b>();
+    (void) get_and_assert_saturation<int_b, frac_b, sign>();
 
-    return convert<int_b, frac_b>::from (
-      bin_op<int_b, frac_b> (rhs, [] (auto a, auto b) { return a + b; }));
+    return convert<int_b, frac_b, sign>::from (
+      bin_op<int_b, frac_b, sign> (rhs, [] (auto a, auto b) { return a + b; }));
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_rhs_is_static_compat<T>* = nullptr>
+  template <class T, enable_if_operable_w_static<T>* = nullptr>
   constexpr auto& operator-= (T rhs) noexcept
   {
     _v = bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a - b; });
     return *this;
   }
 
-  template <class T, enable_if_rhs_is_static_compat<T>* = nullptr>
+  template <class T, enable_if_operable_w_static<T>* = nullptr>
   constexpr auto operator- (T rhs) const noexcept
   {
     auto ret {*this};
@@ -863,20 +865,21 @@ public:
     return ret;
   }
 
-  template <class T, enable_if_rhs_is_dynamic_compat<T>* = nullptr>
+  template <class T, enable_if_operable_w_dynamic<T>* = nullptr>
   constexpr auto operator- (T rhs) const noexcept
   {
     assert (rhs.is_normalized()); // making sure it is in range
     constexpr uint int_b  = std::max (n_int, T::n_int) + n_sign;
     constexpr uint frac_b = std::max (n_frac, T::n_frac);
+    constexpr uint sign   = n_sign | T::n_sign;
 
-    (void) get_and_assert_saturation<int_b, frac_b>();
+    (void) get_and_assert_saturation<int_b, frac_b, sign>();
 
-    return convert<int_b, frac_b>::from (
-      bin_op<int_b, frac_b> (rhs, [] (auto a, auto b) { return a - b; }));
+    return convert<int_b, frac_b, sign>::from (
+      bin_op<int_b, frac_b, sign> (rhs, [] (auto a, auto b) { return a - b; }));
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_rhs_is_static_compat<T>* = nullptr>
+  template <class T, enable_if_operable_w_static<T>* = nullptr>
   constexpr auto& operator*= (T rhs) noexcept
   {
     // only make space to handle (and revert) the shift caused by
@@ -892,7 +895,7 @@ public:
     return *this;
   }
 
-  template <class T, enable_if_rhs_is_static_compat<T>* = nullptr>
+  template <class T, enable_if_operable_w_static<T>* = nullptr>
   constexpr auto operator* (T rhs) const noexcept
   {
     auto ret {*this};
@@ -900,25 +903,25 @@ public:
     return ret;
   }
 
-  template <class T, enable_if_rhs_is_dynamic_compat<T>* = nullptr>
+  template <class T, enable_if_operable_w_dynamic<T>* = nullptr>
   constexpr auto operator* (T rhs) const noexcept
   {
     assert (rhs.is_normalized()); // making sure it is in range
 
     constexpr uint int_b  = n_int + T::n_int;
     constexpr uint frac_b = n_frac + T::n_frac;
+    constexpr uint sign   = n_sign | T::n_sign;
 
-    constexpr auto n_sat = get_and_assert_saturation<int_b, frac_b>();
+    constexpr auto n_sat = get_and_assert_saturation<int_b, frac_b, sign>();
 
-    using converted = convert<int_b, frac_b>;
+    using converted = convert<int_b, frac_b, sign>;
     using scalar    = typename converted::scalar_type;
     if constexpr (n_sat > 0) {
       // For mixed types: dropping fractional bits before considering that not
       // enough datatype resolution is available. Notice that the
       // "get_and_assert_saturation" will "static_assert" when there are no more
       // bits available.
-      constexpr uint n_not_flexible = n_sign + int_b;
-      constexpr uint n_frac_kept    = converted::n_bits - n_not_flexible;
+      constexpr uint n_frac_kept = converted::n_frac;
       // try with a balanced amount of fractional bits.
       constexpr uint kept1 = (n_frac_kept + 1) / 2; // div_ceil
       constexpr uint kept2 = n_frac_kept / 2;
@@ -963,7 +966,7 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_rhs_is_static_compat<T>* = nullptr>
+  template <class T, enable_if_operable_w_static<T>* = nullptr>
   constexpr auto& operator/= (T rhs) noexcept
   {
     // only make space to handle the pre-shift required for dividing while
@@ -978,7 +981,7 @@ public:
     return *this;
   }
 
-  template <class T, enable_if_rhs_is_static_compat<T>* = nullptr>
+  template <class T, enable_if_operable_w_static<T>* = nullptr>
   constexpr auto operator/ (T rhs) const noexcept
   {
     auto ret {*this};
@@ -986,7 +989,7 @@ public:
     return ret;
   }
 
-  template <class T, enable_if_rhs_is_dynamic_compat<T>* = nullptr>
+  template <class T, enable_if_operable_w_dynamic<T>* = nullptr>
   constexpr auto operator/ (T rhs) const noexcept
   {
     // reminder: The easiest explanation for me of fixed point division is based
@@ -1012,15 +1015,16 @@ public:
 
     constexpr uint int_b  = n_int + T::n_frac;
     constexpr uint frac_b = n_frac + T::n_int;
+    constexpr uint sign   = n_sign | T::n_sign;
 
-    using converted = convert<int_b, frac_b>;
+    using converted = convert<int_b, frac_b, sign>;
     using scalar    = typename converted::scalar_type;
 
     constexpr int  prediv_req_pos = converted::n_frac + T::n_frac;
     constexpr auto curr_pos       = (int) n_frac;
     constexpr auto shift          = prediv_req_pos - curr_pos;
 
-    get_and_assert_saturation<int_b, frac_b>();
+    get_and_assert_saturation<int_b, frac_b, sign>();
 
     auto v = vec_cast<scalar> (_v);
     v      = ::artv::ash<shift> (v);
@@ -1041,37 +1045,37 @@ public:
     return ret;
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_rhs_is_compat<T>* = nullptr>
+  template <class T, enable_if_comparable<T>* = nullptr>
   constexpr auto operator== (T rhs) const noexcept
   {
     return bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a == b; });
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_rhs_is_compat<T>* = nullptr>
+  template <class T, enable_if_comparable<T>* = nullptr>
   constexpr auto operator!= (T rhs) const noexcept
   {
     return bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a != b; });
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_rhs_is_compat<T>* = nullptr>
+  template <class T, enable_if_comparable<T>* = nullptr>
   constexpr auto operator<= (T rhs) const noexcept
   {
     return bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a <= b; });
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_rhs_is_compat<T>* = nullptr>
+  template <class T, enable_if_comparable<T>* = nullptr>
   constexpr auto operator>= (T rhs) const noexcept
   {
     return bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a >= b; });
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_rhs_is_compat<T>* = nullptr>
+  template <class T, enable_if_comparable<T>* = nullptr>
   constexpr auto operator<(T rhs) const noexcept
   {
     return bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a < b; });
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_rhs_is_compat<T>* = nullptr>
+  template <class T, enable_if_comparable<T>* = nullptr>
   constexpr auto operator> (T rhs) const noexcept
   {
     return bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a > b; });
@@ -1120,10 +1124,10 @@ public:
   // TODO: Binary Logic Ops. Do they make sense.
   //----------------------------------------------------------------------------
 private:
-  template <uint G_int, uint G_frac>
+  template <uint G_int, uint G_frac, uint Signv>
   static constexpr uint get_and_assert_saturation()
   {
-    constexpr uint required_bits = n_sign + G_int + G_frac;
+    constexpr uint required_bits = Signv + G_int + G_frac;
     if constexpr (is_saturating) {
       static_assert (
         (required_bits - G_frac) <= max_conversion_bits,
@@ -1193,11 +1197,17 @@ private:
   static constexpr scalar_float flt_max = (scalar_float) raw_max / float_factor;
   static constexpr scalar_float flt_min = (scalar_float) raw_min / float_factor;
   //----------------------------------------------------------------------------
+  template <uint Int, uint Frac, uint Signv, class F, class T>
+  constexpr auto bin_op (T other, F&& fn) const noexcept
+  {
+    using converted = convert<Int, Frac, Signv>;
+    return fn (cast (converted {})._v, other.cast (converted {})._v);
+  }
+  //----------------------------------------------------------------------------
   template <uint Int, uint Frac, class F, class T>
   constexpr auto bin_op (T other, F&& fn) const noexcept
   {
-    using converted = convert<Int, Frac>;
-    return fn (cast (converted {})._v, other.cast (converted {})._v);
+    return bin_op<Int, Frac, n_sign> (other, std::forward<F> (fn));
   }
   //----------------------------------------------------------------------------
   template <uint, uint, uint, uint, class>
