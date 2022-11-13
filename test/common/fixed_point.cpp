@@ -450,12 +450,18 @@ TEST (fixed_point, fixed_point_mixed_div_saturation)
   constexpr uint intb  = 62;
   constexpr uint fracb = 1;
 
-  auto a = fixpt<1, intb, fracb, fixpt_mixed>::from_float (3.);
-  auto b = a / a;
-  static_assert (b.n_int == 63);
-  static_assert (b.n_frac == 0);
-  b.normalize();
-  EXPECT_NEAR (b.to_floatp(), 3 / 3, .00015);
+  s64    aval = (1ull << 40) - 1;
+  double bval = 7.1234;
+
+  auto a = fixpt<1, 40, 23, fixpt_mixed>::from_int (aval);
+  auto b = fixpt<1, 40, 20, fixpt_mixed>::from_float (bval);
+  auto c = a / b;
+  static_assert (c.n_int == 60);
+  static_assert (c.n_frac == 3);
+  c.normalize();
+  // errors in the denominator magnify a lot
+  auto err = 1. - (b.to_floatp() / bval);
+  EXPECT_NEAR (c.to_floatp(), aval / bval, (aval / bval) * err);
   // auto c = b + a; // Triggers assert!
 }
 //------------------------------------------------------------------------------

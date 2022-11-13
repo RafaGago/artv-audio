@@ -842,7 +842,7 @@ public:
     constexpr uint int_b  = std::max (n_int, T::n_int) + 1;
     constexpr uint frac_b = std::max (n_frac, T::n_frac);
 
-    assert_growth<int_b, frac_b>();
+    (void) get_and_assert_saturation<int_b, frac_b>();
 
     return convert<int_b, frac_b>::from (
       bin_op<int_b, frac_b> (rhs, [] (auto a, auto b) { return a + b; }));
@@ -870,7 +870,7 @@ public:
     constexpr uint int_b  = std::max (n_int, T::n_int) + n_sign;
     constexpr uint frac_b = std::max (n_frac, T::n_frac);
 
-    assert_growth<int_b, frac_b>();
+    (void) get_and_assert_saturation<int_b, frac_b>();
 
     return convert<int_b, frac_b>::from (
       bin_op<int_b, frac_b> (rhs, [] (auto a, auto b) { return a - b; }));
@@ -884,11 +884,11 @@ public:
     constexpr uint int_b  = n_int + T::n_frac;
     constexpr uint frac_b = n_frac;
 
-    using dst_type      = convert<int_b, frac_b>;
-    using bigger_scalar = typename dst_type::scalar_type;
-    auto mul = vec_cast<bigger_scalar> (_v) * vec_cast<bigger_scalar> (rhs._v);
+    using converted  = convert<int_b, frac_b>;
+    using new_scalar = typename converted::scalar_type;
+    auto mul = vec_cast<new_scalar> (_v) * vec_cast<new_scalar> (rhs._v);
 
-    _v = vec_cast<scalar_type> (ashr_truncate<T::n_frac, bigger_scalar> (mul));
+    _v = vec_cast<scalar_type> (ashr_truncate<T::n_frac, new_scalar> (mul));
     return *this;
   }
 
@@ -905,60 +905,60 @@ public:
   {
     assert (rhs.is_normalized()); // making sure it is in range
 
-    constexpr uint int_b   = n_int + T::n_int;
-    constexpr uint frac_b  = n_frac + T::n_frac;
-    constexpr uint total_b = n_sign + int_b + frac_b;
+    constexpr uint int_b  = n_int + T::n_int;
+    constexpr uint frac_b = n_frac + T::n_frac;
 
-    assert_growth<int_b, frac_b>();
+    constexpr auto n_sat = get_and_assert_saturation<int_b, frac_b>();
 
-    using lossless_type = convert<int_b, frac_b>;
-    using scalar        = typename lossless_type::scalar_type;
-    if constexpr (is_saturating && (total_b > max_conversion_bits)) {
-      // fractional bits are to be dropped. Notice that the "assert_growth" will
-      // trigger if there are not enough bits to drop
-
+    using converted = convert<int_b, frac_b>;
+    using scalar    = typename converted::scalar_type;
+    if constexpr (n_sat > 0) {
+      // For mixed types: dropping fractional bits before considering that not
+      // enough datatype resolution is available. Notice that the
+      // "get_and_assert_saturation" will "static_assert" when there are no more
+      // bits available.
       constexpr uint n_not_flexible = n_sign + int_b;
-      constexpr uint n_frac_spared  = lossless_type::n_bits - n_not_flexible;
-      // try with a balanced amount of fractional bits
-      constexpr uint drop1 = (n_frac_spared + 1) / 2; // div_ceil
-      constexpr uint drop2 = n_frac_spared / 2;
+      constexpr uint n_frac_kept    = converted::n_bits - n_not_flexible;
+      // try with a balanced amount of fractional bits.
+      constexpr uint kept1 = (n_frac_kept + 1) / 2; // div_ceil
+      constexpr uint kept2 = n_frac_kept / 2;
 
-      constexpr uint drop_lhs = (n_frac > T::n_frac) ? drop1 : drop2;
-      constexpr uint drop_rhs = (n_frac > T::n_frac) ? drop2 : drop1;
+      constexpr uint kept_lhs = (n_frac > T::n_frac) ? kept1 : kept2;
+      constexpr uint kept_rhs = (n_frac > T::n_frac) ? kept2 : kept1;
 
-      if constexpr ((n_frac >= drop_lhs) && (T::n_frac >= drop_rhs)) {
-        // balanced drop
-        constexpr uint shift_l = n_frac - drop_lhs;
-        constexpr uint shift_r = T::n_frac - drop_rhs;
+      if constexpr ((n_frac >= kept_lhs) && (T::n_frac >= kept_rhs)) {
+        // balanced fractional bit dropping
+        constexpr uint lhs_drop = n_frac - kept_lhs;
+        constexpr uint rhs_drop = T::n_frac - kept_rhs;
 
-        return lossless_type::from (
-          vec_cast<scalar> (ashr_truncate_ns<shift_l> (_v))
-          * vec_cast<scalar> (ashr_truncate_ns<shift_r> (rhs._v)));
+        return converted::from (
+          vec_cast<scalar> (ashr_truncate_ns<lhs_drop> (_v))
+          * vec_cast<scalar> (ashr_truncate_ns<rhs_drop> (rhs._v)));
       }
-      else if constexpr ((n_frac >= drop_lhs)) {
-        // drop more bits from lhs. Reminder: There are enough bits to drop
-        constexpr uint drop_rhs_debt = drop_rhs - T::n_frac;
-        constexpr uint shift_l       = n_frac - drop_lhs - drop_rhs_debt;
+      else if constexpr ((n_frac >= kept_lhs)) {
+        // drop more bits from lhs.
+        constexpr uint kept_rhs_debt = kept_rhs - T::n_frac;
+        constexpr uint lhs_drop      = n_frac - kept_lhs - kept_rhs_debt;
 
-        return lossless_type::from (
-          vec_cast<scalar> (ashr_truncate_ns<shift_l> (_v))
+        return converted::from (
+          vec_cast<scalar> (ashr_truncate_ns<lhs_drop> (_v))
           * vec_cast<scalar> (rhs._v));
       }
-      else if constexpr ((n_frac >= drop_lhs) && (T::n_frac >= drop_rhs)) {
-        // drop more bits from rhs. Reminder: There are enough bits to drop
-        constexpr uint drop_lhs_debt = drop_lhs - n_frac;
-        constexpr uint shift_r       = T::n_frac - drop_rhs - drop_lhs_debt;
+      else if constexpr ((n_frac >= kept_lhs) && (T::n_frac >= kept_rhs)) {
+        // drop more bits from rhs.
+        constexpr uint kept_lhs_debt = kept_lhs - n_frac;
+        constexpr uint rhs_drop      = T::n_frac - kept_rhs - kept_lhs_debt;
 
-        return lossless_type::from (
+        return converted::from (
           vec_cast<scalar> (_v)
-          * vec_cast<scalar> (ashr_truncate_ns<shift_r> (rhs._v)));
+          * vec_cast<scalar> (ashr_truncate_ns<rhs_drop> (rhs._v)));
       }
       else {
         static_assert (sizeof (T) == 0, "Unreachable!");
       }
     }
     else {
-      return lossless_type::from (
+      return converted::from (
         vec_cast<scalar> (_v) * vec_cast<scalar> (rhs._v));
     }
   }
@@ -970,9 +970,10 @@ public:
     // keeping the same scaling.
     constexpr uint int_b  = n_int + T::n_frac;
     constexpr uint frac_b = n_frac;
-    using dst_type        = convert<int_b, frac_b>;
 
-    auto tmp = cast<dst_type>();
+    using converted = convert<int_b, frac_b>;
+
+    auto tmp = cast<converted>();
     this->_v = vec_cast<scalar_type> (ashl<T::n_frac> (tmp._v) / rhs._v);
     return *this;
   }
@@ -988,18 +989,42 @@ public:
   template <class T, enable_if_rhs_is_dynamic_compat<T>* = nullptr>
   constexpr auto operator/ (T rhs) const noexcept
   {
-    assert (rhs.is_normalized()); // making sure it is in range
+    // reminder: The easiest explanation for me of fixed point division is based
+    // on considering the fact that a division by a decimal number is a
+    // multiplication. E.g
+    //
+    // 1 / 0.001 = 1000;
+    //
+    // Considering the properties of the integer value 1 in a fixed point int:
+    //
+    // - On fixed point it is the smallest (positive) number representable.
+    // - On fixed point, when used as a divisor it has to multiply the
+    //   numerator/dividend.
+    // - On integers, dividing an integer by 1 keeps the result is the same.
+    //
+    // So it becomes obvious that fixed point division requires adjusting the
+    // numerator/dividend in a way such as when it is divided by one it is
+    // equivalent to a multiplication. To do so it has to be shifted left from
+    // the number of fractional bits of the divisor relative to the final
+    // desired fixed point location.
+
+    assert (rhs.is_normalized()); // make sure it is in range
 
     constexpr uint int_b  = n_int + T::n_frac;
     constexpr uint frac_b = n_frac + T::n_int;
 
-    assert_growth<int_b, frac_b>();
+    using converted = convert<int_b, frac_b>;
+    using scalar    = typename converted::scalar_type;
 
-    using lossless_type = convert<int_b, frac_b>;
-    auto ret            = cast<lossless_type>();
-    ret._v              = ashl<T::n_frac> (ret._v);
-    ret._v /= rhs._v;
-    return ret;
+    constexpr int  prediv_req_pos = converted::n_frac + T::n_frac;
+    constexpr auto curr_pos       = (int) n_frac;
+    constexpr auto shift          = prediv_req_pos - curr_pos;
+
+    get_and_assert_saturation<int_b, frac_b>();
+
+    auto v = vec_cast<scalar> (_v);
+    v      = ::artv::ash<shift> (v);
+    return converted {v / rhs._v};
   }
   //----------------------------------------------------------------------------
   constexpr auto operator-() const noexcept
@@ -1096,26 +1121,26 @@ public:
   //----------------------------------------------------------------------------
 private:
   template <uint G_int, uint G_frac>
-  static constexpr void assert_growth()
+  static constexpr uint get_and_assert_saturation()
   {
     constexpr uint required_bits = n_sign + G_int + G_frac;
     if constexpr (is_saturating) {
       static_assert (
         (required_bits - G_frac) <= max_conversion_bits,
         "Arithmetic operation needs more integer bits than the biggest convertible type supports");
+      return (required_bits > max_conversion_bits)
+        ? required_bits - max_conversion_bits
+        : 0;
     }
-    else if constexpr (required_bits > max_conversion_bits) {
-      if constexpr ((required_bits - G_frac) <= max_conversion_bits) {
-        static_assert (
-          true,
-          "Arithmetic operation needs more integer bits than the biggest convertible type supports");
-      }
-      else {
-        static_assert (
-          true,
-          "Arithmetic operation needs more fractional bits than the biggest convertible type supports");
-      }
+    else if constexpr (is_dynamic && (required_bits > max_conversion_bits)) {
+      static_assert (
+        (required_bits - G_frac) <= max_conversion_bits,
+        "Arithmetic operation needs more integer bits than the biggest convertible type supports");
+      static_assert (
+        (required_bits - G_frac) > max_conversion_bits,
+        "Arithmetic operation needs more fractional bits than the biggest convertible type supports");
     }
+    return 0;
   }
   //----------------------------------------------------------------------------
   template <uint N, class T_scalar, class T>
@@ -1171,8 +1196,8 @@ private:
   template <uint Int, uint Frac, class F, class T>
   constexpr auto bin_op (T other, F&& fn) const noexcept
   {
-    using lossless_type = convert<Int, Frac>;
-    return fn (cast (lossless_type {})._v, other.cast (lossless_type {})._v);
+    using converted = convert<Int, Frac>;
+    return fn (cast (converted {})._v, other.cast (converted {})._v);
   }
   //----------------------------------------------------------------------------
   template <uint, uint, uint, uint, class>
