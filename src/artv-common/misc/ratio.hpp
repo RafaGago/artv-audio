@@ -13,9 +13,10 @@ namespace artv {
 template <std::intmax_t Num, std::intmax_t Den = 1>
 class ratio {
 public:
-  using int_type                = std::intmax_t;
-  using uint_type               = std::uintmax_t;
-  using std_ratio               = typename std::ratio<Num, Den>::type;
+  using int_type  = std::intmax_t;
+  using uint_type = std::uintmax_t;
+  using std_ratio = typename std::ratio<Num, Den>::type;
+
   static constexpr int_type num = std_ratio::num;
   static constexpr int_type den = std_ratio::den;
   //----------------------------------------------------------------------------
@@ -59,40 +60,218 @@ public:
     return {neg ? -((int_type) quo) : (int_type) quo, neg, n_int, n_frac};
   }
   //----------------------------------------------------------------------------
-  // will this need to be explicit to avoid ambiguity?
-  constexpr operator float()
-  {
-    return (float) std_ratio::num / (float) std_ratio::den;
-  }
-  //----------------------------------------------------------------------------
-  constexpr operator double()
-  {
-    return (double) std_ratio::num / (double) std_ratio::den;
-  }
-  //----------------------------------------------------------------------------
-  constexpr operator long double()
-  {
-    return (long double) std_ratio::num / (long double) std_ratio::den;
-  }
-  //----------------------------------------------------------------------------
 };
+
+template <typename T, typename = void>
+struct is_ratio : std::false_type {};
+
+template <typename T>
+struct is_ratio<T, decltype ((void) T::num, (void) T::den, void())>
+  : std::true_type {};
+
+template <class T>
+static constexpr bool is_ratio_v = is_ratio<T>::value;
+
+namespace detail {
+template <class T, class R>
+using enable_if_floatpt_and_ratio
+  = std::enable_if_t<std::is_floating_point_v<T> && is_ratio_v<R>>;
+
+template <class T, class Ratio>
+constexpr inline T ratio_to_float (Ratio)
+{
+  return (T) Ratio::num / (T) Ratio::den;
+}
+
+} // namespace detail
 //------------------------------------------------------------------------------
-template <class T>
-struct is_artv_ratio : public std::false_type {};
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr auto operator+ (T lhs, Ratio rhs) noexcept
+{
+  return lhs + detail::ratio_to_float<T> (rhs);
+}
 
-template <std::intmax_t N, std::intmax_t D>
-struct is_artv_ratio<ratio<N, D>> : public std::true_type {};
-
-template <class T>
-static constexpr bool is_artv_ratio_v = is_artv_ratio<T>::value;
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr auto operator+ (Ratio lhs, T rhs) noexcept
+{
+  return detail::ratio_to_float<T> (lhs) + rhs;
+}
 //------------------------------------------------------------------------------
-template <class T>
-struct is_std_ratio : public std::false_type {};
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr auto operator- (T lhs, Ratio rhs) noexcept
+{
+  return lhs - detail::ratio_to_float<T> (rhs);
+  ;
+}
 
-template <std::intmax_t N, std::intmax_t D>
-struct is_std_ratio<std::ratio<N, D>> : public std::true_type {};
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr auto operator- (Ratio lhs, T rhs) noexcept
+{
+  return detail::ratio_to_float<T> (lhs) - rhs;
+}
+//-----------------------------------------------------------------------------
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr auto operator* (T lhs, Ratio rhs) noexcept
+{
+  return lhs * detail::ratio_to_float<T> (rhs);
+  ;
+}
 
-template <class T>
-static constexpr bool is_std_ratio_v = is_std_ratio<T>::value;
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr auto operator* (Ratio lhs, T rhs) noexcept
+{
+  return detail::ratio_to_float<T> (lhs) * rhs;
+}
+//------------------------------------------------------------------------------
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr auto operator/ (T lhs, Ratio rhs) noexcept
+{
+  return lhs / detail::ratio_to_float<T> (rhs);
+  ;
+}
+
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr auto operator/ (Ratio lhs, T rhs) noexcept
+{
+  return detail::ratio_to_float<T> (lhs) / rhs;
+}
+//------------------------------------------------------------------------------
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr bool operator== (T lhs, Ratio rhs) noexcept
+{
+  return lhs == detail::ratio_to_float<T> (rhs);
+  ;
+}
+
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr bool operator== (Ratio lhs, T rhs) noexcept
+{
+  return detail::ratio_to_float<T> (lhs) == rhs;
+}
+//------------------------------------------------------------------------------
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr bool operator!= (T lhs, Ratio rhs) noexcept
+{
+  return lhs != detail::ratio_to_float<T> (rhs);
+  ;
+}
+
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr bool operator!= (Ratio lhs, T rhs) noexcept
+{
+  return detail::ratio_to_float<T> (lhs) != rhs;
+}
+//------------------------------------------------------------------------------
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr bool operator> (T lhs, Ratio rhs) noexcept
+{
+  return lhs > detail::ratio_to_float<T> (rhs);
+  ;
+}
+
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr bool operator> (Ratio lhs, T rhs) noexcept
+{
+  return detail::ratio_to_float<T> (lhs) > rhs;
+}
+//------------------------------------------------------------------------------
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr bool operator>= (T lhs, Ratio rhs) noexcept
+{
+  return lhs >= detail::ratio_to_float<T> (rhs);
+  ;
+}
+
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr bool operator>= (Ratio lhs, T rhs) noexcept
+{
+  return detail::ratio_to_float<T> (lhs) >= rhs;
+}
+//------------------------------------------------------------------------------
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr bool operator<(T lhs, Ratio rhs) noexcept
+{
+  return lhs < detail::ratio_to_float<T> (rhs);
+  ;
+}
+
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr bool operator<(Ratio lhs, T rhs) noexcept
+{
+  return detail::ratio_to_float<T> (lhs) < rhs;
+}
+//------------------------------------------------------------------------------
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr bool operator<= (T lhs, Ratio rhs) noexcept
+{
+  return lhs <= detail::ratio_to_float<T> (rhs);
+  ;
+}
+
+template <
+  class T,
+  class Ratio,
+  detail::enable_if_floatpt_and_ratio<T, Ratio>* = nullptr>
+constexpr bool operator<= (Ratio lhs, T rhs) noexcept
+{
+  return detail::ratio_to_float<T> (lhs) <= rhs;
+}
 //------------------------------------------------------------------------------
 } // namespace artv

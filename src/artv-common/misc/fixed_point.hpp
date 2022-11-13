@@ -1264,27 +1264,13 @@ template <
   std::intmax_t Num,
   std::intmax_t Den,
   uint          Max_frac_bits = (sizeof (uint) * 8)>
-struct ratio_fracb : public ::artv::ratio<Num, Den> {
-  using base = ::artv::ratio<Num, Den>;
-
+struct ratio_fracb {
+  using base                          = ::artv::ratio<Num, Den>;
   static constexpr uint max_frac_bits = Max_frac_bits;
   static constexpr auto num           = base::num;
   static constexpr auto den           = base::den;
-  // clang-format off
-  using base::operator float;
-  using base::operator double;
-  using base::operator long double;
-  // clang-format on
 };
 
-template <class T>
-struct is_ratio_fracb : public std::false_type {};
-
-template <std::intmax_t N, std::intmax_t D, uint M>
-struct is_ratio_fracb<ratio_fracb<N, D, M>> : public std::true_type {};
-
-template <class T>
-static constexpr auto is_ratio_fracb_v = is_ratio_fracb<T>::value;
 //------------------------------------------------------------------------------
 // Operators for ratio<num, den>, std::ratio<num, den>, ratio_fracb<num, den,
 // max_frac_bits>
@@ -1390,20 +1376,13 @@ constexpr auto ratio_mul (T lhs, Ratio rhs) noexcept
     return lhs * fixpt_from_ratio_impl<maxfrac> (rat {}, lhs);
   }
 }
-
-//------------------------------------------------------------------------------
-template <class T, class U>
-using enable_if_fixpt_and_ratio = std::enable_if_t<
-  is_fixpt_v<T>
-  && (is_artv_ratio_v<U> || is_ratio_fracb_v<U> || is_std_ratio_v<U>)>;
-
 //------------------------------------------------------------------------------
 } // namespace detail
 //------------------------------------------------------------------------------
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr auto operator+ (T lhs, Ratio rhs) noexcept
 {
   return lhs + detail::fixpt_from_ratio (rhs, lhs);
@@ -1412,7 +1391,7 @@ constexpr auto operator+ (T lhs, Ratio rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr auto operator+ (Ratio lhs, T rhs) noexcept
 {
   return detail::fixpt_from_ratio (lhs, rhs) + rhs;
@@ -1421,7 +1400,7 @@ constexpr auto operator+ (Ratio lhs, T rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr auto operator- (T lhs, Ratio rhs) noexcept
 {
   return lhs - detail::fixpt_from_ratio (rhs, lhs);
@@ -1430,7 +1409,7 @@ constexpr auto operator- (T lhs, Ratio rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr auto operator- (Ratio lhs, T rhs) noexcept
 {
   return detail::fixpt_from_ratio (lhs, rhs) - rhs;
@@ -1439,7 +1418,7 @@ constexpr auto operator- (Ratio lhs, T rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr auto operator* (T lhs, Ratio rhs) noexcept
 {
   return detail::ratio_mul<false> (lhs, rhs);
@@ -1448,7 +1427,7 @@ constexpr auto operator* (T lhs, Ratio rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr auto operator* (Ratio lhs, T rhs) noexcept
 {
   return rhs * lhs;
@@ -1457,7 +1436,7 @@ constexpr auto operator* (Ratio lhs, T rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr auto operator/ (T lhs, Ratio rhs) noexcept
 {
   return detail::ratio_mul<true> (lhs, rhs);
@@ -1466,7 +1445,7 @@ constexpr auto operator/ (T lhs, Ratio rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr auto operator/ (Ratio lhs, T rhs) noexcept
 {
   return detail::fixpt_from_ratio (lhs, rhs) / rhs;
@@ -1475,7 +1454,7 @@ constexpr auto operator/ (Ratio lhs, T rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr bool operator== (T lhs, Ratio rhs) noexcept
 {
   return lhs == detail::fixpt_from_ratio (rhs, lhs);
@@ -1484,7 +1463,7 @@ constexpr bool operator== (T lhs, Ratio rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr bool operator== (Ratio lhs, T rhs) noexcept
 {
   return detail::fixpt_from_ratio (lhs, rhs) == rhs;
@@ -1493,7 +1472,7 @@ constexpr bool operator== (Ratio lhs, T rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr bool operator!= (T lhs, Ratio rhs) noexcept
 {
   return lhs != detail::fixpt_from_ratio (rhs, lhs);
@@ -1502,7 +1481,7 @@ constexpr bool operator!= (T lhs, Ratio rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr bool operator!= (Ratio lhs, T rhs) noexcept
 {
   return detail::fixpt_from_ratio (lhs, rhs) != rhs;
@@ -1511,7 +1490,7 @@ constexpr bool operator!= (Ratio lhs, T rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr bool operator> (T lhs, Ratio rhs) noexcept
 {
   return lhs > detail::fixpt_from_ratio (rhs, lhs);
@@ -1520,7 +1499,7 @@ constexpr bool operator> (T lhs, Ratio rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr bool operator> (Ratio lhs, T rhs) noexcept
 {
   return detail::fixpt_from_ratio (lhs, rhs) > rhs;
@@ -1529,7 +1508,7 @@ constexpr bool operator> (Ratio lhs, T rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr bool operator>= (T lhs, Ratio rhs) noexcept
 {
   return lhs >= detail::fixpt_from_ratio (rhs, lhs);
@@ -1538,7 +1517,7 @@ constexpr bool operator>= (T lhs, Ratio rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr bool operator>= (Ratio lhs, T rhs) noexcept
 {
   return detail::fixpt_from_ratio (lhs, rhs) >= rhs;
@@ -1547,7 +1526,7 @@ constexpr bool operator>= (Ratio lhs, T rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr bool operator<(T lhs, Ratio rhs) noexcept
 {
   return lhs < detail::fixpt_from_ratio (rhs, lhs);
@@ -1556,7 +1535,7 @@ constexpr bool operator<(T lhs, Ratio rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr bool operator<(Ratio lhs, T rhs) noexcept
 {
   return detail::fixpt_from_ratio (lhs, rhs) < rhs;
@@ -1565,7 +1544,7 @@ constexpr bool operator<(Ratio lhs, T rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr bool operator<= (T lhs, Ratio rhs) noexcept
 {
   return lhs <= detail::fixpt_from_ratio (rhs, lhs);
@@ -1574,12 +1553,11 @@ constexpr bool operator<= (T lhs, Ratio rhs) noexcept
 template <
   class T,
   class Ratio,
-  detail::enable_if_fixpt_and_ratio<T, Ratio>* = nullptr>
+  std::enable_if_t<is_fixpt_v<T> && is_ratio_v<Ratio>>* = nullptr>
 constexpr bool operator<= (Ratio lhs, T rhs) noexcept
 {
   return detail::fixpt_from_ratio (lhs, rhs) <= rhs;
 }
-
 //------------------------------------------------------------------------------
 // Operators for num<T>
 //------------------------------------------------------------------------------
