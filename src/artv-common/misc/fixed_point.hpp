@@ -244,7 +244,7 @@ private:
     mp_find_if_q<conversions, detail::first_type_n_bits_gt_n<n_bits>>::value;
   static constexpr uint n_conversions = mp11::mp_size<conversions>::value;
   static constexpr uint max_conversion_bits
-    = mp11::mp_at_c<conversions, n_conversions - 1>::n_bits;
+    = mp11::mp_back<conversions>::n_bits;
 
   static_assert (n_sign <= 1, "Invalid value. 1 is signed, 0 unsigned");
   static_assert (
@@ -1249,9 +1249,15 @@ template <
   class Traits = std_fp_types_trait>
 static constexpr auto fixpt_from_ratio()
 {
-  constexpr auto fp = ratio<Num, Den>::get_fixpt();
-  return fixpt<fp.n_sign, fp.n_int, fp.n_frac, fixpt_dynamic, Traits>::from (
-    fp.value);
+  constexpr auto fp       = ratio<Num, Den>::get_fixpt();
+  constexpr uint max_bits = mp11::mp_back<typename Traits::conversions>::n_bits;
+  constexpr uint fixed_bits = fp.n_sign - fp.n_int;
+  constexpr uint max_frac   = max_bits - fixed_bits;
+  constexpr uint frac_drop  = (fp.n_frac > max_frac) ? fp.n_frac - max_frac : 0;
+  constexpr uint n_frac     = fp.n_frac - frac_drop;
+
+  using fixpt_t = fixpt<fp.n_sign, fp.n_int, n_frac, fixpt_dynamic, Traits>;
+  return fixpt_t::from (fp.value >> frac_drop);
 }
 
 // A class to represent a ratio truncated to some amount of bits. When used in
@@ -1269,6 +1275,9 @@ struct ratio_fracb {
   static constexpr uint max_frac_bits = Max_frac_bits;
   static constexpr auto num           = base::num;
   static constexpr auto den           = base::den;
+
+  template <std::intmax_t Num_v, std::intmax_t Den_v>
+  using rebind = ratio_fracb<Num_v, Den_v, max_frac_bits>;
 };
 
 //------------------------------------------------------------------------------
@@ -1314,9 +1323,10 @@ static constexpr uint get_max_frac_bits (ratio_fracb<Num, Den, Max_frac>, Fixpt)
 template <std::intmax_t Num, std::intmax_t Den, class Fixpt>
 static constexpr auto fixpt_from_ratio (::artv::ratio<Num, Den>, Fixpt)
 {
-  constexpr auto r = ::artv::ratio<Num, Den> {};
-  constexpr auto f = Fixpt {};
-  return fixpt_from_ratio_impl<get_max_frac_bits (r, f)> (r, f);
+  constexpr auto r       = ::artv::ratio<Num, Den> {};
+  constexpr auto f       = Fixpt {};
+  constexpr auto maxfrac = get_max_frac_bits (r, f);
+  return fixpt_from_ratio_impl<maxfrac> (r, f);
 }
 
 template <std::intmax_t Num, std::intmax_t Den, class Fixpt>
