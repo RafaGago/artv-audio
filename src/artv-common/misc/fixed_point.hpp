@@ -376,7 +376,7 @@ public:
   //----------------------------------------------------------------------------
   constexpr fixpt() noexcept { _v = decltype (_v) {}; }
 
-  template <class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+  template <class T, std::enable_if_t<rhs_is_assign_compat<T>>* = nullptr>
   constexpr fixpt (T other) noexcept
   {
     *this = other;
@@ -1249,6 +1249,46 @@ template <
   class Traits     = std_fp_types_trait>
 using fixpt_m
   = fixpt<Sign, N_int, N_frac, fixpt_mixed | (Extra_flags & ~uint {3}), Traits>;
+
+//------------------------------------------------------------------------------
+// convenience classes to be used as operators. The main purpose  for these is
+// for float and fixed point code to be compatible on templates
+//------------------------------------------------------------------------------
+template <int N_int, int N_frac>
+struct fixpt_resize_token {};
+
+template <
+  class T,
+  int N_int,
+  int N_frac,
+  std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+inline constexpr auto operator& (
+  T lhs,
+  fixpt_resize_token<N_int, N_frac>) noexcept
+{
+  return lhs.template resize<N_int, N_frac>();
+}
+
+template <int N_int1, int N_frac1, int N_int2, int N_frac2>
+inline constexpr auto operator& (
+  fixpt_resize_token<N_int1, N_frac1>,
+  fixpt_resize_token<N_int2, N_frac2>) noexcept
+{
+  return fixpt_resize_token<N_int1 + N_int2, N_frac1 + N_frac2> {};
+}
+
+template <
+  class T,
+  int N_int,
+  int N_frac,
+  std::enable_if_t<!is_fixpt_v<T>>* = nullptr>
+inline constexpr auto operator& (
+  T lhs,
+  fixpt_resize_token<N_int, N_frac>) noexcept
+{
+  return lhs; // passthrough for other types.
+}
+
 //------------------------------------------------------------------------------
 // "ratio" related classes and functions
 //------------------------------------------------------------------------------
@@ -1291,30 +1331,27 @@ struct ratio_fracb {
 };
 
 template <uint Max_frac_bits>
-struct ratio_add_max_frac_bits {
-  static constexpr uint value = Max_frac_bits;
-};
+struct ratio_add_max_frac_bits_token {};
 
 template <
   uint N_frac,
   class Ratio,
   std::enable_if_t<is_ratio_v<Ratio>>* = nullptr>
-constexpr auto operator& (Ratio, ratio_add_max_frac_bits<N_frac>) noexcept
+constexpr auto operator& (Ratio, ratio_add_max_frac_bits_token<N_frac>) noexcept
 {
   return ratio_fracb<Ratio::num, Ratio::den, N_frac> {};
 }
 
 // operator for adding fractional bits to a ratio, e.g:
-// > (1_r/3_r) & 6_frac_bits
+// > (1_r/3_r) & 6_ratio_frac_bits
 
 template <char... Chars>
-constexpr auto operator"" _frac_bits()
+constexpr auto operator"" _max_ratio_fracb()
 {
   using str            = comptime::str<Chars...>;
   constexpr auto value = comptime::atoi<str>();
-  static_assert (value > 0, "_frac_bits: negative or zero values not allowed");
-  static_assert (value < 1024, "_frac_bits: Bug?");
-  return ratio_add_max_frac_bits<value> {};
+  static_assert (value < 1024, "_max_ratio_fracb: Bug?");
+  return ratio_add_max_frac_bits_token<value> {};
 }
 
 //------------------------------------------------------------------------------
@@ -1969,10 +2006,9 @@ constexpr bool operator> (T lhs, U rhs) noexcept
 {
   return U {lhs, detail::fixpt_arith_tag {}} > rhs;
 }
-
 //------------------------------------------------------------------------------
-// ternary operators can't be overloaded. This is mostly done for native vector
-// types.
+// ternary operators can't be overloaded. This is mostly done for native
+// vector types.
 template <class C, class U, std::enable_if_t<is_fixpt_v<U>>* = nullptr>
 constexpr auto fixpt_select (C cond, U a, U b) noexcept
 {
