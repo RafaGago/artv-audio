@@ -270,11 +270,11 @@ private:
     = std::enable_if_t<rhs_is_compatible<T> && (n_sign == fixpt_sign<T>())>;
 
   template <class T>
-  using enable_if_operable_w_dynamic
+  using enable_if_operand_w_dynamic
     = std::enable_if_t<rhs_is_compatible<T> && is_dynamic>;
 
   template <class T>
-  using enable_if_operable_w_static = std::enable_if_t<
+  using enable_if_operand_w_static = std::enable_if_t<
     rhs_is_compatible<T> && (n_sign >= fixpt_sign<T>()) && !is_dynamic>;
   //----------------------------------------------------------------------------
   template <uint N_intb, uint N_fracb, uint N_signv, uint Flagsv>
@@ -316,7 +316,7 @@ private:
     uint N_signv = n_sign,
     uint Flagsv  = flags>
   using convert_raw
-    = decltype (convert_impl<N_intb, N_fracb, n_sign, Flagsv>());
+    = decltype (convert_impl<N_intb, N_fracb, N_signv, Flagsv>());
   //----------------------------------------------------------------------------
 public:
   using type = mp11::mp_at_c<conversions, type_idx>;
@@ -373,7 +373,6 @@ public:
   using no_int_twin         = convert_flags<flags & ~fixpt_implicit_int>;
   using implicit_twin       = convert_flags<flags | fixpt_implicit>;
   using no_implicit_twin    = convert_flags<flags & ~fixpt_implicit>;
-
   //----------------------------------------------------------------------------
   constexpr fixpt() noexcept { _v = decltype (_v) {}; }
 
@@ -822,14 +821,14 @@ public:
     return vec_cast<vec_value_type_t<T>> (to_int());
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_operable_w_static<T>* = nullptr>
+  template <class T, enable_if_operand_w_static<T>* = nullptr>
   constexpr auto& operator+= (T rhs) noexcept
   {
     _v = bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a + b; });
     return *this;
   }
 
-  template <class T, enable_if_operable_w_static<T>* = nullptr>
+  template <class T, enable_if_operand_w_static<T>* = nullptr>
   constexpr auto operator+ (T rhs) const noexcept
   {
     auto ret {*this};
@@ -837,7 +836,7 @@ public:
     return ret;
   }
 
-  template <class T, enable_if_operable_w_dynamic<T>* = nullptr>
+  template <class T, enable_if_operand_w_dynamic<T>* = nullptr>
   constexpr auto operator+ (T rhs) const noexcept
   {
     assert (rhs.is_normalized()); // making sure it is in range
@@ -851,14 +850,14 @@ public:
       bin_op<int_b, frac_b, sign> (rhs, [] (auto a, auto b) { return a + b; }));
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_operable_w_static<T>* = nullptr>
+  template <class T, enable_if_operand_w_static<T>* = nullptr>
   constexpr auto& operator-= (T rhs) noexcept
   {
     _v = bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a - b; });
     return *this;
   }
 
-  template <class T, enable_if_operable_w_static<T>* = nullptr>
+  template <class T, enable_if_operand_w_static<T>* = nullptr>
   constexpr auto operator- (T rhs) const noexcept
   {
     auto ret {*this};
@@ -866,13 +865,13 @@ public:
     return ret;
   }
 
-  template <class T, enable_if_operable_w_dynamic<T>* = nullptr>
+  template <class T, enable_if_operand_w_dynamic<T>* = nullptr>
   constexpr auto operator- (T rhs) const noexcept
   {
     assert (rhs.is_normalized()); // making sure it is in range
-    constexpr uint int_b  = std::max (n_int, T::n_int) + n_sign;
-    constexpr uint frac_b = std::max (n_frac, T::n_frac);
     constexpr uint sign   = n_sign | T::n_sign;
+    constexpr uint int_b  = std::max (n_int, T::n_int) + sign;
+    constexpr uint frac_b = std::max (n_frac, T::n_frac);
 
     (void) get_and_assert_saturation<int_b, frac_b, sign>();
 
@@ -880,7 +879,7 @@ public:
       bin_op<int_b, frac_b, sign> (rhs, [] (auto a, auto b) { return a - b; }));
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_operable_w_static<T>* = nullptr>
+  template <class T, enable_if_operand_w_static<T>* = nullptr>
   constexpr auto& operator*= (T rhs) noexcept
   {
     // only make space to handle (and revert) the shift caused by
@@ -896,7 +895,7 @@ public:
     return *this;
   }
 
-  template <class T, enable_if_operable_w_static<T>* = nullptr>
+  template <class T, enable_if_operand_w_static<T>* = nullptr>
   constexpr auto operator* (T rhs) const noexcept
   {
     auto ret {*this};
@@ -904,7 +903,7 @@ public:
     return ret;
   }
 
-  template <class T, enable_if_operable_w_dynamic<T>* = nullptr>
+  template <class T, enable_if_operand_w_dynamic<T>* = nullptr>
   constexpr auto operator* (T rhs) const noexcept
   {
     assert (rhs.is_normalized()); // making sure it is in range
@@ -967,7 +966,7 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  template <class T, enable_if_operable_w_static<T>* = nullptr>
+  template <class T, enable_if_operand_w_static<T>* = nullptr>
   constexpr auto& operator/= (T rhs) noexcept
   {
     // only make space to handle the pre-shift required for dividing while
@@ -982,7 +981,7 @@ public:
     return *this;
   }
 
-  template <class T, enable_if_operable_w_static<T>* = nullptr>
+  template <class T, enable_if_operand_w_static<T>* = nullptr>
   constexpr auto operator/ (T rhs) const noexcept
   {
     auto ret {*this};
@@ -990,7 +989,7 @@ public:
     return ret;
   }
 
-  template <class T, enable_if_operable_w_dynamic<T>* = nullptr>
+  template <class T, enable_if_operand_w_dynamic<T>* = nullptr>
   constexpr auto operator/ (T rhs) const noexcept
   {
     // reminder: The easiest explanation for me of fixed point division is based
@@ -1306,7 +1305,7 @@ constexpr auto operator& (Ratio, ratio_add_max_frac_bits<N_frac>) noexcept
 }
 
 // operator for adding fractional bits to a ratio, e.g:
-// > (1_r/3_r) | 6_frac_bits
+// > (1_r/3_r) & 6_frac_bits
 
 template <char... Chars>
 constexpr auto operator"" _frac_bits()

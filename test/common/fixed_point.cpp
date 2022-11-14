@@ -80,6 +80,28 @@ TEST (fixed_point, add_rounding)
   EXPECT_NEAR (c.to_floatp(), -0.1, 0.0001);
 }
 //------------------------------------------------------------------------------
+TEST (fixed_point, add_unsigned)
+{
+  constexpr auto flags = fixpt_dynamic;
+  auto           a     = fixpt<1, 3, 12, flags>::from_float (0.6);
+  auto           b     = fixpt<0, 0, 15, flags>::from_float (0.7);
+  auto           c     = a + b;
+  c.normalize();
+  static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 15, flags>>);
+  EXPECT_NEAR (c.to_floatp(), 0.6 + 0.7, 0.00011);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, add_gaining_sign)
+{
+  constexpr auto flags = fixpt_dynamic;
+  auto           a     = fixpt<0, 3, 12, flags>::from_float (0.6);
+  auto           b     = fixpt<1, 0, 15, flags>::from_float (-0.7);
+  auto           c     = a + b;
+  c.normalize();
+  static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 15, flags>>);
+  EXPECT_NEAR (c.to_floatp(), -0.1, 0.0001);
+}
+//------------------------------------------------------------------------------
 TEST (fixed_point, sub_equal_frac_bits)
 {
   auto a = fixpt<1, 0, 15>::from_float (0.6);
@@ -131,6 +153,39 @@ TEST (fixed_point, sub_rounding)
   EXPECT_NEAR (c.to_floatp(), 1.3, 0.0002);
 }
 //------------------------------------------------------------------------------
+TEST (fixed_point, sub_unsigned)
+{
+  constexpr auto flags = fixpt_dynamic | fixpt_rounding;
+  auto           a     = fixpt<1, 3, 12, flags>::from_float (0.6);
+  auto           b     = fixpt<0, 0, 15, flags>::from_float (0.7);
+  auto           c     = a - b;
+  c.normalize();
+  static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 15, flags>>);
+  EXPECT_NEAR (c.to_floatp(), -0.1, 0.0002);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, sub_gaining_sign)
+{
+  constexpr auto flags = fixpt_dynamic | fixpt_rounding;
+  auto           a     = fixpt<0, 3, 12, flags>::from_float (0.6);
+  auto           b     = fixpt<1, 0, 15, flags>::from_float (-0.7);
+  auto           c     = a - b;
+  c.normalize();
+  static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 15, flags>>);
+  EXPECT_NEAR (c.to_floatp(), 1.3, 0.0002);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, sub_unsigned_gains_no_bits)
+{
+  constexpr auto flags = fixpt_dynamic | fixpt_rounding;
+  auto           a     = fixpt<0, 3, 12, flags>::from_float (0.7);
+  auto           b     = fixpt<0, 0, 15, flags>::from_float (0.6);
+  auto           c     = a - b;
+  c.normalize();
+  static_assert (std::is_same_v<decltype (c), fixpt<0, 3, 15, flags>>);
+  EXPECT_NEAR (c.to_floatp(), 0.1, 0.0002);
+}
+//------------------------------------------------------------------------------
 TEST (fixed_point, mul_equal_frac_bits)
 {
   auto a = fixpt<1, 1, 14>::from_float (1.6);
@@ -175,6 +230,28 @@ TEST (fixed_point, mul_rounding)
 {
   constexpr auto flags = fixpt_dynamic | fixpt_rounding;
   auto           a     = fixpt<1, 3, 12, flags>::from_float (1.6);
+  auto           b     = fixpt<1, 1, 14, flags>::from_float (-1.7);
+  auto           c     = a * b;
+  c.normalize();
+  static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 26, flags>>);
+  EXPECT_NEAR (c.to_floatp(), 1.6 * -1.7, 0.001);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, mul_unsigned)
+{
+  constexpr auto flags = fixpt_dynamic | fixpt_rounding;
+  auto           a     = fixpt<1, 3, 12, flags>::from_float (1.6);
+  auto           b     = fixpt<0, 1, 14, flags>::from_float (1.7);
+  auto           c     = a * b;
+  c.normalize();
+  static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 26, flags>>);
+  EXPECT_NEAR (c.to_floatp(), 1.6 * 1.7, 0.001);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, mul_gaining_sign)
+{
+  constexpr auto flags = fixpt_dynamic | fixpt_rounding;
+  auto           a     = fixpt<0, 3, 12, flags>::from_float (1.6);
   auto           b     = fixpt<1, 1, 14, flags>::from_float (-1.7);
   auto           c     = a * b;
   c.normalize();
@@ -236,6 +313,26 @@ TEST (fixed_point, div_rounding)
 {
   constexpr auto flags = fixpt_dynamic | fixpt_rounding;
   auto           a     = fixpt<1, 3, 12, flags>::from_float (1.6);
+  auto           b     = fixpt<1, 1, 14, flags>::from_float (-1.7);
+  auto           c     = a / b;
+  static_assert (std::is_same_v<decltype (c), fixpt<1, 17, 13, flags>>);
+  EXPECT_NEAR (c.to_floatp(), 1.6 / -1.7, 0.001);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, div_unsigned)
+{
+  constexpr auto flags = fixpt_dynamic | fixpt_rounding;
+  auto           a     = fixpt<1, 3, 12, flags>::from_float (1.6);
+  auto           b     = fixpt<0, 1, 14, flags>::from_float (1.7);
+  auto           c     = a / b;
+  static_assert (std::is_same_v<decltype (c), fixpt<1, 17, 13, flags>>);
+  EXPECT_NEAR (c.to_floatp(), 1.6 / 1.7, 0.001);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, div_gaining_sign)
+{
+  constexpr auto flags = fixpt_dynamic | fixpt_rounding;
+  auto           a     = fixpt<0, 3, 12, flags>::from_float (1.6);
   auto           b     = fixpt<1, 1, 14, flags>::from_float (-1.7);
   auto           c     = a / b;
   static_assert (std::is_same_v<decltype (c), fixpt<1, 17, 13, flags>>);
@@ -467,6 +564,7 @@ TEST (fixed_point, fixed_point_mixed_div_saturation)
 //------------------------------------------------------------------------------
 TEST (fixed_point, fixed_point_implicit_enabled)
 {
+  // implicit assignment and arithmetic with float and int types.
   constexpr uint intb  = 62;
   constexpr uint fracb = 1;
 
