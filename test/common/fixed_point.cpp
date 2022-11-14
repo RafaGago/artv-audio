@@ -292,7 +292,7 @@ TEST (fixed_point, fixed_point_decimals_ratio)
 TEST (fixed_point, fixed_point_pow2_ratio_add)
 {
   auto a = fixpt<1, 15, 16>::from_float (23.);
-  auto b = a + ratio<1, 2>();
+  auto b = a + 0.5_r;
   b.normalize();
   static_assert (b.n_int == 16);
   static_assert (b.n_frac == 16);
@@ -302,7 +302,7 @@ TEST (fixed_point, fixed_point_pow2_ratio_add)
 TEST (fixed_point, fixed_point_infinite_decimals_ratio_add)
 {
   auto a = fixpt<1, 15, 16, fixpt_mixed>::from_float (23.);
-  auto b = a + ratio<1, 3>();
+  auto b = a + (1_r / 3_r);
   b.normalize();
   static_assert (b.n_int == 16);
   static_assert (b.n_frac == 16);
@@ -312,7 +312,7 @@ TEST (fixed_point, fixed_point_infinite_decimals_ratio_add)
 TEST (fixed_point, fixed_point_pow2_ratio_sub)
 {
   auto a = fixpt<1, 15, 16>::from_float (23.);
-  auto b = a - ratio<1, 2>();
+  auto b = a - 0.5_r;
   b.normalize();
   static_assert (b.n_int == 16);
   static_assert (b.n_frac == 16);
@@ -322,7 +322,7 @@ TEST (fixed_point, fixed_point_pow2_ratio_sub)
 TEST (fixed_point, fixed_point_infinite_decimals_ratio_sub)
 {
   auto a = fixpt<1, 15, 16, fixpt_mixed>::from_float (23.);
-  auto b = a - ratio<1, 3>();
+  auto b = a - (1_r / 3_r);
   b.normalize();
   static_assert (b.n_int == 16);
   static_assert (b.n_frac == 16);
@@ -332,7 +332,7 @@ TEST (fixed_point, fixed_point_infinite_decimals_ratio_sub)
 TEST (fixed_point, fixed_point_pow2_ratio_mul)
 {
   auto a = fixpt<1, 2, 0>::from_float (2.);
-  auto b = a * ratio<1, 2>();
+  auto b = a * 0.5_r;
   b.normalize();
   static_assert (b.n_int == 1);
   static_assert (b.n_frac == 1);
@@ -343,7 +343,7 @@ TEST (fixed_point, fixed_point_infinite_decimals_ratio_mul)
 {
   using T = fixpt<1, 3, 0, fixpt_mixed>;
   auto a  = T::max();
-  auto b  = a * ratio_fracb<1, 3, 15>(); // 15 bits of fraction
+  auto b  = a * ((1_r / 3_r) & 15_frac_bits);
   b.normalize();
   static_assert (b.n_int == 2);
   static_assert (b.n_frac == 15);
@@ -355,7 +355,7 @@ TEST (fixed_point, fixed_point_integer_ratio_mul)
   using T = fixpt<1, 3, 1, fixpt_mixed>;
   auto a  = T::max();
   // 6 = 110. shifts 3 bits, reduces the fraction 1 bit (trailing 0)
-  auto b = a * ratio<6>();
+  auto b = a * 6_r;
   b.normalize();
   static_assert (b.n_int == 6);
   static_assert (b.n_frac == 0);
@@ -366,7 +366,7 @@ TEST (fixed_point, fixed_point_integer_non_pure_ratio_mul)
 {
   using T = fixpt<1, 3, 1, fixpt_mixed>;
   auto a  = T::max();
-  auto b  = a * ratio_fracb<14, 10, 15>();
+  auto b  = a * ((14_r / 10_r) & 15_frac_bits);
   b.normalize();
   static_assert (b.n_int == 4);
   static_assert (b.n_frac == 16);
@@ -377,7 +377,7 @@ TEST (fixed_point, fixed_point_integer_non_pure_ratio_mul)
 TEST (fixed_point, fixed_point_pow2_ratio_div)
 {
   auto a = fixpt<1, 15, 16>::from_float (2.);
-  auto b = a / ratio<1, 2>();
+  auto b = a / 0.5_r;
   b.normalize();
   static_assert (b.n_int == 16);
   static_assert (b.n_frac == 15);
@@ -387,7 +387,7 @@ TEST (fixed_point, fixed_point_pow2_ratio_div)
 TEST (fixed_point, fixed_point_infinite_decimals_ratio_div)
 {
   auto a = fixpt<1, 3, 16, fixpt_mixed>::from_float (3.);
-  auto b = a / ratio<3, 1>();
+  auto b = a / 3_r;
   b.normalize();
   static_assert (b.n_int == 2);
   static_assert (b.n_frac == 32);

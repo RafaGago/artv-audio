@@ -7,6 +7,7 @@
 
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/compiler.hpp"
+#include "artv-common/misc/comptime_string.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/num.hpp"
@@ -1289,6 +1290,33 @@ struct ratio_fracb {
   template <std::intmax_t Num_v, std::intmax_t Den_v>
   using rebind = ratio_fracb<Num_v, Den_v, max_frac_bits>;
 };
+
+template <uint Max_frac_bits>
+struct ratio_add_max_frac_bits {
+  static constexpr uint value = Max_frac_bits;
+};
+
+template <
+  uint N_frac,
+  class Ratio,
+  std::enable_if_t<is_ratio_v<Ratio>>* = nullptr>
+constexpr auto operator& (Ratio, ratio_add_max_frac_bits<N_frac>) noexcept
+{
+  return ratio_fracb<Ratio::num, Ratio::den, N_frac> {};
+}
+
+// operator for adding fractional bits to a ratio, e.g:
+// > (1_r/3_r) | 6_frac_bits
+
+template <char... Chars>
+constexpr auto operator"" _frac_bits()
+{
+  using str            = comptime::str<Chars...>;
+  constexpr auto value = comptime::atoi<str>();
+  static_assert (value > 0, "_frac_bits: negative or zero values not allowed");
+  static_assert (value < 1024, "_frac_bits: Bug?");
+  return ratio_add_max_frac_bits<value> {};
+}
 
 //------------------------------------------------------------------------------
 // Operators for ratio<num, den>, std::ratio<num, den>, ratio_fracb<num, den,

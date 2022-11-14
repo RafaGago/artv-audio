@@ -6,7 +6,7 @@
 #include <ratio>
 #include <type_traits>
 
-#include "artv-common/misc/mp11.hpp"
+#include "artv-common/misc/comptime_string.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "boost/mp11/algorithm.hpp"
 #include "boost/mp11/list.hpp"
@@ -374,39 +374,6 @@ constexpr auto operator/ (Ratio1 lhs, Ratio2 rhs) noexcept
   }
 }
 //------------------------------------------------------------------------------
-namespace detail {
-
-constexpr uint comptime_exp10 (uint n)
-{
-  uint exp10 = 1;
-  for (uint i = 0; i < n; ++i) {
-    exp10 *= 10;
-  }
-  return exp10;
-}
-
-template <class Str>
-constexpr std::intmax_t comptime_parse_int()
-{
-  constexpr auto len    = mp11::mp_size<Str>::value;
-  std::intmax_t  sum    = 0;
-  std::intmax_t  factor = 1;
-
-  static_assert (len > 0, "Empty strings not allowed");
-  constexpr bool negative = mp11::mp_first<Str>::value == '-';
-  using str = std::conditional_t<negative, mp11::mp_pop_front<Str>, Str>;
-
-  factor = comptime_exp10 (len - 1 - negative);
-  mp11::mp_for_each<Str> ([&sum, &factor] (auto v) {
-    constexpr char vchar = v.value;
-    static_assert (vchar >= '0' && vchar <= '9', "Only digits allowed");
-    sum += (vchar - '0') * factor;
-    factor /= 10;
-  });
-  return negative ? -sum : sum;
-}
-} // namespace detail
-//------------------------------------------------------------------------------
 // Literal for creating integer ratios that can then be combined with the
 // operators. E.g. for creating a 1/2 ratio instead of doing:
 //
@@ -427,25 +394,28 @@ constexpr std::intmax_t comptime_parse_int()
 //
 // (1_r / 3_r)
 //
+// Which will result in "ratio<1, 3>" instead of e.g.
+// "ratio<333333333, 1000000000>"
+//
 // Implementing something more complicated than this is hairy, as e.g.
 // approximating 0.33333333 to 1/3 would require an epsilon/error tolerance.
-// That is not easily achieved with literals.
+// That is not easily achieved with user defined literals.
 
 template <char... Chars>
 constexpr auto operator"" _r()
 {
   constexpr uint len     = sizeof...(Chars);
-  using str              = mp_list<std::integral_constant<char, Chars>...>;
-  using dot              = std::integral_constant<char, '.'>;
+  using str              = comptime::str<Chars...>;
+  using dot              = comptime::chr<'.'>;
   constexpr auto dot_pos = mp11::mp_find<str, dot>::value;
   if constexpr (dot_pos == len) {
     // a plain integer
-    return ratio<detail::comptime_parse_int<str>(), 1> {};
+    return ratio<comptime::atoi<str>(), 1> {};
   }
   else {
     using num_str      = mp11::mp_erase_c<str, dot_pos, dot_pos + 1>;
-    constexpr auto num = detail::comptime_parse_int<num_str>();
-    constexpr uint den = detail::comptime_exp10 (len - 1 - dot_pos);
+    constexpr auto num = comptime::atoi<num_str>();
+    constexpr uint den = comptime::exp10 (len - 1 - dot_pos);
     return ratio<num, den> {};
   }
 }
