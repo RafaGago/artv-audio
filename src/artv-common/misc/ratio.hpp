@@ -136,7 +136,6 @@ template <
 constexpr auto operator- (T lhs, Ratio rhs) noexcept
 {
   return lhs - detail::ratio_to_float<T> (rhs);
-  ;
 }
 
 template <
@@ -372,6 +371,14 @@ constexpr auto operator/ (Ratio1 lhs, Ratio2 rhs) noexcept
       std::is_same_v<Ratio1, void>,
       "Ratio operator only available for ratios that can rebind");
   }
+}
+//------------------------------------------------------------------------------
+template <class Ratio, std::enable_if_t<is_ratio_v<Ratio>>* = nullptr>
+constexpr auto operator- (Ratio rhs) noexcept
+{
+  constexpr auto num = -Ratio::num;
+  constexpr auto den = Ratio::den;
+  return typename Ratio::template rebind<num, den> {};
 }
 //------------------------------------------------------------------------------
 // Literal for creating integer ratios that can then be combined with the
