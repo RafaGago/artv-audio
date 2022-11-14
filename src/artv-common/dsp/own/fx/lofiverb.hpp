@@ -28,12 +28,28 @@
 
 namespace artv {
 namespace detail { namespace lofiverb {
+
 //------------------------------------------------------------------------------
-using fixpt_t        = fixpt_s<1, 3, 28, fixpt_unsafe>;
-using fixpt_tr       = fixpt_s<1, 3, 28, fixpt_unsafe>;
-using fixpt_sto      = fixpt_s<1, 0, 15, fixpt_unsafe>;
-using fixpt_spls     = fixpt_d<0, 14, 0>;
-using fixpt_spls_mod = fixpt_d<0, 9, 0>;
+struct no_64bit_conversions {
+  using conversions = mp_list<
+    fp_int_conversion_step<s8, u8, float>,
+    fp_int_conversion_step<s16, u16, float>,
+    fp_int_conversion_step<s32, u32, double>>;
+};
+//------------------------------------------------------------------------------
+// fixed point type for computation
+using fixpt_t = fixpt_m<1, 0, 15, fixpt_relaxed_assign, no_64bit_conversions>;
+// fixed point type for computation
+using fixpt_tr = fixpt_m<
+  1,
+  0,
+  15,
+  fixpt_rounding | fixpt_relaxed_assign,
+  no_64bit_conversions>;
+// fixed point type for storage
+using fixpt_sto      = fixpt_s<1, 0, 15, 0, no_64bit_conversions>;
+using fixpt_spls     = fixpt_m<0, 14, 0, 0, no_64bit_conversions>;
+using fixpt_spls_mod = fixpt_m<0, 9, 0, 0, no_64bit_conversions>;
 //------------------------------------------------------------------------------
 struct delay_data {
   fixpt_spls     spls;
@@ -156,7 +172,7 @@ public:
       T v;
       if constexpr (is_fixpt_v<T>) {
         auto gv = (g.value() == 0) ? get_gain<Idx, T>() : g;
-        v       = (num {1} - gv) * io[i];
+        v       = (1_r - gv) * io[i];
         v       = v + y1 * gv;
       }
       else {
@@ -188,7 +204,8 @@ public:
       T v;
       if constexpr (is_fixpt_v<T>) {
         auto gv = (g.value() == 0) ? get_gain<Idx, T>() : g;
-        v       = (num {1} - gv) * io[i];
+        v       = (1_r - gv) * io[i];
+        v       = v + y1 * gv;
       }
       else {
         float gv = (g == 0.f) ? get_gain<Idx, T>() : g;
@@ -358,8 +375,8 @@ private:
       n_spls -= i;
       fixpt_t n_spls_frac = (fixpt_t) fixpt_spls.fractional();
 
-      fixpt_t d = n_spls_frac + num {0.418f};
-      fixpt_t a = (num {1} - d) / (num {1} + d); // 0.4104 to -1
+      fixpt_t d = n_spls_frac + 0.418_r;
+      fixpt_t a = (1_r - d) / (1_r + d).resize<0, -1>(); // 0.4104 to -1
 
       auto z0 = get<Idx, fixpt_t> (n_spls - 1);
       auto z1 = get<Idx, fixpt_t> (n_spls);
@@ -385,8 +402,8 @@ private:
       float n_spls_frac = fixpt_spls - n_spls;
       n_spls -= i;
 
-      float d = n_spls_frac + 0.418f;
-      float a = (1.f - d) / (1.f + d); // 0.4104 to -1
+      float d = n_spls_frac + 0.418_r;
+      float a = (1_r - d) / (1_r + d); // 0.4104 to -1
 
       auto z0 = get<Idx, float> (n_spls - 1);
       auto z1 = get<Idx, float> (n_spls);
@@ -981,21 +998,19 @@ private:
       // to MS
 
       late_in[i] = half (io[i][0] + io[i][1]);
-      auto mod   = (T) (num {0.25} + (num {1} - par.mod[i]) * num {0.75});
+      // TODO define a global one = 0.99f. Use everywhere.
+      auto mod = (T) (0.25_r + (1_r - par.mod[i]) * 0.75_r);
       // ER + late lfo
       auto lfo = tick_lfo<T>();
       lfo1[i]  = T {lfo[0]};
-      lfo2[i]  = T {lfo[1]};
-      lfo3[i]  = T {lfo[2]};
-      lfo4[i]  = T {lfo[3]};
-      lfo2[i] *= num {0.5} + half (par.er[i]);
-      lfo3[i] *= mod;
-      lfo4[i] *= mod;
+      lfo2[i]  = T {lfo[1]} * (0.5_r + half (par.er[i]));
+      lfo3[i]  = T {lfo[2]} * mod;
+      lfo4[i]  = T {lfo[3]} * mod;
 
       // decay fixup
-      auto decay   = num {1} - par.decay[i];
-      decay        = num {1} - decay * decay;
-      par.decay[i] = num {0.6f} + decay * num {0.39f};
+      auto decay   = 1_r - par.decay[i];
+      decay        = 1_r - decay * decay;
+      par.decay[i] = 0.6_r + decay * 0.39_r;
     }
 
     // diffusion -----------------------------
@@ -1019,7 +1034,7 @@ private:
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       // apply ER feedback
-      er1[i] = (late_in[i] + er2[i] * num {0.2}) * par.decay[i];
+      er1[i] = (late_in[i] + er2[i] * 0.2_r) * par.decay[i];
     }
     er2.cut_head (1); // drop feedback sample from previous block
 
@@ -1046,8 +1061,8 @@ private:
 
     for (uint i = 0; i < io.size(); ++i) {
       late[i] = late_in[i] + r[i] * par.decay[i];
-      late[i] -= (er1[i] + er2[i]) * par.er[i] * num {0.4};
-      g[i] = (T) (num {0.618} + par.character[i] * num {(0.707 - 0.618) * 2.});
+      late[i] = late[i] - (er1[i] + er2[i]) * par.er[i] * 0.4_r;
+      g[i]    = (T) (0.618_r + par.character[i] * ((0.707_r - 0.618_r) * 2_r));
     }
     r.cut_head (1); // drop feedback sample from previous block
 
@@ -1068,7 +1083,7 @@ private:
     for (uint i = 0; i < io.size(); ++i) {
       // prepare input with feedback
       late[i] = late_in[i] + l[i] * par.decay[i];
-      late[i] += (er1[i] + er2[i]) * par.er[i] * num {0.4};
+      late[i] = late[i] + ((er1[i] + er2[i]) * par.er[i] * 0.4_r);
     }
     l.cut_head (1); // drop feedback sample from previous block
 
@@ -1084,10 +1099,8 @@ private:
     // Mixdown
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      io[i][0]
-        = l[i] + (-er1[i] * num {0.825} - er2[i] * num {0.423}) * par.er[i];
-      io[i][1]
-        = r[i] + (-er1[i] * num {0.855} + er2[i] * num {0.443}) * par.er[i];
+      io[i][0] = l[i] + (-er1[i] * 0.825_r - er2[i] * 0.423_r) * par.er[i];
+      io[i][1] = r[i] + (-er1[i] * 0.855_r + er2[i] * 0.443_r) * par.er[i];
     }
   }
   //----------------------------------------------------------------------------
@@ -1095,7 +1108,7 @@ private:
   static T half (T v)
   {
     // TODO: check the compiler output and probably remove
-    if constexpr (std::is_same_v<fixpt_t, T>) {
+    if constexpr (is_fixpt_v<T>) {
       return v >> 1;
     }
     else {
@@ -1118,7 +1131,10 @@ private:
   auto tick_lfo()
   {
     if constexpr (std::is_same_v<fixpt_t, T>) {
-      return _lfo.tick_sine_fixpt().spec_cast<fixpt_t>().value();
+      auto ret = _lfo.tick_sine_fixpt().spec_cast<fixpt_t>().value();
+      // At this point "ret" has fixed traits, but different fixed point
+      // conversions configured
+      return vec_cast<fixpt_t::value_type> (ret);
     }
     else {
       return _lfo.tick_sine();
