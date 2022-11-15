@@ -166,8 +166,11 @@ static constexpr bool fixpt_are_compatible_v
 // See the flags documentation for the capabilities. Also the tests for some
 // usage examples.
 //
-// "Traits" is a description of the underlying types that can be used, see e.g.
-//  "std_fp_types_trait" and "vec_fp_types_trait"
+// "Traits" is a compile time-list sorted from smallest to biggest bit
+// resolution, enumerating the types that are allowed for doing conversions when
+// expanding the type bits or when doing intermediate math and specifying its
+// relation to a floating point type. See e.g. "std_fp_types_trait" and
+// "vec_fp_types_trait".
 //------------------------------------------------------------------------------
 template <uint N_sign, uint N_int, uint N_frac, uint Flags, class Traits>
 class fixpt {
@@ -478,7 +481,7 @@ public:
   constexpr void load_int (value_type v) noexcept { *this = from_int (v); }
   //----------------------------------------------------------------------------
   // cast to any fixp, same caveats that static casting regular integers
-  // apply e.g. signedness and range issues.
+  // apply e.g. signedness and range issues might not be respected.
   template <
     class T,
     std::enable_if_t<fixpt_are_compatible_v<T, mytype>>* = nullptr>
@@ -530,6 +533,9 @@ public:
   {
     return cast (convert_raw<n_int, n_frac, n_sign, Flags_v> {});
   }
+  //----------------------------------------------------------------------------
+  // Shorthand functions to just convert flags (could be considered bloat), Just
+  // for being able to write better looking client code.
   //----------------------------------------------------------------------------
   constexpr dynamic_twin to_dynamic() const noexcept
   {
@@ -611,7 +617,8 @@ public:
   };
   constexpr with_sign add_sign() const noexcept { return cast<with_sign>(); };
   //----------------------------------------------------------------------------
-  // Add or remove resolution both on the integer and fractional part
+  // Add or remove resolution both on the integer and fractional part. Negative
+  // values remove resolution.
   template <int Int, int Frac = 0>
   constexpr auto resize() const noexcept
   {
@@ -619,20 +626,21 @@ public:
     static_assert (Frac >= 0 ? true : (-Frac <= n_frac));
     return cast (convert<n_int + Int, n_frac + Frac> {});
   }
-  // Add or remove resolution both on the integer and fractional part
-  template <uint Int, uint Frac = 0>
+  // Set resolution in absolute terms
+  template <uint Int, uint Frac>
   constexpr auto set_size() const noexcept
   {
     return cast (convert<Int, Frac> {});
   }
   //----------------------------------------------------------------------------
+  // Get value as a float
   constexpr float_type to_floatp() const noexcept
   {
     constexpr scalar_float factor = (scalar_float) 1. / float_factor;
     return factor * vec_cast<scalar_float> (_v);
   }
   //----------------------------------------------------------------------------
-  // equivalent to floor
+  // Get value as a an int (equivalent to floor)
   constexpr value_type to_int() const noexcept { return ashr<n_frac> (_v); }
   //----------------------------------------------------------------------------
   // returns the fractional part only. for signed types it might be negative.
@@ -685,42 +693,57 @@ public:
   // raw underlying integer value(s)
   constexpr value_type value() const noexcept { return _v; }
   //----------------------------------------------------------------------------
+  // maximum value representable
   static constexpr fixpt max() noexcept
   {
     return from (vec_set<vector_size> (raw_max));
   };
+  // minimum value representable
   static constexpr fixpt min() noexcept
   {
     return from (vec_set<vector_size> (raw_min));
   };
+  // value of the step. basically 1 on the underlying integer type.
   static constexpr fixpt epsilon() noexcept
   {
     return from (vec_set<vector_size> ((scalar_type) 1));
   }
+  // maximum value representable as a raw integer representation. Equivalent to
+  // max().value()
   static constexpr value_type max_raw() noexcept
   {
     return vec_set<vector_size> (raw_max);
   }
+  // maximum value representable as a raw integer representation. Equivalent to
+  // min().value()
   static constexpr value_type min_raw() noexcept
   {
     return vec_set<vector_size> (raw_min);
   }
+  // floor of "max_raw()" on the internal representation (zeroes at the right)
   static constexpr value_type max_int() noexcept
   {
     return vec_set<vector_size> (int_max);
   }
+  // floor of "min_raw()" on the internal representation (zeroes at the right)
   static constexpr value_type min_int() noexcept
   {
     return vec_set<vector_size> (int_min);
   }
+  // Maximum value representable as float. Beware that depending on the traits
+  // configuration there might be resolution issues because of the provided
+  // floating point type may not have enough mantissa bits to represent it.
   static constexpr float_type max_float() noexcept
   {
     return vec_set<vector_size> (flt_max);
   }
+  // see "max_float"
   static constexpr float_type min_float() noexcept
   {
     return vec_set<vector_size> (flt_min);
   }
+  // The location of the fixed point normalized. In other words, the factor that
+  // makes the raw integer representation to result in the floating point value.
   static constexpr float_type factor() noexcept
   {
     return vec_set<vector_size> (float_factor);
