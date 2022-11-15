@@ -10,7 +10,6 @@
 #include "artv-common/misc/vec_math.hpp"
 
 namespace artv {
-
 //------------------------------------------------------------------------------
 TEST (fixed_point, float_set_and_cast)
 {
@@ -585,4 +584,5 @@ TEST (fixed_point, fixed_point_implicit_enabled)
   EXPECT_NEAR (a.to_floatp(), 4, .00015);
 }
 //------------------------------------------------------------------------------
+
 } // namespace artv

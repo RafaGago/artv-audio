@@ -38,14 +38,9 @@ struct no_64bit_conversions {
 };
 //------------------------------------------------------------------------------
 // fixed point type for computation
-using fixpt_t = fixpt_m<1, 0, 15, fixpt_relaxed_assign, no_64bit_conversions>;
+using fixpt_t = fixpt_d<1, 0, 15, 0, no_64bit_conversions>;
 // fixed point type for computation
-using fixpt_tr = fixpt_m<
-  1,
-  0,
-  15,
-  fixpt_rounding | fixpt_relaxed_assign,
-  no_64bit_conversions>;
+using fixpt_tr = fixpt_d<1, 0, 15, fixpt_rounding, no_64bit_conversions>;
 // fixed point type for storage
 using fixpt_sto      = fixpt_s<1, 0, 15, 0, no_64bit_conversions>;
 using fixpt_spls     = fixpt_m<0, 14, 0, 0, no_64bit_conversions>;
@@ -172,8 +167,8 @@ public:
       T v;
       if constexpr (is_fixpt_v<T>) {
         auto gv = (g.value() == 0) ? get_gain<Idx, T>() : g;
-        v       = (1_r - gv) * io[i];
-        v       = v + y1 * gv;
+        v       = (T) ((1_r - gv) * io[i]);
+        v       = (T) (v + (y1 * gv));
       }
       else {
         float gv = (g == 0.f) ? get_gain<Idx, T>() : g;
@@ -204,8 +199,8 @@ public:
       T v;
       if constexpr (is_fixpt_v<T>) {
         auto gv = (g.value() == 0) ? get_gain<Idx, T>() : g;
-        v       = (1_r - gv) * io[i];
-        v       = v + y1 * gv;
+        v       = (T) ((1_r - gv) * io[i]);
+        v       = (T) (v + (y1 * gv));
       }
       else {
         float gv = (g == 0.f) ? get_gain<Idx, T>() : g;
@@ -213,7 +208,7 @@ public:
         v        = v + y1 * gv;
       }
       y1    = v;
-      io[i] = io[i] - v;
+      io[i] = (T) (io[i] - v);
     }
     encode_write (_stage[Idx].z[0], y1);
   }
@@ -375,12 +370,12 @@ private:
       n_spls -= i;
       fixpt_t n_spls_frac = (fixpt_t) fixpt_spls.fractional();
 
-      fixpt_t d = n_spls_frac + 0.418_r;
-      fixpt_t a = (1_r - d) / (1_r + d).resize<0, -1>(); // 0.4104 to -1
+      auto    d = (n_spls_frac + 0.418_r) & fixpt_resize_token<0, -1> {};
+      fixpt_t a = (fixpt_t) ((1_r - d) / (1_r + d)); // 0.4104 to -1
 
       auto z0 = get<Idx, fixpt_t> (n_spls - 1);
       auto z1 = get<Idx, fixpt_t> (n_spls);
-      y1      = z0 * a + z1 - a * y1;
+      y1      = (fixpt_t) (z0 * a + z1 - a * y1);
       dst[i]  = y1;
     }
     encode_write (_stage[Idx].z[y1_pos], y1);
@@ -997,20 +992,20 @@ private:
     for (uint i = 0; i < io.size(); ++i) {
       // to MS
 
-      late_in[i] = half (io[i][0] + io[i][1]);
+      late_in[i] = (T) ((io[i][0] + io[i][1]) * 0.5_r);
       // TODO define a global one = 0.99f. Use everywhere.
       auto mod = (T) (0.25_r + (1_r - par.mod[i]) * 0.75_r);
       // ER + late lfo
       auto lfo = tick_lfo<T>();
       lfo1[i]  = T {lfo[0]};
-      lfo2[i]  = T {lfo[1]} * (0.5_r + half (par.er[i]));
-      lfo3[i]  = T {lfo[2]} * mod;
-      lfo4[i]  = T {lfo[3]} * mod;
+      lfo2[i]  = (T) (T {lfo[1]} * (0.5_r + par.er[i] * 0.5_r));
+      lfo3[i]  = (T) (T {lfo[2]} * mod);
+      lfo4[i]  = (T) (T {lfo[3]} * mod);
 
       // decay fixup
-      auto decay   = 1_r - par.decay[i];
-      decay        = 1_r - decay * decay;
-      par.decay[i] = 0.6_r + decay * 0.39_r;
+      auto decay   = (T) (1_r - par.decay[i]);
+      decay        = (T) (1_r - decay * decay);
+      par.decay[i] = (T) (0.6_r + decay * 0.39_r);
     }
 
     // diffusion -----------------------------
@@ -1034,7 +1029,7 @@ private:
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       // apply ER feedback
-      er1[i] = (late_in[i] + er2[i] * 0.2_r) * par.decay[i];
+      er1[i] = (T) ((late_in[i] + er2[i] * 0.2_r) * par.decay[i]);
     }
     er2.cut_head (1); // drop feedback sample from previous block
 
@@ -1060,8 +1055,8 @@ private:
     rev.fetch_block_plus_one<22> (r);
 
     for (uint i = 0; i < io.size(); ++i) {
-      late[i] = late_in[i] + r[i] * par.decay[i];
-      late[i] = late[i] - (er1[i] + er2[i]) * par.er[i] * 0.4_r;
+      late[i] = (T) (late_in[i] + (T) (r[i] * par.decay[i]));
+      late[i] = (T) (late[i] - (T) ((er1[i] + er2[i]) * par.er[i]) * 0.4_r);
       g[i]    = (T) (0.618_r + par.character[i] * ((0.707_r - 0.618_r) * 2_r));
     }
     r.cut_head (1); // drop feedback sample from previous block
@@ -1082,8 +1077,8 @@ private:
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       // prepare input with feedback
-      late[i] = late_in[i] + l[i] * par.decay[i];
-      late[i] = late[i] + ((er1[i] + er2[i]) * par.er[i] * 0.4_r);
+      late[i] = (T) (late_in[i] + (T) (l[i] * par.decay[i]));
+      late[i] = (T) (late[i] + (T) (((er1[i] + er2[i]) * par.er[i]) * 0.4_r));
     }
     l.cut_head (1); // drop feedback sample from previous block
 
@@ -1099,20 +1094,10 @@ private:
     // Mixdown
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      io[i][0] = l[i] + (-er1[i] * 0.825_r - er2[i] * 0.423_r) * par.er[i];
-      io[i][1] = r[i] + (-er1[i] * 0.855_r + er2[i] * 0.443_r) * par.er[i];
-    }
-  }
-  //----------------------------------------------------------------------------
-  template <class T>
-  static T half (T v)
-  {
-    // TODO: check the compiler output and probably remove
-    if constexpr (is_fixpt_v<T>) {
-      return v >> 1;
-    }
-    else {
-      return v * 0.5f;
+      io[i][0]
+        = (T) (l[i] + (T) ((-er1[i] * 0.825_r - er2[i] * 0.423_r) * par.er[i]));
+      io[i][1]
+        = (T) (r[i] + (T) ((-er1[i] * 0.855_r + er2[i] * 0.443_r) * par.er[i]));
     }
   }
   //----------------------------------------------------------------------------
