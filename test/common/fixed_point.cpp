@@ -439,7 +439,7 @@ TEST (fixed_point, fixed_point_infinite_decimals_ratio_mul)
 {
   using T = fixpt<1, 3, 0, fixpt_mixed>;
   auto a  = T::max();
-  auto b  = a * ((1_r / 3_r) & 15_frac_bits);
+  auto b  = a * ((1_r / 3_r) & 15_max_ratio_fracb);
   b.normalize();
   static_assert (b.n_int == 2);
   static_assert (b.n_frac == 15);
@@ -462,7 +462,7 @@ TEST (fixed_point, fixed_point_integer_non_pure_ratio_mul)
 {
   using T = fixpt<1, 3, 1, fixpt_mixed>;
   auto a  = T::max();
-  auto b  = a * ((14_r / 10_r) & 15_frac_bits);
+  auto b  = a * ((14_r / 10_r) & 15_max_ratio_fracb);
   b.normalize();
   static_assert (b.n_int == 4);
   static_assert (b.n_frac == 16);
@@ -584,5 +584,4 @@ TEST (fixed_point, fixed_point_implicit_enabled)
   EXPECT_NEAR (a.to_floatp(), 4, .00015);
 }
 //------------------------------------------------------------------------------
-
 } // namespace artv
