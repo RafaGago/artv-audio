@@ -1034,16 +1034,15 @@ private:
     // feedback handling
     rev.fetch_block_plus_one<7> (er2);
 
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < io.size(); ++i) {
-      // apply ER feedback
-      er1[i] = (T) ((late_in[i] + er2[i] * 0.2_r) * par.decay[i]);
-    }
+    span_visit (er1, [&] (auto& v, uint i) {
+      v = (T) ((late_in[i] + er2[i] * 0.2_r) * par.decay[i]);
+    });
     er2.cut_head (1); // drop feedback sample from previous block
 
     rev.run_mod<4> (er1, xspan {lfo2});
     rev.run_lp<5> (er1, load_float<T> (0.0001f + 0.17f * _param.damp));
     xspan_memcpy (er1b, er1);
+    span_visit (er1b, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
     rev.run_mod<6> (er1b, xspan {lfo1});
     rev.push<7> (er1b.to_const()); // feedback point
 
@@ -1077,8 +1076,10 @@ private:
     rev.run_mod<8> (late, xspan {lfo3}, g);
     rev.run<9> (late);
     rev.run_lp<10> (late, late_damp);
+    span_visit (late, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
     rev.run<11> (late, [g] (uint i) { return -g[i]; });
     rev.run<12> (late);
+    span_visit (late, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
     rev.run<13> (late);
     rev.push<14> (late.to_const()); // feedback point
 
@@ -1093,9 +1094,11 @@ private:
     rev.run_mod<15> (late, xspan {lfo4}, g);
     rev.run<16> (late);
     rev.run_lp<17> (late, late_damp);
+    span_visit (late, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
     rev.run<18> (late, [g] (uint i) { return -g[i]; });
     rev.run<19> (late);
     rev.run<20> (late);
+    span_visit (late, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
     rev.run_hp<21> (late);
     rev.push<22> (late.to_const()); // feedback point
 
@@ -1141,6 +1144,17 @@ private:
     auto f_er   = 0.3f + mod * 0.3f;
     auto f_late = 0.1f + mod * 1.2f;
     _lfo.set_freq (f32_x4 {f_er, f_er, f_late, f_late}, t_spl);
+  }
+  //----------------------------------------------------------------------------
+  // just a convenience function for iterating block loops while not bloating
+  // the code with more loop unroll hints than necessary
+  template <class T, class F>
+  void span_visit (xspan<T> block, F&& visitor)
+  {
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < block.size(); ++i) {
+      visitor (block[i], i);
+    }
   }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
