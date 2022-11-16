@@ -632,7 +632,10 @@ public:
   }
   //----------------------------------------------------------------------------
   struct decay_tag {};
-  void set (decay_tag, float v) { _param_smooth.target().decay = v * 0.01f; }
+  void set (decay_tag, float v)
+  {
+    _param_smooth.target().decay = v * 0.01f * one_flt;
+  }
 
   static constexpr auto get_parameter (decay_tag)
   {
@@ -642,7 +645,7 @@ public:
   struct mod_tag {};
   void set (mod_tag, float v)
   {
-    v *= 0.01f;
+    v *= 0.01f * one_flt;
     if (v == _param_smooth.target().mod) {
       return;
     }
@@ -658,7 +661,7 @@ public:
   struct character_tag {};
   void set (character_tag, float v)
   {
-    _param_smooth.target().character = v * 0.01f;
+    _param_smooth.target().character = v * 0.01f * one_flt;
   }
 
   static constexpr auto get_parameter (character_tag)
@@ -667,7 +670,7 @@ public:
   }
   //----------------------------------------------------------------------------
   struct damp_tag {};
-  void set (damp_tag, float v) { _param.damp = v * 0.01f; }
+  void set (damp_tag, float v) { _param.damp = v * 0.01f * one_flt; }
 
   static constexpr auto get_parameter (damp_tag)
   {
@@ -706,6 +709,7 @@ public:
   {
     v *= 0.01f;
     v *= v;
+    v *= one_flt;
     _param_smooth.target().er = v;
   }
 
@@ -852,6 +856,10 @@ private:
   static constexpr uint  n_channels     = 2;
   static constexpr uint  srate          = 33600;
   static constexpr float t_spl          = (float) (1. / srate);
+  // this is using 16 bits fixed-point arithmetic, positive values can't
+  // represent one, so instead of correcting everywhere the parameters are
+  // scaled instead to never reach 1.
+  static constexpr float one_flt = 0.9999f;
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters;
   struct smoothed_parameters;
