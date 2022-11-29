@@ -7016,6 +7016,16 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  diffuse_delay_tap_diff,
+  n_stereo_busses,
+  param_common (
+    "Tap diff",
+    declptr<diffuse_delay>(),
+    declptr<diffuse_delay::tap_diff_tag>()),
+  diffuse_delay::get_parameter (diffuse_delay::tap_diff_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   diffuse_delay_gain,
   n_stereo_busses,
   param_common (
@@ -7219,9 +7229,9 @@ using diffuse_delay_params = mp_list<
   diffuse_delay_mode,
   diffuse_delay_sixteenths,
   diffuse_delay_diffusion,
+  diffuse_delay_tap_diff,
   diffuse_delay_feedback,
   diffuse_delay_transients,
-  diffuse_delay_gain,
   diffuse_delay_ducking_threshold,
   diffuse_delay_ducking_speed,
 
@@ -7238,7 +7248,8 @@ using diffuse_delay_params = mp_list<
   diffuse_bp_freq,
   diffuse_bp_drive,
   diffuse_bp_reso,
-  diffuse_bp_envfollow>;
+  diffuse_bp_envfollow,
+  diffuse_delay_gain>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
   mod_stages,
@@ -7662,10 +7673,11 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  lofiverb_params>;
+  lofiverb_params,
+  diffuse_delay_params>;
 
 static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "Verb");
+  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "Verb", "DDlay");
 #else
 // clang-format off
 using all_fx_typelists = mp_list<

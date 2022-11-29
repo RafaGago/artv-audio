@@ -64,6 +64,22 @@ public:
     return float_param ("sixteenths", 0.5f, max_t_beats * 16, 6.f, 0.01f, 0.5f);
   }
   //----------------------------------------------------------------------------
+  struct tap_diff_tag {};
+  void set (tap_diff_tag, float v)
+  {
+    v = v * 0.01f;
+    if (v == _extpar.tap_diff) {
+      return;
+    }
+    _extpar.tap_diff = v;
+    update_taps();
+  }
+
+  static constexpr auto get_parameter (tap_diff_tag)
+  {
+    return float_param ("%", -50.f, 50.f, 0.f, 0.01f);
+  }
+  //----------------------------------------------------------------------------
   struct feedback_tag {};
   void set (feedback_tag, float v)
   {
@@ -413,6 +429,7 @@ public:
     feedback_tag,
     gain_tag,
     sixteenths_tag,
+    tap_diff_tag,
     damp_tag,
     freq_spread_tag,
     tilt_db_tag,
@@ -602,9 +619,22 @@ private:
     constexpr float max_delay_sec = 20.f;
     f32_x4          desync_spls_max {0.f, 161.803398f, 261.803f, 423.606f};
 
-    auto delay_spls = std::max<float> (_extpar.delay_spls, min_main_delay_spls);
-    f32_x4 spl_budget = vec_set<n_taps> (delay_spls - min_main_delay_spls);
+    auto delay_spls_l
+      = std::max<float> (_extpar.delay_spls, min_main_delay_spls);
+    auto delay_spls_s = std::max<float> (
+      _extpar.delay_spls * (1.f - abs (_extpar.tap_diff)), min_main_delay_spls);
+    // tap_diff
+    f32_x4 delay_spls;
+    if (_extpar.tap_diff >= 0.f) {
+      delay_spls
+        = f32_x4 {delay_spls_l, delay_spls_l, delay_spls_s, delay_spls_s};
+    }
+    else {
+      delay_spls
+        = f32_x4 {delay_spls_s, delay_spls_s, delay_spls_l, delay_spls_l};
+    }
     // desync
+    auto spl_budget  = delay_spls - (float) min_main_delay_spls;
     auto desync_spls = spl_budget;
     spl_budget = vec_max (spl_budget - (desync_spls_max * _extpar.desync), 0.f);
     desync_spls -= spl_budget;
@@ -1104,6 +1134,7 @@ private:
     uint  mode;
     uint  mod_mode;
     float delay_spls;
+    float tap_diff;
     float feedback;
     float diffusion;
     float gain;
