@@ -50,6 +50,7 @@ struct delay_data {
   fixpt_spls     spls;
   fixpt_spls_mod mod; // In samples. If 0 the delay is not modulated
   fixpt_t        g; // If 0 the delay has no allpass
+  fixpt_t        g1; // If 0 the delay has no nested allpass
 };
 //------------------------------------------------------------------------------
 static constexpr detail::lofiverb::delay_data make_dd (
@@ -65,41 +66,80 @@ static constexpr detail::lofiverb::delay_data make_dd (
     fixpt_t::from_float (g)};
 }
 //------------------------------------------------------------------------------
+static constexpr detail::lofiverb::delay_data make_ap (
+  u16   spls,
+  float g,
+  u16   mod = 0)
+{
+  return make_dd (spls, g, mod);
+}
+//------------------------------------------------------------------------------
+static constexpr detail::lofiverb::delay_data make_delay (u16 spls)
+{
+  return make_dd (spls);
+}
+//------------------------------------------------------------------------------
+static constexpr detail::lofiverb::delay_data make_damp (float g = 0)
+{
+  return make_dd (0, g);
+}
+//------------------------------------------------------------------------------
 static constexpr auto get_rev1_spec()
 {
   return make_array<delay_data> (
     // diffusors
-    make_dd (147, -0.707), // AP
-    make_dd (183, 0.707), // AP
-    make_dd (389, -0.6), // AP
-    make_dd (401, 0.6), // AP
+    make_ap (147, -0.707),
+    make_ap (183, 0.707),
+    make_ap (389, -0.6),
+    make_ap (401, 0.6),
     // er
-    make_dd (1367, 0.35, 71 + 70), // AP + chorus
-    make_dd (0), // damp filter
-    make_dd (1787, 0., 261), // Delay + chorus
-    make_dd (33), // delay to allow block processing
+    make_ap (1367, 0.35, 71 + 70),
+    make_damp(),
+    make_ap (1787, 0., 261),
+    make_delay (33), // to allow block processing
     // loop1
-    make_dd (977, 0.5 /*overridden*/, 51), // AP with variable gain + chorus
-    make_dd (2819), // Delay
-    make_dd (0), // damp filter
-    make_dd (863, -0.5 /*overridden*/), // AP with variable gain
-    make_dd (1021), // Delay
-    make_dd (1453, 0.618), // Delay + chorus
-    make_dd (787), // delay (allows block processing)
+    make_ap (977, 0.5 /*overridden*/, 51),
+    make_delay (2819),
+    make_damp(),
+    make_ap (863, -0.5 /*overridden*/),
+    make_delay (1021), // Delay
+    make_ap (1453, 0.618),
+    make_delay (787), // delay (allows block processing)
     // loop2
-    make_dd (947, 0.5 /*overridden*/, 67), // AP with variable gain + chorus
-    make_dd (3191), // Delay
-    make_dd (0), // damp filter
-    make_dd (887, -0.5 /*overridden*/), // AP with variable gain
-    make_dd (1049), // Delay
-    make_dd (1367, 0.618), // Delay + chorus
-    make_dd (0, 0.98), // fixed highpass filter
-    make_dd (647)); // delay (allows block processing)
+    make_ap (947, 0.5 /*overridden*/, 67),
+    make_delay (3191),
+    make_damp(),
+    make_ap (887, -0.5 /*overridden*/),
+    make_delay (1049), // Delay
+    make_ap (1367, 0.618),
+    make_damp (0.98),
+    make_delay (647)); // delay (allows block processing)
 }
 
 struct rev1_spec {
   static constexpr auto values {get_rev1_spec()};
 };
+#if 0
+//------------------------------------------------------------------------------
+static constexpr auto get_rev2_spec()
+{
+  return make_array<delay_data> (
+    // diffusors
+    make_ap (23, 0.85);
+    make_ap (37, 0.85);
+    make_ap (59, -0.8);
+    make_ap (97, 0.8);
+    make_ap (158, 0.65);
+    make_ap (255, 0.65);
+    make_ap (419, -0.6);
+    make_ap (661, -0.5 /*overriden by character*/);
+    make_ap (1087, -0.5 /*overriden by character*/);
+}
+
+struct rev2_spec {
+  static constexpr auto values {get_rev2_spec()};
+};
+#endif
 //------------------------------------------------------------------------------
 // A class to abstract 16-bit storage, queue access and common DSP operations
 // when building reverbs based on allpass loops. Both on fixed and floating
@@ -262,6 +302,20 @@ public:
   {
     run_mod<Idx> (
       io, [gs] (uint i) { return gs[i]; }, [lfo] (uint i) { return lfo[i]; });
+  }
+  //----------------------------------------------------------------------------
+  // These are for nested allpasses. Add only those that are needed, as there
+  // are lots of combinations...
+  //----------------------------------------------------------------------------
+  template <uint Idx1, uint Idx2, class T>
+  void run (xspan<T> io)
+  {
+    run_impl<Idx1, Idx2> (
+      io,
+      [] (uint) { return get_gain<Idx1, T>(); },
+      nullptr,
+      [] (uint) { return get_gain<Idx2, T>(); },
+      nullptr);
   }
   //----------------------------------------------------------------------------
 private:
@@ -495,6 +549,64 @@ private:
         }
       }
     }
+  }
+  //----------------------------------------------------------------------------
+  // Template function to run nested allpasses
+  template <
+    uint Idx1,
+    uint Idx2,
+    class T,
+    class GF1,
+    class LF1,
+    class GF2,
+    class LF2>
+  void run_impl (
+    xspan<T> io,
+    GF1&&    g_gen1,
+    LF1&&    lfo_gen1,
+    GF2&&    g_gen2,
+    LF2&&    lfo_gen2)
+  {
+    constexpr delay_data dd[2] = {Spec::values[Idx1], Spec::values[Idx2]};
+    constexpr uint       sz[2] = {get_delay_size (Idx1), get_delay_size (Idx2)};
+    constexpr uint       minsz[2]
+      = {sz[0] - dd[0].mod.to_int(), sz[1] - dd[1].mod.to_int()};
+    constexpr bool has_modulation[2]
+      = {dd[0].mod.value() != 0, dd[1].mod.value() != 0};
+
+    // only block processing for now, non-block processing can be easily added.
+    static_assert (minsz[0] >= max_block_size && minsz[1] >= max_block_size);
+
+    assert ((io.size() <= minsz[0]) && (io.size() <= minsz[1]));
+
+    array2d<T, max_block_size, 2> yn_mem;
+    auto                          yn
+      = make_array (xspan {yn_mem[0], io.size()}, xspan {yn_mem[1], io.size()});
+
+    if constexpr (has_modulation[0]) {
+      run_thiran<Idx1> (yn[0], std::forward<LF1> (lfo_gen1));
+    }
+    else {
+      decode_read (yn[0], get_read_buffers<Idx1> (yn[0].size(), 0));
+    }
+    if constexpr (has_modulation[1]) {
+      run_thiran<Idx2> (yn[1], std::forward<LF2> (lfo_gen2));
+    }
+    else {
+      decode_read (yn[1], get_read_buffers<Idx2> (yn[1].size(), 0));
+    }
+    for (uint i = 0; i < io.size(); ++i) {
+      auto g = make_array (g_gen1 (i), g_gen2 (i));
+
+      auto u = io[i] + yn[0][i] * g[0];
+      io[i]  = yn[0][i] - u * g[1]; // output
+      u += yn[1][i] * g[1];
+      auto u1  = yn[1][i] - u * g[1];
+      yn[0][i] = u1;
+      yn[1][i] = u;
+    }
+    encode_write (prepare_block_insertion<Idx1> (io.size()), yn[0].to_const());
+    encode_write (prepare_block_insertion<Idx2> (io.size()), yn[1].to_const());
   }
   //----------------------------------------------------------------------------
   static constexpr uint get_delay_size (uint i)
