@@ -1,0 +1,483 @@
+desc:jsfx-drafts/midifex-49.jsfx
+slider1:decay_p=0.8<0,1,0.01> Decay
+
+slider3:mod=0.5<0,1,0.01> Mod
+slider4:character=0.5<0,1,0.01> Character
+
+slider6:damp=0.3<0,1,0.01> Damping
+slider7:hp=0<0,1,0.01> HP
+
+slider9:stereo=1<-1,1, 0.01> Stereo
+
+slider11:er_fact=0.2<0,1,0.01> ER
+
+slider21:db_wet=-12<-40, 12,0.1> Wet dB
+slider20:db_dry=0<-60, 0,0.1> Dry dB
+
+import _core.jsfx-inc
+import _delay-line.jsfx-inc
+import _reverb.jsfx-inc
+import _lfo.jsfx-inc
+import _fir.jsfx-inc
+
+// ratios starting point
+// http://www.voxangelica.net/transfer/magic%20numbers%20for%20reverb%20design%203b.pdf
+//
+// Not really used, but at least this script provides set of primes to do manual
+// tuning work.
+//
+// #!/usr/bin/env python
+// from math import *
+// import sympy as sp
+//
+// def print_delay(v):
+//   print (f'// {v}[{sp.prevprime (v)},{sp.nextprime (v)}]')
+//
+// def get_start_times(del_spls, n_ap):
+//   def f(x):
+//     return 1 / (x + 1 - log(2))
+//   print_delay(del_spls)
+//   for i in range (n_ap):
+//     print_delay (del_spls * f (i + 1))
+//
+// def get_start_times2(del_spls, n_ap):
+//   print_delay(del_spls)
+//   print_delay(del_spls / 2)
+//   for i in range (n_ap):
+//     idx = int(i / 2) + 1
+//     if (i % 2) == 0:
+//       print_delay (del_spls * (2 / (1 + 2 * idx)))
+//     else:
+//       print_delay (del_spls * (4 / (3 + 2 * idx)))
+//
+// get_start_times2(12000, 102)
+
+// golden ratio helper
+// #!/usr/bin/env python
+// from math import *
+// import sympy as sp
+//
+// import argparse
+//
+// def get_args():
+//     parser = argparse.ArgumentParser()
+//     parser.add_argument("start", type=int, help='smallest in the series')
+//     parser.add_argument("count", type=int, help='count in the series')
+//     parser.add_argument("--nonprime", default=False, type=bool, help='maximum of features',)
+//     opt = parser.parse_args()
+//     return opt
+//
+// def golden_ratio_series(start, count, nonprime):
+//   ret = []
+//   curr = start
+//   for _ in range (count):
+//     append = curr;
+//     if not nonprime:
+//       append = [sp.prevprime (curr),sp.nextprime (curr)]
+//
+//     ret.append (append)
+//     curr *= 1.61803398874989484820458683436563811772030917980576 # way over double...
+//   return ret
+//
+// def main():
+//     args = get_args()
+//     print (golden_ratio_series(args.start, args.count, args.nonprime))
+//
+// if __name__ == "__main__":
+//     main()
+
+@init
+
+// SRC stuff -------------------------------------------------------------------
+BYPASS_SRC = 0;
+
+k.src.kaiser_att_db = 210;
+k.src.taps_branch = 32;
+k.src.taps_branch_frac = 16;
+k.src.cutoff = 10500;
+k.src.srate = BYPASS_SRC ? srate : 23400;
+
+src.down.resampler_2c_init(
+  k.src.srate,
+  srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.up.resampler_2c_init(
+  srate,
+  k.src.srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.out_q.deque_init(
+  src.up.resampler_2c_max_n_out_samples() * 2
+  );
+
+src.ins.array_init (src.down.resampler_2c_max_n_out_samples() * 2);
+src.outs.array_init (src.up.resampler_2c_max_n_out_samples() * 2);
+
+src.ins.array_clear();
+src.outs.array_clear();
+
+// TODO how many?
+loop(floor (srate / 44100) * 2,
+  src.out_q.deque_push (0);
+  src.out_q.deque_push (0);
+);
+
+// Actual reverb stuff ---------------------------------------------------------
+n_lines = 150; // more than we need
+max_delay = 3000;
+delay_line_idx = 0; // to avoid passing parameters
+del.delay_line_init (round_next_pow2 (max_delay), n_lines);
+del.delay_line_init (round_next_pow2 (max_delay), n_lines);
+del.delay_line_thiran1_add();
+
+n_lfos = 2;
+lfo.lfo_bank_init (n_lfos, 1);
+lfo.ret.array_init (n_lfos);
+lfo.lfo_bank_reset_phase (0);
+
+er_lfo.lfo_bank_init (n_lfos, 1);
+er_lfo.ret.array_init (n_lfos);
+er_lfo.lfo_bank_reset_phase (0);
+
+// TODO: nested lattice
+function delay (in, spls) local (x) global (del*, delay_line_idx) (
+  x = del.delay_line_get (spls, delay_line_idx);
+  del.delay_line_set (in, 0, delay_line_idx);
+  delay_line_idx += 1;
+  x;
+);
+
+function delay_mod (in, spls, lfo, max_lfo) local (x) global (del*, delay_line_idx) (
+  x = del.delay_line_thiran1_get (spls, delay_line_idx);
+  del.delay_line_set (in, 0, delay_line_idx);
+  delay_line_idx += 1;
+  x;
+);
+
+// allpass
+function ap (in, spls, g) local (yn, u, x) global (del*, delay_line_idx) (
+  yn = del.delay_line_get (spls, delay_line_idx);
+  u = in + yn * g;
+  x = yn - u * g;
+  del.delay_line_set (u, 0, delay_line_idx);
+  delay_line_idx += 1;
+  x;
+);
+
+
+// allpass with modulation
+function ap (in, spls, g, lfo, maxlfo) local (yn, u, x) global (del*, delay_line_idx) (
+  spls += lfo * maxlfo;
+  yn = del.delay_line_thiran1_get (spls, delay_line_idx);
+  u = in + yn * g;
+  x = yn - u * g;
+  del.delay_line_set (u, 0, delay_line_idx);
+  delay_line_idx += 1;
+  x;
+);
+
+// 2 nested allpasses (lattice)
+function ap2 (in, spls1, spls2, g1, g2)
+  local (yn, u, u1, x, i1, i2, yn1, yn2) global (del*, delay_line_idx) (
+  i1 = delay_line_idx;
+  i2 = delay_line_idx + 1;
+
+  yn1 = del.delay_line_get (spls1, i1);
+  yn2 = del.delay_line_get (spls2, i2);
+
+  u  = in;
+  u += yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  del.delay_line_set (u1, 0, i1);
+  del.delay_line_set (u, 0, i2);
+  delay_line_idx += 2;
+  x;
+);
+
+// 2 nested allpasses (lattice) with outer modulation
+function ap2 (in, spls1, spls2, g1, g2, lfo, maxlfo)
+  local (yn, u, u1, x, i1, i2, yn1, yn2) global (del*, delay_line_idx) (
+  i1 = delay_line_idx;
+  i2 = delay_line_idx + 1;
+
+  spls1 += lfo * maxlfo;
+  yn1 = del.delay_line_thiran1_get (spls1, i1);
+  yn2 = del.delay_line_get (spls2, i2);
+
+  u  = in;
+  u += yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  del.delay_line_set (u1, 0, i1);
+  del.delay_line_set (u, 1, i2);
+  delay_line_idx += 2;
+  x;
+);
+
+// 2 nested allpasses (lattice) with outer and inner modulation
+function ap2 (in, spls1, spls2, g1, g2, lfo1, maxlfo1, lfo2, maxlfo2)
+  local (yn, u, u1, x, i1, i2, yn1, yn2) global (del*, delay_line_idx) (
+  i1 = delay_line_idx;
+  i2 = delay_line_idx + 1;
+
+  spls1 += lfo1 * maxlfo1;
+  spls2 += lfo2 * maxlfo2;
+  yn1 = del.delay_line_thiran1_get (spls1, i1);
+  yn2 = del.delay_line_thiran1_get (spls2, i2);
+
+  u  = in;
+  u += yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  del.delay_line_set (u1, 0, i1);
+  del.delay_line_set (u, 1, i2);
+  delay_line_idx += 2;
+  x;
+);
+
+// 3 nested allpasses (lattice)
+function ap3 (in, spls1, spls2, spls3, g1, g2, g3)
+  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (del*, delay_line_idx) (
+  i1 = delay_line_idx;
+  i2 = delay_line_idx + 1;
+  i3 = delay_line_idx + 2;
+
+  yn1 = del.delay_line_get (spls1, i1);
+  yn2 = del.delay_line_get (spls2, i2);
+  yn3 = del.delay_line_get (spls2, i3);
+
+  u  = in;
+  u += yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  u += yn3 * g3;
+  u2 = yn3 - u * g3;
+
+  del.delay_line_set (u1, 0, i1);
+  del.delay_line_set (u2, 0, i2);
+  del.delay_line_set (u, 0, i3);
+  delay_line_idx += 3;
+  x;
+);
+
+// 3 nested allpasses (lattice) with outer modulation
+function ap3 (in, spls1, spls2, spls3, g1, g2, g3, lfo, maxlfo)
+  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (del*, delay_line_idx) (
+  i1 = delay_line_idx;
+  i2 = delay_line_idx + 1;
+  i3 = delay_line_idx + 2;
+
+  spls1 += lfo * maxlfo;
+  yn1 = del.delay_line_thiran1_get (spls1, i1);
+  yn2 = del.delay_line_get (spls2, i2);
+  yn3 = del.delay_line_get (spls2, i3);
+
+  u  = in + yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  u += yn3 * g3;
+  u2 = yn3 - u * g3;
+
+  del.delay_line_set (u1, 0, i1);
+  del.delay_line_set (u2, 0, i2);
+  del.delay_line_set (u, 0, i3);
+  delay_line_idx += 3;
+  x;
+);
+
+// 3 nested allpasses (lattice) with outer and middle modulation
+function ap3 (in, spls1, spls2, spls3, g1, g2, g3, lfo1, maxlfo1, lfo2, maxlfo2)
+  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (del*, delay_line_idx) (
+  i1 = delay_line_idx;
+  i2 = delay_line_idx + 1;
+  i3 = delay_line_idx + 2;
+
+  spls1 += lfo1 * maxlfo1;
+  spls2 += lfo2 * maxlfo2;
+  yn1 = del.delay_line_thiran1_get (spls1, i1);
+  yn2 = del.delay_line_thiran1_get (spls2, i2);
+  yn3 = del.delay_line_get (spls2, i3);
+
+  u  = in + yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  u += yn3 * g3;
+  u2 = yn3 - u * g3;
+
+  del.delay_line_set (u1, 0, i1);
+  del.delay_line_set (u2, 0, i2);
+  del.delay_line_set (u, 0, i3);
+  delay_line_idx += 3;
+  x;
+);
+
+// 3 nested allpasses (lattice) with full modulation
+function ap3 (in, spls1, spls2, spls3, g1, g2, g3, lfo1, maxlfo1, lfo2, maxlfo2, lfo3, maxlfo3)
+  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (del*, delay_line_idx) (
+  i1 = delay_line_idx;
+  i2 = delay_line_idx + 1;
+  i3 = delay_line_idx + 2;
+
+  spls1 += lfo1 * maxlfo1;
+  spls2 += lfo2 * maxlfo2;
+  spls3 += lfo3 * maxlfo3;
+  yn1 = del.delay_line_thiran1_get (spls1, i1);
+  yn2 = del.delay_line_thiran1_get (spls2, i2);
+  yn3 = del.delay_line_thiran1_get (spls2, i3);
+
+  u  = in + yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  u += yn3 * g3;
+  u2 = yn3 - u * g3;
+
+  del.delay_line_set (u1, 0, i1);
+  del.delay_line_set (u2, 0, i2);
+  del.delay_line_set (u, 0, i3);
+  delay_line_idx += 3;
+  x;
+);
+
+
+function dampfilter (in, g)  local (y1) global() (
+  in = (1 - g) * in + this.y1 * g;
+  this.y1 = in;
+);
+
+feedback = 0;
+
+@slider
+
+// TODO: predelay
+
+// TODO: dc block?
+
+decay = 1 - decay_p;
+decay = 1 - decay * decay;
+decay = decay * 0.15;
+
+lfo.lfo_bank_reset_freq (0, 0.2 + mod * 0.6, k.src.srate);
+er_lfo.lfo_bank_reset_freq (0, 0.3 + mod * 0.3, k.src.srate);
+
+dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
+wet_gain = db_to_lin (db_wet);
+
+kdamp = (0.9 - damp * 0.9);
+kdamp = 1 - kdamp * kdamp;
+kdamp *= 0.7;
+
+hp_fact = 1 - hp * hp;
+hp_fact *= 0.39;
+hp_fact += 0.6;
+
+g_character = 0.618 + ((0.707 - 0.618) * 2) * character;
+
+er_amt = (er_fact * er_fact) * 0.4;
+
+@sample
+
+// Downsampling
+n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
+
+(n_spls_down) ? (
+  m = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5;
+  s = (src.ins.ptr[0] - src.ins.ptr[1]) * 0.5;
+
+  //  a = lfo.ret.ptr[0];
+
+1 ? (
+
+// [[113, 131], [199, 211], [331, 337]]
+// [[317, 331], [523, 541], [853, 857]]
+// [[421, 431], [683, 691], [1117, 1123]]
+// [[823, 829], [1327, 1361], [2161, 2179]]
+// [[1123, 1129], [1823, 1831], [2939, 2953]]
+// [[1823, 1831], [2953, 2957], [4783, 4787]]
+// [[6823, 6829], [11027, 11047], [17863, 17881]]
+
+
+  er_lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
+
+//  er = m;
+//  er = ap3 (er, 337, 207, 121, 0.27, 0.21, -0.14, lfo.ret.ptr[0], 4, lfo.ret.ptr[1], 3, lfo.ret.ptr[0], -3);
+
+  lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
+
+//[[19, 29], [37, 41], [59, 61], [97, 101], [157, 163], [251, 257], [409, 419], [661, 673], [1069, 1087]]
+//[23, 37.214781741247585, 60.21478174124759, 97.42956348249518, 157.6443452237428, 255.073908706238, 412.7182539299808, 667.7921626362188, 1080.5104165661996]
+  x *= 2.53125;
+  x = ap (m, 321, 0.5);
+  x = ap (x, 431, 0.5);
+  x = ap (x, 968, 0.5);
+  x = ap (x, 1620, 0.5);
+
+  // FB node
+  x += fb;
+  l = delay (x, 21);
+  r = delay (x, 1010);
+
+  x = delay (x, 1624);
+  x = ap (x, 1992, 0.5);
+
+  l += delay (x, 1891);
+  r += delay (x, 890);
+
+  x = delay (x, 2110);
+  x *= 0.9375;
+  x = ap (x, 2371, 0.5);
+
+  l += delay (x, 2003);
+  r += delay (x, 671);
+
+  x = delay (x, 2157);
+  x *= 0.9375;
+  x = ap (x, 2712, 0.5);
+
+  x = dampfilter (x, 0.25);
+  fb = x;
+
+);
+
+  // prepare next iteration
+  del.delay_line_advance();
+  delay_line_idx = 0;
+
+  l = r * (1 - abs (stereo)) + l * abs (stereo);
+  stereo < 0 ? (
+    tmp = r;
+    r = l;
+    l = tmp;
+  );
+
+  // Upsampling
+  n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);
+  i = 0;
+  loop (n_spls_up * 2, // *2 : two channels
+    src.out_q.deque_push (src.outs.ptr[i]);
+    i += 1;
+  );
+);
+
+spl0 *= dry_gain;
+spl1 *= dry_gain;
+spl0 += src.out_q.deque_pop() * wet_gain;
+spl1 += src.out_q.deque_pop() * wet_gain;

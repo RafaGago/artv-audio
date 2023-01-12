@@ -112,34 +112,54 @@ static constexpr auto get_rev1_spec()
     make_ap (887, -0.5 /*overridden*/),
     make_delay (1049), // Delay
     make_ap (1367, 0.618),
-    make_damp (0.98),
+    make_damp (0.98), // HP
     make_delay (647)); // delay (allows block processing)
 }
 
 struct rev1_spec {
   static constexpr auto values {get_rev1_spec()};
 };
-#if 0
+
 //------------------------------------------------------------------------------
 static constexpr auto get_rev2_spec()
 {
   return make_array<delay_data> (
     // diffusors
-    make_ap (23, 0.85);
-    make_ap (37, 0.85);
-    make_ap (59, -0.8);
-    make_ap (97, 0.8);
-    make_ap (158, 0.65);
-    make_ap (255, 0.65);
-    make_ap (419, -0.6);
-    make_ap (661, -0.5 /*overriden by character*/);
-    make_ap (1087, -0.5 /*overriden by character*/);
+    make_ap (23, 0.85), // 0
+    make_ap (37, 0.85), // 1
+    make_ap (59, -0.8), // 2
+    make_ap (97, 0.8), // 3
+    make_ap (158, 0.65), // 4
+    make_ap (255, 0.65), // 5
+    make_ap (419, -0.6), // 6
+    make_ap (661, -0.5 /*overriden by character*/), // 7
+    make_ap (1087, -0.5 /*overriden by character*/), // 8
+    // "er"
+    make_ap (727, 0.85), // 2nd order AP // 9
+    make_ap (271, -0.25), // 2nd order AP // 10
+    // first loop
+    make_ap (2831, -0.63, 16), // modulated... // 11
+    make_ap (1604, -0.6), // 12
+    make_ap (1119, 0.5), // 13
+    make_ap (859, -0.5), // 14
+    make_ap (698, 0.5), // 15
+    make_damp(), // 16
+    make_delay (3700), // 17
+    // second loop
+    make_ap (3292, -0.65, 16), // modulated... // 18
+    make_ap (1864, -0.6), // 19
+    make_ap (1300, 0.5), // 20
+    make_ap (999, -0.5), // 21
+    make_ap (811, 0.5), // 22
+    make_damp(), // 23
+    make_damp (0.98), // HP // 24
+    make_delay (4301)); // 25
 }
 
 struct rev2_spec {
   static constexpr auto values {get_rev2_spec()};
 };
-#endif
+
 //------------------------------------------------------------------------------
 // A class to abstract 16-bit storage, queue access and common DSP operations
 // when building reverbs based on allpass loops. Both on fixed and floating
@@ -402,10 +422,10 @@ private:
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
-  void push (T v)
+  void push_one (T v)
   {
     encode_write (_stage[Idx].z[_stage[Idx].pos], v);
-    advance_pos();
+    advance_pos<Idx>();
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class LF>
@@ -481,7 +501,17 @@ private:
   auto run_allpass (T in, T yn, U g)
   {
     auto u = in + yn * g;
+    if constexpr (std::is_floating_point_v<T>) {
+      if (abs (u) >= 1.) {
+        assert (false);
+      }
+    }
     auto x = yn - u * g;
+    if constexpr (std::is_floating_point_v<T>) {
+      if (abs (x) >= 1.) {
+        assert (false);
+      }
+    }
     return std::make_tuple (static_cast<T> (x), static_cast<T> (u));
   }
   //----------------------------------------------------------------------------
@@ -535,16 +565,15 @@ private:
           });
         }
         else {
-          T qv = read_next<Idx>();
+          T qv = read_next<Idx, T>();
         }
         if constexpr (has_allpass) {
-          auto [out, push] = run_allpass<Idx, T> (
-            io[i], qv, [i, &g_gen] (uint) { return g_gen (i); });
-          push<Idx> (push);
+          auto [out, push] = run_allpass<Idx, T> (io[i], qv, g_gen (i));
+          push_one<Idx> (push);
           io[i] = out;
         }
         else {
-          push<Idx> (io[i]);
+          push_one<Idx> (io[i]);
           io[i] = qv;
         }
       }
@@ -580,8 +609,8 @@ private:
     assert ((io.size() <= minsz[0]) && (io.size() <= minsz[1]));
 
     array2d<T, max_block_size, 2> yn_mem;
-    auto                          yn
-      = make_array (xspan {yn_mem[0], io.size()}, xspan {yn_mem[1], io.size()});
+    auto                          yn = make_array (
+      xspan {yn_mem[0].data(), io.size()}, xspan {yn_mem[1].data(), io.size()});
 
     if constexpr (has_modulation[0]) {
       run_thiran<Idx1> (yn[0], std::forward<LF1> (lfo_gen1));
@@ -598,10 +627,10 @@ private:
     for (uint i = 0; i < io.size(); ++i) {
       auto g = make_array (g_gen1 (i), g_gen2 (i));
 
-      auto u = io[i] + yn[0][i] * g[0];
-      io[i]  = yn[0][i] - u * g[1]; // output
-      u += yn[1][i] * g[1];
-      auto u1  = yn[1][i] - u * g[1];
+      auto u   = (T) (io[i] + yn[0][i] * g[0]);
+      io[i]    = (T) (yn[0][i] - u * g[1]); // output
+      u        = (T) (u + yn[1][i] * g[1]);
+      auto u1  = (T) (yn[1][i] - u * g[1]);
       yn[0][i] = u1;
       yn[1][i] = u;
     }
@@ -716,15 +745,21 @@ public:
     if (v == _param.mode) {
       return;
     }
-    // reminder. "normalization_gain" is the gain such that if the reverb is fed
-    // values in the [-1,1] range will make it output values at most at the
-    // [-1,1] range. This is important for fixed-point and truncated float
-    // scaling.
+    // reminder. "norm_att" is the gain that makes the reverb to be under unity
+    // range assuming inputs in unity range.
     switch (v) {
     case mode::rev1_flt:
     case mode::rev1: {
-      _param.normalization_gain = 1.f / (2.f + 0.8f + 0.855f + 0.443f);
-      auto& rev                 = _modes.emplace<rev1_type>();
+      _param.norm_att = 1.f / 9.75f;
+      _param.gain     = 1.f;
+      auto& rev       = _modes.emplace<rev1_type>();
+      rev.reset_memory (_mem_reverb);
+    } break;
+    case mode::rev2_flt:
+    case mode::rev2: {
+      _param.norm_att = 1.f / 5.75f;
+      _param.gain     = 10.f;
+      auto& rev       = _modes.emplace<rev2_type>();
       rev.reset_memory (_mem_reverb);
     } break;
     default:
@@ -735,12 +770,13 @@ public:
     xspan_memset (_mem_reverb, 0);
   }
   struct mode {
-    enum { rev1_flt, rev1 };
+    enum { rev1_flt, rev1, rev2_flt, rev2 };
   };
 
   static constexpr auto get_parameter (mode_tag)
   {
-    return choice_param (0, make_cstr_array ("Reverb1", "Reverb1 16-bit"), 48);
+    return choice_param (
+      0, make_cstr_array ("1", "1 16-bit", "2", "2 16-bit"), 48);
   }
   //----------------------------------------------------------------------------
   struct decay_tag {};
@@ -878,8 +914,8 @@ public:
     _resampler.reset (
       srate,
       pc.get_sample_rate(),
-      15000,
-      15000,
+      10500,
+      10500,
       32,
       16,
       210,
@@ -966,12 +1002,12 @@ private:
   //----------------------------------------------------------------------------
   static constexpr uint  max_block_size = 32;
   static constexpr uint  n_channels     = 2;
-  static constexpr uint  srate          = 33600;
+  static constexpr uint  srate          = 23400;
   static constexpr float t_spl          = (float) (1. / srate);
   // this is using 16 bits fixed-point arithmetic, positive values can't
   // represent one, so instead of correcting everywhere the parameters are
   // scaled instead to never reach 1.
-  static constexpr float one_flt = 0.9999f;
+  static constexpr float one_flt = 0.999f;
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters;
   struct smoothed_parameters;
@@ -989,9 +1025,9 @@ private:
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       f32_x2 wetv    = _filt.tick_cascade (vec_from_array (io[i]));
-      wetv           = vec_clamp (wetv, -0.98f, 0.98f);
+      wetv           = vec_clamp (wetv, -0.98f, 0.98f); // TODO: soft sat?
       ducker_gain[i] = _ducker.tick (wetv);
-      wetv *= _param.normalization_gain;
+      wetv *= _param.norm_att;
       io[i] = vec_to_array (wetv);
 
       _param_smooth.tick();
@@ -1019,13 +1055,21 @@ private:
       }
     }
     // main loop
-    process_rev1 (xspan {wet.data(), io.size()}, pars);
-
+    switch (_param.mode) {
+    case mode::rev1:
+      process_rev1 (xspan {wet.data(), io.size()}, pars);
+      break;
+    case mode::rev2:
+      process_rev2 (xspan {wet.data(), io.size()}, pars);
+      break;
+    default:
+      assert (false);
+    }
     // float conversion
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto l = wet[i][0].to_floatp() * ducker_gain[i][0];
-      auto r = wet[i][1].to_floatp() * ducker_gain[i][1];
+      auto l = wet[i][0].to_floatp() * ducker_gain[i][0] * _param.gain;
+      auto r = wet[i][1].to_floatp() * ducker_gain[i][1] * _param.gain;
       l      = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
       if (pars.stereo[i] < 0) {
         io[i][0] = r;
@@ -1050,9 +1094,14 @@ private:
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       f32_x2 wet     = _filt.tick_cascade (vec_from_array (io[i]));
-      wet            = vec_clamp (wet, -0.98f, 0.98f);
+      wet            = vec_clamp (wet, -0.99f, 0.99f); // TODO: soft sat?
       ducker_gain[i] = _ducker.tick (wet);
-      wet *= _param.normalization_gain;
+#if 0
+      // stress test input with maximum level DC to find suitable normalization
+      // att of each algo (at max decay).
+      wet = vec_set<2> (0.99f);
+#endif
+      wet *= _param.norm_att;
       io[i] = vec_to_array (wet);
 
       _param_smooth.tick();
@@ -1076,12 +1125,20 @@ private:
       }
     }
     // main loop
-    process_rev1 (io, pars);
-
+    switch (_param.mode) {
+    case mode::rev1_flt:
+      process_rev1 (io, pars);
+      break;
+    case mode::rev2_flt:
+      process_rev2 (io, pars);
+      break;
+    default:
+      assert (false);
+    }
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto l = io[i][0] * ducker_gain[i][0];
-      auto r = io[i][1] * ducker_gain[i][1];
+      auto l = io[i][0] * ducker_gain[i][0] * _param.gain;
+      auto r = io[i][1] * ducker_gain[i][1] * _param.gain;
       l      = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
       if (pars.stereo[i] < 0) {
         io[i][0] = r;
@@ -1123,8 +1180,8 @@ private:
       lfo4[i]  = (T) (T {lfo[3]} * mod);
 
       // decay fixup
-      auto decay   = (T) (1_r - par.decay[i]);
-      decay        = (T) (1_r - decay * decay);
+      auto decay   = (T) (0.99999_r - par.decay[i]);
+      decay        = (T) (0.99999_r - decay * decay);
       par.decay[i] = (T) (0.6_r + decay * 0.39_r);
     }
 
@@ -1224,6 +1281,100 @@ private:
     }
   }
   //----------------------------------------------------------------------------
+  template <class T, class Params>
+  void process_rev2 (xspan<std::array<T, 2>> io, Params& par)
+  {
+    auto& rev = std::get<rev2_type> (_modes);
+
+    using arr    = std::array<T, max_block_size>;
+    using arr_fb = std::array<T, max_block_size + 1>;
+
+    arr    x_arr, l_arr, df_arr, lfo1, lfo2;
+    arr_fb r_arr;
+    xspan  l {l_arr.data(), io.size()};
+    xspan  r {r_arr.data(), io.size() + 1}; // + 1 sample for feedback
+    xspan  x {x_arr.data(), io.size()}; // (loop variable)
+    xspan  df {df_arr.data(), io.size()}; // (difused input)
+
+    span_visit (io, [&] (auto& spl, uint i) {
+      // to MS
+      df[i] = (T) ((spl[0] + spl[1]) * 0.5_r);
+      // lfo
+      auto lfo = tick_lfo<T>();
+      lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
+      lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
+      // decay fixup
+      auto decay   = (T) (0.99999_r - par.decay[i]);
+      decay        = (T) (0.99999_r - decay * decay);
+      par.decay[i] = (T) (0.25_r + decay * 0.15_r);
+    });
+
+    float dampf = (0.9f - _param.damp * 0.9f);
+    dampf       = 1.f - dampf * dampf;
+    dampf *= 0.7f;
+    auto damp = load_float<T> (dampf);
+
+    // diffusion -----------------------------
+    rev.run<0> (df);
+    rev.run<1> (df);
+    rev.run<2> (df);
+    rev.run<3> (df);
+    rev.run<4> (df);
+    rev.run<5> (df);
+    rev.run<6> (df);
+    rev.run<7> (df, [&] (uint i) { return -0.5_r * par.character[i]; });
+    rev.run<8> (df, [&] (uint i) { return -0.5_r * par.character[i]; });
+
+    // pseudo-ER temporarily stored on L channel for buffer reuse
+    xspan_memcpy (l, df);
+    rev.run<9, 10> (l);
+    span_visit (df, [&] (auto& df_spl, uint i) {
+      df_spl = (T) (df_spl * (1_r - par.er[i]) + l[i] * par.er[i]);
+    });
+
+    // loop 1
+    rev.fetch_block_plus_one<25> (r);
+    span_visit (x, [&] (auto& x_spl, uint i) {
+      x_spl = (T) (df[i] + r[i] * par.decay[i]);
+    });
+    r.cut_head (1); // feedback sample already processed...
+
+    rev.run_mod<11> (x, xspan {lfo1});
+    apply_gain (x, par.decay);
+    rev.run<12> (x);
+    apply_gain (x, par.decay);
+    rev.run<13> (x);
+    apply_gain (x, par.decay);
+    rev.run<14> (x);
+    apply_gain (x, par.decay);
+    rev.run<15> (x);
+    rev.run_lp<16> (x, damp);
+    rev.run<17> (x); // plain delay
+    xspan_memcpy (l, x);
+
+    // loop 2
+    span_visit (x, [&] (auto& x_spl, uint i) {
+      x_spl = (T) (df[i] + x_spl * par.decay[i]);
+    });
+    rev.run_mod<18> (x, xspan {lfo2});
+    apply_gain (x, par.decay);
+    rev.run<19> (x);
+    apply_gain (x, par.decay);
+    rev.run<20> (x);
+    apply_gain (x, par.decay);
+    rev.run<21> (x);
+    apply_gain (x, par.decay);
+    rev.run<22> (x);
+    rev.run_lp<23> (x, damp);
+    rev.run_hp<24> (x);
+    rev.push<25> (x.to_const()); // delay / feedback point
+
+    span_visit (io, [&] (auto& spls, uint i) {
+      spls[0] = l[i];
+      spls[1] = r[i];
+    });
+  }
+  //----------------------------------------------------------------------------
   template <class T>
   static T load_float (float v)
   {
@@ -1269,9 +1420,24 @@ private:
     }
   }
   //----------------------------------------------------------------------------
+  template <class T>
+  void apply_gain (xspan<T> block, std::array<T, max_block_size> const& decay)
+  {
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < block.size(); ++i) {
+      if constexpr (std::is_floating_point_v<T>) {
+        block[i] *= decay[i];
+      }
+      else {
+        block[i] = (typename T::rounding_twin) (block[i] * decay[i]);
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
     u32   mode;
-    float normalization_gain;
+    float norm_att;
+    float gain;
     float tilt;
     float predelay;
     float damp;
@@ -1314,8 +1480,10 @@ private:
 
   using rev1_type
     = detail::lofiverb::engine<detail::lofiverb::rev1_spec, max_block_size>;
-  std::variant<rev1_type> _modes;
-  ducker<f32_x2>          _ducker;
+  using rev2_type
+    = detail::lofiverb::engine<detail::lofiverb::rev2_spec, max_block_size>;
+  std::variant<rev1_type, rev2_type> _modes;
+  ducker<f32_x2>                     _ducker;
 
   uint  _n_processed_samples;
   float _1_4beat_spls;
