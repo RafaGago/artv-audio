@@ -17,6 +17,7 @@
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"
+#include "artv-common/misc/xspan.hpp"
 
 namespace artv {
 namespace detail { namespace lofiverb {
@@ -58,44 +59,84 @@ struct algo1_spec {
 };
 
 //------------------------------------------------------------------------------
-static constexpr auto get_algo2_spec()
+static constexpr auto get_midifex49_spec()
 {
   return make_array<delay_data> (
     // diffusors
-    make_ap (23, 0.85), // 0
-    make_ap (37, 0.85), // 1
-    make_ap (59, -0.8), // 2
-    make_ap (97, 0.8), // 3
-    make_ap (158, 0.65), // 4
-    make_ap (255, 0.65), // 5
-    make_ap (419, -0.6), // 6
-    make_ap (661, -0.5 /*overriden by character*/), // 7
-    make_ap (1087, -0.5 /*overriden by character*/), // 8
-    // "er"
-    make_ap (727, 0.85), // 2nd order AP // 9
-    make_ap (271, -0.25), // 2nd order AP // 10
-    // first loop
-    make_ap (2831, -0.63, 16), // modulated... // 11
-    make_ap (1604, -0.6), // 12
-    make_ap (1119, 0.5), // 13
-    make_ap (859, -0.5), // 14
-    make_ap (698, 0.5), // 15
+    make_ap (321, 0.5), // 0 PreAP
+    make_ap (431, 0.5), // 1 PreAP
+    make_ap (968, 0.5), // 2 PreAP
+    make_ap (1620, 0.5), // 3 PreAP
+
+    make_delay (21), // 4 L1
+    make_delay (1010), // 5 R1
+
+    make_delay (1624), // 6 FB
+    make_ap (1992, 0.5, 17), // 7 FB modulated...
+
+    make_delay (1891), // 8 L2
+    make_delay (890), // 9 R2
+
+    make_delay (2110), // 10 FB
+    make_ap (2371, 0.5), // 11 FB nested allpass 1
+    make_ap (1378, 0.2), // 12 FB nested allpass 2
+
+    make_delay (2003), // 13 L3
+    make_delay (671), // 14 R3
+
+    make_delay (2157), // 15 FB
     make_damp(), // 16
-    make_delay (3700), // 17
-    // second loop
-    make_ap (3292, -0.65, 16), // modulated... // 18
-    make_ap (1864, -0.6), // 19
-    make_ap (1300, 0.5), // 20
-    make_ap (999, -0.5), // 21
-    make_ap (811, 0.5), // 22
-    make_damp(), // 23
-    make_damp (0.98), // HP // 24
-    make_delay (4301)); // 25
+    make_ap (2712, 0.5, 22), // 17 FB nested allpass 1
+    make_ap (1783, 0.2), // 18 FB nested allpass 2
+
+    make_delay (33) // 19 delay block
+  );
 }
 
-struct algo2_spec {
-  static constexpr auto values {get_algo2_spec()};
+struct midifex49_spec {
+  static constexpr auto values {get_midifex49_spec()};
 };
+
+//------------------------------------------------------------------------------
+static constexpr auto get_midifex50_spec()
+{
+  return make_array<delay_data> (
+    make_ap (13, 0.5), // 0
+    make_ap (83, 0.5), // 1
+    make_ap (116, 0.5), // 2
+    make_ap (239, 0.5), // 3
+    make_delay (32), // 4
+    make_ap (339, 0.5), // 5
+    make_ap (481, 0.5), // 6
+    make_ap (555, 0.5), // 7
+    make_ap (823, 0.5), // 8
+    make_delay (64), // 9
+    make_ap (999, 0.5), // 10
+    make_ap (1100, 0.5), // 11
+    make_ap (1347, 0.5), // 12
+    make_ap (1563, 0.5), // 13
+    make_delay (64), // 14
+    make_ap (1841, 0.5), // 15
+    make_ap (2001, 0.5, 67), // 16
+    make_ap (2083, 0.5, 127), // 17
+    make_damp(), // 18
+    make_delay (96), // 19
+    make_delay (32), // 20 (FB point)
+    make_ap (147, 0.5), // 21 L diff
+    make_ap (43, 0.5), // 22 L diff
+    make_ap (55, 0.5), // 23 L diff
+    make_delay (1), // 24 L diff
+    make_ap (249, 0.5), // 25 R diff
+    make_ap (48, 0.5), // 26 R diff
+    make_ap (21, 0.5), // 27 R diff
+    make_delay (1) // 28 R diff
+  );
+}
+
+struct midifex50_spec {
+  static constexpr auto values {get_midifex50_spec()};
+};
+
 }} // namespace detail::lofiverb
 //------------------------------------------------------------------------------
 // A reverb using 16-bit fixed-point arithmetic on the main loop. One design
@@ -126,13 +167,17 @@ public:
       _param.gain     = 1.f;
       auto& rev       = _modes.emplace<algo1_type>();
       rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
     } break;
-    case mode::algo2_flt:
-    case mode::algo2: {
-      _param.norm_att = 1.f / 5.75f;
-      _param.gain     = 10.f;
-      auto& rev       = _modes.emplace<algo2_type>();
+    case mode::midifex49_flt:
+    case mode::midifex49: {
+      _param.norm_att = 1.f / 2.f;
+      _param.gain     = 1.f;
+      auto& rev       = _modes.emplace<midifex49_type>();
       rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
     } break;
     default:
       return;
@@ -140,15 +185,19 @@ public:
     _param.mode          = v;
     _n_processed_samples = 0; // trigger the control block on first sample
     xspan_memset (_mem_reverb, 0);
+    update_mod();
   }
   struct mode {
-    enum { algo1_flt, algo1, algo2_flt, algo2 };
+    enum { algo1_flt, algo1, midifex49_flt, midifex49 };
   };
 
   static constexpr auto get_parameter (mode_tag)
   {
     return choice_param (
-      0, make_cstr_array ("1", "1 16-bit", "2", "2 16-bit"), 48);
+      0,
+      make_cstr_array (
+        " Long 1", "Long 1 16-bit", "Midifex 49", "Midifex 49 16-bit"),
+      48);
   }
   //----------------------------------------------------------------------------
   struct decay_tag {};
@@ -298,7 +347,6 @@ public:
     _filt.reset_states_cascade();
     _ducker.reset();
     _lfo.reset();
-    _lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
 
     // resize memory
     uint predelay_spls = std::ceil (_1_4beat_spls * max_predelay_qb) * 2;
@@ -431,8 +479,8 @@ private:
     case mode::algo1:
       process_algo1 (xspan {wet.data(), io.size()}, pars);
       break;
-    case mode::algo2:
-      process_algo2 (xspan {wet.data(), io.size()}, pars);
+    case mode::midifex49:
+      process_midifex49 (xspan {wet.data(), io.size()}, pars);
       break;
     default:
       assert (false);
@@ -501,8 +549,8 @@ private:
     case mode::algo1_flt:
       process_algo1 (io, pars);
       break;
-    case mode::algo2_flt:
-      process_algo2 (io, pars);
+    case mode::midifex49_flt:
+      process_midifex49 (io, pars);
       break;
     default:
       assert (false);
@@ -572,19 +620,18 @@ private:
     auto er1b = xspan {early1b_arr.data(), io.size()};
     auto er2 = xspan {early2_arr.data(), io.size() + 1}; // +1: Feedback on head
 
-    // feedback handling
-    rev.fetch_block_plus_one<7> (er2);
+    rev.fetch_block<7> (er2, 1); // feedback, fetching block + 1 samples
 
     span_visit (er1, [&] (auto& v, uint i) {
       v = (T) ((late_in[i] + er2[i] * 0.2_r) * par.decay[i]);
     });
     er2.cut_head (1); // drop feedback sample from previous block
 
-    rev.run_mod<4> (er1, xspan {lfo2});
+    rev.run<4> (er1, xspan {lfo2}, nullptr);
     rev.run_lp<5> (er1, load_float<T> (0.0001f + 0.17f * _param.damp));
     xspan_memcpy (er1b, er1);
     span_visit (er1b, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
-    rev.run_mod<6> (er1b, xspan {lfo1});
+    rev.run<6> (er1b, xspan {lfo1}, nullptr);
     rev.push<7> (er1b.to_const()); // feedback point
 
     // Late -----------------------------
@@ -599,8 +646,8 @@ private:
     auto r    = xspan {r_arr.data(), io.size() + 1}; // +1: Feedback on head
 
     // feedback handling
-    rev.fetch_block_plus_one<14> (l);
-    rev.fetch_block_plus_one<22> (r);
+    rev.fetch_block<14> (l, 1); // feedback, fetching block + 1 samples
+    rev.fetch_block<22> (r, 1); // feedback, fetching block + 1 samples
 
     for (uint i = 0; i < io.size(); ++i) {
       late[i] = (T) (late_in[i] + (T) (r[i] * par.decay[i]));
@@ -614,11 +661,11 @@ private:
     late_dampf *= 0.4f;
     auto late_damp = load_float<T> (late_dampf);
 
-    rev.run_mod<8> (late, xspan {lfo3}, g);
+    rev.run<8> (late, xspan {lfo3}, g);
     rev.run<9> (late);
     rev.run_lp<10> (late, late_damp);
     span_visit (late, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
-    rev.run<11> (late, [g] (uint i) { return -g[i]; });
+    rev.run<11> (late, nullptr, [g] (uint i) { return -g[i]; });
     rev.run<12> (late);
     span_visit (late, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
     rev.run<13> (late);
@@ -632,11 +679,11 @@ private:
     }
     l.cut_head (1); // drop feedback sample from previous block
 
-    rev.run_mod<15> (late, xspan {lfo4}, g);
+    rev.run<15> (late, xspan {lfo4}, g);
     rev.run<16> (late);
     rev.run_lp<17> (late, late_damp);
     span_visit (late, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
-    rev.run<18> (late, [g] (uint i) { return -g[i]; });
+    rev.run<18> (late, nullptr, [g] (uint i) { return -g[i]; });
     rev.run<19> (late);
     rev.run<20> (late);
     span_visit (late, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
@@ -654,92 +701,94 @@ private:
   }
   //----------------------------------------------------------------------------
   template <class T, class Params>
-  void process_algo2 (xspan<std::array<T, 2>> io, Params& par)
+  void process_midifex49 (xspan<std::array<T, 2>> io, Params& par)
   {
-    auto& rev = std::get<algo2_type> (_modes);
+    auto& rev = std::get<midifex49_type> (_modes);
 
     using arr    = std::array<T, max_block_size>;
     using arr_fb = std::array<T, max_block_size + 1>;
 
-    arr    x_arr, l_arr, df_arr, lfo1, lfo2;
-    arr_fb r_arr;
+    arr_fb tmp_arr;
+    xspan  tmp {tmp_arr.data(), io.size() + 1};
+    arr_fb sig_arr;
+    xspan  sig {sig_arr.data(), io.size()};
+    arr    l_arr;
     xspan  l {l_arr.data(), io.size()};
-    xspan  r {r_arr.data(), io.size() + 1}; // + 1 sample for feedback
-    xspan  x {x_arr.data(), io.size()}; // (loop variable)
-    xspan  df {df_arr.data(), io.size()}; // (difused input)
+    arr    r_arr;
+    xspan  r {r_arr.data(), io.size()};
+    arr    lfo1_arr;
+    xspan  lfo1 {lfo1_arr.data(), io.size()};
+    arr    lfo2_arr;
+    xspan  lfo2 {lfo2_arr.data(), io.size()};
 
     span_visit (io, [&] (auto& spl, uint i) {
-      // to MS
-      df[i] = (T) ((spl[0] + spl[1]) * 0.5_r);
-      // lfo
+      // Midside signal
+      sig[i] = (T) (((spl[0] + spl[1]) * 0.5_r));
+      // LFO
       auto lfo = tick_lfo<T>();
       lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
       lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
       // decay fixup
       auto decay   = (T) (0.99999_r - par.decay[i]);
       decay        = (T) (0.99999_r - decay * decay);
-      par.decay[i] = (T) (0.25_r + decay * 0.15_r);
+      par.decay[i] = (T) (0.1_r + decay * 0.8375_r);
     });
 
-    float dampf = (0.9f - _param.damp * 0.9f);
-    dampf       = 1.f - dampf * dampf;
-    dampf *= 0.7f;
-    auto damp = load_float<T> (dampf);
+    rev.run<0> (sig);
+    rev.run<1> (sig);
+    rev.run<2> (sig);
+    rev.run<3> (sig);
 
-    // diffusion -----------------------------
-    rev.run<0> (df);
-    rev.run<1> (df);
-    rev.run<2> (df);
-    rev.run<3> (df);
-    rev.run<4> (df);
-    rev.run<5> (df);
-    rev.run<6> (df);
-    rev.run<7> (df, [&] (uint i) { return -0.5_r * par.character[i]; });
-    rev.run<8> (df, [&] (uint i) { return -0.5_r * par.character[i]; });
+    // feedback handling, fetching the block with a negative offset of 1
+    rev.fetch_block<19> (tmp, 1);
+    span_visit (sig, [&] (auto& v, uint i) { v = (T) (v + tmp[i]); });
+    tmp.cut_head (1); // feedback done, drop oldest sample
 
-    // pseudo-ER temporarily stored on L channel for buffer reuse
-    xspan_memcpy (l, df);
-    rev.run<9, 10> (l);
-    span_visit (df, [&] (auto& df_spl, uint i) {
-      df_spl = (T) (df_spl * (1_r - par.er[i]) + l[i] * par.er[i]);
+    // 1st output point for L and R signal
+    xspan_memcpy (l, sig); // delay LT a block -> might overlap, requires copy
+    rev.run<4> (l);
+    rev.fetch_block<5> (r); // delay GT a block will never overlap
+    rev.push<5> (sig.to_const());
+
+    // continuing the loop
+    rev.run<6> (sig);
+    rev.run<7> (sig, lfo1, nullptr);
+
+    // 2nd output point for L and R signal
+    rev.fetch_block<8> (tmp); // delay GT a block will never overlap
+    span_visit (l, [&] (auto& v, uint i) { v = (T) (v + tmp[i]); });
+    rev.push<8> (sig.to_const());
+    rev.fetch_block<9> (tmp); // delay GT a block will never overlap
+    span_visit (r, [&] (auto& v, uint i) { v = (T) (v + tmp[i]); });
+    rev.push<9> (sig.to_const());
+
+    // continuing the loop
+    rev.run<10> (sig);
+    apply_gain (sig, par.decay);
+    span_visit (tmp, [&] (auto& v, uint i) {
+      v = (T) (par.character[i] * 0.14_r);
     });
+    rev.run<11, 12> (sig, nullptr, nullptr, nullptr, tmp);
 
-    // loop 1
-    rev.fetch_block_plus_one<25> (r);
-    span_visit (x, [&] (auto& x_spl, uint i) {
-      x_spl = (T) (df[i] + r[i] * par.decay[i]);
+    // 3rd output point for L and R signal
+    rev.fetch_block<13> (tmp); // delay GT a block will never overlap
+    span_visit (l, [&] (auto& v, uint i) { v = (T) (v + tmp[i]); });
+    rev.push<13> (sig.to_const());
+    rev.fetch_block<14> (tmp); // delay GT a block will never overlap
+    span_visit (r, [&] (auto& v, uint i) { v = (T) (v + tmp[i]); });
+    rev.push<14> (sig.to_const());
+
+    // continuing the loop
+    rev.run<15> (sig);
+    apply_gain (sig, par.decay);
+    rev.run_lp<16> (sig, load_float<T> (_param.damp * 0.8f));
+    span_visit (tmp, [&] (auto& v, uint i) {
+      v = (T) (par.character[i] * 0.2_r);
     });
-    r.cut_head (1); // feedback sample already processed...
+    rev.run<17, 18> (sig, lfo2, nullptr, nullptr, tmp);
 
-    rev.run_mod<11> (x, xspan {lfo1});
-    apply_gain (x, par.decay);
-    rev.run<12> (x);
-    apply_gain (x, par.decay);
-    rev.run<13> (x);
-    apply_gain (x, par.decay);
-    rev.run<14> (x);
-    apply_gain (x, par.decay);
-    rev.run<15> (x);
-    rev.run_lp<16> (x, damp);
-    rev.run<17> (x); // plain delay
-    xspan_memcpy (l, x);
-
-    // loop 2
-    span_visit (x, [&] (auto& x_spl, uint i) {
-      x_spl = (T) (df[i] + x_spl * par.decay[i]);
-    });
-    rev.run_mod<18> (x, xspan {lfo2});
-    apply_gain (x, par.decay);
-    rev.run<19> (x);
-    apply_gain (x, par.decay);
-    rev.run<20> (x);
-    apply_gain (x, par.decay);
-    rev.run<21> (x);
-    apply_gain (x, par.decay);
-    rev.run<22> (x);
-    rev.run_lp<23> (x, damp);
-    rev.run_hp<24> (x);
-    rev.push<25> (x.to_const()); // delay / feedback point
+    // push to delay feedback
+    rev.push<19> (sig.to_const());
 
     span_visit (io, [&] (auto& spls, uint i) {
       spls[0] = l[i];
@@ -774,11 +823,24 @@ private:
   //----------------------------------------------------------------------------
   void update_mod()
   {
-    // Reminder, phase are at 0, 180, 0, 180 on reset.
-    auto mod    = _param_smooth.target().mod;
-    auto f_er   = 0.3f + mod * 0.3f;
-    auto f_late = 0.1f + mod * 1.2f;
-    _lfo.set_freq (f32_x4 {f_er, f_er, f_late, f_late}, t_spl);
+    // reminder, the phase relations are set on "void set (mode_tag, int v)"
+    auto mod = _param_smooth.target().mod;
+    switch (_param.mode) {
+    case mode::algo1:
+    case mode::algo1_flt: {
+      auto f_er   = 0.3f + mod * 0.3f;
+      auto f_late = 0.1f + mod * 1.2f;
+      _lfo.set_freq (f32_x4 {f_er, f_er, f_late, f_late}, t_spl);
+    } break;
+    case mode::midifex49_flt:
+    case mode::midifex49: {
+      // Reminder, phase are at 0, 180, 0, 180 on reset.
+      auto f_late = 0.2f + mod * 0.2f;
+      _lfo.set_freq (f32_x4 {f_late, f_late, f_late, f_late}, t_spl);
+    } break;
+    default:
+      break;
+    }
   }
   //----------------------------------------------------------------------------
   // just a convenience function for iterating block loops while not bloating
@@ -852,10 +914,10 @@ private:
 
   using algo1_type
     = detail::lofiverb::engine<detail::lofiverb::algo1_spec, max_block_size>;
-  using algo2_type
-    = detail::lofiverb::engine<detail::lofiverb::algo2_spec, max_block_size>;
-  std::variant<algo1_type, algo2_type> _modes;
-  ducker<f32_x2>                       _ducker;
+  using midifex49_type = detail::lofiverb::
+    engine<detail::lofiverb::midifex49_spec, max_block_size>;
+  std::variant<algo1_type, midifex49_type> _modes;
+  ducker<f32_x2>                           _ducker;
 
   uint  _n_processed_samples;
   float _1_4beat_spls;

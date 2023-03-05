@@ -5,6 +5,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <type_traits>
 #include <vector>
 
@@ -110,13 +111,13 @@ public:
   // will be placed. Once the feedback is applied to a current input, this head
   // feedback sample (last output) can be dropped.
   template <uint Idx, class T>
-  void fetch_block_plus_one (xspan<T> dst)
+  void fetch_block (xspan<T> dst, uint negative_offset = 0)
   {
     constexpr delay_data dd = Spec::values[Idx];
     static_assert (dd.g.value() == 0, "Not possible on allpasses");
     static_assert (dd.mod.value() == 0, "Not possible on Modulated delays");
     assert (dst);
-    decode_read (dst, get_read_buffers<Idx> (dst.size(), 1));
+    decode_read (dst, get_read_buffers<Idx> (dst.size(), negative_offset));
   }
   // see comment on fetch_block_plus_one
   //----------------------------------------------------------------------------
@@ -194,66 +195,162 @@ public:
     run_hp<Idx> (io, T {});
   }
   //----------------------------------------------------------------------------
+  // run an allpass or pure delay.
+  // Lfo and gain parameters can be either value generators (lambdas with T(int)
+  // signature), spans or dummy types. When dummy types (no span and no lambda
+  // types, e.g. nullptr) the parameters are defaulted (no delay modulation,
+  // same allpass gain as in the specification)
+  template <uint Idx, class T, class P1, class P2>
+  void run (xspan<T> io, P1 lfo, P2 gain)
+  {
+    run_impl<Idx> (
+      io,
+      get_gain_generator<Idx, T> (std::forward<P2> (gain)),
+      get_lfo_generator<T> (std::forward<P1> (lfo)));
+  }
+  //----------------------------------------------------------------------------
+  // run an allpass or pure delay
   template <uint Idx, class T>
   void run (xspan<T> io)
   {
-    run<Idx> (io, [] (uint) { return get_gain<Idx, T>(); });
+    run<Idx> (io, nullptr, nullptr);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T, class GF>
-  void run (xspan<T> io, GF&& g_gen)
-  {
-    run_impl<Idx> (io, std::forward<GF> (g_gen), nullptr);
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class T, class U>
-  void run (xspan<T> io, xspan<U> gs)
-  {
-    run_impl<Idx> (
-      io, [gs] (uint i) { return gs[i]; }, nullptr);
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class T, class LF>
-  void run_mod (xspan<T> io, LF&& lfo)
-  {
-    run_impl<Idx> (
-      io, [] (uint) { return get_gain<Idx, T>(); }, std::forward<LF> (lfo));
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class T, class U>
-  void run_mod (xspan<T> io, xspan<U> lfo)
-  {
-    run_mod<Idx> (io, [lfo] (uint i) { return lfo[i]; });
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class T, class GF, class LF>
-  void run_mod (xspan<T> io, GF&& g_gen, LF&& lfo_gen)
-  {
-    run_impl<Idx> (io, std::forward<GF> (g_gen), std::forward<LF> (lfo_gen));
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class T, class U, class V>
-  void run_mod (xspan<T> io, xspan<U> lfo, xspan<V> gs)
-  {
-    run_mod<Idx> (
-      io, [gs] (uint i) { return gs[i]; }, [lfo] (uint i) { return lfo[i]; });
-  }
-  //----------------------------------------------------------------------------
-  // These are double nested allpasses. Only expose those that are needed, as
-  // there are lots of modulation combinations...
-  //----------------------------------------------------------------------------
-  template <uint Idx1, uint Idx2, class T>
-  void run (xspan<T> io)
+  // run 2 level nested allpass.
+  // Lfo and gain parameters can be either value generators (lambdas with T(int)
+  // signature), spans or dummy types. When dummy types (no span and no lambda
+  // types, e.g. nullptr) the parameters are defaulted (no delay modulation,
+  // same allpass gain as in the specification)
+  template <
+    uint Idx1,
+    uint Idx2,
+    class T,
+    class L1,
+    class G1,
+    class L2,
+    class G2>
+  void run (xspan<T> io, L1 lfo1, G1 g1, L2 lfo2, G2 g2)
   {
     run_impl<Idx1, Idx2> (
       io,
-      [] (uint) { return get_gain<Idx1, T>(); },
-      nullptr,
-      [] (uint) { return get_gain<Idx2, T>(); },
-      nullptr);
+      get_gain_generator<Idx1, T> (std::forward<G1> (g1)),
+      get_lfo_generator<T> (std::forward<L1> (lfo1)),
+      get_gain_generator<Idx2, T> (std::forward<G2> (g2)),
+      get_lfo_generator<T> (std::forward<L2> (lfo2)));
+  }
+  //----------------------------------------------------------------------------
+  // run a 2-level nested allpass
+  template <uint Idx1, uint Idx2, class T>
+  void run (xspan<T> io)
+  {
+    run<Idx1, Idx2> (io, nullptr, nullptr, nullptr, nullptr);
+  }
+  //----------------------------------------------------------------------------
+  template <uint Start_idx, uint N, class T>
+  void run_multichannel (std::array<T*, N> io, uint block_size)
+  {
+    mp11::mp_for_each<mp11::mp_iota_c<N>> ([&] (auto idx) {
+      run<Start_idx + idx.value> (xspan {io[idx.value], block_size});
+    });
+  }
+  //----------------------------------------------------------------------------
+  template <class T, uint N>
+  static void hadamard_no_norm (std::array<T*, N> io, uint block_size)
+  {
+    static_assert (is_pow2 (N));
+    if constexpr (N > 1) {
+      constexpr int half_n = N / 2;
+      // all this superfluous array copying stuff should be removed by the
+      // optimizer.
+      hadamard (array_slice<0, half_n> (io), block_size);
+      hadamard (array_slice<half_n, half_n> (io), block_size);
+
+      for (uint n = 0; n < half_n; ++n) {
+        uint n1 = n;
+        uint n2 = n + half_n;
+        ARTV_LOOP_UNROLL_SIZE_HINT (16)
+        for (uint i = 0; i < block_size; ++i) {
+          T a       = io[n1][i];
+          T b       = io[n2][i];
+          io[n1][i] = (a + b);
+          io[n2][i] = (a - b);
+        }
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T, uint N>
+  static void hadamard (std::array<T*, N> io, uint block_size)
+  {
+    hadamard_no_norm (io, block_size);
+    // normalize by 1/sqrtn, not using GCEM because this benefits from fixed
+    // point constant literals.
+    if constexpr (N == 2) {
+      for (auto iov : io) {
+        ARTV_LOOP_UNROLL_SIZE_HINT (16)
+        for (uint i = 0; i < block_size; ++i) {
+          io[i] = (T) (io[i] * get_hadamard_ratio<N>());
+        }
+      }
+    }
   }
   //----------------------------------------------------------------------------
 private:
+  //----------------------------------------------------------------------------
+  template <class T, class Lfo>
+  static constexpr auto get_lfo_generator (Lfo&& v)
+  {
+    if constexpr (
+      std::is_convertible_v<Lfo, std::function<T (uint)>>
+      && !std::is_same_v<Lfo, std::nullptr_t>) {
+      return std::forward<Lfo> (v);
+    }
+    else if constexpr (is_xspan<Lfo>) {
+      return [v] (uint i) { return v[i]; };
+    }
+    else {
+      return nullptr;
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class Gain>
+  static constexpr auto get_gain_generator (Gain&& v)
+  {
+    if constexpr (
+      std::is_convertible_v<Gain, std::function<T (uint)>>
+      && !std::is_same_v<Gain, std::nullptr_t>) {
+      return std::forward<Gain> (v);
+    }
+    else if constexpr (is_xspan<Gain>) {
+      return [v] (uint i) { return v[i]; };
+    }
+    else {
+      return [] (uint) { return get_gain<Idx, T>(); };
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <uint N>
+  static constexpr auto get_hadamard_ratio()
+  {
+    if constexpr (N == 4) {
+      return 0.5_r;
+    }
+    else if constexpr (N == 8) {
+      return 0.35355339059327373_r;
+    }
+    else if constexpr (N == 16) {
+      return 0.25_r;
+    }
+    else if constexpr (N == 32) {
+      return 0.17677669529663687_r;
+    }
+    else if constexpr (N == 64) {
+      return 0.125_r;
+    }
+    else {
+      static_assert (N == N, "Unimplemented");
+    }
+  }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
   static constexpr auto get_gain()
@@ -495,7 +592,7 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  // Helper template function to run nested allpasses
+  // Helper template function to run (arbitrarily) nested allpasses
   template <
     uint I,
     uint N,
@@ -709,7 +806,7 @@ private:
     constexpr delay_data dd = Spec::values[Idx];
     constexpr auto       sz = get_delay_size (Idx);
     assert (blocksize);
-    assert (sz >= blocksize);
+    assert (sz >= (blocksize + neg_offset));
 
     uint block1 = _stage[Idx].pos - dd.spls.to_int() - neg_offset;
     block1 += (block1 >= sz) ? sz : 0;
