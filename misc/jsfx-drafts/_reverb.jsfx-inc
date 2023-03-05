@@ -2,68 +2,156 @@ import _core.jsfx-inc
 
 @init
 
-// returns 8 values on the "dst_ptr" array. "src_ptr" has to contain 8 values.
-function hadamard_8 (y_ptr, x_ptr)
-    local (x01, x23, x45, x67, x0123, x4567, i) global()(
-    // y0 + + + + + + + +
-    // y4 + + + + - - - -
-    // y2 + + - - + + - -
-    // y6 + + - - - - + +
+function hadamard_4_no_norm (y_ptr, x_ptr)
+  local(y1, y2, y3, y4) global()(
 
-    x01 = x_ptr[0] + x_ptr[1];
-    x23 = x_ptr[2] + x_ptr[3];
-    x45 = x_ptr[4] + x_ptr[5];
-    x67 = x_ptr[6] + x_ptr[7];
+    // reminder, this starts from two butterflies (first drawing), it is then
+    // combined together (so copy paste of the 4 x 2x2 matrices with the
+    // upper-left one negated) using the same scheme.
+    //
+    //     1 2             3 4
+    // --------        --------
+    // 1 | + -         3 | + -
+    // 2 | + +         4 | + +
 
-    x0123 = x01 + x23;
-    x4567 = x45 + x67;
-    y_ptr[0] = x0123 + x4567;
-    y_ptr[4] = x0123 - x4567;
-    x0123 = x01 - x23;
-    x4567 = x45 - x67;
-    y_ptr[2] = x0123 + x4567;
-    y_ptr[6] = x0123 - x4567;
+    //     1 2 3 4
+    // ------------
+    // 1 | + - - +
+    // 2 | + + - -
+    // 3 | + - + -
+    // 4 | + + + +
 
-    // y1 + - + - + - + -
-    // y5 + - + - - + - +
-    // y3 + - - + + - - +
-    // y7 + - - + - + + -
+  y1 = x_ptr[0] - x_ptr[1];
+  y2 = x_ptr[0] + x_ptr[1];
 
-    x01 = x_ptr[0] - x_ptr[1];
-    x23 = x_ptr[2] - x_ptr[3];
-    x45 = x_ptr[4] - x_ptr[5];
-    x67 = x_ptr[6] - x_ptr[7];
+  y3 = x_ptr[2] - x_ptr[3];
+  y4 = x_ptr[2] + x_ptr[3];
 
-    x0123 = x01 + x23;
-    x4567 = x45 + x67;
-    y_ptr[1] = x0123 + x4567;
-    y_ptr[5] = x0123 - x4567;
-    x0123 = x01 - x23;
-    x4567 = x45 - x67;
-    y_ptr[3] = x0123 + x4567;
-    y_ptr[7] = x0123 - x4567;
-
-    i = 0;
-    loop(8,
-        y_ptr[i] *= 0.35355339059327373; // 1/sqrt(8)
-        i += 1;
-    );
+  y_ptr[0] = y1 - y3;
+  y_ptr[1] = y2 - y4;
+  y_ptr[2] = y1 + y3;
+  y_ptr[3] = y2 + y4;
 );
 
+function hadamard_4 (y_ptr, x_ptr) local(i) global() (
+  hadamard_4_no_norm (y_ptr, x_ptr);
+  i = 0;
+  loop(4,
+    y_ptr[i] *= 0.5; // 1/sqrt(4)
+    i += 1;
+  );
+);
 
-function hadamard_4 (y_ptr, x_ptr) local (x01, x23) global()(
-    // ++++
-    // +-+-
-    // ++--
-    // +--+
-    x01 = (x_ptr[0] + x_ptr[1]) * 0.5;
-    x23 = (x_ptr[2] + x_ptr[3]) * 0.5;
-    y_ptr[0] = x01 + x23;
-    y_ptr[2] = x01 - x23;
-    x01 -= x_ptr[1];
-    x23 -= x_ptr[3];
-    y_ptr[1] = x01 + x23;
-    y_ptr[3] = x01 - x23;
+// returns 8 values on the "dst_ptr" array. "src_ptr" has to contain 8 values.
+function hadamard_8_no_norm (y_ptr, x_ptr)
+  local(y1, y2, y3, y4, y5, y6, y7, y8) global()(
+
+  hadamard_4_no_norm (y_ptr, x_ptr);
+  hadamard_4_no_norm (y_ptr + 4, x_ptr + 4);
+
+    //     1 2 3 4
+    // ------------
+    // 1 | + - - +
+    // 2 | + + - -
+    // 3 | + - + -
+    // 4 | + + + +
+
+    //     5 6 7 8
+    // ------------
+    // 5 | + - - +
+    // 6 | + + - -
+    // 7 | + - + -
+    // 8 | + + + +
+
+    //     1 2 3 4 5 6 7 8
+    // ---------------------
+    // 1 | + - - + - + + -
+    // 2 | + + - - - - + +
+    // 3 | + - + - - + - +
+    // 4 | + + + + - - - -
+    // 5 | + - - + + - - +
+    // 6 | + + - - + + - -
+    // 7 | + - + - + - + -
+    // 8 | + + + + + + + +
+
+  y1 = y_ptr[0];
+  y2 = y_ptr[1];
+  y3 = y_ptr[2];
+  y4 = y_ptr[3];
+  y5 = y_ptr[4];
+  y6 = y_ptr[5];
+  y7 = y_ptr[6];
+  y8 = y_ptr[7];
+
+  y_ptr[0] = y1 - y5;
+  y_ptr[1] = y2 - y6;
+  y_ptr[2] = y3 - y7;
+  y_ptr[3] = y4 - y8;
+  y_ptr[4] = y1 + y5;
+  y_ptr[5] = y2 + y6;
+  y_ptr[6] = y3 + y7;
+  y_ptr[7] = y4 + y8;
+);
+
+function hadamard_8 (y_ptr, x_ptr) local(i) global() (
+  hadamard_8_no_norm (y_ptr, x_ptr);
+  i = 0;
+  loop(8,
+    y_ptr[i] *= 0.35355339059327373; // 1/sqrt(8)
+    i += 1;
+  );
+);
+
+function hadamard_16_no_norm (y_ptr, x_ptr)
+  local(
+    y1, y2, y3, y4, y5, y6, y7, y8, y9, ya, yb, yc, yd, ye, yf, yg)
+  global()(
+
+  hadamard_8_no_norm (y_ptr, x_ptr);
+  hadamard_8_no_norm (y_ptr + 8, x_ptr + 8);
+
+  y1 = y_ptr[0];
+  y2 = y_ptr[1];
+  y3 = y_ptr[2];
+  y4 = y_ptr[3];
+  y5 = y_ptr[4];
+  y6 = y_ptr[5];
+  y7 = y_ptr[6];
+  y8 = y_ptr[7];
+  y9 = y_ptr[8];
+  ya = y_ptr[9];
+  yb = y_ptr[10];
+  yc = y_ptr[11];
+  yd = y_ptr[12];
+  ye = y_ptr[13];
+  yf = y_ptr[14];
+  yg = y_ptr[15];
+
+  y_ptr[0]  = y1 - y9;
+  y_ptr[1]  = y2 - ya;
+  y_ptr[2]  = y3 - yb;
+  y_ptr[3]  = y4 - yc;
+  y_ptr[4]  = y5 - yd;
+  y_ptr[5]  = y6 - ye;
+  y_ptr[6]  = y7 - yf;
+  y_ptr[7]  = y8 - yg;
+  y_ptr[8]  = y1 + y9;
+  y_ptr[9]  = y2 + ya;
+  y_ptr[10] = y3 + yb;
+  y_ptr[11] = y4 + yc;
+  y_ptr[12] = y5 + yd;
+  y_ptr[13] = y6 + ye;
+  y_ptr[14] = y7 + yf;
+  y_ptr[15] = y8 + yg;
+);
+
+function hadamard_16 (y_ptr, x_ptr) local(i) global() (
+  hadamard_16_no_norm (y_ptr, x_ptr);
+  i = 0;
+  loop(16,
+    y_ptr[i] *= 0.25; // 1/sqrt(16)
+    i += 1;
+  );
 );
 
 // returns "size "values on the "y_ptr" array. "x_ptr" array has to contain

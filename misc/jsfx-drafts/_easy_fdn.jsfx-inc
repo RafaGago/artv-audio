@@ -1,0 +1,59 @@
+// Header creating a lot of delay lines of 8192 and defining functions to
+// operate FND reverbs on them. The intent is to be able to use FDNs
+// without boilerplate when drafting reverb algorithms. This is based on global
+// variables.
+
+@init
+
+function easy_fdn_delay_4(ptr, t1, t2, t3, t4)
+    local(i1, i2, i3, i4, v1, v2, v3, v4) global (easyfdn_del*, easyfdn_del_idx) (
+
+  i1 = easyfdn_del_idx;
+  i2 = easyfdn_del_idx + 1;
+  i3 = easyfdn_del_idx + 2;
+  i4 = easyfdn_del_idx + 3;
+
+  v1 = easyfdn_del.delay_line_get (t1, i1);
+  v2 = easyfdn_del.delay_line_get (t2, i2);
+  v3 = easyfdn_del.delay_line_get (t3, i3);
+  v4 = easyfdn_del.delay_line_get (t4, i4);
+
+  easyfdn_del.delay_line_set (ptr[0], 0, i1);
+  easyfdn_del.delay_line_set (ptr[1], 0, i2);
+  easyfdn_del.delay_line_set (ptr[2], 0, i3);
+  easyfdn_del.delay_line_set (ptr[3], 0, i4);
+
+  ptr[0] = v1;
+  ptr[1] = v2;
+  ptr[2] = v3;
+  ptr[3] = v4;
+
+  easyfdn_del_idx += 4;
+);
+
+function easy_fdn_delay(arr*, t1, t2, t3, t4) local() global () (
+  easy_fdn_delay_4(arr.ptr, t1, t2, t3, t4);
+);
+
+function easy_fdn_delay(arr*, t1, t2, t3, t4, t5, t6, t7, t8) local() global () (
+  easy_fdn_delay_4(arr.ptr, t1, t2, t3, t4);
+  easy_fdn_delay_4(arr.ptr + 4, t5, t6, t7, t8);
+);
+
+function easy_fdn_delay(arr*, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15, t16) local() global () (
+  easy_fdn_delay_4(arr.ptr, t1, t2, t3, t4);
+  easy_fdn_delay_4(arr.ptr + 4, t5, t6, t7, t8);
+  easy_fdn_delay_4(arr.ptr + 8, t9, t10, t11, t12);
+  easy_fdn_delay_4(arr.ptr + 12, t13, t14, t15, t16);
+);
+
+function easy_fdn_next_sample() local() global (easyfdn_del*, easyfdn_del_idx) (
+  easyfdn_del.delay_line_advance();
+  easyfdn_del_idx = 0;
+);
+
+n_lines = 512; // more than we need
+max_delay = 4096;
+easyfdn_del_idx = 0; // to avoid passing parameters
+easyfdn_del.delay_line_init (round_next_pow2 (max_delay), n_lines);
+easyfdn_del.delay_line_init (round_next_pow2 (max_delay), n_lines);

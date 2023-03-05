@@ -8,82 +8,16 @@ slider7:hp=0<0,1,0.01> HP
 
 slider9:stereo=1<-1,1, 0.01> Stereo
 
-slider11:er_fact=0.2<0,1,0.01> ER
-
 slider21:db_wet=-12<-40, 12,0.1> Wet dB
 slider20:db_dry=0<-60, 0,0.1> Dry dB
 
+slider23:offset=0<0, 30, 1> Offset
+
 import _core.jsfx-inc
-import _delay-line.jsfx-inc
+import _easy_allpass_reverb.jsfx-inc
 import _reverb.jsfx-inc
 import _lfo.jsfx-inc
 import _fir.jsfx-inc
-
-// ratios starting point
-// http://www.voxangelica.net/transfer/magic%20numbers%20for%20reverb%20design%203b.pdf
-//
-// Not really used, but at least this script provides set of primes to do manual
-// tuning work.
-//
-// #!/usr/bin/env python
-// from math import *
-// import sympy as sp
-//
-// def print_delay(v):
-//   print (f'// {v}[{sp.prevprime (v)},{sp.nextprime (v)}]')
-//
-// def get_start_times(del_spls, n_ap):
-//   def f(x):
-//     return 1 / (x + 1 - log(2))
-//   print_delay(del_spls)
-//   for i in range (n_ap):
-//     print_delay (del_spls * f (i + 1))
-//
-// def get_start_times2(del_spls, n_ap):
-//   print_delay(del_spls)
-//   print_delay(del_spls / 2)
-//   for i in range (n_ap):
-//     idx = int(i / 2) + 1
-//     if (i % 2) == 0:
-//       print_delay (del_spls * (2 / (1 + 2 * idx)))
-//     else:
-//       print_delay (del_spls * (4 / (3 + 2 * idx)))
-//
-// get_start_times2(12000, 102)
-
-// golden ratio helper
-// #!/usr/bin/env python
-// from math import *
-// import sympy as sp
-//
-// import argparse
-//
-// def get_args():
-//     parser = argparse.ArgumentParser()
-//     parser.add_argument("start", type=int, help='smallest in the series')
-//     parser.add_argument("count", type=int, help='count in the series')
-//     parser.add_argument("--nonprime", default=False, type=bool, help='maximum of features',)
-//     opt = parser.parse_args()
-//     return opt
-//
-// def golden_ratio_series(start, count, nonprime):
-//   ret = []
-//   curr = start
-//   for _ in range (count):
-//     append = curr;
-//     if not nonprime:
-//       append = [sp.prevprime (curr),sp.nextprime (curr)]
-//
-//     ret.append (append)
-//     curr *= 1.61803398874989484820458683436563811772030917980576 # way over double...
-//   return ret
-//
-// def main():
-//     args = get_args()
-//     print (golden_ratio_series(args.start, args.count, args.nonprime))
-//
-// if __name__ == "__main__":
-//     main()
 
 @init
 
@@ -133,13 +67,6 @@ loop(floor (srate / 44100) * 2,
 );
 
 // Actual reverb stuff ---------------------------------------------------------
-n_lines = 150; // more than we need
-max_delay = 3000;
-delay_line_idx = 0; // to avoid passing parameters
-del.delay_line_init (round_next_pow2 (max_delay), n_lines);
-del.delay_line_init (round_next_pow2 (max_delay), n_lines);
-del.delay_line_thiran1_add();
-
 n_lfos = 2;
 lfo.lfo_bank_init (n_lfos, 1);
 lfo.ret.array_init (n_lfos);
@@ -149,251 +76,7 @@ er_lfo.lfo_bank_init (n_lfos, 1);
 er_lfo.ret.array_init (n_lfos);
 er_lfo.lfo_bank_reset_phase (0);
 
-// TODO: nested lattice
-function delay (in, spls) local (x) global (del*, delay_line_idx) (
-  x = del.delay_line_get (spls, delay_line_idx);
-  del.delay_line_set (in, 0, delay_line_idx);
-  delay_line_idx += 1;
-  x;
-);
 
-function delay_mod (in, spls, lfo, max_lfo) local (x) global (del*, delay_line_idx) (
-  x = del.delay_line_thiran1_get (spls, delay_line_idx);
-  del.delay_line_set (in, 0, delay_line_idx);
-  delay_line_idx += 1;
-  x;
-);
-
-// allpass
-function ap (in, spls, g) local (yn, u, x) global (del*, delay_line_idx) (
-  yn = del.delay_line_get (spls, delay_line_idx);
-  u = in + yn * g;
-  x = yn - u * g;
-  del.delay_line_set (u, 0, delay_line_idx);
-  delay_line_idx += 1;
-  x;
-);
-
-
-// allpass with modulation
-function ap (in, spls, g, lfo, maxlfo) local (yn, u, x) global (del*, delay_line_idx) (
-  spls += lfo * maxlfo;
-  yn = del.delay_line_thiran1_get (spls, delay_line_idx);
-  u = in + yn * g;
-  x = yn - u * g;
-  del.delay_line_set (u, 0, delay_line_idx);
-  delay_line_idx += 1;
-  x;
-);
-
-// 2 nested allpasses (lattice)
-function ap2 (in, spls1, spls2, g1, g2)
-  local (yn, u, u1, x, i1, i2, yn1, yn2) global (del*, delay_line_idx) (
-  i1 = delay_line_idx;
-  i2 = delay_line_idx + 1;
-
-  yn1 = del.delay_line_get (spls1, i1);
-  yn2 = del.delay_line_get (spls2, i2);
-
-  u  = in;
-  u += yn1 * g1;
-  x  = yn1 - u * g1;
-  u += yn2 * g2;
-  u1 = yn2 - u * g2;
-  del.delay_line_set (u1, 0, i1);
-  del.delay_line_set (u, 0, i2);
-  delay_line_idx += 2;
-  x;
-);
-
-// 2 nested allpasses (lattice) with outer modulation
-function ap2 (in, spls1, spls2, g1, g2, lfo, maxlfo)
-  local (yn, u, u1, x, i1, i2, yn1, yn2) global (del*, delay_line_idx) (
-  i1 = delay_line_idx;
-  i2 = delay_line_idx + 1;
-
-  spls1 += lfo * maxlfo;
-  yn1 = del.delay_line_thiran1_get (spls1, i1);
-  yn2 = del.delay_line_get (spls2, i2);
-
-  u  = in;
-  u += yn1 * g1;
-  x  = yn1 - u * g1;
-  u += yn2 * g2;
-  u1 = yn2 - u * g2;
-  del.delay_line_set (u1, 0, i1);
-  del.delay_line_set (u, 1, i2);
-  delay_line_idx += 2;
-  x;
-);
-
-// 2 nested allpasses (lattice) with outer and inner modulation
-function ap2 (in, spls1, spls2, g1, g2, lfo1, maxlfo1, lfo2, maxlfo2)
-  local (yn, u, u1, x, i1, i2, yn1, yn2) global (del*, delay_line_idx) (
-  i1 = delay_line_idx;
-  i2 = delay_line_idx + 1;
-
-  spls1 += lfo1 * maxlfo1;
-  spls2 += lfo2 * maxlfo2;
-  yn1 = del.delay_line_thiran1_get (spls1, i1);
-  yn2 = del.delay_line_thiran1_get (spls2, i2);
-
-  u  = in;
-  u += yn1 * g1;
-  x  = yn1 - u * g1;
-  u += yn2 * g2;
-  u1 = yn2 - u * g2;
-  del.delay_line_set (u1, 0, i1);
-  del.delay_line_set (u, 1, i2);
-  delay_line_idx += 2;
-  x;
-);
-
-// 3 nested allpasses (lattice)
-function ap3 (in, spls1, spls2, spls3, g1, g2, g3)
-  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (del*, delay_line_idx) (
-  i1 = delay_line_idx;
-  i2 = delay_line_idx + 1;
-  i3 = delay_line_idx + 2;
-
-  yn1 = del.delay_line_get (spls1, i1);
-  yn2 = del.delay_line_get (spls2, i2);
-  yn3 = del.delay_line_get (spls2, i3);
-
-  u  = in;
-  u += yn1 * g1;
-  x  = yn1 - u * g1;
-  u += yn2 * g2;
-  u1 = yn2 - u * g2;
-  u += yn3 * g3;
-  u2 = yn3 - u * g3;
-
-  del.delay_line_set (u1, 0, i1);
-  del.delay_line_set (u2, 0, i2);
-  del.delay_line_set (u, 0, i3);
-  delay_line_idx += 3;
-  x;
-);
-
-// 3 nested allpasses (lattice) with outer modulation
-function ap3 (in, spls1, spls2, spls3, g1, g2, g3, lfo, maxlfo)
-  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (del*, delay_line_idx) (
-  i1 = delay_line_idx;
-  i2 = delay_line_idx + 1;
-  i3 = delay_line_idx + 2;
-
-  spls1 += lfo * maxlfo;
-  yn1 = del.delay_line_thiran1_get (spls1, i1);
-  yn2 = del.delay_line_get (spls2, i2);
-  yn3 = del.delay_line_get (spls2, i3);
-
-  u  = in + yn1 * g1;
-  x  = yn1 - u * g1;
-  u += yn2 * g2;
-  u1 = yn2 - u * g2;
-  u += yn3 * g3;
-  u2 = yn3 - u * g3;
-
-  del.delay_line_set (u1, 0, i1);
-  del.delay_line_set (u2, 0, i2);
-  del.delay_line_set (u, 0, i3);
-  delay_line_idx += 3;
-  x;
-);
-
-// 3 nested allpasses (lattice) with outer and middle modulation
-function ap3 (in, spls1, spls2, spls3, g1, g2, g3, lfo1, maxlfo1, lfo2, maxlfo2)
-  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (del*, delay_line_idx) (
-  i1 = delay_line_idx;
-  i2 = delay_line_idx + 1;
-  i3 = delay_line_idx + 2;
-
-  spls1 += lfo1 * maxlfo1;
-  spls2 += lfo2 * maxlfo2;
-  yn1 = del.delay_line_thiran1_get (spls1, i1);
-  yn2 = del.delay_line_thiran1_get (spls2, i2);
-  yn3 = del.delay_line_get (spls2, i3);
-
-  u  = in + yn1 * g1;
-  x  = yn1 - u * g1;
-  u += yn2 * g2;
-  u1 = yn2 - u * g2;
-  u += yn3 * g3;
-  u2 = yn3 - u * g3;
-
-  del.delay_line_set (u1, 0, i1);
-  del.delay_line_set (u2, 0, i2);
-  del.delay_line_set (u, 0, i3);
-  delay_line_idx += 3;
-  x;
-);
-
-// 3 nested allpasses (lattice) with full modulation
-function ap3 (in, spls1, spls2, spls3, g1, g2, g3, lfo1, maxlfo1, lfo2, maxlfo2, lfo3, maxlfo3)
-  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (del*, delay_line_idx) (
-  i1 = delay_line_idx;
-  i2 = delay_line_idx + 1;
-  i3 = delay_line_idx + 2;
-
-  spls1 += lfo1 * maxlfo1;
-  spls2 += lfo2 * maxlfo2;
-  spls3 += lfo3 * maxlfo3;
-  yn1 = del.delay_line_thiran1_get (spls1, i1);
-  yn2 = del.delay_line_thiran1_get (spls2, i2);
-  yn3 = del.delay_line_thiran1_get (spls2, i3);
-
-  u  = in + yn1 * g1;
-  x  = yn1 - u * g1;
-  u += yn2 * g2;
-  u1 = yn2 - u * g2;
-  u += yn3 * g3;
-  u2 = yn3 - u * g3;
-
-  del.delay_line_set (u1, 0, i1);
-  del.delay_line_set (u2, 0, i2);
-  del.delay_line_set (u, 0, i3);
-  delay_line_idx += 3;
-  x;
-);
-
-
-// 3 nested allpasses (lattice) with inner delays
-function ap3_d (in, spls1, spls2, spls3, d1, d2, g1, g2, g3, lfo, maxlfo)
-  local (yn, u, u1, u2, x, i1, i2, i3, i4, i5, yn1, yn2, yn3) global (del*, delay_line_idx) (
-  i1 = delay_line_idx;
-  i2 = delay_line_idx + 1;
-  i3 = delay_line_idx + 2;
-  i4 = delay_line_idx + 3;
-  i5 = delay_line_idx + 4;
-
-  spls1 += lfo * maxlfo;
-  yn1 = del.delay_line_thiran1_get (spls1, i1);
-  yn2 = del.delay_line_get (spls2, i2);
-  yn3 = del.delay_line_get (spls2, i3);
-
-  u  = in + yn1 * g1;
-  x  = yn1 - u * g1;
-  del.delay_line_set(u, 0, i4);
-  u = del.delay_line_get (d1, i4);
-  u += yn2 * g2;
-  u1 = yn2 - u * g2;
-  del.delay_line_set(u1, 0, i5);
-  u1 = del.delay_line_get (d2, i5);
-  u += yn3 * g3;
-  u2 = yn3 - u * g3;
-
-  del.delay_line_set (u1, 0, i1);
-  del.delay_line_set (u2, 0, i2);
-  del.delay_line_set (u, 0, i3);
-  delay_line_idx += 5;
-  x;
-);
-
-
-function dampfilter (in, g)  local (y1) global() (
-  in = (1 - g) * in + this.y1 * g;
-  this.y1 = in;
-);
 
 feedback = 0;
 
@@ -403,27 +86,14 @@ feedback = 0;
 
 // TODO: dc block?
 
-g1 = -0.3 - 0.3 * decay;
-g2 = 0.23 + 0.1 * decay;
-g3 = -0.15 - 0.06 * decay;
-
-lfo.lfo_bank_reset_freq (0, 0.2 + mod * 0.6, k.src.srate);
-er_lfo.lfo_bank_reset_freq (0, 0.3 + mod * 0.3, k.src.srate);
+lfo.lfo_bank_reset_freq (0, 0.2 + mod * .2, k.src.srate);
+er_lfo.lfo_bank_reset_freq (0, 0.2 + mod * 0.2, k.src.srate);
 
 dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
 
-kdamp = (0.9 - damp * 0.9);
-kdamp = 1 - kdamp * kdamp;
-kdamp *= 0.7;
+decay = decay_p * 0.75;
 
-hp_fact = 1 - hp * hp;
-hp_fact *= 0.39;
-hp_fact += 0.6;
-
-g_character = 0.618 + ((0.707 - 0.618) * 2) * character;
-
-er_amt = (er_fact * er_fact) * 0.4;
 
 @sample
 
@@ -435,18 +105,6 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   s = (src.ins.ptr[0] - src.ins.ptr[1]) * 0.5;
 
   //  a = lfo.ret.ptr[0];
-
-1 ? (
-
-// [[113, 131], [199, 211], [331, 337]]
-// [[317, 331], [523, 541], [853, 857]]
-// [[421, 431], [683, 691], [1117, 1123]]
-// [[823, 829], [1327, 1361], [2161, 2179]]
-// [[1123, 1129], [1823, 1831], [2939, 2953]]
-// [[1823, 1831], [2953, 2957], [4783, 4787]]
-// [[6823, 6829], [11027, 11047], [17863, 17881]]
-
-
   er_lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
 
 //  er = m;
@@ -455,58 +113,53 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
 
 (1) ? (
+  x = m;
 
-//[[19, 29], [37, 41], [59, 61], [97, 101], [157, 163], [251, 257], [409, 419], [661, 673], [1069, 1087]]
-//[23, 37.214781741247585, 60.21478174124759, 97.42956348249518, 157.6443452237428, 255.073908706238, 412.7182539299808, 667.7921626362188, 1080.5104165661996]
+  x = ap (x, 5, 0.1 + 0.8 * character);
+  x = ap (x, 53, 0.1 + 0.7 * character);
+  x = ap (x, 157, 0.1 + 0.6 * character);
+  x = ap (x, 173, (0.1 + 0.5 * character));
 
+  x += fb;
+//  x = ap2 (x, 331, 478, -0.27, 0 * decay * 0.015, lfo.ret.ptr[0] * mod, 27);
+  x = ap (x, 331, -0.27);
+  x *= 0.6 + decay * 0.2;
+  x0 = x;
+  x = delay (x, 72);
+  x = ap (x, 201, 0.2);
+  x *= 0.4 + decay * 0.2;
+  x = ap (x, 131, -0.35, lfo.ret.ptr[1] * mod, 13);
+//  x = f1.ap1_2_lp (x, 1009, 704, 433, 0.1 + decay_p * 0.07, 0.1 + decay_p * 0.04, 0.1, sqrt (damp) * 0.5);
+  x = dampfilter (x, damp * 0.8);
+  x = delay (x, 72);
+  x1 = x;
+//  x = f2.ap1_2_lp (x, 226, 317, 615, -0.1 + decay_p * -0.07, 0.1 + decay_p * 0.04, -0.1, sqrt (damp) * 0.5);
+//  x = ap3 (x, 615, 317, 226, -(0.2 + decay_p * 0.07), (0.14 + decay_p * 0.04), 0.1);
+  x2 = x;
+  fb = x2;
 
-decay = 1;
+//  r = x;
+//  l = x;
+  mix = character * 0.5;
+  o = (1 - mix) * x0;
+  o += mix * x1;
 
-  x = ap (m, 23, 0.75);
-  x = ap (x, 37, 0.75);
-  x = ap (x, 59, -0.7);
-  eri = ap (x, 97, 0.7);
-  x = ap (x, 158, 0.65);
-  x = ap (x, 255, 0.65);
-  x = ap (x, 419, 0.6);
-  x = ap (x, 661, -0.5 * character);
-  x = ap (x, 1087, -0.5 * character);
-  
-// [467, 479], [317, 331], [251, 257], [199, 211], [167, 173], [139, 149], [127, 131], [113, 127], [103, 107], [89, 97], [83, 89], 1087]
-// [831.7692580452521, 471.204747368256, 328.71133351016823, 252.38847148283182, 204.82949819488178, 172.35220657908232, 148.7644580862517, 130.85581550887187, 116.79565811221232, 105.46381315834623, 96.13638891019288, 88.32477449335882, 1087]
+  l = o;
+  l = ap (l, 19, 0.5 + 0.4 * character);
+  l = ap (l, 27, -(0.3 + 0.5 * character));
+  l = ap (l, 48, 0.5 + 0.25 * character);
+  l = ap (l, 77, 0.3 + 0.4 * character);
 
-  er = ap2 (eri, 727, 271, 0.65, -0.25);
-  df = x * (1 - character) + (er * character);
+  r = o;
+  r = ap (r, 17, -(0.5 + 0.4 * character));
+  r = ap (r, 31, 0.5 + 0.3 * character);
+  r = ap (r, 47, 0.5 + 0.25 * character);
+  r = ap (r, 79, 0.3 + 0.4 * character);
 
-//[[2819, 2833], [1601, 1607], [1117, 1123], [859, 863], [691, 701], 3700]
-//[2831.2293052138293, 1603.9168033694086, 1118.8886237236636, 859.095993087836, 697.2117233864421, 3700]
-//  x = ap (df * decay, 2831, -0.63, lfo.ret.ptr[0], (16 * mod) * 1);
-//  x = ap (df, 1604, -0.6);
-//  x = ap (x, 1119, 0.5);
-  
-  x = ap3_d (df, 1117, 859, 691, 9, 35, g1, g2, g3, lfo.ret.ptr[0], (16 * mod) * 1);
-  x = ap (x, 424, -0.5);
-  x = ap (x, 257, 0.5);
-  x1 = lp1.dampfilter(x, kdamp);
- 
-//[[2693, 2699], [1523, 1531], [1063, 1069], [811, 821], [661, 673], [557, 563], 3522]
-//[2695.0242197197585, 1526.755400396502, 1065.0610088526334, 817.7665101771239, 663.6701864235268, 558.4401762387562, 3522]
+//  r = l;
+//  l = r;
+//  l = r = x2;
 
-//[[23, 29], [37, 41], [61, 67], [101, 103], [163, 167], [263, 269], [421, 431], [691, 701], [1123, 1129], [1823, 1831], [2939, 2953], [4759, 4783], [7727, 7741], [12503, 12511], [20231, 20233], [32719, 32749], [52967, 52973], [85703, 85711], [138661, 138679], [224363, 224401], [363047, 363059], [587417, 587429], [950461, 950473], [1537889, 1537897], [2488363, 2488379], [4026259, 4026277]]
-//[24, 38.83281572999748, 62.83281572999748, 101.66563145999496, 164.49844718999245, 266.1640786499874, 430.6625258399799, 696.8266044899673, 1127.489130329947, 1824.3157348199145, 2951.8048651498616, 4776.120599969776, 7727.925465119638, 12504.046065089415, 20231.971530209055, 32736.017595298472, 52967.98912550753, 85704.006720806, 138671.99584631354, 224376.00256711955, 363047.9984134331, 587424.0009805526, 950471.9993939857, 1537896.0003745384, 2488367.999768524, 4026264.0001430623]
-  x = ap3_d (df, 1123, 691, 421, 7, 14, g1, g2, g3, lfo.ret.ptr[1], (16 * mod) * 1);
-  x = ap (x, 431, -0.5);
-  x = ap (x, 263, 0.5);
-  x = lp2.dampfilter(x, kdamp);
-  x = delay (x, 418);
-
-//  x = ap (df * decay, 3292, 0.65, lfo.ret.ptr[1], (16 * mod) * 1);
-//  x = ap (df, 1864, -0.6);
-//  x = ap (x, 1300, 0.5);
-//  x = ap (x , 999, -0.5);
-//  x = ap (x, 811, 0.5);
-//  x = lp2.dampfilter(x, kdamp);
-//  x = delay (x, 4301); 
 ) : (
   // datorro (impl check)
   decayv = decay + 0.6;
@@ -523,24 +176,16 @@ decay = 1;
   x = delay (x, /*4217*/4761);
   x = ap (x * decayv, /*2656*/2999, 0.5);
   x = delay (x, /*3163*//*3571*/3571);
-  
+
   x = ap (d + x * decayv, /*672*/759, 0.7, lfo.ret.ptr[0], /*24*/18*1);
   x = delay (x, /*4453*/5027);
   x = ap (x * decayv, /*1800*/2031, 0.5);
   x = delay (x, /*3720*//*4201*/4201);
-  
+
   fb = x;
 );
- 
 
-);
-
-  // prepare next iteration
-  del.delay_line_advance();
-  delay_line_idx = 0;
-
-  l = x + x1;
-  r = x - x1;
+  easy_ap_next_sample(); // prepare next iteration
 
   l = r * (1 - abs (stereo)) + l * abs (stereo);
   stereo < 0 ? (

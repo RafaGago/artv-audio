@@ -59,7 +59,7 @@ BYPASS_SRC = 0;
 k.src.kaiser_att_db = 210;
 k.src.taps_branch = 32;
 k.src.taps_branch_frac = 16;
-k.src.cutoff = 15000;
+k.src.cutoff = 10500;
 k.src.srate = BYPASS_SRC ? srate : 23400;//33600;
 
 src.down.resampler_2c_init(

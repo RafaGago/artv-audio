@@ -1,0 +1,403 @@
+// Header creating a lot of delay lines of 8192 and defining functions to
+// operate allpass reverbs on them. The intent is to be able to use allpasses
+// without boilerplate when drafting reverb algorithms. This is based on global
+// variables.
+
+// ratios starting point (Figure 8 topologies)
+// http://www.voxangelica.net/transfer/magic%20numbers%20for%20reverb%20design%203b.pdf
+//
+// Not really used, but at least this script provides set of primes to do manual
+// tuning work.
+//
+// #!/usr/bin/env python
+// from math import *
+// import sympy as sp
+//
+// def print_delay(v):
+//   print (f'// {v}[{sp.prevprime (v)},{sp.nextprime (v)}]')
+//
+// def get_start_times(del_spls, n_ap):
+//   def f(x):
+//     return 1 / (x + 1 - log(2))
+//   print_delay(del_spls)
+//   for i in range (n_ap):
+//     print_delay (del_spls * f (i + 1))
+//
+// def get_start_times2(del_spls, n_ap):
+//   print_delay(del_spls)
+//   print_delay(del_spls / 2)
+//   for i in range (n_ap):
+//     idx = int(i / 2) + 1
+//     if (i % 2) == 0:
+//       print_delay (del_spls * (2 / (1 + 2 * idx)))
+//     else:
+//       print_delay (del_spls * (4 / (3 + 2 * idx)))
+//
+// get_start_times2(12000, 102)
+
+// golden ratio helper
+// #!/usr/bin/env python
+// from math import *
+// import sympy as sp
+//
+// import argparse
+//
+// def get_args():
+//     parser = argparse.ArgumentParser()
+//     parser.add_argument("start", type=int, help='smallest in the series')
+//     parser.add_argument("count", type=int, help='count in the series')
+//     parser.add_argument("--nonprime", default=False, type=bool, help='maximum of features',)
+//     opt = parser.parse_args()
+//     return opt
+//
+// def golden_ratio_series(start, count, nonprime):
+//   ret = []
+//   curr = start
+//   for _ in range (count):
+//     append = curr;
+//     if not nonprime:
+//       append = [sp.prevprime (curr),sp.nextprime (curr)]
+//
+//     ret.append (append)
+//     curr *= 1.61803398874989484820458683436563811772030917980576 # way over double...
+//   return ret
+//
+// def main():
+//     args = get_args()
+//     print (golden_ratio_series(args.start, args.count, args.nonprime))
+//
+// if __name__ == "__main__":
+//     main()
+
+import _core.jsfx-inc
+import _delay-line.jsfx-inc
+
+@init
+
+// TODO: nested lattice
+function delay (in, spls) local (x) global (easyapv_del*, easyapv_del_idx) (
+  x = easyapv_del.delay_line_get (spls, easyapv_del_idx);
+  easyapv_del.delay_line_set (in, 0, easyapv_del_idx);
+  easyapv_del_idx += 1;
+  x;
+);
+
+function delay_mod (in, spls, lfo, max_lfo) local (x) global (easyapv_del*, easyapv_del_idx) (
+  x = easyapv_del.delay_line_thiran1_get (spls + lfo * max_lfo, easyapv_del_idx);
+  easyapv_del.delay_line_set (in, 0, easyapv_del_idx);
+  easyapv_del_idx += 1;
+  x;
+);
+
+// allpass
+function ap (in, spls, g) local (yn, u, x) global (easyapv_del*, easyapv_del_idx) (
+  yn = easyapv_del.delay_line_get (spls, easyapv_del_idx);
+  u = in + yn * g;
+  x = yn - u * g;
+  easyapv_del.delay_line_set (u, 0, easyapv_del_idx);
+  easyapv_del_idx += 1;
+  x;
+);
+
+
+// allpass with modulation
+function ap (in, spls, g, lfo, maxlfo) local (yn, u, x) global (easyapv_del*, easyapv_del_idx) (
+  spls += lfo * maxlfo;
+  yn = easyapv_del.delay_line_thiran1_get (spls, easyapv_del_idx);
+  u = in + yn * g;
+  x = yn - u * g;
+  easyapv_del.delay_line_set (u, 0, easyapv_del_idx);
+  easyapv_del_idx += 1;
+  x;
+);
+
+// 2 nested allpasses (lattice)
+function ap2 (in, spls1, spls2, g1, g2)
+  local (yn, u, u1, x, i1, i2, yn1, yn2) global (easyapv_del*, easyapv_del_idx) (
+  i1 = easyapv_del_idx;
+  i2 = easyapv_del_idx + 1;
+
+  yn1 = easyapv_del.delay_line_get (spls1, i1);
+  yn2 = easyapv_del.delay_line_get (spls2, i2);
+
+  u  = in;
+  u += yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  easyapv_del.delay_line_set (u1, 0, i1);
+  easyapv_del.delay_line_set (u, 0, i2);
+  easyapv_del_idx += 2;
+  x;
+);
+
+// 2 nested allpasses (lattice) with outer modulation
+function ap2 (in, spls1, spls2, g1, g2, lfo, maxlfo)
+  local (yn, u, u1, x, i1, i2, yn1, yn2) global (easyapv_del*, easyapv_del_idx) (
+  i1 = easyapv_del_idx;
+  i2 = easyapv_del_idx + 1;
+
+  spls1 += lfo * maxlfo;
+  yn1 = easyapv_del.delay_line_thiran1_get (spls1, i1);
+  yn2 = easyapv_del.delay_line_get (spls2, i2);
+
+  u  = in;
+  u += yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  easyapv_del.delay_line_set (u1, 0, i1);
+  easyapv_del.delay_line_set (u, 1, i2);
+  easyapv_del_idx += 2;
+  x;
+);
+
+// 2 nested allpasses (lattice) with outer and inner modulation
+function ap2 (in, spls1, spls2, g1, g2, lfo1, maxlfo1, lfo2, maxlfo2)
+  local (yn, u, u1, x, i1, i2, yn1, yn2) global (easyapv_del*, easyapv_del_idx) (
+  i1 = easyapv_del_idx;
+  i2 = easyapv_del_idx + 1;
+
+  spls1 += lfo1 * maxlfo1;
+  spls2 += lfo2 * maxlfo2;
+  yn1 = easyapv_del.delay_line_thiran1_get (spls1, i1);
+  yn2 = easyapv_del.delay_line_thiran1_get (spls2, i2);
+
+  u  = in;
+  u += yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  easyapv_del.delay_line_set (u1, 0, i1);
+  easyapv_del.delay_line_set (u, 1, i2);
+  easyapv_del_idx += 2;
+  x;
+);
+
+
+//  Allpass with 2 nested serial allpasses
+function ap1_2 (in, spls1, spls2, spls3, g1, g2, g3)
+  local (yn, u1, u2, u3, x, xn, i1, i2, i3, yn1, yn2, yn3) global (easyapv_del*, easyapv_del_idx) (
+  i1 = easyapv_del_idx;
+  i2 = easyapv_del_idx + 1;
+  i3 = easyapv_del_idx + 2;
+
+  yn1 = easyapv_del.delay_line_get (spls1, i1);
+  yn2 = easyapv_del.delay_line_get (spls2, i2);
+  yn3 = easyapv_del.delay_line_get (spls2, i3);
+
+  // outer allpass
+  u1 = in + yn1 * g1;
+  x = yn1 - u1 * g1;
+  // inner serial 1
+  u2 = u1 + yn2 * g2;
+  xn = yn2 - u2 * g2;
+  // inner serial 2
+  u3 = xn + yn3 * g3;
+  xn = yn3 - u3 * g3;
+
+  easyapv_del.delay_line_set (xn, 0, i1);
+  easyapv_del.delay_line_set (u2, 0, i2);
+  easyapv_del.delay_line_set (u3, 0, i3);
+  easyapv_del_idx += 3;
+  x;
+);
+
+//  Allpass with 2 nested serial allpasses and a lowpass
+function ap1_2_lp (in, spls1, spls2, spls3, g1, g2, g3, glp)
+  local (yn, u1, u2, u3, x, xn, i1, i2, i3, yn1, yn2, yn3) global (easyapv_del*, easyapv_del_idx) (
+  i1 = easyapv_del_idx;
+  i2 = easyapv_del_idx + 1;
+  i3 = easyapv_del_idx + 2;
+
+  yn1 = easyapv_del.delay_line_get (spls1, i1);
+  yn2 = easyapv_del.delay_line_get (spls2, i2);
+  yn3 = easyapv_del.delay_line_get (spls2, i3);
+
+  // outer allpass
+  u1 = in + yn1 * g1;
+  x = yn1 - u1 * g1;
+  // inner serial 1
+  u2 = u1 + yn2 * g2;
+  xn = yn2 - u2 * g2;
+  // inner serial 2
+  u3 = xn + yn3 * g3;
+  xn = yn3 - u3 * g3;
+  // lowpass
+  xn *= 1 - glp;
+  xn += this.xn1 * glp;
+  this.xn1 = xn;
+
+  easyapv_del.delay_line_set (xn, 0, i1);
+  easyapv_del.delay_line_set (u2, 0, i2);
+  easyapv_del.delay_line_set (u3, 0, i3);
+  easyapv_del_idx += 3;
+  x;
+);
+
+// 3 nested allpasses (lattice)
+function ap3 (in, spls1, spls2, spls3, g1, g2, g3)
+  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (easyapv_del*, easyapv_del_idx) (
+  i1 = easyapv_del_idx;
+  i2 = easyapv_del_idx + 1;
+  i3 = easyapv_del_idx + 2;
+
+  yn1 = easyapv_del.delay_line_get (spls1, i1);
+  yn2 = easyapv_del.delay_line_get (spls2, i2);
+  yn3 = easyapv_del.delay_line_get (spls2, i3);
+
+  u  = in;
+  u += yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  u += yn3 * g3;
+  u2 = yn3 - u * g3;
+
+  easyapv_del.delay_line_set (u1, 0, i1);
+  easyapv_del.delay_line_set (u2, 0, i2);
+  easyapv_del.delay_line_set (u, 0, i3);
+  easyapv_del_idx += 3;
+  x;
+);
+
+// 3 nested allpasses (golden ratio ascending)
+function ap3_gra (in, spls1, off1, off2, g1, g2, g3) (
+  ap3 (in, floor (spls1), floor(spls1 * 1.6180339887) + off1, floor (spls1 * 1.6180339887 * 1.61803398875) + off2, g1, g2, g3);
+);
+
+// 3 nested allpasses (golden ratio descending)
+function ap3_grd (in, spls1, off1, off2, g1, g2, g3) (
+  ap3 (in, floor (spls1), floor(spls1 / 1.6180339887) + off1, floor (spls1 / 1.6180339887 / 1.61803398875) + off2, g1, g2, g3);
+);
+
+// 3 nested allpasses (lattice) with outer modulation
+function ap3 (in, spls1, spls2, spls3, g1, g2, g3, lfo, maxlfo)
+  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (easyapv_del*, easyapv_del_idx) (
+  i1 = easyapv_del_idx;
+  i2 = easyapv_del_idx + 1;
+  i3 = easyapv_del_idx + 2;
+
+  spls1 += lfo * maxlfo;
+  yn1 = easyapv_del.delay_line_thiran1_get (spls1, i1);
+  yn2 = easyapv_del.delay_line_get (spls2, i2);
+  yn3 = easyapv_del.delay_line_get (spls2, i3);
+
+  u  = in + yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  u += yn3 * g3;
+  u2 = yn3 - u * g3;
+
+  easyapv_del.delay_line_set (u1, 0, i1);
+  easyapv_del.delay_line_set (u2, 0, i2);
+  easyapv_del.delay_line_set (u, 0, i3);
+  easyapv_del_idx += 3;
+  x;
+);
+
+// 3 nested allpasses (lattice) with outer and middle modulation
+function ap3 (in, spls1, spls2, spls3, g1, g2, g3, lfo1, maxlfo1, lfo2, maxlfo2)
+  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (easyapv_del*, easyapv_del_idx) (
+  i1 = easyapv_del_idx;
+  i2 = easyapv_del_idx + 1;
+  i3 = easyapv_del_idx + 2;
+
+  spls1 += lfo1 * maxlfo1;
+  spls2 += lfo2 * maxlfo2;
+  yn1 = easyapv_del.delay_line_thiran1_get (spls1, i1);
+  yn2 = easyapv_del.delay_line_thiran1_get (spls2, i2);
+  yn3 = easyapv_del.delay_line_get (spls2, i3);
+
+  u  = in + yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  u += yn3 * g3;
+  u2 = yn3 - u * g3;
+
+  easyapv_del.delay_line_set (u1, 0, i1);
+  easyapv_del.delay_line_set (u2, 0, i2);
+  easyapv_del.delay_line_set (u, 0, i3);
+  easyapv_del_idx += 3;
+  x;
+);
+
+// 3 nested allpasses (lattice) with full modulation
+function ap3 (in, spls1, spls2, spls3, g1, g2, g3, lfo1, maxlfo1, lfo2, maxlfo2, lfo3, maxlfo3)
+  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (easyapv_del*, easyapv_del_idx) (
+  i1 = easyapv_del_idx;
+  i2 = easyapv_del_idx + 1;
+  i3 = easyapv_del_idx + 2;
+
+  spls1 += lfo1 * maxlfo1;
+  spls2 += lfo2 * maxlfo2;
+  spls3 += lfo3 * maxlfo3;
+  yn1 = easyapv_del.delay_line_thiran1_get (spls1, i1);
+  yn2 = easyapv_del.delay_line_thiran1_get (spls2, i2);
+  yn3 = easyapv_del.delay_line_thiran1_get (spls2, i3);
+
+  u  = in + yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  u += yn3 * g3;
+  u2 = yn3 - u * g3;
+
+  easyapv_del.delay_line_set (u1, 0, i1);
+  easyapv_del.delay_line_set (u2, 0, i2);
+  easyapv_del.delay_line_set (u, 0, i3);
+  easyapv_del_idx += 3;
+  x;
+);
+
+
+// 3 nested allpasses (lattice) with inner delays
+function ap3_d (in, spls1, spls2, spls3, d1, d2, g1, g2, g3, lfo, maxlfo)
+  local (yn, u, u1, u2, x, i1, i2, i3, i4, i5, yn1, yn2, yn3) global (easyapv_del*, easyapv_del_idx) (
+  i1 = easyapv_del_idx;
+  i2 = easyapv_del_idx + 1;
+  i3 = easyapv_del_idx + 2;
+  i4 = easyapv_del_idx + 3;
+  i5 = easyapv_del_idx + 4;
+
+  spls1 += lfo * maxlfo;
+  yn1 = easyapv_del.delay_line_thiran1_get (spls1, i1);
+  yn2 = easyapv_del.delay_line_get (spls2, i2);
+  yn3 = easyapv_del.delay_line_get (spls2, i3);
+
+  u  = in + yn1 * g1;
+  x  = yn1 - u * g1;
+  easyapv_del.delay_line_set(u, 0, i4);
+  u = easyapv_del.delay_line_get (d1, i4);
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  easyapv_del.delay_line_set(u1, 0, i5);
+  u1 = easyapv_del.delay_line_get (d2, i5);
+  u += yn3 * g3;
+  u2 = yn3 - u * g3;
+
+  easyapv_del.delay_line_set (u1, 0, i1);
+  easyapv_del.delay_line_set (u2, 0, i2);
+  easyapv_del.delay_line_set (u, 0, i3);
+  easyapv_del_idx += 5;
+  x;
+);
+
+function dampfilter (in, g)  local (y1) global() (
+  in = (1 - g) * in + this.y1 * g;
+  this.y1 = in;
+);
+
+function easy_ap_next_sample() local() global (easyapv_del*, easyapv_del_idx) (
+  easyapv_del.delay_line_advance();
+  easyapv_del_idx = 0;
+);
+
+n_lines = 96; // more than we need
+max_delay = 8192;
+easyapv_del_idx = 0; // to avoid passing parameters
+easyapv_del.delay_line_init (round_next_pow2 (max_delay), n_lines);
+easyapv_del.delay_line_init (round_next_pow2 (max_delay), n_lines);
+easyapv_del.delay_line_thiran1_add();

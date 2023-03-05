@@ -9,8 +9,6 @@ slider7:hp=0<0,1,0.01> HP
 
 slider9:stereo=1<-1,1, 0.01> Stereo
 
-slider11:er_fact=0.2<0,1,0.01> ER
-
 slider21:db_wet=-12<-40, 12,0.1> Wet dB
 slider20:db_dry=0<-60, 0,0.1> Dry dB
 
@@ -373,9 +371,9 @@ feedback = 0;
 
 decay = 1 - decay_p;
 decay = 1 - decay * decay;
-decay = decay * 0.15;
+decay = 0.1 + decay * 0.8375;
 
-lfo.lfo_bank_reset_freq (0, 0.2 + mod * 0.6, k.src.srate);
+lfo.lfo_bank_reset_freq (0, 0.2 + mod * 0.2, k.src.srate);
 er_lfo.lfo_bank_reset_freq (0, 0.3 + mod * 0.3, k.src.srate);
 
 dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
@@ -403,7 +401,6 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   s = (src.ins.ptr[0] - src.ins.ptr[1]) * 0.5;
 
   //  a = lfo.ret.ptr[0];
-
 1 ? (
 
 // [[113, 131], [199, 211], [331, 337]]
@@ -436,23 +433,27 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   r = delay (x, 1010);
 
   x = delay (x, 1624);
-  x = ap (x, 1992, 0.5);
+  x = ap (x, 1992, 0.5, lfo.ret.ptr[0] * mod, 17);
 
   l += delay (x, 1891);
   r += delay (x, 890);
 
   x = delay (x, 2110);
-  x *= 0.9375;
-  x = ap (x, 2371, 0.5);
+  x *= decay;
+//  x = ap (x, 2371, 0.5);
+  x = ap2 (x, 2371, 1378, 0.5, (character * 0.14));
 
   l += delay (x, 2003);
   r += delay (x, 671);
 
   x = delay (x, 2157);
-  x *= 0.9375;
-  x = ap (x, 2712, 0.5);
+  x *= decay;
+  x = dampfilter (x, /*damp * 0.25*/ damp * 0.8);
+  x = ap2 (x, 2712, 1783, 0.5, (0.2 * character), lfo.ret.ptr[1] * mod, 22);
+//  x = ap (x, 2712, 0.5, lfo.ret.ptr[1] * mod, 22);
+//  x = ap (x, 2712, 0.5);
+  x = delay (x, 32);
 
-  x = dampfilter (x, 0.25);
   fb = x;
 
 );
