@@ -119,6 +119,11 @@ using enable_if_compatible_container
 
 //------------------------------------------------------------------------------
 } // namespace xspan_detail
+
+//------------------------------------------------------------------------------
+template <class T>
+static constexpr auto is_xspan = xspan_detail::is_xspan_v<T>;
+
 //------------------------------------------------------------------------------
 // took this as reference:
 // https://github.com/tcbrindle/span/blob/master/include/tcb/span.hpp
