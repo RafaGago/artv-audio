@@ -452,6 +452,11 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   x = ap2 (x, 2712, 1783, 0.5, (0.2 * character), lfo.ret.ptr[1] * mod, 22);
 //  x = ap (x, 2712, 0.5, lfo.ret.ptr[1] * mod, 22);
 //  x = ap (x, 2712, 0.5);
+
+  // late + hp
+  hpf = hp1.dampfilter (x, 0.985);
+  x = x - hpf;
+
   x = delay (x, 32);
 
   fb = x;

@@ -569,26 +569,26 @@ private:
     else {
       // overlap, needs single-sample iteration
       for (uint i = 0; i < io.size(); ++i) {
-        T qv;
+        T delayed;
         if constexpr (has_modulation) {
           // this is for completeness, modulations under the block size are
           // unlikely.
-          qv = io[i];
-          run_thiran<Idx> (xspan {&qv, 1}, [i, &lfo_gen] (uint) {
+          delayed = io[i];
+          run_thiran<Idx> (xspan {&delayed, 1}, [i, &lfo_gen] (uint) {
             return lfo_gen (i);
           });
         }
         else {
-          qv = read_next<Idx, T>();
+          delayed = read_next<Idx, T>();
         }
         if constexpr (has_allpass) {
-          auto [out, push] = run_allpass<Idx, T> (io[i], qv, g_gen (i));
+          auto [out, push] = run_allpass<Idx, T> (io[i], delayed, g_gen (i));
           push_one<Idx> (push);
           io[i] = out;
         }
         else {
           push_one<Idx> (io[i]);
-          io[i] = qv;
+          io[i] = delayed;
         }
       }
     }
@@ -723,7 +723,7 @@ private:
   //----------------------------------------------------------------------------
   // Template function to run double nested allpasses, kept for reference
   // understanding what is going on on the implementation for arbitrary nested
-  // allpasses above.
+  // allpasses above, as it is relatively "clever" code.
   template <
     uint Idx1,
     uint Idx2,

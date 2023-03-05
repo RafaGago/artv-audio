@@ -7545,10 +7545,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_er,
+  lofiverb_clip_level,
   n_stereo_busses,
-  param_common ("ER", declptr<lofiverb>(), declptr<lofiverb::er_tag>()),
-  lofiverb::get_parameter (lofiverb::er_tag {}),
+  param_common (
+    "Clip Lvl",
+    declptr<lofiverb>(),
+    declptr<lofiverb::clip_level_tag>()),
+  lofiverb::get_parameter (lofiverb::clip_level_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -7590,13 +7593,14 @@ using lofiverb_params = mp_list<
   lofiverb_predelay,
   lofiverb_decay,
   lofiverb_damp,
-  lofiverb_er,
+  lofiverb_stereo,
   lofiverb_character,
   lofiverb_freq_balance,
   lofiverb_mod,
+
   lofiverb_ducking_threshold,
   lofiverb_ducking_speed,
-  lofiverb_stereo>;
+  lofiverb_clip_level>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (

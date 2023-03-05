@@ -14,9 +14,11 @@
 #include "artv-common/dsp/own/classes/value_smoother.hpp"
 #include "artv-common/dsp/own/fx/lofiverb-engine.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
+#include "artv-common/dsp/own/parts/waveshapers/sigmoid.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"
+#include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/xspan.hpp"
 
 namespace artv {
@@ -92,7 +94,9 @@ static constexpr auto get_midifex49_spec()
     make_ap (2712, 0.5, 22), // 17 FB nested allpass 1
     make_ap (1783, 0.2), // 18 FB nested allpass 2
 
-    make_delay (max_block_size + 1) // 19 delay block (== blocksz + 1)
+    make_damp (0.995), // 19 HP
+
+    make_delay (max_block_size + 1) // 20 delay block (== blocksz + 1)
   );
 }
 
@@ -108,29 +112,30 @@ static constexpr auto get_midifex50_spec()
     make_ap (83, 0.5), // 1
     make_ap (116, 0.5), // 2
     make_ap (239, 0.5), // 3
-    make_delay (1, 32), // 4 (interpolated delays require at least 1 spl)
+    make_delay (2, 32), // 4 TODO: FIX or STUDY. min of 2 spls are required
     make_ap (339, 0.5), // 5
     make_ap (481, 0.5), // 6
     make_ap (555, 0.5), // 7
     make_ap (823, 0.5), // 8
-    make_delay (1, 64), // 9 (interpolated delays require at least 1 spl)
+    make_delay (2, 64), // 9 TODO: FIX or STUDY. min of 2 spls are required
     make_ap (999, 0.5), // 10
     make_ap (1100, 0.5), // 11
     make_ap (1347, 0.5), // 12
     make_ap (1563, 0.5), // 13
-    make_delay (1, 64), // 14 (interpolated delays require at least 1 spl)
+    make_delay (2, 64), // 14 TODO: FIX or STUDY. min of 2 spls are required
     make_ap (1841, 0.5), // 15
     make_ap (2001, 0.5, 67), // 16
     make_ap (2083, 0.5, 127), // 17
     make_damp(), // 18
-    make_delay (1, 96), // 19 (interpolated delays require at least 1 spl)
-    make_delay (max_block_size + 1), // 20 (FB point) (== blocksz + 1)
-    make_ap (147, 0.5), // 21 L diff
-    make_ap (43, 0.5), // 22 L diff
-    make_ap (55, 0.5), // 23 L diff
-    make_ap (249, 0.5), // 24 R diff
-    make_ap (48, 0.5), // 25 R diff
-    make_ap (21, 0.5) // 26 R diff
+    make_delay (2, 96), // 19 TODO: FIX or STUDY. min of 2 spls are required
+    make_damp (0.995), // 20 HP
+    make_delay (max_block_size + 1), // 21 (FB point) (== blocksz + 1)
+    make_ap (147, 0.5), // 22 L diff
+    make_ap (43, 0.5), // 23 L diff
+    make_ap (55, 0.5), // 24 L diff
+    make_ap (249, 0.5), // 25 R diff
+    make_ap (48, 0.5), // 26 R diff
+    make_ap (21, 0.5) // 27 R diff
   );
 }
 
@@ -159,32 +164,30 @@ public:
     if (v == _param.mode) {
       return;
     }
-    // reminder. "norm_att" is the gain that makes the reverb to be under unity
-    // range assuming inputs in unity range.
     switch (v) {
     case mode::algo1_flt:
     case mode::algo1: {
-      _param.norm_att = 1.f / 9.75f;
-      _param.gain     = 1.f;
-      auto& rev       = _modes.emplace<algo1_type>();
+      _param.pre_gain  = db_to_gain (-29.f);
+      _param.post_gain = db_to_gain (29.f - 6.f); // match all algos
+      auto& rev        = _modes.emplace<algo1_type>();
       rev.reset_memory (_mem_reverb);
       _lfo.set_phase (
         phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
     } break;
     case mode::midifex49_flt:
     case mode::midifex49: {
-      _param.norm_att = 1.f / 2.f;
-      _param.gain     = 1.f;
-      auto& rev       = _modes.emplace<midifex49_type>();
+      _param.pre_gain  = db_to_gain (-24.f);
+      _param.post_gain = db_to_gain (24.f - 10.6f);
+      auto& rev        = _modes.emplace<midifex49_type>();
       rev.reset_memory (_mem_reverb);
       _lfo.set_phase (
         phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
     } break;
     case mode::midifex50_flt:
     case mode::midifex50: {
-      _param.norm_att = 1.f / 2.f;
-      _param.gain     = 1.f;
-      auto& rev       = _modes.emplace<midifex50_type>();
+      _param.pre_gain  = db_to_gain (-23.f);
+      _param.post_gain = db_to_gain (23.f - 6.f);
+      auto& rev        = _modes.emplace<midifex50_type>();
       rev.reset_memory (_mem_reverb);
       _lfo.set_phase (
         phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
@@ -295,18 +298,12 @@ public:
     return float_param ("quarters", 0., max_predelay_qb, 0., 0.001);
   }
   //----------------------------------------------------------------------------
-  struct er_tag {};
-  void set (er_tag, float v)
-  {
-    v *= 0.01f;
-    v *= v;
-    v *= one_flt;
-    _param_smooth.target().er = v;
-  }
+  struct clip_level_tag {};
+  void set (clip_level_tag, float v) { _param.gain = db_to_gain (v); }
 
-  static constexpr auto get_parameter (er_tag)
+  static constexpr auto get_parameter (clip_level_tag)
   {
-    return float_param ("%", 0., 100., 25., 0.001);
+    return float_param ("dBFS", -36., 36., 0., 0.1, 0.5, true);
   }
   //----------------------------------------------------------------------------
   struct stereo_tag {};
@@ -427,7 +424,7 @@ public:
     decay_tag,
     predelay_tag,
     freq_balace_tag,
-    er_tag,
+    clip_level_tag,
     mod_tag,
     stereo_tag,
     ducking_threshold_tag,
@@ -463,18 +460,25 @@ private:
     std::array<f32_x2, max_block_size>  ducker_gain;
     loop_parameters                     pars;
 
+    auto pre_gain = 1.f / _param.gain;
+
     // tilt + clamp + ducker measuring + param smoothing
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      f32_x2 wetv    = _filt.tick_cascade (vec_from_array (io[i]));
-      wetv           = vec_clamp (wetv, -0.98f, 0.98f); // TODO: soft sat?
+      f32_x2 wetv = _filt.tick_cascade (vec_from_array (io[i]));
+#if 1
+      wetv *= pre_gain;
+      wetv           = vec_clamp (wetv, -1.f, 1.f);
       ducker_gain[i] = _ducker.tick (wetv);
-      wetv *= _param.norm_att;
+      wetv *= _param.pre_gain;
+#else // pre_gain calibration. (shouldn't be on when Released).
+      ducker_gain[i] = _ducker.tick (f32_x2 {});
+      wetv *= pre_gain;
+#endif
       io[i] = vec_to_array (wetv);
 
       _param_smooth.tick();
       pars.stereo[i] = _param_smooth.get().stereo;
-      pars.er[i].load_float (_param_smooth.get().er);
       pars.decay[i].load_float (_param_smooth.get().decay);
       pars.character[i].load_float (_param_smooth.get().character);
       pars.mod[i].load_float (_param_smooth.get().mod);
@@ -513,9 +517,17 @@ private:
     // float conversion
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto l = wet[i][0].to_floatp() * ducker_gain[i][0] * _param.gain;
-      auto r = wet[i][1].to_floatp() * ducker_gain[i][1] * _param.gain;
-      l      = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
+      auto l = wet[i][0].to_floatp();
+      auto r = wet[i][1].to_floatp();
+#if 1
+      l *= ducker_gain[i][0] * _param.gain * _param.post_gain;
+      r *= ducker_gain[i][1] * _param.gain * _param.post_gain;
+#else // pre_gain calibration (shouldn't be on when Released).
+      l *= _param.gain;
+      r *= _param.gain;
+#endif
+
+      l = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
       if (pars.stereo[i] < 0) {
         io[i][0] = r;
         io[i][1] = l;
@@ -535,23 +547,20 @@ private:
     std::array<f32_x2, max_block_size> ducker_gain;
     loop_parameters_flt                pars;
 
+    auto pre_gain = 1.f / _param.gain;
+
     // tilt + clamp + ducker measuring + param smoothing
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      f32_x2 wet     = _filt.tick_cascade (vec_from_array (io[i]));
-      wet            = vec_clamp (wet, -0.99f, 0.99f); // TODO: soft sat?
+      f32_x2 wet = _filt.tick_cascade (vec_from_array (io[i]));
+      wet *= pre_gain;
+      wet            = vec_clamp (wet, -1.f, 1.f);
       ducker_gain[i] = _ducker.tick (wet);
-#if 0
-      // stress test input with maximum level DC to find suitable normalization
-      // att of each algo (at max decay).
-      wet = vec_set<2> (0.99f);
-#endif
-      wet *= _param.norm_att;
+      wet *= _param.pre_gain;
       io[i] = vec_to_array (wet);
 
       _param_smooth.tick();
       pars.stereo[i]    = _param_smooth.get().stereo;
-      pars.er[i]        = _param_smooth.get().er;
       pars.decay[i]     = _param_smooth.get().decay;
       pars.character[i] = _param_smooth.get().character;
       pars.mod[i]       = _param_smooth.get().mod;
@@ -585,8 +594,8 @@ private:
     }
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto l = io[i][0] * ducker_gain[i][0] * _param.gain;
-      auto r = io[i][1] * ducker_gain[i][1] * _param.gain;
+      auto l = io[i][0] * ducker_gain[i][0] * _param.gain * _param.post_gain;
+      auto r = io[i][1] * ducker_gain[i][1] * _param.gain * _param.post_gain;
       l      = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
       if (pars.stereo[i] < 0) {
         io[i][0] = r;
@@ -616,14 +625,13 @@ private:
     auto late_in = xspan {late_in_arr.data(), io.size()};
     for (uint i = 0; i < io.size(); ++i) {
       // to MS
-
       late_in[i] = (T) ((io[i][0] + io[i][1]) * 0.5_r);
       // TODO define a global one = 0.99f. Use everywhere.
       auto mod = (T) (0.25_r + (1_r - par.mod[i]) * 0.75_r);
       // ER + late lfo
       auto lfo = tick_lfo<T>();
       lfo1[i]  = T {lfo[0]};
-      lfo2[i]  = (T) (T {lfo[1]} * (0.5_r + par.er[i] * 0.5_r));
+      lfo2[i]  = (T) (T {lfo[1]} * (0.5_r + par.character[i] * 0.5_r));
       lfo3[i]  = (T) (T {lfo[2]} * mod);
       lfo4[i]  = (T) (T {lfo[3]} * mod);
 
@@ -679,8 +687,9 @@ private:
 
     for (uint i = 0; i < io.size(); ++i) {
       late[i] = (T) (late_in[i] + (T) (r[i] * par.decay[i]));
-      late[i] = (T) (late[i] - (T) ((er1[i] + er2[i]) * par.er[i]) * 0.4_r);
-      g[i]    = (T) (0.618_r + par.character[i] * ((0.707_r - 0.618_r) * 2_r));
+      late[i]
+        = (T) (late[i] - (T) ((er1[i] + er2[i]) * par.character[i]) * 0.4_r);
+      g[i] = (T) (0.618_r + par.character[i] * ((0.707_r - 0.618_r) * 2_r));
     }
     r.cut_head (1); // drop feedback sample from previous block
 
@@ -703,7 +712,8 @@ private:
     for (uint i = 0; i < io.size(); ++i) {
       // prepare input with feedback
       late[i] = (T) (late_in[i] + (T) (l[i] * par.decay[i]));
-      late[i] = (T) (late[i] + (T) (((er1[i] + er2[i]) * par.er[i]) * 0.4_r));
+      late[i]
+        = (T) (late[i] + (T) (((er1[i] + er2[i]) * par.character[i]) * 0.4_r));
     }
     l.cut_head (1); // drop feedback sample from previous block
 
@@ -721,10 +731,10 @@ private:
     // Mixdown
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      io[i][0]
-        = (T) (l[i] + (T) ((-er1[i] * 0.825_r - er2[i] * 0.423_r) * par.er[i]));
-      io[i][1]
-        = (T) (r[i] + (T) ((-er1[i] * 0.855_r + er2[i] * 0.443_r) * par.er[i]));
+      T e_l = (T) ((-er1[i] * 0.825_r - er2[i] * 0.423_r) * par.character[i]);
+      T e_r = (T) ((-er1[i] * 0.855_r + er2[i] * 0.443_r) * par.character[i]);
+      io[i][0] = (T) (l[i] + e_l);
+      io[i][1] = (T) (r[i] + e_r);
     }
   }
   //----------------------------------------------------------------------------
@@ -767,7 +777,7 @@ private:
     rev.run<3> (sig);
 
     // feedback handling, fetching the block with a negative offset of 1
-    rev.fetch_block<19> (tmp, 1);
+    rev.fetch_block<20> (tmp, 1);
     span_visit (sig, [&] (auto& v, uint i) { v = (T) (v + tmp[i]); });
 
     // 1st output point for L and R signal
@@ -812,9 +822,9 @@ private:
       v = (T) (par.character[i] * 0.2_r);
     });
     rev.run<17, 18> (sig, lfo2, nullptr, nullptr, tmp);
-
+    rev.run_hp<19> (sig);
     // push to delay feedback
-    rev.push<19> (sig.to_const());
+    rev.push<20> (sig.to_const());
 
     span_visit (io, [&] (auto& spls, uint i) {
       spls[0] = l[i];
@@ -839,7 +849,7 @@ private:
     xspan lfo2 {lfo2_arr.data(), io.size()};
 
     // fetch feedback values
-    rev.fetch_block<20> (l, 1);
+    rev.fetch_block<21> (l, 1);
     span_visit (io, [&] (auto& spl, uint i) {
       // decay fixup
       auto decay = (T) (0.99999_r - par.decay[i]);
@@ -880,18 +890,19 @@ private:
     dampv       = 0.05f + dampv;
     rev.run_lp<18> (l, load_float<T> (dampv));
     rev.run<19> (l, xspan {par.character}, nullptr); // variable delay
+    rev.run_hp<20> (l);
 
     // push to delay feedback
-    rev.push<20> (l.to_const());
+    rev.push<21> (l.to_const());
 
     xspan_memcpy (r, l);
-    rev.run<21> (l);
     rev.run<22> (l);
     rev.run<23> (l);
+    rev.run<24> (l);
 
-    rev.run<24> (r);
     rev.run<25> (r);
     rev.run<26> (r);
+    rev.run<27> (r);
 
     span_visit (io, [&] (auto& spls, uint i) {
       spls[0] = l[i];
@@ -977,8 +988,12 @@ private:
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
     u32   mode;
-    float norm_att;
-    float gain;
+    float post_gain; // set to rougly match loudness for all algorithms and to
+                     // compensate for pre_gain
+    float pre_gain; // using a 440Hz 0dbFS square wave in looking at which level
+                    // breaks with decay set to the maximum value and moving
+                    // abruptly all parameters.
+    float gain; // a parameter
     float tilt;
     float predelay;
     float damp;
@@ -996,14 +1011,12 @@ private:
   };
   //----------------------------------------------------------------------------
   struct loop_parameters {
-    std::array<fixpt_t, max_block_size> er;
     std::array<fixpt_t, max_block_size> decay;
     std::array<fixpt_t, max_block_size> character;
     std::array<fixpt_t, max_block_size> mod;
     std::array<float, max_block_size>   stereo;
   };
   struct loop_parameters_flt {
-    std::array<float, max_block_size> er;
     std::array<float, max_block_size> decay;
     std::array<float, max_block_size> character;
     std::array<float, max_block_size> mod;
