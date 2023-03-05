@@ -21,6 +21,9 @@
 
 namespace artv {
 namespace detail { namespace lofiverb {
+
+//------------------------------------------------------------------------------
+static constexpr uint max_block_size = 32;
 //------------------------------------------------------------------------------
 static constexpr auto get_algo1_spec()
 {
@@ -34,7 +37,7 @@ static constexpr auto get_algo1_spec()
     make_ap (1367, 0.35, 71 + 70),
     make_damp(),
     make_ap (1787, 0., 261),
-    make_delay (33), // to allow block processing
+    make_delay (max_block_size + 1), // to allow block processing
     // loop1
     make_ap (977, 0.5 /*overridden*/, 51),
     make_delay (2819),
@@ -42,7 +45,7 @@ static constexpr auto get_algo1_spec()
     make_ap (863, -0.5 /*overridden*/),
     make_delay (1021), // Delay
     make_ap (1453, 0.618),
-    make_delay (787), // delay (allows block processing)
+    make_delay (787), // delay (allows block processing) (> blocksz + 1)
     // loop2
     make_ap (947, 0.5 /*overridden*/, 67),
     make_delay (3191),
@@ -51,7 +54,7 @@ static constexpr auto get_algo1_spec()
     make_delay (1049), // Delay
     make_ap (1367, 0.618),
     make_damp (0.98), // HP
-    make_delay (647)); // delay (allows block processing)
+    make_delay (647)); // delay (allows block processing) (> blocksz + 1)
 }
 
 struct algo1_spec {
@@ -89,7 +92,7 @@ static constexpr auto get_midifex49_spec()
     make_ap (2712, 0.5, 22), // 17 FB nested allpass 1
     make_ap (1783, 0.2), // 18 FB nested allpass 2
 
-    make_delay (33) // 19 delay block
+    make_delay (max_block_size + 1) // 19 delay block (== blocksz + 1)
   );
 }
 
@@ -105,31 +108,29 @@ static constexpr auto get_midifex50_spec()
     make_ap (83, 0.5), // 1
     make_ap (116, 0.5), // 2
     make_ap (239, 0.5), // 3
-    make_delay (32), // 4
+    make_delay (1, 32), // 4 (interpolated delays require at least 1 spl)
     make_ap (339, 0.5), // 5
     make_ap (481, 0.5), // 6
     make_ap (555, 0.5), // 7
     make_ap (823, 0.5), // 8
-    make_delay (64), // 9
+    make_delay (1, 64), // 9 (interpolated delays require at least 1 spl)
     make_ap (999, 0.5), // 10
     make_ap (1100, 0.5), // 11
     make_ap (1347, 0.5), // 12
     make_ap (1563, 0.5), // 13
-    make_delay (64), // 14
+    make_delay (1, 64), // 14 (interpolated delays require at least 1 spl)
     make_ap (1841, 0.5), // 15
     make_ap (2001, 0.5, 67), // 16
     make_ap (2083, 0.5, 127), // 17
     make_damp(), // 18
-    make_delay (96), // 19
-    make_delay (32), // 20 (FB point)
+    make_delay (1, 96), // 19 (interpolated delays require at least 1 spl)
+    make_delay (max_block_size + 1), // 20 (FB point) (== blocksz + 1)
     make_ap (147, 0.5), // 21 L diff
     make_ap (43, 0.5), // 22 L diff
     make_ap (55, 0.5), // 23 L diff
-    make_delay (1), // 24 L diff
-    make_ap (249, 0.5), // 25 R diff
-    make_ap (48, 0.5), // 26 R diff
-    make_ap (21, 0.5), // 27 R diff
-    make_delay (1) // 28 R diff
+    make_ap (249, 0.5), // 24 R diff
+    make_ap (48, 0.5), // 25 R diff
+    make_ap (21, 0.5) // 26 R diff
   );
 }
 
@@ -179,6 +180,15 @@ public:
       _lfo.set_phase (
         phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
     } break;
+    case mode::midifex50_flt:
+    case mode::midifex50: {
+      _param.norm_att = 1.f / 2.f;
+      _param.gain     = 1.f;
+      auto& rev       = _modes.emplace<midifex50_type>();
+      rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    } break;
     default:
       return;
     }
@@ -188,7 +198,14 @@ public:
     update_mod();
   }
   struct mode {
-    enum { algo1_flt, algo1, midifex49_flt, midifex49 };
+    enum {
+      algo1_flt,
+      algo1,
+      midifex49_flt,
+      midifex49,
+      midifex50_flt,
+      midifex50
+    };
   };
 
   static constexpr auto get_parameter (mode_tag)
@@ -196,8 +213,13 @@ public:
     return choice_param (
       0,
       make_cstr_array (
-        " Long 1", "Long 1 16-bit", "Midifex 49", "Midifex 49 16-bit"),
-      48);
+        "Long 1",
+        "Long 1 16-bit",
+        "Midifex 49",
+        "Midifex 49 16-bit",
+        "Midifex 50",
+        "Midifex 50 16-bit"),
+      128);
   }
   //----------------------------------------------------------------------------
   struct decay_tag {};
@@ -420,7 +442,7 @@ private:
   using fixpt_t  = detail::lofiverb::fixpt_t;
   using fixpt_tr = detail::lofiverb::fixpt_tr;
   //----------------------------------------------------------------------------
-  static constexpr uint  max_block_size = 32;
+  static constexpr uint  max_block_size = detail::lofiverb::max_block_size;
   static constexpr uint  n_channels     = 2;
   static constexpr uint  srate          = 23400;
   static constexpr float t_spl          = (float) (1. / srate);
@@ -481,6 +503,9 @@ private:
       break;
     case mode::midifex49:
       process_midifex49 (xspan {wet.data(), io.size()}, pars);
+      break;
+    case mode::midifex50:
+      process_midifex50 (xspan {wet.data(), io.size()}, pars);
       break;
     default:
       assert (false);
@@ -551,6 +576,9 @@ private:
       break;
     case mode::midifex49_flt:
       process_midifex49 (io, pars);
+      break;
+    case mode::midifex50_flt:
+      process_midifex50 (io, pars);
       break;
     default:
       assert (false);
@@ -705,21 +733,20 @@ private:
   {
     auto& rev = std::get<midifex49_type> (_modes);
 
-    using arr    = std::array<T, max_block_size>;
-    using arr_fb = std::array<T, max_block_size + 1>;
+    using arr = std::array<T, max_block_size>;
 
-    arr_fb tmp_arr;
-    xspan  tmp {tmp_arr.data(), io.size() + 1};
-    arr_fb sig_arr;
-    xspan  sig {sig_arr.data(), io.size()};
-    arr    l_arr;
-    xspan  l {l_arr.data(), io.size()};
-    arr    r_arr;
-    xspan  r {r_arr.data(), io.size()};
-    arr    lfo1_arr;
-    xspan  lfo1 {lfo1_arr.data(), io.size()};
-    arr    lfo2_arr;
-    xspan  lfo2 {lfo2_arr.data(), io.size()};
+    arr   tmp_arr;
+    xspan tmp {tmp_arr.data(), io.size()};
+    arr   sig_arr;
+    xspan sig {sig_arr.data(), io.size()};
+    arr   l_arr;
+    xspan l {l_arr.data(), io.size()};
+    arr   r_arr;
+    xspan r {r_arr.data(), io.size()};
+    arr   lfo1_arr;
+    xspan lfo1 {lfo1_arr.data(), io.size()};
+    arr   lfo2_arr;
+    xspan lfo2 {lfo2_arr.data(), io.size()};
 
     span_visit (io, [&] (auto& spl, uint i) {
       // Midside signal
@@ -742,7 +769,6 @@ private:
     // feedback handling, fetching the block with a negative offset of 1
     rev.fetch_block<19> (tmp, 1);
     span_visit (sig, [&] (auto& v, uint i) { v = (T) (v + tmp[i]); });
-    tmp.cut_head (1); // feedback done, drop oldest sample
 
     // 1st output point for L and R signal
     xspan_memcpy (l, sig); // delay LT a block -> might overlap, requires copy
@@ -796,6 +822,83 @@ private:
     });
   }
   //----------------------------------------------------------------------------
+  template <class T, class Params>
+  void process_midifex50 (xspan<std::array<T, 2>> io, Params& par)
+  {
+    auto& rev = std::get<midifex50_type> (_modes);
+
+    using arr = std::array<T, max_block_size>;
+
+    arr   l_arr;
+    xspan l {l_arr.data(), io.size()};
+    arr   r_arr;
+    xspan r {r_arr.data(), io.size()};
+    arr   lfo1_arr;
+    xspan lfo1 {lfo1_arr.data(), io.size()};
+    arr   lfo2_arr;
+    xspan lfo2 {lfo2_arr.data(), io.size()};
+
+    // fetch feedback values
+    rev.fetch_block<20> (l, 1);
+    span_visit (io, [&] (auto& spl, uint i) {
+      // decay fixup
+      auto decay = (T) (0.99999_r - par.decay[i]);
+      decay      = (T) (0.99999_r - decay * decay);
+      decay      = (T) - (0.3_r + decay * 0.45_r);
+      // Add midside signal to feedback
+      l[i] = (T) (l[i] * decay);
+      l[i] = (T) (l[i] + ((spl[0] + spl[1]) * 0.5_r));
+      // LFO
+      auto lfo = tick_lfo<T>();
+      lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
+      lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
+    });
+
+    rev.run<0> (l);
+    rev.run<1> (l);
+    rev.run<2> (l);
+    rev.run<3> (l);
+    rev.run<4> (l, xspan {par.character}, nullptr); // variable delay
+
+    rev.run<5> (l);
+    rev.run<6> (l);
+    rev.run<7> (l);
+    rev.run<8> (l);
+    rev.run<9> (l, xspan {par.character}, nullptr); // variable delay
+
+    rev.run<10> (l);
+    rev.run<11> (l);
+    rev.run<12> (l);
+    rev.run<13> (l);
+    rev.run<14> (l, xspan {par.character}, nullptr); // variable delay
+
+    rev.run<15> (l);
+    rev.run<16> (l, xspan {lfo1}, nullptr);
+    rev.run<17> (l, xspan {lfo2}, nullptr);
+    float dampv = _param.damp;
+    dampv       = dampv * dampv * 0.4f;
+    dampv       = 0.05f + dampv;
+    rev.run_lp<18> (l, load_float<T> (dampv));
+    rev.run<19> (l, xspan {par.character}, nullptr); // variable delay
+
+    // push to delay feedback
+    rev.push<20> (l.to_const());
+
+    xspan_memcpy (r, l);
+    rev.run<21> (l);
+    rev.run<22> (l);
+    rev.run<23> (l);
+
+    rev.run<24> (r);
+    rev.run<25> (r);
+    rev.run<26> (r);
+
+    span_visit (io, [&] (auto& spls, uint i) {
+      spls[0] = l[i];
+      spls[1] = r[i];
+    });
+  }
+  //----------------------------------------------------------------------------
   template <class T>
   static T load_float (float v)
   {
@@ -834,8 +937,12 @@ private:
     } break;
     case mode::midifex49_flt:
     case mode::midifex49: {
-      // Reminder, phase are at 0, 180, 0, 180 on reset.
       auto f_late = 0.2f + mod * 0.2f;
+      _lfo.set_freq (f32_x4 {f_late, f_late, f_late, f_late}, t_spl);
+    } break;
+    case mode::midifex50_flt:
+    case mode::midifex50: {
+      auto f_late = 0.3f + mod * 0.1f;
       _lfo.set_freq (f32_x4 {f_late, f_late, f_late, f_late}, t_spl);
     } break;
     default:
@@ -916,8 +1023,12 @@ private:
     = detail::lofiverb::engine<detail::lofiverb::algo1_spec, max_block_size>;
   using midifex49_type = detail::lofiverb::
     engine<detail::lofiverb::midifex49_spec, max_block_size>;
-  std::variant<algo1_type, midifex49_type> _modes;
-  ducker<f32_x2>                           _ducker;
+  using midifex50_type = detail::lofiverb::
+    engine<detail::lofiverb::midifex50_spec, max_block_size>;
+  using modes_type = std::variant<algo1_type, midifex49_type, midifex50_type>;
+
+  modes_type     _modes;
+  ducker<f32_x2> _ducker;
 
   uint  _n_processed_samples;
   float _1_4beat_spls;

@@ -43,7 +43,6 @@ struct delay_data {
   fixpt_spls     spls;
   fixpt_spls_mod mod; // In samples. If 0 the delay is not modulated
   fixpt_t        g; // If 0 the delay has no allpass
-  fixpt_t        g1; // If 0 the delay has no nested allpass
 };
 //------------------------------------------------------------------------------
 static constexpr detail::lofiverb::delay_data make_dd (
@@ -67,9 +66,9 @@ static constexpr detail::lofiverb::delay_data make_ap (
   return make_dd (spls, g, mod);
 }
 //------------------------------------------------------------------------------
-static constexpr detail::lofiverb::delay_data make_delay (u16 spls)
+static constexpr detail::lofiverb::delay_data make_delay (u16 spls, u16 mod = 0)
 {
-  return make_dd (spls);
+  return make_dd (spls, 0., mod);
 }
 //------------------------------------------------------------------------------
 static constexpr detail::lofiverb::delay_data make_damp (float g = 0)
@@ -200,13 +199,13 @@ public:
   // signature), spans or dummy types. When dummy types (no span and no lambda
   // types, e.g. nullptr) the parameters are defaulted (no delay modulation,
   // same allpass gain as in the specification)
-  template <uint Idx, class T, class P1, class P2>
-  void run (xspan<T> io, P1 lfo, P2 gain)
+  template <uint Idx, class T, class L, class G>
+  void run (xspan<T> io, L lfo, G gain)
   {
     run_impl<Idx> (
       io,
-      get_gain_generator<Idx, T> (std::forward<P2> (gain)),
-      get_lfo_generator<T> (std::forward<P1> (lfo)));
+      get_gain_generator<Idx, T> (std::forward<G> (gain)),
+      get_lfo_generator<T> (std::forward<L> (lfo)));
   }
   //----------------------------------------------------------------------------
   // run an allpass or pure delay
@@ -542,6 +541,8 @@ private:
     constexpr auto       has_allpass    = dd.g.value() != 0;
     constexpr auto       has_modulation = dd.mod.value() != 0;
 
+    auto szw = get_delay_size (Idx);
+
     if constexpr (minsz >= max_block_size) {
       // no overlap, can run block-wise
       assert (io.size() <= minsz);
@@ -572,12 +573,13 @@ private:
         if constexpr (has_modulation) {
           // this is for completeness, modulations under the block size are
           // unlikely.
-          qv = run_thiran<Idx> (xspan {&io[i], 1}, [i, &lfo_gen] (uint) {
+          qv = io[i];
+          run_thiran<Idx> (xspan {&qv, 1}, [i, &lfo_gen] (uint) {
             return lfo_gen (i);
           });
         }
         else {
-          T qv = read_next<Idx, T>();
+          qv = read_next<Idx, T>();
         }
         if constexpr (has_allpass) {
           auto [out, push] = run_allpass<Idx, T> (io[i], qv, g_gen (i));
@@ -784,11 +786,6 @@ private:
   static constexpr uint get_delay_size (uint i)
   {
     uint ret = Spec::values[i].spls.to_int() + 1; // spls + 1 = size
-    // pure delays have 1 extra sample to be able to return the previous
-    // output (delaying one cycle the time it is overwritten).
-    auto mod_val = Spec::values[i].mod.value();
-    auto g_val   = Spec::values[i].g.value();
-    ret += (uint) (mod_val == 0 && g_val == 0);
     ret += Spec::values[i].mod.to_int(); // add mod spls to the size
     return ret;
   }
