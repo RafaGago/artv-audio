@@ -76,21 +76,22 @@ lfo.lfo_bank_init (n_lfos, 4);
 lfo.ret.array_init (n_lfos);
 lfo.lfo_bank_reset_phase (0);
 
-er_lfo.lfo_bank_init (n_lfos, 1);
-er_lfo.ret.array_init (n_lfos);
-er_lfo.lfo_bank_reset_phase (0);
+m_lfo.lfo_bank_init (n_lfos, 2);
+m_lfo.ret.array_init (n_lfos);
+m_lfo.lfo_bank_reset_phase (0);
 
 @slider
 
-lfo.lfo_bank_reset_freq (0, 0.05 + mod * 0.05, k.src.srate);
-er_lfo.lfo_bank_reset_freq (0, 0.2 + mod * 0.5, k.src.srate);
+lfo.lfo_bank_reset_freq (0, 0.13, k.src.srate);
+m_lfo.lfo_bank_reset_freq (0, 0.1 + mod * 3., k.src.srate);
 
 dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
 
-decay = sqrt (decay_p) * 0.9;
+decay = 0.2 + sqrt (decay_p) * 0.72;
 
 filter_k = 0.15 + damp * 0.1;
+filter_k2 = filter_k * 0.9;
 
 @sample
 
@@ -101,8 +102,16 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   m = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5;
   s = (src.ins.ptr[0] - src.ins.ptr[1]) * 0.5;
 
-  er_lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
-  lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
+  m = ap (m, 23, 0.8 + 0.1 * character);
+  m = ap (m, 130, 0.8 * character);
+  m = ap (m, 217, 0.8 * character);
+  
+  s = ap (s, 22, 0.8 + 0.1 * character);
+  s = ap (s, 131, 0.8 * character);
+  s = ap (s, 219, 0.8 * character);
+
+  m_lfo.lfo_bank_tick_tri (m_lfo.ret.ptr, 0);
+  lfo.lfo_bank_tick_tri (lfo.ret.ptr, 0);
 
   // end of boilerplate, reverb algo
 
@@ -110,34 +119,41 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   range_mul_k (mtx.ptr, decay, mtx.size);
   mtx.ptr[1] += m;
+  mtx.ptr[3] += s;
   hadamard_4(mtxcp.ptr, mtx.ptr);
   mtx.array_copy (mtxcp);
+  
+  modv = 1 - ((1 - mod) * (1 - mod));
+
+  g3 = 0.04;
+  mod_spls = 3;
 
 // [[151, 157], [83, 89], [59, 61], 201]
 // [153.8046190129675, 87.13169661547329, 60.78286847796119, 201
   a = mtx.ptr[0];
-//  a = ap3 (a, 137, 73, 53, 0.1 + 0.1 * lfo.ptr[0], -0.04 - 0.04 * -lfo.ptr[0], 0.03);
-  a = ap3 (a, 153, 89, 60, 0.1 + 0.1 * lfo.ptr[0], -0.04 - 0.04 * -lfo.ptr[0], 0.03);
-  a = delay(a, 201);
+  a = ap3 (a, 153, 89, 60, 0.1 + 0.1 * lfo.ret.ptr[0], -0.04, g3);
+  a = delay(a, 201, m_lfo.ret.ptr[0] * modv, mod_spls);
 
 // [[139, 149], [79, 83], [53, 59], 185]
 // [141.56146526069148, 80.19584016847044, 55.94443118618319, 185]
   b = mtx.ptr[1];
-  b = ap3 (b, 139, 79, 53, -0.1 + -0.1 * lfo.ptr[1], -0.04 - 0.04 * -lfo.ptr[1], 0.03);
-  b = delay(b, 185);
+  b = ap3 (b, 139, 79, 53, -0.1 - 0.1 * m_lfo.ret.ptr[0], -0.04, g3);
+  b = delay(b, 185, m_lfo.ret.ptr[1] * modv, mod_spls);
 
 // [[139, 149], [83, 89], [53, 59], 193]
 // [147.68304213682947, 83.66376839197186, 58.363649832072184, 193]
   c = mtx.ptr[2];
-  c = ap3 (c, 149, 83, 59, 0.1 + 0.1 * lfo.ptr[2], 0.04 + 0.04 * -lfo.ptr[2], -0.03);
-  c = delay(c, 193);
+  c = ap3 (c, 149, 83, 59, 0.1 + 0.1 * m_lfo.ret.ptr[1], 0.04, -g3);
+  c = delay(c, 193, m_lfo.ret.ptr[0] * modv, mod_spls);
 
 // [[167, 173], [89, 97], [61, 67], 221]
 // [169.10856120331252, 95.80151717422684, 66.8309150926837, 221]
   d = mtx.ptr[3];
-  //d = ap3 (d, 137, 83, 59, 0.1 + 0.1 * lfo.ptr[3], -0.04 - 0.04 * -lfo.ptr[3], 0.03);
-  d = ap3 (d, 167, 97, 67, 0.1 + 0.1 * lfo.ptr[3], -0.04 - 0.04 * -lfo.ptr[3], 0.03);
-  d = delay(d, 221);
+  d = ap3 (d, 167, 97, 67, 0.1 - 0.1 * lfo.ret.ptr[2], -0.04, g3);
+  d = delay(d, 221, m_lfo.ret.ptr[1] * modv, mod_spls);
+
+// [[167, 173], [89, 97], [61, 67], 221]
+// [169.10856120331252, 95.80151717422684, 66.8309150926837, 221]
 
   mtx.ptr[0] = a;
   mtx.ptr[1] = b;
@@ -145,68 +161,61 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   mtx.ptr[3] = d;
 
   range_mul_k (mtx.ptr, decay, mtx.size);
-  mtx.ptr[3] += s;
   hadamard_4(mtxcp.ptr, mtx.ptr);
   mtx.array_copy (mtxcp);
 
 // [[113, 127], [67, 71], [43, 47], 155]
 // [118.60555197517394, 67.1911093303401, 46.872361264099425, 155]
   a = mtx.ptr[3];
-  a = f1.dampfilter (a, filter_k);
-//  a = ap (a, 103, 0.04);
-//  a = ap (a, 61, -0.04);
-//  a = ap (a, 43, 0.04);
-  // a = ap3 (a, 103, 55, 43, 0.1 + 0.1 * lfo.ptr[3], 0.04 + 0.04 * -lfo.ptr[3], -0.03);
-  a = ap3 (a, 113, 67, 47, 0.1 + 0.1 * lfo.ptr[3], 0.04 + 0.04 * -lfo.ptr[3], -0.03);
-  a = delay(a, 155);
+   
+  a = f1.dampfilter (a, filter_k2);
+  a = ap3 (a, 113, 67, 47, 0.1, 0.04, -g3);
+  a = delay (a, 155);
+  
+  a = ap (a, 119, 0.6);
+  a = ap (a, 67, 0.6);
+  a = ap (a, 47, -0.6); 
+   
+// [[113, 127], [67, 71], [43, 47], 155]
+// [118.60555197517394, 67.1911093303401, 46.872361264099425, 155]
 
 // [[113, 127], [61, 67], [43, 47], 149]
 // [114.01436931807042, 64.59016316271402, 45.05794727968267, 149]
   b = mtx.ptr[2];
   b = f2.dampfilter (b, filter_k);
-//  b = ap (b, 113, -0.04);
-//  b = ap (b, 67, -0.04);
-//  b = ap (b, 46, -0.04);
-  b = ap3 (b, 114, 66, 47, -0.1 + -0.1 * lfo.ptr[2], -0.04 - 0.04 * -lfo.ptr[2], -0.03);
+  b = ap3 (b, 114, 66, 47, -0.1, -0.04, -g3);
   b = delay(b, 149);
 
   // [[113, 127], [61, 67], [43, 47], 151]
 // [115.54476353710493, 65.45714521858937, 45.66275194115492, 151]
   c = mtx.ptr[0];
   c = f3.dampfilter (c, filter_k);
-//  c = ap (c, 113, 0.04);
-//  c = ap (c, 67, -0.04);
-//  c = ap (c, 46, 0.04);
-  c = ap3 (c, 116, 65, 46, 0.1 + 0.1 * lfo.ptr[1], -0.04 - 0.04 * -lfo.ptr[1], -0.03);
+  c = ap3 (c, 116, 65, 46, -0.1, -0.04, -g3);
   c = delay(c, 151);
 
 // [[113, 127], [67, 71], [47, 53], 157]
 // [120.13594619420843, 68.05809138621545, 47.477165925571676, 157]
   d = mtx.ptr[1];
-  d = f4.dampfilter (d, filter_k);
-//  d = ap (d, 123, -0.04);
-//  d = ap (d, 71, 0.04);
-//  d = ap (d, 53, -0.04);
-  d = ap3 (d, 121, 69, 47, -0.1 + -0.1 * lfo.ptr[0], 0.04 + 0.04 * lfo.ptr[0], 0.03);
+  d = f4.dampfilter (d, filter_k2);
+  d = ap3 (d, 121, 69, 47, -0.1, 0.04, g3);
   d = delay(d, 157);
-  
-  l1 = c;
-  l2 = d;
 
   mtx.ptr[0] = a;
   mtx.ptr[1] = b;
   mtx.ptr[2] = c;
   mtx.ptr[3] = d;
+  
+  l = a;
+  l = ap (l, 71, 0.4 + 0.3 * character);
+  l = ap (l, 116, -0.6 * character);
+  l = ap (l, 172, -0.6 * character);
+  l = ap (l, 277, 0.6 * character);
 
-  l = a * (1 - character) + l1 * character;
-  l = ap (l, 23, 0.7);
-  l = ap (l, 27, 0.7 * character);
-  l = ap (l, 35, 0.6);
-
-  r = d * (1 - character) + l2 * character;
-  r = ap (r, 23, 0.7);
-  r = ap (r, 27, 0.7 * character);
-  r = ap (r, 35, 0.6);
+  r = d;
+  r = ap (r, 72, 0.4 + 0.3 * character);
+  r = ap (r, 117, -0.6 * character);
+  r = ap (r, 175, -0.6 * character);
+  r = ap (r, 274, 0.6 * character);
 
   // more boilerplate (summing + downsample)
   easy_ap_next_sample();

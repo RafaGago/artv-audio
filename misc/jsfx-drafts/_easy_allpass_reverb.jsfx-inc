@@ -82,7 +82,7 @@ function delay (in, spls) local (x) global (easyapv_del*, easyapv_del_idx) (
   x;
 );
 
-function delay_mod (in, spls, lfo, max_lfo) local (x) global (easyapv_del*, easyapv_del_idx) (
+function delay (in, spls, lfo, max_lfo) local (x) global (easyapv_del*, easyapv_del_idx) (
   x = easyapv_del.delay_line_thiran1_get (spls + lfo * max_lfo, easyapv_del_idx);
   easyapv_del.delay_line_set (in, 0, easyapv_del_idx);
   easyapv_del_idx += 1;
