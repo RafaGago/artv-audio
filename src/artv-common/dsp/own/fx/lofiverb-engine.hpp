@@ -30,10 +30,13 @@ struct no_64bit_conversions {
     fp_int_conversion_step<s32, u32, double>>;
 };
 //------------------------------------------------------------------------------
-// fixed point type for computation
-using fixpt_t = fixpt_d<1, 0, 15, 0, no_64bit_conversions>;
-// fixed point type for computation
+// truncating fixed point type for computation
+using fixpt_tt = fixpt_d<1, 0, 15, 0, no_64bit_conversions>;
+// rounding fixed point type for computation
 using fixpt_tr = fixpt_d<1, 0, 15, fixpt_rounding, no_64bit_conversions>;
+
+using fixpt_t = fixpt_tt;
+
 // fixed point type for storage
 using fixpt_sto      = fixpt_s<1, 0, 15, 0, no_64bit_conversions>;
 using fixpt_spls     = fixpt_m<0, 14, 0, 0, no_64bit_conversions>;

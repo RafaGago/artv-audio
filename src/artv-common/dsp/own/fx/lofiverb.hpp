@@ -659,14 +659,17 @@ private:
     rev.fetch_block<7> (er2, 1); // feedback, fetching block + 1 samples
 
     span_visit (er1, [&] (auto& v, uint i) {
-      v = (T) ((late_in[i] + er2[i] * 0.2_r) * par.decay[i]);
+      v = (T) (late_in[i] + er2[i] * 0.2_r);
+      v = mul_round (v, par.decay[i]);
     });
     er2.cut_head (1); // drop feedback sample from previous block
 
     rev.run<4> (er1, xspan {lfo2}, nullptr);
     rev.run_lp<5> (er1, load_float<T> (0.0001f + 0.17f * _param.damp));
     xspan_memcpy (er1b, er1);
-    span_visit (er1b, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
+    span_visit (er1b, [&] (auto& v, uint i) {
+      v = mul_round (v, par.decay[i]);
+    });
     rev.run<6> (er1b, xspan {lfo1}, nullptr);
     rev.push<7> (er1b.to_const()); // feedback point
 
@@ -686,7 +689,7 @@ private:
     rev.fetch_block<22> (r, 1); // feedback, fetching block + 1 samples
 
     for (uint i = 0; i < io.size(); ++i) {
-      late[i] = (T) (late_in[i] + (T) (r[i] * par.decay[i]));
+      late[i] = (T) (late_in[i] + (T) (mul_round (r[i], par.decay[i])));
       late[i]
         = (T) (late[i] - (T) ((er1[i] + er2[i]) * par.character[i]) * 0.4_r);
       g[i] = (T) (0.618_r + par.character[i] * ((0.707_r - 0.618_r) * 2_r));
@@ -701,10 +704,14 @@ private:
     rev.run<8> (late, xspan {lfo3}, g);
     rev.run<9> (late);
     rev.run_lp<10> (late, late_damp);
-    span_visit (late, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
+    span_visit (late, [&] (auto& v, uint i) {
+      v = (T) (mul_round (v, par.decay[i]));
+    });
     rev.run<11> (late, nullptr, [g] (uint i) { return -g[i]; });
     rev.run<12> (late);
-    span_visit (late, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
+    span_visit (late, [&] (auto& v, uint i) {
+      v = (T) (mul_round (v, par.decay[i]));
+    });
     rev.run<13> (late);
     rev.push<14> (late.to_const()); // feedback point
 
@@ -720,11 +727,15 @@ private:
     rev.run<15> (late, xspan {lfo4}, g);
     rev.run<16> (late);
     rev.run_lp<17> (late, late_damp);
-    span_visit (late, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
+    span_visit (late, [&] (auto& v, uint i) {
+      v = (T) (mul_round (v, par.decay[i]));
+    });
     rev.run<18> (late, nullptr, [g] (uint i) { return -g[i]; });
     rev.run<19> (late);
     rev.run<20> (late);
-    span_visit (late, [&] (auto& v, uint i) { v = (T) (v * par.decay[i]); });
+    span_visit (late, [&] (auto& v, uint i) {
+      v = (T) (mul_round (v, par.decay[i]));
+    });
     rev.run_hp<21> (late);
     rev.push<22> (late.to_const()); // feedback point
 
@@ -856,7 +867,7 @@ private:
       decay      = (T) (0.99999_r - decay * decay);
       decay      = (T) - (0.3_r + decay * 0.45_r);
       // Add midside signal to feedback
-      l[i] = (T) (l[i] * decay);
+      l[i] = mul_round (l[i], decay);
       l[i] = (T) (l[i] + ((spl[0] + spl[1]) * 0.5_r));
       // LFO
       auto lfo = tick_lfo<T>();
@@ -909,6 +920,13 @@ private:
       spls[1] = r[i];
     });
   }
+  //----------------------------------------------------------------------------
+  fixpt_t mul_round (fixpt_t value, fixpt_t mul)
+  {
+    return (fixpt_t) (detail::lofiverb::fixpt_tr) (value * mul);
+  }
+  //----------------------------------------------------------------------------
+  float mul_round (float value, float mul) { return value * mul; }
   //----------------------------------------------------------------------------
   template <class T>
   static T load_float (float v)
@@ -981,7 +999,7 @@ private:
         block[i] *= decay[i];
       }
       else {
-        block[i] = (typename T::rounding_twin) (block[i] * decay[i]);
+        block[i] = (T) mul_round (block[i], decay[i]);
       }
     }
   }

@@ -1173,7 +1173,7 @@ private:
   template <uint N, class T_scalar, class T>
   static constexpr auto ashr_truncate (T v)
   {
-    if constexpr (rounds_nearest) {
+    if constexpr (rounds_nearest && (N > 0)) {
       constexpr auto roundval = bit<T_scalar> (N - 1);
       if constexpr (std::is_signed_v<T_scalar>) {
         v += (v >= 0) ? roundval : -roundval;
