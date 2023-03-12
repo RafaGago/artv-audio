@@ -512,7 +512,7 @@ private:
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
         wet[i][0].load_float (io[i][0]);
-        wet[i][1].load_float (io[i][0]);
+        wet[i][1].load_float (io[i][1]);
       }
     }
     // main loop
