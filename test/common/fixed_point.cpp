@@ -70,13 +70,12 @@ TEST (fixed_point, add_lossy)
 //------------------------------------------------------------------------------
 TEST (fixed_point, add_rounding)
 {
-  constexpr auto flags = fixpt_dynamic | fixpt_rounding;
-  auto           a     = fixpt<1, 3, 12, flags>::from_float (0.6);
-  auto           b     = fixpt<1, 0, 15, flags>::from_float (-0.7);
-  auto           c     = a + b;
-  c.normalize();
-  static_assert (std::is_same_v<decltype (c), fixpt<1, 4, 15, flags>>);
-  EXPECT_NEAR (c.to_floatp(), -0.1, 0.0001);
+  constexpr auto flags = fixpt_rounding;
+  auto           a     = fixpt<1, 4, 11, flags>::from_float (0.6);
+  auto           b     = fixpt<1, 4, 11, flags>::from_float (-2.52);
+  fixpt<1, 15, 0, flags | fixpt_relaxed_frac_assign> c {};
+  c = a + b;
+  EXPECT_NEAR (c.to_floatp(), -2., 0.0001);
 }
 //------------------------------------------------------------------------------
 TEST (fixed_point, add_unsigned)
@@ -582,6 +581,25 @@ TEST (fixed_point, fixed_point_implicit_enabled)
   EXPECT_NEAR (a.to_floatp(), 7, .00015);
   a = 4;
   EXPECT_NEAR (a.to_floatp(), 4, .00015);
+}
+//------------------------------------------------------------------------------
+TEST (fixed_point, rounding_and_truncation)
+{
+  using base       = fixpt_d<1, 5, 10>;
+  using truncating = fixpt_d<1, 5, 0>;
+  using rounding   = truncating::rounding_twin;
+
+  static_assert (rounding::rounds_nearest);
+
+  auto v     = base::from_float (1.9);
+  auto initv = v.to_floatp();
+
+  EXPECT_EQ (((truncating) v).to_floatp(), 1.);
+  EXPECT_EQ (((rounding) v).to_floatp(), 2.);
+
+  v = base::from_float (-1.9);
+  EXPECT_EQ (((truncating) v).to_floatp(), -1.);
+  EXPECT_EQ (((rounding) v).to_floatp(), -2.);
 }
 //------------------------------------------------------------------------------
 } // namespace artv

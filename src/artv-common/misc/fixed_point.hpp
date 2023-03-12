@@ -496,7 +496,8 @@ public:
       ret._v = ashl<shift> (vec_cast<scalar> (_v));
     }
     else if constexpr (shift < 0) {
-      ret._v = vec_cast<scalar> (ashr_truncate<-shift, scalar_type> (_v));
+      ret._v = vec_cast<scalar> (
+        ret.template ashr_truncate<-shift, scalar_type> (_v));
     }
     else {
       ret._v = vec_cast<scalar> (_v);
@@ -753,7 +754,9 @@ public:
   constexpr fixpt& operator= (T rhs) noexcept
   {
     _v = rhs.cast (*this)._v;
-    assert (to_int() == rhs.to_int());
+    assert (
+      to_int() == rhs.to_int()
+      || ((relaxed_frac_assign || relaxed_int_assign) && rounds_nearest));
     return *this;
   }
 
@@ -1170,11 +1173,11 @@ private:
     return 0;
   }
   //----------------------------------------------------------------------------
-  template <uint N, class T_scalar, class T>
+  template <uint N_drop, class T_scalar, class T>
   static constexpr auto ashr_truncate (T v)
   {
-    if constexpr (rounds_nearest && (N > 0)) {
-      constexpr auto roundval = bit<T_scalar> (N - 1);
+    if constexpr (rounds_nearest && (N_drop > 0)) {
+      constexpr auto roundval = bit<T_scalar> (N_drop - 1);
       if constexpr (std::is_signed_v<T_scalar>) {
         v += (v >= 0) ? roundval : -roundval;
       }
@@ -1182,13 +1185,13 @@ private:
         v += roundval;
       }
     }
-    return ashr<N> (v);
+    return ashr<N_drop> (v);
   }
   //----------------------------------------------------------------------------
-  template <uint N, class T>
+  template <uint N_drop, class T>
   static constexpr auto ashr_truncate_ns (T v)
   {
-    return ashr_truncate<N, T> (v);
+    return ashr_truncate<N_drop, T> (v);
   }
   //----------------------------------------------------------------------------
   static constexpr auto frac_mask
@@ -1675,6 +1678,14 @@ constexpr bool operator<= (Ratio lhs, T rhs) noexcept
 {
   return detail::fixpt_from_ratio (lhs, rhs) <= rhs;
 }
+
+// avoid circular dependencies, as assignment overload can be a free function
+template <class Ratio, std::enable_if_t<is_ratio_v<Ratio>>* = nullptr>
+constexpr auto to_fixpt (Ratio) noexcept
+{
+  return fixpt_from_ratio<Ratio::num, Ratio::den>();
+}
+
 //------------------------------------------------------------------------------
 // Operators for num<T>
 //------------------------------------------------------------------------------
