@@ -54,7 +54,45 @@ struct filter_data {
   fixpt_t g;
   bool    is_lowpass;
 };
-using stage_data = std::variant<allpass_data, delay_data, filter_data>;
+
+struct quantizer {
+  fixpt_t g;
+};
+
+using stage_data
+  = std::variant<allpass_data, delay_data, filter_data, quantizer>;
+//------------------------------------------------------------------------------
+static constexpr detail::lofiverb::stage_data make_ap (
+  u16   spls,
+  float g,
+  u16   mod = 0)
+{
+  return allpass_data {
+    fixpt_spls::from_int (spls),
+    fixpt_spls_mod::from_int (mod),
+    fixpt_t::from_float (g)};
+}
+//------------------------------------------------------------------------------
+static constexpr detail::lofiverb::stage_data make_delay (u16 spls, u16 mod = 0)
+{
+  return delay_data {
+    fixpt_spls::from_int (spls), fixpt_spls_mod::from_int (mod)};
+}
+//------------------------------------------------------------------------------
+static constexpr detail::lofiverb::stage_data make_hp (float g = 0)
+{
+  return filter_data {fixpt_t::from_float (g), false};
+}
+//------------------------------------------------------------------------------
+static constexpr detail::lofiverb::stage_data make_lp (float g = 0)
+{
+  return filter_data {fixpt_t::from_float (g), true};
+}
+//------------------------------------------------------------------------------
+static constexpr detail::lofiverb::stage_data make_quantizer()
+{
+  return quantizer {};
+}
 //------------------------------------------------------------------------------
 
 template <class Spec_array>
@@ -74,6 +112,11 @@ public:
   static constexpr bool is_filter (uint i)
   {
     return std::holds_alternative<filter_data> (values[i]);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr bool is_quantizer (uint i)
+  {
+    return std::holds_alternative<quantizer> (values[i]);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_lowpass_filter (uint i)
@@ -139,33 +182,6 @@ private:
   static constexpr auto values {Spec_array::values};
   //----------------------------------------------------------------------------
 };
-//------------------------------------------------------------------------------
-static constexpr detail::lofiverb::stage_data make_ap (
-  u16   spls,
-  float g,
-  u16   mod = 0)
-{
-  return allpass_data {
-    fixpt_spls::from_int (spls),
-    fixpt_spls_mod::from_int (mod),
-    fixpt_t::from_float (g)};
-}
-//------------------------------------------------------------------------------
-static constexpr detail::lofiverb::stage_data make_delay (u16 spls, u16 mod = 0)
-{
-  return delay_data {
-    fixpt_spls::from_int (spls), fixpt_spls_mod::from_int (mod)};
-}
-//------------------------------------------------------------------------------
-static constexpr detail::lofiverb::stage_data make_hp (float g = 0)
-{
-  return filter_data {fixpt_t::from_float (g), false};
-}
-//------------------------------------------------------------------------------
-static constexpr detail::lofiverb::stage_data make_lp (float g = 0)
-{
-  return filter_data {fixpt_t::from_float (g), true};
-}
 //------------------------------------------------------------------------------
 // A class to abstract 16-bit storage, queue access and common DSP operations
 // when building reverbs based on allpass loops. Both on fixed and floating
@@ -283,6 +299,9 @@ public:
       else {
         run_hp<Idx> (io, std::forward<Ts> (args)...);
       }
+    }
+    else if constexpr (spec::is_quantizer (Idx)) {
+      run_quantizer<Idx> (io, std::forward<Ts> (args)...);
     }
     else {
       static_assert (sizeof (T) != sizeof (T), "Invalid");
@@ -447,6 +466,31 @@ private:
       y1       = y;
     }
     save_state<Idx> (y1);
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class Func>
+  void run_quantizer (xspan<fixpt_t> io, Func&& fn)
+  {
+    // decay with error-feedback/ fraction saving
+    constexpr uint mask
+      = lsb_mask<uint> (fixpt_acum_t::n_bits - fixpt_t::n_bits);
+
+    s16 err = fetch_quantizer_err<Idx>();
+    for (uint i = 0; i < io.size(); ++i) {
+      auto v = (fixpt_acum_t) fn (io[i], i);
+      v += fixpt_acum_t::from (err);
+      io[i] = (fixpt_tr) v;
+      err   = (s16) (v.value() & mask);
+    }
+    save_quantizer_err<Idx> (err);
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class Func>
+  void run_quantizer (xspan<float> io, Func&& fn)
+  {
+    for (uint i = 0; i < io.size(); ++i) {
+      io[i] = fn (io[i], i);
+    }
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class U>
@@ -924,9 +968,23 @@ private:
     return get_delay_size (i);
   }
   //----------------------------------------------------------------------------
-  static constexpr uint n_thiran_states  = 2;
-  static constexpr uint n_filter_states  = 2;
-  static constexpr uint n_allpass_states = 2;
+  static constexpr uint n_thiran_states    = 2;
+  static constexpr uint n_filter_states    = 2;
+  static constexpr uint n_allpass_states   = 2;
+  static constexpr uint n_quantizer_states = 1;
+  //----------------------------------------------------------------------------
+  static constexpr uint get_stage_n_elems (uint i)
+  {
+    // ordering as appears here
+    uint ret = get_delay_size (i);
+    ret += ((uint) spec::has_modulated_delay (i)) * n_thiran_states;
+    ret += ((uint) spec::is_filter (i)) * n_filter_states;
+    ret += ((uint) spec::is_allpass (i)) * n_allpass_states;
+    ret += ((uint) spec::is_quantizer (i)) * n_quantizer_states;
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+
   //----------------------------------------------------------------------------
   // fetch state for thiran interpolators or damp filters
   template <uint Idx>
@@ -990,14 +1048,22 @@ private:
     _stage[Idx].z[offset + 1] = err2;
   }
   //----------------------------------------------------------------------------
-  static constexpr uint get_stage_n_elems (uint i)
+  // fetch truncation error for decay (fixed point only)
+  template <uint Idx>
+  auto fetch_quantizer_err()
   {
-    // ordering as appears here
-    uint ret = get_delay_size (i);
-    ret += ((uint) spec::has_modulated_delay (i)) * n_thiran_states;
-    ret += ((uint) spec::is_filter (i)) * n_filter_states;
-    ret += ((uint) spec::is_allpass (i)) * n_allpass_states;
-    return ret;
+    static_assert (spec::is_quantizer (Idx));
+    constexpr auto offset = get_states_offset (Idx);
+    return _stage[Idx].z[offset];
+  }
+  //----------------------------------------------------------------------------
+  // store truncation error for decay (fixed point only)
+  template <uint Idx>
+  void save_quantizer_err (s16 err)
+  {
+    static_assert (spec::is_quantizer (Idx));
+    constexpr auto offset = get_states_offset (Idx);
+    _stage[Idx].z[offset] = err;
   }
   //----------------------------------------------------------------------------
   template <uint Idx>

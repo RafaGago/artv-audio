@@ -164,7 +164,7 @@ feedback = 0;
 
 decay = 1 - decay_p;
 decay = 1 - decay * decay;
-decay = 0.6 + decay  * 0.39;
+decay = 0.6 + decay * 0.38;
 
 mod_amt = 0.75 * (1 - mod) + 0.25;
 lfo.lfo_bank_reset_freq (0, 0.1 + mod * 1.2, k.src.srate);
@@ -184,6 +184,7 @@ hp_fact += 0.6;
 g_character = 0.618 + ((0.707 - 0.618) * 2) * character;
 
 er_amt = er_fact * er_fact;
+er_amt = 0.05 + er_amt * 0.5;
 
 @sample
 
@@ -199,24 +200,32 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   x = ap (x, 183, 0.707);
   x = ap (x, 389, -0.6);
   x = ap (x, 401, 0.6);
-  late_in = x;
+  late_in = x; // 0-1 range (bipolar)
 
   // ER
   er_lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
-  x = ap_mod (decay * (x + er_fb), 1367, 0.35, lfo.ret.ptr[1], 71 + er_amt * 70);
+  // notice the care all over al feedback sums to keep the maximum gain at one
+  // (maximum), as this has to run on fixed point
+  x = ap_mod (decay * (late_in * 0.5 + er_fb), 1367, 0.35, lfo.ret.ptr[1], 71 + er_amt * 70);
   x = erdamp.dampfilter (x, 0.0001 + 0.17 * damp);
-  er1 = x;
+  er1 = x;  // 0-1 range (bipolar)
   x = delay_mod (x * decay, 1787, lfo.ret.ptr[0], 261);
   x = delay (x, 33); // just to enable block processing
-  er2 = x;
-  er_fb = x * 0.2;
+  er2 = x;  // 0-1 range (bipolar)
+  er_fb = x;
 
   // late + hp
   lp = lp1.dampfilter (late_in, hp_fact);
   late_in = late_in - lp;
 
   lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
-  loop_in = late_in + f2 * decay - (er1 + er2) * er_amt * 0.4;
+
+  loop_in = late_in + f2 * decay * 0.6 - (er1 + er2) * er_amt * 0.4;
+
+
+  loopsig = (late_in * 0.5);
+  ersig = (er1 + er2) * 0.25;
+  loop_in = loopsig * (1 - er_amt) - ersig * er_amt + f2;
   x = ap_mod (loop_in, 977, g_character, lfo.ret.ptr[0], 71 * mod_amt);
   x = delay (x, 2819);
   x = damp1.dampfilter (x, kdamp);
@@ -228,7 +237,9 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   x = delay (x, 787);
   l = x;
 
- loop_in = late_in + f1 * decay + (er1 - er2) * er_amt * 0.4;
+  loopsig = (late_in * 0.5);
+  ersig = (er1 - er2) * 0.25;
+  loop_in = loopsig * (1 - er_amt) - ersig * er_amt + f1;
   x = ap_mod (loop_in, 947, g_character, lfo.ret.ptr[1], 47 * mod_amt);
   x = delay (x, 3191);
   x = damp2.dampfilter (x, kdamp);
@@ -247,8 +258,10 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   delay_line_idx = 0;
 
   // Mixdown
-  l += (-er1 * 0.825 - er2 * 0.423) * er_amt;
-  r += (-er1 * 0.855 + er2 * 0.443) * er_amt;
+  er_cf = er_amt * 0.2;
+
+  l = l * (1 - er_cf) + (-er1 * 0.66 - er2 * 0.34) * er_cf;
+  r = r * (1 - er_cf) + (-er1 * 0.66 + er2 * 0.34) * er_cf;
 
   l = r * (1 - abs (stereo)) + l * abs (stereo);
   stereo < 0 ? (

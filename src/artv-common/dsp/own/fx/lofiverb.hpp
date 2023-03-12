@@ -38,7 +38,8 @@ static constexpr auto get_debug_algo_spec()
     make_ap (183, 0.707), // 1
     make_ap (389, -0.6), // 2
     make_ap (401, 0.6), // 3
-    make_delay (max_block_size + 1) // 4 delay block (== blocksz + 1)
+    make_quantizer(), // 4
+    make_delay (max_block_size + 1) // 5 delay block (== blocksz + 1)
   );
 }
 
@@ -55,28 +56,33 @@ static constexpr auto get_algo1_spec()
     make_ap (183, 0.707), // 1
     make_ap (389, -0.6), // 2
     make_ap (401, 0.6), // 3
-    // er
+    // er (not ER at the end, as this is now another reverb...)
     make_ap (1367, 0.35, 71 + 70), // 4
     make_lp(), // 5
-    make_ap (1787, 0.5, 261), // 6
-    make_delay (max_block_size + 1), // 7 to allow block processing
+    make_quantizer(), // 6
+    make_ap (1787, 0.5, 261), // 7
+    make_delay (max_block_size + 1), // 8 to allow block processing
     // loop1
-    make_ap (977, 0.5 /*overridden*/, 51), // 8
-    make_delay (2819), // 9
-    make_lp(), // 10
-    make_ap (863, -0.5 /*overridden*/), // 11
-    make_delay (1021), // 12 Delay
-    make_ap (1453, 0.618), // 13
-    make_delay (787), // 14 delay (allows block processing) (> blocksz + 1)
+    make_ap (977, 0.5 /*overridden*/, 51), // 9
+    make_delay (2819), // 10
+    make_lp(), // 11
+    make_quantizer(), // 12
+    make_ap (863, -0.5 /*overridden*/), // 13
+    make_delay (1021), // 14
+    make_quantizer(), // 15
+    make_ap (1453, 0.618), // 16
+    make_delay (787), // 17 delay (allows block processing) (> blocksz + 1)
     // loop2
-    make_ap (947, 0.5 /*overridden*/, 67), // 15
-    make_delay (3191), // 16
-    make_lp(), // 17
-    make_ap (887, -0.5 /*overridden*/), // 18
-    make_delay (1049), // 19 Delay
-    make_ap (1367, 0.618), // 20
-    make_hp (0.98), // 21 HP
-    make_delay (647)); // 22 delay (allows block processing) (> blocksz + 1)
+    make_ap (947, 0.5 /*overridden*/, 67), // 18
+    make_delay (3191), // 19
+    make_lp(), // 20
+    make_quantizer(), // 21
+    make_ap (887, -0.5 /*overridden*/), // 22
+    make_delay (1049), // 23
+    make_quantizer(), // 24
+    make_ap (1367, 0.618), // 25
+    make_hp (0.98), // 26
+    make_delay (647)); // 27 delay (allows block processing) (> blocksz + 1)
 }
 
 struct algo1_spec {
@@ -96,27 +102,29 @@ static constexpr auto get_midifex49_spec()
     make_delay (21), // 4 L1
     make_delay (1010), // 5 R1
 
-    make_delay (1624), // 6 FB
-    make_ap (1992, 0.5, 17), // 7 FB modulated...
+    make_delay (1624), // 6 Loop
+    make_ap (1992, 0.5, 17), // 7 Loop
 
     make_delay (1891), // 8 L2
     make_delay (890), // 9 R2
 
-    make_delay (2110), // 10 FB
-    make_ap (2371, 0.5), // 11 FB nested allpass 1
-    make_ap (1378, 0.2), // 12 FB nested allpass 2
+    make_delay (2110), // 10 Loop
+    make_quantizer(), // 11
+    make_ap (2371, 0.5), // 12 Loop nested allpass 1
+    make_ap (1378, 0.2), // 13 Loop nested allpass 2
 
-    make_delay (2003), // 13 L3
-    make_delay (671), // 14 R3
+    make_delay (2003), // 14 L3
+    make_delay (671), // 15 R3
 
-    make_delay (2157), // 15 FB
-    make_lp(), // 16
-    make_ap (2712, 0.5, 22), // 17 FB nested allpass 1
-    make_ap (1783, 0.2), // 18 FB nested allpass 2
+    make_delay (2157), // 16 Loop
+    make_quantizer(), // 17
+    make_lp(), // 18
+    make_ap (2712, 0.5, 22), // 19 Loop nested allpass 1
+    make_ap (1783, 0.2), // 20 Loop nested allpass 2
 
-    make_hp (0.995), // 19 HP
+    make_hp (0.995), // 21 HP
 
-    make_delay (max_block_size + 1) // 20 delay block (== blocksz + 1)
+    make_delay (max_block_size + 1) // 21 delay block (== blocksz + 1)
   );
 }
 
@@ -128,34 +136,35 @@ struct midifex49_spec {
 static constexpr auto get_midifex50_spec()
 {
   return make_array<stage_data> (
-    make_ap (13, 0.5), // 0
-    make_ap (83, 0.5), // 1
-    make_ap (116, 0.5), // 2
-    make_ap (239, 0.5), // 3
-    make_delay (2, 32), // 4 TODO: FIX or STUDY. min of 2 spls are required
-    make_ap (339, 0.5), // 5
-    make_ap (481, 0.5), // 6
-    make_ap (555, 0.5), // 7
-    make_ap (823, 0.5), // 8
-    make_delay (2, 64), // 9 TODO: FIX or STUDY. min of 2 spls are required
-    make_ap (999, 0.5), // 10
-    make_ap (1100, 0.5), // 11
-    make_ap (1347, 0.5), // 12
-    make_ap (1563, 0.5), // 13
-    make_delay (2, 64), // 14 TODO: FIX or STUDY. min of 2 spls are required
-    make_ap (1841, 0.5), // 15
-    make_ap (2001, 0.5, 67), // 16
-    make_ap (2083, 0.5, 127), // 17
-    make_lp(), // 18
-    make_delay (2, 96), // 19 TODO: FIX or STUDY. min of 2 spls are required
-    make_hp (0.995), // 20 HP
-    make_delay (max_block_size + 1), // 21 (FB point) (== blocksz + 1)
-    make_ap (147, 0.5), // 22 L diff
-    make_ap (43, 0.5), // 23 L diff
-    make_ap (55, 0.5), // 24 L diff
-    make_ap (249, 0.5), // 25 R diff
-    make_ap (48, 0.5), // 26 R diff
-    make_ap (21, 0.5) // 27 R diff
+    make_quantizer(), // 0
+    make_ap (13, 0.5), // 1
+    make_ap (83, 0.5), // 2
+    make_ap (116, 0.5), // 3
+    make_ap (239, 0.5), // 4
+    make_delay (2, 32), // 5 TODO: FIX or STUDY. min of 2 spls are required
+    make_ap (339, 0.5), // 6
+    make_ap (481, 0.5), // 7
+    make_ap (555, 0.5), // 8
+    make_ap (823, 0.5), // 9
+    make_delay (2, 64), // 10 TODO: FIX or STUDY. min of 2 spls are required
+    make_ap (999, 0.5), // 11
+    make_ap (1100, 0.5), // 12
+    make_ap (1347, 0.5), // 13
+    make_ap (1563, 0.5), // 14
+    make_delay (2, 64), // 15 TODO: FIX or STUDY. min of 2 spls are required
+    make_ap (1841, 0.5), // 16
+    make_ap (2001, 0.5, 67), // 17
+    make_ap (2083, 0.5, 127), // 18
+    make_lp(), // 19
+    make_delay (2, 96), // 20 TODO: FIX or STUDY. min of 2 spls are required
+    make_hp (0.995), // 21 HP
+    make_delay (max_block_size + 1), // 22 (FB point) (== blocksz + 1)
+    make_ap (147, 0.5), // 23 L diff
+    make_ap (43, 0.5), // 24 L diff
+    make_ap (55, 0.5), // 25 L diff
+    make_ap (249, 0.5), // 26 R diff
+    make_ap (48, 0.5), // 27 R diff
+    make_ap (21, 0.5) // 28 R diff
   );
 }
 
@@ -673,15 +682,11 @@ private:
     auto in  = xspan {in_arr.data(), io.size()};
     auto out = xspan {out_arr.data(), io.size() + 1};
 
-    rev.fetch_block<4> (out, 1); // feedback, fetching block + 1 samples
+    rev.fetch_block<5> (out, 1); // feedback, fetching block + 1 samples
 
     for (uint i = 0; i < io.size(); ++i) {
       // to MS
       in[i] = (T) (((io[i][0] + io[i][1]) * 0.25_r) + out[i]);
-      // decay fixup
-      auto decay   = (T) (0.99999_r - par.decay[i]);
-      decay        = (T) (0.99999_r - decay * decay);
-      par.decay[i] = (T) (0.6_r + decay * 0.39_r);
     }
     out.cut_head (1); // drop feedback sample from previous block
 
@@ -689,8 +694,13 @@ private:
     rev.run<1> (in);
     rev.run<2> (in);
     rev.run<3> (in);
-    span_visit (in, [&] (auto& v, uint i) { v = mul_round (v, par.decay[i]); });
-    rev.push<4> (in.to_const()); // feedback point
+    rev.run<4> (in, [&] (auto v, uint i) { // decay fixup
+      auto decay = (T) (0.99999_r - par.decay[i]);
+      decay      = (T) (0.99999_r - decay * decay);
+      decay      = (T) (0.6_r + decay * 0.39_r);
+      return v * decay;
+    });
+    rev.push<5> (in.to_const()); // feedback point
 
     // Mixdown (not a lot going on...)
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
@@ -731,16 +741,15 @@ private:
       // decay fixup
       auto decay   = (T) (0.99999_r - par.decay[i]);
       decay        = (T) (0.99999_r - decay * decay);
-      par.decay[i] = (T) (0.6_r + decay * 0.39_r);
+      par.decay[i] = (T) (0.6_r + decay * 0.38_r);
     }
-
     // diffusion -----------------------------
     rev.run<0> (late_in);
     rev.run<1> (late_in);
     rev.run<2> (late_in);
     rev.run<3> (late_in);
 
-    // ER -----------------------------
+    // ER (first reverb, not exactly ER at the end...) -----------------------
     arr    early1_arr;
     arr    early1b_arr;
     arr_fb early2_arr;
@@ -749,22 +758,19 @@ private:
     auto er1b = xspan {early1b_arr.data(), io.size()};
     auto er2 = xspan {early2_arr.data(), io.size() + 1}; // +1: Feedback on head
 
-    rev.fetch_block<7> (er2, 1); // feedback, fetching block + 1 samples
+    rev.fetch_block<8> (er2, 1); // feedback, fetching block + 1 samples
 
     span_visit (er1, [&] (auto& v, uint i) {
-      v = (T) (late_in[i] + er2[i] * 0.2_r);
-      v = mul_round (v, par.decay[i]);
+      v = (T) (late_in[i] * 0.5_r + er2[i]);
     });
     er2.cut_head (1); // drop feedback sample from previous block
 
     rev.run<4> (er1, xspan {lfo2}, nullptr);
     rev.run<5> (er1, load_float<T> (0.0001f + 0.17f * _param.damp));
     xspan_memcpy (er1b, er1);
-    span_visit (er1b, [&] (auto& v, uint i) {
-      v = mul_round (v, par.decay[i]);
-    });
-    rev.run<6> (er1b, xspan {lfo1}, nullptr);
-    rev.push<7> (er1b.to_const()); // feedback point
+    rev.run<6> (er1b, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run<7> (er1b, xspan {lfo1}, nullptr);
+    rev.push<8> (er1b.to_const()); // feedback point
 
     // Late -----------------------------
     arr    late_arr;
@@ -778,13 +784,14 @@ private:
     auto r    = xspan {r_arr.data(), io.size() + 1}; // +1: Feedback on head
 
     // feedback handling
-    rev.fetch_block<14> (l, 1); // feedback, fetching block + 1 samples
-    rev.fetch_block<22> (r, 1); // feedback, fetching block + 1 samples
+    rev.fetch_block<17> (l, 1); // feedback, fetching block + 1 samples
+    rev.fetch_block<27> (r, 1); // feedback, fetching block + 1 samples
 
     for (uint i = 0; i < io.size(); ++i) {
-      late[i] = (T) (late_in[i] + (T) (mul_round (r[i], par.decay[i])));
-      late[i]
-        = (T) (late[i] - (T) ((er1[i] + er2[i]) * par.character[i]) * 0.4_r);
+      auto loopsig = late_in[i] * 0.5_r + r[i];
+      auto er_sig  = (er1[i] + er2[i]) * 0.25_r;
+      auto er_amt  = par.character[i] * 0.5_r;
+      late[i]      = (T) (loopsig * (0.99999_r - er_amt) + er_sig * er_amt);
       g[i] = (T) (0.618_r + par.character[i] * ((0.707_r - 0.618_r) * 2_r));
     }
     r.cut_head (1); // drop feedback sample from previous block
@@ -793,50 +800,45 @@ private:
     late_dampf       = 1.f - late_dampf * late_dampf;
     late_dampf *= 0.4f;
     auto late_damp = load_float<T> (late_dampf);
-    rev.run<8> (late, xspan {lfo3}, g);
-    rev.run<9> (late);
-    rev.run<10> (late, late_damp);
-    span_visit (late, [&] (auto& v, uint i) {
-      v = (T) (mul_round (v, par.decay[i]));
-    });
-    rev.run<11> (late, nullptr, [g] (uint i) { return -g[i]; });
-    rev.run<12> (late);
-    span_visit (late, [&] (auto& v, uint i) {
-      v = (T) (mul_round (v, par.decay[i]));
-    });
-    rev.run<13> (late);
-    rev.push<14> (late.to_const()); // feedback point
+    rev.run<9> (late, xspan {lfo3}, g);
+    rev.run<10> (late);
+    rev.run<11> (late, late_damp);
+    rev.run<12> (late, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run<13> (late, nullptr, [g] (uint i) { return -g[i]; });
+    rev.run<14> (late);
+    rev.run<15> (late, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run<16> (late);
+    rev.push<17> (late.to_const()); // feedback point
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       // prepare input with feedback
-      late[i] = (T) (late_in[i] + (T) (l[i] * par.decay[i]));
-      late[i]
-        = (T) (late[i] + (T) (((er1[i] + er2[i]) * par.character[i]) * 0.4_r));
+      auto loopsig = late_in[i] * 0.5_r + l[i];
+      auto er_sig  = (er1[i] - er2[i]) * 0.25_r;
+      auto er_amt  = par.character[i] * 0.5_r;
+      late[i]      = (T) (loopsig * (0.99999_r - er_amt) + er_sig * er_amt);
     }
     l.cut_head (1); // drop feedback sample from previous block
-    rev.run<15> (late, xspan {lfo4}, g);
-    rev.run<16> (late);
-    rev.run<17> (late, late_damp);
-    span_visit (late, [&] (auto& v, uint i) {
-      v = (T) (mul_round (v, par.decay[i]));
-    });
-    rev.run<18> (late, nullptr, [g] (uint i) { return -g[i]; });
+    rev.run<18> (late, xspan {lfo4}, g);
     rev.run<19> (late);
-    rev.run<20> (late);
-    span_visit (late, [&] (auto& v, uint i) {
-      v = (T) (mul_round (v, par.decay[i]));
-    });
-    rev.run<21> (late);
-    rev.push<22> (late.to_const()); // feedback point
+    rev.run<20> (late, late_damp);
+    rev.run<21> (late, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run<22> (late, nullptr, [g] (uint i) { return -g[i]; });
+    rev.run<23> (late);
+    rev.run<24> (late, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run<25> (late);
+    rev.run<26> (late);
+    rev.push<27> (late.to_const()); // feedback point
 
     // Mixdown
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      T e_l = (T) ((-er1[i] * 0.825_r - er2[i] * 0.423_r) * par.character[i]);
-      T e_r = (T) ((-er1[i] * 0.855_r + er2[i] * 0.443_r) * par.character[i]);
-      io[i][0] = (T) (l[i] + e_l);
-      io[i][1] = (T) (r[i] + e_r);
+      auto er_amt     = par.character[i] * 0.2_r;
+      auto e_l        = (-er1[i] * 0.66_r - er2[i] * 0.34_r) * er_amt;
+      auto e_r        = (-er1[i] * 0.66_r + er2[i] * 0.34_r) * er_amt;
+      auto direct_amt = 0.99999_r - er_amt;
+      io[i][0]        = (T) (l[i] * direct_amt + e_l);
+      io[i][1]        = (T) (r[i] * direct_amt + e_r);
     }
   }
   //----------------------------------------------------------------------------
@@ -862,7 +864,7 @@ private:
 
     span_visit (io, [&] (auto& spl, uint i) {
       // Midside signal
-      sig[i] = (T) (((spl[0] + spl[1]) * 0.5_r));
+      sig[i] = (T) (((spl[0] + spl[1]) * 0.25_r)); // gain = 0.5 + feedback = 1
       // LFO
       auto lfo = tick_lfo<T>();
       lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
@@ -879,7 +881,7 @@ private:
     rev.run<3> (sig);
 
     // feedback handling, fetching the block with a negative offset of 1
-    rev.fetch_block<20> (tmp, 1);
+    rev.fetch_block<22> (tmp, 1);
     span_visit (sig, [&] (auto& v, uint i) { v = (T) (v + tmp[i]); });
 
     // 1st output point for L and R signal
@@ -894,39 +896,47 @@ private:
 
     // 2nd output point for L and R signal
     rev.fetch_block<8> (tmp); // delay GT a block will never overlap
-    span_visit (l, [&] (auto& v, uint i) { v = (T) (v + tmp[i]); });
+    span_visit (l, [&] (auto& v, uint i) {
+      v = (T) ((v + tmp[i]) * (2_r / 3_r));
+    });
     rev.push<8> (sig.to_const());
     rev.fetch_block<9> (tmp); // delay GT a block will never overlap
-    span_visit (r, [&] (auto& v, uint i) { v = (T) (v + tmp[i]); });
+    span_visit (r, [&] (auto& v, uint i) {
+      v = (T) ((v + tmp[i]) * (2_r / 3_r));
+    });
     rev.push<9> (sig.to_const());
 
     // continuing the loop
     rev.run<10> (sig);
-    apply_gain (sig, par.decay);
+    rev.run<11> (sig, [&] (auto v, uint i) { return v * par.decay[i]; });
     span_visit (tmp, [&] (auto& v, uint i) {
       v = (T) (par.character[i] * 0.14_r);
     });
-    rev.run<11, 12> (sig, nullptr, nullptr, nullptr, tmp);
+    rev.run<12, 13> (sig, nullptr, nullptr, nullptr, tmp);
 
     // 3rd output point for L and R signal
-    rev.fetch_block<13> (tmp); // delay GT a block will never overlap
-    span_visit (l, [&] (auto& v, uint i) { v = (T) (v + tmp[i]); });
-    rev.push<13> (sig.to_const());
     rev.fetch_block<14> (tmp); // delay GT a block will never overlap
-    span_visit (r, [&] (auto& v, uint i) { v = (T) (v + tmp[i]); });
+    span_visit (l, [&] (auto& v, uint i) {
+      v = (T) (v + tmp[i] * (1_r / 3_r));
+    });
     rev.push<14> (sig.to_const());
+    rev.fetch_block<15> (tmp); // delay GT a block will never overlap
+    span_visit (r, [&] (auto& v, uint i) {
+      v = (T) (v + tmp[i] * (1_r / 3_r));
+    });
+    rev.push<15> (sig.to_const());
 
     // continuing the loop
-    rev.run<15> (sig);
-    apply_gain (sig, par.decay);
-    rev.run<16> (sig, load_float<T> (_param.damp * 0.8f));
+    rev.run<16> (sig);
+    rev.run<17> (sig, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run<18> (sig, load_float<T> (_param.damp * 0.8f));
     span_visit (tmp, [&] (auto& v, uint i) {
       v = (T) (par.character[i] * 0.2_r);
     });
-    rev.run<17, 18> (sig, lfo2, nullptr, nullptr, tmp);
-    rev.run<19> (sig);
+    rev.run<19, 20> (sig, lfo2, nullptr, nullptr, tmp);
+    rev.run<21> (sig);
     // push to delay feedback
-    rev.push<20> (sig.to_const());
+    rev.push<22> (sig.to_const());
 
     span_visit (io, [&] (auto& spls, uint i) {
       spls[0] = l[i];
@@ -951,92 +961,66 @@ private:
     xspan lfo2 {lfo2_arr.data(), io.size()};
 
     // fetch feedback values
-    rev.fetch_block<21> (l, 1);
-    span_visit (io, [&] (auto& spl, uint i) {
+    rev.fetch_block<22> (l, 1);
+    rev.run<0> (l, [&] (T fb_spl, uint i) {
+      // running lfo (unrelated to quantizing)
+      auto lfo = tick_lfo<T>();
+      lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
+      lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
+
       // decay fixup
       auto decay = (T) (0.99999_r - par.decay[i]);
       decay      = (T) (0.99999_r - decay * decay);
       decay      = (T) - (0.3_r + decay * 0.45_r);
-      // Add midside signal to feedback
-      l[i] = mul_round (l[i], decay);
-      l[i] = (T) (l[i] + ((spl[0] + spl[1]) * 0.5_r));
-      // LFO
-      auto lfo = tick_lfo<T>();
-      lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
-      lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
-    });
 
-    rev.run<0> (l);
+      return (fb_spl * decay) + ((io[i][0] + io[i][1]) * 0.25_r); // gain = 1
+    }); // feedback + input summing with quantizer
+
     rev.run<1> (l);
     rev.run<2> (l);
     rev.run<3> (l);
-    rev.run<4> (l, xspan {par.character}, nullptr); // variable delay
+    rev.run<4> (l);
+    rev.run<5> (l, xspan {par.character}, nullptr); // variable delay
 
-    rev.run<5> (l);
     rev.run<6> (l);
     rev.run<7> (l);
     rev.run<8> (l);
-    rev.run<9> (l, xspan {par.character}, nullptr); // variable delay
+    rev.run<9> (l);
+    rev.run<10> (l, xspan {par.character}, nullptr); // variable delay
 
-    rev.run<10> (l);
     rev.run<11> (l);
     rev.run<12> (l);
     rev.run<13> (l);
-    rev.run<14> (l, xspan {par.character}, nullptr); // variable delay
+    rev.run<14> (l);
+    rev.run<15> (l, xspan {par.character}, nullptr); // variable delay
 
-    rev.run<15> (l);
-    rev.run<16> (l, xspan {lfo1}, nullptr);
-    rev.run<17> (l, xspan {lfo2}, nullptr);
+    rev.run<16> (l);
+    rev.run<17> (l, xspan {lfo1}, nullptr);
+    rev.run<18> (l, xspan {lfo2}, nullptr);
     float dampv = _param.damp;
     dampv       = dampv * dampv * 0.4f;
     dampv       = 0.05f + dampv;
-    rev.run<18> (l, load_float<T> (dampv));
-    rev.run<19> (l, xspan {par.character}, nullptr); // variable delay
-    rev.run<20> (l);
+    rev.run<19> (l, load_float<T> (dampv));
+    rev.run<20> (l, xspan {par.character}, nullptr); // variable delay
+    rev.run<21> (l);
 
     // push to delay feedback
-    rev.push<21> (l.to_const());
+    rev.push<22> (l.to_const());
 
     xspan_memcpy (r, l);
-    rev.run<22> (l);
     rev.run<23> (l);
     rev.run<24> (l);
+    rev.run<25> (l);
 
-    rev.run<25> (r);
     rev.run<26> (r);
     rev.run<27> (r);
+    rev.run<28> (r);
 
     span_visit (io, [&] (auto& spls, uint i) {
       spls[0] = l[i];
       spls[1] = r[i];
     });
   }
-  //----------------------------------------------------------------------------
-  fixpt_t mul_round (fixpt_t value, fixpt_t mul)
-  {
-#if 0
-    assert ((mul.to_floatp() < 1.f) && (mul.to_floatp() >= 0.f));
-    auto wide      = value * mul;
-    auto rounded   = (detail::lofiverb::fixpt_tr) wide;
-    // 1LSB leakage
-    bool add_leakage = rounded.value() && (rounded == value);
-    s16  leakage     = add_leakage ? ((value.value() < 0) ? 1 : -1) : 0;
-    return fixpt_t::from (rounded.value() + leakage);
-#elif 0
-    using acum_t = detail::lofiverb::fixpt_acum_t;
-    static s32 err_prev {};
-    auto wide = (acum_t) value * mul;
-    wide += acum_t::from (err_prev);
-    auto round = (detail::lofiverb::fixpt_tr) wide;
-    auto err = wide - ((acum_t) round);
-    err_prev = err.value();
-    return round;
-#else
-    return (detail::lofiverb::fixpt_tr) (value * mul);
-#endif
-  }
-  //----------------------------------------------------------------------------
-  float mul_round (float value, float mul) { return value * mul; }
   //----------------------------------------------------------------------------
   template <class T>
   static T load_float (float v)
@@ -1100,27 +1084,13 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  void apply_gain (xspan<T> block, std::array<T, max_block_size> const& decay)
-  {
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < block.size(); ++i) {
-      if constexpr (std::is_floating_point_v<T>) {
-        block[i] *= decay[i];
-      }
-      else {
-        block[i] = (T) mul_round (block[i], decay[i]);
-      }
-    }
-  }
-  //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
     u32   mode;
     float post_gain; // set to rougly match loudness for all algorithms and to
                      // compensate for pre_gain
-    float pre_gain; // using a 440Hz 0dbFS square wave in looking at which level
-                    // breaks with decay set to the maximum value and moving
-                    // abruptly all parameters.
+    float pre_gain; // using a 440Hz 0dbFS square wave in looking at which
+                    // level breaks with decay set to the maximum value and
+                    // moving abruptly all parameters.
     float gain; // a parameter
     float tilt;
     float predelay;
