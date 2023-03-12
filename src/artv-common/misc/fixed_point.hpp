@@ -1385,17 +1385,27 @@ namespace detail {
 template <uint Max_frac_bits, std::intmax_t Num, std::intmax_t Den, class Fixpt>
 static constexpr auto fixpt_from_ratio_impl (ratio<Num, Den>, Fixpt)
 {
-  constexpr auto fix = fixpt_from_ratio<Num, Den, typename Fixpt::traits>()
-                         .template flags_cast<Fixpt::flags>();
-  using T = decltype (fix);
-
-  if constexpr (T::n_frac > Max_frac_bits) {
-    // limit to the same size of its operand
-    constexpr int n_reduce = T::n_frac - Max_frac_bits;
-    return fix.template resize<0, -n_reduce>();
+  constexpr auto fixdyn = fixpt_from_ratio<Num, Den, typename Fixpt::traits>();
+  if constexpr (Fixpt::is_dynamic) {
+    constexpr auto fix = fixdyn.template flags_cast<Fixpt::flags>();
+    using T            = decltype (fix);
+    if constexpr (T::n_frac > Max_frac_bits) {
+      // limit to the same fractional size than its operand
+      constexpr int n_reduce = T::n_frac - Max_frac_bits;
+      return fix.template resize<0, -n_reduce>();
+    }
+    else {
+      return fix;
+    }
   }
   else {
-    return fix;
+    // The sum of bits (sign + int + frac) of static types has to match the sum
+    // of bits of its underlying scalar representation. So trying to cast
+    // the spec from "fixdyn" can fail on a static_assertion that verifies that.
+    //
+    // As the other operator is not a dynamic type we don't need to optimize
+    // bits, just cat the optimized/packed ratio to the other operand's type.
+    return fixdyn.template cast<Fixpt>();
   }
 }
 
