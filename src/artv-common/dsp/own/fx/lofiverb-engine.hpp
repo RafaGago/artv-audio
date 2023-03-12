@@ -497,24 +497,24 @@ private:
     constexpr auto       sz     = get_delay_size (Idx);
     constexpr auto       y1_pos = sz;
 
-    fixpt_t y1;
-    decode_read (y1, _stage[Idx].z[y1_pos]);
+    fixpt_acum_t y1 = fetch_accumulator<Idx> (fixpt_t {});
+
     for (uint i = 0; i < dst.size(); ++i) {
+      using fixpt_w_range = decltype (y1.resize<2, -2>());
+
       auto fixpt_spls
         = (dd.spls.add_sign() + (lfo_gen (i) * dd.mod.add_sign()));
       auto n_spls = fixpt_spls.to_int();
       n_spls -= i;
-      fixpt_t n_spls_frac = (fixpt_t) fixpt_spls.fractional();
-
-      auto    d = (n_spls_frac + 0.418_r) & fixpt_resize_token<0, -1> {};
-      fixpt_t a = (fixpt_t) ((1_r - d) / (1_r + d)); // 0.4104 to -1
-
-      auto z0 = get<Idx, fixpt_t> (n_spls - 1);
-      auto z1 = get<Idx, fixpt_t> (n_spls);
-      y1      = (fixpt_t) (z0 * a + z1 - a * y1);
-      dst[i]  = y1;
+      auto n_spls_frac = (fixpt_w_range) fixpt_spls.fractional();
+      auto d           = n_spls_frac + 0.418_r; // this might exceed 1
+      auto a  = (fixpt_w_range) ((1_r - d) / (1_r + d)); // 0.4104 to -1
+      auto z0 = (fixpt_w_range) get<Idx, fixpt_t> (n_spls - 1);
+      auto z1 = (fixpt_w_range) get<Idx, fixpt_t> (n_spls);
+      y1      = (fixpt_acum_t) (z0 * a + z1 - a * y1);
+      dst[i]  = (fixpt_t) y1;
     }
-    encode_write (_stage[Idx].z[y1_pos], y1);
+    save_accumulator<Idx> (y1);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class LF>
