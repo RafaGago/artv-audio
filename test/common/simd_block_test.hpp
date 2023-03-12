@@ -3,7 +3,7 @@
 #include <cstring>
 #include <gtest/gtest.h>
 
-#include "artv-common/dsp/own/classes/misc.hpp"
+#include "artv-common/dsp/own/classes/noise.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/vec_math.hpp"
 #include "artv-common/misc/xspan.hpp"

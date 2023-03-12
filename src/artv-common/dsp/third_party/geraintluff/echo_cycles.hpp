@@ -15,7 +15,6 @@
 #include <vector>
 
 #include "artv-common/dsp/own/classes/add_ducker.hpp"
-#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
@@ -1349,10 +1348,7 @@ private:
     return this$value;
   }
   //----------------------------------------------------------------------------
-  double init$smoother_value (double& this$value)
-  {
-    return this$value;
-  }
+  double init$smoother_value (double& this$value) { return this$value; }
 }; /* jsfx_process */
 }} // namespace artv::geraint_luff
 

@@ -4,7 +4,6 @@
 #include <cassert>
 #include <limits>
 
-#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/misc/fixed_point.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"

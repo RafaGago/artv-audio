@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include "artv-common/dsp/own/classes/fir.hpp"
-#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/windowed_sync.hpp"
 #include "artv-common/dsp/types.hpp"

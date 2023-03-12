@@ -34,7 +34,6 @@
 
 #include "artv-common/dsp/own/classes/add_ducker.hpp"
 #include "artv-common/dsp/own/classes/jsfx.hpp"
-#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/third_party/jsfx_engine/jsfx_engine.hpp"
 #include "artv-common/dsp/types.hpp"
@@ -123,10 +122,7 @@ private:
   { /* TODO: stub, implement */
   }
 #endif
-  double jsfx_rand (double maxv = 1.)
-  {
-    return jsfx_engine::rand (maxv);
-  }
+  double jsfx_rand (double maxv = 1.) { return jsfx_engine::rand (maxv); }
 
 public:
   //----------------------------------------------------------------------------
@@ -138,10 +134,7 @@ public:
   }
 #endif
   float  sample_rate = 0;
-  double jsfx_specialvar_get_srate()
-  {
-    return sample_rate;
-  }
+  double jsfx_specialvar_get_srate() { return sample_rate; }
 
   //----------------------------------------------------------------------------
   // stubs for sliders
@@ -806,10 +799,7 @@ private:
   // global/stateful variables for section "slider"
   double action_release;
   //----------------------------------------------------------------------------
-  void init_slider_variables()
-  {
-    action_release = 0;
-  }
+  void init_slider_variables() { action_release = 0; }
   //----------------------------------------------------------------------------
   // global/stateful variables for section "block"
   double buffer_pos;

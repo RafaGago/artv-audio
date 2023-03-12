@@ -5,7 +5,6 @@
 #include <cmath>
 #include <cstdint>
 
-#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/third_party/jsfx_engine/jsfx_engine.hpp"
 #include "artv-common/dsp/types.hpp"

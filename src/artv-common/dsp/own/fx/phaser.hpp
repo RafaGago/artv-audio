@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "artv-common/dsp/own/classes/delay_line.hpp"
-#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/value_smoother.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"

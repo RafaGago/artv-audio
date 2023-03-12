@@ -4,7 +4,6 @@
 
 #include <gcem.hpp>
 
-#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/pitch_shift.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"

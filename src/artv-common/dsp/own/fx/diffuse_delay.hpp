@@ -9,7 +9,6 @@
 #include "artv-common/dsp/own/classes/delay_line.hpp"
 #include "artv-common/dsp/own/classes/diffusion_matrix.hpp"
 #include "artv-common/dsp/own/classes/ducker.hpp"
-#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/reverb_tools.hpp"
 #include "artv-common/dsp/own/parts/filters/composite/tilt.hpp"

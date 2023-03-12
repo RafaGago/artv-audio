@@ -6,7 +6,6 @@
 #include <cstring>
 #include <vector>
 
-#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/third_party/jsfx_engine/jsfx_engine.hpp"
 #include "artv-common/dsp/types.hpp"
@@ -52,10 +51,7 @@ private:
   }
 #endif
   //----------------------------------------------------------------------------
-  double jsfx_specialvar_get_srate()
-  {
-    return plugcontext->get_sample_rate();
-  }
+  double jsfx_specialvar_get_srate() { return plugcontext->get_sample_rate(); }
 
   void jsfx_specialvar_set_pdc_delay (double val)
   {

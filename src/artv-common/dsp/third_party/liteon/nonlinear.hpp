@@ -12,7 +12,6 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/third_party/jsfx_engine/jsfx_engine.hpp"
 #include "artv-common/dsp/types.hpp"
@@ -51,20 +50,14 @@ private:
   }
 #if LITEON_NONLIN_BIG_TABLE
   std::vector<float> heapmem;
-  inline float&      heap (std::size_t value)
-  {
-    return heapmem[value];
-  }
-  void heap_reset (std::size_t s)
+  inline float&      heap (std::size_t value) { return heapmem[value]; }
+  void               heap_reset (std::size_t s)
   { /*heap_reset has to be set after manual analysis of the mem requirements*/
     heapmem.resize (s);
     std::memset (heapmem.data(), 0, heapmem.size() * sizeof heapmem[0]);
   }
 #else
-  double get_noise_sample()
-  {
-    return jsfx_engine::rand (2.) - 1.;
-  }
+  double get_noise_sample() { return jsfx_engine::rand (2.) - 1.; }
 #endif
 
   //----------------------------------------------------------------------------
@@ -75,10 +68,7 @@ private:
     return 0.; /* TODO: stub for getting JSFX var "samplesblock" */
   }
 
-  double jsfx_specialvar_get_srate()
-  {
-    return plugcontext->get_sample_rate();
-  }
+  double jsfx_specialvar_get_srate() { return plugcontext->get_sample_rate(); }
 
   void jsfx_specialvar_set_pdc_bot_ch (double val)
   {

@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include "artv-common/dsp/own/classes/add_ducker.hpp"
-#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/pitch_shift.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/reverb_tools.hpp"

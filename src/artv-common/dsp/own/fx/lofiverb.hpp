@@ -9,7 +9,6 @@
 #include "artv-common/dsp/own/classes/block_resampler.hpp"
 #include "artv-common/dsp/own/classes/delay_line.hpp"
 #include "artv-common/dsp/own/classes/ducker.hpp"
-#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/value_smoother.hpp"
 #include "artv-common/dsp/own/fx/lofiverb-engine.hpp"
@@ -1097,9 +1096,6 @@ private:
 
   std::vector<s16, overaligned_allocator<s16, 16>> _mem;
   xspan<s16>                                       _mem_reverb;
-#if 0
-  white_noise_generator                            _whitenoise;
-#endif
 };
 //------------------------------------------------------------------------------
 } // namespace artv

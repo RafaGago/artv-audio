@@ -5,7 +5,6 @@
 #include <bl/base/static_integer_math.h>
 
 #include "artv-common/dsp/own/classes/control_rate.hpp"
-#include "artv-common/dsp/own/classes/misc.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/filters/composite/tilt.hpp"
