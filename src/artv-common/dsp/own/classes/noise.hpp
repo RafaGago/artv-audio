@@ -12,9 +12,16 @@ namespace artv {
 template <uint N>
 class lowbias32_hash {
 public:
-  using value_type = vec<u32, N>;
   //----------------------------------------------------------------------------
-  static constexpr value_type tick (value_type x)
+  using value_type = vec<u32, N>;
+  lowbias32_hash()
+  {
+    for (uint i = 0; i < N; ++i) {
+      _seed[i] = i;
+    }
+  }
+  //----------------------------------------------------------------------------
+  static value_type tick (value_type x)
   {
     // from https://github.com/skeeto/hash-prospector
     x ^= x >> 15;
@@ -25,19 +32,19 @@ public:
     return x;
   }
   //----------------------------------------------------------------------------
-  constexpr value_type operator()
+  value_type operator()()
   {
-    return _seed += 1;
-    tick (_seed);
+    _seed += N;
+    return tick (_seed);
   }
   //------------------------------------------------------------------------------
-  value_type _seed {};
+  value_type _seed;
 };
 //------------------------------------------------------------------------------
 class white_noise_generator {
 public:
   //----------------------------------------------------------------------------
-  constexpr std::array<float, 2> operator()() // -1 to 1
+  std::array<float, 2> operator()() // -1 to 1
   {
     constexpr float scale = 1.f / float {0xffff};
 
@@ -45,13 +52,13 @@ public:
     return {scale * (s16) v, scale * (s16) (v >> 16)};
   }
   //----------------------------------------------------------------------------
-  constexpr float get() // wastes resolutin
+  float get() // wastes resolutin
   {
     constexpr float scale = 1.f / float {0xffffffff};
     return scale * (s32) raw();
   }
   //----------------------------------------------------------------------------
-  constexpr u32 raw() { return _hash()[0]; }
+  u32 raw() { return _hash()[0]; }
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
@@ -62,7 +69,7 @@ template <
   uint Bit_depth,
   class T                                        = float,
   uint N                                         = 1,
-  std::enable_if_t<std::is_floating_point_t<T>>* = nullptr>
+  std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
 inline std::array<T, N> tpdf_dither (lowbias32_hash<N>& noise)
 {
   constexpr T scale = T {1} / T {lsb_mask<uint> (Bit_depth)};
@@ -79,14 +86,14 @@ template <
   uint Frac_bit_idx, // the desired bit index of the noise's MSB (when positive)
   class T                                                         = s32,
   uint N                                                          = 1,
-  std::enable_if_t<std::is_signed_t<T> && std::is_integral_t<T>>* = nullptr>
+  std::enable_if_t<std::is_signed_v<T> && std::is_integral_v<T>>* = nullptr>
 inline std::array<T, N> tpdf_dither (lowbias32_hash<N>& noise)
 {
   static_assert (Frac_bit_idx < (sizeof (T) * 8));
 
   constexpr int n_noise_bits  = 16;
   constexpr int noise_bit_idx = n_noise_bits - 1;
-  constexpr int lshift        = Frac_bit_idx - n_noise_bits;
+  constexpr int lshift        = Frac_bit_idx - noise_bit_idx;
 
   auto sig = noise();
   auto v1  = sig & lsb_mask<uint> (16);
@@ -94,7 +101,7 @@ inline std::array<T, N> tpdf_dither (lowbias32_hash<N>& noise)
 
   if constexpr (sizeof (T) <= 2) {
     // can't cast to a signed type before shifting
-    static_assert (l_shift < 0);
+    static_assert (lshift < 0);
     v1 >>= -lshift;
     v2 >>= -lshift;
     auto r1 = vec_cast<T> (v1);
