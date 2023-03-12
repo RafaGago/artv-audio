@@ -23,24 +23,19 @@
 namespace artv { namespace detail { namespace lofiverb {
 
 //------------------------------------------------------------------------------
-struct no_64bit_conversions {
-  using conversions = mp_list<
-    fp_int_conversion_step<s8, u8, float>,
-    fp_int_conversion_step<s16, u16, float>,
-    fp_int_conversion_step<s32, u32, double>>;
-};
-//------------------------------------------------------------------------------
 // truncating fixed point type for computation
-using fixpt_tt = fixpt_d<1, 0, 15, 0, no_64bit_conversions>;
+using fixpt_tt = fixpt_d<1, 0, 15, 0>;
 // rounding fixed point type for computation
-using fixpt_tr = fixpt_d<1, 0, 15, fixpt_rounding, no_64bit_conversions>;
+using fixpt_tr = fixpt_d<1, 0, 15, fixpt_rounding>;
 
 using fixpt_t = fixpt_tt;
 
+using fixpt_acum_t = fixpt_s<1, 0, 31>;
+
 // fixed point type for storage
-using fixpt_sto      = fixpt_s<1, 0, 15, 0, no_64bit_conversions>;
-using fixpt_spls     = fixpt_m<0, 14, 0, 0, no_64bit_conversions>;
-using fixpt_spls_mod = fixpt_m<0, 9, 0, 0, no_64bit_conversions>;
+using fixpt_sto      = fixpt_s<1, 0, 15, 0>;
+using fixpt_spls     = fixpt_m<0, 14, 0, 0>;
+using fixpt_spls_mod = fixpt_m<0, 9, 0, 0>;
 //------------------------------------------------------------------------------
 struct delay_data {
   fixpt_spls     spls;
@@ -136,27 +131,25 @@ public:
   template <uint Idx, class T, class U>
   void run_lp (xspan<T> io, U g)
   {
-    static_assert (get_delay_size (Idx) >= 1);
-
     assert (io);
-    T y1;
-    decode_read (y1, _stage[Idx].z[0]);
+    auto y1    = fetch_accumulator<Idx> (T {});
+    using Acum = decltype (y1);
     for (uint i = 0; i < io.size(); ++i) {
-      T v;
+      bool is_zero;
       if constexpr (is_fixpt_v<T>) {
-        auto gv = (g.value() == 0) ? get_gain<Idx, T>() : g;
-        v       = (T) ((1_r - gv) * io[i]);
-        v       = (T) (v + (y1 * gv));
+        is_zero = (g.value() == 0);
       }
       else {
-        float gv = (g == 0.f) ? get_gain<Idx, T>() : g;
-        v        = (1.f - gv) * io[i];
-        v        = v + y1 * gv;
+        is_zero = (g == 0.f);
       }
-      y1    = v;
-      io[i] = v;
+      auto gv = is_zero ? (Acum) get_gain<Idx, T>() : (Acum) g;
+      auto v  = (Acum) io[i];
+      v       = (1_r - gv) * io[i];
+      v       = v + (y1 * gv);
+      y1      = v;
+      io[i]   = (T) v;
     }
-    encode_write (_stage[Idx].z[0], y1);
+    save_accumulator<Idx> (y1);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -168,27 +161,25 @@ public:
   template <uint Idx, class T, class U>
   void run_hp (xspan<T> io, U g)
   {
-    static_assert (get_delay_size (Idx) >= 1);
-
     assert (io);
-    T y1;
-    decode_read (y1, _stage[Idx].z[0]);
+    auto y1    = fetch_accumulator<Idx> (T {});
+    using Acum = decltype (y1);
     for (uint i = 0; i < io.size(); ++i) {
-      T v;
+      bool is_zero;
       if constexpr (is_fixpt_v<T>) {
-        auto gv = (g.value() == 0) ? get_gain<Idx, T>() : g;
-        v       = (T) ((1_r - gv) * io[i]);
-        v       = (T) (v + (y1 * gv));
+        is_zero = (g.value() == 0);
       }
       else {
-        float gv = (g == 0.f) ? get_gain<Idx, T>() : g;
-        v        = (1.f - gv) * io[i];
-        v        = v + y1 * gv;
+        is_zero = (g == 0.f);
       }
-      y1    = v;
-      io[i] = (T) (io[i] - v);
+      auto gv = is_zero ? (Acum) get_gain<Idx, T>() : (Acum) g;
+      auto v  = (Acum) io[i];
+      v       = (1_r - gv) * io[i];
+      v       = v + (y1 * gv);
+      y1      = v;
+      io[i]   = (T) (io[i] - v);
     }
-    encode_write (_stage[Idx].z[0], y1);
+    save_accumulator<Idx> (y1);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -440,6 +431,42 @@ private:
   {
     encode_write (_stage[Idx].z[_stage[Idx].pos], v);
     advance_pos<Idx>();
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx>
+  fixpt_acum_t fetch_accumulator (fixpt_t)
+  {
+    static_assert (sizeof (fixpt_acum_t) == 2 * sizeof (fixpt_t));
+    fixpt_acum_t   ret;
+    constexpr auto tail = get_delay_size (Idx);
+    memcpy (&ret, &_stage[Idx].z[tail], sizeof ret);
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx>
+  float fetch_accumulator (float)
+  {
+    static_assert (sizeof (float) == 2 * sizeof (fixpt_t));
+    float          ret;
+    constexpr auto tail = get_delay_size (Idx);
+    memcpy (&ret, &_stage[Idx].z[tail], sizeof ret);
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx>
+  void save_accumulator (fixpt_acum_t v)
+  {
+    static_assert (sizeof (v) == 2 * sizeof (fixpt_t));
+    constexpr auto tail = get_delay_size (Idx);
+    memcpy (&_stage[Idx].z[tail], &v, sizeof v);
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx>
+  void save_accumulator (float v)
+  {
+    static_assert (sizeof (v) == 2 * sizeof (fixpt_t));
+    constexpr auto tail = get_delay_size (Idx);
+    memcpy (&_stage[Idx].z[tail], &v, sizeof v);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class LF>
@@ -796,7 +823,8 @@ private:
   static constexpr uint get_buffer_size (uint i)
   {
     uint ret = get_delay_size (i);
-    ret += (uint) (Spec::values[i].mod.value() != 0); // thiran state
+    ret += ((uint) (Spec::values[i].mod.value() != 0)) * 2; // thiran state
+    ret += ((uint) (Spec::values[i].spls.value() == 0)) * 2; // damp filt state
     return ret;
   }
   //----------------------------------------------------------------------------
