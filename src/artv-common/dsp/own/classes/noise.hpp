@@ -1,5 +1,6 @@
 #pragma once
 
+#include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/vec.hpp"
 #include <array>
@@ -89,21 +90,27 @@ template <
   std::enable_if_t<std::is_signed_v<T> && std::is_integral_v<T>>* = nullptr>
 inline std::array<T, N> tpdf_dither (lowbias32_hash<N>& noise)
 {
+  using T_u = std::make_unsigned_t<T>;
   static_assert (Frac_bit_idx < (sizeof (T) * 8));
 
   constexpr int n_noise_bits  = 16;
   constexpr int noise_bit_idx = n_noise_bits - 1;
-  constexpr int lshift        = Frac_bit_idx - noise_bit_idx;
+  // the - 1 is to compensate the bit gained on the final subtraction
+  constexpr int lshift = Frac_bit_idx - noise_bit_idx - 1;
+
+  static_assert (((Frac_bit_idx + lshift) > 0), "under representable range");
+  static_assert (
+    ((Frac_bit_idx + lshift) < (sizeof (T) * 8)), "undesired truncation?");
 
   auto sig = noise();
-  auto v1  = sig & lsb_mask<uint> (16);
-  auto v2  = sig >> 16;
+  auto v1  = vec_cast<s16> (sig & lsb_mask<uint> (16));
+  auto v2  = vec_cast<s16> (sig >> 16);
 
   if constexpr (sizeof (T) <= 2) {
-    // can't cast to a signed type before shifting
+    // don't cast before shifting for simplicity
     static_assert (lshift < 0);
-    v1 >>= -lshift;
-    v2 >>= -lshift;
+    v1      = ashr<-lshift> (v1);
+    v2      = ashr<-lshift> (v2);
     auto r1 = vec_cast<T> (v1);
     auto r2 = vec_cast<T> (v2);
     return vec_to_array (r1 - r2);
@@ -117,8 +124,8 @@ inline std::array<T, N> tpdf_dither (lowbias32_hash<N>& noise)
       r2 <<= lshift;
     }
     else {
-      r1 >>= -lshift;
-      r2 >>= -lshift;
+      r1 = ashr<-lshift> (r1);
+      r2 = ashr<-lshift> (r2);
     }
     return vec_to_array (r1 - r2);
   }
