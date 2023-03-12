@@ -35,28 +35,44 @@ static constexpr auto get_algo1_spec()
     make_ap (183, 0.707), // 1
     make_ap (389, -0.6), // 2
     make_ap (401, 0.6), // 3
-    // er
+// er
+#if 0
     make_ap (1367, 0.35, 71 + 70), // 4
+#else
+    make_ap (1367, 0.35), // 4
+#endif
     make_damp(), // 5
-    make_ap (1787, 0., 261), // 6
+#if 0
+    make_ap (1787, 0.5, 261), // 6
+#else
+    make_ap (1787, 0.5), // 6
+#endif
     make_delay (max_block_size + 1), // 7 to allow block processing
-    // loop1
+// loop1
+#if 0
     make_ap (977, 0.5 /*overridden*/, 51), // 8
+#else
+    make_ap (977, 0.5 /*overridden*/), // 8
+#endif
     make_delay (2819), // 9
     make_damp(), // 10
     make_ap (863, -0.5 /*overridden*/), // 11
     make_delay (1021), // 12 Delay
     make_ap (1453, 0.618), // 13
     make_delay (787), // 14 delay (allows block processing) (> blocksz + 1)
-    // loop2
-    make_ap (947, 0.5 /*overridden*/, 67), // 14
-    make_delay (3191), // 15
-    make_damp(), // 16
-    make_ap (887, -0.5 /*overridden*/), // 17
-    make_delay (1049), // 18 Delay
-    make_ap (1367, 0.618), // 19
-    make_damp (0.98), // 20 HP
-    make_delay (647)); // 21 delay (allows block processing) (> blocksz + 1)
+// loop2
+#if 0
+    make_ap (947, 0.5 /*overridden*/, 67), // 15
+#else
+    make_ap (947, 0.5), // 15
+#endif
+    make_delay (3191), // 16
+    make_damp(), // 17
+    make_ap (887, -0.5 /*overridden*/), // 18
+    make_delay (1049), // 19 Delay
+    make_ap (1367, 0.618), // 20
+    make_damp (0.98), // 21 HP
+    make_delay (647)); // 22 delay (allows block processing) (> blocksz + 1)
 }
 
 struct algo1_spec {
@@ -700,14 +716,21 @@ private:
     late_dampf       = 1.f - late_dampf * late_dampf;
     late_dampf *= 0.4f;
     auto late_damp = load_float<T> (late_dampf);
-
+#if 0
     rev.run<8> (late, xspan {lfo3}, g);
+#else
+    rev.run<8> (late);
+#endif
     rev.run<9> (late);
     rev.run_lp<10> (late, late_damp);
     span_visit (late, [&] (auto& v, uint i) {
       v = (T) (mul_round (v, par.decay[i]));
     });
+#if 0
     rev.run<11> (late, nullptr, [g] (uint i) { return -g[i]; });
+#else
+    rev.run<11> (late);
+#endif
     rev.run<12> (late);
     span_visit (late, [&] (auto& v, uint i) {
       v = (T) (mul_round (v, par.decay[i]));
@@ -724,13 +747,21 @@ private:
     }
     l.cut_head (1); // drop feedback sample from previous block
 
+#if 0
     rev.run<15> (late, xspan {lfo4}, g);
+#else
+    rev.run<15> (late);
+#endif
     rev.run<16> (late);
     rev.run_lp<17> (late, late_damp);
     span_visit (late, [&] (auto& v, uint i) {
       v = (T) (mul_round (v, par.decay[i]));
     });
+#if 0
     rev.run<18> (late, nullptr, [g] (uint i) { return -g[i]; });
+#else
+    rev.run<18> (late);
+#endif
     rev.run<19> (late);
     rev.run<20> (late);
     span_visit (late, [&] (auto& v, uint i) {
