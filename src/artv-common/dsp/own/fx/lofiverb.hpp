@@ -31,32 +31,32 @@ static constexpr auto get_algo1_spec()
 {
   return make_array<delay_data> (
     // diffusors
-    make_ap (147, -0.707),
-    make_ap (183, 0.707),
-    make_ap (389, -0.6),
-    make_ap (401, 0.6),
+    make_ap (147, -0.707), // 0
+    make_ap (183, 0.707), // 1
+    make_ap (389, -0.6), // 2
+    make_ap (401, 0.6), // 3
     // er
-    make_ap (1367, 0.35, 71 + 70),
-    make_damp(),
-    make_ap (1787, 0., 261),
-    make_delay (max_block_size + 1), // to allow block processing
+    make_ap (1367, 0.35, 71 + 70), // 4
+    make_damp(), // 5
+    make_ap (1787, 0., 261), // 6
+    make_delay (max_block_size + 1), // 7 to allow block processing
     // loop1
-    make_ap (977, 0.5 /*overridden*/, 51),
-    make_delay (2819),
-    make_damp(),
-    make_ap (863, -0.5 /*overridden*/),
-    make_delay (1021), // Delay
-    make_ap (1453, 0.618),
-    make_delay (787), // delay (allows block processing) (> blocksz + 1)
+    make_ap (977, 0.5 /*overridden*/, 51), // 8
+    make_delay (2819), // 9
+    make_damp(), // 10
+    make_ap (863, -0.5 /*overridden*/), // 11
+    make_delay (1021), // 12 Delay
+    make_ap (1453, 0.618), // 13
+    make_delay (787), // 14 delay (allows block processing) (> blocksz + 1)
     // loop2
-    make_ap (947, 0.5 /*overridden*/, 67),
-    make_delay (3191),
-    make_damp(),
-    make_ap (887, -0.5 /*overridden*/),
-    make_delay (1049), // Delay
-    make_ap (1367, 0.618),
-    make_damp (0.98), // HP
-    make_delay (647)); // delay (allows block processing) (> blocksz + 1)
+    make_ap (947, 0.5 /*overridden*/, 67), // 14
+    make_delay (3191), // 15
+    make_damp(), // 16
+    make_ap (887, -0.5 /*overridden*/), // 17
+    make_delay (1049), // 18 Delay
+    make_ap (1367, 0.618), // 19
+    make_damp (0.98), // 20 HP
+    make_delay (647)); // 21 delay (allows block processing) (> blocksz + 1)
 }
 
 struct algo1_spec {
