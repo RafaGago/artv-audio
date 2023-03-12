@@ -57,13 +57,13 @@ static constexpr auto get_algo1_spec()
     make_ap (401, 0.6), // 3
     // er
     make_ap (1367, 0.35, 71 + 70), // 4
-    make_damp(), // 5
+    make_lp(), // 5
     make_ap (1787, 0.5, 261), // 6
     make_delay (max_block_size + 1), // 7 to allow block processing
     // loop1
     make_ap (977, 0.5 /*overridden*/, 51), // 8
     make_delay (2819), // 9
-    make_damp(), // 10
+    make_lp(), // 10
     make_ap (863, -0.5 /*overridden*/), // 11
     make_delay (1021), // 12 Delay
     make_ap (1453, 0.618), // 13
@@ -71,11 +71,11 @@ static constexpr auto get_algo1_spec()
     // loop2
     make_ap (947, 0.5 /*overridden*/, 67), // 15
     make_delay (3191), // 16
-    make_damp(), // 17
+    make_lp(), // 17
     make_ap (887, -0.5 /*overridden*/), // 18
     make_delay (1049), // 19 Delay
     make_ap (1367, 0.618), // 20
-    make_damp (0.98), // 21 HP
+    make_hp (0.98), // 21 HP
     make_delay (647)); // 22 delay (allows block processing) (> blocksz + 1)
 }
 
@@ -110,11 +110,11 @@ static constexpr auto get_midifex49_spec()
     make_delay (671), // 14 R3
 
     make_delay (2157), // 15 FB
-    make_damp(), // 16
+    make_lp(), // 16
     make_ap (2712, 0.5, 22), // 17 FB nested allpass 1
     make_ap (1783, 0.2), // 18 FB nested allpass 2
 
-    make_damp (0.995), // 19 HP
+    make_hp (0.995), // 19 HP
 
     make_delay (max_block_size + 1) // 20 delay block (== blocksz + 1)
   );
@@ -146,9 +146,9 @@ static constexpr auto get_midifex50_spec()
     make_ap (1841, 0.5), // 15
     make_ap (2001, 0.5, 67), // 16
     make_ap (2083, 0.5, 127), // 17
-    make_damp(), // 18
+    make_lp(), // 18
     make_delay (2, 96), // 19 TODO: FIX or STUDY. min of 2 spls are required
-    make_damp (0.995), // 20 HP
+    make_hp (0.995), // 20 HP
     make_delay (max_block_size + 1), // 21 (FB point) (== blocksz + 1)
     make_ap (147, 0.5), // 22 L diff
     make_ap (43, 0.5), // 23 L diff
@@ -758,7 +758,7 @@ private:
     er2.cut_head (1); // drop feedback sample from previous block
 
     rev.run<4> (er1, xspan {lfo2}, nullptr);
-    rev.run_lp<5> (er1, load_float<T> (0.0001f + 0.17f * _param.damp));
+    rev.run<5> (er1, load_float<T> (0.0001f + 0.17f * _param.damp));
     xspan_memcpy (er1b, er1);
     span_visit (er1b, [&] (auto& v, uint i) {
       v = mul_round (v, par.decay[i]);
@@ -795,7 +795,7 @@ private:
     auto late_damp = load_float<T> (late_dampf);
     rev.run<8> (late, xspan {lfo3}, g);
     rev.run<9> (late);
-    rev.run_lp<10> (late, late_damp);
+    rev.run<10> (late, late_damp);
     span_visit (late, [&] (auto& v, uint i) {
       v = (T) (mul_round (v, par.decay[i]));
     });
@@ -817,7 +817,7 @@ private:
     l.cut_head (1); // drop feedback sample from previous block
     rev.run<15> (late, xspan {lfo4}, g);
     rev.run<16> (late);
-    rev.run_lp<17> (late, late_damp);
+    rev.run<17> (late, late_damp);
     span_visit (late, [&] (auto& v, uint i) {
       v = (T) (mul_round (v, par.decay[i]));
     });
@@ -827,7 +827,7 @@ private:
     span_visit (late, [&] (auto& v, uint i) {
       v = (T) (mul_round (v, par.decay[i]));
     });
-    rev.run_hp<21> (late);
+    rev.run<21> (late);
     rev.push<22> (late.to_const()); // feedback point
 
     // Mixdown
@@ -919,12 +919,12 @@ private:
     // continuing the loop
     rev.run<15> (sig);
     apply_gain (sig, par.decay);
-    rev.run_lp<16> (sig, load_float<T> (_param.damp * 0.8f));
+    rev.run<16> (sig, load_float<T> (_param.damp * 0.8f));
     span_visit (tmp, [&] (auto& v, uint i) {
       v = (T) (par.character[i] * 0.2_r);
     });
     rev.run<17, 18> (sig, lfo2, nullptr, nullptr, tmp);
-    rev.run_hp<19> (sig);
+    rev.run<19> (sig);
     // push to delay feedback
     rev.push<20> (sig.to_const());
 
@@ -990,9 +990,9 @@ private:
     float dampv = _param.damp;
     dampv       = dampv * dampv * 0.4f;
     dampv       = 0.05f + dampv;
-    rev.run_lp<18> (l, load_float<T> (dampv));
+    rev.run<18> (l, load_float<T> (dampv));
     rev.run<19> (l, xspan {par.character}, nullptr); // variable delay
-    rev.run_hp<20> (l);
+    rev.run<20> (l);
 
     // push to delay feedback
     rev.push<21> (l.to_const());

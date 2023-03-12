@@ -52,6 +52,7 @@ struct delay_data {
 
 struct filter_data {
   fixpt_t g;
+  bool    is_lowpass;
 };
 using stage_data = std::variant<allpass_data, delay_data, filter_data>;
 //------------------------------------------------------------------------------
@@ -73,6 +74,14 @@ public:
   static constexpr bool is_filter (uint i)
   {
     return std::holds_alternative<filter_data> (values[i]);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr bool is_lowpass_filter (uint i)
+  {
+    if (is_filter (i)) {
+      return std::get<filter_data> (values[i]).is_lowpass;
+    }
+    return false;
   }
   //----------------------------------------------------------------------------
   static constexpr fixpt_t get_gain (uint i)
@@ -148,9 +157,14 @@ static constexpr detail::lofiverb::stage_data make_delay (u16 spls, u16 mod = 0)
     fixpt_spls::from_int (spls), fixpt_spls_mod::from_int (mod)};
 }
 //------------------------------------------------------------------------------
-static constexpr detail::lofiverb::stage_data make_damp (float g = 0)
+static constexpr detail::lofiverb::stage_data make_hp (float g = 0)
 {
-  return filter_data {fixpt_t::from_float (g)};
+  return filter_data {fixpt_t::from_float (g), false};
+}
+//------------------------------------------------------------------------------
+static constexpr detail::lofiverb::stage_data make_lp (float g = 0)
+{
+  return filter_data {fixpt_t::from_float (g), true};
 }
 //------------------------------------------------------------------------------
 // A class to abstract 16-bit storage, queue access and common DSP operations
@@ -189,7 +203,7 @@ public:
   template <uint Idx, class T>
   void fetch_block (xspan<T> dst, uint negative_offset = 0)
   {
-    static_assert (!spec::is_allpass (Idx), "Not possible on allpasses");
+    static_assert (spec::is_delay (Idx), "Only possible on pure delays");
     static_assert (
       !spec::has_modulated_delay (Idx), "Not possible on Modulated delays");
     assert (dst);
@@ -200,162 +214,11 @@ public:
   template <uint Idx, class T>
   void push (xspan<T const> src)
   {
-    static_assert (!spec::is_allpass (Idx), "Not possible on allpasses");
+    static_assert (spec::is_delay (Idx), "Only possible on pure delays");
     static_assert (
       !spec::has_modulated_delay (Idx), "Not possible on Modulated delays");
     assert (src);
     encode_write (prepare_block_insertion<Idx> (src.size()), src);
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class U>
-  void run_lp (xspan<float> io, U g)
-  {
-    static_assert (spec::is_filter (Idx));
-    assert (io);
-    float y1 = fetch_state<Idx> (float {});
-    for (uint i = 0; i < io.size(); ++i) {
-      float gv = (g == 0.f) ? (float) spec::get_gain (Idx) : g;
-      float y  = y1 * gv + (1_r - gv) * io[i];
-      io[i]    = y;
-      y1       = y;
-    }
-    save_state<Idx> (y1);
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class U>
-  void run_lp (xspan<fixpt_t> io, U g)
-  {
-    static_assert (spec::is_filter (Idx));
-    assert (io);
-    // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
-    // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
-    constexpr uint mask
-      = lsb_mask<uint> (fixpt_acum_t::n_frac - fixpt_t::n_frac);
-    auto [y1v, errv] = fetch_state<Idx> (fixpt_t {});
-    auto y1          = fixpt_t::from (y1v);
-    auto err         = fixpt_acum_t::from (errv);
-
-    for (uint i = 0; i < io.size(); ++i) {
-      fixpt_t gvf = (g.value() == 0) ? spec::get_gain (Idx) : g;
-      auto    gv  = (fixpt_acum_t) gvf;
-      auto    x   = (fixpt_acum_t) io[i];
-#if 0
-// investigate why it does sound better without noise-shaping...
-      auto    y   = gv * y1 + (1_r - gv) * x + err;
-      y1          = (fixpt_t) y;
-      err         = fixpt_acum_t::from (y.value() & mask);
-#else
-      auto y = gv * y1 + (1_r - gv) * x;
-      y1     = (fixpt_t) y;
-#endif
-      io[i] = y1;
-    }
-    save_state<Idx> (y1.value(), err.value());
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class T>
-  void run_lp (xspan<T> io)
-  {
-    static_assert (spec::is_filter (Idx));
-    run_lp<Idx> (io, T {});
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class U>
-  void run_hp (xspan<float> io, U g)
-  {
-    static_assert (spec::is_filter (Idx));
-    assert (io);
-    float y1 = fetch_state<Idx> (float {});
-    for (uint i = 0; i < io.size(); ++i) {
-      float gv = (g == 0.f) ? (float) spec::get_gain (Idx) : g;
-      float y  = io[i] * gv;
-      y += (1_r - gv) * y1;
-      io[i] = y;
-      y1    = y;
-    }
-    save_state<Idx> (y1);
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class U>
-  void run_hp (xspan<fixpt_t> io, U g)
-  {
-    static_assert (spec::is_filter (Idx));
-    assert (io);
-    // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
-    // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
-    constexpr uint mask
-      = lsb_mask<uint> (fixpt_acum_t::n_frac - fixpt_t::n_frac);
-    auto [y1v, errv] = fetch_state<Idx> (fixpt_t {});
-    auto y1          = fixpt_t::from (y1v);
-    auto err         = fixpt_acum_t::from (errv);
-
-    for (uint i = 0; i < io.size(); ++i) {
-      fixpt_t gvf = (g.value() == 0) ? spec::get_gain (Idx) : g;
-      auto    gv  = (fixpt_acum_t) gvf;
-      auto    x   = (fixpt_acum_t) io[i];
-      auto    y   = gv * x + (1_r - gv) * y1 + err;
-      y1          = (fixpt_t) y;
-      err         = fixpt_acum_t::from (y.value() & mask);
-      io[i]       = y1;
-    }
-    save_state<Idx> (y1.value(), err.value());
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class T>
-  void run_hp (xspan<T> io)
-  {
-    run_hp<Idx> (io, T {});
-  }
-  //----------------------------------------------------------------------------
-  // run an allpass or pure delay.
-  // Lfo and gain parameters can be either value generators (lambdas with T(int)
-  // signature), spans or dummy types. When dummy types (no span and no lambda
-  // types, e.g. nullptr) the parameters are defaulted (no delay modulation,
-  // same allpass gain as in the specification)
-  template <uint Idx, class T, class L, class G>
-  void run (xspan<T> io, L lfo, G gain)
-  {
-    run_impl<Idx> (
-      io,
-      get_gain_generator<Idx, T> (std::forward<G> (gain)),
-      get_lfo_generator<T> (std::forward<L> (lfo)));
-  }
-  //----------------------------------------------------------------------------
-  // run an allpass or pure delay
-  template <uint Idx, class T>
-  void run (xspan<T> io)
-  {
-    run<Idx> (io, nullptr, nullptr);
-  }
-  //----------------------------------------------------------------------------
-  // run 2 level nested allpass.
-  // Lfo and gain parameters can be either value generators (lambdas with T(int)
-  // signature), spans or dummy types. When dummy types (no span and no lambda
-  // types, e.g. nullptr) the parameters are defaulted (no delay modulation,
-  // same allpass gain as in the specification)
-  template <
-    uint Idx1,
-    uint Idx2,
-    class T,
-    class L1,
-    class G1,
-    class L2,
-    class G2>
-  void run (xspan<T> io, L1 lfo1, G1 g1, L2 lfo2, G2 g2)
-  {
-    run_impl<Idx1, Idx2> (
-      io,
-      get_gain_generator<Idx1, T> (std::forward<G1> (g1)),
-      get_lfo_generator<T> (std::forward<L1> (lfo1)),
-      get_gain_generator<Idx2, T> (std::forward<G2> (g2)),
-      get_lfo_generator<T> (std::forward<L2> (lfo2)));
-  }
-  //----------------------------------------------------------------------------
-  // run a 2-level nested allpass
-  template <uint Idx1, uint Idx2, class T>
-  void run (xspan<T> io)
-  {
-    run<Idx1, Idx2> (io, nullptr, nullptr, nullptr, nullptr);
   }
   //----------------------------------------------------------------------------
   template <uint Start_idx, uint N, class T>
@@ -404,6 +267,38 @@ public:
           io[i] = (T) (io[i] * get_hadamard_ratio<N>());
         }
       }
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class... Ts>
+  void run (xspan<T> io, Ts&&... args)
+  {
+    if constexpr (spec::is_allpass (Idx) || spec::is_delay (Idx)) {
+      run_ap_or_delay<Idx> (io, std::forward<Ts> (args)...);
+    }
+    else if constexpr (spec::is_filter (Idx)) {
+      if constexpr (spec::is_lowpass_filter (Idx)) {
+        run_lp<Idx> (io, std::forward<Ts> (args)...);
+      }
+      else {
+        run_hp<Idx> (io, std::forward<Ts> (args)...);
+      }
+    }
+    else {
+      static_assert (sizeof (T) != sizeof (T), "Invalid");
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx1, uint Idx2, class T, class... Ts>
+  void run (xspan<T> io, Ts&&... args)
+  {
+    if constexpr (
+      spec::is_allpass (Idx1)
+      && (spec::is_allpass (Idx2) || spec::is_delay (Idx2))) {
+      run_nested_ap2<Idx1, Idx2> (io, std::forward<Ts> (args)...);
+    }
+    else {
+      static_assert (sizeof (T) != sizeof (T), "Invalid");
     }
   }
   //----------------------------------------------------------------------------
@@ -539,6 +434,158 @@ private:
     advance_pos<Idx>();
   }
   //----------------------------------------------------------------------------
+  template <uint Idx, class U>
+  void run_lp (xspan<float> io, U g)
+  {
+    static_assert (spec::is_filter (Idx));
+    assert (io);
+    float y1 = fetch_state<Idx> (float {});
+    for (uint i = 0; i < io.size(); ++i) {
+      float gv = (g == 0.f) ? (float) spec::get_gain (Idx) : g;
+      float y  = y1 * gv + (1_r - gv) * io[i];
+      io[i]    = y;
+      y1       = y;
+    }
+    save_state<Idx> (y1);
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class U>
+  void run_lp (xspan<fixpt_t> io, U g)
+  {
+    static_assert (spec::is_filter (Idx));
+    assert (io);
+    // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
+    // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
+    constexpr uint mask
+      = lsb_mask<uint> (fixpt_acum_t::n_frac - fixpt_t::n_frac);
+    auto [y1v, errv] = fetch_state<Idx> (fixpt_t {});
+    auto y1          = fixpt_t::from (y1v);
+    auto err         = fixpt_acum_t::from (errv);
+
+    for (uint i = 0; i < io.size(); ++i) {
+      fixpt_t gvf = (g.value() == 0) ? spec::get_gain (Idx) : g;
+      auto    gv  = (fixpt_acum_t) gvf;
+      auto    x   = (fixpt_acum_t) io[i];
+#if 0
+// investigate why it does sound better without noise-shaping...
+      auto    y   = gv * y1 + (1_r - gv) * x + err;
+      y1          = (fixpt_t) y;
+      err         = fixpt_acum_t::from (y.value() & mask);
+#else
+      auto y = gv * y1 + (1_r - gv) * x;
+      y1     = (fixpt_t) y;
+#endif
+      io[i] = y1;
+    }
+    save_state<Idx> (y1.value(), err.value());
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T>
+  void run_lp (xspan<T> io)
+  {
+    static_assert (spec::is_filter (Idx));
+    run_lp<Idx> (io, T {});
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class U>
+  void run_hp (xspan<float> io, U g)
+  {
+    static_assert (spec::is_filter (Idx));
+    assert (io);
+    float y1 = fetch_state<Idx> (float {});
+    for (uint i = 0; i < io.size(); ++i) {
+      float gv = (g == 0.f) ? (float) spec::get_gain (Idx) : g;
+      float y  = io[i] * gv;
+      y += (1_r - gv) * y1;
+      io[i] = y;
+      y1    = y;
+    }
+    save_state<Idx> (y1);
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class U>
+  void run_hp (xspan<fixpt_t> io, U g)
+  {
+    static_assert (spec::is_filter (Idx));
+    assert (io);
+    // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
+    // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
+    constexpr uint mask
+      = lsb_mask<uint> (fixpt_acum_t::n_frac - fixpt_t::n_frac);
+    auto [y1v, errv] = fetch_state<Idx> (fixpt_t {});
+    auto y1          = fixpt_t::from (y1v);
+    auto err         = fixpt_acum_t::from (errv);
+
+    for (uint i = 0; i < io.size(); ++i) {
+      fixpt_t gvf = (g.value() == 0) ? spec::get_gain (Idx) : g;
+      auto    gv  = (fixpt_acum_t) gvf;
+      auto    x   = (fixpt_acum_t) io[i];
+      auto    y   = gv * x + (1_r - gv) * y1 + err;
+      y1          = (fixpt_t) y;
+      err         = fixpt_acum_t::from (y.value() & mask);
+      io[i]       = y1;
+    }
+    save_state<Idx> (y1.value(), err.value());
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T>
+  void run_hp (xspan<T> io)
+  {
+    run_hp<Idx> (io, T {});
+  }
+  //----------------------------------------------------------------------------
+  // run an allpass or pure delay.
+  // Lfo and gain parameters can be either value generators (lambdas with
+  // T(int) signature), spans or dummy types. When dummy types (no span and no
+  // lambda types, e.g. nullptr) the parameters are defaulted (no delay
+  // modulation, same allpass gain as in the specification)
+  template <uint Idx, class T, class L, class G>
+  void run_ap_or_delay (xspan<T> io, L lfo, G gain)
+  {
+    run_ap_or_delay_impl<Idx> (
+      io,
+      get_gain_generator<Idx, T> (std::forward<G> (gain)),
+      get_lfo_generator<T> (std::forward<L> (lfo)));
+  }
+  //----------------------------------------------------------------------------
+  // run an allpass or pure delay
+  template <uint Idx, class T>
+  void run_ap_or_delay (xspan<T> io)
+  {
+    run_ap_or_delay<Idx> (io, nullptr, nullptr);
+  }
+  //----------------------------------------------------------------------------
+  // run 2 level nested allpass.
+  // Lfo and gain parameters can be either value generators (lambdas with
+  // T(int) signature), spans or dummy types. When dummy types (no span and no
+  // lambda types, e.g. nullptr) the parameters are defaulted (no delay
+  // modulation, same allpass gain as in the specification)
+  template <
+    uint Idx1,
+    uint Idx2,
+    class T,
+    class L1,
+    class G1,
+    class L2,
+    class G2>
+  void run_nested_ap2 (xspan<T> io, L1 lfo1, G1 g1, L2 lfo2, G2 g2)
+  {
+    run_nested_ap_impl<Idx1, Idx2> (
+      io,
+      get_gain_generator<Idx1, T> (std::forward<G1> (g1)),
+      get_lfo_generator<T> (std::forward<L1> (lfo1)),
+      get_gain_generator<Idx2, T> (std::forward<G2> (g2)),
+      get_lfo_generator<T> (std::forward<L2> (lfo2)));
+  }
+  //----------------------------------------------------------------------------
+  // run a 2-level nested allpass (notice that more levels are possible on the
+  // internal implementation, just not exposed outside)
+  template <uint Idx1, uint Idx2, class T>
+  void run_nested_ap2 (xspan<T> io)
+  {
+    run<Idx1, Idx2> (io, nullptr, nullptr, nullptr, nullptr);
+  }
+  //----------------------------------------------------------------------------
   template <uint Idx, class LF>
   void run_thiran (xspan<fixpt_t> dst, LF&& lfo_gen)
   {
@@ -669,7 +716,7 @@ private:
   // - modulated non-nested allpasses.
   //
   template <uint Idx, class T, class GF, class LF>
-  void run_impl (xspan<T> io, GF&& g_gen, LF&& lfo_gen)
+  void run_ap_or_delay_impl (xspan<T> io, GF&& g_gen, LF&& lfo_gen)
   {
     static_assert (!spec::is_filter (Idx));
 
@@ -738,7 +785,7 @@ private:
     class GainGen,
     class LfoGen,
     class... GainAndLfoGens>
-  void run_impl_get_yn (
+  void run_nested_ap_impl_get_yn (
     std::array<xspan<T>, N>& yn,
     GainGen&&                _,
     LfoGen&&                 lfo_gen,
@@ -760,7 +807,7 @@ private:
     }
     // recurse....
     if constexpr ((I + 1) < N) {
-      run_impl_get_yn<I + 1, N, Idxs> (
+      run_nested_ap_impl_get_yn<I + 1, N, Idxs> (
         yn, std::forward<GainAndLfoGens> (fwd)...);
     }
   }
@@ -773,7 +820,7 @@ private:
     class GainGen,
     class LfoGen,
     class... GainAndLfoGens>
-  void run_impl_get_gains (
+  void run_nested_ap_impl_get_gains (
     std::array<T, N>& gains,
     uint              n_spl,
     GainGen&&         gain_gen,
@@ -783,17 +830,19 @@ private:
     gains[I] = gain_gen (n_spl);
     // recurse....
     if constexpr ((I + 1) < N) {
-      run_impl_get_gains<I + 1, N> (
+      run_nested_ap_impl_get_gains<I + 1, N> (
         gains, n_spl, std::forward<GainAndLfoGens> (fwd)...);
     }
   }
   //----------------------------------------------------------------------------
   // Helper template function to run nested allpasses
   template <class T, uint N, class... GainAndLfoGens>
-  std::array<T, N> run_impl_get_gains (uint n_spl, GainAndLfoGens&&... glfo)
+  std::array<T, N> run_nested_ap_impl_get_gains (
+    uint n_spl,
+    GainAndLfoGens&&... glfo)
   {
     std::array<T, N> ret;
-    run_impl_get_gains<0, N> (
+    run_nested_ap_impl_get_gains<0, N> (
       ret, n_spl, std::forward<GainAndLfoGens> (glfo)...);
     return ret;
   }
@@ -803,7 +852,7 @@ private:
   // modulations can be unity but have to be present). It only work for delay
   // sizes bigger than the block size for implementation "simplicity".
   template <uint... Idx, class T, class... GainAndLfoGens>
-  void run_impl (xspan<T> io, GainAndLfoGens&&... gnlfo)
+  void run_nested_ap_impl (xspan<T> io, GainAndLfoGens&&... gnlfo)
   {
     using Idxs          = mp_list<std::integral_constant<uint, Idx>...>;
     constexpr auto idx0 = mp11::mp_front<Idxs>::value;
@@ -815,11 +864,12 @@ private:
     for (uint i = 0; i < n; ++i) {
       yn[i] = xspan {yn_mem[i].data(), io.size()};
     }
-    run_impl_get_yn<0, n, Idxs> (yn, std::forward<GainAndLfoGens> (gnlfo)...);
+    run_nested_ap_impl_get_yn<0, n, Idxs> (
+      yn, std::forward<GainAndLfoGens> (gnlfo)...);
 
     for (uint i = 0; i < io.size(); ++i) {
-      auto g
-        = run_impl_get_gains<T, n> (i, std::forward<GainAndLfoGens> (gnlfo)...);
+      auto g = run_nested_ap_impl_get_gains<T, n> (
+        i, std::forward<GainAndLfoGens> (gnlfo)...);
 
       std::array<T, n> u;
 
