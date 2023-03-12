@@ -193,12 +193,13 @@ public:
       auto y1  = fixpt_acum_t::from (raw & ~mask);
       auto x   = (fixpt_acum_t) io[i];
 
-      auto y = gv * x + (1_r - gv) * y1 - err;
-      io[i]  = (fixpt_tr) y; // notice the rounding
-      sto    = ((fixpt_acum_t) io[i]) - y; // write the error
-      raw    = sto.value();
-      raw &= ((Scalar) io[i].value()) << shift; // append y after rounding
-      sto = fixpt_acum_t::from (raw);
+      auto y = gv * x + (1_r - gv) * y1 + err;
+      io[i]  = (fixpt_tr) y; // rounding
+
+      sto = y - ((fixpt_acum_t) io[i]); // write the error
+      raw = sto.value();
+      raw &= (y.value() & ~mask); // append y after rounding
+      sto = y;
     }
     save_accumulator<Idx> (sto);
   }
@@ -497,10 +498,16 @@ private:
     constexpr auto       sz     = get_delay_size (Idx);
     constexpr auto       y1_pos = sz;
 
-    fixpt_acum_t y1 = fetch_accumulator<Idx> (fixpt_t {});
+    fixpt_acum_t sto = fetch_accumulator<Idx> (fixpt_t {});
 
     for (uint i = 0; i < dst.size(); ++i) {
-      using fixpt_w_range = decltype (y1.resize<2, -2>());
+      using Scalar         = fixpt_acum_t::scalar_type;
+      using U_scalar       = std::make_unsigned_t<Scalar>;
+      constexpr uint shift = fixpt_acum_t::n_bits - fixpt_t::n_bits;
+      constexpr auto mask  = lsb_mask<U_scalar> (shift);
+      // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
+
+      using fixpt_w_range = decltype (sto.resize<2, -2>());
 
       auto fixpt_spls
         = (dd.spls.add_sign() + (lfo_gen (i) * dd.mod.add_sign()));
@@ -508,13 +515,23 @@ private:
       n_spls -= i;
       auto n_spls_frac = (fixpt_w_range) fixpt_spls.fractional();
       auto d           = n_spls_frac + 0.418_r; // this might exceed 1
-      auto a  = (fixpt_w_range) ((1_r - d) / (1_r + d)); // 0.4104 to -1
+      auto a = (fixpt_w_range) ((1_r - d) / (1_r + d)); // 0.4104 to -1
+
+      auto raw = sto.value(); // avoid arithmetic shift
+      auto err = fixpt_acum_t::from (raw & mask);
+      auto y1  = fixpt_acum_t::from (raw & ~mask);
+
       auto z0 = (fixpt_w_range) get<Idx, fixpt_t> (n_spls - 1);
       auto z1 = (fixpt_w_range) get<Idx, fixpt_t> (n_spls);
-      y1      = (fixpt_acum_t) (z0 * a + z1 - a * y1);
-      dst[i]  = (fixpt_t) y1;
+      auto y  = (fixpt_acum_t) (z0 * a + z1 - a * y1 + err);
+      dst[i]  = (fixpt_tr) y; // rounding
+
+      sto = y - ((fixpt_acum_t) dst[i]); // write the error
+      raw = sto.value();
+      raw &= (y.value() & ~mask); // append y after rounding
+      sto = y;
     }
-    save_accumulator<Idx> (y1);
+    save_accumulator<Idx> (sto);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class LF>
