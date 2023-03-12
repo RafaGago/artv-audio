@@ -146,8 +146,8 @@ public:
       auto y  = (Acum) io[i];
       y       = (1_r - gv) * io[i];
       y       = y + (y1 * gv);
+      io[i]   = (T) y;
       y1      = y;
-      io[i]   = (T) v;
     }
     save_accumulator<Idx> (y1);
   }
@@ -158,27 +158,49 @@ public:
     run_lp<Idx> (io, T {});
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T, class U>
-  void run_hp (xspan<T> io, U g)
+  template <uint Idx, class U>
+  void run_hp (xspan<float> io, U g)
   {
     assert (io);
-    auto y1    = fetch_accumulator<Idx> (T {});
-    using Acum = decltype (y1);
+    float y1 = fetch_accumulator<Idx> (float {});
     for (uint i = 0; i < io.size(); ++i) {
-      bool is_zero;
-      if constexpr (is_fixpt_v<T>) {
-        is_zero = (g.value() == 0);
-      }
-      else {
-        is_zero = (g == 0.f);
-      }
-      auto gv = is_zero ? (Acum) get_gain<Idx, T>() : (Acum) g;
-      auto y  = ((Acum) io[i]) * gv;
+      float gv = (g == 0.f) ? get_gain<Idx, float>() : g;
+      float y  = io[i] * gv;
       y += (1_r - gv) * y1;
-      io[i] = (T) y;
+      io[i] = y;
       y1    = y;
     }
     save_accumulator<Idx> (y1);
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class U>
+  void run_hp (xspan<fixpt_t> io, U g)
+  {
+    assert (io);
+    fixpt_acum_t sto = fetch_accumulator<Idx> (fixpt_t {});
+
+    for (uint i = 0; i < io.size(); ++i) {
+      using Scalar         = fixpt_acum_t::scalar_type;
+      using U_scalar       = std::make_unsigned_t<Scalar>;
+      constexpr uint shift = fixpt_acum_t::n_bits - fixpt_t::n_bits;
+      constexpr auto mask  = lsb_mask<U_scalar> (shift);
+      // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
+      fixpt_t gvf = (g.value() == 0) ? get_gain<Idx, fixpt_t>() : g;
+      auto    gv  = (fixpt_acum_t) gvf;
+
+      auto raw = sto.value(); // avoid arithmetic shift
+      auto err = fixpt_acum_t::from (raw & mask);
+      auto y1  = fixpt_acum_t::from (raw & ~mask);
+      auto x   = (fixpt_acum_t) io[i];
+
+      auto y = gv * x + (1_r - gv) * y1 - err;
+      io[i]  = (fixpt_tr) y; // notice the rounding
+      sto    = ((fixpt_acum_t) io[i]) - y; // write the error
+      raw    = sto.value();
+      raw &= ((Scalar) io[i].value()) << shift; // append y after rounding
+      sto = fixpt_acum_t::from (raw);
+    }
+    save_accumulator<Idx> (sto);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
