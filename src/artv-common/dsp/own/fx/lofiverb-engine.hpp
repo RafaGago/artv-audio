@@ -143,10 +143,10 @@ public:
         is_zero = (g == 0.f);
       }
       auto gv = is_zero ? (Acum) get_gain<Idx, T>() : (Acum) g;
-      auto v  = (Acum) io[i];
-      v       = (1_r - gv) * io[i];
-      v       = v + (y1 * gv);
-      y1      = v;
+      auto y  = (Acum) io[i];
+      y       = (1_r - gv) * io[i];
+      y       = y + (y1 * gv);
+      y1      = y;
       io[i]   = (T) v;
     }
     save_accumulator<Idx> (y1);
@@ -173,11 +173,10 @@ public:
         is_zero = (g == 0.f);
       }
       auto gv = is_zero ? (Acum) get_gain<Idx, T>() : (Acum) g;
-      auto v  = (Acum) io[i];
-      v       = (1_r - gv) * io[i];
-      v       = v + (y1 * gv);
-      y1      = v;
-      io[i]   = (T) (io[i] - v);
+      auto y  = ((Acum) io[i]) * gv;
+      y += (1_r - gv) * y1;
+      io[i] = (T) y;
+      y1    = y;
     }
     save_accumulator<Idx> (y1);
   }
