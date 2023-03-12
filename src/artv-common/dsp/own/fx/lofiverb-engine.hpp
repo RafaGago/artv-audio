@@ -127,6 +127,7 @@ public:
     assert (src);
     encode_write (prepare_block_insertion<Idx> (src.size()), src);
   }
+#if 1
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
   void run_lp (xspan<T> io, U g)
@@ -150,6 +151,50 @@ public:
       y1      = y;
     }
     save_accumulator<Idx> (y1);
+  }
+#else
+  // investigate why it does sound better without noise-shaping...
+  //----------------------------------------------------------------------------
+  template <uint Idx, class U>
+  void run_lp (xspan<float> io, U g)
+  {
+    assert (io);
+    float y1 = fetch_accumulator<Idx> (float {});
+    for (uint i = 0; i < io.size(); ++i) {
+      float gv = (g == 0.f) ? get_gain<Idx, float>() : g;
+      float y  = y1 * gv + (1_r - gv) * io[i];
+      io[i]    = y;
+      y1       = y;
+    }
+    save_accumulator<Idx> (y1);
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class U>
+  void run_lp (xspan<fixpt_t> io, U g)
+  {
+    assert (io);
+    fixpt_acum_t sto = fetch_accumulator<Idx> (fixpt_t {});
+
+    for (uint i = 0; i < io.size(); ++i) {
+      fixpt_t gvf       = (g.value() == 0) ? get_gain<Idx, fixpt_t>() : g;
+      auto    gv        = (fixpt_acum_t) gvf;
+      auto [y1, err]    = acum_get_y1_and_err (sto);
+      auto x            = (fixpt_acum_t) io[i];
+      auto y            = gv * y1 + (1_r - gv) * x /*+ err*/;
+      auto [y_tr, acum] = acum_get_quantized_y_and_acum (y);
+      io[i]             = y_tr;
+      sto               = acum;
+    }
+    save_accumulator<Idx> (sto);
+  }
+#endif
+  //----------------------------------------------------------------------------
+  std::tuple<fixpt_acum_t, fixpt_acum_t> truncate_accumulator (fixpt_acum_t v)
+  {
+    using Scalar         = fixpt_acum_t::scalar_type;
+    using U_scalar       = std::make_unsigned_t<Scalar>;
+    constexpr uint shift = fixpt_acum_t::n_bits - fixpt_t::n_bits;
+    constexpr auto mask  = lsb_mask<U_scalar> (shift);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -180,26 +225,14 @@ public:
     fixpt_acum_t sto = fetch_accumulator<Idx> (fixpt_t {});
 
     for (uint i = 0; i < io.size(); ++i) {
-      using Scalar         = fixpt_acum_t::scalar_type;
-      using U_scalar       = std::make_unsigned_t<Scalar>;
-      constexpr uint shift = fixpt_acum_t::n_bits - fixpt_t::n_bits;
-      constexpr auto mask  = lsb_mask<U_scalar> (shift);
-      // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
-      fixpt_t gvf = (g.value() == 0) ? get_gain<Idx, fixpt_t>() : g;
-      auto    gv  = (fixpt_acum_t) gvf;
-
-      auto raw = sto.value(); // avoid arithmetic shift
-      auto err = fixpt_acum_t::from (raw & mask);
-      auto y1  = fixpt_acum_t::from (raw & ~mask);
-      auto x   = (fixpt_acum_t) io[i];
-
-      auto y = gv * x + (1_r - gv) * y1 + err;
-      io[i]  = (fixpt_tr) y; // rounding
-
-      sto = y - ((fixpt_acum_t) io[i]); // write the error
-      raw = sto.value();
-      raw &= (y.value() & ~mask); // append y after rounding
-      sto = y;
+      fixpt_t gvf       = (g.value() == 0) ? get_gain<Idx, fixpt_t>() : g;
+      auto    gv        = (fixpt_acum_t) gvf;
+      auto [y1, err]    = acum_get_y1_and_err (sto);
+      auto x            = (fixpt_acum_t) io[i];
+      auto y            = gv * x + (1_r - gv) * y1 + err;
+      auto [y_tr, acum] = acum_get_quantized_y_and_acum (y);
+      io[i]             = y_tr;
+      sto               = acum;
     }
     save_accumulator<Idx> (sto);
   }
@@ -342,6 +375,37 @@ private:
     else {
       return [] (uint) { return get_gain<Idx, T>(); };
     }
+  }
+  //----------------------------------------------------------------------------
+  static auto acum_get_y1_and_err (fixpt_acum_t acum)
+  {
+    // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
+    // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
+    using scalar         = fixpt_acum_t::scalar_type;
+    using u_scalar       = std::make_unsigned_t<scalar>;
+    constexpr uint shift = fixpt_acum_t::n_bits - fixpt_t::n_bits;
+    constexpr auto mask  = lsb_mask<u_scalar> (shift);
+
+    auto raw = acum.value(); // avoid arithmetic shift
+    auto err = fixpt_acum_t::from (raw & mask);
+    auto y1  = fixpt_acum_t::from (raw & ~mask);
+
+    return std::make_tuple (y1, err);
+  }
+  //----------------------------------------------------------------------------
+  static auto acum_get_quantized_y_and_acum (fixpt_acum_t y)
+  {
+    // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
+    // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
+    using scalar         = fixpt_acum_t::scalar_type;
+    using u_scalar       = std::make_unsigned_t<scalar>;
+    constexpr uint shift = fixpt_acum_t::n_bits - fixpt_t::n_bits;
+    constexpr auto mask  = lsb_mask<u_scalar> (shift);
+
+    auto truncated = (fixpt_t) y;
+    auto err       = y.value() & mask;
+    auto y1        = ((fixpt_acum_t) truncated).value();
+    return std::make_tuple (truncated, fixpt_acum_t::from (err | y1));
   }
   //----------------------------------------------------------------------------
   template <uint N>
@@ -501,12 +565,6 @@ private:
     fixpt_acum_t sto = fetch_accumulator<Idx> (fixpt_t {});
 
     for (uint i = 0; i < dst.size(); ++i) {
-      using Scalar         = fixpt_acum_t::scalar_type;
-      using U_scalar       = std::make_unsigned_t<Scalar>;
-      constexpr uint shift = fixpt_acum_t::n_bits - fixpt_t::n_bits;
-      constexpr auto mask  = lsb_mask<U_scalar> (shift);
-      // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
-
       using fixpt_w_range = decltype (sto.resize<2, -2>());
 
       auto fixpt_spls
@@ -515,21 +573,15 @@ private:
       n_spls -= i;
       auto n_spls_frac = (fixpt_w_range) fixpt_spls.fractional();
       auto d           = n_spls_frac + 0.418_r; // this might exceed 1
-      auto a = (fixpt_w_range) ((1_r - d) / (1_r + d)); // 0.4104 to -1
-
-      auto raw = sto.value(); // avoid arithmetic shift
-      auto err = fixpt_acum_t::from (raw & mask);
-      auto y1  = fixpt_acum_t::from (raw & ~mask);
-
-      auto z0 = (fixpt_w_range) get<Idx, fixpt_t> (n_spls - 1);
-      auto z1 = (fixpt_w_range) get<Idx, fixpt_t> (n_spls);
-      auto y  = (fixpt_acum_t) (z0 * a + z1 - a * y1 + err);
-      dst[i]  = (fixpt_tr) y; // rounding
-
-      sto = y - ((fixpt_acum_t) dst[i]); // write the error
-      raw = sto.value();
-      raw &= (y.value() & ~mask); // append y after rounding
-      sto = y;
+      auto a         = (fixpt_w_range) ((1_r - d) / (1_r + d)); // 0.4104 to -1
+      auto [y1, err] = acum_get_y1_and_err (sto);
+      auto z0        = (fixpt_w_range) get<Idx, fixpt_t> (n_spls - 1);
+      auto z1        = (fixpt_w_range) get<Idx, fixpt_t> (n_spls);
+      auto y
+        = (fixpt_acum_t) (z0 * a + z1 - a * (fixpt_w_range) y1 + (fixpt_w_range) err);
+      auto [y_tr, acum] = acum_get_quantized_y_and_acum (y);
+      dst[i]            = y_tr;
+      sto               = acum;
     }
     save_accumulator<Idx> (sto);
   }
