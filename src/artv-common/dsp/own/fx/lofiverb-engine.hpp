@@ -7,8 +7,10 @@
 #include <cstdint>
 #include <functional>
 #include <type_traits>
+#include <variant>
 #include <vector>
 
+#include "artv-common/dsp/own/classes/noise.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/fixed_point.hpp"
@@ -36,6 +38,23 @@ using fixpt_acum_t = fixpt_s<1, 0, 31>;
 using fixpt_sto      = fixpt_s<1, 0, 15, 0>;
 using fixpt_spls     = fixpt_m<0, 14, 0, 0>;
 using fixpt_spls_mod = fixpt_m<0, 9, 0, 0>;
+//------------------------------------------------------------------------------
+#if 0
+struct allpass_data {
+  fixpt_spls     spls;
+  fixpt_spls_mod mod; // In samples. If 0 the delay is not modulated
+  fixpt_t        g;
+};
+
+struct delay_data {
+  fixpt_spls     spls;
+  fixpt_spls_mod mod; // In samples. If 0 the delay is not modulated
+};
+
+struct filter_data {
+  fixpt_t g;
+};
+#endif
 //------------------------------------------------------------------------------
 struct delay_data {
   fixpt_spls     spls;
@@ -160,8 +179,8 @@ public:
       fixpt_t gvf = (g.value() == 0) ? get_gain<Idx, fixpt_t>() : g;
       auto    gv  = (fixpt_acum_t) gvf;
       auto    x   = (fixpt_acum_t) io[i];
-// investigate why it does sound better without noise-shaping...
 #if 0
+// investigate why it does sound better without noise-shaping...
       auto    y   = gv * y1 + (1_r - gv) * x + err;
       y1          = (fixpt_t) y;
       err         = fixpt_acum_t::from (y.value() & mask);
@@ -473,68 +492,6 @@ private:
     advance_pos<Idx>();
   }
   //----------------------------------------------------------------------------
-  // fetch state for thiran interpolators or damp filters
-  template <uint Idx>
-  auto fetch_state (fixpt_t)
-  {
-    static_assert (is_modulated_delay (Idx) || is_filter (Idx));
-    constexpr auto offset = get_states_offset (Idx);
-    return std::make_tuple (_stage[Idx].z[offset], _stage[Idx].z[offset + 1]);
-  }
-  //----------------------------------------------------------------------------
-  // fetch state for thiran interpolators or damp filters
-  template <uint Idx>
-  float fetch_state (float)
-  {
-    static_assert (is_modulated_delay (Idx) || is_filter (Idx));
-    static_assert (sizeof (float) == 2 * sizeof (fixpt_t));
-    float          ret;
-    constexpr auto offset = get_states_offset (Idx);
-    memcpy (&ret, &_stage[Idx].z[offset], sizeof ret);
-    return ret;
-  }
-  //----------------------------------------------------------------------------
-  // save state for thiran interpolators or damp filters
-  template <uint Idx>
-  void save_state (s16 v1, s16 v2)
-  {
-    static_assert (is_modulated_delay (Idx) || is_filter (Idx));
-    constexpr auto offset     = get_states_offset (Idx);
-    _stage[Idx].z[offset]     = v1;
-    _stage[Idx].z[offset + 1] = v2;
-  }
-  //----------------------------------------------------------------------------
-  // save state for thiran interpolators or damp filters
-  template <uint Idx>
-  void save_state (float v)
-  {
-    static_assert (is_modulated_delay (Idx) || is_filter (Idx));
-    static_assert (sizeof (v) == 2 * sizeof (fixpt_t));
-    constexpr auto offset = get_states_offset (Idx);
-    memcpy (&_stage[Idx].z[offset], &v, sizeof v);
-  }
-  //----------------------------------------------------------------------------
-  // fetch truncation error for allpass (fixed point only)
-  template <uint Idx>
-  auto fetch_ap_err()
-  {
-    static_assert (is_allpass (Idx));
-    constexpr auto offset
-      = get_states_offset (Idx) + (is_modulated_delay (Idx) ? 2 : 0);
-    return std::make_tuple (_stage[Idx].z[offset], _stage[Idx].z[offset + 1]);
-  }
-  //----------------------------------------------------------------------------
-  // store truncation error for allpass (fixed point only)
-  template <uint Idx>
-  void save_ap_err (s16 err1, s16 err2)
-  {
-    static_assert (is_allpass (Idx));
-    constexpr auto offset
-      = get_states_offset (Idx) + (is_modulated_delay (Idx) ? 2 : 0);
-    _stage[Idx].z[offset]     = err1;
-    _stage[Idx].z[offset + 1] = err2;
-  }
-  //----------------------------------------------------------------------------
   template <uint Idx, class LF>
   void run_thiran (xspan<fixpt_t> dst, LF&& lfo_gen)
   {
@@ -628,17 +585,36 @@ private:
       return std::make_tuple (x, u);
     }
     else {
-      constexpr uint mask = lsb_mask<uint> (fixpt_acum_t::n_frac - T::n_frac);
-      auto [err_x, err_u] = fetch_ap_err<Idx>();
+#if 0
+      // dither + noise shaping
+      constexpr uint n_truncated = fixpt_acum_t::n_bits - T::n_bits;
+      constexpr uint mask        = lsb_mask<uint> (n_truncated);
+      auto [z_err_out, z_err_yn] = fetch_ap_err<Idx>();
+      auto noise
+        = tpdf_dither<n_truncated, fixpt_acum_t::scalar_type, 2> (_noise);
       // cast to something wide and known
-      auto out = (fixpt_acum_t) x;
-      auto yn  = (fixpt_acum_t) u;
-
-      out += fixpt_acum_t::from (err_x);
-      yn += fixpt_acum_t::from (err_u);
-      //  store bits that will be dropped
+      auto out = (fixpt_acum_t) x + fixpt_acum_t::from (z_err_out);
+      auto yn  = (fixpt_acum_t) u + fixpt_acum_t::from (z_err_yn);
+      auto d_out = out + fixpt_acum_t::from (noise[0]);
+      auto d_yn  = yn + fixpt_acum_t::from (noise[1]);
+      auto q_out = (T) d_out;
+      auto q_yn  = (T) d_yn;
+      auto err_out = out - q_out;
+      auto err_yn  = yn - q_yn;
+      save_ap_err<Idx> (err_out.value() & mask, err_yn.value() & mask);
+      return std::make_tuple (q_out, q_yn);
+#else
+      // noise shaping only
+      constexpr uint n_truncated = fixpt_acum_t::n_bits - T::n_bits;
+      constexpr uint mask        = lsb_mask<uint> (n_truncated);
+      auto [z_err_out, z_err_yn] = fetch_ap_err<Idx>();
+      auto out   = (fixpt_acum_t) x + fixpt_acum_t::from (z_err_out);
+      auto yn    = (fixpt_acum_t) u + fixpt_acum_t::from (z_err_yn);
+      auto q_out = (T) out;
+      auto q_yn  = (T) yn;
       save_ap_err<Idx> (out.value() & mask, yn.value() & mask);
-      return std::make_tuple ((T) out, (T) yn);
+      return std::make_tuple (q_out, q_yn);
+#endif
     }
   }
   //----------------------------------------------------------------------------
@@ -932,13 +908,79 @@ private:
     return get_delay_size (i);
   }
   //----------------------------------------------------------------------------
+  static constexpr uint n_thiran_states  = 2;
+  static constexpr uint n_filter_states  = 2;
+  static constexpr uint n_allpass_states = 2;
+  //----------------------------------------------------------------------------
+  // fetch state for thiran interpolators or damp filters
+  template <uint Idx>
+  auto fetch_state (fixpt_t)
+  {
+    static_assert (is_modulated_delay (Idx) || is_filter (Idx));
+    constexpr auto offset = get_states_offset (Idx);
+    return std::make_tuple (_stage[Idx].z[offset], _stage[Idx].z[offset + 1]);
+  }
+  //----------------------------------------------------------------------------
+  // fetch state for thiran interpolators or damp filters
+  template <uint Idx>
+  float fetch_state (float)
+  {
+    static_assert (is_modulated_delay (Idx) || is_filter (Idx));
+    static_assert (sizeof (float) == 2 * sizeof (fixpt_t));
+    float          ret;
+    constexpr auto offset = get_states_offset (Idx);
+    memcpy (&ret, &_stage[Idx].z[offset], sizeof ret);
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+  // save state for thiran interpolators or damp filters
+  template <uint Idx>
+  void save_state (s16 v1, s16 v2)
+  {
+    static_assert (is_modulated_delay (Idx) || is_filter (Idx));
+    constexpr auto offset     = get_states_offset (Idx);
+    _stage[Idx].z[offset]     = v1;
+    _stage[Idx].z[offset + 1] = v2;
+  }
+  //----------------------------------------------------------------------------
+  // save state for thiran interpolators or damp filters
+  template <uint Idx>
+  void save_state (float v)
+  {
+    static_assert (is_modulated_delay (Idx) || is_filter (Idx));
+    static_assert (sizeof (v) == 2 * sizeof (fixpt_t));
+    constexpr auto offset = get_states_offset (Idx);
+    memcpy (&_stage[Idx].z[offset], &v, sizeof v);
+  }
+  //----------------------------------------------------------------------------
+  // fetch truncation error for allpass (fixed point only)
+  template <uint Idx>
+  auto fetch_ap_err()
+  {
+    static_assert (is_allpass (Idx));
+    constexpr auto offset = get_states_offset (Idx)
+      + (is_modulated_delay (Idx) ? n_thiran_states : 0);
+    return std::make_tuple (_stage[Idx].z[offset], _stage[Idx].z[offset + 1]);
+  }
+  //----------------------------------------------------------------------------
+  // store truncation error for allpass (fixed point only)
+  template <uint Idx>
+  void save_ap_err (s16 err1, s16 err2)
+  {
+    static_assert (is_allpass (Idx));
+    constexpr auto offset = get_states_offset (Idx)
+      + (is_modulated_delay (Idx) ? n_thiran_states : 0);
+    _stage[Idx].z[offset]     = err1;
+    _stage[Idx].z[offset + 1] = err2;
+  }
+  //----------------------------------------------------------------------------
   static constexpr uint get_stage_n_elems (uint i)
   {
     // ordering as appears here
     uint ret = get_delay_size (i);
-    ret += ((uint) is_modulated_delay (i)) * 2; // thiran state + frac saving
-    ret += ((uint) is_filter (i)) * 2; // damp filt state + frac saving
-    ret += ((uint) is_allpass (i)) * 2; // allpass 2x frac saving
+    ret += ((uint) is_modulated_delay (i)) * n_thiran_states;
+    ret += ((uint) is_filter (i)) * n_filter_states;
+    ret += ((uint) is_allpass (i)) * n_allpass_states;
     return ret;
   }
   //----------------------------------------------------------------------------
@@ -1008,6 +1050,7 @@ private:
     uint pos {};
   };
   std::array<stage, Spec::values.size()> _stage;
+  lowbias32_hash<2>                      _noise;
 };
 }}} // namespace artv::detail::lofiverb
 //------------------------------------------------------------------------------

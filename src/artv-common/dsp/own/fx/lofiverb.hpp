@@ -20,11 +20,32 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/xspan.hpp"
 
+#define LOFIVERB_ADD_DEBUG_ALGO   1
+#define LOFIVERB_GAIN_CALIBRATION 1
+
 namespace artv {
 namespace detail { namespace lofiverb {
 
 //------------------------------------------------------------------------------
 static constexpr uint max_block_size = 32;
+
+#ifdef LOFIVERB_ADD_DEBUG_ALGO
+//------------------------------------------------------------------------------
+static constexpr auto get_debug_algo_spec()
+{
+  return make_array<delay_data> (
+    make_ap (147, -0.707), // 0
+    make_ap (183, 0.707), // 1
+    make_ap (389, -0.6), // 2
+    make_ap (401, 0.6), // 3
+    make_delay (max_block_size + 1) // 4 delay block (== blocksz + 1)
+  );
+}
+
+struct debug_algo_spec {
+  static constexpr auto values {get_debug_algo_spec()};
+};
+#endif
 //------------------------------------------------------------------------------
 static constexpr auto get_algo1_spec()
 {
@@ -34,37 +55,21 @@ static constexpr auto get_algo1_spec()
     make_ap (183, 0.707), // 1
     make_ap (389, -0.6), // 2
     make_ap (401, 0.6), // 3
-// er
-#if 0
+    // er
     make_ap (1367, 0.35, 71 + 70), // 4
-#else
-    make_ap (1367, 0.35), // 4
-#endif
     make_damp(), // 5
-#if 0
     make_ap (1787, 0.5, 261), // 6
-#else
-    make_ap (1787, 0.5), // 6
-#endif
     make_delay (max_block_size + 1), // 7 to allow block processing
-// loop1
-#if 0
+    // loop1
     make_ap (977, 0.5 /*overridden*/, 51), // 8
-#else
-    make_ap (977, 0.5 /*overridden*/), // 8
-#endif
     make_delay (2819), // 9
     make_damp(), // 10
     make_ap (863, -0.5 /*overridden*/), // 11
     make_delay (1021), // 12 Delay
     make_ap (1453, 0.618), // 13
     make_delay (787), // 14 delay (allows block processing) (> blocksz + 1)
-// loop2
-#if 0
+    // loop2
     make_ap (947, 0.5 /*overridden*/, 67), // 15
-#else
-    make_ap (947, 0.5), // 15
-#endif
     make_delay (3191), // 16
     make_damp(), // 17
     make_ap (887, -0.5 /*overridden*/), // 18
@@ -180,6 +185,17 @@ public:
       return;
     }
     switch (v) {
+#ifdef LOFIVERB_ADD_DEBUG_ALGO
+    case mode::debug_algo_flt:
+    case mode::debug_algo: {
+      _param.pre_gain  = db_to_gain (-29.f);
+      _param.post_gain = db_to_gain (29.f - 6.f); // match all algos
+      auto& rev        = _modes.emplace<debug_algo_type>();
+      rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
+    } break;
+#endif
     case mode::algo1_flt:
     case mode::algo1: {
       _param.pre_gain  = db_to_gain (-29.f);
@@ -217,6 +233,10 @@ public:
   }
   struct mode {
     enum {
+#ifdef LOFIVERB_ADD_DEBUG_ALGO
+      debug_algo_flt,
+      debug_algo,
+#endif
       algo1_flt,
       algo1,
       midifex49_flt,
@@ -231,6 +251,10 @@ public:
     return choice_param (
       0,
       make_cstr_array (
+#ifdef LOFIVERB_ADD_DEBUG_ALGO
+        "Debug ",
+        "Debug 16-bit",
+#endif
         "Long 1",
         "Long 1 16-bit",
         "Midifex 49",
@@ -481,14 +505,15 @@ private:
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       f32_x2 wetv = _filt.tick_cascade (vec_from_array (io[i]));
-#if 1
+#ifndef LOFIVERB_GAIN_CALIBRATION
       wetv *= pre_gain;
-      wetv           = vec_clamp (wetv, -1.f, 1.f);
+      wetv           = vec_clamp (wetv, -0.9999f, 0.9999f);
       ducker_gain[i] = _ducker.tick (wetv);
       wetv *= _param.pre_gain;
 #else // pre_gain calibration. (shouldn't be on when Released).
       ducker_gain[i] = _ducker.tick (f32_x2 {});
       wetv *= pre_gain;
+      wetv = vec_clamp (wetv, -0.9999f, 0.9999f);
 #endif
       io[i] = vec_to_array (wetv);
 
@@ -517,6 +542,11 @@ private:
     }
     // main loop
     switch (_param.mode) {
+#ifdef LOFIVERB_ADD_DEBUG_ALGO
+    case mode::debug_algo:
+      process_debug_algo (xspan {wet.data(), io.size()}, pars);
+      break;
+#endif
     case mode::algo1:
       process_algo1 (xspan {wet.data(), io.size()}, pars);
       break;
@@ -534,7 +564,7 @@ private:
     for (uint i = 0; i < io.size(); ++i) {
       auto l = wet[i][0].to_floatp();
       auto r = wet[i][1].to_floatp();
-#if 1
+#ifndef LOFIVERB_GAIN_CALIBRATION
       l *= ducker_gain[i][0] * _param.gain * _param.post_gain;
       r *= ducker_gain[i][1] * _param.gain * _param.post_gain;
 #else // pre_gain calibration (shouldn't be on when Released).
@@ -595,6 +625,11 @@ private:
     }
     // main loop
     switch (_param.mode) {
+#ifdef LOFIVERB_ADD_DEBUG_ALGO
+    case mode::debug_algo_flt:
+      process_debug_algo (io, pars);
+      break;
+#endif
     case mode::algo1_flt:
       process_algo1 (io, pars);
       break;
@@ -622,6 +657,49 @@ private:
       }
     }
   }
+//----------------------------------------------------------------------------
+#ifdef LOFIVERB_ADD_DEBUG_ALGO
+  template <class T, class Params>
+  void process_debug_algo (xspan<std::array<T, 2>> io, Params& par)
+  {
+    auto& rev = std::get<debug_algo_type> (_modes);
+
+    using arr    = std::array<T, max_block_size>;
+    using arr_fb = std::array<T, max_block_size + 1>;
+
+    arr    in_arr;
+    arr_fb out_arr;
+
+    auto in  = xspan {in_arr.data(), io.size()};
+    auto out = xspan {out_arr.data(), io.size() + 1};
+
+    rev.fetch_block<4> (out, 1); // feedback, fetching block + 1 samples
+
+    for (uint i = 0; i < io.size(); ++i) {
+      // to MS
+      in[i] = (T) (((io[i][0] + io[i][1]) * 0.25_r) + out[i]);
+      // decay fixup
+      auto decay   = (T) (0.99999_r - par.decay[i]);
+      decay        = (T) (0.99999_r - decay * decay);
+      par.decay[i] = (T) (0.6_r + decay * 0.39_r);
+    }
+    out.cut_head (1); // drop feedback sample from previous block
+
+    rev.run<0> (in);
+    rev.run<1> (in);
+    rev.run<2> (in);
+    rev.run<3> (in);
+    span_visit (in, [&] (auto& v, uint i) { v = mul_round (v, par.decay[i]); });
+    rev.push<4> (in.to_const()); // feedback point
+
+    // Mixdown (not a lot going on...)
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      io[i][0] = out[i];
+      io[i][1] = out[i];
+    }
+  }
+#endif
   //----------------------------------------------------------------------------
   template <class T, class Params>
   void process_algo1 (xspan<std::array<T, 2>> io, Params& par)
@@ -715,21 +793,13 @@ private:
     late_dampf       = 1.f - late_dampf * late_dampf;
     late_dampf *= 0.4f;
     auto late_damp = load_float<T> (late_dampf);
-#if 0
     rev.run<8> (late, xspan {lfo3}, g);
-#else
-    rev.run<8> (late);
-#endif
     rev.run<9> (late);
     rev.run_lp<10> (late, late_damp);
     span_visit (late, [&] (auto& v, uint i) {
       v = (T) (mul_round (v, par.decay[i]));
     });
-#if 0
     rev.run<11> (late, nullptr, [g] (uint i) { return -g[i]; });
-#else
-    rev.run<11> (late);
-#endif
     rev.run<12> (late);
     span_visit (late, [&] (auto& v, uint i) {
       v = (T) (mul_round (v, par.decay[i]));
@@ -745,22 +815,13 @@ private:
         = (T) (late[i] + (T) (((er1[i] + er2[i]) * par.character[i]) * 0.4_r));
     }
     l.cut_head (1); // drop feedback sample from previous block
-
-#if 0
     rev.run<15> (late, xspan {lfo4}, g);
-#else
-    rev.run<15> (late);
-#endif
     rev.run<16> (late);
     rev.run_lp<17> (late, late_damp);
     span_visit (late, [&] (auto& v, uint i) {
       v = (T) (mul_round (v, par.decay[i]));
     });
-#if 0
     rev.run<18> (late, nullptr, [g] (uint i) { return -g[i]; });
-#else
-    rev.run<18> (late);
-#endif
     rev.run<19> (late);
     rev.run<20> (late);
     span_visit (late, [&] (auto& v, uint i) {
@@ -953,7 +1014,26 @@ private:
   //----------------------------------------------------------------------------
   fixpt_t mul_round (fixpt_t value, fixpt_t mul)
   {
-    return (fixpt_t) (detail::lofiverb::fixpt_tr) (value * mul);
+#if 0
+    assert ((mul.to_floatp() < 1.f) && (mul.to_floatp() >= 0.f));
+    auto wide      = value * mul;
+    auto rounded   = (detail::lofiverb::fixpt_tr) wide;
+    // 1LSB leakage
+    bool add_leakage = rounded.value() && (rounded == value);
+    s16  leakage     = add_leakage ? ((value.value() < 0) ? 1 : -1) : 0;
+    return fixpt_t::from (rounded.value() + leakage);
+#elif 0
+    using acum_t = detail::lofiverb::fixpt_acum_t;
+    static s32 err_prev {};
+    auto wide = (acum_t) value * mul;
+    wide += acum_t::from (err_prev);
+    auto round = (detail::lofiverb::fixpt_tr) wide;
+    auto err = wide - ((acum_t) round);
+    err_prev = err.value();
+    return round;
+#else
+    return (detail::lofiverb::fixpt_tr) (value * mul);
+#endif
   }
   //----------------------------------------------------------------------------
   float mul_round (float value, float mul) { return value * mul; }
@@ -1086,7 +1166,16 @@ private:
     engine<detail::lofiverb::midifex49_spec, max_block_size>;
   using midifex50_type = detail::lofiverb::
     engine<detail::lofiverb::midifex50_spec, max_block_size>;
+
+#ifndef LOFIVERB_ADD_DEBUG_ALGO
   using modes_type = std::variant<algo1_type, midifex49_type, midifex50_type>;
+#else
+  using debug_algo_type = detail::lofiverb::
+    engine<detail::lofiverb::debug_algo_spec, max_block_size>;
+
+  using modes_type
+    = std::variant<debug_algo_type, algo1_type, midifex49_type, midifex50_type>;
+#endif
 
   modes_type     _modes;
   ducker<f32_x2> _ducker;
