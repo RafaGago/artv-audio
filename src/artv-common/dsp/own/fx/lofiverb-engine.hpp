@@ -39,7 +39,6 @@ using fixpt_sto      = fixpt_s<1, 0, 15, 0>;
 using fixpt_spls     = fixpt_m<0, 14, 0, 0>;
 using fixpt_spls_mod = fixpt_m<0, 9, 0, 0>;
 //------------------------------------------------------------------------------
-#if 0
 struct allpass_data {
   fixpt_spls     spls;
   fixpt_spls_mod mod; // In samples. If 0 the delay is not modulated
@@ -54,49 +53,110 @@ struct delay_data {
 struct filter_data {
   fixpt_t g;
 };
-#endif
+using stage_data = std::variant<allpass_data, delay_data, filter_data>;
 //------------------------------------------------------------------------------
-struct delay_data {
-  fixpt_spls     spls;
-  fixpt_spls_mod mod; // In samples. If 0 the delay is not modulated
-  fixpt_t        g; // If 0 the delay has no allpass
+
+template <class Spec_array>
+class spec_access {
+public:
+  //----------------------------------------------------------------------------
+  static constexpr bool is_allpass (uint i)
+  {
+    return std::holds_alternative<allpass_data> (values[i]);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr bool is_delay (uint i)
+  {
+    return std::holds_alternative<delay_data> (values[i]);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr bool is_filter (uint i)
+  {
+    return std::holds_alternative<filter_data> (values[i]);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr fixpt_t get_gain (uint i)
+  {
+    if (is_allpass (i)) {
+      return std::get<allpass_data> (values[i]).g;
+    }
+    else if (is_filter (i)) {
+      return std::get<filter_data> (values[i]).g;
+    }
+    else {
+      return {};
+    }
+  }
+  //----------------------------------------------------------------------------
+  static constexpr fixpt_spls get_delay_spls (uint i)
+  {
+    if (is_allpass (i)) {
+      return std::get<allpass_data> (values[i]).spls;
+    }
+    else if (is_delay (i)) {
+      return std::get<delay_data> (values[i]).spls;
+    }
+    else {
+      return {};
+    }
+  }
+  //----------------------------------------------------------------------------
+  static constexpr fixpt_spls_mod get_delay_mod_spls (uint i)
+  {
+    if (is_allpass (i)) {
+      return std::get<allpass_data> (values[i]).mod;
+    }
+    else if (is_delay (i)) {
+      return std::get<delay_data> (values[i]).mod;
+    }
+    else {
+      return {};
+    }
+  }
+  //----------------------------------------------------------------------------
+  static constexpr bool has_modulated_delay (uint i)
+  {
+    return get_delay_mod_spls (i).value() != 0;
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint get_max_delay_spls (uint i)
+  {
+    return get_delay_spls (i).to_int() + get_delay_mod_spls (i).to_int();
+  }
+  //----------------------------------------------------------------------------
+  static constexpr std::size_t size() { return values.size(); }
+  //----------------------------------------------------------------------------
+private:
+  static constexpr auto values {Spec_array::values};
+  //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-static constexpr detail::lofiverb::delay_data make_dd (
+static constexpr detail::lofiverb::stage_data make_ap (
   u16   spls,
-  float g   = 0.,
+  float g,
   u16   mod = 0)
 {
-  assert (spls < fixpt_spls::max_int());
-  assert (mod < fixpt_spls_mod::max_int());
-  return delay_data {
+  return allpass_data {
     fixpt_spls::from_int (spls),
     fixpt_spls_mod::from_int (mod),
     fixpt_t::from_float (g)};
 }
 //------------------------------------------------------------------------------
-static constexpr detail::lofiverb::delay_data make_ap (
-  u16   spls,
-  float g,
-  u16   mod = 0)
+static constexpr detail::lofiverb::stage_data make_delay (u16 spls, u16 mod = 0)
 {
-  return make_dd (spls, g, mod);
+  return delay_data {
+    fixpt_spls::from_int (spls), fixpt_spls_mod::from_int (mod)};
 }
 //------------------------------------------------------------------------------
-static constexpr detail::lofiverb::delay_data make_delay (u16 spls, u16 mod = 0)
+static constexpr detail::lofiverb::stage_data make_damp (float g = 0)
 {
-  return make_dd (spls, 0., mod);
-}
-//------------------------------------------------------------------------------
-static constexpr detail::lofiverb::delay_data make_damp (float g = 0)
-{
-  return make_dd (0, g);
+  return filter_data {fixpt_t::from_float (g)};
 }
 //------------------------------------------------------------------------------
 // A class to abstract 16-bit storage, queue access and common DSP operations
 // when building reverbs based on allpass loops. Both on fixed and floating
 // point.
-template <class Spec, uint Max_block_size>
+template <class Spec_array, uint Max_block_size>
 class engine {
 public:
   //----------------------------------------------------------------------------
@@ -129,9 +189,9 @@ public:
   template <uint Idx, class T>
   void fetch_block (xspan<T> dst, uint negative_offset = 0)
   {
-    static_assert (!is_allpass (Idx), "Not possible on allpasses");
+    static_assert (!spec::is_allpass (Idx), "Not possible on allpasses");
     static_assert (
-      !is_modulated_delay (Idx), "Not possible on Modulated delays");
+      !spec::has_modulated_delay (Idx), "Not possible on Modulated delays");
     assert (dst);
     decode_read (dst, get_read_buffers<Idx> (dst.size(), negative_offset));
   }
@@ -140,9 +200,9 @@ public:
   template <uint Idx, class T>
   void push (xspan<T const> src)
   {
-    static_assert (!is_allpass (Idx), "Not possible on allpasses");
+    static_assert (!spec::is_allpass (Idx), "Not possible on allpasses");
     static_assert (
-      !is_modulated_delay (Idx), "Not possible on Modulated delays");
+      !spec::has_modulated_delay (Idx), "Not possible on Modulated delays");
     assert (src);
     encode_write (prepare_block_insertion<Idx> (src.size()), src);
   }
@@ -150,11 +210,11 @@ public:
   template <uint Idx, class U>
   void run_lp (xspan<float> io, U g)
   {
-    static_assert (is_filter (Idx));
+    static_assert (spec::is_filter (Idx));
     assert (io);
     float y1 = fetch_state<Idx> (float {});
     for (uint i = 0; i < io.size(); ++i) {
-      float gv = (g == 0.f) ? get_gain<Idx, float>() : g;
+      float gv = (g == 0.f) ? (float) spec::get_gain (Idx) : g;
       float y  = y1 * gv + (1_r - gv) * io[i];
       io[i]    = y;
       y1       = y;
@@ -165,7 +225,7 @@ public:
   template <uint Idx, class U>
   void run_lp (xspan<fixpt_t> io, U g)
   {
-    static_assert (is_filter (Idx));
+    static_assert (spec::is_filter (Idx));
     assert (io);
     // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
     // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
@@ -176,7 +236,7 @@ public:
     auto err         = fixpt_acum_t::from (errv);
 
     for (uint i = 0; i < io.size(); ++i) {
-      fixpt_t gvf = (g.value() == 0) ? get_gain<Idx, fixpt_t>() : g;
+      fixpt_t gvf = (g.value() == 0) ? spec::get_gain (Idx) : g;
       auto    gv  = (fixpt_acum_t) gvf;
       auto    x   = (fixpt_acum_t) io[i];
 #if 0
@@ -196,18 +256,18 @@ public:
   template <uint Idx, class T>
   void run_lp (xspan<T> io)
   {
-    static_assert (is_filter (Idx));
+    static_assert (spec::is_filter (Idx));
     run_lp<Idx> (io, T {});
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class U>
   void run_hp (xspan<float> io, U g)
   {
-    static_assert (is_filter (Idx));
+    static_assert (spec::is_filter (Idx));
     assert (io);
     float y1 = fetch_state<Idx> (float {});
     for (uint i = 0; i < io.size(); ++i) {
-      float gv = (g == 0.f) ? get_gain<Idx, float>() : g;
+      float gv = (g == 0.f) ? (float) spec::get_gain (Idx) : g;
       float y  = io[i] * gv;
       y += (1_r - gv) * y1;
       io[i] = y;
@@ -219,7 +279,7 @@ public:
   template <uint Idx, class U>
   void run_hp (xspan<fixpt_t> io, U g)
   {
-    static_assert (is_filter (Idx));
+    static_assert (spec::is_filter (Idx));
     assert (io);
     // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
     // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
@@ -230,7 +290,7 @@ public:
     auto err         = fixpt_acum_t::from (errv);
 
     for (uint i = 0; i < io.size(); ++i) {
-      fixpt_t gvf = (g.value() == 0) ? get_gain<Idx, fixpt_t>() : g;
+      fixpt_t gvf = (g.value() == 0) ? spec::get_gain (Idx) : g;
       auto    gv  = (fixpt_acum_t) gvf;
       auto    x   = (fixpt_acum_t) io[i];
       auto    y   = gv * x + (1_r - gv) * y1 + err;
@@ -377,7 +437,7 @@ private:
       return [v] (uint i) { return v[i]; };
     }
     else {
-      return [] (uint) { return get_gain<Idx, T>(); };
+      return [] (uint) { return (T) spec::get_gain (Idx); };
     }
   }
   //----------------------------------------------------------------------------
@@ -401,18 +461,6 @@ private:
     }
     else {
       static_assert (N == N, "Unimplemented");
-    }
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class T>
-  static constexpr auto get_gain()
-  {
-    constexpr delay_data dd = Spec::values[Idx];
-    if constexpr (is_fixpt_v<T>) {
-      return dd.g;
-    }
-    else {
-      return (float) dd.g;
     }
   }
   //----------------------------------------------------------------------------
@@ -469,8 +517,7 @@ private:
   template <uint Idx>
   void advance_pos()
   {
-    constexpr delay_data dd = Spec::values[Idx];
-    constexpr auto       sz = get_delay_size (Idx);
+    constexpr auto sz = get_delay_size (Idx);
 
     ++_stage[Idx].pos;
     if (_stage[Idx].pos == sz) {
@@ -481,8 +528,8 @@ private:
   template <uint Idx, class T>
   T read_next()
   {
-    constexpr delay_data dd = Spec::values[Idx];
-    return get<Idx, T> (dd.spls.to_int());
+    constexpr auto spls = spec::get_delay_spls (Idx).to_int();
+    return get<Idx, T> (spls);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -495,8 +542,10 @@ private:
   template <uint Idx, class LF>
   void run_thiran (xspan<fixpt_t> dst, LF&& lfo_gen)
   {
-    static_assert (is_modulated_delay (Idx));
-    constexpr delay_data dd = Spec::values[Idx];
+    static_assert (spec::has_modulated_delay (Idx));
+    constexpr auto delay_spls     = spec::get_delay_spls (Idx).add_sign();
+    constexpr auto delay_mod_spls = spec::get_delay_mod_spls (Idx).add_sign();
+
     // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
     // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
     // requires extra integer room on e.g the "d " calculation
@@ -507,9 +556,8 @@ private:
     auto err            = fixpt_th::from (errv);
 
     for (uint i = 0; i < dst.size(); ++i) {
-      auto fixpt_spls
-        = (dd.spls.add_sign() + (lfo_gen (i) * dd.mod.add_sign()));
-      auto n_spls = fixpt_spls.to_int();
+      auto fixpt_spls = (delay_spls + (lfo_gen (i) * delay_mod_spls));
+      auto n_spls     = fixpt_spls.to_int();
       n_spls -= i;
       auto n_spls_frac = (fixpt_th) fixpt_spls.fractional();
       auto d           = n_spls_frac + 0.418_r; // this might exceed 1
@@ -527,16 +575,13 @@ private:
   template <uint Idx, class LF>
   void run_thiran (xspan<float> dst, LF&& lfo_gen)
   {
-    static_assert (is_modulated_delay (Idx));
-    constexpr delay_data dd     = Spec::values[Idx];
-    constexpr auto       sz     = get_delay_size (Idx);
-    constexpr auto       y1_pos = sz;
+    static_assert (spec::has_modulated_delay (Idx));
+    constexpr auto delay_spls     = spec::get_delay_spls (Idx).to_floatp();
+    constexpr auto delay_mod_spls = spec::get_delay_mod_spls (Idx).to_floatp();
 
-    float y1;
-    decode_read (y1, _stage[Idx].z[y1_pos]);
+    float y1 = fetch_state<Idx> (float {});
     for (uint i = 0; i < dst.size(); ++i) {
-      float fixpt_spls
-        = dd.spls.to_floatp() + (lfo_gen (i) * dd.mod.to_floatp());
+      float fixpt_spls  = (delay_spls + (lfo_gen (i) * delay_mod_spls));
       uint  n_spls      = (uint) fixpt_spls;
       float n_spls_frac = fixpt_spls - n_spls;
       n_spls -= i;
@@ -549,14 +594,13 @@ private:
       y1      = z0 * a + z1 - a * y1;
       dst[i]  = y1;
     }
-    encode_write (_stage[Idx].z[y1_pos], y1);
+    save_state<Idx> (y1);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
   T get (uint delay_spls)
   {
-    constexpr delay_data dd = Spec::values[Idx];
-    constexpr auto       sz = get_delay_size (Idx);
+    constexpr auto sz = get_delay_size (Idx);
 
     assert (delay_spls < sz);
 
@@ -570,7 +614,7 @@ private:
   template <uint Idx, class T, class U>
   auto run_allpass (T in, T yn, U g)
   {
-    static_assert (is_allpass (Idx));
+    static_assert (spec::is_allpass (Idx));
     auto u = in + yn * g;
     if constexpr (std::is_floating_point_v<T>) {
       if (abs (u) >= 1.) {
@@ -627,11 +671,10 @@ private:
   template <uint Idx, class T, class GF, class LF>
   void run_impl (xspan<T> io, GF&& g_gen, LF&& lfo_gen)
   {
-    static_assert (!is_filter (Idx));
+    static_assert (!spec::is_filter (Idx));
 
-    constexpr delay_data dd    = Spec::values[Idx];
-    constexpr auto       sz    = get_delay_size (Idx);
-    constexpr auto       minsz = sz - dd.mod.to_int();
+    constexpr auto sz    = get_delay_size (Idx);
+    constexpr auto minsz = sz - spec::get_delay_mod_spls (Idx).to_int();
 
     auto szw = get_delay_size (Idx);
 
@@ -643,13 +686,13 @@ private:
       xspan                         iocp {iocp_mem.data(), io.size()};
       xspan_memcpy (iocp, io);
 
-      if constexpr (is_modulated_delay (Idx)) {
+      if constexpr (spec::has_modulated_delay (Idx)) {
         run_thiran<Idx> (io, std::forward<LF> (lfo_gen));
       }
       else {
         decode_read (io, get_read_buffers<Idx> (io.size(), 0));
       }
-      if constexpr (is_allpass (Idx)) {
+      if constexpr (spec::is_allpass (Idx)) {
         for (uint i = 0; i < io.size(); ++i) {
           auto [out, push] = run_allpass<Idx, T> (iocp[i], io[i], g_gen (i));
           io[i]            = out;
@@ -662,7 +705,7 @@ private:
       // overlap, needs single-sample iteration
       for (uint i = 0; i < io.size(); ++i) {
         T delayed;
-        if constexpr (is_modulated_delay (Idx)) {
+        if constexpr (spec::has_modulated_delay (Idx)) {
           // this is for completeness, modulations under the block size are
           // unlikely.
           delayed = io[i];
@@ -673,7 +716,7 @@ private:
         else {
           delayed = read_next<Idx, T>();
         }
-        if constexpr (is_allpass (Idx)) {
+        if constexpr (spec::is_allpass (Idx)) {
           auto [out, push] = run_allpass<Idx, T> (io[i], delayed, g_gen (i));
           push_one<Idx> (push);
           io[i] = out;
@@ -701,16 +744,15 @@ private:
     LfoGen&&                 lfo_gen,
     GainAndLfoGens&&... fwd)
   {
-    constexpr uint       idx   = mp11::mp_at_c<Idxs, I>::value;
-    constexpr delay_data dd    = Spec::values[idx];
-    constexpr uint       sz    = get_delay_size (idx);
-    constexpr uint       minsz = sz - dd.mod.to_int();
+    constexpr uint idx   = mp11::mp_at_c<Idxs, I>::value;
+    constexpr uint sz    = get_delay_size (idx);
+    constexpr uint minsz = sz - spec::get_delay_mod_spls (idx).to_int();
 
     // only block processing for now, non-block processing could be added.
     static_assert (minsz >= max_block_size);
     assert (yn.size() <= minsz);
 
-    if constexpr (is_modulated_delay (idx)) {
+    if constexpr (spec::has_modulated_delay (idx)) {
       run_thiran<idx> (yn[I], std::forward<LfoGen> (lfo_gen));
     }
     else {
@@ -783,22 +825,24 @@ private:
 
       mp_foreach_idx (Idxs {}, [&] (auto j, auto stage_idx) {
         if constexpr (stage_idx.value == idx0) {
-          static_assert (is_allpass (idx0), "1st stage has to be allpass");
+          static_assert (
+            spec::is_allpass (idx0), "1st stage has to be allpass");
           auto [out, push]
             = run_allpass<stage_idx.value, T> (io[i], yn[0][i], g[0]);
           u[0]  = push;
           io[i] = out;
         }
         else {
-          static_assert (!is_filter (stage_idx.value));
+
           // subsequent stages of the lattice can be allpasses or plain delays
-          if constexpr (is_allpass (stage_idx.value)) {
+          if constexpr (spec::is_allpass (stage_idx.value)) {
             auto [out, push]
               = run_allpass<stage_idx.value, T> (u[0], yn[j][i], g[j]);
             u[0] = push;
             u[j] = out;
           }
           else {
+            static_assert (spec::is_delay (stage_idx.value));
             // The optimizer would see the 0 mul anyways, just for
             // highlighting that plain delays can be added to the allpass
             // chain
@@ -817,90 +861,12 @@ private:
         yn[i].to_const());
     });
   }
-#if 0
-  //----------------------------------------------------------------------------
-  // Template function to run double nested allpasses, kept for reference
-  // understanding what is going on on the implementation for arbitrary nested
-  // allpasses above, as it is relatively "clever" code.
-  template <
-    uint Idx1,
-    uint Idx2,
-    class T,
-    class GF1,
-    class LF1,
-    class GF2,
-    class LF2>
-  void run_impl (
-    xspan<T> io,
-    GF1&&    g_gen1,
-    LF1&&    lfo_gen1,
-    GF2&&    g_gen2,
-    LF2&&    lfo_gen2)
-  {
-    constexpr delay_data dd[2] = {Spec::values[Idx1], Spec::values[Idx2]};
-    constexpr uint       sz[2] = {get_delay_size (Idx1), get_delay_size (Idx2)};
-    constexpr uint       minsz[2]
-      = {sz[0] - dd[0].mod.to_int(), sz[1] - dd[1].mod.to_int()};
-    constexpr bool has_modulation[2]
-      = {dd[0].mod.value() != 0, dd[1].mod.value() != 0};
-
-    // only block processing for now, non-block processing can be easily added.
-    static_assert (minsz[0] >= max_block_size && minsz[1] >= max_block_size);
-
-    assert ((io.size() <= minsz[0]) && (io.size() <= minsz[1]));
-
-    array2d<T, max_block_size, 2> yn_mem;
-    auto                          yn = make_array (
-      xspan {yn_mem[0].data(), io.size()}, xspan {yn_mem[1].data(), io.size()});
-
-    if constexpr (has_modulation[0]) {
-      run_thiran<Idx1> (yn[0], std::forward<LF1> (lfo_gen1));
-    }
-    else {
-      decode_read (yn[0], get_read_buffers<Idx1> (yn[0].size(), 0));
-    }
-    if constexpr (has_modulation[1]) {
-      run_thiran<Idx2> (yn[1], std::forward<LF2> (lfo_gen2));
-    }
-    else {
-      decode_read (yn[1], get_read_buffers<Idx2> (yn[1].size(), 0));
-    }
-    for (uint i = 0; i < io.size(); ++i) {
-      auto g = make_array (g_gen1 (i), g_gen2 (i));
-
-      auto u   = (T) (io[i] + yn[0][i] * g[0]);
-      io[i]    = (T) (yn[0][i] - u * g[1]); // output
-      u        = (T) (u + yn[1][i] * g[1]);
-      auto u1  = (T) (yn[1][i] - u * g[1]);
-      yn[0][i] = u1;
-      yn[1][i] = u;
-    }
-    encode_write (prepare_block_insertion<Idx1> (io.size()), yn[0].to_const());
-    encode_write (prepare_block_insertion<Idx2> (io.size()), yn[1].to_const());
-  }
-  //----------------------------------------------------------------------------
-#endif
-  //----------------------------------------------------------------------------
-  static constexpr bool is_allpass (uint i)
-  {
-    return Spec::values[i].g.value() != 0;
-  }
-  //----------------------------------------------------------------------------
-  static constexpr bool is_modulated_delay (uint i)
-  {
-    return Spec::values[i].mod.value() != 0;
-  }
-  //----------------------------------------------------------------------------
-  static constexpr bool is_filter (uint i)
-  {
-    return Spec::values[i].spls.value() == 0;
-  }
   //----------------------------------------------------------------------------
   static constexpr uint get_delay_size (uint i)
   {
-    uint ret = Spec::values[i].spls.to_int() + 1; // spls + 1 = size
-    ret += Spec::values[i].mod.to_int(); // add mod spls to the size
-    return ret;
+    // + 1 is some legacy that I forgot. I vaguely remember that wasting one
+    // element allowed saving code (TODO investigate)
+    return spec::get_max_delay_spls (i) + 1;
   }
   //----------------------------------------------------------------------------
   static constexpr uint get_states_offset (uint i)
@@ -916,7 +882,7 @@ private:
   template <uint Idx>
   auto fetch_state (fixpt_t)
   {
-    static_assert (is_modulated_delay (Idx) || is_filter (Idx));
+    static_assert (spec::has_modulated_delay (Idx) || spec::is_filter (Idx));
     constexpr auto offset = get_states_offset (Idx);
     return std::make_tuple (_stage[Idx].z[offset], _stage[Idx].z[offset + 1]);
   }
@@ -925,7 +891,7 @@ private:
   template <uint Idx>
   float fetch_state (float)
   {
-    static_assert (is_modulated_delay (Idx) || is_filter (Idx));
+    static_assert (spec::has_modulated_delay (Idx) || spec::is_filter (Idx));
     static_assert (sizeof (float) == 2 * sizeof (fixpt_t));
     float          ret;
     constexpr auto offset = get_states_offset (Idx);
@@ -937,7 +903,7 @@ private:
   template <uint Idx>
   void save_state (s16 v1, s16 v2)
   {
-    static_assert (is_modulated_delay (Idx) || is_filter (Idx));
+    static_assert (spec::has_modulated_delay (Idx) || spec::is_filter (Idx));
     constexpr auto offset     = get_states_offset (Idx);
     _stage[Idx].z[offset]     = v1;
     _stage[Idx].z[offset + 1] = v2;
@@ -947,7 +913,7 @@ private:
   template <uint Idx>
   void save_state (float v)
   {
-    static_assert (is_modulated_delay (Idx) || is_filter (Idx));
+    static_assert (spec::has_modulated_delay (Idx) || spec::is_filter (Idx));
     static_assert (sizeof (v) == 2 * sizeof (fixpt_t));
     constexpr auto offset = get_states_offset (Idx);
     memcpy (&_stage[Idx].z[offset], &v, sizeof v);
@@ -957,9 +923,9 @@ private:
   template <uint Idx>
   auto fetch_ap_err()
   {
-    static_assert (is_allpass (Idx));
+    static_assert (spec::is_allpass (Idx));
     constexpr auto offset = get_states_offset (Idx)
-      + (is_modulated_delay (Idx) ? n_thiran_states : 0);
+      + (spec::has_modulated_delay (Idx) ? n_thiran_states : 0);
     return std::make_tuple (_stage[Idx].z[offset], _stage[Idx].z[offset + 1]);
   }
   //----------------------------------------------------------------------------
@@ -967,9 +933,9 @@ private:
   template <uint Idx>
   void save_ap_err (s16 err1, s16 err2)
   {
-    static_assert (is_allpass (Idx));
+    static_assert (spec::is_allpass (Idx));
     constexpr auto offset = get_states_offset (Idx)
-      + (is_modulated_delay (Idx) ? n_thiran_states : 0);
+      + (spec::has_modulated_delay (Idx) ? n_thiran_states : 0);
     _stage[Idx].z[offset]     = err1;
     _stage[Idx].z[offset + 1] = err2;
   }
@@ -978,23 +944,23 @@ private:
   {
     // ordering as appears here
     uint ret = get_delay_size (i);
-    ret += ((uint) is_modulated_delay (i)) * n_thiran_states;
-    ret += ((uint) is_filter (i)) * n_filter_states;
-    ret += ((uint) is_allpass (i)) * n_allpass_states;
+    ret += ((uint) spec::has_modulated_delay (i)) * n_thiran_states;
+    ret += ((uint) spec::is_filter (i)) * n_filter_states;
+    ret += ((uint) spec::is_allpass (i)) * n_allpass_states;
     return ret;
   }
   //----------------------------------------------------------------------------
   template <uint Idx>
   std::array<xspan<s16>, 2> get_read_buffers (uint blocksize, uint neg_offset)
   {
-    constexpr delay_data dd = Spec::values[Idx];
-    constexpr auto       sz = get_delay_size (Idx);
+    constexpr uint n_spls = spec::get_delay_spls (Idx).to_int();
+    constexpr auto sz     = get_delay_size (Idx);
     assert (blocksize);
     assert (sz >= (blocksize + neg_offset));
 
-    uint block1 = _stage[Idx].pos - dd.spls.to_int() - neg_offset;
+    uint block1 = _stage[Idx].pos - n_spls - neg_offset;
     block1 += (block1 >= sz) ? sz : 0;
-    uint end = _stage[Idx].pos - dd.spls.to_int() + blocksize - neg_offset - 1;
+    uint end = _stage[Idx].pos - n_spls + blocksize - neg_offset - 1;
     end += (end >= sz) ? sz : 0;
 
     uint block1sz, block2sz;
@@ -1017,8 +983,7 @@ private:
   template <uint Idx>
   std::array<xspan<s16>, 2> prepare_block_insertion (uint blocksize)
   {
-    constexpr delay_data dd = Spec::values[Idx];
-    constexpr auto       sz = get_delay_size (Idx);
+    constexpr auto sz = get_delay_size (Idx);
     assert (blocksize);
     assert (sz >= blocksize);
 
@@ -1045,12 +1010,14 @@ private:
   }
   //----------------------------------------------------------------------------
   using float16 = f16pack<5, -1, f16pack_dftz>;
+  using spec    = spec_access<Spec_array>;
+
   struct stage {
     s16* z {};
     uint pos {};
   };
-  std::array<stage, Spec::values.size()> _stage;
-  lowbias32_hash<2>                      _noise;
+  std::array<stage, spec::size()> _stage;
+  lowbias32_hash<2>               _noise;
 };
 }}} // namespace artv::detail::lofiverb
 //------------------------------------------------------------------------------

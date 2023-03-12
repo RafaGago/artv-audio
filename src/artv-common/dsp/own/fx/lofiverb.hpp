@@ -33,7 +33,7 @@ static constexpr uint max_block_size = 32;
 //------------------------------------------------------------------------------
 static constexpr auto get_debug_algo_spec()
 {
-  return make_array<delay_data> (
+  return make_array<stage_data> (
     make_ap (147, -0.707), // 0
     make_ap (183, 0.707), // 1
     make_ap (389, -0.6), // 2
@@ -49,7 +49,7 @@ struct debug_algo_spec {
 //------------------------------------------------------------------------------
 static constexpr auto get_algo1_spec()
 {
-  return make_array<delay_data> (
+  return make_array<stage_data> (
     // diffusors
     make_ap (147, -0.707), // 0
     make_ap (183, 0.707), // 1
@@ -86,7 +86,7 @@ struct algo1_spec {
 //------------------------------------------------------------------------------
 static constexpr auto get_midifex49_spec()
 {
-  return make_array<delay_data> (
+  return make_array<stage_data> (
     // diffusors
     make_ap (321, 0.5), // 0 PreAP
     make_ap (431, 0.5), // 1 PreAP
@@ -127,7 +127,7 @@ struct midifex49_spec {
 //------------------------------------------------------------------------------
 static constexpr auto get_midifex50_spec()
 {
-  return make_array<delay_data> (
+  return make_array<stage_data> (
     make_ap (13, 0.5), // 0
     make_ap (83, 0.5), // 1
     make_ap (116, 0.5), // 2
