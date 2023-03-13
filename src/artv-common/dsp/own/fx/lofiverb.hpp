@@ -276,7 +276,7 @@ public:
   struct decay_tag {};
   void set (decay_tag, float v)
   {
-    _param_smooth.target().decay = v * 0.01f * one_flt;
+    _param_smooth.target().decay = v * 0.01f * fixpt_max_flt;
   }
 
   static constexpr auto get_parameter (decay_tag)
@@ -287,7 +287,7 @@ public:
   struct mod_tag {};
   void set (mod_tag, float v)
   {
-    v *= 0.01f * one_flt;
+    v *= 0.01f * fixpt_max_flt;
     if (v == _param_smooth.target().mod) {
       return;
     }
@@ -303,7 +303,7 @@ public:
   struct character_tag {};
   void set (character_tag, float v)
   {
-    _param_smooth.target().character = v * 0.01f * one_flt;
+    _param_smooth.target().character = v * 0.01f * fixpt_max_flt;
   }
 
   static constexpr auto get_parameter (character_tag)
@@ -312,7 +312,7 @@ public:
   }
   //----------------------------------------------------------------------------
   struct damp_tag {};
-  void set (damp_tag, float v) { _param.damp = v * 0.01f * one_flt; }
+  void set (damp_tag, float v) { _param.damp = v * 0.01f * fixpt_max_flt; }
 
   static constexpr auto get_parameter (damp_tag)
   {
@@ -494,7 +494,18 @@ private:
   // this is using 16 bits fixed-point arithmetic, positive values can't
   // represent one, so instead of correcting everywhere the parameters are
   // scaled instead to never reach 1.
-  static constexpr float one_flt = 0.999f;
+  static constexpr auto fixpt_max_flt = fixpt_t::max_float();
+  //----------------------------------------------------------------------------
+  template <class T>
+  static constexpr auto one()
+  {
+    if constexpr (std::is_floating_point_v<T>) {
+      return fixpt_max_flt;
+    }
+    else {
+      return fixpt_t::max();
+    }
+  }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters;
   struct smoothed_parameters;
@@ -508,7 +519,7 @@ private:
     std::array<f32_x2, max_block_size>  ducker_gain;
     loop_parameters                     pars;
 
-    auto pre_gain = 1.f / _param.gain;
+    auto pre_gain = (1.f / _param.gain) * fixpt_max_flt;
 
     // tilt + clamp + ducker measuring + param smoothing
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
@@ -516,13 +527,12 @@ private:
       f32_x2 wetv = _filt.tick_cascade (vec_from_array (io[i]));
 #ifndef LOFIVERB_GAIN_CALIBRATION
       wetv *= pre_gain;
-      wetv           = vec_clamp (wetv, -0.9999f, 0.9999f);
+      wetv           = vec_clamp (wetv, -fixpt_max_flt, fixpt_max_flt);
       ducker_gain[i] = _ducker.tick (wetv);
       wetv *= _param.pre_gain;
 #else // pre_gain calibration. (shouldn't be on when Released).
-      ducker_gain[i] = _ducker.tick (f32_x2 {});
       wetv *= pre_gain;
-      wetv = vec_clamp (wetv, -0.9999f, 0.9999f);
+      wetv = vec_clamp (wetv, -fixpt_max_flt, fixpt_max_flt);
 #endif
       io[i] = vec_to_array (wetv);
 
@@ -695,8 +705,8 @@ private:
     rev.run<2> (in);
     rev.run<3> (in);
     rev.run<4> (in, [&] (auto v, uint i) { // decay fixup
-      auto decay = (T) (0.99999_r - par.decay[i]);
-      decay      = (T) (0.99999_r - decay * decay);
+      auto decay = (T) (one<T>() - par.decay[i]);
+      decay      = (T) (one<T>() - decay * decay);
       decay      = (T) (0.6_r + decay * 0.39_r);
       return v * decay;
     });
@@ -729,8 +739,7 @@ private:
     for (uint i = 0; i < io.size(); ++i) {
       // to MS
       late_in[i] = (T) ((io[i][0] + io[i][1]) * 0.5_r);
-      // TODO define a global one = 0.99f. Use everywhere.
-      auto mod = (T) (0.25_r + (1_r - par.mod[i]) * 0.75_r);
+      auto mod   = (T) (0.25_r + (1_r - par.mod[i]) * 0.75_r);
       // ER + late lfo
       auto lfo = tick_lfo<T>();
       lfo1[i]  = T {lfo[0]};
@@ -739,8 +748,8 @@ private:
       lfo4[i]  = (T) (T {lfo[3]} * mod);
 
       // decay fixup
-      auto decay   = (T) (0.99999_r - par.decay[i]);
-      decay        = (T) (0.99999_r - decay * decay);
+      auto decay   = (T) (one<T>() - par.decay[i]);
+      decay        = (T) (one<T>() - decay * decay);
       par.decay[i] = (T) (0.6_r + decay * 0.38_r);
     }
     // diffusion -----------------------------
@@ -791,7 +800,7 @@ private:
       auto loopsig = late_in[i] * 0.5_r + r[i];
       auto er_sig  = (er1[i] + er2[i]) * 0.25_r;
       auto er_amt  = par.character[i] * 0.5_r;
-      late[i]      = (T) (loopsig * (0.99999_r - er_amt) + er_sig * er_amt);
+      late[i]      = (T) (loopsig * (one<T>() - er_amt) + er_sig * er_amt);
       g[i] = (T) (0.618_r + par.character[i] * ((0.707_r - 0.618_r) * 2_r));
     }
     r.cut_head (1); // drop feedback sample from previous block
@@ -816,7 +825,7 @@ private:
       auto loopsig = late_in[i] * 0.5_r + l[i];
       auto er_sig  = (er1[i] - er2[i]) * 0.25_r;
       auto er_amt  = par.character[i] * 0.5_r;
-      late[i]      = (T) (loopsig * (0.99999_r - er_amt) + er_sig * er_amt);
+      late[i]      = (T) (loopsig * (one<T>() - er_amt) + er_sig * er_amt);
     }
     l.cut_head (1); // drop feedback sample from previous block
     rev.run<18> (late, xspan {lfo4}, g);
@@ -836,7 +845,7 @@ private:
       auto er_amt     = par.character[i] * 0.2_r;
       auto e_l        = (-er1[i] * 0.66_r - er2[i] * 0.34_r) * er_amt;
       auto e_r        = (-er1[i] * 0.66_r + er2[i] * 0.34_r) * er_amt;
-      auto direct_amt = 0.99999_r - er_amt;
+      auto direct_amt = one<T>() - er_amt;
       io[i][0]        = (T) (l[i] * direct_amt + e_l);
       io[i][1]        = (T) (r[i] * direct_amt + e_r);
     }
@@ -870,8 +879,8 @@ private:
       lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
       lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
       // decay fixup
-      auto decay   = (T) (0.99999_r - par.decay[i]);
-      decay        = (T) (0.99999_r - decay * decay);
+      auto decay   = (T) (one<T>() - par.decay[i]);
+      decay        = (T) (one<T>() - decay * decay);
       par.decay[i] = (T) (0.1_r + decay * 0.8375_r);
     });
 
@@ -969,8 +978,8 @@ private:
       lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
 
       // decay fixup
-      auto decay = (T) (0.99999_r - par.decay[i]);
-      decay      = (T) (0.99999_r - decay * decay);
+      auto decay = (T) (one<T>() - par.decay[i]);
+      decay      = (T) (one<T>() - decay * decay);
       decay      = (T) - (0.3_r + decay * 0.45_r);
 
       return (fb_spl * decay) + ((io[i][0] + io[i][1]) * 0.25_r); // gain = 1
