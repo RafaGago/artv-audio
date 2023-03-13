@@ -462,8 +462,10 @@ private:
     for (uint i = 0; i < io.size(); ++i) {
       float gv = (g == 0.f) ? (float) spec::get_gain (Idx) : g;
       float y  = y1 * gv + (1_r - gv) * io[i];
-      io[i]    = y;
-      y1       = y;
+      assert_range (gv);
+      assert_range (y);
+      io[i] = y;
+      y1    = y;
     }
     save_state<Idx> (y1);
   }
@@ -477,10 +479,10 @@ private:
 
     s16 err = fetch_quantizer_err<Idx>();
     for (uint i = 0; i < io.size(); ++i) {
-      auto v = (fixpt_acum_t) fn (io[i], i);
-      v += fixpt_acum_t::from (err);
-      io[i] = (fixpt_tr) v;
-      err   = (s16) (v.value() & mask);
+      auto in        = fn (io[i], i);
+      auto [v, err_] = round (in, err);
+      io[i]          = v;
+      err            = err_;
     }
     save_quantizer_err<Idx> (err);
   }
@@ -520,6 +522,7 @@ private:
       y1     = (fixpt_t) y;
 #endif
       io[i] = y1;
+      assert_range (y1);
     }
     save_state<Idx> (y1.value(), errv);
   }
@@ -543,6 +546,7 @@ private:
       y += (1_r - gv) * y1;
       io[i] = y;
       y1    = y;
+      assert_range (y1);
     }
     save_state<Idx> (y1);
   }
@@ -567,6 +571,7 @@ private:
       y1                = y1_;
       errv              = errv_;
       io[i]             = y1;
+      assert_range (y1);
     }
     save_state<Idx> (y1.value(), errv);
   }
@@ -655,6 +660,7 @@ private:
       y1                = y1_;
       errv              = errv_;
       dst[i]            = y1;
+      assert_range (y1);
     }
     save_state<Idx> (y1.value(), errv);
   }
@@ -680,6 +686,7 @@ private:
       auto z1 = get<Idx, float> (n_spls);
       y1      = z0 * a + z1 - a * y1;
       dst[i]  = y1;
+      assert_range (y1);
     }
     save_state<Idx> (y1);
   }
@@ -704,9 +711,9 @@ private:
     static_assert (spec::is_allpass (Idx));
     auto u = in + yn * g;
     auto x = yn - u * g;
+    assert_range (x);
+    assert_range (u);
     if constexpr (std::is_floating_point_v<T>) {
-      assert (abs (x) < 1.);
-      assert (abs (u) < 1.);
       return std::make_tuple (x, u);
     }
     else {
@@ -741,6 +748,8 @@ private:
         err_u              = err_u_;
         io[i]              = q_x;
         yn[i]              = q_u;
+        assert_range (x);
+        assert_range (u);
       }
       save_ap_err<Idx> (err_x, err_u);
     }
@@ -760,7 +769,7 @@ private:
     constexpr auto sz    = get_delay_size (Idx);
     constexpr auto minsz = sz - spec::get_delay_mod_spls (Idx).to_int();
 
-    auto szw = get_delay_size (Idx);
+    constexpr auto szw = get_delay_size (Idx);
 
     if constexpr (minsz >= max_block_size) {
       // no overlap, can run block-wise
@@ -1003,6 +1012,7 @@ private:
     else {
       d_out = out;
     }
+    assert_range (d_out);
     fixpt_t q_out;
     if constexpr (round) {
       q_out = (fixpt_tr) d_out;
@@ -1031,6 +1041,22 @@ private:
   std::tuple<fixpt_t, s16> truncate (T v, s16 err_prev)
   {
     return quantize<false, false> (v, err_prev);
+  }
+  //----------------------------------------------------------------------------
+  template <class T, std::enable_if_t<!is_fixpt_v<T>>* = nullptr>
+  void assert_range (T v)
+  {
+#ifndef NDEBUG
+    assert (abs (v) < 1.f);
+#endif
+  }
+  //----------------------------------------------------------------------------
+  template <class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+  void assert_range (T v)
+  {
+#ifndef NDEBUG
+    assert_range (v.to_floatp());
+#endif
   }
   //----------------------------------------------------------------------------
   // fetch state for thiran interpolators or damp filters
