@@ -504,24 +504,24 @@ private:
       = lsb_mask<uint> (fixpt_acum_t::n_frac - fixpt_t::n_frac);
     auto [y1v, errv] = fetch_state<Idx> (fixpt_t {});
     auto y1          = fixpt_t::from (y1v);
-    auto err         = fixpt_acum_t::from (errv);
 
     for (uint i = 0; i < io.size(); ++i) {
       fixpt_t gvf = (g.value() == 0) ? spec::get_gain (Idx) : g;
       auto    gv  = (fixpt_acum_t) gvf;
       auto    x   = (fixpt_acum_t) io[i];
 #if 0
-// investigate why it does sound better without noise-shaping...
-      auto    y   = gv * y1 + (1_r - gv) * x + err;
-      y1          = (fixpt_t) y;
-      err         = fixpt_acum_t::from (y.value() & mask);
+      // investigate why it does sound better without noise-shaping...
+      auto y            = gv * y1 + (1_r - gv) * x;
+      auto [y1_, errv_] = truncate (y, errv);
+      y1                = y1_;
+      errv              = errv_;
 #else
       auto y = gv * y1 + (1_r - gv) * x;
       y1     = (fixpt_t) y;
 #endif
       io[i] = y1;
     }
-    save_state<Idx> (y1.value(), err.value());
+    save_state<Idx> (y1.value(), errv);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -552,24 +552,23 @@ private:
   {
     static_assert (spec::is_filter (Idx));
     assert (io);
-    // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
-    // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
+
     constexpr uint mask
       = lsb_mask<uint> (fixpt_acum_t::n_frac - fixpt_t::n_frac);
     auto [y1v, errv] = fetch_state<Idx> (fixpt_t {});
     auto y1          = fixpt_t::from (y1v);
-    auto err         = fixpt_acum_t::from (errv);
 
     for (uint i = 0; i < io.size(); ++i) {
-      fixpt_t gvf = (g.value() == 0) ? spec::get_gain (Idx) : g;
-      auto    gv  = (fixpt_acum_t) gvf;
-      auto    x   = (fixpt_acum_t) io[i];
-      auto    y   = gv * x + (1_r - gv) * y1 + err;
-      y1          = (fixpt_t) y;
-      err         = fixpt_acum_t::from (y.value() & mask);
-      io[i]       = y1;
+      fixpt_t gvf       = (g.value() == 0) ? spec::get_gain (Idx) : g;
+      auto    gv        = (fixpt_acum_t) gvf;
+      auto    x         = (fixpt_acum_t) io[i];
+      auto    y         = gv * x + (1_r - gv) * y1;
+      auto [y1_, errv_] = truncate (y, errv);
+      y1                = y1_;
+      errv              = errv_;
+      io[i]             = y1;
     }
-    save_state<Idx> (y1.value(), err.value());
+    save_state<Idx> (y1.value(), errv);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -637,30 +636,27 @@ private:
     constexpr auto delay_spls     = spec::get_delay_spls (Idx).add_sign();
     constexpr auto delay_mod_spls = spec::get_delay_mod_spls (Idx).add_sign();
 
-    // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
-    // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
-    // requires extra integer room on e.g the "d " calculation
     using fixpt_th      = decltype (fixpt_acum_t {}.resize<2, -2>());
     constexpr uint mask = lsb_mask<uint> (fixpt_th::n_frac - fixpt_t::n_frac);
     auto [y1v, errv]    = fetch_state<Idx> (fixpt_t {});
     auto y1             = fixpt_t::from (y1v);
-    auto err            = fixpt_th::from (errv);
 
     for (uint i = 0; i < dst.size(); ++i) {
       auto fixpt_spls = (delay_spls + (lfo_gen (i) * delay_mod_spls));
       auto n_spls     = fixpt_spls.to_int();
       n_spls -= i;
-      auto n_spls_frac = (fixpt_th) fixpt_spls.fractional();
-      auto d           = n_spls_frac + 0.418_r; // this might exceed 1
-      auto a           = (1_r - d) / (1_r + d); // 0.4104 to -1
-      auto z0          = (fixpt_th) get<Idx, fixpt_t> (n_spls - 1);
-      auto z1          = (fixpt_th) get<Idx, fixpt_t> (n_spls);
-      auto y           = (z0 * a) + z1 - (a * y1) + err;
-      y1               = (fixpt_t) y; // truncated
-      err              = fixpt_th::from (y.value() & mask); // error
-      dst[i]           = y1;
+      auto n_spls_frac  = (fixpt_th) fixpt_spls.fractional();
+      auto d            = n_spls_frac + 0.418_r; // this might exceed 1
+      auto a            = (1_r - d) / (1_r + d); // 0.4104 to -1
+      auto z0           = (fixpt_th) get<Idx, fixpt_t> (n_spls - 1);
+      auto z1           = (fixpt_th) get<Idx, fixpt_t> (n_spls);
+      auto y            = (z0 * a) + z1 - (a * y1);
+      auto [y1_, errv_] = truncate (y, errv);
+      y1                = y1_;
+      errv              = errv_;
+      dst[i]            = y1;
     }
-    save_state<Idx> (y1.value(), (s16) err.value());
+    save_state<Idx> (y1.value(), errv);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class LF>
@@ -707,49 +703,46 @@ private:
   {
     static_assert (spec::is_allpass (Idx));
     auto u = in + yn * g;
-    if constexpr (std::is_floating_point_v<T>) {
-      if (abs (u) >= 1.) {
-        assert (false);
-      }
-    }
     auto x = yn - u * g;
     if constexpr (std::is_floating_point_v<T>) {
-      if (abs (x) >= 1.) {
-        assert (false);
-      }
+      assert (abs (x) < 1.);
+      assert (abs (u) < 1.);
       return std::make_tuple (x, u);
     }
     else {
-#if 0
-      // dither + noise shaping
-      constexpr uint n_truncated = fixpt_acum_t::n_bits - T::n_bits;
-      constexpr uint mask        = lsb_mask<uint> (n_truncated);
-      auto [z_err_out, z_err_yn] = fetch_ap_err<Idx>();
-      auto noise
-        = tpdf_dither<n_truncated, fixpt_acum_t::scalar_type, 2> (_noise);
-      // cast to something wide and known
-      auto out = (fixpt_acum_t) x + fixpt_acum_t::from (z_err_out);
-      auto yn  = (fixpt_acum_t) u + fixpt_acum_t::from (z_err_yn);
-      auto d_out = out + fixpt_acum_t::from (noise[0]);
-      auto d_yn  = yn + fixpt_acum_t::from (noise[1]);
-      auto q_out = (T) d_out;
-      auto q_yn  = (T) d_yn;
-      auto err_out = out - q_out;
-      auto err_yn  = yn - q_yn;
-      save_ap_err<Idx> (err_out.value() & mask, err_yn.value() & mask);
-      return std::make_tuple (q_out, q_yn);
-#else
-      // noise shaping only
-      constexpr uint n_truncated = fixpt_acum_t::n_bits - T::n_bits;
-      constexpr uint mask        = lsb_mask<uint> (n_truncated);
-      auto [z_err_out, z_err_yn] = fetch_ap_err<Idx>();
-      auto out   = (fixpt_acum_t) x + fixpt_acum_t::from (z_err_out);
-      auto yn    = (fixpt_acum_t) u + fixpt_acum_t::from (z_err_yn);
-      auto q_out = (T) out;
-      auto q_yn  = (T) yn;
-      save_ap_err<Idx> (out.value() & mask, yn.value() & mask);
-      return std::make_tuple (q_out, q_yn);
-#endif
+      auto [err_x_prev, err_u_prev] = fetch_ap_err<Idx>();
+      auto [q_x, err_x]             = truncate (x, err_x_prev);
+      auto [q_u, err_u]             = truncate (u, err_u_prev);
+      save_ap_err<Idx> (err_x, err_u);
+      return std::make_tuple (q_x, q_u);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class FG>
+  auto run_allpass (xspan<T> io, xspan<T> yn, FG&& g_gen)
+  {
+    static_assert (spec::is_allpass (Idx));
+    if constexpr (std::is_floating_point_v<T>) {
+      for (uint i = 0; i < io.size(); ++i) {
+        auto [x, u] = run_allpass<Idx, T> (io[i], yn[i], g_gen (i));
+        io[i]       = x;
+        yn[i]       = u;
+      }
+    }
+    else {
+      auto [err_x, err_u] = fetch_ap_err<Idx>();
+      for (uint i = 0; i < io.size(); ++i) {
+        auto g             = g_gen (i);
+        auto u             = io[i] + yn[i] * g;
+        auto x             = yn[i] - u * g;
+        auto [q_x, err_x_] = truncate (x, err_x);
+        auto [q_u, err_u_] = truncate (u, err_u);
+        err_x              = err_x_;
+        err_u              = err_u_;
+        io[i]              = q_x;
+        yn[i]              = q_u;
+      }
+      save_ap_err<Idx> (err_x, err_u);
     }
   }
   //----------------------------------------------------------------------------
@@ -773,24 +766,23 @@ private:
       // no overlap, can run block-wise
       assert (io.size() <= minsz);
 
-      std::array<T, max_block_size> iocp_mem;
-      xspan                         iocp {iocp_mem.data(), io.size()};
-      xspan_memcpy (iocp, io);
+      std::array<T, max_block_size> z_mem;
+      xspan                         z {z_mem.data(), io.size()};
 
       if constexpr (spec::has_modulated_delay (Idx)) {
-        run_thiran<Idx> (io, std::forward<LF> (lfo_gen));
+        run_thiran<Idx> (z, std::forward<LF> (lfo_gen));
       }
       else {
-        decode_read (io, get_read_buffers<Idx> (io.size(), 0));
+        decode_read (z, get_read_buffers<Idx> (z.size(), 0));
       }
       if constexpr (spec::is_allpass (Idx)) {
-        for (uint i = 0; i < io.size(); ++i) {
-          auto [out, push] = run_allpass<Idx, T> (iocp[i], io[i], g_gen (i));
-          io[i]            = out;
-          iocp[i]          = push;
-        }
+        run_allpass<Idx, T> (io, z, std::forward<GF> (g_gen));
+        encode_write (prepare_block_insertion<Idx> (io.size()), z.to_const());
       }
-      encode_write (prepare_block_insertion<Idx> (io.size()), iocp.to_const());
+      else {
+        encode_write (prepare_block_insertion<Idx> (io.size()), io.to_const());
+        xspan_memcpy (io, z);
+      }
     }
     else {
       // overlap, needs single-sample iteration
@@ -809,8 +801,8 @@ private:
         }
         if constexpr (spec::is_allpass (Idx)) {
           auto [out, push] = run_allpass<Idx, T> (io[i], delayed, g_gen (i));
+          io[i]            = out;
           push_one<Idx> (push);
-          io[i] = out;
         }
         else {
           push_one<Idx> (io[i]);
@@ -923,17 +915,18 @@ private:
             spec::is_allpass (idx0), "1st stage has to be allpass");
           auto [out, push]
             = run_allpass<stage_idx.value, T> (io[i], yn[0][i], g[0]);
-          u[0]  = push;
           io[i] = out;
+          u[0]  = push;
         }
         else {
 
-          // subsequent stages of the lattice can be allpasses or plain delays
+          // subsequent stages of the lattice can be allpasses or plain
+          // delays
           if constexpr (spec::is_allpass (stage_idx.value)) {
             auto [out, push]
               = run_allpass<stage_idx.value, T> (u[0], yn[j][i], g[j]);
-            u[0] = push;
             u[j] = out;
+            u[0] = push;
           }
           else {
             static_assert (spec::is_delay (stage_idx.value));
@@ -984,7 +977,61 @@ private:
     return ret;
   }
   //----------------------------------------------------------------------------
+  // This might belong somewhere else if made more generic. Do when required.
+  template <
+    bool round,
+    bool dither,
+    class T,
+    std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+  std::tuple<fixpt_t, s16> quantize (T spl, s16 err_prev)
+  {
+    // Fraction-saving quantization
+    // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
+    // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
+    // noise shaping only
+    constexpr uint n_truncated   = fixpt_acum_t::n_bits - fixpt_t::n_bits;
+    constexpr uint mask          = lsb_mask<uint> (n_truncated);
+    constexpr bool bidirectional = round || dither;
 
+    auto         out = (fixpt_acum_t) (spl + fixpt_acum_t::from (err_prev));
+    fixpt_acum_t d_out;
+    if constexpr (dither) {
+      // not throughly tested...
+      auto noise = tpdf_dither<n_truncated, fixpt_acum_t::scalar_type> (_noise);
+      d_out      = out + fixpt_acum_t::from (noise[0]);
+    }
+    else {
+      d_out = out;
+    }
+    fixpt_t q_out;
+    if constexpr (round) {
+      q_out = (fixpt_tr) d_out;
+    }
+    else {
+      q_out = (fixpt_t) d_out; // truncation
+    }
+    if constexpr (bidirectional) {
+      fixpt_acum_t errv = out - q_out;
+      auto         err  = (s16) (errv.value() & mask);
+      return std::make_tuple ((fixpt_t) q_out, err);
+    }
+    else {
+      auto err = (s16) (out.value() & mask);
+      return std::make_tuple (q_out, err);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  std::tuple<fixpt_t, s16> round (T v, s16 err_prev)
+  {
+    return quantize<true, false> (v, err_prev);
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  std::tuple<fixpt_t, s16> truncate (T v, s16 err_prev)
+  {
+    return quantize<false, false> (v, err_prev);
+  }
   //----------------------------------------------------------------------------
   // fetch state for thiran interpolators or damp filters
   template <uint Idx>
@@ -1133,7 +1180,7 @@ private:
     uint pos {};
   };
   std::array<stage, spec::size()> _stage;
-  lowbias32_hash<2>               _noise;
+  lowbias32_hash<1>               _noise;
 };
 }}} // namespace artv::detail::lofiverb
 //------------------------------------------------------------------------------
