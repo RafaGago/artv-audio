@@ -381,8 +381,9 @@ private:
   template <class T>
   void decode_read (T& dst, s16 src)
   {
-    if constexpr (std::is_same_v<T, fixpt_t>) {
-      dst = fixpt_sto::from (src);
+    if constexpr (is_fixpt_v<T>) {
+      static_assert (T::n_bits == 16 && T::n_sign == 1);
+      dst = T::from (src);
     }
     else {
       static_assert (std::is_same_v<T, float>);
@@ -406,8 +407,9 @@ private:
   template <class T>
   void encode_write (s16& dst, T src)
   {
-    if constexpr (std::is_same_v<T, fixpt_t>) {
-      dst = ((fixpt_sto) src).value();
+    if constexpr (is_fixpt_v<T>) {
+      static_assert (T::n_bits == 16 && T::n_sign == 1);
+      dst = src.value();
     }
     else {
       static_assert (std::is_same_v<T, float>);
