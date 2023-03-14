@@ -340,7 +340,7 @@ public:
   struct clip_level_tag {};
   void set (clip_level_tag, float v)
   {
-    _param.gain = db_to_gain (v) * clip_value;
+    _param.gain = db_to_gain (v) * clip_value();
   }
 
   static constexpr auto get_parameter (clip_level_tag)
@@ -480,6 +480,7 @@ private:
   // truncating leakage.
   using fixpt_t  = detail::lofiverb::fixpt_t;
   using fixpt_tr = detail::lofiverb::fixpt_tr;
+  using float16  = detail::lofiverb::float16;
   //----------------------------------------------------------------------------
   static constexpr uint  max_block_size = detail::lofiverb::max_block_size;
   static constexpr uint  n_channels     = 2;
@@ -488,8 +489,9 @@ private:
   // this is using 16 bits fixed-point arithmetic, positive values can't
   // represent one, so instead of correcting everywhere the parameters are
   // scaled instead to never reach 1.
-  static constexpr auto  fixpt_max_flt = fixpt_t::max_float();
-  static constexpr float clip_value    = fixpt_max_flt;
+  static constexpr auto fixpt_max_flt = fixpt_t::max_float();
+  //----------------------------------------------------------------------------
+  static float clip_value() { return std::min (fixpt_max_flt, float16::max()); }
   //----------------------------------------------------------------------------
   template <class T>
   static constexpr auto one()
@@ -521,7 +523,7 @@ private:
     for (uint i = 0; i < io.size(); ++i) {
       f32_x2 wetv = _filt.tick_cascade (vec_from_array (io[i]));
       wetv *= pre_gain;
-      wetv           = vec_clamp (wetv, -clip_value, clip_value);
+      wetv           = vec_clamp (wetv, -clip_value(), clip_value());
       ducker_gain[i] = _ducker.tick (wetv);
       io[i]          = vec_to_array (wetv);
       _param_smooth.tick();
@@ -601,7 +603,7 @@ private:
     for (uint i = 0; i < io.size(); ++i) {
       f32_x2 wet = _filt.tick_cascade (vec_from_array (io[i]));
       wet *= pre_gain;
-      wet            = vec_clamp (wet, -clip_value, clip_value);
+      wet            = vec_clamp (wet, -clip_value(), clip_value());
       ducker_gain[i] = _ducker.tick (wet);
       io[i]          = vec_to_array (wet);
       _param_smooth.tick();

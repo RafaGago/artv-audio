@@ -38,6 +38,8 @@ using fixpt_acum_t = fixpt_s<1, 0, 31>;
 using fixpt_sto      = fixpt_s<1, 0, 15, 0>;
 using fixpt_spls     = fixpt_m<0, 14, 0, 0>;
 using fixpt_spls_mod = fixpt_m<0, 9, 0, 0>;
+
+using float16 = f16pack<5, -1, f16pack_dftz | f16pack_clamp>;
 //------------------------------------------------------------------------------
 struct allpass_data {
   fixpt_spls     spls;
@@ -480,37 +482,38 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class U, class Fn>
-  void run_1pole (xspan<fixpt_t> io, U g, Fn&& filter)
+  template <uint Idx, bool Is_lp, class U>
+  void run_1pole (xspan<fixpt_t> io, U g)
   {
     static_assert (spec::is_filter (Idx));
     assert (io);
 
-    constexpr uint mask
-      = lsb_mask<uint> (fixpt_acum_t::n_frac - fixpt_t::n_frac);
     auto [y1v, errv] = fetch_state<Idx> (fixpt_t {});
     auto y1          = fixpt_t::from (y1v);
 
     for (uint i = 0; i < io.size(); ++i) {
-      auto y            = filter ((fixpt_acum_t) io[i], y1, (fixpt_acum_t) g);
+      auto x            = (fixpt_acum_t) io[i];
+      auto gw           = (fixpt_acum_t) g;
+      auto y            = (1_r - g) * x + g * y1;
       auto [y1_, errv_] = truncate (y, errv);
       y1                = y1_;
       errv              = errv_;
-      io[i]             = y1;
+      io[i]             = Is_lp ? y1 : (decltype (y1)) (x - y);
     }
     save_state<Idx> (y1.value(), errv);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class U, class Fn>
-  void run_1pole (xspan<float> io, U g, Fn&& filter)
+  template <uint Idx, bool Is_lp, class U>
+  void run_1pole (xspan<float> io, U g)
   {
     static_assert (spec::is_filter (Idx));
     assert (io);
     float y1 = fetch_state<Idx> (float {});
     for (uint i = 0; i < io.size(); ++i) {
-      float gv = (float) g;
-      y1       = filter (io[i], y1, gv);
-      io[i]    = y1;
+      auto x  = io[i];
+      auto gf = (float) g;
+      y1      = (1.f - gf) * x + gf * y1;
+      io[i]   = Is_lp ? y1 : (x - y1);
     }
     save_state<Idx> (y1);
   }
@@ -518,9 +521,7 @@ private:
   template <uint Idx, class T, class U>
   void run_lp (xspan<T> io, U g)
   {
-    run_1pole<Idx> (io, g, [] (auto x, auto y1, auto g) {
-      return g * y1 + (1_r - g) * x;
-    });
+    run_1pole<Idx, true> (io, g);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -532,9 +533,7 @@ private:
   template <uint Idx, class T, class U>
   void run_hp (xspan<T> io, U g)
   {
-    run_1pole<Idx> (io, g, [] (auto x, auto y1, auto g) {
-      return g * x + (1_r - g) * y1;
-    });
+    run_1pole<Idx, false> (io, g);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -1166,8 +1165,7 @@ private:
       xspan {&_stage[Idx].z[0], block2sz}};
   }
   //----------------------------------------------------------------------------
-  using float16 = f16pack<5, -1, f16pack_dftz>;
-  using spec    = spec_access<Spec_array>;
+  using spec = spec_access<Spec_array>;
 
   struct stage {
     s16* z {};
