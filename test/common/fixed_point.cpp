@@ -602,4 +602,23 @@ TEST (fixed_point, rounding_and_truncation)
   EXPECT_EQ (((rounding) v).to_floatp(), -2.);
 }
 //------------------------------------------------------------------------------
+TEST (fixed_point, integer_operators)
+{
+  auto v = fixpt_d<1, 7, 8>::from_float (1.5f);
+
+  EXPECT_TRUE (v != v.max());
+  EXPECT_TRUE (v < v.max());
+  EXPECT_TRUE (v > v.min());
+  EXPECT_TRUE (v == v);
+  EXPECT_TRUE (v <= v);
+  EXPECT_TRUE (v >= v);
+  EXPECT_TRUE (v >= v);
+  auto w = v.resize<1, -1>();
+  EXPECT_TRUE (v == w);
+  EXPECT_TRUE (v <= w);
+  EXPECT_TRUE (v >= w);
+  EXPECT_TRUE (v >= w);
+}
+
+//------------------------------------------------------------------------------
 } // namespace artv

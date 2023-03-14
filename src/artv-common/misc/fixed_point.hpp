@@ -269,8 +269,7 @@ private:
     && (relaxed_int_assign || (n_int >= fixpt_n_int<T>()));
 
   template <class T>
-  using enable_if_comparable
-    = std::enable_if_t<rhs_is_compatible<T> && (n_sign == fixpt_sign<T>())>;
+  using enable_if_comparable = std::enable_if_t<rhs_is_compatible<T>>;
 
   template <class T>
   using enable_if_operand_w_dynamic
@@ -1074,37 +1073,37 @@ public:
   template <class T, enable_if_comparable<T>* = nullptr>
   constexpr auto operator== (T rhs) const noexcept
   {
-    return bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a == b; });
+    return cmp_op (rhs, [] (auto a, auto b) { return a == b; });
   }
   //----------------------------------------------------------------------------
   template <class T, enable_if_comparable<T>* = nullptr>
   constexpr auto operator!= (T rhs) const noexcept
   {
-    return bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a != b; });
+    return cmp_op (rhs, [] (auto a, auto b) { return a != b; });
   }
   //----------------------------------------------------------------------------
   template <class T, enable_if_comparable<T>* = nullptr>
   constexpr auto operator<= (T rhs) const noexcept
   {
-    return bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a <= b; });
+    return cmp_op (rhs, [] (auto a, auto b) { return a <= b; });
   }
   //----------------------------------------------------------------------------
   template <class T, enable_if_comparable<T>* = nullptr>
   constexpr auto operator>= (T rhs) const noexcept
   {
-    return bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a >= b; });
+    return cmp_op (rhs, [] (auto a, auto b) { return a >= b; });
   }
   //----------------------------------------------------------------------------
   template <class T, enable_if_comparable<T>* = nullptr>
   constexpr auto operator<(T rhs) const noexcept
   {
-    return bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a < b; });
+    return cmp_op (rhs, [] (auto a, auto b) { return a < b; });
   }
   //----------------------------------------------------------------------------
   template <class T, enable_if_comparable<T>* = nullptr>
   constexpr auto operator> (T rhs) const noexcept
   {
-    return bin_op<n_int, n_frac> (rhs, [] (auto a, auto b) { return a > b; });
+    return cmp_op (rhs, [] (auto a, auto b) { return a > b; });
   }
   //----------------------------------------------------------------------------
   // Notice: bit shifts are always arithmetic and lossy!
@@ -1234,6 +1233,18 @@ private:
   constexpr auto bin_op (T other, F&& fn) const noexcept
   {
     return bin_op<Int, Frac, n_sign> (other, std::forward<F> (fn));
+  }
+  //----------------------------------------------------------------------------
+  template <class T, class F>
+  constexpr auto cmp_op (T other, F&& fn) const noexcept
+  {
+    static_assert (
+      n_sign == T::n_sign,
+      "Signedness mismatch. Manually cast before comparison.");
+    constexpr uint intb  = std::max (n_int, T::n_int);
+    constexpr uint fracb = std::max (n_frac, T::n_frac);
+    using converted      = convert<intb, fracb>;
+    return fn (cast (converted {})._v, other.cast (converted {})._v);
   }
   //----------------------------------------------------------------------------
   template <uint, uint, uint, uint, class>
