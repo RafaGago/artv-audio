@@ -1289,7 +1289,8 @@ using fixpt_m
 
 //------------------------------------------------------------------------------
 // convenience classes to be used as operators. The main purpose  for these is
-// for float and fixed point code to be compatible on templates
+// for float and fixed point code to be able to be geneated from the same
+// source.
 //------------------------------------------------------------------------------
 template <int N_int, int N_frac>
 struct fixpt_resize_token {};
@@ -2084,6 +2085,19 @@ constexpr auto fixpt_abs (T v) noexcept
     return v;
   }
 }
+//------------------------------------------------------------------------------
+template <class T, class U, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+constexpr auto fixpt_clamp (T v, U min, U max) noexcept
+{
+  assert (min <= max);
+  auto kmin = (T) min;
+  auto kmax = (T) max;
+  auto ret  = fixpt_select (v < kmin, kmin, v);
+  ret       = fixpt_select (v > kmax, kmax, v);
+  return ret;
+}
+//------------------------------------------------------------------------------
+
 // TODO: fixpt_ceil, fixpt_floor, fixpt_round, fixpt_exp2...
 //------------------------------------------------------------------------------
 } // namespace artv
