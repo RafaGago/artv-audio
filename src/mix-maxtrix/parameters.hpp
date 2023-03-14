@@ -7545,10 +7545,10 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_clip_level,
+  lofiverb_operating_range,
   n_stereo_busses,
   param_common (
-    "Clip Lvl",
+    "Op Range",
     declptr<lofiverb>(),
     declptr<lofiverb::clip_level_tag>()),
   lofiverb::get_parameter (lofiverb::clip_level_tag {}),
