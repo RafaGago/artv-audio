@@ -7494,6 +7494,16 @@ using mod_params = mp_list<
   mod_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
+  lofiverb_algorithm_tag,
+  n_stereo_busses,
+  param_common (
+    "Algo",
+    declptr<lofiverb>(),
+    declptr<lofiverb::algorithm_tag>()),
+  lofiverb::get_parameter (lofiverb::algorithm_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   lofiverb_mode,
   n_stereo_busses,
   param_common ("Mode", declptr<lofiverb>(), declptr<lofiverb::mode_tag>()),
@@ -7589,7 +7599,7 @@ parameter_cpp_class_define (
   slider_ext);
 
 using lofiverb_params = mp_list<
-  lofiverb_mode,
+  lofiverb_algorithm_tag,
   lofiverb_predelay,
   lofiverb_decay,
   lofiverb_damp,
@@ -7600,7 +7610,8 @@ using lofiverb_params = mp_list<
 
   lofiverb_ducking_threshold,
   lofiverb_ducking_speed,
-  lofiverb_clip_level>;
+  lofiverb_mode,
+  lofiverb_operating_range>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (

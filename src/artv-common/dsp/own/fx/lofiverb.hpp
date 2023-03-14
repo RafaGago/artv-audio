@@ -186,82 +186,48 @@ public:
   static constexpr uint      n_inputs  = 1;
   static constexpr uint      n_outputs = 1;
   //----------------------------------------------------------------------------
-  struct mode_tag {};
-  void set (mode_tag, int v)
+  struct algorithm_tag {};
+  void set (algorithm_tag, int v)
   {
-    if (v == _param.mode) {
+    u32 curr = _param.mode / 2;
+    if (v == curr) {
       return;
     }
-    switch (v) {
-#ifdef LOFIVERB_ADD_DEBUG_ALGO
-    case mode::debug_algo_flt:
-    case mode::debug_algo: {
-      auto& rev = _modes.emplace<debug_algo_type>();
-      rev.reset_memory (_mem_reverb);
-      _lfo.set_phase (
-        phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
-    } break;
-#endif
-    case mode::abyss_flt:
-    case mode::abyss: {
-      auto& rev = _modes.emplace<abyss_type>();
-      rev.reset_memory (_mem_reverb);
-      _lfo.set_phase (
-        phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
-    } break;
-    case mode::midifex49_flt:
-    case mode::midifex49: {
-      auto& rev = _modes.emplace<midifex49_type>();
-      rev.reset_memory (_mem_reverb);
-      _lfo.set_phase (
-        phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
-    } break;
-    case mode::midifex50_flt:
-    case mode::midifex50: {
-      auto& rev = _modes.emplace<midifex50_type>();
-      rev.reset_memory (_mem_reverb);
-      _lfo.set_phase (
-        phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
-    } break;
-    default:
-      return;
-    }
-    _param.mode          = v;
-    _n_processed_samples = 0; // trigger the control block on first sample
-    xspan_memset (_mem_reverb, 0);
-    update_mod();
+    _param.mode = (_param.mode % 2) | (v * 2);
+    update_mode();
   }
-  struct mode {
-    enum {
-#ifdef LOFIVERB_ADD_DEBUG_ALGO
-      debug_algo_flt,
-      debug_algo,
-#endif
-      abyss_flt,
-      abyss,
-      midifex49_flt,
-      midifex49,
-      midifex50_flt,
-      midifex50
-    };
-  };
-
-  static constexpr auto get_parameter (mode_tag)
+  //----------------------------------------------------------------------------
+  static constexpr auto get_parameter (algorithm_tag)
   {
     return choice_param (
       0,
       make_cstr_array (
-#ifdef LOFIVERB_ADD_DEBUG_ALGO
-        "Debug ",
-        "Debug 16-bit",
-#endif
         "Abyss",
-        "Abyss 16-bit",
         "Midifex 49",
-        "Midifex 49 16-bit",
-        "Midifex 50",
-        "Midifex 50 16-bit"),
-      128);
+        "Midifex 50"
+#ifdef LOFIVERB_ADD_DEBUG_ALGO
+        ,
+        "Debug "
+#endif
+        ),
+      64);
+  }
+  //----------------------------------------------------------------------------
+  struct mode_tag {};
+  void set (mode_tag, int v)
+  {
+    u32 curr = _param.mode & 1;
+    if (v == curr <) {
+      return;
+    }
+    _param.mode = (_param.mode & ~(1u)) | (v & 1);
+    update_mode();
+  }
+
+  static constexpr auto get_parameter (mode_tag)
+  {
+    return choice_param (
+      1, make_cstr_array ("16-bit float point", "16-bit fixed point"), 16);
   }
   //----------------------------------------------------------------------------
   struct decay_tag {};
@@ -460,6 +426,7 @@ public:
   }
   //----------------------------------------------------------------------------
   using parameters = mp_list<
+    algorithm_tag,
     mode_tag,
     character_tag,
     damp_tag,
@@ -1036,6 +1003,62 @@ private:
     else {
       return _lfo.tick_sine();
     }
+  }
+  //----------------------------------------------------------------------------
+  struct mode {
+    enum {
+      abyss_flt,
+      abyss,
+      midifex49_flt,
+      midifex49,
+      midifex50_flt,
+      midifex50,
+#ifdef LOFIVERB_ADD_DEBUG_ALGO
+      debug_algo_flt,
+      debug_algo,
+#endif
+    };
+  };
+  //----------------------------------------------------------------------------
+  void update_mode()
+  {
+    switch (_param.mode) {
+    case mode::abyss_flt:
+    case mode::abyss: {
+      auto& rev = _modes.emplace<abyss_type>();
+      rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
+    } break;
+    case mode::midifex49_flt:
+    case mode::midifex49: {
+      auto& rev = _modes.emplace<midifex49_type>();
+      rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    } break;
+    case mode::midifex50_flt:
+    case mode::midifex50: {
+      auto& rev = _modes.emplace<midifex50_type>();
+      rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    } break;
+#ifdef LOFIVERB_ADD_DEBUG_ALGO
+    case mode::debug_algo_flt:
+    case mode::debug_algo: {
+      auto& rev = _modes.emplace<debug_algo_type>();
+      rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
+    } break;
+#endif
+    default:
+      return;
+    }
+    _n_processed_samples = 0; // trigger the control block on first sample
+    xspan_memset (_mem_reverb, 0);
+    update_mod();
   }
   //----------------------------------------------------------------------------
   void update_mod()
