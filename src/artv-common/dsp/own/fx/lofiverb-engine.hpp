@@ -455,23 +455,6 @@ private:
     advance_pos<Idx>();
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class U>
-  void run_lp (xspan<float> io, U g)
-  {
-    static_assert (spec::is_filter (Idx));
-    assert (io);
-    float y1 = fetch_state<Idx> (float {});
-    for (uint i = 0; i < io.size(); ++i) {
-      float gv = (g == 0.f) ? (float) spec::get_gain (Idx) : g;
-      float y  = y1 * gv + (1_r - gv) * io[i];
-      assert_range (gv);
-      assert_range (y);
-      io[i] = y;
-      y1    = y;
-    }
-    save_state<Idx> (y1);
-  }
-  //----------------------------------------------------------------------------
   template <uint Idx, class Func>
   void run_quantizer (xspan<fixpt_t> io, Func&& fn)
   {
@@ -497,91 +480,67 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class U>
-  void run_lp (xspan<fixpt_t> io, U g)
+  template <uint Idx, class U, class Fn>
+  void run_1pole (xspan<fixpt_t> io, U g, Fn&& filter)
   {
     static_assert (spec::is_filter (Idx));
     assert (io);
-    // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
-    // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
+
     constexpr uint mask
       = lsb_mask<uint> (fixpt_acum_t::n_frac - fixpt_t::n_frac);
     auto [y1v, errv] = fetch_state<Idx> (fixpt_t {});
     auto y1          = fixpt_t::from (y1v);
 
     for (uint i = 0; i < io.size(); ++i) {
-      fixpt_t gvf = (g.value() == 0) ? spec::get_gain (Idx) : g;
-      auto    gv  = (fixpt_acum_t) gvf;
-      auto    x   = (fixpt_acum_t) io[i];
-#if 0
-      // investigate why it does sound better without noise-shaping...
-      auto y            = gv * y1 + (1_r - gv) * x;
+      auto y            = filter ((fixpt_acum_t) io[i], y1, (fixpt_acum_t) g);
       auto [y1_, errv_] = truncate (y, errv);
       y1                = y1_;
       errv              = errv_;
-#else
-      auto y = gv * y1 + (1_r - gv) * x;
-      y1     = (fixpt_t) y;
-#endif
-      io[i] = y1;
-      assert_range (y1);
+      io[i]             = y1;
     }
     save_state<Idx> (y1.value(), errv);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T>
-  void run_lp (xspan<T> io)
-  {
-    static_assert (spec::is_filter (Idx));
-    run_lp<Idx> (io, T {});
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class U>
-  void run_hp (xspan<float> io, U g)
+  template <uint Idx, class U, class Fn>
+  void run_1pole (xspan<float> io, U g, Fn&& filter)
   {
     static_assert (spec::is_filter (Idx));
     assert (io);
     float y1 = fetch_state<Idx> (float {});
     for (uint i = 0; i < io.size(); ++i) {
-      float gv = (g == 0.f) ? (float) spec::get_gain (Idx) : g;
-      float y  = io[i] * gv;
-      y += (1_r - gv) * y1;
-      io[i] = y;
-      y1    = y;
-      assert_range (y1);
+      float gv = (float) g;
+      y1       = filter (io[i], y1, gv);
+      io[i]    = y1;
     }
     save_state<Idx> (y1);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class U>
-  void run_hp (xspan<fixpt_t> io, U g)
+  template <uint Idx, class T, class U>
+  void run_lp (xspan<T> io, U g)
   {
-    static_assert (spec::is_filter (Idx));
-    assert (io);
-
-    constexpr uint mask
-      = lsb_mask<uint> (fixpt_acum_t::n_frac - fixpt_t::n_frac);
-    auto [y1v, errv] = fetch_state<Idx> (fixpt_t {});
-    auto y1          = fixpt_t::from (y1v);
-
-    for (uint i = 0; i < io.size(); ++i) {
-      fixpt_t gvf       = (g.value() == 0) ? spec::get_gain (Idx) : g;
-      auto    gv        = (fixpt_acum_t) gvf;
-      auto    x         = (fixpt_acum_t) io[i];
-      auto    y         = gv * x + (1_r - gv) * y1;
-      auto [y1_, errv_] = truncate (y, errv);
-      y1                = y1_;
-      errv              = errv_;
-      io[i]             = y1;
-      assert_range (y1);
-    }
-    save_state<Idx> (y1.value(), errv);
+    run_1pole<Idx> (io, g, [] (auto x, auto y1, auto g) {
+      return g * y1 + (1_r - g) * x;
+    });
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T>
+  void run_lp (xspan<T> io)
+  {
+    run_lp<Idx> (io, spec::get_gain (Idx));
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class U>
+  void run_hp (xspan<T> io, U g)
+  {
+    run_1pole<Idx> (io, g, [] (auto x, auto y1, auto g) {
+      return g * x + (1_r - g) * y1;
+    });
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
   void run_hp (xspan<T> io)
   {
-    run_hp<Idx> (io, T {});
+    run_hp<Idx> (io, spec::get_gain (Idx));
   }
   //----------------------------------------------------------------------------
   // run an allpass or pure delay.
@@ -662,7 +621,6 @@ private:
       y1                = y1_;
       errv              = errv_;
       dst[i]            = y1;
-      assert_range (y1);
     }
     save_state<Idx> (y1.value(), errv);
   }
@@ -688,7 +646,6 @@ private:
       auto z1 = get<Idx, float> (n_spls);
       y1      = z0 * a + z1 - a * y1;
       dst[i]  = y1;
-      assert_range (y1);
     }
     save_state<Idx> (y1);
   }
@@ -713,8 +670,6 @@ private:
     static_assert (spec::is_allpass (Idx));
     auto u = in + yn * g;
     auto x = yn - u * g;
-    assert_range (x);
-    assert_range (u);
     if constexpr (std::is_floating_point_v<T>) {
       return std::make_tuple (x, u);
     }
@@ -750,8 +705,6 @@ private:
         err_u              = err_u_;
         io[i]              = q_x;
         yn[i]              = q_u;
-        assert_range (x);
-        assert_range (u);
       }
       save_ap_err<Idx> (err_x, err_u);
     }
@@ -1003,6 +956,19 @@ private:
     constexpr uint n_truncated   = fixpt_acum_t::n_bits - fixpt_t::n_bits;
     constexpr uint mask          = lsb_mask<uint> (n_truncated);
     constexpr bool bidirectional = round || dither;
+
+    if constexpr (dither) {
+      spl = fixpt_clamp (
+        spl,
+        fixpt_t::min() + 3_r * fixpt_t::epsilon(),
+        fixpt_t::max() - 3_r * fixpt_t::epsilon());
+    }
+    else {
+      spl = fixpt_clamp (
+        spl,
+        fixpt_t::min() + fixpt_t::epsilon(),
+        fixpt_t::max() - fixpt_t::epsilon());
+    }
 
     auto         out = (fixpt_acum_t) (spl + fixpt_acum_t::from (err_prev));
     fixpt_acum_t d_out;

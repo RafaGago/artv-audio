@@ -20,8 +20,7 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/xspan.hpp"
 
-#define LOFIVERB_ADD_DEBUG_ALGO   1
-#define LOFIVERB_GAIN_CALIBRATION 1
+#define LOFIVERB_ADD_DEBUG_ALGO 1
 
 namespace artv {
 namespace detail { namespace lofiverb {
@@ -48,7 +47,7 @@ struct debug_algo_spec {
 };
 #endif
 //------------------------------------------------------------------------------
-static constexpr auto get_algo1_spec()
+static constexpr auto get_abyss_spec()
 {
   return make_array<stage_data> (
     // diffusors
@@ -85,8 +84,8 @@ static constexpr auto get_algo1_spec()
     make_delay (647)); // 27 delay (allows block processing) (> blocksz + 1)
 }
 
-struct algo1_spec {
-  static constexpr auto values {get_algo1_spec()};
+struct abyss_spec {
+  static constexpr auto values {get_abyss_spec()};
 };
 
 //------------------------------------------------------------------------------
@@ -197,37 +196,29 @@ public:
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
     case mode::debug_algo_flt:
     case mode::debug_algo: {
-      _param.pre_gain  = db_to_gain (-29.f);
-      _param.post_gain = db_to_gain (29.f - 6.f); // match all algos
-      auto& rev        = _modes.emplace<debug_algo_type>();
+      auto& rev = _modes.emplace<debug_algo_type>();
       rev.reset_memory (_mem_reverb);
       _lfo.set_phase (
         phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
     } break;
 #endif
-    case mode::algo1_flt:
-    case mode::algo1: {
-      _param.pre_gain  = db_to_gain (-29.f);
-      _param.post_gain = db_to_gain (29.f - 6.f); // match all algos
-      auto& rev        = _modes.emplace<algo1_type>();
+    case mode::abyss_flt:
+    case mode::abyss: {
+      auto& rev = _modes.emplace<abyss_type>();
       rev.reset_memory (_mem_reverb);
       _lfo.set_phase (
         phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
     } break;
     case mode::midifex49_flt:
     case mode::midifex49: {
-      _param.pre_gain  = db_to_gain (-24.f);
-      _param.post_gain = db_to_gain (24.f - 10.6f);
-      auto& rev        = _modes.emplace<midifex49_type>();
+      auto& rev = _modes.emplace<midifex49_type>();
       rev.reset_memory (_mem_reverb);
       _lfo.set_phase (
         phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
     } break;
     case mode::midifex50_flt:
     case mode::midifex50: {
-      _param.pre_gain  = db_to_gain (-23.f);
-      _param.post_gain = db_to_gain (23.f - 6.f);
-      auto& rev        = _modes.emplace<midifex50_type>();
+      auto& rev = _modes.emplace<midifex50_type>();
       rev.reset_memory (_mem_reverb);
       _lfo.set_phase (
         phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
@@ -246,8 +237,8 @@ public:
       debug_algo_flt,
       debug_algo,
 #endif
-      algo1_flt,
-      algo1,
+      abyss_flt,
+      abyss,
       midifex49_flt,
       midifex49,
       midifex50_flt,
@@ -264,8 +255,8 @@ public:
         "Debug ",
         "Debug 16-bit",
 #endif
-        "Long 1",
-        "Long 1 16-bit",
+        "Abyss",
+        "Abyss 16-bit",
         "Midifex 49",
         "Midifex 49 16-bit",
         "Midifex 50",
@@ -347,7 +338,10 @@ public:
   }
   //----------------------------------------------------------------------------
   struct clip_level_tag {};
-  void set (clip_level_tag, float v) { _param.gain = db_to_gain (v); }
+  void set (clip_level_tag, float v)
+  {
+    _param.gain = db_to_gain (v) * clip_value;
+  }
 
   static constexpr auto get_parameter (clip_level_tag)
   {
@@ -494,7 +488,8 @@ private:
   // this is using 16 bits fixed-point arithmetic, positive values can't
   // represent one, so instead of correcting everywhere the parameters are
   // scaled instead to never reach 1.
-  static constexpr auto fixpt_max_flt = fixpt_t::max_float();
+  static constexpr auto  fixpt_max_flt = fixpt_t::max_float();
+  static constexpr float clip_value    = fixpt_max_flt;
   //----------------------------------------------------------------------------
   template <class T>
   static constexpr auto one()
@@ -519,23 +514,16 @@ private:
     std::array<f32_x2, max_block_size>  ducker_gain;
     loop_parameters                     pars;
 
-    auto pre_gain = (1.f / _param.gain) * fixpt_max_flt;
+    auto pre_gain = (1.f / _param.gain);
 
     // tilt + clamp + ducker measuring + param smoothing
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       f32_x2 wetv = _filt.tick_cascade (vec_from_array (io[i]));
-#ifndef LOFIVERB_GAIN_CALIBRATION
       wetv *= pre_gain;
-      wetv           = vec_clamp (wetv, -fixpt_max_flt, fixpt_max_flt);
+      wetv           = vec_clamp (wetv, -clip_value, clip_value);
       ducker_gain[i] = _ducker.tick (wetv);
-      wetv *= _param.pre_gain;
-#else // pre_gain calibration. (shouldn't be on when Released).
-      wetv *= pre_gain;
-      wetv = vec_clamp (wetv, -fixpt_max_flt, fixpt_max_flt);
-#endif
-      io[i] = vec_to_array (wetv);
-
+      io[i]          = vec_to_array (wetv);
       _param_smooth.tick();
       pars.stereo[i] = _param_smooth.get().stereo;
       pars.decay[i].load_float (_param_smooth.get().decay);
@@ -563,11 +551,11 @@ private:
     switch (_param.mode) {
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
     case mode::debug_algo:
-      process_debug_algo (xspan {wet.data(), io.size()}, pars);
+      // process_debug_algo (xspan {wet.data(), io.size()}, pars);
       break;
 #endif
-    case mode::algo1:
-      process_algo1 (xspan {wet.data(), io.size()}, pars);
+    case mode::abyss:
+      process_abyss (xspan {wet.data(), io.size()}, pars);
       break;
     case mode::midifex49:
       process_midifex49 (xspan {wet.data(), io.size()}, pars);
@@ -579,18 +567,13 @@ private:
       assert (false);
     }
     // float conversion
+    auto postgain = _param.gain;
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       auto l = wet[i][0].to_floatp();
       auto r = wet[i][1].to_floatp();
-#ifndef LOFIVERB_GAIN_CALIBRATION
-      l *= ducker_gain[i][0] * _param.gain * _param.post_gain;
-      r *= ducker_gain[i][1] * _param.gain * _param.post_gain;
-#else // pre_gain calibration (shouldn't be on when Released).
-      l *= _param.gain;
-      r *= _param.gain;
-#endif
-
+      l *= ducker_gain[i][0] * postgain;
+      r *= ducker_gain[i][1] * postgain;
       l = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
       if (pars.stereo[i] < 0) {
         io[i][0] = r;
@@ -618,11 +601,9 @@ private:
     for (uint i = 0; i < io.size(); ++i) {
       f32_x2 wet = _filt.tick_cascade (vec_from_array (io[i]));
       wet *= pre_gain;
-      wet            = vec_clamp (wet, -1.f, 1.f);
+      wet            = vec_clamp (wet, -clip_value, clip_value);
       ducker_gain[i] = _ducker.tick (wet);
-      wet *= _param.pre_gain;
-      io[i] = vec_to_array (wet);
-
+      io[i]          = vec_to_array (wet);
       _param_smooth.tick();
       pars.stereo[i]    = _param_smooth.get().stereo;
       pars.decay[i]     = _param_smooth.get().decay;
@@ -649,8 +630,8 @@ private:
       process_debug_algo (io, pars);
       break;
 #endif
-    case mode::algo1_flt:
-      process_algo1 (io, pars);
+    case mode::abyss_flt:
+      process_abyss (io, pars);
       break;
     case mode::midifex49_flt:
       process_midifex49 (io, pars);
@@ -663,8 +644,8 @@ private:
     }
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto l = io[i][0] * ducker_gain[i][0] * _param.gain * _param.post_gain;
-      auto r = io[i][1] * ducker_gain[i][1] * _param.gain * _param.post_gain;
+      auto l = io[i][0] * ducker_gain[i][0] * _param.gain;
+      auto r = io[i][1] * ducker_gain[i][1] * _param.gain;
       l      = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
       if (pars.stereo[i] < 0) {
         io[i][0] = r;
@@ -700,8 +681,7 @@ private:
     }
     out.cut_head (1); // drop feedback sample from previous block
 
-    rev.run<0> (in);
-    rev.run<1> (in);
+    rev.run<0, 1> (in);
     rev.run<2> (in);
     rev.run<3> (in);
     rev.run<4> (in, [&] (auto v, uint i) { // decay fixup
@@ -722,9 +702,9 @@ private:
 #endif
   //----------------------------------------------------------------------------
   template <class T, class Params>
-  void process_algo1 (xspan<std::array<T, 2>> io, Params& par)
+  void process_abyss (xspan<std::array<T, 2>> io, Params& par)
   {
-    auto& rev = std::get<algo1_type> (_modes);
+    auto& rev = std::get<abyss_type> (_modes);
 
     using arr    = std::array<T, max_block_size>;
     using arr_fb = std::array<T, max_block_size + 1>;
@@ -1061,8 +1041,8 @@ private:
     // reminder, the phase relations are set on "void set (mode_tag, int v)"
     auto mod = _param_smooth.target().mod;
     switch (_param.mode) {
-    case mode::algo1:
-    case mode::algo1_flt: {
+    case mode::abyss:
+    case mode::abyss_flt: {
       auto f_er   = 0.3f + mod * 0.3f;
       auto f_late = 0.1f + mod * 1.2f;
       _lfo.set_freq (f32_x4 {f_er, f_er, f_late, f_late}, t_spl);
@@ -1095,11 +1075,6 @@ private:
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
     u32   mode;
-    float post_gain; // set to rougly match loudness for all algorithms and to
-                     // compensate for pre_gain
-    float pre_gain; // using a 440Hz 0dbFS square wave in looking at which
-                    // level breaks with decay set to the maximum value and
-                    // moving abruptly all parameters.
     float gain; // a parameter
     float tilt;
     float predelay;
@@ -1139,21 +1114,21 @@ private:
 
   lfo<4> _lfo;
 
-  using algo1_type
-    = detail::lofiverb::engine<detail::lofiverb::algo1_spec, max_block_size>;
+  using abyss_type
+    = detail::lofiverb::engine<detail::lofiverb::abyss_spec, max_block_size>;
   using midifex49_type = detail::lofiverb::
     engine<detail::lofiverb::midifex49_spec, max_block_size>;
   using midifex50_type = detail::lofiverb::
     engine<detail::lofiverb::midifex50_spec, max_block_size>;
 
 #ifndef LOFIVERB_ADD_DEBUG_ALGO
-  using modes_type = std::variant<algo1_type, midifex49_type, midifex50_type>;
+  using modes_type = std::variant<abyss_type, midifex49_type, midifex50_type>;
 #else
   using debug_algo_type = detail::lofiverb::
     engine<detail::lofiverb::debug_algo_spec, max_block_size>;
 
   using modes_type
-    = std::variant<debug_algo_type, algo1_type, midifex49_type, midifex50_type>;
+    = std::variant<debug_algo_type, abyss_type, midifex49_type, midifex50_type>;
 #endif
 
   modes_type     _modes;
