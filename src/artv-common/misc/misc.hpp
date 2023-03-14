@@ -455,4 +455,9 @@ struct fraction {
 template <class T, size_t D1, size_t D2>
 using array2d = std::array<std::array<T, D1>, D2>;
 //------------------------------------------------------------------------------
+constexpr void constexpr_memcpy (void* dst, void const* src, std::size_t size)
+{
+  __builtin_memcpy (dst, src, size);
+}
+
 } // namespace artv
