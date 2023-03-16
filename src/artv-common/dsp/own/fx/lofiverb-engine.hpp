@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <tuple>
 #include <type_traits>
 #include <variant>
 #include <vector>
@@ -66,7 +67,7 @@ using stage_data
 //------------------------------------------------------------------------------
 static constexpr detail::lofiverb::stage_data make_ap (
   u16   spls,
-  float g,
+  float g   = 0.f,
   u16   mod = 0)
 {
   return allpass_data {
@@ -246,6 +247,9 @@ public:
       run<Start_idx + idx.value> (xspan {io[idx.value], block_size});
     });
   }
+#if 0
+  // This doesn't optimize the datatype range, for ints it truncates more times
+  // than necessary
   //----------------------------------------------------------------------------
   template <class T, uint N>
   static void hadamard_no_norm (std::array<T*, N> io, uint block_size)
@@ -255,8 +259,8 @@ public:
       constexpr int half_n = N / 2;
       // all this superfluous array copying stuff should be removed by the
       // optimizer.
-      hadamard (array_slice<0, half_n> (io), block_size);
-      hadamard (array_slice<half_n, half_n> (io), block_size);
+      hadamard_no_norm (array_slice<0, half_n> (io), block_size);
+      hadamard_no_norm (array_slice<half_n, half_n> (io), block_size);
 
       for (uint n = 0; n < half_n; ++n) {
         uint n1 = n;
@@ -287,6 +291,24 @@ public:
       }
     }
   }
+#else
+  template <class T, uint N>
+  static void hadamard4 (std::array<T*, N> io, uint block_size)
+  {
+    // these quantizations might use error saving too...
+    for (uint i = 0; i < io.size(); ++i) {
+      auto y1 = io[0][i] - io[1][i];
+      auto y2 = io[0][i] + io[1][i];
+      auto y3 = io[2][i] - io[3][i];
+      auto y4 = io[2][i] + io[3][i];
+
+      io[0][i] = (y1 - y3) * 0.5_r;
+      io[1][i] = (y2 - y4) * 0.5_r;
+      io[2][i] = (y1 + y3) * 0.5_r;
+      io[3][i] = (y2 + y4) * 0.5_r;
+    }
+  }
+#endif
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class... Ts>
   void run (xspan<T> io, Ts&&... args)
@@ -310,16 +332,21 @@ public:
     }
   }
   //----------------------------------------------------------------------------
-  template <uint Idx1, uint Idx2, class T, class... Ts>
+  // for arbitrarily nested allpasses.
+  //
+  // see comment on "run_nested_ap"
+  template <uint Idx1, uint Idx2, uint... Idxs, class T, class... Ts>
   void run (xspan<T> io, Ts&&... args)
   {
     if constexpr (
       spec::is_allpass (Idx1)
-      && (spec::is_allpass (Idx2) || spec::is_delay (Idx2))) {
-      run_nested_ap2<Idx1, Idx2> (io, std::forward<Ts> (args)...);
+      && (spec::is_allpass (Idx2) || spec::is_delay (Idx2))
+      && (... && (spec::is_allpass (Idxs) || spec::is_delay (Idxs)))) {
+      run_nested_ap<Idx1, Idx2, Idxs...> (io, std::forward<Ts> (args)...);
     }
     else {
-      static_assert (sizeof (T) != sizeof (T), "Invalid");
+      static_assert (
+        sizeof (T) != sizeof (T), "Invalid type on one of the indexes");
     }
   }
   //----------------------------------------------------------------------------
@@ -328,12 +355,13 @@ private:
   template <class T, class Lfo>
   static constexpr auto get_lfo_generator (Lfo&& v)
   {
+    using LfoDec = std::decay_t<Lfo>;
     if constexpr (
-      std::is_convertible_v<Lfo, std::function<T (uint)>>
-      && !std::is_same_v<Lfo, std::nullptr_t>) {
-      return std::forward<Lfo> (v);
+      std::is_convertible_v<LfoDec, std::function<T (uint)>>
+      && !std::is_same_v<LfoDec, std::nullptr_t>) {
+      return std::forward<LfoDec> (v);
     }
-    else if constexpr (is_xspan<Lfo>) {
+    else if constexpr (is_xspan<LfoDec>) {
       return [v] (uint i) { return v[i]; };
     }
     else {
@@ -344,12 +372,13 @@ private:
   template <uint Idx, class T, class Gain>
   static constexpr auto get_gain_generator (Gain&& v)
   {
+    using GainDec = std::decay_t<Gain>;
     if constexpr (
-      std::is_convertible_v<Gain, std::function<T (uint)>>
-      && !std::is_same_v<Gain, std::nullptr_t>) {
-      return std::forward<Gain> (v);
+      std::is_convertible_v<GainDec, std::function<T (uint)>>
+      && !std::is_same_v<GainDec, std::nullptr_t>) {
+      return std::forward<GainDec> (v);
     }
-    else if constexpr (is_xspan<Gain>) {
+    else if constexpr (is_xspan<GainDec>) {
       return [v] (uint i) { return v[i]; };
     }
     else {
@@ -360,6 +389,7 @@ private:
   template <uint N>
   static constexpr auto get_hadamard_ratio()
   {
+    // no constexpr 1/sqrt(N)
     if constexpr (N == 4) {
       return 0.5_r;
     }
@@ -563,35 +593,45 @@ private:
     run_ap_or_delay<Idx> (io, nullptr, nullptr);
   }
   //----------------------------------------------------------------------------
-  // run 2 level nested allpass.
+  // run arbitrarily nested allpass.
+  // For each allpass an lfo and a gain parameter can be provided, those are
+  // consumed positionally.
+  //
   // Lfo and gain parameters can be either value generators (lambdas with
   // T(int) signature), spans or dummy types. When dummy types (no span and no
   // lambda types, e.g. nullptr) the parameters are defaulted (no delay
   // modulation, same allpass gain as in the specification)
-  template <
-    uint Idx1,
-    uint Idx2,
-    class T,
-    class L1,
-    class G1,
-    class L2,
-    class G2>
-  void run_nested_ap2 (xspan<T> io, L1 lfo1, G1 g1, L2 lfo2, G2 g2)
+  //
+  // the parameters don't need to be filled up to the last, but if you have a
+  // 3 level allpass with modulation on the second level and gain generator on
+  // the third all the parameters in between have to be provided.
+  //
+  // run<0,1,2> (nullptr, nullptr, lfo2modlambda, nullptr, nullptr, gain3_span);
+
+  template <uint... Idxs, class T, class... Ts>
+  void run_nested_ap (xspan<T> io, Ts&&... lfo_and_gen_seq)
   {
-    run_nested_ap_impl<Idx1, Idx2> (
-      io,
-      get_gain_generator<Idx1, T> (std::forward<G1> (g1)),
-      get_lfo_generator<T> (std::forward<L1> (lfo1)),
-      get_gain_generator<Idx2, T> (std::forward<G2> (g2)),
-      get_lfo_generator<T> (std::forward<L2> (lfo2)));
-  }
-  //----------------------------------------------------------------------------
-  // run a 2-level nested allpass (notice that more levels are possible on the
-  // internal implementation, just not exposed outside)
-  template <uint Idx1, uint Idx2, class T>
-  void run_nested_ap2 (xspan<T> io)
-  {
-    run<Idx1, Idx2> (io, nullptr, nullptr, nullptr, nullptr);
+    constexpr uint n_args          = sizeof...(Ts);
+    constexpr uint expected_n_args = sizeof...(Idxs) * 2;
+
+    static_assert (n_args <= expected_n_args, "Excess arguments!");
+
+    if constexpr (expected_n_args == n_args) {
+      run_nested_ap_impl<Idxs...> (io, std::forward<Ts> (lfo_and_gen_seq)...);
+    }
+    else {
+      // add null on the remaining positions
+      using filler_nulls = mp11::
+        mp_repeat_c<std::tuple<std::nullptr_t>, expected_n_args - n_args>;
+      std::apply (
+        [=] (auto&&... targs) {
+          run_nested_ap_impl<Idxs...> (
+            io, std::forward<decltype (targs)> (targs)...);
+        },
+        std::tuple_cat (
+          std::forward_as_tuple (std::forward<Ts> (lfo_and_gen_seq)...),
+          filler_nulls {}));
+    }
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class LF>
@@ -781,14 +821,14 @@ private:
     uint N,
     class Idxs,
     class T,
-    class GainGen,
-    class LfoGen,
-    class... GainAndLfoGens>
+    class Lfo,
+    class Gain,
+    class... GainAndLfoPairs>
   void run_nested_ap_impl_get_yn (
     std::array<xspan<T>, N>& yn,
-    GainGen&&                _,
-    LfoGen&&                 lfo_gen,
-    GainAndLfoGens&&... fwd)
+    Lfo&&                    lfo_arg,
+    Gain&&                   _,
+    GainAndLfoPairs&&... fwd)
   {
     constexpr uint idx   = mp11::mp_at_c<Idxs, I>::value;
     constexpr uint sz    = get_delay_size (idx);
@@ -799,7 +839,12 @@ private:
     assert (yn.size() <= minsz);
 
     if constexpr (spec::has_modulated_delay (idx)) {
-      run_thiran<idx> (yn[I], std::forward<LfoGen> (lfo_gen));
+      auto&& gen    = get_lfo_generator<T> (std::forward<Lfo> (lfo_arg));
+      using gentype = decltype (gen);
+      static_assert (
+        !std::is_same_v<std::decay_t<gentype>, std::nullptr_t> && idx == idx,
+        "A modulated delay is missing the modulation lfo or xspan");
+      run_thiran<idx> (yn[I], std::forward<gentype> (gen));
     }
     else {
       decode_read (yn[I], get_read_buffers<idx> (yn[I].size(), 0));
@@ -807,7 +852,7 @@ private:
     // recurse....
     if constexpr ((I + 1) < N) {
       run_nested_ap_impl_get_yn<I + 1, N, Idxs> (
-        yn, std::forward<GainAndLfoGens> (fwd)...);
+        yn, std::forward<GainAndLfoPairs> (fwd)...);
     }
   }
   //----------------------------------------------------------------------------
@@ -815,34 +860,46 @@ private:
   template <
     uint I,
     uint N,
+    class Idxs,
     class T,
-    class GainGen,
-    class LfoGen,
-    class... GainAndLfoGens>
+    class Gain,
+    class Lfo,
+    class... GainAndLfoPairs>
   void run_nested_ap_impl_get_gains (
     std::array<T, N>& gains,
     uint              n_spl,
-    GainGen&&         gain_gen,
-    LfoGen&&          _,
-    GainAndLfoGens&&... fwd)
+    Lfo&&             _,
+    Gain&&            gain_arg,
+    GainAndLfoPairs&&... fwd)
   {
-    gains[I] = gain_gen (n_spl);
+    if constexpr (
+      std::is_convertible_v<Gain, std::function<T (uint)>>
+      && !std::is_same_v<Gain, std::nullptr_t>) {
+      gains[I] = gain_arg (n_spl);
+    }
+    else if constexpr (is_xspan<Gain>) {
+      gains[I] = gain_arg[n_spl];
+    }
+    else {
+      constexpr uint idx = mp11::mp_at_c<Idxs, I>::value;
+      gains[I]           = (T) spec::get_gain (idx);
+    }
     // recurse....
     if constexpr ((I + 1) < N) {
-      run_nested_ap_impl_get_gains<I + 1, N> (
-        gains, n_spl, std::forward<GainAndLfoGens> (fwd)...);
+      run_nested_ap_impl_get_gains<I + 1, N, Idxs> (
+        gains, n_spl, std::forward<GainAndLfoPairs> (fwd)...);
     }
   }
   //----------------------------------------------------------------------------
   // Helper template function to run nested allpasses
-  template <class T, uint N, class... GainAndLfoGens>
+  template <class T, uint N, class Idxs, class... GainAndLfoPairs>
   std::array<T, N> run_nested_ap_impl_get_gains (
     uint n_spl,
-    GainAndLfoGens&&... glfo)
+    GainAndLfoPairs&&... glfo)
   {
     std::array<T, N> ret;
-    run_nested_ap_impl_get_gains<0, N> (
-      ret, n_spl, std::forward<GainAndLfoGens> (glfo)...);
+    run_nested_ap_impl_get_gains<0, N, Idxs> (
+      ret, n_spl, std::forward<GainAndLfoPairs> (glfo)...);
     return ret;
   }
   //----------------------------------------------------------------------------
@@ -850,13 +907,14 @@ private:
   // combinations with or gain and delay time modulation (the gain and time
   // modulations can be unity but have to be present). It only work for delay
   // sizes bigger than the block size for implementation "simplicity".
-  template <uint... Idx, class T, class... GainAndLfoGens>
-  void run_nested_ap_impl (xspan<T> io, GainAndLfoGens&&... gnlfo)
+  template <uint... Idx, class T, class... GainAndLfoPairs>
+  void run_nested_ap_impl (xspan<T> io, GainAndLfoPairs&&... gnlfo)
   {
     using Idxs          = mp_list<std::integral_constant<uint, Idx>...>;
     constexpr auto idx0 = mp11::mp_front<Idxs>::value;
     constexpr uint n    = mp11::mp_size<Idxs>::value;
-    static_assert ((n * 2) == mp11::mp_size<mp_list<GainAndLfoGens...>>::value);
+    static_assert (
+      (n * 2) == mp11::mp_size<mp_list<GainAndLfoPairs...>>::value);
 
     array2d<T, max_block_size, n> yn_mem;
     std::array<xspan<T>, n>       yn;
@@ -864,11 +922,11 @@ private:
       yn[i] = xspan {yn_mem[i].data(), io.size()};
     }
     run_nested_ap_impl_get_yn<0, n, Idxs> (
-      yn, std::forward<GainAndLfoGens> (gnlfo)...);
+      yn, std::forward<GainAndLfoPairs> (gnlfo)...);
 
     for (uint i = 0; i < io.size(); ++i) {
-      auto g = run_nested_ap_impl_get_gains<T, n> (
-        i, std::forward<GainAndLfoGens> (gnlfo)...);
+      auto g = run_nested_ap_impl_get_gains<T, n, Idxs> (
+        i, std::forward<GainAndLfoPairs> (gnlfo)...);
 
       std::array<T, n> u;
 
@@ -941,13 +999,10 @@ private:
   }
   //----------------------------------------------------------------------------
   // This might belong somewhere else if made more generic. Do when required.
-  template <
-    bool round,
-    bool dither,
-    class T,
-    std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+  template <bool round, bool dither, class T>
   std::tuple<fixpt_t, s16> quantize (T spl, s16 err_prev)
   {
+    static_assert (is_fixpt_v<T>);
     // Fraction-saving quantization
     // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
     // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
