@@ -33,12 +33,10 @@ static constexpr uint max_block_size = 32;
 static constexpr auto get_debug_algo_spec()
 {
   return make_array<stage_data> (
-    make_ap (147, -0.707), // 0
-    make_ap (183, 0.707), // 1
-    make_ap (389, -0.6), // 2
-    make_ap (401, 0.6), // 3
-    make_quantizer(), // 4
-    make_delay (max_block_size + 1) // 5 delay block (== blocksz + 1)
+    make_ap (147, 0.5), // 0
+    make_ap (183, 0.4), // 1
+    make_ap (389, 0.3), // 2
+    make_delay (33) // 3
   );
 }
 
@@ -87,7 +85,104 @@ static constexpr auto get_abyss_spec()
 struct abyss_spec {
   static constexpr auto values {get_abyss_spec()};
 };
+//------------------------------------------------------------------------------
+static constexpr auto get_small_space_spec()
+{
+  return make_array<stage_data> (
+    // left channel output conditioning
+    make_ap (71), // 0
+    make_ap (116), // 1
+    make_ap (172), // 2
+    make_ap (277), // 3
 
+    // right channel output conditioning
+    make_ap (72), // 4
+    make_ap (117), // 5
+    make_ap (175), // 6
+    make_ap (274), // 7
+
+    // m diffusors
+    make_ap (23, 0.8), // 8
+    make_ap (130, 0.8), // 9
+    make_ap (217, 0.8), // 10
+    // s diffusors
+    make_ap (22, 0.8), // 11
+    make_ap (131, 0.8), // 12
+    make_ap (219, 0.8), // 13
+
+    make_quantizer(), // 14
+    make_quantizer(), // 15
+    make_quantizer(), // 16
+    make_quantizer(), // 17
+    // block a iteration 1
+    make_ap (153), // nested 3x (mod g) // 18
+    make_ap (89, -0.04), // 19
+    make_ap (60, 0.04), // 20
+    make_delay (201, 3), // 21
+
+    // block b iteration 1
+    make_ap (139), // nested 3x (mod g) // 22
+    make_ap (79, -0.04), // 23
+    make_ap (53, 0.04), // 24
+    make_delay (185, 3), // mod delay // 25
+
+    // block c iteration 1
+    make_ap (149), // nested 3x (mod g) // 26
+    make_ap (83, 0.04), // 27
+    make_ap (59, -0.04), // 28
+    make_delay (193, 3), // 29
+
+    // block d iteration 1
+    make_ap (167), // nested 3x (mod g) // 30
+    make_ap (97, -0.04), // 31
+    make_ap (67, 0.04), // 32
+    make_delay (221, 3), // mod delay // 33
+
+    make_quantizer(), // 34
+    make_quantizer(), // 35
+    make_quantizer(), // 36
+    make_quantizer(), // 37
+
+    // block a iteration 2
+    make_lp(), // 38
+    make_ap (113, 0.1), // nested 3x // 39
+    make_ap (67, 0.04), // 40
+    make_ap (47, -0.04), // nested end // 41
+    make_delay (122), // 42
+    make_ap (119, 0.6), // 43
+    make_ap (67, 0.6), // 44
+    make_ap (47, -0.6), // 45
+    make_delay (33), // feedback point // 46
+
+    // block b iteration 2
+    make_lp(), // 47
+    make_ap (114, -0.1), // nested 3x // 48
+    make_ap (66, -0.04), // 49
+    make_ap (47, -0.04), // 50
+    //    make_delay (149), // feedback point // 51
+    make_delay (33), // feedback point // 51
+
+    // block c iteration 2
+    make_lp(), // 52
+    make_ap (116, -0.1), // nested 3x // 53
+    make_ap (65, -0.04), // 54
+    make_ap (46, -0.04), // 55
+    //    make_delay (151), // feedback point // 56
+    make_delay (33), // feedback point // 56
+
+    // block d iteration 2
+    make_lp(), // 57
+    make_ap (121, -0.1), // nested 3x // 58
+    make_ap (69, 0.04), // 59
+    make_ap (47, 0.04), // 60
+    // make_delay (157) // feedback point // 61
+    make_delay (33) // feedback point // 61
+  );
+}
+
+struct small_space_spec {
+  static constexpr auto values {get_small_space_spec()};
+};
 //------------------------------------------------------------------------------
 static constexpr auto get_midifex49_spec()
 {
@@ -203,6 +298,7 @@ public:
       0,
       make_cstr_array (
         "Abyss",
+        "Small space",
         "Midifex 49",
         "Midifex 50"
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
@@ -217,7 +313,7 @@ public:
   void set (mode_tag, int v)
   {
     u32 curr = _param.mode & 1;
-    if (v == curr <) {
+    if (v == curr) {
       return;
     }
     _param.mode = (_param.mode & ~(1u)) | (v & 1);
@@ -520,11 +616,14 @@ private:
     switch (_param.mode) {
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
     case mode::debug_algo:
-      // process_debug_algo (xspan {wet.data(), io.size()}, pars);
+      process_debug_algo (xspan {wet.data(), io.size()}, pars);
       break;
 #endif
     case mode::abyss:
       process_abyss (xspan {wet.data(), io.size()}, pars);
+      break;
+    case mode::small_space:
+      process_small_space (xspan {wet.data(), io.size()}, pars);
       break;
     case mode::midifex49:
       process_midifex49 (xspan {wet.data(), io.size()}, pars);
@@ -602,6 +701,9 @@ private:
     case mode::abyss_flt:
       process_abyss (io, pars);
       break;
+    case mode::small_space_flt:
+      process_small_space (io, pars);
+      break;
     case mode::midifex49_flt:
       process_midifex49 (io, pars);
       break;
@@ -637,36 +739,22 @@ private:
     using arr_fb = std::array<T, max_block_size + 1>;
 
     arr    in_arr;
-    arr_fb out_arr;
+    arr_fb loop_arr;
 
-    auto in  = xspan {in_arr.data(), io.size()};
-    auto out = xspan {out_arr.data(), io.size() + 1};
+    auto in   = xspan {in_arr.data(), io.size()};
+    auto loop = xspan {loop_arr.data(), io.size() + 1};
 
-    rev.fetch_block<5> (out, 1); // feedback, fetching block + 1 samples
-
-    for (uint i = 0; i < io.size(); ++i) {
-      // to MS
-      in[i] = (T) (((io[i][0] + io[i][1]) * 0.25_r) + out[i]);
-    }
-    out.cut_head (1); // drop feedback sample from previous block
-
-    rev.run<0, 1> (in);
-    rev.run<2> (in);
-    rev.run<3> (in);
-    rev.run<4> (in, [&] (auto v, uint i) { // decay fixup
-      auto decay = (T) (one<T>() - par.decay[i]);
-      decay      = (T) (one<T>() - decay * decay);
-      decay      = (T) (0.6_r + decay * 0.39_r);
-      return v * decay;
+    span_visit (in, [&] (auto& v, uint i) {
+      v = (T) ((io[i][0] + io[i][1]) * 0.25_r);
     });
-    rev.push<5> (in.to_const()); // feedback point
-
-    // Mixdown (not a lot going on...)
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < io.size(); ++i) {
-      io[i][0] = out[i];
-      io[i][1] = out[i];
-    }
+    rev.fetch_block<3> (loop, 1);
+    span_visit (io, [&] (auto& v, uint i) { v[0] = v[1] = loop[i + 1]; });
+    loop.cut_tail (1);
+    span_visit (loop, [&] (auto& v, uint i) {
+      v = (T) (in[i] + v * (0.7_r + par.decay[i] * 0.28_r));
+    });
+    rev.run<0, 1, 2> (loop);
+    rev.push<3> (loop.to_const()); // feedback point
   }
 #endif
   //----------------------------------------------------------------------------
@@ -798,6 +886,189 @@ private:
       io[i][0]        = (T) (l[i] * direct_amt + e_l);
       io[i][1]        = (T) (r[i] * direct_amt + e_r);
     }
+  }
+  //----------------------------------------------------------------------------
+  template <class T, class Params>
+  void process_small_space (xspan<std::array<T, 2>> io, Params& par)
+  {
+    using arr    = std::array<T, max_block_size>;
+    using arr_fb = std::array<T, max_block_size + 1>;
+
+    auto& rev = std::get<small_space_type> (_modes);
+
+    arr_fb a_mem, d_mem;
+    arr    b_mem, c_mem, tmp1_mem, tmp2_mem, tmp3_mem;
+    arr    lfo2_mem, lfo3_mem, lfo4_mem;
+
+    xspan a {a_mem.data(), io.size() + 1};
+    xspan b {b_mem.data(), io.size()};
+    xspan c {c_mem.data(), io.size()};
+    xspan d {d_mem.data(), io.size() + 1};
+    xspan tmp1 {tmp1_mem.data(), io.size()};
+    xspan tmp2 {tmp2_mem.data(), io.size()};
+    xspan tmp3 {tmp3_mem.data(), io.size()};
+    xspan lfo2 {lfo2_mem.data(), io.size()};
+    xspan lfo3 {lfo3_mem.data(), io.size()};
+    xspan lfo4 {lfo4_mem.data(), io.size()};
+
+    // fetch a block from the output (a and d)
+    rev.fetch_block<46> (a, 1); // feedback, fetching block + 1 samples
+    rev.fetch_block<61> (d, 1); // feedback, fetching block + 1 samples
+
+    xspan_memcpy (b, a.advanced (1)); // L out on b
+    a.cut_tail (1); // fb samples on a.
+
+    xspan_memcpy (c, d.advanced (1)); // R out on c
+    d.cut_tail (1); // fb samples on d.
+
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      tmp1[i] = (T) (0.4_r + 0.3_r * par.character[i]);
+      tmp2[i] = (T) (-0.6_r * par.character[i]);
+      tmp3[i] = (T) (0.6_r * par.character[i]);
+      // decay fixup
+      par.decay[i] = (T) (0.2_r + par.decay[i] * 0.7_r);
+    }
+
+    // output preconditioning
+    rev.run<0> (b, 0, tmp1);
+    rev.run<1> (b, 0, tmp2);
+    rev.run<2> (b, 0, tmp2);
+    rev.run<3> (b, 0, tmp3);
+
+    rev.run<4> (c, 0, tmp1);
+    rev.run<5> (c, 0, tmp2);
+    rev.run<6> (c, 0, tmp2);
+    rev.run<7> (c, 0, tmp3);
+
+    // output write + preparations
+    span_visit (io, [&] (auto& spls, uint i) {
+      tmp1[i] = (T) ((spls[0] + spls[1]) * 0.25_r); // m
+      tmp2[i] = (T) ((spls[0] - spls[1]) * 0.25_r); // s
+      spls[0] = b[i];
+      spls[1] = c[i];
+      b[i]    = (T) (0.8_r + 0.1_r * par.character[i]); // character 1 on b
+      c[i]    = (T) (0.8_r * par.character[i]); // character 2 on c
+    });
+
+    // input preconditioning
+    rev.run<8> (tmp1, 0, b);
+    rev.run<9> (tmp1, 0, c);
+    rev.run<10> (tmp1, 0, c);
+
+    rev.run<11> (tmp2, 0, b);
+    rev.run<12> (tmp2, 0, c);
+    rev.run<13> (tmp2, 0, c);
+
+    // fetch b and d feedback (a and d are already ready) 1 block only
+    rev.fetch_block<51> (b, 1); // feedback
+    rev.fetch_block<56> (c, 1); // feedback
+
+    // quantized decay
+    rev.run<14> (a, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run<15> (b, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run<16> (c, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run<17> (d, [&] (auto v, uint i) { return v * par.decay[i]; });
+
+    // sum inputs to feedback
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      // a single hadamard iteration can duplicate the range on one
+      // of the channels, so halving once more.
+      b[i] = (T) (b[i] + tmp1[i] * 0.5_r);
+      d[i] = (T) (d[i] + tmp2[i] * 0.5_r);
+    }
+    rev.hadamard4 (
+      make_array (a.data(), b.data(), c.data(), d.data()), a.size());
+
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      auto lfo  = tick_lfo<T>();
+      auto lfo1 = T {lfo[0]};
+      lfo2[i]   = T {lfo[1]};
+      lfo3[i]   = T {lfo[2]};
+      lfo4[i]   = T {lfo[3]};
+      // mod fixup
+      par.mod[i] = (T) (one<T>() - par.mod[i]);
+      par.mod[i] = (T) (one<T>() - (par.mod[i] * par.mod[i]));
+      // preparing modlations for block a
+      tmp1[i] = (T) (0.1_r + 0.1_r * lfo1);
+      tmp2[i] = (T) (lfo3[i] * par.mod[i]);
+    }
+    // channel a block 1
+    rev.run<18, 19, 20> (a, 0, tmp1);
+    rev.run<21> (a, tmp2);
+
+    // channel b block 1
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      tmp1[i] = (T) (-0.1_r - 0.1_r * lfo3[i]);
+      tmp2[i] = (T) (lfo4[i] * par.mod[i]);
+    }
+    rev.run<22, 23, 24> (b, 0, tmp1);
+    rev.run<25> (b, tmp2);
+
+    // channel c block 1
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      tmp1[i] = (T) (0.1_r + 0.1_r * lfo4[i]);
+      tmp2[i] = (T) (lfo3[i] * par.mod[i]);
+    }
+    rev.run<26, 27, 28> (c, 0, tmp1);
+    rev.run<29> (c, tmp2);
+
+    // channel d block 1
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      tmp1[i] = (T) (0.1_r - 0.1_r * lfo2[i]);
+      tmp2[i] = (T) (lfo4[i] * par.mod[i]);
+    }
+    rev.run<30, 31, 32> (d, 0, tmp1);
+    rev.run<33> (d, tmp2);
+
+    // quantized decay
+    rev.run<34> (a, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run<35> (b, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run<36> (c, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run<37> (d, [&] (auto v, uint i) { return v * par.decay[i]; });
+
+    // block 2
+    rev.hadamard4 (
+      make_array (a.data(), b.data(), c.data(), d.data()), a.size());
+
+    // filter damp
+    T damp_k1 = load_float<T> (0.15f + _param.damp * 0.45f);
+    T damp_k2 = load_float<T> ((0.15f + _param.damp * 0.45f) * 0.9f);
+
+    // swaps.
+    a = xspan {d_mem.data(), io.size()};
+    b = xspan {c_mem.data(), io.size()};
+    c = xspan {a_mem.data(), io.size()};
+    d = xspan {b_mem.data(), io.size()};
+
+    // channel a block 2
+    rev.run<38> (a, damp_k2);
+    rev.run<39, 40, 41> (a);
+    rev.run<42> (a);
+    rev.run<43> (a);
+    rev.run<44> (a);
+    rev.run<45> (a);
+    rev.push<46> (a.to_const());
+
+    // channel b block 2
+    rev.run<47> (b, damp_k1);
+    rev.run<48, 49, 50> (b);
+    rev.push<51> (b.to_const());
+
+    // channel c block 2
+    rev.run<52> (c, damp_k1);
+    rev.run<53, 54, 55> (c);
+    rev.push<56> (c.to_const());
+
+    // channel d block 2
+    rev.run<57> (d, damp_k2);
+    rev.run<58, 59, 60> (d);
+    rev.push<61> (d.to_const());
   }
   //----------------------------------------------------------------------------
   template <class T, class Params>
@@ -1009,6 +1280,8 @@ private:
     enum {
       abyss_flt,
       abyss,
+      small_space_flt,
+      small_space,
       midifex49_flt,
       midifex49,
       midifex50_flt,
@@ -1026,6 +1299,13 @@ private:
     case mode::abyss_flt:
     case mode::abyss: {
       auto& rev = _modes.emplace<abyss_type>();
+      rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
+    } break;
+    case mode::small_space_flt:
+    case mode::small_space: {
+      auto& rev = _modes.emplace<small_space_type>();
       rev.reset_memory (_mem_reverb);
       _lfo.set_phase (
         phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
@@ -1072,6 +1352,12 @@ private:
       auto f_late = 0.1f + mod * 1.2f;
       _lfo.set_freq (f32_x4 {f_er, f_er, f_late, f_late}, t_spl);
     } break;
+    case mode::small_space:
+    case mode::small_space_flt: {
+      auto f1 = 0.13f;
+      auto f2 = 0.1f + mod * 3.f;
+      _lfo.set_freq (f32_x4 {f1, f1, f2, f2}, t_spl);
+    } break;
     case mode::midifex49_flt:
     case mode::midifex49: {
       auto f_late = 0.2f + mod * 0.2f;
@@ -1095,6 +1381,17 @@ private:
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < block.size(); ++i) {
       visitor (block[i], i);
+    }
+  }
+  //----------------------------------------------------------------------------
+  // just a convenience function for iterating block loops while not bloating
+  // the code with more loop unroll hints than necessary
+  template <class T, class U>
+  void span_mul (xspan<T> block, U val)
+  {
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < block.size(); ++i) {
+      block[i] = (T) (block[i] * val);
     }
   }
   //----------------------------------------------------------------------------
@@ -1141,19 +1438,26 @@ private:
 
   using abyss_type
     = detail::lofiverb::engine<detail::lofiverb::abyss_spec, max_block_size>;
+  using small_space_type = detail::lofiverb::
+    engine<detail::lofiverb::small_space_spec, max_block_size>;
   using midifex49_type = detail::lofiverb::
     engine<detail::lofiverb::midifex49_spec, max_block_size>;
   using midifex50_type = detail::lofiverb::
     engine<detail::lofiverb::midifex50_spec, max_block_size>;
 
 #ifndef LOFIVERB_ADD_DEBUG_ALGO
-  using modes_type = std::variant<abyss_type, midifex49_type, midifex50_type>;
+  using modes_type = std::
+    variant<abyss_type, small_space_type, midifex49_type, midifex50_type>;
 #else
   using debug_algo_type = detail::lofiverb::
     engine<detail::lofiverb::debug_algo_spec, max_block_size>;
 
-  using modes_type
-    = std::variant<debug_algo_type, abyss_type, midifex49_type, midifex50_type>;
+  using modes_type = std::variant<
+    debug_algo_type,
+    abyss_type,
+    small_space_type,
+    midifex49_type,
+    midifex50_type>;
 #endif
 
   modes_type     _modes;

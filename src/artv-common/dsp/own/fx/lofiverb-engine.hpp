@@ -310,7 +310,7 @@ public:
   {
     // these quantizations could use fraction saving too...
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < io.size(); ++i) {
+    for (uint i = 0; i < block_size; ++i) {
       auto y1 = io[0][i] - io[1][i];
       auto y2 = io[0][i] + io[1][i];
       auto y3 = io[2][i] - io[3][i];

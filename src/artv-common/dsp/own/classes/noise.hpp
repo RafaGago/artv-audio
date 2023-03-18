@@ -3,6 +3,7 @@
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/short_ints.hpp"
 #include "artv-common/misc/vec.hpp"
+#include "artv-common/misc/vec_util.hpp"
 #include <array>
 #include <type_traits>
 

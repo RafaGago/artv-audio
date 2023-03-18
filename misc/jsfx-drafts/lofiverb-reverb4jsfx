@@ -72,7 +72,7 @@ loop(floor (srate / 44100) * 2,
 
 // Actual reverb stuff ---------------------------------------------------------
 n_lfos = 2;
-lfo.lfo_bank_init (n_lfos, 4);
+lfo.lfo_bank_init (n_lfos, 2);
 lfo.ret.array_init (n_lfos);
 lfo.lfo_bank_reset_phase (0);
 
@@ -99,16 +99,24 @@ filter_k2 = filter_k * 0.9;
 n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
 (n_spls_down) ? (
-  m = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5;
-  s = (src.ins.ptr[0] - src.ins.ptr[1]) * 0.5;
+
+  // halving an additional time to leave headroom
+  m = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5 * 0.5;
+  s = (src.ins.ptr[0] - src.ins.ptr[1]) * 0.5 * 0.5;
 
   m = ap (m, 23, 0.8 + 0.1 * character);
   m = ap (m, 130, 0.8 * character);
   m = ap (m, 217, 0.8 * character);
-  
+
   s = ap (s, 22, 0.8 + 0.1 * character);
   s = ap (s, 131, 0.8 * character);
   s = ap (s, 219, 0.8 * character);
+
+  // a single hadamard iteration can duplicate the range on one
+  // of the signals, so we halve once more.
+
+  m *= 0.5;
+  s *= 0.5;
 
   m_lfo.lfo_bank_tick_tri (m_lfo.ret.ptr, 0);
   lfo.lfo_bank_tick_tri (lfo.ret.ptr, 0);
@@ -122,7 +130,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   mtx.ptr[3] += s;
   hadamard_4(mtxcp.ptr, mtx.ptr);
   mtx.array_copy (mtxcp);
-  
+
   modv = 1 - ((1 - mod) * (1 - mod));
 
   g3 = 0.04;
@@ -149,7 +157,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 // [[167, 173], [89, 97], [61, 67], 221]
 // [169.10856120331252, 95.80151717422684, 66.8309150926837, 221]
   d = mtx.ptr[3];
-  d = ap3 (d, 167, 97, 67, 0.1 - 0.1 * lfo.ret.ptr[2], -0.04, g3);
+  d = ap3 (d, 167, 97, 67, 0.1 - 0.1 * lfo.ret.ptr[1], -0.04, g3);
   d = delay(d, 221, m_lfo.ret.ptr[1] * modv, mod_spls);
 
 // [[167, 173], [89, 97], [61, 67], 221]
@@ -167,15 +175,14 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 // [[113, 127], [67, 71], [43, 47], 155]
 // [118.60555197517394, 67.1911093303401, 46.872361264099425, 155]
   a = mtx.ptr[3];
-   
+
   a = f1.dampfilter (a, filter_k2);
   a = ap3 (a, 113, 67, 47, 0.1, 0.04, -g3);
-  a = delay (a, 155);
-  
+  a = delay (a, 122);
   a = ap (a, 119, 0.6);
   a = ap (a, 67, 0.6);
-  a = ap (a, 47, -0.6); 
-   
+  a = ap (a, 47, -0.6);
+  a = delay (a, 33);
 // [[113, 127], [67, 71], [43, 47], 155]
 // [118.60555197517394, 67.1911093303401, 46.872361264099425, 155]
 
@@ -204,7 +211,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   mtx.ptr[1] = b;
   mtx.ptr[2] = c;
   mtx.ptr[3] = d;
-  
+
   l = a;
   l = ap (l, 71, 0.4 + 0.3 * character);
   l = ap (l, 116, -0.6 * character);
