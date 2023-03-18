@@ -53,6 +53,11 @@ struct delay_data {
   fixpt_spls_mod mod; // In samples. If 0 the delay is not modulated
 };
 
+struct block_delay_data {
+  fixpt_spls spls;
+  fixpt_spls extra_spls; // In samples. To be able to do negative offsets
+};
+
 struct filter_data {
   fixpt_t g;
   bool    is_lowpass;
@@ -62,8 +67,8 @@ struct quantizer {
   fixpt_t g;
 };
 
-using stage_data
-  = std::variant<allpass_data, delay_data, filter_data, quantizer>;
+using stage_data = std::
+  variant<allpass_data, delay_data, block_delay_data, filter_data, quantizer>;
 //------------------------------------------------------------------------------
 static constexpr detail::lofiverb::stage_data make_ap (
   u16   spls,
@@ -80,6 +85,30 @@ static constexpr detail::lofiverb::stage_data make_delay (u16 spls, u16 mod = 0)
 {
   return delay_data {
     fixpt_spls::from_int (spls), fixpt_spls_mod::from_int (mod)};
+}
+//------------------------------------------------------------------------------
+// block delays have to be at least one block long. It has an additional
+// parameter to overallocate memory to allow block processing "extra_spls".
+//
+// If the last element of a reverb loop is a delay of at least one block, all
+// the outputs for a block can be fetched from existing previous work, before
+// even starting processing the incoming sample batch.
+//
+// If those samples are to be used as feedback to sum with the current input
+// batch, then the feedback samples need the last output from the past block to
+// be added with the first incoming sample.
+//
+// So in total it is needed to fetch 1 block plus one old sample for feedback
+// purposes, that's what the "extra_spls" parameter is for. This is used in
+// conjunction with a value of 1 on "negative_offset" on the fetch_block
+// function plus passing a buffer of the desired size + 1 spl.
+
+If the block delay is not used as a feedback an
+  a static constexpr detail::lofiverb::stage_data
+  make_block_delay (u16 spls, u16 extra_spls = 1)
+{
+  return block_delay_data {
+    fixpt_spls::from_int (spls), fixpt_spls::from_int (extra_spls)};
 }
 //------------------------------------------------------------------------------
 static constexpr detail::lofiverb::stage_data make_hp (float g = 0)
@@ -107,9 +136,14 @@ public:
     return std::holds_alternative<allpass_data> (values[i]);
   }
   //----------------------------------------------------------------------------
+  static constexpr bool is_block_delay (uint i)
+  {
+    return std::holds_alternative<block_delay_data> (values[i]);
+  }
+  //----------------------------------------------------------------------------
   static constexpr bool is_delay (uint i)
   {
-    return std::holds_alternative<delay_data> (values[i]);
+    return std::holds_alternative<delay_data> (values[i]) || is_block_delay (i);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_filter (uint i)
@@ -148,6 +182,9 @@ public:
     if (is_allpass (i)) {
       return std::get<allpass_data> (values[i]).spls;
     }
+    else if (is_block_delay (i)) {
+      return std::get<block_delay_data> (values[i]).spls;
+    }
     else if (is_delay (i)) {
       return std::get<delay_data> (values[i]).spls;
     }
@@ -161,8 +198,18 @@ public:
     if (is_allpass (i)) {
       return std::get<allpass_data> (values[i]).mod;
     }
-    else if (is_delay (i)) {
+    else if (is_delay (i) && !is_block_delay (i)) {
       return std::get<delay_data> (values[i]).mod;
+    }
+    else {
+      return {};
+    }
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint get_delay_extra_spls (uint i)
+  {
+    if (is_block_delay (i)) {
+      return std::get<block_delay_data> (values[i]).extra_spls.to_int();
     }
     else {
       return {};
@@ -222,9 +269,8 @@ public:
   template <uint Idx, class T>
   void fetch_block (xspan<T> dst, uint negative_offset = 0)
   {
-    static_assert (spec::is_delay (Idx), "Only possible on pure delays");
-    static_assert (
-      !spec::has_modulated_delay (Idx), "Not possible on Modulated delays");
+    static_assert (spec::is_block_delay (Idx), "Only usable on block delays");
+    static_assert (spec::get_delay_spls (Idx).to_int() >= max_block_size);
     assert (dst);
     decode_read (dst, get_read_buffers<Idx> (dst.size(), negative_offset));
   }
@@ -233,9 +279,8 @@ public:
   template <uint Idx, class T>
   void fetch_block_add (xspan<T> io, uint negative_offset = 0)
   {
-    static_assert (spec::is_delay (Idx), "Only possible on pure delays");
-    static_assert (
-      !spec::has_modulated_delay (Idx), "Not possible on Modulated delays");
+    static_assert (spec::is_block_delay (Idx), "Only usable on block delays");
+    static_assert (spec::get_delay_spls (Idx).to_int() >= max_block_size);
     assert (io);
     decode_read_add (io, get_read_buffers<Idx> (io.size(), negative_offset));
   }
@@ -245,9 +290,8 @@ public:
   template <uint Idx, class T>
   void push (xspan<T const> src)
   {
-    static_assert (spec::is_delay (Idx), "Only possible on pure delays");
-    static_assert (
-      !spec::has_modulated_delay (Idx), "Not possible on Modulated delays");
+    static_assert (spec::is_block_delay (Idx), "Only usable on block delays");
+    static_assert (spec::get_delay_spls (Idx).to_int() >= max_block_size);
     assert (src);
     encode_write (prepare_block_insertion<Idx> (src.size()), src);
   }
@@ -526,6 +570,20 @@ private:
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
+  T get (uint delay_spls)
+  {
+    constexpr auto sz = get_delay_size (Idx);
+
+    assert (delay_spls <= sz);
+
+    uint z = _stage[Idx].pos - delay_spls;
+    z += (z >= sz) ? sz : 0;
+    T ret;
+    decode_read (ret, _stage[Idx].z[z]);
+    return ret;
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T>
   void push_one (T v)
   {
     encode_write (_stage[Idx].z[_stage[Idx].pos], v);
@@ -735,20 +793,6 @@ private:
       dst[i]  = y1;
     }
     save_state<Idx> (y1);
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class T>
-  T get (uint delay_spls)
-  {
-    constexpr auto sz = get_delay_size (Idx);
-
-    assert (delay_spls < sz);
-
-    uint z = _stage[Idx].pos - delay_spls;
-    z += (z >= sz) ? sz : 0;
-    T ret;
-    decode_read (ret, _stage[Idx].z[z]);
-    return ret;
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
@@ -1029,10 +1073,11 @@ private:
   //----------------------------------------------------------------------------
   static constexpr uint get_delay_size (uint i)
   {
-    // + 1 is some legacy that I forgot. I vaguely remember that wasting one
-    // element allowed saving code (TODO investigate)
     uint v = spec::get_max_delay_spls (i);
-    return v + (v ? 1 : 0);
+    if (spec::is_block_delay (i)) {
+      v += spec::get_delay_extra_spls (i);
+    }
+    return v;
   }
   //----------------------------------------------------------------------------
   static constexpr uint get_states_offset (uint i)
@@ -1225,7 +1270,7 @@ private:
     constexpr uint n_spls = spec::get_delay_spls (Idx).to_int();
     constexpr auto sz     = get_delay_size (Idx);
     assert (blocksize);
-    assert (sz >= (blocksize + neg_offset));
+    assert (sz >= blocksize);
 
     uint block1 = _stage[Idx].pos - n_spls - neg_offset;
     block1 += (block1 >= sz) ? sz : 0;

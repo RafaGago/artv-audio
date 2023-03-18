@@ -36,7 +36,7 @@ static constexpr auto get_debug_algo_spec()
     make_ap (147, 0.5), // 0
     make_ap (183, 0.4), // 1
     make_ap (389, 0.3), // 2
-    make_delay (33) // 3
+    make_block_delay (max_block_size) // 3
   );
 }
 
@@ -58,7 +58,7 @@ static constexpr auto get_abyss_spec()
     make_lp(), // 5
     make_quantizer(), // 6
     make_ap (1787, 0.5, 261), // 7
-    make_delay (max_block_size + 1), // 8 to allow block processing
+    make_block_delay (max_block_size), // 8 to allow block processing
     // loop1
     make_ap (977, 0.5 /*overridden*/, 51), // 9
     make_delay (2819), // 10
@@ -68,7 +68,8 @@ static constexpr auto get_abyss_spec()
     make_delay (1021), // 14
     make_quantizer(), // 15
     make_ap (1453, 0.618), // 16
-    make_delay (787), // 17 delay (allows block processing) (> blocksz + 1)
+    make_block_delay (
+      787), // 17 delay (allows block processing) (> blocksz + 1)
     // loop2
     make_ap (947, 0.5 /*overridden*/, 67), // 18
     make_delay (3191), // 19
@@ -79,7 +80,8 @@ static constexpr auto get_abyss_spec()
     make_quantizer(), // 24
     make_ap (1367, 0.618), // 25
     make_hp (0.98), // 26
-    make_delay (647)); // 27 delay (allows block processing) (> blocksz + 1)
+    make_block_delay (
+      647)); // 27 delay (allows block processing) (> blocksz + 1)
 }
 
 struct abyss_spec {
@@ -152,31 +154,28 @@ static constexpr auto get_small_space_spec()
     make_ap (119, 0.6), // 43
     make_ap (67, 0.6), // 44
     make_ap (47, -0.6), // 45
-    make_delay (33), // feedback point // 46
+    make_block_delay (32), // feedback point // 46
 
     // block b iteration 2
     make_lp(), // 47
     make_ap (114, -0.1), // nested 3x // 48
     make_ap (66, -0.04), // 49
     make_ap (47, -0.04), // 50
-    //    make_delay (149), // feedback point // 51
-    make_delay (33), // feedback point // 51
+    make_block_delay (149), // feedback point // 51
 
     // block c iteration 2
     make_lp(), // 52
     make_ap (116, -0.1), // nested 3x // 53
     make_ap (65, -0.04), // 54
     make_ap (46, -0.04), // 55
-    //    make_delay (151), // feedback point // 56
-    make_delay (33), // feedback point // 56
+    make_block_delay (151), // feedback point // 56
 
     // block d iteration 2
     make_lp(), // 57
     make_ap (121, -0.1), // nested 3x // 58
     make_ap (69, 0.04), // 59
     make_ap (47, 0.04), // 60
-    // make_delay (157) // feedback point // 61
-    make_delay (33) // feedback point // 61
+    make_block_delay (157) // feedback point // 61
   );
 }
 
@@ -194,21 +193,21 @@ static constexpr auto get_midifex49_spec()
     make_ap (1620, 0.5), // 3 PreAP
 
     make_delay (21), // 4 L1
-    make_delay (1010), // 5 R1
+    make_block_delay (1010, 0), // 5 R1
 
     make_delay (1624), // 6 Loop
     make_ap (1992, 0.5, 17), // 7 Loop
 
-    make_delay (1891), // 8 L2
-    make_delay (890), // 9 R2
+    make_block_delay (1891, 0), // 8 L2
+    make_block_delay (890, 0), // 9 R2
 
     make_delay (2110), // 10 Loop
     make_quantizer(), // 11
     make_ap (2371, 0.5), // 12 Loop nested allpass 1
     make_ap (1378, 0.2), // 13 Loop nested allpass 2
 
-    make_delay (2003), // 14 L3
-    make_delay (671), // 15 R3
+    make_block_delay (2003, 0), // 14 L3
+    make_block_delay (671, 0), // 15 R3
 
     make_delay (2157), // 16 Loop
     make_quantizer(), // 17
@@ -218,7 +217,7 @@ static constexpr auto get_midifex49_spec()
 
     make_hp (0.995), // 21 HP
 
-    make_delay (max_block_size + 1) // 21 delay block (== blocksz + 1)
+    make_block_delay (max_block_size) // 21 delay block (== blocksz + 1)
   );
 }
 
@@ -252,7 +251,7 @@ static constexpr auto get_midifex50_spec()
     make_lp(), // 19
     make_delay (2, 96), // 20 TODO: FIX or STUDY. min of 2 spls are required
     make_hp (0.995), // 21 HP
-    make_delay (max_block_size + 1), // 22 (FB point) (== blocksz + 1)
+    make_block_delay (32), // 22 (FB point) (== blocksz + 1)
     make_ap (147, 0.5), // 23 L diff
     make_ap (43, 0.5), // 24 L diff
     make_ap (55, 0.5), // 25 L diff
