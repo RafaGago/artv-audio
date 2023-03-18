@@ -650,6 +650,7 @@ add_executable(
     test/common/fft.cpp
     test/common/simd.cpp
     test/common/fixed_point.cpp
+    test/common/lofiverb.cpp
     )
 target_link_libraries (common-test PUBLIC test mufft-all pffft)
 #-- Mix-maxtrix ----------------------------------------------------------------
