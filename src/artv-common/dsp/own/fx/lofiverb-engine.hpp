@@ -228,7 +228,19 @@ public:
     assert (dst);
     decode_read (dst, get_read_buffers<Idx> (dst.size(), negative_offset));
   }
-  // see comment on fetch_block_plus_one
+
+  // as above, but gets the contents added to "io"
+  template <uint Idx, class T>
+  void fetch_block_add (xspan<T> io, uint negative_offset = 0)
+  {
+    static_assert (spec::is_delay (Idx), "Only possible on pure delays");
+    static_assert (
+      !spec::has_modulated_delay (Idx), "Not possible on Modulated delays");
+    assert (io);
+    decode_read_add (io, get_read_buffers<Idx> (io.size(), negative_offset));
+  }
+
+  // see comment on fetch_block
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
   void push (xspan<T const> src)
@@ -292,20 +304,22 @@ public:
     }
   }
 #else
-  template <class T, uint N>
-  static void hadamard4 (std::array<T*, N> io, uint block_size)
+  // this might belong somewhere else
+  template <class T>
+  static void hadamard4 (std::array<T*, 4> io, uint block_size)
   {
-    // these quantizations might use error saving too...
+    // these quantizations could use fraction saving too...
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       auto y1 = io[0][i] - io[1][i];
       auto y2 = io[0][i] + io[1][i];
       auto y3 = io[2][i] - io[3][i];
       auto y4 = io[2][i] + io[3][i];
 
-      io[0][i] = (y1 - y3) * 0.5_r;
-      io[1][i] = (y2 - y4) * 0.5_r;
-      io[2][i] = (y1 + y3) * 0.5_r;
-      io[3][i] = (y2 + y4) * 0.5_r;
+      io[0][i] = (T) ((y1 - y3) * 0.5_r);
+      io[1][i] = (T) ((y2 - y4) * 0.5_r);
+      io[2][i] = (T) ((y1 + y3) * 0.5_r);
+      io[3][i] = (T) ((y2 + y4) * 0.5_r);
     }
   }
 #endif
@@ -314,7 +328,25 @@ public:
   void run (xspan<T> io, Ts&&... args)
   {
     if constexpr (spec::is_allpass (Idx) || spec::is_delay (Idx)) {
-      run_ap_or_delay<Idx> (io, std::forward<Ts> (args)...);
+      constexpr uint n_args          = sizeof...(Ts);
+      constexpr uint expected_n_args = 2;
+
+      if constexpr (expected_n_args == n_args) {
+        run_ap_or_delay<Idx> (io, std::forward<Ts> (args)...);
+      }
+      else {
+        // add null on the remaining positions
+        using filler_nulls = mp11::
+          mp_repeat_c<std::tuple<std::nullptr_t>, expected_n_args - n_args>;
+        std::apply (
+          [=] (auto&&... targs) {
+            run_ap_or_delay<Idx> (
+              io, std::forward<decltype (targs)> (targs)...);
+          },
+          std::tuple_cat (
+            std::forward_as_tuple (std::forward<Ts> (args)...),
+            filler_nulls {}));
+      }
     }
     else if constexpr (spec::is_filter (Idx)) {
       if constexpr (spec::is_lowpass_filter (Idx)) {
@@ -356,9 +388,7 @@ private:
   static constexpr auto get_lfo_generator (Lfo&& v)
   {
     using LfoDec = std::decay_t<Lfo>;
-    if constexpr (
-      std::is_convertible_v<LfoDec, std::function<T (uint)>>
-      && !std::is_same_v<LfoDec, std::nullptr_t>) {
+    if constexpr (is_generator<T, LfoDec>()) {
       return std::forward<LfoDec> (v);
     }
     else if constexpr (is_xspan<LfoDec>) {
@@ -373,9 +403,7 @@ private:
   static constexpr auto get_gain_generator (Gain&& v)
   {
     using GainDec = std::decay_t<Gain>;
-    if constexpr (
-      std::is_convertible_v<GainDec, std::function<T (uint)>>
-      && !std::is_same_v<GainDec, std::nullptr_t>) {
+    if constexpr (is_generator<T, GainDec>()) {
       return std::forward<GainDec> (v);
     }
     else if constexpr (is_xspan<GainDec>) {
@@ -433,6 +461,23 @@ private:
     dst.cut_head (src[0].size());
     for (uint i = 0; i < src[1].size(); ++i) {
       decode_read (dst[i], src[1][i]);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void decode_read_add (xspan<T> dst, std::array<xspan<s16>, 2> src)
+  {
+    assert (dst.size() == (src[0].size() + src[1].size()));
+    for (uint i = 0; i < src[0].size(); ++i) {
+      T v;
+      decode_read (v, src[0][i]);
+      dst[i] = (T) (dst[i] + v);
+    }
+    dst.cut_head (src[0].size());
+    for (uint i = 0; i < src[1].size(); ++i) {
+      T v;
+      decode_read (v, src[1][i]);
+      dst[i] = (T) (dst[i] + v);
     }
   }
   //----------------------------------------------------------------------------
@@ -495,6 +540,7 @@ private:
       = lsb_mask<uint> (fixpt_acum_t::n_bits - fixpt_t::n_bits);
 
     s16 err = fetch_quantizer_err<Idx>();
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       auto in        = fn (io[i], i);
       auto [v, err_] = round (in, err);
@@ -507,13 +553,14 @@ private:
   template <uint Idx, class Func>
   void run_quantizer (xspan<float> io, Func&& fn)
   {
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       io[i] = fn (io[i], i);
     }
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, bool Is_lp, class U>
-  void run_1pole (xspan<fixpt_t> io, U g)
+  template <uint Idx, bool Is_lp, class Gain>
+  void run_1pole (xspan<fixpt_t> io, Gain g)
   {
     static_assert (spec::is_filter (Idx));
     assert (io);
@@ -521,9 +568,19 @@ private:
     auto [y1v, errv] = fetch_state<Idx> (fixpt_t {});
     auto y1          = fixpt_t::from (y1v);
 
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto x            = (fixpt_acum_t) io[i];
-      auto gw           = (fixpt_acum_t) g;
+      auto         x = (fixpt_acum_t) io[i];
+      fixpt_acum_t gw;
+      if constexpr (is_generator<fixpt_t, Gain>()) {
+        gw = (fixpt_acum_t) g (i);
+      }
+      else if constexpr (is_xspan<Gain>) {
+        gw = (fixpt_acum_t) g[i];
+      }
+      else {
+        gw = (fixpt_acum_t) g;
+      }
       auto y            = (1_r - g) * x + g * y1;
       auto [y1_, errv_] = truncate (y, errv);
       y1                = y1_;
@@ -533,25 +590,35 @@ private:
     save_state<Idx> (y1.value(), errv);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, bool Is_lp, class U>
-  void run_1pole (xspan<float> io, U g)
+  template <uint Idx, bool Is_lp, class Gain>
+  void run_1pole (xspan<float> io, Gain g)
   {
     static_assert (spec::is_filter (Idx));
     assert (io);
     float y1 = fetch_state<Idx> (float {});
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto x  = io[i];
-      auto gf = (float) g;
-      y1      = (1.f - gf) * x + gf * y1;
-      io[i]   = Is_lp ? y1 : (x - y1);
+      auto  x = io[i];
+      float gv;
+      if constexpr (is_generator<float, Gain>()) {
+        gv = (float) g (i);
+      }
+      else if constexpr (is_xspan<Gain>) {
+        gv = (float) g[i];
+      }
+      else {
+        gv = (float) g;
+      }
+      y1    = (1.f - gv) * x + gv * y1;
+      io[i] = Is_lp ? y1 : (x - y1);
     }
     save_state<Idx> (y1);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
-  void run_lp (xspan<T> io, U g)
+  void run_lp (xspan<T> io, U&& g)
   {
-    run_1pole<Idx, true> (io, g);
+    run_1pole<Idx, true> (io, std::forward<U> (g));
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -561,36 +628,15 @@ private:
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
-  void run_hp (xspan<T> io, U g)
+  void run_hp (xspan<T> io, U&& g)
   {
-    run_1pole<Idx, false> (io, g);
+    run_1pole<Idx, false> (io, std::forward<U> (g));
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
   void run_hp (xspan<T> io)
   {
     run_hp<Idx> (io, spec::get_gain (Idx));
-  }
-  //----------------------------------------------------------------------------
-  // run an allpass or pure delay.
-  // Lfo and gain parameters can be either value generators (lambdas with
-  // T(int) signature), spans or dummy types. When dummy types (no span and no
-  // lambda types, e.g. nullptr) the parameters are defaulted (no delay
-  // modulation, same allpass gain as in the specification)
-  template <uint Idx, class T, class L, class G>
-  void run_ap_or_delay (xspan<T> io, L lfo, G gain)
-  {
-    run_ap_or_delay_impl<Idx> (
-      io,
-      get_gain_generator<Idx, T> (std::forward<G> (gain)),
-      get_lfo_generator<T> (std::forward<L> (lfo)));
-  }
-  //----------------------------------------------------------------------------
-  // run an allpass or pure delay
-  template <uint Idx, class T>
-  void run_ap_or_delay (xspan<T> io)
-  {
-    run_ap_or_delay<Idx> (io, nullptr, nullptr);
   }
   //----------------------------------------------------------------------------
   // run arbitrarily nested allpass.
@@ -646,6 +692,7 @@ private:
     auto [y1v, errv]    = fetch_state<Idx> (fixpt_t {});
     auto y1             = fixpt_t::from (y1v);
 
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < dst.size(); ++i) {
       auto fixpt_spls = (delay_spls + (lfo_gen (i) * delay_mod_spls));
       auto n_spls     = fixpt_spls.to_int();
@@ -672,6 +719,7 @@ private:
     constexpr auto delay_mod_spls = spec::get_delay_mod_spls (Idx).to_floatp();
 
     float y1 = fetch_state<Idx> (float {});
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < dst.size(); ++i) {
       float fixpt_spls  = (delay_spls + (lfo_gen (i) * delay_mod_spls));
       uint  n_spls      = (uint) fixpt_spls;
@@ -726,6 +774,7 @@ private:
   {
     static_assert (spec::is_allpass (Idx));
     if constexpr (std::is_floating_point_v<T>) {
+      ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
         auto [x, u] = run_allpass<Idx, T> (io[i], yn[i], g_gen (i));
         io[i]       = x;
@@ -734,6 +783,7 @@ private:
     }
     else {
       auto [err_x, err_u] = fetch_ap_err<Idx>();
+      ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
         auto g             = g_gen (i);
         auto u             = io[i] + yn[i] * g;
@@ -755,8 +805,12 @@ private:
   // - non-nested allpasses
   // - modulated non-nested allpasses.
   //
-  template <uint Idx, class T, class GF, class LF>
-  void run_ap_or_delay_impl (xspan<T> io, GF&& g_gen, LF&& lfo_gen)
+  // Lfo and gain parameters can be either value generators (lambdas with
+  // T(int) signature), spans or dummy types. When dummy types (no span and no
+  // lambda types, e.g. nullptr) the parameters are defaulted (no delay
+  // modulation, same allpass gain as in the specification)
+  template <uint Idx, class T, class Lfo, class G>
+  void run_ap_or_delay (xspan<T> io, Lfo&& lfo, G&& gain)
   {
     static_assert (!spec::is_filter (Idx));
 
@@ -764,6 +818,9 @@ private:
     constexpr auto minsz = sz - spec::get_delay_mod_spls (Idx).to_int();
 
     constexpr auto szw = get_delay_size (Idx);
+
+    auto g_gen   = get_gain_generator<Idx, T> (std::forward<G> (gain));
+    auto lfo_gen = get_lfo_generator<T> (std::forward<Lfo> (lfo));
 
     if constexpr (minsz >= max_block_size) {
       // no overlap, can run block-wise
@@ -773,13 +830,13 @@ private:
       xspan                         z {z_mem.data(), io.size()};
 
       if constexpr (spec::has_modulated_delay (Idx)) {
-        run_thiran<Idx> (z, std::forward<LF> (lfo_gen));
+        run_thiran<Idx> (z, lfo_gen);
       }
       else {
         decode_read (z, get_read_buffers<Idx> (z.size(), 0));
       }
       if constexpr (spec::is_allpass (Idx)) {
-        run_allpass<Idx, T> (io, z, std::forward<GF> (g_gen));
+        run_allpass<Idx, T> (io, z, g_gen);
         encode_write (prepare_block_insertion<Idx> (io.size()), z.to_const());
       }
       else {
@@ -789,6 +846,7 @@ private:
     }
     else {
       // overlap, needs single-sample iteration
+      ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
         T delayed;
         if constexpr (spec::has_modulated_delay (Idx)) {
@@ -872,9 +930,7 @@ private:
     Gain&&            gain_arg,
     GainAndLfoPairs&&... fwd)
   {
-    if constexpr (
-      std::is_convertible_v<Gain, std::function<T (uint)>>
-      && !std::is_same_v<Gain, std::nullptr_t>) {
+    if constexpr (is_generator<T, Gain>()) {
       gains[I] = gain_arg (n_spl);
     }
     else if constexpr (is_xspan<Gain>) {
@@ -924,6 +980,7 @@ private:
     run_nested_ap_impl_get_yn<0, n, Idxs> (
       yn, std::forward<GainAndLfoPairs> (gnlfo)...);
 
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       auto g = run_nested_ap_impl_get_gains<T, n, Idxs> (
         i, std::forward<GainAndLfoPairs> (gnlfo)...);
@@ -974,7 +1031,8 @@ private:
   {
     // + 1 is some legacy that I forgot. I vaguely remember that wasting one
     // element allowed saving code (TODO investigate)
-    return spec::get_max_delay_spls (i) + 1;
+    uint v = spec::get_max_delay_spls (i);
+    return v + (v ? 1 : 0);
   }
   //----------------------------------------------------------------------------
   static constexpr uint get_states_offset (uint i)
@@ -1206,7 +1264,7 @@ private:
 
     uint block1sz, block2sz;
     if (block1 < end) {
-      // contiguous
+      // contiguous, no wraparound
       block1sz = blocksize;
       block2sz = 0;
     }
@@ -1218,6 +1276,14 @@ private:
     return {
       xspan {&_stage[Idx].z[block1], block1sz},
       xspan {&_stage[Idx].z[0], block2sz}};
+  }
+  //----------------------------------------------------------------------------
+  template <class T, class Candidate>
+  static constexpr bool is_generator()
+  {
+    using C = std::remove_reference_t<Candidate>;
+    return std::is_convertible_v<C, std::function<T (uint)>>
+      && !std::is_same_v<C, std::nullptr_t>;
   }
   //----------------------------------------------------------------------------
   using spec = spec_access<Spec_array>;
