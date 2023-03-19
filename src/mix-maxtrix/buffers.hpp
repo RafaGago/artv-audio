@@ -130,56 +130,18 @@ public:
   template <size_t N_bus_chnls = 2> // 2 = stereo
   void swap (int bus1, int bus2)
   {
-    using simd                  = juce::dsp::SIMDRegister<value_type>;
-    constexpr size_t simd_elems = simd::SIMDNumElements;
-
-    assert (bus1 != 0);
-    assert (bus2 != 0);
-
-    if (unlikely (bus1 == bus2)) {
-      return;
-    }
-
-    auto simd_swap = [] (std::array<value_type*, 2> v, uint blocks) {
-      value_type* end = v[0] + (blocks * simd_elems);
-      while (v[0] < end) {
-        auto reg1 = simd::fromRawArray (v[0]);
-        auto reg2 = simd::fromRawArray (v[1]);
-        reg1.copyToRawArray (v[1]);
-        reg2.copyToRawArray (v[0]);
-        v[0] += simd_elems;
-        v[1] += simd_elems;
-      }
-    };
-
-    auto remainder_swap = [] (std::array<value_type*, 2> v, uint remainder) {
-      value_type* end = v[0] + remainder;
-      while (v[0] < end) {
-        value_type tmp = *v[0];
-        *v[0]          = *v[1];
-        *v[1]          = tmp;
-        ++v[0];
-        ++v[1];
-      }
-    };
-
     auto chnls1 = get_write_ptrs<N_bus_chnls> (bus1);
     auto chnls2 = get_write_ptrs<N_bus_chnls> (bus2);
-
+    auto count  = sample_count();
     for (int i = 0; i < N_bus_chnls; ++i) {
-      block_divide (
-        simd::SIMDRegisterSize,
-        make_array (chnls1[i], chnls2[i]),
-        sample_count(),
-        simd_swap,
-        remainder_swap);
+      std::swap_ranges (chnls1[i], chnls1[i] + count, chnls2[i]);
     }
   }
   //----------------------------------------------------------------------------
   template <size_t N_bus_chnls = 2, class I> // 2 = stereo
   bool mix (
     int            dst_bus,
-    xspan<const I> mix_buses,
+    xspan<I const> mix_buses,
     bool           foce_sum_with_dst = false)
   {
     static_assert (
@@ -232,7 +194,7 @@ public:
   template <size_t N_bus_chnls = 2, class I, class P> // 2 = stereo
   bool mix (
     int            dst_bus,
-    xspan<const I> mix_buses,
+    xspan<I const> mix_buses,
     xspan<P*>      adders,
     bool           dst_has_valid_data          = false,
     bool           adder_idx_is_mix_bus_offset = false)
@@ -302,54 +264,18 @@ public:
     std::array<float, N_bus_chnls> from,
     std::array<float, N_bus_chnls> to)
   {
-    using simd                  = juce::dsp::SIMDRegister<value_type>;
-    constexpr size_t simd_elems = simd::SIMDNumElements;
-
     if (unlikely (bus == 0)) {
       return;
     }
-
     uint first = get_first_audiobuffer_chnl (bus, N_bus_chnls);
     for (int i = 0; i < N_bus_chnls; ++i) {
-      if (from[i] == to[i]) {
-        _buffers[bus < 0]->applyGain (first + i, 0, sample_count(), from[i]);
-        continue;
+      if (from[i] != to[i]) {
+        _buffers[bus < 0]->applyGainRamp (
+          first + i, 0, sample_count(), from[i], to[i]);
       }
-
-      auto ptrs = get_write_ptrs<N_bus_chnls> (bus);
-
-      // maybe add interpolation classes?
-      auto simd_ramp = [&] (std::array<value_type*, 1> v, uint blocks) {
-        value_type* end     = v[0] + (blocks * simd_elems);
-        value_type  current = value_type {from[i]};
-
-        value_type increment = value_type {to[i]} - value_type {from[i]};
-        increment *= (value_type) simd_elems;
-        increment /= (value_type) sample_count();
-
-        while (v[0] < end) {
-          auto reg = simd::fromRawArray (v[0]);
-          reg *= current;
-          reg.copyToRawArray (v[0]);
-          v[0] += simd_elems;
-          current += increment;
-        }
-      };
-
-      auto remainder_ramp = [&] (std::array<value_type*, 1> v, uint remainder) {
-        value_type* end = v[0] + remainder;
-        while (v[0] < end) {
-          *v[0] *= to[i];
-          ++v[0];
-        }
-      };
-
-      block_divide (
-        simd::SIMDRegisterSize,
-        make_array (ptrs[i]),
-        sample_count(),
-        simd_ramp,
-        remainder_ramp);
+      else {
+        _buffers[bus < 0]->applyGain (first + i, 0, sample_count(), from[i]);
+      }
     }
   }
   //----------------------------------------------------------------------------
@@ -393,6 +319,6 @@ private:
   juce::AudioBuffer<T>                 _internal;
   uint                                 _channel_count = 0;
   uint                                 _extra_count   = 0;
-}; // namespace artv
+};
 
 } // namespace artv

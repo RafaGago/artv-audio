@@ -224,8 +224,8 @@ public:
 
       while (c[0] < end) {
         // dry channels
-        auto dl  = vec_load<vec_t> (c[0]);
-        auto dr  = vec_load<vec_t> (c[1]);
+        auto dl  = vec_load_unaligned<vec_t> (c[0]);
+        auto dr  = vec_load_unaligned<vec_t> (c[1]);
         auto reg = dl;
         dl       = dl + dr; // now L is M
         dr       = dr - reg; // now R is S
@@ -237,8 +237,8 @@ public:
         dl *= _gain[dry].l.skip (traits.size);
         dr *= _gain[dry].r.skip (traits.size);
         // wet channels
-        auto wl = vec_load<vec_t> (c[2]);
-        auto wr = vec_load<vec_t> (c[3]);
+        auto wl = vec_load_unaligned<vec_t> (c[2]);
+        auto wr = vec_load_unaligned<vec_t> (c[3]);
         reg     = wl;
         wl      = wl + wr; // now L is M
         wr      = wr - reg; // now R is S
@@ -255,8 +255,8 @@ public:
         dl *= _gain[global].l.skip (traits.size);
         dr *= _gain[global].r.skip (traits.size);
 
-        vec_store (c[0], dl);
-        vec_store (c[1], dr);
+        vec_store_unaligned (c[0], dl);
+        vec_store_unaligned (c[1], dr);
         c[0] += traits.size;
         c[1] += traits.size;
         c[2] += traits.size;
@@ -327,8 +327,8 @@ public:
 
       while (c[0] < end) {
         // dry channels
-        auto dl  = vec_load<vec_t> (c[0]);
-        auto dr  = vec_load<vec_t> (c[1]);
+        auto dl  = vec_load_unaligned<vec_t> (c[0]);
+        auto dr  = vec_load_unaligned<vec_t> (c[1]);
         auto reg = dl;
         dl       = dl + dr; // now L is M
         dr       = dr - reg; // now R is S
@@ -340,8 +340,8 @@ public:
         dl *= _gain[global].l.skip (traits.size);
         dr *= _gain[global].r.skip (traits.size);
 
-        vec_store (c[0], dl);
-        vec_store (c[1], dr);
+        vec_store_unaligned (c[0], dl);
+        vec_store_unaligned (c[1], dr);
         c[0] += traits.size;
         c[1] += traits.size;
       }

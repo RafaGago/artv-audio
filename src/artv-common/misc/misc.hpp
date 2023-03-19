@@ -246,7 +246,8 @@ static void apply (funct const& f, xspan<T> r, args&&... vargs)
   apply (f, std::forward<args> (vargs)...);
 }
 //------------------------------------------------------------------------------
-// divide memory on blocks. mainly to be used to wrap SIMD loop
+// divide memory on blocks. Invoke a function for each block and one for the
+// remainder, if any.
 template <class T, size_t N, class FunctorB, class FunctorT>
 static void block_divide (
   uint              blocksize, // bytes
@@ -255,10 +256,6 @@ static void block_divide (
   FunctorB          f_blocks,
   FunctorT          f_tail)
 {
-  for (auto v : elems) {
-    assert ((((uintptr_t) v) & (uintptr_t {blocksize} - 1)) == 0);
-  }
-
   uint blocks = elem_count / (blocksize / sizeof (T));
   if (blocks) {
     f_blocks (elems, blocks);
