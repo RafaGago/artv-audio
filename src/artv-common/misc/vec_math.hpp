@@ -173,7 +173,9 @@ inline auto call_vec_function (V1&& x, V2&& y, V3&& z, F1&& simd, F2&& scalar)
 template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 inline auto vec_exp (V&& x)
 {
-#if XSIMD_DISABLED == 0
+#if 0 // TBI
+  return __builtin_elementwise_exp (x);
+#elif XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::exp (std::forward<decltype (v)> (v)); },
@@ -191,7 +193,9 @@ inline auto vec_exp (V&& x)
 template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 inline auto vec_exp2 (V&& x)
 {
-#if XSIMD_DISABLED == 0
+#if 0 // TBI
+  return __builtin_elementwise_exp2 (x);
+#elif XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::exp2 (std::forward<decltype (v)> (v)); },
@@ -284,7 +288,9 @@ inline auto vec_cbrt (V&& x)
 template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 inline auto vec_log (V&& x)
 {
-#if XSIMD_DISABLED == 0
+#if 0 // TBI
+  return __builtin_elementwise_log (x);
+#elif XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::log (std::forward<decltype (v)> (v)); },
@@ -302,7 +308,9 @@ inline auto vec_log (V&& x)
 template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 inline auto vec_log2 (V&& x)
 {
-#if XSIMD_DISABLED == 0
+#if 0 // TBI
+  return __builtin_elementwise_log2 (x);
+#elif XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::log2 (std::forward<decltype (v)> (v)); },
@@ -320,7 +328,9 @@ inline auto vec_log2 (V&& x)
 template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 inline auto vec_log10 (V&& x)
 {
-#if XSIMD_DISABLED == 0
+#if 0 // TBI
+  return __builtin_elementwise_log10 (x);
+#elif XSIMD_DISABLED == 0
   using T = vec_value_type_t<V>;
   return detail::call_vec_function (
     std::forward<V> (x),
@@ -341,7 +351,9 @@ inline auto vec_log10 (V&& x)
 template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 inline auto vec_sin (V&& x)
 {
-#if XSIMD_DISABLED == 0
+#if 1
+  return __builtin_elementwise_sin (x);
+#elif XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::sin (std::forward<decltype (v)> (v)); },
@@ -359,7 +371,9 @@ inline auto vec_sin (V&& x)
 template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
 inline auto vec_cos (V&& x)
 {
-#if XSIMD_DISABLED == 0
+#if 1
+  return __builtin_elementwise_cos (x);
+#elif XSIMD_DISABLED == 0
   return detail::call_vec_function (
     std::forward<V> (x),
     [] (auto&& v) { return xsimd::cos (std::forward<decltype (v)> (v)); },
