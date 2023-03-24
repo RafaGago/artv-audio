@@ -12,6 +12,8 @@
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/value_smoother.hpp"
 #include "artv-common/dsp/own/fx/lofiverb-engine.hpp"
+#include "artv-common/dsp/own/parts/filters/composite/tilt.hpp"
+#include "artv-common/dsp/own/parts/oscillators/lfo.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/dsp/own/parts/waveshapers/sigmoid.hpp"
 #include "artv-common/dsp/types.hpp"
@@ -379,11 +381,9 @@ public:
       return;
     }
     _param.tilt = v;
-    auto db     = vec_set<2> ((float) v * -14.f);
-    _filt.reset_coeffs<0> (vec_set<2> (350.f), vec_set<2> (0.5f), db, t_spl);
-    _filt.reset_coeffs<1> (vec_set<2> (2200.f), db * -0.5f);
+    update_freq_balance();
   }
-
+  //----------------------------------------------------------------------------
   static constexpr auto get_parameter (freq_balace_tag)
   {
     return float_param ("%", -100, 100., 0., 0.1);
@@ -439,8 +439,7 @@ public:
       return;
     }
     _param.ducking_speed = v;
-    v *= 0.01f;
-    _ducker.set_speed (vec_set<2> (v * v), t_spl);
+    update_ducker();
   }
 
   static constexpr auto get_parameter (ducking_speed_tag)
@@ -450,43 +449,13 @@ public:
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
   {
-    auto beat_hz         = pc.get_play_state().bpm * (1.f / 60.f);
-    _1_4beat_spls        = (0.25f / beat_hz) * srate;
+    _pc                  = &pc;
     _n_processed_samples = 0;
+    _srate               = 0; // ensure triggering a resample reset
+    _param.mode
+      = (decltype (_param.mode)) -1ull; // trigger a mode and resampler reset
 
-    _resampler.reset (
-      srate,
-      pc.get_sample_rate(),
-      10500,
-      10500,
-      32,
-      16,
-      210,
-      true,
-      max_block_size,
-      6 * 1024);
-
-    _filt.reset_states_cascade();
-    _ducker.reset();
-    _lfo.reset();
-
-    // resize memory
-    uint predelay_spls = std::ceil (_1_4beat_spls * max_predelay_qb) * 2;
-    uint rev_spls      = 0;
-    mp11::mp_for_each<decltype (_modes)> ([&] (auto mode) {
-      rev_spls = std::max (mode.get_required_size(), rev_spls);
-    });
-    uint predelay_flt = predelay_spls * (sizeof (float) / sizeof _mem[0]);
-
-    _mem.clear();
-    _mem.resize (predelay_spls + predelay_flt + rev_spls);
-
-    _mem_reverb = xspan {_mem};
-    // reminder, hack, _mem_reverb is span<s16> and here it is casting to
-    // float. Do keep the predelay (float) first in the memory block to avoid
-    // alignment issues.
-    _predelay.reset (_mem_reverb.cut_head (predelay_flt).cast<float>(), 2);
-
+    _param_smooth.reset (_t_spl);
     // set defaults
     mp11::mp_for_each<parameters> ([&] (auto param) {
       set (param, get_parameter (param).min);
@@ -521,7 +490,7 @@ public:
   }
   //----------------------------------------------------------------------------
   using parameters = mp_list<
-    algorithm_tag,
+    algorithm_tag, // keep first! important for reset to work
     mode_tag,
     character_tag,
     damp_tag,
@@ -544,10 +513,8 @@ private:
   using fixpt_tr = detail::lofiverb::fixpt_tr;
   using float16  = detail::lofiverb::float16;
   //----------------------------------------------------------------------------
-  static constexpr uint  max_block_size = detail::lofiverb::max_block_size;
-  static constexpr uint  n_channels     = 2;
-  static constexpr uint  srate          = 23400;
-  static constexpr float t_spl          = (float) (1. / srate);
+  static constexpr uint max_block_size = detail::lofiverb::max_block_size;
+  static constexpr uint n_channels     = 2;
   // this is using 16 bits fixed-point arithmetic, positive values can't
   // represent one, so instead of correcting everywhere the parameters are
   // scaled instead to never reach 1.
@@ -1294,6 +1261,45 @@ private:
   //----------------------------------------------------------------------------
   void update_mode()
   {
+    uint srate {}, fc {};
+
+    switch (_param.mode) {
+    case mode::abyss_flt:
+    case mode::abyss: {
+      srate = 25200;
+      fc    = 11500;
+    } break;
+    case mode::small_space_flt:
+    case mode::small_space: {
+      srate = 25200;
+      fc    = 11500;
+    } break;
+    case mode::midifex49_flt:
+    case mode::midifex49: {
+      srate = 23400;
+      fc    = 10500;
+    } break;
+    case mode::midifex50_flt:
+    case mode::midifex50: {
+      srate = 23400;
+      fc    = 10500;
+    } break;
+#ifdef LOFIVERB_ADD_DEBUG_ALGO
+    case mode::debug_algo_flt:
+    case mode::debug_algo: {
+      srate = 23400;
+      fc    = 10500;
+    } break;
+#endif
+    default:
+      return;
+    }
+
+    if (_srate != srate) {
+      _srate = srate;
+      update_internal_srate (srate, fc);
+    }
+
     switch (_param.mode) {
     case mode::abyss_flt:
     case mode::abyss: {
@@ -1335,9 +1341,58 @@ private:
     default:
       return;
     }
+
     _n_processed_samples = 0; // trigger the control block on first sample
     xspan_memset (_mem_reverb, 0);
     update_mod();
+  }
+  //----------------------------------------------------------------------------
+  void update_internal_srate (uint srate, uint fc)
+  {
+    auto daw_srate = _pc->get_sample_rate();
+    _resampler.reset (
+      srate, daw_srate, fc, fc, 32, 16, 210, true, max_block_size, 6 * 1024);
+
+    auto  state   = _pc->get_play_state();
+    float beat_hz = 120.f;
+    if (state.is_valid) {
+      // playhead may not exist, eg. when scanning the plugin
+      beat_hz = state.bpm * (1.f / 60.f);
+    }
+    _1_4beat_spls = (0.25f / beat_hz) * srate;
+    _t_spl        = 1.f / srate;
+
+    _filt.reset_states_cascade();
+    _ducker.reset();
+    _lfo.reset();
+    _param_smooth.reset_srate (_t_spl);
+
+    // resize memory
+    uint predelay_spls = std::ceil (_1_4beat_spls * max_predelay_qb) * 2;
+    uint rev_spls      = 0;
+    mp11::mp_for_each<decltype (_modes)> ([&] (auto mode) {
+      rev_spls = std::max (mode.get_required_size(), rev_spls);
+    });
+    uint predelay_flt = predelay_spls * (sizeof (float) / sizeof _mem[0]);
+
+    _mem.clear();
+    _mem.resize (predelay_spls + predelay_flt + rev_spls);
+
+    _mem_reverb = xspan {_mem};
+    // reminder, hack, _mem_reverb is span<s16> and here it is casting to
+    // float. Do keep the predelay (float) first in the memory block to avoid
+    // alignment issues.
+    _predelay.reset (_mem_reverb.cut_head (predelay_flt).cast<float>(), 2);
+
+    update_mod();
+    update_freq_balance();
+    update_ducker();
+  }
+  //----------------------------------------------------------------------------
+  void update_ducker()
+  {
+    auto v = _param.ducking_speed * 0.01f;
+    _ducker.set_speed (vec_set<2> (v * v), _t_spl);
   }
   //----------------------------------------------------------------------------
   void update_mod()
@@ -1349,27 +1404,34 @@ private:
     case mode::abyss_flt: {
       auto f_er   = 0.3f + mod * 0.3f;
       auto f_late = 0.1f + mod * 1.2f;
-      _lfo.set_freq (f32_x4 {f_er, f_er, f_late, f_late}, t_spl);
+      _lfo.set_freq (f32_x4 {f_er, f_er, f_late, f_late}, _t_spl);
     } break;
     case mode::small_space:
     case mode::small_space_flt: {
       auto f1 = 0.13f;
       auto f2 = 0.1f + mod * 3.f;
-      _lfo.set_freq (f32_x4 {f1, f1, f2, f2}, t_spl);
+      _lfo.set_freq (f32_x4 {f1, f1, f2, f2}, _t_spl);
     } break;
     case mode::midifex49_flt:
     case mode::midifex49: {
       auto f_late = 0.2f + mod * 0.2f;
-      _lfo.set_freq (f32_x4 {f_late, f_late, f_late, f_late}, t_spl);
+      _lfo.set_freq (f32_x4 {f_late, f_late, f_late, f_late}, _t_spl);
     } break;
     case mode::midifex50_flt:
     case mode::midifex50: {
       auto f_late = 0.3f + mod * 0.1f;
-      _lfo.set_freq (f32_x4 {f_late, f_late, f_late, f_late}, t_spl);
+      _lfo.set_freq (f32_x4 {f_late, f_late, f_late, f_late}, _t_spl);
     } break;
     default:
       break;
     }
+  }
+  //----------------------------------------------------------------------------
+  void update_freq_balance()
+  {
+    auto db = vec_set<2> ((float) _param.tilt * -14.f);
+    _filt.reset_coeffs<0> (vec_set<2> (350.f), vec_set<2> (0.5f), db, _t_spl);
+    _filt.reset_coeffs<1> (vec_set<2> (2200.f), db * -0.5f);
   }
   //----------------------------------------------------------------------------
   // just a convenience function for iterating block loops while not bloating
@@ -1394,6 +1456,15 @@ private:
     }
   }
   //----------------------------------------------------------------------------
+  static constexpr uint get_max_mode_n_elems()
+  {
+    uint max_spls {0};
+    mp11::mp_for_each<decltype (_modes)> ([&] (auto mode) {
+      max_spls = std::max (decltype (mode)::get_required_size(), max_spls);
+    });
+    return max_spls;
+  }
+  //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
     u32   mode;
     float gain; // a parameter
@@ -1407,7 +1478,6 @@ private:
   struct smoothed_parameters {
     float mod;
     float stereo;
-    float er;
     float decay;
     float character;
     // dry, wet, ducker/gate
@@ -1464,6 +1534,10 @@ private:
 
   uint  _n_processed_samples;
   float _1_4beat_spls;
+  float _t_spl;
+  uint  _srate;
+
+  plugin_context* _pc;
 
   std::vector<s16, overaligned_allocator<s16, 16>> _mem;
   xspan<s16>                                       _mem_reverb;

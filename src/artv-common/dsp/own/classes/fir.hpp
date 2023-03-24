@@ -704,9 +704,28 @@ static constexpr uint get_n_ticks_for_n_new_spls_floor (
 //   required is 147/160 depending on the direction (gcd is 300).
 //
 //   If this is used to set the internal frequency at wich a DSP process
-//   operates then some  favorable numbers for the internal samplerate can be
-//   chosen, as e.g. 54000, which has very low memory requirements for multiples
-//   of 48KHz (gcd is 6000) and low for multiples of 44100 (gcd is 900).
+//   operates internally, then some even more favorable numbers for being
+//   converted from/to multiples of 44k1 and 48k  can be chosen, this script can
+//   be helpful:
+//
+//    #!/usr/bin/env python3
+//    # display good GCD's between 44100 and 48000 multiples. This is to select
+//    # favorable sample rate conversions
+//    from math import gcd
+//
+//    gcd_thres=800 # increase to get less but better ratios
+//
+//    print (f'srate t44k t48k')
+//    for i in range(11000, 60001):
+//        gcd44 = gcd(i, 44100)
+//        gcd48 = gcd(i, 48000)
+//        if gcd44 >= gcd_thres and gcd48 >= gcd_thres:
+//            ntables44 = int (max(44100, i) / gcd44)
+//            ntables48 = int (max(48000, i) / gcd48)
+//            print (f'{i} {ntables44:02d}   {ntables48:02d}')
+//
+// It can be seen that for samplerates like 50400 only 8-21 tables are required
+// with 44100 and 48000 respectively, which is very favorable.
 //
 // Along with "resampling::get_n_ticks_for_n_new_spls_floor/ceil" it is possible
 // to precompute how many input samples should be fed to get N output samples.

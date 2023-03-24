@@ -41,8 +41,13 @@ public:
   //----------------------------------------------------------------------------
   void reset (T t_spl, T hz = 10.f)
   {
-    memset (&_target, 0, sizeof _target);
     memset (&_current, 0, sizeof _current);
+    memset (&_target, 0, sizeof _target);
+    reset_srate (t_spl, hz);
+  }
+  //----------------------------------------------------------------------------
+  void reset_srate (T t_spl, T hz = 10.f)
+  {
     using x1_t = vec<T, 1>;
     onepole_smoother::reset_coeffs (
       xspan {&_smoother_coeff, 1}.cast (x1_t {}), vec_set<x1_t> (hz), t_spl);
