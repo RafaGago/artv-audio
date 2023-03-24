@@ -558,7 +558,7 @@ private:
 
       // refresh FX type.
       if (unlikely (fx_type_changed)) {
-        _fx_dsp[channel] = dsp_class{};
+        _fx_dsp[channel].emplace<dsp_class> ();
         auto& fx = std::get<dsp_class> (_fx_dsp[channel]);
         _fx_context.set_delay_compensation(0);
         fx.reset (_fx_context);

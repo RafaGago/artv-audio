@@ -102,10 +102,9 @@ static constexpr detail::lofiverb::stage_data make_delay (u16 spls, u16 mod = 0)
 // purposes, that's what the "extra_spls" parameter is for. This is used in
 // conjunction with a value of 1 on "negative_offset" on the fetch_block
 // function plus passing a buffer of the desired size + 1 spl.
-
-If the block delay is not used as a feedback an
-  a static constexpr detail::lofiverb::stage_data
-  make_block_delay (u16 spls, u16 extra_spls = 1)
+static constexpr detail::lofiverb::stage_data make_block_delay (
+  u16 spls,
+  u16 extra_spls = 1)
 {
   return block_delay_data {
     fixpt_spls::from_int (spls), fixpt_spls::from_int (extra_spls)};
@@ -233,6 +232,88 @@ private:
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
+namespace state {
+// these need to be outside of engine, as the constexpr function has to be fully
+// defined before.
+//------------------------------------------------------------------------------
+struct empty {
+  struct clang_bug_workaround {};
+  clang_bug_workaround v;
+};
+//------------------------------------------------------------------------------
+struct y1_float {
+  float y1;
+};
+//------------------------------------------------------------------------------
+struct y1_fixpt {
+  fixpt_t y1;
+  s16     y1_err;
+};
+//------------------------------------------------------------------------------
+struct allpass_fixpt {
+  s16 x_err;
+  s16 u_err;
+};
+//------------------------------------------------------------------------------
+struct allpass_and_y1_fixpt {
+  fixpt_t y1;
+  s16     y1_err;
+  s16     x_err;
+  s16     u_err;
+};
+//------------------------------------------------------------------------------
+struct quantizer_fixpt {
+  s16 err;
+};
+//------------------------------------------------------------------------------
+template <class T, uint Idx, class SpecAccess>
+static constexpr auto get_state_type()
+{
+  if constexpr (is_fixpt_v<T>) {
+    if constexpr (SpecAccess::has_modulated_delay (Idx)) {
+      if constexpr (SpecAccess::is_allpass (Idx)) {
+        return allpass_and_y1_fixpt {};
+      }
+      else {
+        return y1_fixpt {};
+      }
+    }
+    else if constexpr (SpecAccess::is_allpass (Idx)) {
+      return allpass_fixpt {};
+    }
+    else if constexpr (SpecAccess::is_filter (Idx)) {
+      return y1_fixpt {};
+    }
+    else if constexpr (SpecAccess::is_quantizer (Idx)) {
+      return quantizer_fixpt {};
+    }
+    else {
+      return empty {};
+    }
+  }
+  else {
+    static_assert (std::is_same_v<T, float>);
+    if constexpr (
+      SpecAccess::has_modulated_delay (Idx) || SpecAccess::is_filter (Idx)) {
+      return y1_float {};
+    }
+    else {
+      return empty {};
+    }
+  }
+}
+//------------------------------------------------------------------------------
+template <class T, class SpecAccess>
+struct index_to_state_qfn {
+
+  template <class Idx>
+  using fn = decltype (get_state_type<T, Idx::value, SpecAccess>());
+};
+//------------------------------------------------------------------------------
+
+} // namespace state
+
+//------------------------------------------------------------------------------
 // A class to abstract 16-bit storage, queue access and common DSP operations
 // when building reverbs based on allpass loops. Both on fixed and floating
 // point.
@@ -246,7 +327,7 @@ public:
   {
     uint ret = 0;
     for (uint i = 0; i < decltype (_stage) {}.size(); ++i) {
-      ret += get_stage_n_elems (i);
+      ret += get_delay_size (i);
     }
     return ret;
   }
@@ -254,8 +335,9 @@ public:
   constexpr void reset_memory (xspan<s16> mem)
   {
     for (uint i = 0; i < _stage.size(); ++i) {
-      _stage[i].z = mem.cut_head (get_stage_n_elems (i)).data();
+      _stage[i].z = mem.cut_head (get_delay_size (i)).data();
     }
+    memset (&_states, 0, sizeof _states);
   }
   //----------------------------------------------------------------------------
   // Pure delays with "size > blocksize" are placed before feedback loops to
@@ -597,7 +679,9 @@ private:
     constexpr uint mask
       = lsb_mask<uint> (fixpt_acum_t::n_bits - fixpt_t::n_bits);
 
-    s16 err = fetch_quantizer_err<Idx>();
+    state::quantizer_fixpt& st  = std::get<Idx> (_states.fix);
+    auto                    err = st.err;
+
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       auto in        = fn (io[i], i);
@@ -605,7 +689,7 @@ private:
       io[i]          = v;
       err            = err_;
     }
-    save_quantizer_err<Idx> (err);
+    st.err = err;
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class Func>
@@ -623,8 +707,9 @@ private:
     static_assert (spec::is_filter (Idx));
     assert (io);
 
-    auto [y1v, errv] = fetch_state<Idx> (fixpt_t {});
-    auto y1          = fixpt_t::from (y1v);
+    state::y1_fixpt& st  = std::get<Idx> (_states.fix);
+    auto             y1  = st.y1;
+    auto             err = st.y1_err;
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
@@ -639,13 +724,14 @@ private:
       else {
         gw = (fixpt_acum_t) g;
       }
-      auto y            = (1_r - g) * x + g * y1;
-      auto [y1_, errv_] = truncate (y, errv);
-      y1                = y1_;
-      errv              = errv_;
-      io[i]             = Is_lp ? y1 : (decltype (y1)) (x - y);
+      auto y           = (1_r - g) * x + g * y1;
+      auto [y1_, err_] = truncate (y, err);
+      y1               = y1_;
+      err              = err_;
+      io[i]            = Is_lp ? y1 : (decltype (y1)) (x - y);
     }
-    save_state<Idx> (y1.value(), errv);
+    st.y1     = y1;
+    st.y1_err = err;
   }
   //----------------------------------------------------------------------------
   template <uint Idx, bool Is_lp, class Gain>
@@ -653,7 +739,10 @@ private:
   {
     static_assert (spec::is_filter (Idx));
     assert (io);
-    float y1 = fetch_state<Idx> (float {});
+
+    state::y1_float& st = std::get<Idx> (_states.flt);
+    float            y1 = st.y1;
+
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       auto  x = io[i];
@@ -670,7 +759,7 @@ private:
       y1    = (1.f - gv) * x + gv * y1;
       io[i] = Is_lp ? y1 : (x - y1);
     }
-    save_state<Idx> (y1);
+    st.y1 = y1;
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
@@ -747,26 +836,29 @@ private:
 
     using fixpt_th      = decltype (fixpt_acum_t {}.resize<2, -2>());
     constexpr uint mask = lsb_mask<uint> (fixpt_th::n_frac - fixpt_t::n_frac);
-    auto [y1v, errv]    = fetch_state<Idx> (fixpt_t {});
-    auto y1             = fixpt_t::from (y1v);
+
+    auto& st  = std::get<Idx> (_states.fix);
+    auto  y1  = st.y1;
+    auto  err = st.y1_err;
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < dst.size(); ++i) {
       auto fixpt_spls = (delay_spls + (lfo_gen (i) * delay_mod_spls));
       auto n_spls     = fixpt_spls.to_int();
       n_spls -= i;
-      auto n_spls_frac  = (fixpt_th) fixpt_spls.fractional();
-      auto d            = n_spls_frac + 0.418_r; // this might exceed 1
-      auto a            = (1_r - d) / (1_r + d); // 0.4104 to -1
-      auto z0           = (fixpt_th) get<Idx, fixpt_t> (n_spls - 1);
-      auto z1           = (fixpt_th) get<Idx, fixpt_t> (n_spls);
-      auto y            = (z0 * a) + z1 - (a * y1);
-      auto [y1_, errv_] = truncate (y, errv);
-      y1                = y1_;
-      errv              = errv_;
-      dst[i]            = y1;
+      auto n_spls_frac = (fixpt_th) fixpt_spls.fractional();
+      auto d           = n_spls_frac + 0.418_r; // this might exceed 1
+      auto a           = (1_r - d) / (1_r + d); // 0.4104 to -1
+      auto z0          = (fixpt_th) get<Idx, fixpt_t> (n_spls - 1);
+      auto z1          = (fixpt_th) get<Idx, fixpt_t> (n_spls);
+      auto y           = (z0 * a) + z1 - (a * y1);
+      auto [y1_, err_] = truncate (y, err);
+      y1               = y1_;
+      err              = err_;
+      dst[i]           = y1;
     }
-    save_state<Idx> (y1.value(), errv);
+    st.y1     = y1;
+    st.y1_err = err;
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class LF>
@@ -776,7 +868,9 @@ private:
     constexpr auto delay_spls     = spec::get_delay_spls (Idx).to_floatp();
     constexpr auto delay_mod_spls = spec::get_delay_mod_spls (Idx).to_floatp();
 
-    float y1 = fetch_state<Idx> (float {});
+    auto& st = std::get<Idx> (_states.flt);
+    float y1 = st.y1;
+
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < dst.size(); ++i) {
       float fixpt_spls  = (delay_spls + (lfo_gen (i) * delay_mod_spls));
@@ -792,7 +886,7 @@ private:
       y1      = z0 * a + z1 - a * y1;
       dst[i]  = y1;
     }
-    save_state<Idx> (y1);
+    st.y1 = y1;
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
@@ -805,10 +899,11 @@ private:
       return std::make_tuple (x, u);
     }
     else {
-      auto [err_x_prev, err_u_prev] = fetch_ap_err<Idx>();
-      auto [q_x, err_x]             = truncate (x, err_x_prev);
-      auto [q_u, err_u]             = truncate (u, err_u_prev);
-      save_ap_err<Idx> (err_x, err_u);
+      auto& st          = std::get<Idx> (_states.fix);
+      auto [q_x, x_err] = truncate (x, st.x_err);
+      auto [q_u, u_err] = truncate (u, st.u_err);
+      st.x_err          = x_err;
+      st.u_err          = u_err;
       return std::make_tuple (q_x, q_u);
     }
   }
@@ -826,20 +921,24 @@ private:
       }
     }
     else {
-      auto [err_x, err_u] = fetch_ap_err<Idx>();
+      auto& st    = std::get<Idx> (_states.fix);
+      auto  x_err = st.x_err;
+      auto  u_err = st.u_err;
+
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
         auto g             = g_gen (i);
         auto u             = io[i] + yn[i] * g;
         auto x             = yn[i] - u * g;
-        auto [q_x, err_x_] = truncate (x, err_x);
-        auto [q_u, err_u_] = truncate (u, err_u);
-        err_x              = err_x_;
-        err_u              = err_u_;
+        auto [q_x, x_err_] = truncate (x, x_err);
+        auto [q_u, u_err_] = truncate (u, u_err);
+        x_err              = x_err_;
+        u_err              = u_err_;
         io[i]              = q_x;
         yn[i]              = q_u;
       }
-      save_ap_err<Idx> (err_x, err_u);
+      st.x_err = x_err;
+      st.u_err = u_err;
     }
   }
   //----------------------------------------------------------------------------
@@ -1085,22 +1184,6 @@ private:
     return get_delay_size (i);
   }
   //----------------------------------------------------------------------------
-  static constexpr uint n_thiran_states    = 2;
-  static constexpr uint n_filter_states    = 2;
-  static constexpr uint n_allpass_states   = 2;
-  static constexpr uint n_quantizer_states = 1;
-  //----------------------------------------------------------------------------
-  static constexpr uint get_stage_n_elems (uint i)
-  {
-    // ordering as appears here
-    uint ret = get_delay_size (i);
-    ret += ((uint) spec::has_modulated_delay (i)) * n_thiran_states;
-    ret += ((uint) spec::is_filter (i)) * n_filter_states;
-    ret += ((uint) spec::is_allpass (i)) * n_allpass_states;
-    ret += ((uint) spec::is_quantizer (i)) * n_quantizer_states;
-    return ret;
-  }
-  //----------------------------------------------------------------------------
   // This might belong somewhere else if made more generic. Do when required.
   template <bool round, bool dither, class T>
   std::tuple<fixpt_t, s16> quantize (T spl, s16 err_prev)
@@ -1184,86 +1267,6 @@ private:
 #endif
   }
   //----------------------------------------------------------------------------
-  // fetch state for thiran interpolators or damp filters
-  template <uint Idx>
-  auto fetch_state (fixpt_t)
-  {
-    static_assert (spec::has_modulated_delay (Idx) || spec::is_filter (Idx));
-    constexpr auto offset = get_states_offset (Idx);
-    return std::make_tuple (_stage[Idx].z[offset], _stage[Idx].z[offset + 1]);
-  }
-  //----------------------------------------------------------------------------
-  // fetch state for thiran interpolators or damp filters
-  template <uint Idx>
-  float fetch_state (float)
-  {
-    static_assert (spec::has_modulated_delay (Idx) || spec::is_filter (Idx));
-    static_assert (sizeof (float) == 2 * sizeof (fixpt_t));
-    float          ret;
-    constexpr auto offset = get_states_offset (Idx);
-    memcpy (&ret, &_stage[Idx].z[offset], sizeof ret);
-    return ret;
-  }
-  //----------------------------------------------------------------------------
-  // save state for thiran interpolators or damp filters
-  template <uint Idx>
-  void save_state (s16 v1, s16 v2)
-  {
-    static_assert (spec::has_modulated_delay (Idx) || spec::is_filter (Idx));
-    constexpr auto offset     = get_states_offset (Idx);
-    _stage[Idx].z[offset]     = v1;
-    _stage[Idx].z[offset + 1] = v2;
-  }
-  //----------------------------------------------------------------------------
-  // save state for thiran interpolators or damp filters
-  template <uint Idx>
-  void save_state (float v)
-  {
-    static_assert (spec::has_modulated_delay (Idx) || spec::is_filter (Idx));
-    static_assert (sizeof (v) == 2 * sizeof (fixpt_t));
-    constexpr auto offset = get_states_offset (Idx);
-    memcpy (&_stage[Idx].z[offset], &v, sizeof v);
-  }
-  //----------------------------------------------------------------------------
-  // fetch truncation error for allpass (fixed point only)
-  template <uint Idx>
-  auto fetch_ap_err()
-  {
-    static_assert (spec::is_allpass (Idx));
-    constexpr auto offset = get_states_offset (Idx)
-      + (spec::has_modulated_delay (Idx) ? n_thiran_states : 0);
-    return std::make_tuple (_stage[Idx].z[offset], _stage[Idx].z[offset + 1]);
-  }
-  //----------------------------------------------------------------------------
-  // store truncation error for allpass (fixed point only)
-  template <uint Idx>
-  void save_ap_err (s16 err1, s16 err2)
-  {
-    static_assert (spec::is_allpass (Idx));
-    constexpr auto offset = get_states_offset (Idx)
-      + (spec::has_modulated_delay (Idx) ? n_thiran_states : 0);
-    _stage[Idx].z[offset]     = err1;
-    _stage[Idx].z[offset + 1] = err2;
-  }
-  //----------------------------------------------------------------------------
-  // fetch truncation error for decay (fixed point only)
-  template <uint Idx>
-  auto fetch_quantizer_err()
-  {
-    static_assert (spec::is_quantizer (Idx));
-    constexpr auto offset = get_states_offset (Idx);
-    return _stage[Idx].z[offset];
-  }
-  //----------------------------------------------------------------------------
-  // store truncation error for decay (fixed point only)
-  template <uint Idx>
-  void save_quantizer_err (s16 err)
-  {
-    static_assert (spec::is_quantizer (Idx));
-    constexpr auto offset = get_states_offset (Idx);
-    _stage[Idx].z[offset] = err;
-  }
-  //----------------------------------------------------------------------------
   template <uint Idx>
   std::array<xspan<s16>, 2> get_read_buffers (uint blocksize, uint neg_offset)
   {
@@ -1331,14 +1334,30 @@ private:
       && !std::is_same_v<C, std::nullptr_t>;
   }
   //----------------------------------------------------------------------------
-  using spec = spec_access<Spec_array>;
+  using spec    = spec_access<Spec_array>;
+  using indexes = mp11::mp_iota_c<spec::size()>;
+  // TODO: maybe this class can be split on specializations for fixpt_t and then
+  // float it might result in more code bloat?
+  using states_flt_typelist
+    = mp11::mp_transform_q<state::index_to_state_qfn<float, spec>, indexes>;
+  using states_fixpt_typelist
+    = mp11::mp_transform_q<state::index_to_state_qfn<fixpt_t, spec>, indexes>;
 
+  using states_flt_tuple   = mp11::mp_rename<states_flt_typelist, std::tuple>;
+  using states_fixpt_tuple = mp11::mp_rename<states_fixpt_typelist, std::tuple>;
+  union states_union {
+    states_flt_tuple   flt;
+    states_fixpt_tuple fix;
+  };
+  //----------------------------------------------------------------------------
   struct stage {
     s16* z {};
     uint pos {};
   };
-  std::array<stage, spec::size()> _stage;
-  lowbias32_hash<1>               _noise;
+  std::array<stage, spec::size()> _stage {};
+  states_union                    _states {};
+  lowbias32_hash<1>               _noise {};
 };
+
 }}} // namespace artv::detail::lofiverb
 //------------------------------------------------------------------------------
