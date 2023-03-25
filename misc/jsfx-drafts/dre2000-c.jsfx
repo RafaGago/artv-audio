@@ -1,0 +1,194 @@
+slider1:decay_p=0.8<0,1,0.01> Decay
+
+slider3:mod=0.5<0,1,0.01> Mod
+slider4:character=0.5<0,1,0.01> Character
+
+slider6:damp=0.3<0,1,0.01> Damping
+slider7:hp=0<0,1,0.01> HP
+
+slider9:stereo=1<-1,1, 0.01> Stereo
+slider10:predelay=1<1, 2400, 1> Predelay
+
+slider21:db_wet=-12<-40, 12,0.1> Wet dB
+slider20:db_dry=0<-60, 0,0.1> Dry dB
+
+slider23:offset=0<0, 30, 1> Offset
+
+import _core.jsfx-inc
+import _easy_allpass_reverb.jsfx-inc
+import _easy_fdn.jsfx-inc
+import _reverb.jsfx-inc
+import _lfo.jsfx-inc
+import _fir.jsfx-inc
+
+@init
+
+// SRC stuff -------------------------------------------------------------------
+BYPASS_SRC = 0;
+
+k.src.kaiser_att_db = 210;
+k.src.taps_branch = 32;
+k.src.taps_branch_frac = 16;
+k.src.cutoff = 15000;
+k.src.srate = BYPASS_SRC ? srate : 32400;
+
+src.down.resampler_2c_init(
+  k.src.srate,
+  srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.up.resampler_2c_init(
+  srate,
+  k.src.srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.out_q.deque_init(
+  src.up.resampler_2c_max_n_out_samples() * 2
+  );
+
+src.ins.array_init (src.down.resampler_2c_max_n_out_samples() * 2);
+src.outs.array_init (src.up.resampler_2c_max_n_out_samples() * 2);
+
+src.ins.array_clear();
+src.outs.array_clear();
+
+mtx.array_init (4);
+mtxcp.array_init (4);
+
+// TODO how many?
+loop(floor (srate / 44100) * 2,
+  src.out_q.deque_push (0);
+  src.out_q.deque_push (0);
+);
+
+// Actual reverb stuff ---------------------------------------------------------
+n_lfos = 2;
+lfo.lfo_bank_init (n_lfos, 4);
+lfo.ret.array_init (n_lfos);
+lfo.lfo_bank_reset_phase (0);
+
+m_lfo.lfo_bank_init (n_lfos, 2);
+m_lfo.ret.array_init (n_lfos);
+m_lfo.lfo_bank_reset_phase (0);
+
+@slider
+
+lfo.lfo_bank_reset_freq (0, 0.25 + mod * 0.75, k.src.srate);
+m_lfo.lfo_bank_reset_freq (0, 0.1 + mod * 3., k.src.srate);
+
+dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
+wet_gain = db_to_lin (db_wet);
+
+decayfb = 0 + decay_p * 0.75;
+sumgain = 0.125;
+
+cf = 0.25 + damp * 0.35;
+glp = 1;
+ghp = 0.8 - damp * 0.6;
+
+@sample
+
+// Downsampling
+n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
+
+(n_spls_down) ? (
+  m_lfo.lfo_bank_tick_tri (m_lfo.ret.ptr, 0);
+  lfo.lfo_bank_tick_tri (lfo.ret.ptr, 0);
+
+  // https://gearspace.com/board/showpost.php?p=15850503&postcount=1012
+
+
+  // halving an additional time to leave headroom
+  m = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5 * 0.5;
+  m = fi1.lp (m, 0.05);
+  m = fi2.hp (m, 0.995);
+
+  ml = delay (m, predelay);
+  ml = ap (ml, 115, -0.7);
+  ml = ap (ml, 160, -0.7);
+  ml = ap (ml, 231, -0.7);
+
+  ci = ml + fb1;
+  fb1 = fb1.crossv (ci, cf, glp, ghp);
+  fb1 = delay (fb1, 3762, lfo.ret.ptr[0] * mod, 23) * decayfb;
+  fb1 = delay (fb1, 32);
+  // notice assign not sum
+  r = delay (ci, 20) * -sumgain;
+  // notice assign not sum
+  l = delay (ci, 959) * sumgain;
+  r += delay (ci, 1817) * -sumgain;
+  l += delay (ci, 2855) * sumgain;
+
+  ci = ml + fb2;
+  fb2 = fb2.crossv (ci, cf, glp, ghp);
+  fb2 = delay (fb2, 3806, lfo.ret.ptr[1] * mod, 24) * decayfb;
+  fb2 = delay (fb2, 32);
+  r += delay (ci, 339) * -sumgain;
+  l += delay (ci, 1309) * sumgain;
+  r += delay (ci, 2271) * -sumgain;
+  l += delay (ci, 3221) * sumgain;
+
+  ci = ml + fb3;
+  fb3 = fb3.crossv (ci, cf, glp, ghp);
+  fb3 = delay (fb3, 3829, lfo.ret.ptr[2] * mod, 25) * decayfb;
+  fb3 = delay (fb3, 32);
+  r += delay (ci, 130) * -sumgain;
+  l += delay (ci, 1104) * sumgain;
+  r += delay (ci, 2065) * -sumgain;
+  l += delay (ci, 3391) * sumgain;
+
+  ci = ml + fb4;
+  fb4 = fb4.crossv (ci, cf, glp, ghp);
+  fb4 = delay (fb4, 3862, lfo.ret.ptr[3] * mod, 26) * decayfb;
+  fb4 = delay (fb4, 32);
+  r += delay (ci, 499) * -sumgain;
+  l += delay (ci, 1445) * sumgain;
+  r += delay (ci, 2071) * -sumgain;
+  l += delay (ci, 2885) * sumgain;
+
+  l = ap (l, 140, -0.7);
+  l = ap (l, 202, -0.7);
+
+  r = ap (r, 160, -0.7);
+  r = ap (r, 227, -0.7);
+
+  cfd = (character * character) * 0.3;
+  cfdi = 1 - cfd;
+
+  l = l * cfdi  + delay (ml, 412) * cfd;
+  r = r * cfdi  + delay (ml, 413) * cfd;
+
+  // more boilerplate (summing + downsample)
+  easy_ap_next_sample();
+  easy_fdn_next_sample();
+
+  l = r * (1 - abs (stereo)) + l * abs (stereo);
+  stereo < 0 ? (
+    tmp = r;
+    r = l;
+    l = tmp;
+  );
+
+  // Upsampling
+  n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);
+  i = 0;
+  loop (n_spls_up * 2, // *2 : two channels
+    src.out_q.deque_push (src.outs.ptr[i]);
+    i += 1;
+  );
+);
+
+spl0 *= dry_gain;
+spl1 *= dry_gain;
+spl0 += src.out_q.deque_pop() * wet_gain;
+spl1 += src.out_q.deque_pop() * wet_gain;
