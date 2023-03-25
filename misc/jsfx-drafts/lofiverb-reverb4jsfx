@@ -88,10 +88,12 @@ m_lfo.lfo_bank_reset_freq (0, 0.1 + mod * 3., k.src.srate);
 dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
 
-decay = 0.2 + sqrt (decay_p) * 0.70;
+decay = 0.6 + decay_p * 0.35;
 
-filter_k = 0.15 + damp * 0.45;
-filter_k2 = filter_k * 0.9;
+cf = 0.25 + (1 - (damp * damp)) * 0.25;
+glp = 1;
+ghp = 1 - damp *  0.6;
+
 
 @sample
 
@@ -176,7 +178,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 // [118.60555197517394, 67.1911093303401, 46.872361264099425, 155]
   a = mtx.ptr[3];
 
-  a = f1.dampfilter (a, filter_k2);
+  a = f1.crossv (a, cf, glp, ghp);
   a = ap3 (a, 113, 67, 47, 0.1, 0.04, -g3);
   a = delay (a, 122);
   a = ap (a, 119, 0.6);
@@ -189,21 +191,21 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 // [[113, 127], [61, 67], [43, 47], 149]
 // [114.01436931807042, 64.59016316271402, 45.05794727968267, 149]
   b = mtx.ptr[2];
-  b = f2.dampfilter (b, filter_k);
+  b = f2.crossv (b, cf, glp, ghp);
   b = ap3 (b, 114, 66, 47, -0.1, -0.04, -g3);
   b = delay(b, 149);
 
   // [[113, 127], [61, 67], [43, 47], 151]
 // [115.54476353710493, 65.45714521858937, 45.66275194115492, 151]
   c = mtx.ptr[0];
-  c = f3.dampfilter (c, filter_k);
+  c = f3.crossv (c, cf, glp, ghp);
   c = ap3 (c, 116, 65, 46, -0.1, -0.04, -g3);
   c = delay(c, 151);
 
 // [[113, 127], [67, 71], [47, 53], 157]
 // [120.13594619420843, 68.05809138621545, 47.477165925571676, 157]
   d = mtx.ptr[1];
-  d = f4.dampfilter (d, filter_k2);
+  d = f4.crossv (d, cf, glp, ghp);
   d = ap3 (d, 121, 69, 47, -0.1, 0.04, g3);
   d = delay(d, 157);
 

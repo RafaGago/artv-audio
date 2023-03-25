@@ -99,6 +99,12 @@ function ap (in, spls, g) local (yn, u, x) global (easyapv_del*, easyapv_del_idx
   x;
 );
 
+function ap_crossfade (in, spls, g, cf) local (apv, cfv) global () (
+  apv = this.ap (in, spls, g);
+  cfv = cf * cf;
+  in * cfv + apv * (1 - cfv);
+);
+
 
 // allpass with modulation
 function ap (in, spls, g, lfo, maxlfo) local (yn, u, x) global (easyapv_del*, easyapv_del_idx) (
@@ -389,6 +395,22 @@ function dampfilter (in, g)  local (y1) global() (
   in = (1 - g) * in + this.y1 * g;
   this.y1 = in;
 );
+
+function lp (in, g)  global() (
+  this.dampfilter (in, g);
+);
+
+function hp (in, g)  global() (
+  in - this.dampfilter (in, g);
+);
+
+
+function crossv (in, fg, glp, ghp) global() local (r1, r2, lp, hp) (
+  lp = this.lp (in, fg);
+  hp = in - lp;
+  glp * lp + ghp * hp;
+);
+
 
 function easy_ap_next_sample() local() global (easyapv_del*, easyapv_del_idx) (
   easyapv_del.delay_line_advance();

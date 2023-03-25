@@ -22,7 +22,9 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/xspan.hpp"
 
-#define LOFIVERB_ADD_DEBUG_ALGO 1
+// TODO: Algorithims using crossovers instead of raw LP
+
+#define LOFIVERB_ADD_DEBUG_ALGO 0
 
 namespace artv {
 namespace detail { namespace lofiverb {
