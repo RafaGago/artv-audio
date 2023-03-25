@@ -63,12 +63,23 @@ struct filter_data {
   bool    is_lowpass;
 };
 
-struct quantizer {
+struct crossover_data {
+  fixpt_t g; // fc
+  fixpt_t g_lp; // lowpass gain
+  fixpt_t g_hp; // lowpass highpass gain
+};
+
+struct quantizer_data {
   fixpt_t g;
 };
 
-using stage_data = std::
-  variant<allpass_data, delay_data, block_delay_data, filter_data, quantizer>;
+using stage_data = std::variant<
+  allpass_data,
+  delay_data,
+  block_delay_data,
+  filter_data,
+  crossover_data,
+  quantizer_data>;
 //------------------------------------------------------------------------------
 static constexpr detail::lofiverb::stage_data make_ap (
   u16   spls,
@@ -120,9 +131,20 @@ static constexpr detail::lofiverb::stage_data make_lp (float g = 0)
   return filter_data {fixpt_t::from_float (g), true};
 }
 //------------------------------------------------------------------------------
+static constexpr detail::lofiverb::stage_data make_crossover (
+  float g    = 0,
+  float g_lp = 0,
+  float g_hp = 0)
+{
+  return crossover_data {
+    fixpt_t::from_float (g),
+    fixpt_t::from_float (g_lp),
+    fixpt_t::from_float (g_hp)};
+}
+//------------------------------------------------------------------------------
 static constexpr detail::lofiverb::stage_data make_quantizer()
 {
-  return quantizer {};
+  return quantizer_data {};
 }
 //------------------------------------------------------------------------------
 
@@ -147,12 +169,12 @@ public:
   //----------------------------------------------------------------------------
   static constexpr bool is_filter (uint i)
   {
-    return std::holds_alternative<filter_data> (values[i]);
+    return std::holds_alternative<filter_data> (values[i]) || is_crossover (i);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_quantizer (uint i)
   {
-    return std::holds_alternative<quantizer> (values[i]);
+    return std::holds_alternative<quantizer_data> (values[i]);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_lowpass_filter (uint i)
@@ -163,16 +185,34 @@ public:
     return false;
   }
   //----------------------------------------------------------------------------
+  static constexpr bool is_crossover (uint i)
+  {
+    return std::holds_alternative<crossover_data> (values[i]);
+  }
+  //----------------------------------------------------------------------------
   static constexpr fixpt_t get_gain (uint i)
   {
     if (is_allpass (i)) {
       return std::get<allpass_data> (values[i]).g;
+    }
+    else if (is_crossover (i)) {
+      return std::get<crossover_data> (values[i]).g;
     }
     else if (is_filter (i)) {
       return std::get<filter_data> (values[i]).g;
     }
     else {
       return {};
+    }
+  }
+  //----------------------------------------------------------------------------
+  static constexpr auto get_crossover_data (uint i)
+  {
+    if (is_crossover (i)) {
+      return std::get<crossover_data> (values[i]);
+    }
+    else {
+      return nullptr;
     }
   }
   //----------------------------------------------------------------------------
@@ -475,7 +515,10 @@ public:
       }
     }
     else if constexpr (spec::is_filter (Idx)) {
-      if constexpr (spec::is_lowpass_filter (Idx)) {
+      if constexpr (spec::is_crossover (Idx)) {
+        run_crossover<Idx> (io, std::forward<Ts> (args)...);
+      }
+      else if constexpr (spec::is_lowpass_filter (Idx)) {
         run_lp<Idx> (io, std::forward<Ts> (args)...);
       }
       else {
@@ -701,8 +744,10 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, bool Is_lp, class Gain>
-  void run_1pole (xspan<fixpt_t> io, Gain g)
+  enum onepole_type { lp, hp, crossv };
+  //----------------------------------------------------------------------------
+  template <uint Idx, onepole_type Type, class Gain>
+  void run_1pole (xspan<fixpt_t> io, Gain g, fixpt_t g_lp, fixpt_t g_hp)
   {
     static_assert (spec::is_filter (Idx));
     assert (io);
@@ -728,14 +773,22 @@ private:
       auto [y1_, err_] = truncate (y, err);
       y1               = y1_;
       err              = err_;
-      io[i]            = Is_lp ? y1 : (decltype (y1)) (x - y);
+      if constexpr (Type == onepole_type::lp) {
+        io[i] = y1;
+      }
+      else if constexpr (Type == onepole_type::hp) {
+        io[i] = (fixpt_t) (x - y1);
+      }
+      else {
+        io[i] = (fixpt_t) (x * g_lp + (x - y1) * g_hp);
+      }
     }
     st.y1     = y1;
     st.y1_err = err;
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, bool Is_lp, class Gain>
-  void run_1pole (xspan<float> io, Gain g)
+  template <uint Idx, onepole_type Type, class Gain>
+  void run_1pole (xspan<float> io, Gain g, float g_lp, float g_hp)
   {
     static_assert (spec::is_filter (Idx));
     assert (io);
@@ -756,16 +809,25 @@ private:
       else {
         gv = (float) g;
       }
-      y1    = (1.f - gv) * x + gv * y1;
-      io[i] = Is_lp ? y1 : (x - y1);
+      y1 = (1.f - gv) * x + gv * y1;
+      if constexpr (Type == onepole_type::lp) {
+        io[i] = y1;
+      }
+      else if constexpr (Type == onepole_type::hp) {
+        io[i] = (float) (x - y1);
+      }
+      else {
+        io[i] = (float) (x * g_lp + (x - y1) * g_hp);
+      }
     }
     st.y1 = y1;
   }
+
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
   void run_lp (xspan<T> io, U&& g)
   {
-    run_1pole<Idx, true> (io, std::forward<U> (g));
+    run_1pole<Idx, onepole_type::lp> (io, std::forward<U> (g), T {}, T {});
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -777,13 +839,27 @@ private:
   template <uint Idx, class T, class U>
   void run_hp (xspan<T> io, U&& g)
   {
-    run_1pole<Idx, false> (io, std::forward<U> (g));
+    run_1pole<Idx, onepole_type::hp> (io, std::forward<U> (g), T {}, T {});
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
   void run_hp (xspan<T> io)
   {
     run_hp<Idx> (io, spec::get_gain (Idx));
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class U>
+  void run_crossover (xspan<T> io, U&& g, U&& g_lp, U&& g_hp)
+  {
+    run_1pole<Idx, onepole_type::crossover> (io, g, g_lp, g_hp);
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class U>
+  void run_crossover (xspan<T> io)
+  {
+    constexpr detail::lofiverb::crossover_data d
+      = spec::get_crossover_data (Idx);
+    run_crossover (io, (T) d.g, (T) d.g_lp, (T) d.g_hp);
   }
   //----------------------------------------------------------------------------
   // run arbitrarily nested allpass.
