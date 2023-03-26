@@ -660,7 +660,7 @@ private:
     vol  = db_to_gain (vol);
     gvol = db_to_gain (gvol);
 
-    using dwm = dry_wet_mixer;
+    using dwm = dry_wet_global_mixer_ms;
     _mixer[channel].set (dwm::gain_tag {}, !will_mute ? (vol * gvol) : 0.f);
     _mixer[channel].set (dwm::dry_wet_ratio_tag {}, mix);
     _mixer[channel].set (dwm::pan_tag {}, pan);
@@ -892,10 +892,10 @@ private:
   static constexpr uint n_busses = parameters::n_stereo_busses;
   using io_engine = order_and_buffering<n_busses, parameters::n_crossovers>;
 
-  mix_maxtrix_fx_context              _fx_context;
-  buffers<float>                      _fsamples;
-  io_engine                           _io;
-  std::array<dry_wet_mixer, n_busses> _mixer;
+  mix_maxtrix_fx_context                        _fx_context;
+  buffers<float>                                _fsamples;
+  io_engine                                     _io;
+  std::array<dry_wet_global_mixer_ms, n_busses> _mixer;
 
   std::array<dsp_variant, n_busses> _fx_dsp;
 

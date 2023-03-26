@@ -6,6 +6,7 @@
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_types.hpp"
+#include "artv-common/misc/compiler.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/short_ints.hpp"
@@ -15,7 +16,8 @@
 namespace artv {
 
 namespace detail {
-//----------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
 static float to_normalized_balance (float v) // -100 to +100 to 0 to 1
 {
   v = v / 100.;
@@ -85,6 +87,8 @@ public:
       && !phase_inv_r;
   }
   //----------------------------------------------------------------------------
+  juce::SmoothedValue<float>& operator[] (uint i) { return i == 0 ? l : r; }
+  //----------------------------------------------------------------------------
   juce::SmoothedValue<float> l {1.f};
   juce::SmoothedValue<float> r {1.f};
   //----------------------------------------------------------------------------
@@ -112,6 +116,8 @@ static constexpr auto gain_param = float_param ("", 0.f, 1.f, 1.0f, 0.001f);
 static constexpr auto pan_param  = float_param ("", -100.f, 100.f, 0.0f, 0.01f);
 static constexpr auto phinv_param
   = choice_param (0, make_cstr_array ("Off", "On"));
+static constexpr auto db_gain_param
+  = float_param ("dB", -100.f, 10.f, 0.f, 0.01f);
 //------------------------------------------------------------------------------
 struct ms_smoother {
 public:
@@ -169,8 +175,158 @@ private:
 static constexpr auto ms_param = float_param ("", -100.f, 100.f, 0.f, 0.01f);
 //------------------------------------------------------------------------------
 } // namespace detail
+
 //------------------------------------------------------------------------------
 class dry_wet_mixer {
+public:
+  //----------------------------------------------------------------------------
+  static constexpr dsp_types dsp_type  = dsp_types::mixer;
+  static constexpr bus_types bus_type  = bus_types::stereo;
+  static constexpr uint      n_inputs  = 2;
+  static constexpr uint      n_outputs = 1;
+  //----------------------------------------------------------------------------
+  void reset (plugin_context& pc)
+  {
+    for (auto& gs : _gain) {
+      gs.reset (pc);
+    }
+  }
+  //----------------------------------------------------------------------------
+  void skip_smoothing()
+  {
+    for (auto& gs : _gain) {
+      gs.skip_smoothing();
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  void process_block (xspan<T*> outs, xspan<T const*> ins, int samples)
+  {
+    assert (outs.size() >= (n_outputs * (uint) bus_type));
+    assert (ins.size() >= (n_inputs * (uint) bus_type));
+
+    for (uint c = 0; c < 2; ++c) {
+      ARTV_LOOP_UNROLL_SIZE_HINT (16)
+      for (uint i = 0; i < samples; ++i) {
+        auto gwet  = _gain[wet][c].getNextValue();
+        auto gdry  = _gain[dry][c].getNextValue();
+        outs[c][i] = gwet * ins[c + 2][i] + gdry * ins[c][i];
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  struct wet_tag {};
+  void set (wet_tag, float value)
+  {
+    _gain[wet].set_gain (db_to_gain (value, -99.99f));
+  }
+
+  static constexpr auto get_parameter (wet_tag)
+  {
+    return detail::db_gain_param;
+  }
+  //----------------------------------------------------------------------------
+  struct dry_tag {};
+  void set (dry_tag, float value)
+  {
+    _gain[dry].set_gain (db_to_gain (value, -99.99f));
+  }
+
+  static constexpr auto get_parameter (dry_tag)
+  {
+    return detail::db_gain_param;
+  }
+  //----------------------------------------------------------------------------
+  struct dry_pan_tag {};
+  void set (dry_pan_tag, float value) { _gain[dry].set_pan (value); }
+  static constexpr auto get_parameter (dry_pan_tag)
+  {
+    return detail::pan_param;
+  }
+  //----------------------------------------------------------------------------
+  struct dry_phase_inv_l_tag {};
+  void set (dry_phase_inv_l_tag, int value)
+  {
+    _gain[dry].set_phaseinv_l (value);
+  }
+
+  static constexpr auto get_parameter (dry_phase_inv_l_tag)
+  {
+    return detail::phinv_param;
+  }
+  //----------------------------------------------------------------------------
+  struct dry_phase_inv_r_tag {};
+  void set (dry_phase_inv_r_tag, int value)
+  {
+    _gain[dry].set_phaseinv_r (value);
+  }
+
+  static constexpr auto get_parameter (dry_phase_inv_r_tag)
+  {
+    return detail::phinv_param;
+  }
+  //----------------------------------------------------------------------------
+  struct wet_pan_tag {};
+  void set (wet_pan_tag, float value) { _gain[wet].set_pan (value); }
+  static constexpr auto get_parameter (wet_pan_tag)
+  {
+    return detail::pan_param;
+  }
+  //----------------------------------------------------------------------------
+  struct wet_phase_inv_l_tag {};
+  void set (wet_phase_inv_l_tag, int value)
+  {
+    _gain[wet].set_phaseinv_l (value);
+  }
+
+  static constexpr auto get_parameter (wet_phase_inv_l_tag)
+  {
+    return detail::phinv_param;
+  }
+  //----------------------------------------------------------------------------
+  struct wet_phase_inv_r_tag {};
+  void set (wet_phase_inv_r_tag, int value)
+  {
+    _gain[wet].set_phaseinv_r (value);
+  }
+
+  static constexpr auto get_parameter (wet_phase_inv_r_tag)
+  {
+    return detail::phinv_param;
+  }
+  //----------------------------------------------------------------------------
+  struct dry_wet_ratio_tag {};
+  void set (dry_wet_ratio_tag, float value)
+  {
+    value *= 0.01f;
+    _gain[wet].set_gain (sqrt (value));
+    _gain[dry].set_gain (sqrt (1. - value));
+  }
+
+  static constexpr auto get_parameter (dry_wet_ratio_tag)
+  {
+    return float_param ("", 0.f, 100.f, 100.f, 0.001f);
+  }
+  //----------------------------------------------------------------------------
+  using parameters = mp_list<
+    dry_tag,
+    dry_pan_tag,
+    dry_phase_inv_l_tag,
+    dry_phase_inv_r_tag,
+    wet_tag,
+    wet_pan_tag,
+    wet_phase_inv_l_tag,
+    wet_phase_inv_r_tag,
+    dry_wet_ratio_tag>;
+  //----------------------------------------------------------------------------
+private:
+  //----------------------------------------------------------------------------
+  enum { dry, wet };
+  std::array<detail::gain_smoother, 2> _gain;
+};
+
+//------------------------------------------------------------------------------
+class dry_wet_global_mixer_ms {
 public:
   //----------------------------------------------------------------------------
   static constexpr dsp_types dsp_type  = dsp_types::mixer;
@@ -414,6 +570,17 @@ public:
     return detail::phinv_param;
   }
   //----------------------------------------------------------------------------
+  struct dry_tag {};
+  void set (dry_tag, float value)
+  {
+    _gain[dry].set_gain (db_to_gain (value, -99.99f));
+  }
+
+  static constexpr auto get_parameter (dry_tag)
+  {
+    return detail::db_gain_param;
+  }
+  //----------------------------------------------------------------------------
   struct dry_ms_ratio_tag {};
   void set (dry_ms_ratio_tag, float value) { _ms[dry].set_ms_ratio (value); }
   static constexpr auto get_parameter (dry_ms_ratio_tag)
@@ -448,6 +615,17 @@ public:
   static constexpr auto get_parameter (dry_phase_inv_r_tag)
   {
     return detail::phinv_param;
+  }
+  //----------------------------------------------------------------------------
+  struct wet_tag {};
+  void set (wet_tag, float value)
+  {
+    _gain[wet].set_gain (db_to_gain (value, -99.99f));
+  }
+
+  static constexpr auto get_parameter (wet_tag)
+  {
+    return detail::db_gain_param;
   }
   //----------------------------------------------------------------------------
   struct wet_ms_ratio_tag {};
@@ -489,10 +667,11 @@ public:
   struct dry_wet_ratio_tag {};
   void set (dry_wet_ratio_tag, float value)
   {
-    value /= 100.;
+    value *= 0.01f;
     _gain[wet].set_gain (sqrt (value));
     _gain[dry].set_gain (sqrt (1. - value));
   }
+
   static constexpr auto get_parameter (dry_wet_ratio_tag)
   {
     return float_param ("", 0.f, 100.f, 100.f, 0.001f);
@@ -511,7 +690,9 @@ public:
     wet_pan_tag,
     wet_phase_inv_l_tag,
     wet_phase_inv_r_tag,
-    dry_wet_ratio_tag>;
+    dry_wet_ratio_tag,
+    dry_tag,
+    wet_tag>;
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------

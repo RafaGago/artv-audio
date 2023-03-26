@@ -212,42 +212,47 @@ parameter_cpp_class_define (
   fx_mix,
   n_stereo_busses,
   param_common ("Mix"),
-  dry_wet_mixer::get_parameter (dry_wet_mixer::dry_wet_ratio_tag {}),
+  dry_wet_global_mixer_ms::get_parameter (
+    dry_wet_global_mixer_ms::dry_wet_ratio_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   wet_pan,
   n_stereo_busses,
   param_common ("Pan"),
-  dry_wet_mixer::get_parameter (dry_wet_mixer::wet_pan_tag {}),
+  dry_wet_global_mixer_ms::get_parameter (
+    dry_wet_global_mixer_ms::wet_pan_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   wet_balance,
   n_stereo_busses,
   param_common ("M/S"),
-  dry_wet_mixer::get_parameter (dry_wet_mixer::wet_ms_ratio_tag {}),
+  dry_wet_global_mixer_ms::get_parameter (
+    dry_wet_global_mixer_ms::wet_ms_ratio_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   dry_pan,
   n_stereo_busses,
   param_common ("Pan"),
-  dry_wet_mixer::get_parameter (dry_wet_mixer::dry_pan_tag {}),
+  dry_wet_global_mixer_ms::get_parameter (
+    dry_wet_global_mixer_ms::dry_pan_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   pan,
   n_stereo_busses,
   param_common ("GPan"),
-  dry_wet_mixer::get_parameter (dry_wet_mixer::pan_tag {}),
+  dry_wet_global_mixer_ms::get_parameter (dry_wet_global_mixer_ms::pan_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   dry_balance,
   n_stereo_busses,
   param_common ("M/S"),
-  dry_wet_mixer::get_parameter (dry_wet_mixer::dry_ms_ratio_tag {}),
+  dry_wet_global_mixer_ms::get_parameter (
+    dry_wet_global_mixer_ms::dry_ms_ratio_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -7494,7 +7499,7 @@ using mod_params = mp_list<
   mod_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
-  lofiverb_algorithm_tag,
+  lofiverb_algorithm,
   n_stereo_busses,
   param_common (
     "Algo",
@@ -7599,7 +7604,7 @@ parameter_cpp_class_define (
   slider_ext);
 
 using lofiverb_params = mp_list<
-  lofiverb_algorithm_tag,
+  lofiverb_algorithm,
   lofiverb_predelay,
   lofiverb_decay,
   lofiverb_damp,
