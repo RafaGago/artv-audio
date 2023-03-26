@@ -624,7 +624,6 @@ struct combobox_ext
         break;
       } while (combo.getSelectedItemIndex() != idx);
     };
-    prev_next_grid_width_factor (0.f);
     parent.addAndMakeVisible (prev);
 
     next.setLookAndFeel (&parent.getLookAndFeel());
@@ -664,40 +663,6 @@ struct combobox_ext
   std::array<juce::Component*, 3> get_components()
   {
     return {&combo, &prev, &next};
-  }
-
-  void prev_next_enable (bool enable)
-  {
-    _prev_next_enabled = enable;
-    prev.setVisible (enable);
-    next.setVisible (enable);
-  }
-
-  bool prev_next_enabled() const
-  {
-    // as we are exposing publically the buttons I want to make the "grid"
-    // function behavior independent on what is done on the prev/next buttons
-    // here.
-    return _prev_next_enabled;
-  }
-
-  void prev_next_grid_width_factor (float v)
-  {
-    int prev_conn = juce::TextButton::ConnectedOnRight;
-    if (v <= 0.f || v >= 1.f) {
-      v = 0.f;
-    }
-    else {
-      prev_conn |= juce::TextButton::ConnectedOnLeft;
-    }
-    _prev_next_grid_width_factor = v;
-    prev.setConnectedEdges (prev_conn);
-    // combo can't set connected edges...
-  }
-
-  float prev_next_grid_width_factor() const
-  {
-    return _prev_next_grid_width_factor;
   }
 
   // if this is 0, the "grid" function will consume one row for the buttons,

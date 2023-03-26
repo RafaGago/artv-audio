@@ -23,6 +23,22 @@ static void set_color (int id, juce::Colour color, args&&... components)
 // -----------------------------------------------------------------------------
 namespace detail {
 
+template <class T>
+struct label_on_top {
+  T* ref;
+};
+
+template <class T>
+struct no_buttons {
+  T* ref;
+};
+
+template <class T>
+struct buttons_on_same_row {
+  T*    ref;
+  float combo_width_factor;
+};
+
 template <size_t N>
 struct grid_row_idx {
 public:
@@ -138,6 +154,28 @@ static juce::Rectangle<T> grid (
     std::forward<args> (vargs)...);
 }
 
+template <class T, size_t N, class... args>
+static juce::Rectangle<T> grid (
+  juce::Rectangle<T>              area_remainder,
+  juce::Rectangle<T>              column,
+  float                           width,
+  std::array<float, N> const&     heights,
+  grid_row_idx<N>                 row,
+  label_on_top<slider_ext> const& s,
+  args&&... vargs)
+{
+  // Assuming slider on top.
+  return grid (
+    area_remainder,
+    column,
+    width,
+    heights,
+    row,
+    s.ref->label,
+    s.ref->slider,
+    std::forward<args> (vargs)...);
+}
+
 // variant consuming a button
 template <class T, class V, size_t N, class... args>
 static juce::Rectangle<T> grid (
@@ -170,17 +208,6 @@ static juce::Rectangle<T> grid (
   combobox_ext&               c,
   args&&... vargs)
 {
-  if (!c.prev_next_enabled()) {
-    // no button handling
-    return grid (
-      area_remainder,
-      column,
-      width,
-      heights,
-      row,
-      c.combo,
-      std::forward<args> (vargs)...);
-  }
   auto get_next_area = [&]() {
     if (row() == 0) {
       column = area_remainder.removeFromLeft ((int) width);
@@ -191,24 +218,78 @@ static juce::Rectangle<T> grid (
   };
 
   auto area = get_next_area();
-  // if one of these behaviors is undesired use the "juce::Component" overload.
-  if (c.prev_next_grid_width_factor() == 0.f) {
-    // consume a row for the buttons
-    c.combo.setBounds (area);
-    area      = get_next_area();
-    auto prev = area.removeFromLeft ((int) (width / 2.));
-    c.prev.setBounds (prev);
-    c.next.setBounds (area);
+  // consume a row for the buttons
+  c.combo.setBounds (area);
+  area      = get_next_area();
+  auto prev = area.removeFromLeft ((int) (width / 2.));
+  c.prev.setBounds (prev);
+  c.next.setBounds (area);
+
+  return grid (
+    area_remainder, column, width, heights, row, std::forward<args> (vargs)...);
+}
+
+// variant consuming a combobox
+template <class T, size_t N, class... args>
+static juce::Rectangle<T> grid (
+  juce::Rectangle<T>              area_remainder,
+  juce::Rectangle<T>              column,
+  float                           width,
+  std::array<float, N> const&     heights,
+  grid_row_idx<N>                 row,
+  no_buttons<combobox_ext> const& c,
+  args&&... vargs)
+{
+  // no button handling
+  return grid (
+    area_remainder,
+    column,
+    width,
+    heights,
+    row,
+    c.ref->combo,
+    std::forward<args> (vargs)...);
+}
+
+// variant consuming a combobox
+template <class T, size_t N, class... args>
+static juce::Rectangle<T> grid (
+  juce::Rectangle<T>                       area_remainder,
+  juce::Rectangle<T>                       column,
+  float                                    width,
+  std::array<float, N> const&              heights,
+  grid_row_idx<N>                          row,
+  buttons_on_same_row<combobox_ext> const& c,
+  args&&... vargs)
+{
+  float wf        = c.combo_width_factor;
+  int   prev_conn = juce::TextButton::ConnectedOnRight;
+  if (wf <= 0.f || wf >= 1.f) {
+    wf = 0.f;
   }
   else {
-    // everything on the same row
-    auto next
-      = area.removeFromLeft ((int) (width * c.prev_next_grid_width_factor()));
-    c.combo.setBounds (next);
-    next = area.removeFromLeft ((int) (area.getWidth() / 2.));
-    c.prev.setBounds (next);
-    c.next.setBounds (area);
+    prev_conn |= juce::TextButton::ConnectedOnLeft;
   }
+  c.ref->prev.setConnectedEdges (prev_conn);
+
+  auto get_next_area = [&]() {
+    if (row() == 0) {
+      column = area_remainder.removeFromLeft ((int) width);
+    }
+    auto ret = column.removeFromTop ((int) heights[row()]);
+    ++row;
+    return ret;
+  };
+
+  auto area = get_next_area();
+  // combo can't set connected edges...
+
+  // everything on the same row
+  auto next = area.removeFromLeft ((int) (width * wf));
+  c.ref->combo.setBounds (next);
+  next = area.removeFromLeft ((int) (area.getWidth() / 2.));
+  c.ref->prev.setBounds (next);
+  c.ref->next.setBounds (area);
 
   return grid (
     area_remainder, column, width, heights, row, std::forward<args> (vargs)...);
@@ -216,6 +297,23 @@ static juce::Rectangle<T> grid (
 
 } // namespace detail
 // -----------------------------------------------------------------------------
+inline detail::label_on_top<slider_ext> grid_label_on_top (slider_ext& v)
+{
+  return {&v};
+}
+// -----------------------------------------------------------------------------
+inline detail::no_buttons<combobox_ext> grid_no_buttons (combobox_ext& v)
+{
+  return {&v};
+}
+// -----------------------------------------------------------------------------
+inline detail::buttons_on_same_row<combobox_ext> grid_buttons_on_same_row (
+  combobox_ext& v,
+  float         combo_width_ratio)
+{
+  assert (combo_width_ratio >= 0 && combo_width_ratio <= 1.f);
+  return {&v, combo_width_ratio};
+}
 // -----------------------------------------------------------------------------
 // places a list of vargs objects on a grid. Each column is of fixed width. The
 // height of the rows are specified on "heights". The elemenst are placed top
