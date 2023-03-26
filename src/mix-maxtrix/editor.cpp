@@ -16,13 +16,13 @@
 
 #include "artv-common/juce/effect_base.hpp"
 #include "artv-common/juce/gui_util.hpp"
-#include "artv-common/juce/look_and_feel.hpp"
 #include "artv-common/juce/math.hpp"
 #include "artv-common/juce/parameters.hpp"
 #include "artv-common/juce/value_tree_attachments.hpp"
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/short_ints.hpp"
 
+#include "mix-maxtrix/look_and_feel.hpp"
 #include "mix-maxtrix/parameters.hpp"
 
 #define VERSION_INT VERSION_GET (VERSION_MAJOR, VERSION_MINOR, VERSION_REV)
@@ -397,8 +397,7 @@ public:
     mp11::mp_for_each<mp_list<parameters::dry_balance, parameters::pan>> (
       [this] (auto w) {
         for (auto& s : _widgets.p_get (w)) {
-          s->slider.getProperties().set (
-            look_and_feel::slider_track_bg_from_center, true);
+          s->slider.getProperties().set (slider_track_bg_from_center, true);
         }
       });
 
