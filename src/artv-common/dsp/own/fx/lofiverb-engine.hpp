@@ -1357,7 +1357,7 @@ private:
     end += (end >= sz) ? sz : 0;
 
     uint block1sz, block2sz;
-    if (block1 < end) {
+    if (block1 <= end) {
       // contiguous
       block1sz = blocksize;
       block2sz = 0;
@@ -1387,7 +1387,7 @@ private:
     advance_pos<Idx>();
 
     uint block1sz, block2sz;
-    if (block1 < end) {
+    if (block1 <= end) {
       // contiguous, no wraparound
       block1sz = blocksize;
       block2sz = 0;
