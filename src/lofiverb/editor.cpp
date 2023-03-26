@@ -28,6 +28,34 @@
 namespace artv {
 
 // -----------------------------------------------------------------------------
+class rotary_lookfeel : public juce::LookAndFeel_V4 {
+public:
+  void drawRotarySlider (
+    juce::Graphics& g,
+    int             x,
+    int             y,
+    int             width,
+    int             height,
+    float           sliderPos,
+    float const     rotaryStartAngle,
+    float const     rotaryEndAngle,
+    juce::Slider&   s) override
+  {
+    draw_rotary_1 (
+      g, x, y, width, height, sliderPos, rotaryStartAngle, rotaryEndAngle, s);
+  }
+};
+// -----------------------------------------------------------------------------
+class display_lookfeel : public juce::LookAndFeel_V4 {
+public:
+  juce::Font getLabelFont (juce::Label& obj) override
+  {
+    auto f = LookAndFeel_V4::getLabelFont (obj);
+    f.setHeight (obj.getHeight() - 4);
+    return f;
+  }
+};
+// -----------------------------------------------------------------------------
 struct vertical_line : public juce::Component {
   //----------------------------------------------------------------------------
   bool left = true;
@@ -55,20 +83,25 @@ struct panel : public juce::Component {
   // reuse, so we don't clash...
   enum { backgroundColourId = juce::ResizableWindow::backgroundColourId };
   //----------------------------------------------------------------------------
-  bool upper_line = true;
+  bool upper_line = false;
   //----------------------------------------------------------------------------
   void paint (juce::Graphics& g) override
   {
-    auto bg = findColour (backgroundColourId);
-    g.setColour (bg);
     auto lb = getLocalBounds();
+    auto bg = findColour (backgroundColourId);
+    g.setColour (bg.darker (0.3f));
     g.fillRect (lb);
+
+    auto inner = lb.reduced (1);
+    g.setColour (bg);
+    g.fillRect (inner);
 
     if (!upper_line) {
       return;
     }
-    auto line = lb.removeFromTop (2);
-    g.setColour (bg.brighter (0.3));
+    auto line = lb.removeFromTop (1);
+    line      = line.reduced (1, 0);
+    g.setColour (bg.brighter (0.2));
     g.fillRect (line);
   }
   //----------------------------------------------------------------------------
@@ -84,101 +117,109 @@ public:
     juce::ValueTree&)
     : AudioProcessorEditor (p), _processor (p)
   {
-    //        id, juce::Colours::green.brighter (0.2),
-    //        juce::Colours::orange.brighter (0.07),
-    //        juce::Colours::teal,
-    //        juce::Colours::darkgoldenrod,
-    //        juce::Colours::red.brighter (0.4),
-    //        juce::Colours::sienna,
-
-    static constexpr uint up    = juce::TextButton::ConnectedOnTop;
-    static constexpr uint down  = juce::TextButton::ConnectedOnBottom;
-    static constexpr uint left  = juce::TextButton::ConnectedOnLeft;
-    static constexpr uint right = juce::TextButton::ConnectedOnRight;
-
     //_header.setLookAndFeel (&_lookfeel);
     //_display_frame.setLookAndFeel (&_lookfeel);
-    //_display_value.setLookAndFeel (&_lookfeel);
+    _display_value.setLookAndFeel (&_display_lf);
 
     // setLookAndFeel (&_lookfeel);
-    _params.init_widgets (*this, params);
 
     register_mouse_events();
-
-    // set slider styles
-    auto& dry          = *_params.p_get (parameters::dry {})[0];
-    auto& wet          = *_params.p_get (parameters::wet {})[0];
-    auto& wet_pan      = *_params.p_get (parameters::wet_pan {})[0];
-    auto& algorithm    = *_params.p_get (parameters::algorithm {})[0];
-    auto& predelay     = *_params.p_get (parameters::predelay {})[0];
-    auto& decay        = *_params.p_get (parameters::decay {})[0];
-    auto& damp         = *_params.p_get (parameters::damp {})[0];
-    auto& stereo       = *_params.p_get (parameters::stereo {})[0];
-    auto& character    = *_params.p_get (parameters::character {})[0];
-    auto& freq_balance = *_params.p_get (parameters::freq_balance {})[0];
-    auto& ducking_threshold
-      = *_params.p_get (parameters::ducking_threshold {})[0];
-    auto& ducking_speed   = *_params.p_get (parameters::ducking_speed {})[0];
-    auto& mode            = *_params.p_get (parameters::mode {})[0];
-    auto& mod             = *_params.p_get (parameters::mod {})[0];
-    auto& operating_range = *_params.p_get (parameters::operating_range {})[0];
-
-    dry.slider.setSliderStyle (juce::Slider::LinearVertical);
-    wet.slider.setSliderStyle (juce::Slider::LinearVertical);
-
+    // notice: the order in which they are added is the rendering order. This
+    // is important to keep components on top without having to make complex
+    // hierarchies, which suits simple UIs like this one.
     addAndMakeVisible (_header);
     addAndMakeVisible (_display_frame);
     addAndMakeVisible (_display_value);
-
-    _display_value.setJustificationType (juce::Justification::left);
+    for (auto& v : _mainpanels) {
+      addAndMakeVisible (v);
+    }
+    addAndMakeVisible (_footer);
+    _params.init_widgets (*this, params); // knobs/sliders on top
+    _display_value.setJustificationType (juce::Justification::centred);
     //_display_value.setFont (juce::Font {
     //  juce::Font::getDefaultMonospacedFontName(), 12, juce::Font::bold});
 
     auto opaque      = juce::Colour {0xff000000};
     auto transparent = juce::Colour {0};
-    auto dark_grey   = juce::Colour::fromString {0xff000000 | 0x121f1f};
-    auto light_grey  = juce::Colour::fromString {0xff000000 | 0x1c2b2b};
-    auto panel       = juce::Colour::fromString {0xff000000 | 0x487576};
+    auto dark_grey   = juce::Colour {0xff000000 | 0x1A1C1E}.brighter (0.03f);
+    auto light_grey  = juce::Colour {0xff000000 | 0x222526}.brighter (0.03f);
+    auto display     = juce::Colour {0xff000000 | 0xB5BEAC};
+    auto knob        = light_grey.brighter (0.2);
+    auto knob_bg     = light_grey.darker (0.2);
+    auto decay_color = juce::Colours::orange.brighter (0.07);
+    auto track       = decay_color.brighter (0.8f);
 
-    set_color (juce::TextButton::buttonColourId, panel, _display_frame);
-    set_color (juce::Label::textColourId, panel.darker (0.7f), _display_value);
+    set_color (
+      juce::TextButton::buttonColourId, display.darker (0.1f), _display_frame);
+    set_color (
+      juce::Label::textColourId, display.darker (1.3f), _display_value);
     set_color (juce::Label::backgroundColourId, transparent, _display_value);
-    set_color (panel::backgroundColourId, dark_grey, _header);
+    set_color (panel::backgroundColourId, dark_grey, _header, _footer);
+    for (auto& v : _mainpanels) {
+      set_color (panel::backgroundColourId, light_grey, v);
+    }
 
-    // colors
-    auto color = make_array<juce::Colour> (
-      juce::Colours::teal,
-      juce::Colours::orange.brighter (0.07),
-      juce::Colours::red.brighter (0.4),
-      juce::Colour (0xff00cc99),
-      juce::Colour (0xff0099cc), // 5
-      juce::Colour (0xffff794d),
-      juce::Colour (0xffd22d6f),
-      juce::Colour (0xff9cb946));
+    using sliders = mp_list<parameters::dry, parameters::wet>;
+    _params.pforeach (sliders {}, [=] (auto key, auto& warray) {
+      warray[0]->slider.setSliderStyle (juce::Slider::LinearVertical);
+      warray[0]->slider.setColour (juce::Slider::thumbColourId, knob);
+      warray[0]->slider.setColour (juce::Slider::trackColourId, track);
+    });
 
-    dry.slider.setColour (juce::Slider::thumbColourId, color[0]);
-    wet.slider.setColour (juce::Slider::thumbColourId, color[0]);
+    using rotaries = mp_list<
+      parameters::predelay,
+      parameters::operating_range,
+      parameters::decay,
+      parameters::character,
+      parameters::mod,
+      parameters::freq_balance,
+      parameters::damp,
+      parameters::wet_pan,
+      parameters::stereo,
+      parameters::ducking_speed,
+      parameters::ducking_threshold>;
+    _params.pforeach (rotaries {}, [=] (auto key, auto& warray) {
+      warray[0]->slider.setLookAndFeel (&_rotary_lf);
+      warray[0]->slider.setColour (juce::Slider::thumbColourId, knob);
+      warray[0]->slider.setColour (juce::Slider::trackColourId, track);
+      warray[0]->slider.setColour (juce::Slider::backgroundColourId, knob_bg);
+    });
 
-    predelay.slider.setColour (juce::Slider::thumbColourId, color[0]);
-    operating_range.slider.setColour (juce::Slider::thumbColourId, color[0]);
+    using pans = mp_list<parameters::wet_pan, parameters::stereo>;
+    _params.pforeach (pans {}, [=] (auto key, auto& warray) {
+      warray[0]->slider.getProperties().set (slider_track_bg_from_center, true);
+    });
 
-    decay.slider.setColour (juce::Slider::thumbColourId, color[1]);
+    auto& decay = *_params.p_get (parameters::decay {})[0];
+    decay.slider.setColour (juce::Slider::thumbColourId, decay_color);
 
-    character.slider.setColour (juce::Slider::thumbColourId, color[0]);
-    mod.slider.setColour (juce::Slider::thumbColourId, color[0]);
-
-    freq_balance.slider.setColour (juce::Slider::thumbColourId, color[0]);
-    damp.slider.setColour (juce::Slider::thumbColourId, color[0]);
-
-    wet_pan.slider.setColour (juce::Slider::thumbColourId, color[0]);
-    stereo.slider.setColour (juce::Slider::thumbColourId, color[0]);
-
-    ducking_threshold.slider.setColour (juce::Slider::thumbColourId, color[0]);
-    ducking_speed.slider.setColour (juce::Slider::thumbColourId, color[0]);
-
-    // pan and stereo from center
-    wet_pan.slider.getProperties().set (slider_track_bg_from_center, true);
-    stereo.slider.getProperties().set (slider_track_bg_from_center, true);
+    using comboboxes = mp_list<parameters::algorithm, parameters::mode>;
+    _params.pforeach (comboboxes {}, [=] (auto key, auto& warray) {
+      auto outline = dark_grey; // light_grey.brighter (0.2f);
+      warray[0]->combo.setColour (
+        juce::ComboBox::backgroundColourId, light_grey);
+      warray[0]->combo.setColour (juce::ComboBox::arrowColourId, light_grey);
+      warray[0]->prev.setColour (juce::TextButton::buttonColourId, outline);
+      warray[0]->next.setColour (juce::TextButton::buttonColourId, outline);
+      set_color (
+        juce::TextButton::buttonColourId,
+        light_grey,
+        warray[0]->prev,
+        warray[0]->next);
+      set_color (
+        juce::ComboBox::outlineColourId,
+        outline,
+        warray[0]->combo,
+        warray[0]->prev,
+        warray[0]->next);
+      /*
+      TODO: WTF with this lookandfeel thing...
+    auto& menu = *warray[0]->combo.getRootMenu();
+    menu.setColour (juce::PopupMenu::backgroundColourId, light_grey);
+    menu.setColour (
+      juce::PopupMenu::highlightedTextColourId, light_grey.brighter (0.4f));
+      */
+    });
 
     // size
     constexpr float ratio  = sizes::total_w_divs / sizes::total_h_divs;
@@ -198,32 +239,39 @@ public:
     setSize (width, height);
   }
   //----------------------------------------------------------------------------
-  ~editor() override
-  {
-    // this lookanfeel thing could really be a bit smarter...
-    _params.clear_widgets();
-    _display_value.setLookAndFeel (nullptr);
-    _display_frame.setLookAndFeel (nullptr);
-    setLookAndFeel (nullptr);
-  }
-  //----------------------------------------------------------------------------
   struct sizes {
 
-    static constexpr float main_knob_wh_divs = 4.f;
+    static constexpr float main_knob_wh_divs = 16.f;
     static constexpr float main_label_w_divs = main_knob_wh_divs;
     static constexpr float main_label_h_divs = main_knob_wh_divs / 4.f;
 
-    static constexpr float w_separation_divs = 1.f;
-    static constexpr float h_separation_divs = 1.f;
+    static constexpr float w_separation_divs = 2.f;
+    static constexpr float h_separation_divs = 2.f;
 
-    static constexpr float header_h_divs     = 0.75f * main_knob_wh_divs;
-    static constexpr float header_sep_h_divs = 1.f;
+    static constexpr float header_h_divs = 0.75f * main_knob_wh_divs;
+    static constexpr float footer_h_divs = 1.5f * main_label_h_divs;
 
-    static constexpr float header_margin_w_divs  = 4.f;
+    static constexpr float header_margin_w_divs  = 6.f;
     static constexpr float header_display_w_divs = 10.f;
 
     static constexpr float header_w_divs
       = header_margin_w_divs + header_display_w_divs + header_display_w_divs;
+
+    static constexpr float footer_separation_w_divs = w_separation_divs;
+    static constexpr float footer_section_w_divs    = 2 * main_knob_wh_divs;
+
+    static constexpr float footer_w_divs = //
+      footer_separation_w_divs + //
+      footer_separation_w_divs + //
+      footer_section_w_divs + //
+      footer_separation_w_divs + //
+      footer_separation_w_divs + //
+      footer_section_w_divs + //
+      footer_separation_w_divs + //
+      footer_separation_w_divs + //
+      footer_section_w_divs + //
+      footer_separation_w_divs + //
+      footer_separation_w_divs;
 
     static constexpr float main_w_separation_divs = 1.f;
     static constexpr float main_w_divs            = main_knob_wh_divs;
@@ -233,35 +281,46 @@ public:
     static constexpr float drywet_w_divs = main_w_divs * 1.5f;
     static constexpr float drywet_h_divs = main_h_divs;
 
-    static constexpr float decay_area_w_divs     = main_w_divs * 1.75f;
-    static constexpr float decay_area_h_divs     = main_h_divs;
-    static constexpr float decay_combobox_h_divs = main_label_h_divs;
-    static constexpr float decay_label_h_divs    = main_label_h_divs;
+    static constexpr float decay_area_w_divs  = main_w_divs * 1.75f;
+    static constexpr float decay_area_h_divs  = main_h_divs;
+    static constexpr float decay_label_h_divs = main_label_h_divs;
     static constexpr float decay_knob_h_divs
-      = main_h_divs - 2 * decay_combobox_h_divs - decay_label_h_divs;
+      = decay_area_h_divs - decay_label_h_divs;
 
     static constexpr float total_w_divs = //
       w_separation_divs + //
+      w_separation_divs + //
       drywet_w_divs + //
+      w_separation_divs + //
       w_separation_divs + //
       main_w_divs + // predelay + oprange
       w_separation_divs + //
+      w_separation_divs + //
       decay_area_w_divs + //
+      w_separation_divs + //
       w_separation_divs + //
       main_w_divs + // charac + mod
       w_separation_divs + //
+      w_separation_divs + //
       main_w_divs + // freq
+      w_separation_divs + //
       w_separation_divs + //
       main_w_divs + // stereo
       w_separation_divs + //
+      w_separation_divs + //
       main_w_divs + // ducking
+      w_separation_divs + //
       w_separation_divs //
       ;
     static constexpr float total_h_divs = //
       h_separation_divs + //
       header_h_divs + //
       h_separation_divs + //
+      h_separation_divs + //
       main_h_divs + //
+      h_separation_divs + //
+      h_separation_divs + //
+      footer_h_divs + //
       h_separation_divs;
     ;
   };
@@ -303,12 +362,16 @@ public:
     pvfbounds.reduce (0, pvfbounds.getHeight() / 9);
     _display_value.setBounds (pvfbounds);
 
-    area.removeFromTop (sep_h); //  header margin
-    auto main = area.removeFromTop (h * (float) sizes::main_h_divs);
+    auto main
+      = area.removeFromTop (sep_h + (h * (float) sizes::main_h_divs) + sep_h);
 
-    main.removeFromLeft (sep_w);
-    auto drywet = main.removeFromLeft (w * (float) sizes::drywet_w_divs);
-
+    auto drywet = main.removeFromLeft (
+      2.f * sep_w + (w * (float) sizes::drywet_w_divs) + sep_w);
+    _mainpanels[0].setBounds (drywet);
+    drywet.removeFromTop (sep_h);
+    drywet.removeFromBottom (sep_h);
+    drywet.removeFromLeft (2.f * sep_w);
+    drywet.removeFromRight (sep_w);
     grid (
       drywet,
       ((float) drywet.getWidth()) / 2.f,
@@ -316,9 +379,13 @@ public:
       grid_label_on_top (*_params.p_get (parameters::dry {})[0]),
       grid_label_on_top (*_params.p_get (parameters::wet {})[0]));
 
-    main.removeFromLeft (sep_w);
-    auto predel = main.removeFromLeft (w * (float) sizes::main_w_divs);
-
+    auto predel
+      = main.removeFromLeft (sep_w + (w * (float) sizes::main_w_divs) + sep_w);
+    _mainpanels[1].setBounds (predel);
+    predel.removeFromTop (sep_h);
+    predel.removeFromBottom (sep_h);
+    predel.removeFromLeft (sep_w);
+    predel.removeFromRight (sep_w);
     grid (
       predel,
       predel.getWidth(),
@@ -326,26 +393,28 @@ public:
       grid_label_on_top (*_params.p_get (parameters::predelay {})[0]),
       grid_label_on_top (*_params.p_get (parameters::operating_range {})[0]));
 
-    main.removeFromLeft (sep_w);
-    auto decay = main.removeFromLeft (w * (float) sizes::decay_area_w_divs);
-
-    auto decay_combobox_h = sizes::decay_combobox_h_divs * h;
-    auto decay_knob_h     = sizes::decay_knob_h_divs * h;
-    auto decay_label_h    = sizes::decay_label_h_divs * h;
-
+    auto decay = main.removeFromLeft (
+      sep_w + (w * (float) sizes::decay_area_w_divs) + sep_w);
+    _mainpanels[2].setBounds (decay);
+    decay.removeFromTop (sep_h);
+    decay.removeFromBottom (sep_h);
+    decay.removeFromLeft (sep_w);
+    decay.removeFromRight (sep_w);
+    auto decay_knob_h  = sizes::decay_knob_h_divs * h;
+    auto decay_label_h = sizes::decay_label_h_divs * h;
     grid (
       decay,
       decay.getWidth(),
-      make_array (
-        decay_label_h, decay_knob_h, decay_combobox_h, decay_combobox_h),
-      grid_label_on_top (*_params.p_get (parameters::decay {})[0]),
-      grid_buttons_on_same_row (
-        *_params.p_get (parameters::algorithm {})[0], 0.8f),
-      grid_buttons_on_same_row (*_params.p_get (parameters::mode {})[0], 0.8f));
+      make_array (decay_label_h, decay_knob_h),
+      grid_label_on_top (*_params.p_get (parameters::decay {})[0]));
 
-    main.removeFromLeft (sep_w);
-    auto mod = main.removeFromLeft (w * (float) sizes::main_w_divs);
-
+    auto mod
+      = main.removeFromLeft (sep_w + (w * (float) sizes::main_w_divs) + sep_w);
+    _mainpanels[3].setBounds (mod);
+    mod.removeFromTop (sep_h);
+    mod.removeFromBottom (sep_h);
+    mod.removeFromLeft (sep_w);
+    mod.removeFromRight (sep_w);
     grid (
       mod,
       mod.getWidth(),
@@ -353,9 +422,13 @@ public:
       grid_label_on_top (*_params.p_get (parameters::mod {})[0]),
       grid_label_on_top (*_params.p_get (parameters::character {})[0]));
 
-    main.removeFromLeft (sep_w);
-    auto freq = main.removeFromLeft (w * (float) sizes::main_w_divs);
-
+    auto freq
+      = main.removeFromLeft (sep_w + (w * (float) sizes::main_w_divs) + sep_w);
+    _mainpanels[4].setBounds (freq);
+    freq.removeFromTop (sep_h);
+    freq.removeFromBottom (sep_h);
+    freq.removeFromLeft (sep_w);
+    freq.removeFromRight (sep_w);
     grid (
       freq,
       freq.getWidth(),
@@ -363,9 +436,13 @@ public:
       grid_label_on_top (*_params.p_get (parameters::freq_balance {})[0]),
       grid_label_on_top (*_params.p_get (parameters::damp {})[0]));
 
-    main.removeFromLeft (sep_w);
-    auto stereo = main.removeFromLeft (w * (float) sizes::main_w_divs);
-
+    auto stereo
+      = main.removeFromLeft (sep_w + (w * (float) sizes::main_w_divs) + sep_w);
+    _mainpanels[5].setBounds (stereo);
+    stereo.removeFromTop (sep_h);
+    stereo.removeFromBottom (sep_h);
+    stereo.removeFromLeft (sep_w);
+    stereo.removeFromRight (sep_w);
     grid (
       stereo,
       stereo.getWidth(),
@@ -373,9 +450,12 @@ public:
       grid_label_on_top (*_params.p_get (parameters::stereo {})[0]),
       grid_label_on_top (*_params.p_get (parameters::wet_pan {})[0]));
 
-    main.removeFromLeft (sep_w);
-    auto duck = main.removeFromLeft (w * (float) sizes::main_w_divs);
-
+    auto duck = main.removeFromLeft (main.getWidth());
+    _mainpanels[6].setBounds (duck);
+    duck.removeFromTop (sep_h);
+    duck.removeFromBottom (sep_h);
+    duck.removeFromLeft (sep_w);
+    duck.removeFromRight (duck.getWidth() - (w * (float) sizes::main_w_divs));
     grid (
       duck,
       duck.getWidth(),
@@ -383,7 +463,35 @@ public:
       grid_label_on_top (*_params.p_get (parameters::ducking_threshold {})[0]),
       grid_label_on_top (*_params.p_get (parameters::ducking_speed {})[0]));
 
-    // area.removeFromTop (sep_h); //  bottom margin
+    auto footer
+      = area.removeFromTop (sep_h + (sizes::footer_h_divs * h) + sep_h);
+    _footer.setBounds (footer);
+    footer.removeFromTop (sep_h);
+    footer.removeFromBottom (sep_h);
+
+    auto f_w    = (float) w_units / sizes::footer_w_divs;
+    auto f_sep  = f_w * sizes::footer_separation_w_divs;
+    auto f_sect = f_w * sizes::footer_section_w_divs;
+
+    auto s1 = footer.removeFromLeft (2 * f_sep + f_sect + f_sep);
+    auto s2 = footer.removeFromLeft (f_sep + f_sect + f_sep);
+    s2.removeFromLeft (f_sep);
+    auto algo = s2.removeFromLeft (f_sect);
+    grid (
+      algo,
+      (float) algo.getWidth(),
+      make_array ((float) algo.getHeight()),
+      grid_buttons_on_same_row (
+        *_params.p_get (parameters::algorithm {})[0], 0.8f));
+
+    auto s3 = footer.removeFromLeft (f_sep + f_sect + f_sep * 2);
+    s3.removeFromLeft (f_sep);
+    auto mode = s3.removeFromLeft (f_sect);
+    grid (
+      mode,
+      (float) mode.getWidth(),
+      make_array ((float) mode.getHeight()),
+      grid_buttons_on_same_row (*_params.p_get (parameters::mode {})[0], 0.8f));
   }
 //----------------------------------------------------------------------------
 #if 0
@@ -486,12 +594,14 @@ public:
   //----------------------------------------------------------------------------
 private:
   juce::AudioProcessor& _processor; // unused
-  // look_and_feel         _lookfeel;
+  rotary_lookfeel       _rotary_lf;
+  display_lookfeel      _display_lf;
 
   editor_apvts_widgets<parameters::parameters_typelist> _params;
 
   panel                _header;
-  std::array<panel, 8> _main;
+  std::array<panel, 7> _mainpanels;
+  panel                _footer;
   juce::Label          _display_value;
   juce::TextButton     _display_frame;
   //  std::array<vertical_line, 2>                   _side_lines;
