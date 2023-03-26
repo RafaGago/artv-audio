@@ -610,7 +610,16 @@ target_compile_options(
 #-- Common ---------------------------------------------------------------------
 add_library(common INTERFACE)
 target_include_directories (common INTERFACE src)
-target_link_libraries(common INTERFACE hana mp11 xsimd gcem bl_headers)
+target_link_libraries(
+    common
+    INTERFACE
+    hana
+    mp11
+    xsimd
+    gcem
+    bl_headers
+    mufft-all
+    pffft)
 
 if(MSVC)
     # MSVC Includes clang-cl.
@@ -714,7 +723,6 @@ function (add_mix_maxtrix_plugin_target target channels)
         PUBLIC
         common
         juce::juce_audio_utils
-        mufft-all
         dragonfly
         tal_reverb2
         luftikus
@@ -722,7 +730,6 @@ function (add_mix_maxtrix_plugin_target target channels)
         rubberband
         SoundTouch
         wdl
-        pffft
         )
     install(
         TARGETS ${target}
@@ -732,7 +739,6 @@ function (add_mix_maxtrix_plugin_target target channels)
         )
 endfunction()
 add_mix_maxtrix_plugin_target (MixMaxTrix 8)
-
 #-- Mix-maxtrix tests-----------------------------------------------------------
 add_executable(
     mix-maxtrix-test
@@ -767,3 +773,68 @@ endif()
 #    headless/mix-maxtrix/main.cpp
 #    )
 #target_link_libraries (MixMaxTrix-headless PRIVATE headless MixMaxTrix)
+#-- Lofiverb ----------------------------------------------------------------
+set (LOFIVERB_VERSION_MAJOR 1)
+set (LOFIVERB_VERSION_MINOR 0)
+set (LOFIVERB_VERSION_REV 0)
+set(
+LOFIVERB_VERSION
+"${LOFIVERB_VERSION_MAJOR}.${LOFIVERB_VERSION_MINOR}.${LOFIVERB_VERSION_REV}"
+)
+juce_add_plugin(
+    lofiverb
+    PLUGIN_MANUFACTURER_CODE ArtV
+    PLUGIN_CODE Lfvb
+    PRODUCT_NAME LofiVerb
+    LV2_SHARED_LIBRARY_NAME lofiverb
+    COMPANY_NAME ArtV
+    VERSION "${LOFIVERB_VERSION}"
+    VST3_CATEGORIES Reverb
+    VST3_COPY_DIR ${VST3_COPY_DIR}
+    FORMATS ${PLUGIN_FORMATS}
+    NEEDS_MIDI_INPUT 0
+    VST_NUM_MIDI_INS 0
+    LV2_URI https://github.com/RafaGago/artv-audio
+    )
+target_sources(
+    lofiverb
+    PRIVATE
+    src/lofiverb/processor.cpp
+    src/lofiverb/editor.cpp
+    )
+set_source_files_properties(
+    src/lofiverb/editor.cpp
+    PROPERTIES
+    COMPILE_FLAGS
+    "${ARTV_PLAIN_COMPILE_OPTIONS}"
+    )
+set_source_files_properties(
+    src/lofiverb/processor.cpp
+    PROPERTIES
+    COMPILE_FLAGS
+    "${ARTV_DSP_COMPILE_OPTIONS}"
+    )
+target_compile_definitions(
+    lofiverb
+    PUBLIC
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_VST3_CAN_REPLACE_VST2=0
+    JUCER_ENABLE_GPL_MODE=1
+    VERSION_TXT="${LOFIVERB_VERSION}"
+    VERSION_MAJOR=${LOFIVERB_VERSION_MAJOR}
+    VERSION_MINOR=${LOFIVERB_VERSION_MINOR}
+    VERSION_REV=${LOFIVERB_VERSION_REV}
+    )
+target_link_libraries(
+    lofiverb
+    PUBLIC
+    common
+    juce::juce_audio_utils
+    )
+install(
+    TARGETS lofiverb
+    RUNTIME DESTINATION plugins
+    LIBRARY DESTINATION plugins
+    ARCHIVE DESTINATION plugins
+    )

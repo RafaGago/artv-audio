@@ -117,7 +117,7 @@ static constexpr auto pan_param  = float_param ("", -100.f, 100.f, 0.0f, 0.01f);
 static constexpr auto phinv_param
   = choice_param (0, make_cstr_array ("Off", "On"));
 static constexpr auto db_gain_param
-  = float_param ("dB", -100.f, 10.f, 0.f, 0.01f);
+  = float_param ("dB", -100.f, 6.f, 0.f, 0.01f, 3.f);
 //------------------------------------------------------------------------------
 struct ms_smoother {
 public:

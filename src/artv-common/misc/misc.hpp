@@ -161,23 +161,23 @@ static constexpr void array_cat (std::array<T, N_dst>& dst)
 
 template <uint Offset, class T, size_t N_dst, size_t N_src, size_t... N>
 static constexpr void array_cat (
-  std::array<T, N_dst>&  dst,
-  std::array<T, N_src>&& src,
-  std::array<T, N>&&... arrs)
+  std::array<T, N_dst>&       dst,
+  std::array<T, N_src> const& src,
+  std::array<T, N> const&... arrs)
 {
   memcpy (&dst[Offset], src.data(), sizeof src);
-  array_cat<Offset + N_src> (dst, std::forward<std::array<T, N>> (arrs)...);
+  array_cat<Offset + N_src> (dst, arrs...);
 }
 
 }; // namespace detail
 
 template <class T, size_t... N>
-static constexpr auto array_cat (std::array<T, N>&&... arrs)
+static constexpr auto array_cat (std::array<T, N> const&... arrs)
 {
   constexpr size_t size = (N + ...);
 
   std::array<T, size> ret;
-  detail::array_cat<0> (ret, std::forward<std::array<T, N>> (arrs)...);
+  detail::array_cat<0> (ret, arrs...);
   return ret;
 }
 
