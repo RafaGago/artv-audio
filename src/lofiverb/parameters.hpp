@@ -24,6 +24,13 @@ parameter_cpp_class_define (
   combobox_ext);
 
 parameter_cpp_class_define (
+  clock,
+  1,
+  param_common ("Clock", declptr<lofiverb>(), declptr<lofiverb::clock_tag>()),
+  lofiverb::get_parameter (lofiverb::clock_tag {}),
+  combobox_ext);
+
+parameter_cpp_class_define (
   character,
   1,
   param_common (
@@ -144,6 +151,7 @@ parameter_cpp_class_define (
 using lofiverb_parameters = mp_list<
   algorithm,
   predelay,
+  clock,
   decay,
   damp,
   stereo,

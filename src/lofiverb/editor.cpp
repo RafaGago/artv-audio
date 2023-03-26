@@ -464,6 +464,15 @@ public:
     auto f_sect = f_w * sizes::footer_section_w_divs;
 
     auto s1 = footer.removeFromLeft (2 * f_sep + f_sect + f_sep);
+    s1.removeFromLeft (2 * f_sep);
+    auto clock = s1.removeFromLeft (f_sect);
+    grid (
+      clock,
+      (float) clock.getWidth(),
+      make_array ((float) clock.getHeight()),
+      grid_buttons_on_same_row (
+        *_params.p_get (parameters::clock {})[0], 0.8f));
+
     auto s2 = footer.removeFromLeft (f_sep + f_sect + f_sep);
     s2.removeFromLeft (f_sep);
     auto algo = s2.removeFromLeft (f_sect);

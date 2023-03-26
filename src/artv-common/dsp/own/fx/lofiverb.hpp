@@ -292,7 +292,7 @@ public:
       return;
     }
     _param.mode = (_param.mode % 2) | (v * 2);
-    update_mode();
+    update_operation_mode();
   }
   //----------------------------------------------------------------------------
   static constexpr auto get_parameter (algorithm_tag)
@@ -320,13 +320,37 @@ public:
       return;
     }
     _param.mode = (_param.mode & ~(1u)) | (v & 1);
-    update_mode();
+    update_operation_mode();
   }
 
   static constexpr auto get_parameter (mode_tag)
   {
     return choice_param (
       1, make_cstr_array ("16-bit float point", "16-bit fixed point"), 16);
+  }
+  //----------------------------------------------------------------------------
+  struct clock_tag {};
+  void set (clock_tag, int v)
+  {
+    if (v == _param.srateid) {
+      return;
+    }
+    _param.srateid = v;
+    update_operation_mode();
+  }
+
+  static constexpr auto get_parameter (clock_tag)
+  {
+    return choice_param (
+      3,
+      make_cstr_array (
+        "Downclocked 3",
+        "Downclocked 2",
+        "Downclocked 1",
+        "Base Clock",
+        "Overclocked 1",
+        "Overclocked 2",
+        "Overclocked 3"));
   }
   //----------------------------------------------------------------------------
   struct decay_tag {};
@@ -456,6 +480,7 @@ public:
     _srate               = 0; // ensure triggering a resample reset
     _param.mode
       = (decltype (_param.mode)) -1ull; // trigger a mode and resampler reset
+    _param.srateid = 3;
 
     _param_smooth.reset (_t_spl);
     // set defaults
@@ -494,6 +519,7 @@ public:
   using parameters = mp_list<
     algorithm_tag, // keep first! important for reset to work
     mode_tag,
+    clock_tag,
     character_tag,
     damp_tag,
     decay_tag,
@@ -1261,45 +1287,86 @@ private:
     };
   };
   //----------------------------------------------------------------------------
-  void update_mode()
+  void update_operation_mode()
   {
-    uint srate {}, fc {};
+    /*
+      srate t44k t48k
+      7200 49   20
+      8400 21   40
+      9000 49   16
+      10500 21   32
+      10800 49   40
+      13500 49   32
+      14400 49   10
+      16800 21   20
+      18000 49   08
+      20160 35   50
+      21000 21   16
+      21600 49   20
+      22500 49   32
+      25200 07   40
+      27000 49   16
+      28800 49   05
+      31500 07   32
+      32400 49   40
+      33600 21   10
+      36000 49   04
+      39200 09   60
+      39600 49   40
+      40320 35   25
+      40500 49   32
+      42000 21   08
+      43200 49   10
+      45000 50   16
+      46800 52   40
+      47040 16   50
+      49000 10   49
+      49500 55   33
+      50400 08   21
+      52500 25   35
+      54000 60   09
+      57600 64   06
+      58500 65   39
+      58800 04   49
+      60480 48   63
+      61200 68   51
+      63000 10   21
+      64800 72   27
+      67200 32   07
+      67500 75   45
+      68400 76   57
+    */
+    uint srate {};
 
     switch (_param.mode) {
     case mode::abyss_flt:
-    case mode::abyss: {
-      srate = 25200;
-      fc    = 11500;
-    } break;
+    case mode::abyss:
     case mode::small_space_flt:
     case mode::small_space: {
-      srate = 25200;
-      fc    = 11500;
+      constexpr auto srates
+        = make_array (10500, 16800, 21000, 25200, 31500, 40320, 63000);
+      srate = srates[_param.srateid];
     } break;
     case mode::midifex49_flt:
-    case mode::midifex49: {
-      srate = 23400;
-      fc    = 10500;
-    } break;
+    case mode::midifex49:
     case mode::midifex50_flt:
-    case mode::midifex50: {
-      srate = 23400;
-      fc    = 10500;
-    } break;
+    case mode::midifex50:
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
     case mode::debug_algo_flt:
-    case mode::debug_algo: {
-      srate = 23400;
-      fc    = 10500;
-    } break;
+    case mode::debug_algo:
 #endif
+    {
+      constexpr auto srates
+        = make_array (10500, 16800, 21000, 23400, 33600, 42000, 63000);
+      srate = srates[_param.srateid];
+    } break;
     default:
       return;
     }
 
     if (_srate != srate) {
       _srate = srate;
-      update_internal_srate (srate, fc);
+      update_internal_srate (srate, (srate / 20) * 9);
     }
 
     switch (_param.mode) {
@@ -1352,8 +1419,18 @@ private:
   void update_internal_srate (uint srate, uint fc)
   {
     auto daw_srate = _pc->get_sample_rate();
+    auto target_fc = std::min (fc, (daw_srate / 20) * 9);
     _resampler.reset (
-      srate, daw_srate, fc, fc, 32, 16, 210, true, max_block_size, 6 * 1024);
+      srate,
+      daw_srate,
+      fc,
+      target_fc,
+      32,
+      16,
+      210,
+      true,
+      max_block_size,
+      6 * 1024);
 
     auto  state   = _pc->get_play_state();
     float beat_hz = 120.f;
@@ -1469,6 +1546,7 @@ private:
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
     u32   mode;
+    u32   srateid;
     float gain; // a parameter
     float tilt;
     float predelay;

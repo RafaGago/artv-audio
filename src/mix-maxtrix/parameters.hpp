@@ -7509,6 +7509,13 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
+  lofiverb_clock,
+  n_stereo_busses,
+  param_common ("Clock", declptr<lofiverb>(), declptr<lofiverb::clock_tag>()),
+  lofiverb::get_parameter (lofiverb::clock_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
   lofiverb_mode,
   n_stereo_busses,
   param_common ("Mode", declptr<lofiverb>(), declptr<lofiverb::mode_tag>()),
@@ -7616,6 +7623,7 @@ using lofiverb_params = mp_list<
   lofiverb_ducking_threshold,
   lofiverb_ducking_speed,
   lofiverb_mode,
+  lofiverb_clock,
   lofiverb_operating_range>;
 //------------------------------------------------------------------------------
 #if 0
