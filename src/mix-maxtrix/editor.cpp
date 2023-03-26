@@ -292,6 +292,8 @@ public:
         for (uint i = 0; i < warray.size(); ++i) {
           warray[i]->slider.setColour (
             juce::Slider::thumbColourId, ch_color[i]);
+          warray[i]->slider.setColour (
+            juce::Slider::trackColourId, ch_color[i].brighter (1.5f));
         }
       });
 
@@ -300,9 +302,9 @@ public:
       for (slider_ext& s : arr) {
         s.slider.setColour (
           juce::Slider::thumbColourId,
-          // s.slider.findColour (juce::Slider::thumbColourId).brighter
-          // (0.3)); juce::Colours::grey);
-          //_lookfeel.findColour (juce::ResizableWindow::backgroundColourId)
+          _lookfeel.findColour (juce::Slider::backgroundColourId));
+        s.slider.setColour (
+          juce::Slider::trackColourId,
           _lookfeel.findColour (juce::Slider::backgroundColourId));
       }
     }

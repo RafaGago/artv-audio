@@ -86,6 +86,7 @@ static void draw_rotary_1 (
   bool center_track = s.getProperties().contains (slider_track_bg_from_center);
 
   // arc
+  p.clear();
   constexpr auto arc_factor = 0.80f;
   p.addCentredArc (
     centre_x,
@@ -97,6 +98,7 @@ static void draw_rotary_1 (
                  : rotaryStartAngle,
     angle,
     true);
+  g.setColour (s.findColour (juce::Slider::trackColourId));
   g.strokePath (p, juce::PathStrokeType (2.f));
 }
 
