@@ -12,6 +12,11 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 
+#include "artv-common/juce/look_and_feel.hpp"
+
+#include "fonts/OpenSans-Bold.ttf.hpp"
+#include "fonts/PassionsConflict-Regular.ttf.hpp"
+
 #include "artv-common/juce/effect_base.hpp"
 #include "artv-common/juce/gui_util.hpp"
 #include "artv-common/juce/math.hpp"
@@ -27,34 +32,17 @@
 
 namespace artv {
 
-// -----------------------------------------------------------------------------
-class rotary_lookfeel : public juce::LookAndFeel_V4 {
-public:
-  void drawRotarySlider (
-    juce::Graphics& g,
-    int             x,
-    int             y,
-    int             width,
-    int             height,
-    float           sliderPos,
-    float const     rotaryStartAngle,
-    float const     rotaryEndAngle,
-    juce::Slider&   s) override
-  {
-    draw_rotary_1 (
-      g, x, y, width, height, sliderPos, rotaryStartAngle, rotaryEndAngle, s);
-  }
-};
-// -----------------------------------------------------------------------------
-class display_lookfeel : public juce::LookAndFeel_V4 {
-public:
-  juce::Font getLabelFont (juce::Label& obj) override
-  {
-    auto f = LookAndFeel_V4::getLabelFont (obj);
-    f.setHeight (obj.getHeight() - 4);
-    return f;
-  }
-};
+juce::Typeface::Ptr const default_typeface {
+  juce::Typeface::createSystemTypefaceFor (
+    font::OpenSans_Bold_ttf,
+    sizeof font::OpenSans_Bold_ttf)};
+
+juce::Typeface::Ptr const lcd_typeface = default_typeface;
+
+juce::Typeface::Ptr const title_typeface {
+  juce::Typeface::createSystemTypefaceFor (
+    font::PassionsConflict_Regular_ttf,
+    sizeof font::PassionsConflict_Regular_ttf)};
 // -----------------------------------------------------------------------------
 struct vertical_line : public juce::Component {
   //----------------------------------------------------------------------------
@@ -117,11 +105,31 @@ public:
     juce::ValueTree&)
     : AudioProcessorEditor (p), _processor (p)
   {
-    //_header.setLookAndFeel (&_lookfeel);
-    //_display_frame.setLookAndFeel (&_lookfeel);
-    _display_value.setLookAndFeel (&_display_lf);
+    // look and feel stuff
+    _lf.setDefaultSansSerifTypeface (default_typeface);
+    _lf.setDefaultLookAndFeel (&_lf);
 
-    // setLookAndFeel (&_lookfeel);
+    _lf.on_get_label_font = [this] (juce::Label& obj) {
+      auto  f = obj.getFont();
+      float h = obj.getTopLevelComponent()->getHeight();
+
+      if (&obj == &_title) {
+        f.setHeight (h * 0.14f);
+      }
+      else if (&obj == &_display_value) {
+        f.setHeight (h * 0.12f);
+      }
+      else {
+        f.setHeight (h * 0.055f);
+      }
+      return f;
+    };
+    _lf.on_rotary_draw = draw_rotary_1;
+
+    // init
+    _display_value.setFont (juce::Font {lcd_typeface});
+    _title.setFont (juce::Font {title_typeface});
+    _title.setText ("LofiVerb", juce::dontSendNotification);
 
     register_mouse_events();
     // notice: the order in which they are added is the rendering order. This
@@ -130,12 +138,14 @@ public:
     addAndMakeVisible (_header);
     addAndMakeVisible (_display_frame);
     addAndMakeVisible (_display_value);
+    addAndMakeVisible (_title);
     for (auto& v : _mainpanels) {
       addAndMakeVisible (v);
     }
     addAndMakeVisible (_footer);
     _params.init_widgets (*this, params); // knobs/sliders on top
     _display_value.setJustificationType (juce::Justification::centred);
+    _title.setJustificationType (juce::Justification::centred);
     //_display_value.setFont (juce::Font {
     //  juce::Font::getDefaultMonospacedFontName(), 12, juce::Font::bold});
 
@@ -148,12 +158,32 @@ public:
     auto knob_bg     = light_grey.darker (0.2);
     auto decay_color = juce::Colours::orange.brighter (0.07);
     auto track       = decay_color.brighter (0.8f);
+    auto label_txt   = light_grey.brighter (1.8);
+    auto outline     = dark_grey; // light_grey.brighter (0.2f);
 
+    _lf.setColour (juce::PopupMenu::backgroundColourId, light_grey);
+    _lf.setColour (juce::PopupMenu::highlightedBackgroundColourId, dark_grey);
+    _lf.setColour (juce::Label::textColourId, label_txt);
+    _lf.setColour (juce::Slider::trackColourId, track);
+    _lf.setColour (juce::Slider::thumbColourId, knob);
+    _lf.setColour (juce::Slider::backgroundColourId, knob_bg);
+
+    _lf.setColour (juce::ComboBox::backgroundColourId, light_grey);
+    _lf.setColour (juce::ComboBox::outlineColourId, outline);
+    _lf.setColour (juce::ComboBox::arrowColourId, light_grey);
+    _lf.setColour (juce::ComboBox::textColourId, label_txt);
+
+    _lf.setColour (juce::TextButton::buttonColourId, light_grey);
+    _lf.setColour (juce::TextButton::textColourOffId, label_txt);
+
+    // different colors and styles
     set_color (
       juce::TextButton::buttonColourId, display.darker (0.1f), _display_frame);
     set_color (
       juce::Label::textColourId, display.darker (1.3f), _display_value);
     set_color (juce::Label::backgroundColourId, transparent, _display_value);
+    set_color (juce::Label::textColourId, label_txt, _title);
+    set_color (juce::Label::backgroundColourId, transparent, _title);
     set_color (panel::backgroundColourId, dark_grey, _header, _footer);
     for (auto& v : _mainpanels) {
       set_color (panel::backgroundColourId, light_grey, v);
@@ -162,27 +192,6 @@ public:
     using sliders = mp_list<parameters::dry, parameters::wet>;
     _params.pforeach (sliders {}, [=] (auto key, auto& warray) {
       warray[0]->slider.setSliderStyle (juce::Slider::LinearVertical);
-      warray[0]->slider.setColour (juce::Slider::thumbColourId, knob);
-      warray[0]->slider.setColour (juce::Slider::trackColourId, track);
-    });
-
-    using rotaries = mp_list<
-      parameters::predelay,
-      parameters::operating_range,
-      parameters::decay,
-      parameters::character,
-      parameters::mod,
-      parameters::freq_balance,
-      parameters::damp,
-      parameters::wet_pan,
-      parameters::stereo,
-      parameters::ducking_speed,
-      parameters::ducking_threshold>;
-    _params.pforeach (rotaries {}, [=] (auto key, auto& warray) {
-      warray[0]->slider.setLookAndFeel (&_rotary_lf);
-      warray[0]->slider.setColour (juce::Slider::thumbColourId, knob);
-      warray[0]->slider.setColour (juce::Slider::trackColourId, track);
-      warray[0]->slider.setColour (juce::Slider::backgroundColourId, knob_bg);
     });
 
     using pans = mp_list<parameters::wet_pan, parameters::stereo>;
@@ -192,34 +201,6 @@ public:
 
     auto& decay = *_params.p_get (parameters::decay {})[0];
     decay.slider.setColour (juce::Slider::thumbColourId, decay_color);
-
-    using comboboxes = mp_list<parameters::algorithm, parameters::mode>;
-    _params.pforeach (comboboxes {}, [=] (auto key, auto& warray) {
-      auto outline = dark_grey; // light_grey.brighter (0.2f);
-      warray[0]->combo.setColour (
-        juce::ComboBox::backgroundColourId, light_grey);
-      warray[0]->combo.setColour (juce::ComboBox::arrowColourId, light_grey);
-      warray[0]->prev.setColour (juce::TextButton::buttonColourId, outline);
-      warray[0]->next.setColour (juce::TextButton::buttonColourId, outline);
-      set_color (
-        juce::TextButton::buttonColourId,
-        light_grey,
-        warray[0]->prev,
-        warray[0]->next);
-      set_color (
-        juce::ComboBox::outlineColourId,
-        outline,
-        warray[0]->combo,
-        warray[0]->prev,
-        warray[0]->next);
-      /*
-      TODO: WTF with this lookandfeel thing...
-    auto& menu = *warray[0]->combo.getRootMenu();
-    menu.setColour (juce::PopupMenu::backgroundColourId, light_grey);
-    menu.setColour (
-      juce::PopupMenu::highlightedTextColourId, light_grey.brighter (0.4f));
-      */
-    });
 
     // size
     constexpr float ratio  = sizes::total_w_divs / sizes::total_h_divs;
@@ -243,7 +224,7 @@ public:
 
     static constexpr float main_knob_wh_divs = 16.f;
     static constexpr float main_label_w_divs = main_knob_wh_divs;
-    static constexpr float main_label_h_divs = main_knob_wh_divs / 4.f;
+    static constexpr float main_label_h_divs = main_knob_wh_divs / 3.f;
 
     static constexpr float w_separation_divs = 2.f;
     static constexpr float h_separation_divs = 2.f;
@@ -351,16 +332,25 @@ public:
     header.removeFromTop (sep_h); //  upper margin
     header.removeFromBottom (sep_h); //  lower margin
 
-    header.removeFromLeft (header_margin_w);
-    header.removeFromRight (header_margin_w);
+    auto title = header.removeFromLeft (header_margin_w);
+    _title.setBounds (title);
 
+    //    auto tf = _title.getFont();
+    //    tf.setHeight ((float) title.getHeight() * 113.25f);
+    //    _title.setFont (tf);
+
+    header.removeFromRight (header_margin_w);
     auto display = header;
 
     _display_frame.setBounds (display);
     auto pvfbounds = _display_frame.getBounds().reduced (h_h / 10.f);
-    // make the font smaller to avoid resizings
+
     pvfbounds.reduce (0, pvfbounds.getHeight() / 9);
     _display_value.setBounds (pvfbounds);
+
+    //    auto f = _display_value.getFont();
+    //    f.setHeight ((float) pvfbounds.getHeight() * 3.25f);
+    //    _display_value.setFont (f);
 
     auto main
       = area.removeFromTop (sep_h + (h * (float) sizes::main_h_divs) + sep_h);
@@ -594,8 +584,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   juce::AudioProcessor& _processor; // unused
-  rotary_lookfeel       _rotary_lf;
-  display_lookfeel      _display_lf;
+  saner_look_and_feel   _lf;
 
   editor_apvts_widgets<parameters::parameters_typelist> _params;
 
@@ -603,6 +592,7 @@ private:
   std::array<panel, 7> _mainpanels;
   panel                _footer;
   juce::Label          _display_value;
+  juce::Label          _title;
   juce::TextButton     _display_frame;
   //  std::array<vertical_line, 2>                   _side_lines;
   //  std::array<vertical_line, n_stereo_busses * 2> _fx_lines;

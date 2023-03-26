@@ -102,5 +102,105 @@ static void draw_rotary_1 (
   g.strokePath (p, juce::PathStrokeType (2.f));
 }
 
+// Get rid of inheritance legacy
+class saner_look_and_feel : public juce::LookAndFeel_V4 {
+public:
+  // This class is big, so add methods on an as-needed basis.
+  // ---------------------------------------------------------------------------
+  void drawRotarySlider (
+    juce::Graphics& g,
+    int             x,
+    int             y,
+    int             width,
+    int             height,
+    float           sliderPos,
+    float const     rotaryStartAngle,
+    float const     rotaryEndAngle,
+    juce::Slider&   s) override
+  {
+    if (on_rotary_draw) {
+      on_rotary_draw (
+        g, x, y, width, height, sliderPos, rotaryStartAngle, rotaryEndAngle, s);
+    }
+    else {
+      juce::LookAndFeel_V4::drawRotarySlider (
+        g, x, y, width, height, sliderPos, rotaryStartAngle, rotaryEndAngle, s);
+    }
+  }
+  std::function<void (
+    juce::Graphics&,
+    int,
+    int,
+    int,
+    int,
+    float,
+    float const,
+    float const,
+    juce::Slider&)>
+    on_rotary_draw;
+  // ---------------------------------------------------------------------------
+  void drawLinearSlider (
+    juce::Graphics&                 g,
+    int                             x,
+    int                             y,
+    int                             width,
+    int                             height,
+    float                           sliderPos,
+    float                           minSliderPos,
+    float                           maxSliderPos,
+    const juce::Slider::SliderStyle style,
+    juce::Slider&                   s) override
+  {
+    if (on_linear_slider_draw) {
+      on_linear_slider_draw (
+        g,
+        x,
+        y,
+        width,
+        height,
+        sliderPos,
+        minSliderPos,
+        maxSliderPos,
+        style,
+        s);
+    }
+    else {
+      LookAndFeel_V4::drawLinearSlider (
+        g,
+        x,
+        y,
+        width,
+        height,
+        sliderPos,
+        minSliderPos,
+        maxSliderPos,
+        style,
+        s);
+    }
+  }
+  std::function<void (
+    juce::Graphics&,
+    int,
+    int,
+    int,
+    int,
+    float,
+    float,
+    float,
+    const juce::Slider::SliderStyle,
+    juce::Slider&)>
+    on_linear_slider_draw;
+  // ---------------------------------------------------------------------------
+  juce::Font getLabelFont (juce::Label& obj) override
+  {
+    if (on_get_label_font) {
+      return on_get_label_font (obj);
+    }
+    return juce::LookAndFeel_V4::getLabelFont (obj);
+  }
+  std::function<juce::Font (juce::Label&)> on_get_label_font;
+  // ---------------------------------------------------------------------------
+};
+
 // -----------------------------------------------------------------------------
 } // namespace artv

@@ -1,0 +1,8 @@
+# License
+
+OFL for every font on this folder.
+
+# Reminder
+
+-Use seriaze-font.sh to generate cpp and hpp from a ttf
+-Use update-cmake.sh to update the CmakeLists.txt.

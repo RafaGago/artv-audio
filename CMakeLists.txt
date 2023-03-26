@@ -227,6 +227,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable (juce)
 set (JUCE_REPO ${juce_SOURCE_DIR})
 
+#-- Fonts ----------------------------------------------------------------------
+add_subdirectory(resources/fonts)
+
 #-- Cockos WDL -----------------------------------------------------------------
 FetchContent_Declare(
     wdl_fetch
@@ -831,6 +834,7 @@ target_link_libraries(
     PUBLIC
     common
     juce::juce_audio_utils
+    fonts
     )
 install(
     TARGETS lofiverb

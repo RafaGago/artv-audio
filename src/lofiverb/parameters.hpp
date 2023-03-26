@@ -105,7 +105,7 @@ parameter_cpp_class_define (
   ducking_threshold,
   1,
   param_common (
-    "Duck Thres",
+    "Duck Thrs",
     declptr<lofiverb>(),
     declptr<lofiverb::ducking_threshold_tag>()),
   lofiverb::get_parameter (lofiverb::ducking_threshold_tag {}),
