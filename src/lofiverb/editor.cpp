@@ -199,6 +199,12 @@ public:
       warray[0]->slider.getProperties().set (slider_track_bg_from_center, true);
     });
 
+    using combos
+      = mp_list<parameters::algorithm, parameters::mode, parameters::clock>;
+    _params.pforeach (combos {}, [=] (auto key, auto& warray) {
+      warray[0]->combo.setJustificationType (juce::Justification::centred);
+    });
+
     auto& decay = *_params.p_get (parameters::decay {})[0];
     decay.slider.setColour (juce::Slider::thumbColourId, decay_color);
 
