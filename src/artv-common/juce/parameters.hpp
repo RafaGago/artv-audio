@@ -25,8 +25,8 @@ many parameter values of the same type, see the second parameter of
 These parameter types contain parameter traits (juce id string(s), ranges, text
 strings, etc). They double as parameter definitions an tag classes.
 
-The editor has to inherit "has_editor_params" and the processor has to inherit
-"has_processor_params". Both are passed the typelist with all the
+The editor has to inherit "editor_apvts_widgets" and the processor has to
+inherit "has_processor_params". Both are passed the typelist with all the
 parameters/tag_classes named above.
 
 On both the processor and editor a member "boost::hana::map" is created when
@@ -37,7 +37,7 @@ type arrays in the case of the editor and processor respectively.
 "has_processor_params" inherits "has_content_map". It expands it with
 methods to fetch parameters from an externally owned AudioProcessorTree.
 
-Then "has_editor_params" inherits "has_content_map" too. It expands it with
+Then "editor_apvts_widgets" inherits "has_content_map" too. It expands it with
 methods to initialize the widgets from an AudioProcessorTree.
 
 These two classes remove a lot of the AudioProcessorTree boilerplate and Juce
@@ -495,10 +495,10 @@ private:
 // macro) and creates a member compile time map containing the widgets. As every
 // parameter is a type, the widget arrays can be accessed by p_get<type>() too.
 template <class... unique_types>
-class has_editor_params;
+class editor_apvts_widgets;
 
 template <class... types>
-class has_editor_params<mp_list<types...>>
+class editor_apvts_widgets<mp_list<types...>>
   : public has_content_map<
       mp_list<types...>,
       mp_list<typename types::widget_type...>> {

@@ -64,8 +64,7 @@ struct radio_id {
 };
 // -----------------------------------------------------------------------------
 class editor : public juce::AudioProcessorEditor,
-               public juce::DragAndDropContainer,
-               private has_editor_params<parameters::parameters_typelist> {
+               public juce::DragAndDropContainer {
 public:
   static constexpr uint n_stereo_busses = parameters::n_stereo_busses;
   //----------------------------------------------------------------------------
@@ -114,21 +113,21 @@ public:
       addAndMakeVisible (_fx_lines[i]);
     }
 
-    init_widgets (*this, params);
+    _widgets.init_widgets (*this, params);
 
     register_mouse_events();
 
     // set slider styles
-    p_get (parameters::global_volume {})[0]->slider.setSliderStyle (
+    _widgets.p_get (parameters::global_volume {})[0]->slider.setSliderStyle (
       juce::Slider::LinearHorizontal);
 
-    for (auto& s : p_get (parameters::volume {})) {
+    for (auto& s : _widgets.p_get (parameters::volume {})) {
       s->slider.setSliderStyle (juce::Slider::LinearVertical);
     }
 
     // setting descriptive names to the IO buttons
-    auto& ins  = p_get (parameters::in_selection {});
-    auto& outs = p_get (parameters::out_selection {});
+    auto& ins  = _widgets.p_get (parameters::in_selection {});
+    auto& outs = _widgets.p_get (parameters::out_selection {});
     for (uint src = 0; src < ins.size(); ++src) {
       for (uint dst = 0; dst < ins.size(); ++dst) {
         // TODO: get {fmt}
@@ -148,7 +147,7 @@ public:
     }
 
     // setting descriptive names to the channel modifiers
-    auto& mods = p_get (parameters::channel_modifs {});
+    auto& mods = _widgets.p_get (parameters::channel_modifs {});
     for (auto& widg_ptr : mods) {
       widg_ptr->buttons[0].setName ("Phase inv");
       widg_ptr->buttons[1].setName ("Mono L");
@@ -159,7 +158,7 @@ public:
       widg_ptr->buttons[3].setConnectedEdges (left);
     }
 
-    auto& mixer_sends = p_get (parameters::mixer_sends {});
+    auto& mixer_sends = _widgets.p_get (parameters::mixer_sends {});
     // setting descriptive names to the mixer to mixer send buttons
     for (uint i = 0; i < num_mixer_sends; ++i) {
       // TODO: get {fmt}
@@ -181,22 +180,22 @@ public:
     }
 
     // setting a better description to the Dry/Wet parameters modifiers
-    for (auto& s : p_get (parameters::dry_balance {})) {
+    for (auto& s : _widgets.p_get (parameters::dry_balance {})) {
       s->slider.setName ("Dry M/S");
     }
-    for (auto& s : p_get (parameters::wet_balance {})) {
+    for (auto& s : _widgets.p_get (parameters::wet_balance {})) {
       s->slider.setName ("Wet M/S");
     }
-    for (auto& s : p_get (parameters::dry_pan {})) {
+    for (auto& s : _widgets.p_get (parameters::dry_pan {})) {
       s->slider.setName ("Dry Pan");
     }
-    for (auto& s : p_get (parameters::wet_pan {})) {
+    for (auto& s : _widgets.p_get (parameters::wet_pan {})) {
       s->slider.setName ("Wet Pan");
     }
-    for (auto& s : p_get (parameters::fx_mix {})) {
+    for (auto& s : _widgets.p_get (parameters::fx_mix {})) {
       s->slider.setName ("Fx Mix");
     }
-    for (auto& s : p_get (parameters::pan {})) {
+    for (auto& s : _widgets.p_get (parameters::pan {})) {
       s->slider.setName ("Main Pan");
     }
 
@@ -287,7 +286,7 @@ public:
       juce::Colour (0xffd22d6f),
       juce::Colour (0xff9cb946));
 
-    pforeach (
+    _widgets.pforeach (
       parameters::all_channel_sliders_typelist {},
       [=] (auto type, auto& warray) {
         for (uint i = 0; i < warray.size(); ++i) {
@@ -342,7 +341,7 @@ public:
         _lookfeel.findColour (juce::ResizableWindow::backgroundColourId));
     }
 
-    auto& mutesolo = p_get (parameters::mute_solo {});
+    auto& mutesolo = _widgets.p_get (parameters::mute_solo {});
     // mute solo edges
     for (uint i = 0; i < n_stereo_busses; ++i) {
       mutesolo[i]->buttons[0].setConnectedEdges (right);
@@ -377,7 +376,7 @@ public:
     set_color (
       juce::TextButton::buttonOnColourId,
       _lookfeel.findColour (juce::Slider::backgroundColourId).brighter (0.5),
-      p_get (parameters::mixer_sends {})[0]->buttons);
+      _widgets.p_get (parameters::mixer_sends {})[0]->buttons);
 
     // radio grouping
     for (uint i = 0; i < n_stereo_busses; ++i) {
@@ -397,7 +396,7 @@ public:
     // pan slider bg's.
     mp11::mp_for_each<mp_list<parameters::dry_balance, parameters::pan>> (
       [this] (auto w) {
-        for (auto& s : p_get (w)) {
+        for (auto& s : _widgets.p_get (w)) {
           s->slider.getProperties().set (
             look_and_feel::slider_track_bg_from_center, true);
         }
@@ -405,7 +404,7 @@ public:
 
     // fx type events
     for (uint i = 0; i < n_stereo_busses; ++i) {
-      auto& combo = p_get (parameters::fx_type {})[i]->combo;
+      auto& combo = _widgets.p_get (parameters::fx_type {})[i]->combo;
       // fx change
       combo.onChange = [=] { on_fx_type_or_page_change (i, -1); };
       on_fx_type_or_page_change (i, -1);
@@ -418,7 +417,7 @@ public:
 
     // routing event
     {
-      auto& combo    = p_get (parameters::routing {})[0]->combo;
+      auto& combo    = _widgets.p_get (parameters::routing {})[0]->combo;
       combo.onChange = [=] { on_routing_change(); };
       on_routing_change();
     }
@@ -435,7 +434,7 @@ public:
       parameters::lin_iir_crossv_params>::value;
 
     for (uint i = 1; i < n_stereo_busses; ++i) {
-      auto& combo = p_get (parameters::fx_type {})[i]->combo;
+      auto& combo = _widgets.p_get (parameters::fx_type {})[i]->combo;
       combo.setItemEnabled (crossv_id + 2, false);
       combo.setItemEnabled (wonky_crossv_id + 2, false);
       combo.setItemEnabled (lin_iir_crossv_id + 2, false);
@@ -474,7 +473,7 @@ public:
   ~editor() override
   {
     // this lookanfeel thing could really be a bit smarter...
-    clear_widgets();
+    _widgets.clear_widgets();
     _parameter_value.setLookAndFeel (nullptr);
     _parameter_value_frame.setLookAndFeel (nullptr);
     for (auto& lbl : _chnl_names) {
@@ -653,7 +652,7 @@ public:
       routing,
       (float) routing.getWidth(),
       make_array (header_h / 2.f, header_h / 2.f),
-      *p_get (parameters::routing {})[0]);
+      *_widgets.p_get (parameters::routing {})[0]);
 
     header.removeFromLeft (h_w * sizes::header_sep_row_divs);
 
@@ -664,7 +663,7 @@ public:
       main_gain,
       (float) main_gain.getWidth(),
       make_array (header_h / 2.f, header_h / 2.f),
-      *p_get (parameters::global_volume {})[0]);
+      *_widgets.p_get (parameters::global_volume {})[0]);
 
     area.removeFromTop (sep_h); // separator
 
@@ -674,7 +673,7 @@ public:
     auto columns     = get_columns (in_routings);
 
     for (uint i = 0; i < columns.size(); ++i) {
-      auto& in_btns = p_get (parameters::in_selection {})[i]->buttons;
+      auto& in_btns = _widgets.p_get (parameters::in_selection {})[i]->buttons;
       grid (
         columns[i],
         sqr_btn_w,
@@ -702,7 +701,7 @@ public:
         columns[i],
         (float) columns[0].getWidth(),
         make_array (fx_type_h, fx_prev_next_h),
-        *p_get (parameters::fx_type {})[i]);
+        *_widgets.p_get (parameters::fx_type {})[i]);
     }
 
     area.removeFromTop (sep_h); // separator
@@ -721,9 +720,9 @@ public:
         columns[i],
         (float) columns[0].getWidth() / 3.,
         make_array (dry_wet_mods_slider_h, dry_wet_mods_label_h),
-        *p_get (parameters::wet_balance {})[i],
-        *p_get (parameters::wet_pan {})[i],
-        *p_get (parameters::fx_mix {})[i]);
+        *_widgets.p_get (parameters::wet_balance {})[i],
+        *_widgets.p_get (parameters::wet_pan {})[i],
+        *_widgets.p_get (parameters::fx_mix {})[i]);
     }
 
     area.removeFromTop (sep_h); // separator
@@ -785,7 +784,7 @@ public:
     mp11::mp_for_each<parameters::all_fx_typelists> ([&] (auto fx_tlist) {
       uint param_idx = 0;
       mp11::mp_for_each<decltype (fx_tlist)> ([&] (auto param) {
-        auto& param_arr = p_get (param);
+        auto& param_arr = _widgets.p_get (param);
         for (uint chnl = 0; chnl < param_arr.size(); ++chnl) {
           param_arr[chnl]->slider.setBounds (
             _fx_off_sliders[chnl][param_idx % num_page_params]
@@ -822,7 +821,7 @@ public:
         fader_area,
         (float) fader_area.getWidth(),
         make_array (fader_h, fader_label_h),
-        *p_get (parameters::volume {})[i]);
+        *_widgets.p_get (parameters::volume {})[i]);
     }
 
     area.removeFromTop (sep_h); // separator
@@ -836,9 +835,9 @@ public:
         columns[i],
         (float) columns[0].getWidth() / 3.,
         make_array (dry_wet_mods_slider_h, dry_wet_mods_label_h),
-        *p_get (parameters::dry_balance {})[i],
-        *p_get (parameters::dry_pan {})[i],
-        *p_get (parameters::pan {})[i]);
+        *_widgets.p_get (parameters::dry_balance {})[i],
+        *_widgets.p_get (parameters::dry_pan {})[i],
+        *_widgets.p_get (parameters::pan {})[i]);
     }
 
     auto mix_snd_btn_rm_footer = area.getHeight();
@@ -856,7 +855,7 @@ public:
         columns[i],
         mute_solo_button_w,
         make_array (mute_solo_h),
-        p_get (parameters::mute_solo {})[i]->buttons);
+        _widgets.p_get (parameters::mute_solo {})[i]->buttons);
     }
 
     area.removeFromTop (sep_h); // separator
@@ -870,7 +869,7 @@ public:
         columns[i],
         sqr_btn_w,
         make_array (sqr_btn_h),
-        p_get (parameters::channel_modifs {})[i]->buttons);
+        _widgets.p_get (parameters::channel_modifs {})[i]->buttons);
     }
 
     area.removeFromTop (sep_h); // separator
@@ -880,7 +879,8 @@ public:
     columns   = get_columns (outs);
 
     for (uint i = 0; i < columns.size(); ++i) {
-      auto& out_btns = p_get (parameters::out_selection {})[i]->buttons;
+      auto& out_btns
+        = _widgets.p_get (parameters::out_selection {})[i]->buttons;
       grid (
         columns[i],
         sqr_btn_w,
@@ -906,7 +906,8 @@ public:
       area.removeFromLeft (col_w);
     }
 
-    auto& mixsend_buttons = p_get (parameters::mixer_sends {})[0]->buttons;
+    auto& mixsend_buttons
+      = _widgets.p_get (parameters::mixer_sends {})[0]->buttons;
     _side_lines[0].setBounds (btn_areas[0]);
     for (uint i = 1; i < btn_areas.size() - 1; ++i) {
       float w   = btn_areas[i].getWidth();
@@ -923,7 +924,7 @@ public:
 
     // Place the user-editable channel labels on the position of the channel
     // gain labels.
-    auto& chnl_params = p_get (parameters::volume {});
+    auto& chnl_params = _widgets.p_get (parameters::volume {});
     for (uint i = 0; i < n_stereo_busses; ++i) {
       _chnl_names[i].setBounds (chnl_params[i]->label.getBounds());
       chnl_params[i]->label.setVisible (false);
@@ -957,7 +958,7 @@ public:
         return;
       }
       mp11::mp_for_each<fxtl> ([=] (auto param) {
-        p_get (param)[chnl]->foreach_component (set_hidden);
+        _widgets.p_get (param)[chnl]->foreach_component (set_hidden);
       });
     });
   }
@@ -1024,7 +1025,8 @@ public:
 
       if (action == page.value || forced_by_fx_change) {
         mp11::mp_for_each<page_params> ([=] (auto param) {
-          p_get (param)[param_array_idx]->foreach_component (set_visible);
+          _widgets.p_get (param)[param_array_idx]->foreach_component (
+            set_visible);
         });
         for (uint i = n_params[page.value]; i < num_page_params; ++i) {
           _fx_off_sliders[chnl][i].foreach_component (set_visible);
@@ -1043,8 +1045,8 @@ public:
     // no FX redraw when the crossover is enabled.
     clear_fx_knobs (chnl);
     // get FX
-    auto&          combo  = p_get (parameters::fx_type {})[chnl]->combo;
-    auto           fx_id  = combo.getSelectedId();
+    auto&          combo = _widgets.p_get (parameters::fx_type {})[chnl]->combo;
+    auto           fx_id = combo.getSelectedId();
     constexpr auto fx_val = parameters::fx_type {};
     bool           no_fx  = fx_id <= 1 || fx_id > fx_val.type.choices.size();
 
@@ -1063,7 +1065,8 @@ public:
     if (chnl < num_mixer_sends) {
       uint groupsize = get_n_parallel_buses();
       bool on = channel_send_always_disabled (chnl, groupsize) ? false : !no_fx;
-      auto msends = p_get (parameters::mixer_sends {})[0]->get_components();
+      auto msends
+        = _widgets.p_get (parameters::mixer_sends {})[0]->get_components();
       msends[num_mixer_sends + chnl]->setEnabled (on);
     }
     // crossover only on channel 0.
@@ -1091,8 +1094,9 @@ public:
   //----------------------------------------------------------------------------
   void on_routing_change()
   {
-    auto mixer_sends = p_get (parameters::mixer_sends {})[0]->get_components();
-    uint group_size  = get_n_parallel_buses();
+    auto mixer_sends
+      = _widgets.p_get (parameters::mixer_sends {})[0]->get_components();
+    uint group_size = get_n_parallel_buses();
     for (auto cptr : mixer_sends) {
       cptr->setEnabled (true);
     }
@@ -1108,7 +1112,7 @@ public:
   //----------------------------------------------------------------------------
   uint get_n_parallel_buses()
   {
-    auto& routing_combo = p_get (parameters::routing {})[0]->combo;
+    auto& routing_combo = _widgets.p_get (parameters::routing {})[0]->combo;
     auto  selected_id   = routing_combo.getSelectedId();
     assert (selected_id);
     --selected_id;
@@ -1182,7 +1186,7 @@ public:
   {
     using namespace std::placeholders;
 
-    pforeach ([this] (auto key, auto& warray) {
+    _widgets.pforeach ([this] (auto key, auto& warray) {
       using type = typename std::remove_reference<decltype (*warray[0])>::type;
 
       for (auto& w : warray) {
@@ -1227,7 +1231,7 @@ public:
       return false;
     }
 
-    auto& fx_type_arr  = p_get (parameters::fx_type {});
+    auto& fx_type_arr  = _widgets.p_get (parameters::fx_type {});
     uint  src_chnl_idx = 0;
     for (; src_chnl_idx < fx_type_arr.size(); ++src_chnl_idx) {
       juce::Component* c = &fx_type_arr[src_chnl_idx]->combo;
@@ -1265,7 +1269,7 @@ public:
 
     constexpr auto notif = juce::NotificationType::sendNotificationAsync;
 
-    auto&           fx_type = p_get (parameters::fx_type {});
+    auto&           fx_type = _widgets.p_get (parameters::fx_type {});
     juce::ComboBox& src     = fx_type[src_chnl]->combo;
     juce::ComboBox& dst     = fx_type[dst_chnl]->combo;
     int             src_val = src.getSelectedId();
@@ -1293,7 +1297,7 @@ public:
       = mp_remove_all<slider_typelist, non_copyable_sliders>;
 
     mp11::mp_for_each<copyable_sliders> ([=] (auto paramtype) {
-      auto&         param = p_get (paramtype);
+      auto&         param = _widgets.p_get (paramtype);
       juce::Slider& src   = param[src_chnl]->slider;
       juce::Slider& dst   = param[dst_chnl]->slider;
 
@@ -1343,6 +1347,8 @@ private:
 
   juce::AudioProcessor& _processor; // unused
   look_and_feel         _lookfeel;
+
+  editor_apvts_widgets<parameters::parameters_typelist> _widgets;
 
   using chnl_slider_array = std::array<slider_ext, num_page_params>;
   using chnl_page_btns
