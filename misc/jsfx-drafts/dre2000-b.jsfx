@@ -3,8 +3,8 @@ slider1:decay_p=0.8<0,1,0.01> Decay
 slider3:mod=0.5<0,1,0.01> Mod
 slider4:character=0.5<0,1,0.01> Character
 
-slider6:damp=0.3<0,1,0.01> Damping
-//slider7:hp=0<0,1,0.01> HP
+slider6:hi=0.5<0,1,0.01> highs
+slider7:lo=0.5<0,1,0.01> lows
 
 slider9:stereo=1<-1,1, 0.01> Stereo
 slider10:predelay=1<1, 2400, 1> Predelay
@@ -92,10 +92,10 @@ wet_gain = db_to_lin (db_wet);
 decayfb = 0.2 + decay_p * 0.7;
 sumgain = 0.125;
 
-cf = 0.25 + damp * 0.45;
-glp = 1;
-ghp = 0.8 - damp * 0.2;
-
+flo = 0.90 + lo * lo * 0.05;
+glo = 0.75 + lo * 0.25;
+fhi = 0.82 - hi * hi * 0.4;
+ghi = 0.7 + hi * 0.25;
 
 @sample
 
@@ -114,7 +114,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   m = fi1.lp (m, 0.05);
   m = fi2.hp (m, 0.995);
   ml = m;
-  
+ 
 
 // block1
 // [[283, 293], [163, 167], [113, 127], [83, 89], [71, 73], 377]
@@ -122,7 +122,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
 
   ci = ml + fb1;
-  fb1 = fb1.crossv (ci, cf, glp, ghp);
+  fb1 = fb1.crossv2 (ci, flo, fhi, glo, ghi);
   fb1 = delay (fb1, 3789, lfo.ret.ptr[0] * mod, 54) * -decayfb;
   fb1 = delay (fb1, 32);
   t = delay (ci, 429) * -sumgain; // notice assign not sum
@@ -133,7 +133,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   t += delay (ci, 3311) * sumgain;
 
   ci = ml + fb2;
-  fb2 = fb2.crossv (ci, cf, glp, ghp);
+  fb2 = fb2.crossv2 (ci, flo, fhi, glo, ghi);
   fb2 = delay (fb2, 4004, lfo.ret.ptr[1] * mod, 53) * decayfb;
   fb2 = delay (fb2, 32);
   t += delay (ci, 616) * -sumgain;
@@ -144,7 +144,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   t += delay (ci, 3631) * sumgain;
 
   ci = ml + fb3;
-  fb3 = fb3.crossv (ci, cf, glp, ghp);
+  fb3 = fb3.crossv2 (ci, flo, fhi, glo, ghi);
   fb3 = delay (fb3, 4027, lfo.ret.ptr[2] * mod, 52) * -decayfb;
   fb3 = delay (fb3, 32);
   t += delay (ci, 657) * -sumgain;
@@ -164,7 +164,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   r = ap (t, 194, -0.7);
   r = ap (r, 426, -0.7);
   r = ap (r, 566, -0.7);
-
+  
   // more boilerplate (summing + downsample)
   easy_ap_next_sample();
   easy_fdn_next_sample();

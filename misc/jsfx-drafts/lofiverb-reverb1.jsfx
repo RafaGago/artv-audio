@@ -3,8 +3,8 @@ slider1:decay_p=0.8<0,1,0.01> Decay
 slider3:mod=0.5<0,1,0.01> Mod
 slider4:character=0.5<0,1,0.01> Character
 
-slider6:damp=0.3<0,1,0.01> Damping
-slider7:hp=0<0,1,0.01> HP
+slider6:hi=0.5<0,1,0.01> highs
+slider7:lo=0.5<0,1,0.01> lows
 
 slider9:stereo=1<-1,1, 0.01> Stereo
 
@@ -117,9 +117,10 @@ er_lfo.lfo_bank_reset_freq (0, 0.3 + mod * 0.3, k.src.srate);
 dry_gain  = db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
 
-kdamp = (0.9 - damp * 0.9);
-kdamp = 1 - kdamp * kdamp;
-kdamp *= 0.4;
+flo = 0.90 + lo * lo * 0.05;
+glo = 0.55 + lo * 0.4;
+fhi = 0.82 - hi * hi * 0.4;
+ghi = 0.45 + hi * 0.4;
 
 hp_fact = 1 - hp * hp;
 hp_fact *= 0.39;
@@ -151,7 +152,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   // notice the care all over al feedback sums to keep the maximum gain at one
   // (maximum), as this has to run on fixed point
   x = ap (decay * (late_in * 0.5 + er_fb), 1367, 0.35, lfo.ret.ptr[1], 71 + er_amt * 70);
-  x = erdamp.dampfilter (x, 0.0001 + 0.17 * damp);
+  x = erdamp.crossv2 (x, flo, fhi, glo, ghi);
   er1 = x;  // 0-1 range (bipolar)
   x = delay (x * decay, 1787, lfo.ret.ptr[0], 261);
   x = delay (x, 33); // just to enable block processing
@@ -159,7 +160,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   er_fb = x;
 
   // late + hp
-  lp = lp1.dampfilter (late_in, hp_fact);
+  lp = f1.crossv2 (ci, flo, fhi, glo, ghi);
   late_in = late_in - lp;
 
   lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);
@@ -172,7 +173,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   loop_in = loopsig * (1 - er_amt) - ersig * er_amt + f2;
   x = ap (loop_in, 977, g_character, lfo.ret.ptr[0], 71 * mod_amt);
   x = delay (x, 2819);
-  x = damp1.dampfilter (x, kdamp);
+  x = f1.crossv2 (x, flo, fhi, glo, ghi);
   x = ap (x * decay, 863, -g_character);
   x = delay (x, 1021);
 //  x = ap (x * decay, 509, -0.707);
@@ -186,7 +187,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   loop_in = loopsig * (1 - er_amt) - ersig * er_amt + f1;
   x = ap (loop_in, 947, g_character, lfo.ret.ptr[1], 47 * mod_amt);
   x = delay (x, 3191);
-  x = damp2.dampfilter (x, kdamp);
+  x = f2.crossv2 (x, flo, fhi, glo, ghi);
   x = ap (x * decay, 887, -g_character); // 0.618 to 0.707 -> explosion
   x = delay (x, 1049);
 //  x = ap (x * decay, 617, -0.707);

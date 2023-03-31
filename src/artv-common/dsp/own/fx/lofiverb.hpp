@@ -388,7 +388,7 @@ public:
 
   static constexpr auto get_parameter (character_tag)
   {
-    return float_param ("%", 0., 100., 50., 0.001);
+    return float_param ("%", 0., 100., 0., 0.001);
   }
   //----------------------------------------------------------------------------
   struct damp_tag {};

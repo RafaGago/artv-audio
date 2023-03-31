@@ -405,10 +405,19 @@ function hp (in, g)  global() (
 );
 
 
-function crossv (in, fg, glp, ghp) global() local (r1, r2, lp, hp) (
+function crossv (in, fg, glp, ghp) global() local (lp, hp) (
   lp = this.lp (in, fg);
   hp = in - lp;
   glp * lp + ghp * hp;
+);
+
+
+function crossv2 (in, flow, fhigh, glow, ghigh) global() local (mid, lo, hi) (
+  mid = this.lp1.lp (in, fhigh);
+  hi = in - mid;
+  lo = this.lp2.lp (mid, flow);
+  mid -= lo;
+  (glow * lo) + (ghigh * hi) + mid;
 );
 
 

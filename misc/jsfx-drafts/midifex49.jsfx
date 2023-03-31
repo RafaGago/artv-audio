@@ -4,8 +4,8 @@ slider1:decay_p=0.8<0,1,0.01> Decay
 slider3:mod=0.5<0,1,0.01> Mod
 slider4:character=0.5<0,1,0.01> Character
 
-slider6:damp=0.3<0,1,0.01> Damping
-slider7:hp=0<0,1,0.01> HP
+slider6:hi=0.5<0,1,0.01> highs
+slider7:lo=0.5<0,1,0.01> lows
 
 slider9:stereo=1<-1,1, 0.01> Stereo
 
@@ -159,9 +159,10 @@ er_lfo.lfo_bank_reset_freq (0, 0.3 + mod * 0.3, k.src.srate);
 dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
 
-cf = 0.25 + damp * 0.45;
-glp = 1;
-ghp = 0.8 - damp * 0.2;
+flo = 0.90 + lo * lo * 0.05;
+glo = 0.35 + lo * 0.6;
+fhi = 0.82 - hi * hi * 0.4;
+ghi = 0.35 + hi * 0.5;
 
 hp_fact = 1 - hp * hp;
 hp_fact *= 0.39;
@@ -203,6 +204,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   x = delay (x, 1624);
   x = ap (x, 1992, 0.5, lfo.ret.ptr[0] * mod, 17);
+//  x = ap (x, 1992, 0.5);
 
   l += delay (x, 1891);
   r += delay (x, 890);
@@ -215,16 +217,11 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   l += delay (x, 2003);
   r += delay (x, 671);
 
-  x = delay (x, 2157);
+  x = delay (x, 2157 - 32);
   x *= decay;
-  x = f1.crossv (x, cf, glp, ghp);
+  x = f1.crossv2 (x, flo, fhi, glo, ghi);
   x = ap2 (x, 2712, 1783, 0.5, (0.2 * character), lfo.ret.ptr[1] * mod, 22);
-//  x = ap (x, 2712, 0.5, lfo.ret.ptr[1] * mod, 22);
 //  x = ap (x, 2712, 0.5);
-
-  // late + hp
-  x = hp1.hp (x, 0.985);
-
   x = delay (x, 32);
 
   fb = x;

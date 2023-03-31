@@ -3,8 +3,8 @@ slider1:decay_p=0.8<0,1,0.01> Decay
 slider3:mod=0.5<0,1,0.01> Mod
 slider4:character=0.5<0,1,0.01> Character
 
-slider6:damp=0.3<0,1,0.01> Damping
-slider7:hp=0<0,1,0.01> HP
+slider6:hi=0.5<0,1,0.01> highs
+slider7:lo=0.5<0,1,0.01> lows
 
 slider9:stereo=1<-1,1, 0.01> Stereo
 slider10:predelay=1<1, 2400, 1> Predelay
@@ -92,9 +92,10 @@ wet_gain = db_to_lin (db_wet);
 decayfb = 0 + decay_p * 0.75;
 sumgain = 0.125;
 
-cf = 0.25 + damp * 0.35;
-glp = 1;
-ghp = 0.8 - damp * 0.6;
+flo = 0.90 + lo * lo * 0.05;
+glo = 0.55 + lo * 0.45;
+fhi = 0.82 - hi * hi * 0.4;
+ghi = 0.45 + hi * 0.55;
 
 @sample
 
@@ -119,7 +120,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   ml = ap (ml, 231, -0.7);
 
   ci = ml + fb1;
-  fb1 = fb1.crossv (ci, cf, glp, ghp);
+  fb1 = fb1.crossv2 (ci, flo, fhi, glo, ghi);
   fb1 = delay (fb1, 3762, lfo.ret.ptr[0] * mod, 23) * decayfb;
   fb1 = delay (fb1, 32);
   // notice assign not sum
@@ -130,7 +131,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   l += delay (ci, 2855) * sumgain;
 
   ci = ml + fb2;
-  fb2 = fb2.crossv (ci, cf, glp, ghp);
+  fb2 = fb2.crossv2 (ci, flo, fhi, glo, ghi);
   fb2 = delay (fb2, 3806, lfo.ret.ptr[1] * mod, 24) * decayfb;
   fb2 = delay (fb2, 32);
   r += delay (ci, 339) * -sumgain;
@@ -139,7 +140,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   l += delay (ci, 3221) * sumgain;
 
   ci = ml + fb3;
-  fb3 = fb3.crossv (ci, cf, glp, ghp);
+  fb3 = fb3.crossv2 (ci, flo, fhi, glo, ghi);
   fb3 = delay (fb3, 3829, lfo.ret.ptr[2] * mod, 25) * decayfb;
   fb3 = delay (fb3, 32);
   r += delay (ci, 130) * -sumgain;
@@ -148,7 +149,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   l += delay (ci, 3391) * sumgain;
 
   ci = ml + fb4;
-  fb4 = fb4.crossv (ci, cf, glp, ghp);
+  fb4 = fb4.crossv2 (ci, flo, fhi, glo, ghi);
   fb4 = delay (fb4, 3862, lfo.ret.ptr[3] * mod, 26) * decayfb;
   fb4 = delay (fb4, 32);
   r += delay (ci, 499) * -sumgain;
