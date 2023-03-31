@@ -33,10 +33,7 @@ parameter_cpp_class_define (
 parameter_cpp_class_define (
   character,
   1,
-  param_common (
-    "Character",
-    declptr<lofiverb>(),
-    declptr<lofiverb::character_tag>()),
+  param_common ("???", declptr<lofiverb>(), declptr<lofiverb::character_tag>()),
   lofiverb::get_parameter (lofiverb::character_tag {}),
   slider_ext);
 
