@@ -250,23 +250,29 @@ static constexpr bool is_uint_vec_v
 // scalar-compatible ones
 template <class T>
 static constexpr bool is_vec_or_scalar_v
-  = is_vec_v<T> || std::is_arithmetic_v<T>;
+  = is_vec_v<T> || std::is_arithmetic_v<std::remove_reference_t<T>>;
 
 template <class T>
 static constexpr bool is_floatpt_vec_or_scalar_v
-  = is_floatpt_vec_v<T> || std::is_floating_point_v<T>;
+  = is_floatpt_vec_v<T> || std::is_floating_point_v<std::remove_reference_t<T>>;
 
 template <class T>
 static constexpr bool is_any_int_vec_or_scalar_v
-  = is_any_int_vec_v<T> || std::is_integral_v<T>;
+  = is_any_int_vec_v<T> || std::is_integral_v<std::remove_reference_t<T>>;
 
 template <class T>
-static constexpr bool is_sint_vec_or_scalar_v
-  = is_any_int_vec_v<T> || (std::is_integral_v<T> && std::is_signed_v<T>);
+static constexpr bool is_sint_vec_or_scalar_v = is_any_int_vec_v<T>
+  || (std::is_integral_v<std::remove_reference_t<T>>
+      && std::is_signed_v<std::remove_reference_t<T>>);
 
 template <class T>
-static constexpr bool is_uint_vec_or_scalar_v
-  = is_any_int_vec_v<T> || (std::is_integral_v<T> && std::is_unsigned_v<T>);
+static constexpr bool is_uint_vec_or_scalar_v = is_any_int_vec_v<T>
+  || (std::is_integral_v<std::remove_reference_t<T>>
+      && std::is_unsigned_v<std::remove_reference_t<T>>);
+
+template <class T>
+static constexpr bool is_signed_vec_v
+  = is_vec_v<T> && std::is_signed_v<vec_value_type_t<T>>;
 
 using float_x1 = vec<float, 1>;
 using f32_x1   = float_x1;
@@ -339,7 +345,7 @@ template <class V>
 using enable_if_any_int_vec_t = std::enable_if_t<is_any_int_vec_v<V>>;
 
 template <class V>
-using enable_if_int_vec_t = std::enable_if_t<is_sint_vec_v<V>>;
+using enable_if_sint_vec_t = std::enable_if_t<is_sint_vec_v<V>>;
 
 template <class V>
 using enable_if_uint_vec_t = std::enable_if_t<is_uint_vec_v<V>>;
@@ -366,6 +372,9 @@ using enable_if_uint_vec_or_scalar_t
 template <class V, class T>
 using enable_if_vec_value_type_t
   = std::enable_if_t<is_vec_v<V> && std::is_same_v<vec_value_type_t<V>, T>>;
+
+template <class V>
+using enable_if_signed_vec_t = std::enable_if_t<is_signed_vec_v<V>>;
 
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_or_scalar_t<V>* = nullptr>

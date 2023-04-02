@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include "artv-common/misc/mp11.hpp"
+#include "artv-common/misc/vec_approx_math.hpp"
 #include "artv-common/misc/vec_math.hpp"
 
 namespace artv {
@@ -249,6 +250,64 @@ TEST (simd, all_zeros)
   ASSERT_FALSE (vec_is_all_zeros (v > 2));
   ASSERT_FALSE (vec_is_all_zeros (v > 0));
   ASSERT_TRUE (vec_is_all_zeros (v > 3));
+}
+//------------------------------------------------------------------------------
+TEST (simd, approx_tan_prewarp)
+{
+  for (uint i = 1; i < 49; ++i) {
+    float  x  = 0.01 * i;
+    f32_x4 r1 = vec_tan_pix_prewarp_2dat (vec_set<f32_x4> (x));
+    float  r2 = std::tan (x * M_PI);
+    EXPECT_NEAR (r1[0], r2, r2 / 1000000.);
+  }
+}
+//------------------------------------------------------------------------------
+TEST (simd, approx_exp)
+{
+  for (int i = -100; i < 110; ++i) {
+    float  x  = 0.1f * i;
+    f32_x4 r1 = vec_exp_2dat (vec_set<f32_x4> (x));
+    float  r2 = std::exp (x);
+    EXPECT_NEAR (r1[0], r2, r2 / 1000000.);
+  }
+}
+//------------------------------------------------------------------------------
+TEST (simd, approx_log)
+{
+  for (int i = 1; i < 11; ++i) {
+    float  x  = i;
+    f32_x4 r1 = vec_log_2dat (vec_set<f32_x4> (x));
+    float  r2 = std::log (x);
+    EXPECT_NEAR (r1[0], r2, r2 / 1000000.);
+  }
+}
+//------------------------------------------------------------------------------
+TEST (simd, approx_pow)
+{
+  float y = 0.29f;
+  for (int i = 1; i < 11; ++i) {
+    float  x  = i;
+    f32_x4 r1 = vec_pow_2dat (vec_set<f32_x4> (x), vec_set<f32_x4> (y));
+    float  r2 = std::pow (x, y);
+    EXPECT_NEAR (r1[0], r2, r2 / 1000000.);
+  }
+  float x = 2;
+  for (int i = 1; i < 11; ++i) {
+    y         = i;
+    f32_x4 r1 = vec_pow_2dat (vec_set<f32_x4> (x), vec_set<f32_x4> (y));
+    float  r2 = std::pow (x, y);
+    EXPECT_NEAR (r1[0], r2, r2 / 1000000.);
+  }
+}
+//------------------------------------------------------------------------------
+TEST (simd, approx_tanh)
+{
+  for (int i = -100; i < 110; ++i) {
+    float  x  = 0.1f * i;
+    f32_x4 r1 = vec_tanh_ln2_div2_2dat (vec_set<f32_x4> (x));
+    float  r2 = std::tanh (x * M_LN2 * 0.5);
+    EXPECT_NEAR (r1[0], r2, abs (r2 / 1000000.));
+  }
 }
 //------------------------------------------------------------------------------
 } // namespace artv

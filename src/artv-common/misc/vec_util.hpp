@@ -3,8 +3,13 @@
 #pragma once
 
 #include <array>
-#include <immintrin.h>
 #include <type_traits>
+
+#include <bl/base/arch.h>
+
+#if BL_ARCH == BL_ARCH_X86_64
+#include <immintrin.h>
+#endif
 
 #include "artv-common/misc/hana.hpp"
 #include "artv-common/misc/misc.hpp"
@@ -256,9 +261,10 @@ constexpr inline void vec_set (V& dst, vec_value_type_t<V> v)
 }
 
 template <class V, enable_if_vec_or_scalar_t<V>* = nullptr>
-constexpr inline V vec_set (vec_value_type_t<V> v)
+constexpr inline auto vec_set (vec_value_type_t<V> v)
 {
-  V ret;
+  using Vv = std::remove_reference_t<V>;
+  Vv ret;
   vec_set (ret, v);
   return ret;
 }
@@ -525,10 +531,49 @@ constexpr inline auto vec_cast (V a)
   }
 }
 //------------------------------------------------------------------------------
-template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
+// completely bit casting, aka a reinterpret, e.g. to read floating point exps.
+template <
+  class V1,
+  class V2,
+  std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
+constexpr inline V1 vec_bit_cast (V2 v)
+{
+  static_assert (sizeof (V1) == sizeof (V2));
+  V1 ret;
+  memcpy (&ret, &v, sizeof v);
+  return ret;
+}
+
+template <
+  class V,
+  class T,
+  std::enable_if_t<
+    is_vec_v<V> && std::is_arithmetic_v<std::remove_reference_t<T>>>* = nullptr>
+constexpr inline V vec_bit_cast (T v)
+{
+  using traits  = vec_traits_t<V>;
+  using src_vec = typename traits::template rebind<T>;
+  static_assert (
+    sizeof (vec_value_type_t<V>) == sizeof (vec_value_type_t<src_vec>));
+  return vec_bit_cast<V> (vec_set<src_vec> (v));
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_any_int_vec_t<V>* = nullptr>
 constexpr inline auto vec_abs (V&& x)
 {
   return (x < (vec_value_type_t<V>) 0) ? -x : x;
+}
+
+//------------------------------------------------------------------------------
+template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
+constexpr inline auto vec_abs (V&& x)
+{
+  using U  = typename vec_traits_t<V>::same_size_uint_type;
+  using T  = vec_value_type_t<V>;
+  using Vv = std::remove_reference_t<V>;
+
+  U const rmsign = ~vec_bit_cast<U> (vec_bit_cast<Vv> (T {-0.}));
+  return vec_bit_cast<Vv> (vec_bit_cast<U> (x) & rmsign);
 }
 //------------------------------------------------------------------------------
 template <
@@ -537,21 +582,20 @@ template <
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
 constexpr inline auto vec_min (V1&& x, V2&& y)
 {
+  // reminder different types because V1 can be a reference and V2 a value...
   return x < y ? x : y;
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
 constexpr inline auto vec_min (V&& x, vec_value_type_t<V> y)
 {
-  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
-  return vec_min (std::forward<V> (x), vec_set<Vv> (y));
+  return vec_min (std::forward<V> (x), vec_set<V> (y));
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
 constexpr inline auto vec_min (vec_value_type_t<V> x, V&& y)
 {
-  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
-  return vec_min (vec_set<Vv> (x), std::forward<V> (y));
+  return vec_min (vec_set<V> (x), std::forward<V> (y));
 }
 //------------------------------------------------------------------------------
 template <
@@ -560,21 +604,20 @@ template <
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
 constexpr inline auto vec_max (V1&& x, V2&& y)
 {
+  // reminder different types because V1 can be a reference and V2 a value...
   return x > y ? x : y;
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
 constexpr inline auto vec_max (V&& x, vec_value_type_t<V> y)
 {
-  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
-  return vec_max (std::forward<V> (x), vec_set<Vv> (y));
+  return vec_max (std::forward<V> (x), vec_set<V> (y));
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
 constexpr inline auto vec_max (vec_value_type_t<V> x, V&& y)
 {
-  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
-  return vec_max (vec_set<Vv> (x), std::forward<V> (y));
+  return vec_max (vec_set<V> (x), std::forward<V> (y));
 }
 //------------------------------------------------------------------------------
 template <class V, enable_if_vec_t<V>* = nullptr>
@@ -584,6 +627,7 @@ constexpr inline auto vec_sgn (V x)
   return (x < (T) 0) ? vec_set<V> (-1) : vec_set<V> (1);
 }
 //------------------------------------------------------------------------------
+// TODO: why the 3 vector types can be different?
 template <
   class V1,
   class V2,
@@ -591,6 +635,16 @@ template <
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2> && is_vec_v<V3>>* = nullptr>
 constexpr inline auto vec_clamp (V1&& x, V2&& min, V3&& max)
 {
+  using Vv1 = std::remove_reference_t<std::remove_cv_t<V1>>;
+  using Vv2 = std::remove_reference_t<std::remove_cv_t<V2>>;
+  using Vv3 = std::remove_reference_t<std::remove_cv_t<V3>>;
+  static_assert (
+    (is_signed_vec_v<Vv1> && is_signed_vec_v<Vv2> && is_signed_vec_v<Vv3>)
+    || (!is_signed_vec_v<Vv1> && !is_signed_vec_v<Vv2> && !is_signed_vec_v<Vv3>) );
+
+  for (uint i = 0; i < vec_traits_t<Vv1>::size; ++i) {
+    assert (min[i] <= max[i]);
+  }
   return vec_min (vec_max (x, min), max);
 }
 
@@ -600,8 +654,7 @@ constexpr inline auto vec_clamp (
   vec_value_type_t<V> y,
   vec_value_type_t<V> z)
 {
-  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
-  return vec_clamp (std::forward<V> (x), vec_set<Vv> (y), vec_set<Vv> (z));
+  return vec_clamp (std::forward<V> (x), vec_set<V> (y), vec_set<V> (z));
 }
 
 template <
@@ -610,9 +663,8 @@ template <
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
 constexpr inline auto vec_clamp (V1&& x, V2&& y, vec_value_type_t<V1> z)
 {
-  using Vv = std::remove_reference_t<std::remove_cv_t<V1>>;
   return vec_clamp (
-    std::forward<V1> (x), std::forward<V2> (y), vec_set<Vv> (z));
+    std::forward<V1> (x), std::forward<V2> (y), vec_set<V1> (z));
 }
 
 template <
@@ -621,9 +673,8 @@ template <
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
 constexpr inline auto vec_clamp (V1&& x, vec_value_type_t<V1> y, V2&& z)
 {
-  using Vv = std::remove_reference_t<std::remove_cv_t<V1>>;
   return vec_clamp (
-    std::forward<V1> (x), vec_set<Vv> (y), std::forward<V2> (z));
+    std::forward<V1> (x), vec_set<V1> (y), std::forward<V2> (z));
 }
 
 template <
@@ -632,9 +683,8 @@ template <
   std::enable_if_t<is_vec_v<V1> && is_vec_v<V2>>* = nullptr>
 constexpr inline auto vec_clamp (vec_value_type_t<V1> x, V1&& y, V2&& z)
 {
-  using Vv = std::remove_reference_t<std::remove_cv_t<V1>>;
   return vec_clamp (
-    vec_set<Vv> (x), std::forward<V1> (y), std::forward<V2> (z));
+    vec_set<V1> (x), std::forward<V1> (y), std::forward<V2> (z));
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
@@ -643,8 +693,7 @@ constexpr inline auto vec_clamp (
   vec_value_type_t<V> y,
   V&&                 z)
 {
-  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
-  return vec_clamp (vec_set<V> (x), vec_set<Vv> (y), std::forward<V> (z));
+  return vec_clamp (vec_set<V> (x), vec_set<V> (y), std::forward<V> (z));
 }
 
 template <class V, enable_if_vec_t<V>* = nullptr>
@@ -653,10 +702,71 @@ constexpr inline auto vec_clamp (
   V&&                 y,
   vec_value_type_t<V> z)
 {
-  using Vv = std::remove_reference_t<std::remove_cv_t<V>>;
-  return vec_clamp (vec_set<V> (x), std::forward<V> (y), vec_set<Vv> (z));
+  return vec_clamp (vec_set<V> (x), std::forward<V> (y), vec_set<V> (z));
 }
 
+// The one limit argument versions of vec_clamp assume a symmetric clamp.
+template <
+  class V1,
+  class V2,
+  std::enable_if_t<is_floatpt_vec_v<V1> && is_floatpt_vec_v<V2>>* = nullptr>
+constexpr inline auto vec_clamp (V1&& x, V2&& abs_sym_lim)
+{
+  // reminder different types because e.g. V1 can be a reference and V2 a
+  // value...
+  using Vv     = std::remove_reference_t<std::remove_cv_t<V1>>;
+  using traits = vec_traits_t<Vv>;
+  using U      = typename vec_traits_t<Vv>::same_size_uint_type;
+  using T      = vec_value_type_t<Vv>;
+
+  for (uint i = 0; i < traits::size; ++i) {
+    assert (abs_sym_lim[i] >= T {0.});
+  }
+  U xu        = vec_bit_cast<U> (x);
+  U sign      = xu & vec_bit_cast<U> (vec_set<Vv> (-0.f));
+  xu          = xu & ~sign;
+  Vv signless = vec_min (abs_sym_lim, vec_bit_cast<Vv> (xu));
+  return vec_bit_cast<Vv> (vec_bit_cast<U> (signless) ^ sign);
+}
+
+template <
+  class V1,
+  class V2,
+  std::enable_if_t<is_sint_vec_v<V1> && is_sint_vec_v<V2>>* = nullptr>
+constexpr inline auto vec_clamp (V1&& x, V2&& abs_sym_lim)
+{
+  // reminder different types because V1 can be a reference and V2 a value...
+  using Vv     = std::remove_reference_t<std::remove_cv_t<V1>>;
+  using traits = vec_traits_t<Vv>;
+  using T      = vec_value_type_t<V1>;
+
+  for (uint i = 0; i < traits::size; ++i) {
+    assert (abs_sym_lim[i] >= T {0.});
+  }
+  return vec_clamp (
+    std::forward<V1> (x), -abs_sym_lim, std::forward<V2> (abs_sym_lim));
+}
+
+template <
+  class V1,
+  class V2,
+  std::enable_if_t<is_uint_vec_v<V1> && is_uint_vec_v<V2>>* = nullptr>
+constexpr inline auto vec_clamp (V1&& x, V2&& max)
+{
+  return vec_min (std::forward<V1> (x), std::forward<V2> (max));
+}
+
+template <class V, enable_if_vec_t<V>* = nullptr>
+constexpr inline auto vec_clamp (vec_value_type_t<V> x, V&& lim)
+{
+  return vec_clamp<V> (vec_set<V> (x), std::forward<V> (lim));
+}
+
+template <class V, enable_if_vec_t<V>* = nullptr>
+constexpr inline auto vec_clamp (V&& x, vec_value_type_t<V> lim)
+{
+  return vec_clamp (std::forward<V> (x), vec_set<V> (lim));
+}
 //------------------------------------------------------------------------------
 template <
   class V1,
@@ -746,6 +856,78 @@ constexpr inline V zero_to_lowest (V v)
   using T         = vec_value_type_t<V>;
   constexpr T min = -std::numeric_limits<T>::lowest();
   return (v != (T) 0) ? v : vec_set<V> (min);
+}
+//------------------------------------------------------------------------------
+// xorswap generates less instructions and probably needs less registers. It was
+// verified that clang-16 doesn't generate XOR swap by itself. This is
+// micro-optimization level stuff taken when porting other people's optimized
+// SSE functions.
+template <
+  class V,
+  class U,
+  std::enable_if_t<is_vec_v<V> && is_vec_v<U>>* = nullptr>
+void vec_xorswap (U select_mask, V& a, V& b)
+{
+  static_assert (sizeof (U) == sizeof (V));
+  U    va   = vec_bit_cast<U> (a);
+  U    vb   = vec_bit_cast<U> (b);
+  auto xorv = select_mask & (va ^ vb);
+  va        = va ^ xorv;
+  vb        = vb ^ xorv;
+  a         = vec_bit_cast<V> (va);
+  b         = vec_bit_cast<V> (vb);
+}
+//------------------------------------------------------------------------------
+// get floating point values, get them rounded on an integer of the same width
+template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
+auto vec_sint_round (V v)
+{
+  // I found no generic way for this to generate the rounding instruction, so
+  // using the intrinsic.
+  using T      = vec_value_type_t<V>;
+  using traits = vec_traits_t<V>;
+  using I      = typename traits::same_size_int_type;
+  // as of now (clang 16) __builtin_elementwise_roundeven seems naive. TODO.
+  // Track its evolution.
+#if BL_ARCH == BL_ARCH_X86_64
+  if constexpr (std::is_same_v<float, T> && traits::size == 4) {
+    I       ret;
+    __m128i x = _mm_cvtps_epi32 (v); // cvtps2dq (rounding)
+    memcpy (&ret, &x, sizeof x);
+    return ret;
+  }
+  // _mm_cvtpd_epi64 is AVX512
+  else {
+    // on clang16 this doesn't generate cvtps2dq, but the whole loading plus
+    // cvttps2dq (truncation)
+    return vec_cast<I> (v + ((v > T {0}) ? T {0.5} : T {-0.5}));
+  }
+#else
+  return vec_cast<I> (v + ((v > T {0}) ? T {0.5} : T {-0.5}));
+#endif
+}
+//------------------------------------------------------------------------------
+template <class V, enable_if_floatpt_vec_t<V>* = nullptr>
+auto vec_uint_round (V v)
+{
+  using T      = vec_value_type_t<V>;
+  using traits = vec_traits_t<V>;
+  using U      = typename traits::same_size_uint_type;
+  // as of now (clang 16) __builtin_elementwise_roundeven seems naive.
+#if BL_ARCH == BL_ARCH_X86_64
+  if constexpr (std::is_same_v<float, T> && traits::size == 4) {
+    U       ret;
+    __m128i x = _mm_cvtps_epu32 (v);
+    memcpy (&ret, &x, sizeof x);
+    return ret;
+  }
+  // _mm_cvtpd_epu64 is AVX512
+  else {
+    return vec_cast<U> (v + T {0.5});
+  }
+#else
+  return vec_cast<U> (v + T {0.5});
+#endif
 }
 //------------------------------------------------------------------------------
 } // namespace artv
