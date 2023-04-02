@@ -911,9 +911,11 @@ private:
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      tmp1[i] = (T) (0.4_r + 0.3_r * par.character[i]);
-      tmp2[i] = (T) (-0.6_r * par.character[i]);
-      tmp3[i] = (T) (0.6_r * par.character[i]);
+      // invert character first
+      par.character[i] = (T) (one<T>() - par.character[i]);
+      tmp1[i]          = (T) (0.4_r + 0.3_r * par.character[i]);
+      tmp2[i]          = (T) (-0.6_r * par.character[i]);
+      tmp3[i]          = (T) (0.6_r * par.character[i]);
       // decay fixup
       auto d       = one<T>() - par.decay[i];
       par.decay[i] = (T) (0.9_r - d * d * 0.2_r);
@@ -1031,8 +1033,8 @@ private:
     // damp -----------------------------------
     T flo = load_float<T> (0.9f + _param.lf_amt * _param.lf_amt * 0.05f);
     T glo = load_float<T> (0.87f + _param.lf_amt * 0.13f);
-    T fhi = load_float<T> (0.7f - _param.hf_amt * _param.hf_amt * 0.5f);
-    T ghi = load_float<T> (0.82f + _param.hf_amt * 0.12f);
+    T fhi = load_float<T> (0.75f - _param.hf_amt * _param.hf_amt * 0.55f);
+    T ghi = load_float<T> (0.7f + _param.hf_amt * 0.24f);
 
     // channel a block 2
     rev.run<38, 39> (a, flo, glo, fhi, ghi);
