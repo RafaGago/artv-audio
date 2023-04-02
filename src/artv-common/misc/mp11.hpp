@@ -4,6 +4,7 @@
 // might not need to pull MP11.
 #ifndef ARTV_NO_MP11
 
+#include "artv-common/misc/short_ints.hpp"
 #include <boost/mp11.hpp>
 
 namespace artv {
@@ -63,6 +64,23 @@ void mp_foreach_idx (F&& f)
     mp11::mp_from_sequence<mp11::make_integer_sequence<uint, End>>> (f);
 }
 //------------------------------------------------------------------------------
+template <template <class...> class L, class... Ts, class F>
+void mp_foreach_idx_reverse (L<Ts...>, F&& f)
+{
+  using with_idx = to_typelist_with_indexes<L<Ts...>>;
+
+  mp11::mp_for_each<mp11::mp_reverse<with_idx>> ([&] (auto type) {
+    f (typename decltype (type)::index {}, typename decltype (type)::type {});
+  });
+}
+//------------------------------------------------------------------------------
+template <uint Start, class F>
+void mp_foreach_idx_reverse (F&& f)
+{
+  mp11::mp_for_each<mp11::mp_reverse<
+    mp11::mp_from_sequence<mp11::make_integer_sequence<uint, Start + 1>>>> (f);
+}
+//------------------------------------------------------------------------------
 // clang-format off
 template <class L, class V>
 using mp_not_in_list =
@@ -79,6 +97,22 @@ struct mp_not_in_list_qm {
 // Removes the types on the list "L_rm" from list "L"
 template <class L, class L_rm>
 using mp_remove_all = mp11::mp_remove_if_q<L, mp_not_in_list_qm<L_rm>>;
+//------------------------------------------------------------------------------
+template <uint Offset, class T>
+struct add_offset;
+
+template <uint Offset, uint... Idx>
+struct add_offset<Offset, std::index_sequence<Idx...>> {
+  using type = std::index_sequence<(Offset + Idx)...>;
+};
+
+template <uint Offset, uint... Idx>
+struct add_offset<Offset, mp11::index_sequence<Idx...>> {
+  using type = mp11::index_sequence<(Offset + Idx)...>;
+};
+
+template <uint Offset, class T>
+using add_offset_t = typename add_offset<Offset, T>::type;
 //------------------------------------------------------------------------------
 
 } // namespace artv

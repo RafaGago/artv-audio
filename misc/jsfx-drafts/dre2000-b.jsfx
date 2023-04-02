@@ -93,9 +93,9 @@ decayfb = 0.2 + decay_p * 0.7;
 sumgain = 0.125;
 
 flo = 0.90 + lo * lo * 0.05;
-glo = 0.75 + lo * 0.25;
+glo = 0.7 + lo * 0.3;
 fhi = 0.82 - hi * hi * 0.4;
-ghi = 0.7 + hi * 0.25;
+ghi = 0.5 + hi * 0.25;
 
 @sample
 

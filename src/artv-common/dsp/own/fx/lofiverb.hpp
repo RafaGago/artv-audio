@@ -22,7 +22,7 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/xspan.hpp"
 
-// #define LOFIVERB_ADD_DEBUG_ALGO 1
+#define LOFIVERB_ADD_DEBUG_ALGO 1
 
 namespace artv {
 namespace detail { namespace lofiverb {
@@ -538,6 +538,8 @@ private:
   using fixpt_t  = detail::lofiverb::fixpt_t;
   using fixpt_tr = detail::lofiverb::fixpt_tr;
   using float16  = detail::lofiverb::float16;
+
+  static constexpr auto blank = detail::lofiverb::defaulted;
   //----------------------------------------------------------------------------
   static constexpr uint max_block_size = detail::lofiverb::max_block_size;
   static constexpr uint n_channels     = 2;
@@ -807,11 +809,11 @@ private:
     });
     er2.cut_head (1); // drop feedback sample from previous block
 
-    rev.run<4> (er1, xspan {lfo2}, nullptr);
+    rev.run<4> (er1, xspan {lfo2});
     rev.run<5, 6> (er1, flo, glo, fhi, ghi);
     xspan_memcpy (er1b, er1);
     rev.run<7> (er1b, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run<8> (er1b, xspan {lfo1}, nullptr);
+    rev.run<8> (er1b, xspan {lfo1});
     rev.push<9> (er1b.to_const()); // feedback point
 
     // Late -----------------------------
@@ -842,7 +844,7 @@ private:
     rev.run<11> (late);
     rev.run<12, 13> (late, flo, glo, fhi, ghi);
     rev.run<14> (late, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run<15> (late, nullptr, [g] (uint i) { return -g[i]; });
+    rev.run<15> (late, blank, [g] (uint i) { return -g[i]; });
     rev.run<16> (late);
     rev.run<17> (late, [&] (auto v, uint i) { return v * par.decay[i]; });
     rev.run<18> (late);
@@ -861,7 +863,7 @@ private:
     rev.run<21> (late);
     rev.run<22, 23> (late, flo, glo, fhi, ghi);
     rev.run<24> (late, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run<25> (late, nullptr, [g] (uint i) { return -g[i]; });
+    rev.run<25> (late, blank, [g] (uint i) { return -g[i]; });
     rev.run<26> (late);
     rev.run<27> (late, [&] (auto v, uint i) { return v * par.decay[i]; });
     rev.run<28> (late);
@@ -983,7 +985,7 @@ private:
       tmp1[i] = (T) (0.1_r + 0.1_r * lfo1[i]);
     }
     // channel a block 1
-    rev.run<18, 19, 20> (a, 0, tmp1);
+    rev.run<18, 19, 20> (a, blank, tmp1);
     rev.run<21> (a);
 
     // channel b block 1
@@ -1118,7 +1120,7 @@ private:
 
     // continuing the loop
     rev.run<6> (sig);
-    rev.run<7> (sig, lfo1, nullptr);
+    rev.run<7> (sig, lfo1, blank);
 
     // 2nd output point for L and R signal
     rev.fetch_block<8> (tmp); // delay GT a block will never overlap
@@ -1138,7 +1140,7 @@ private:
     span_visit (tmp, [&] (auto& v, uint i) {
       v = (T) (par.character[i] * 0.14_r);
     });
-    rev.run<12, 13> (sig, nullptr, nullptr, nullptr, tmp);
+    rev.run<12, 13> (sig, blank, blank, blank, tmp);
 
     // 3rd output point for L and R signal
     rev.fetch_block<14> (tmp); // delay GT a block will never overlap
@@ -1165,7 +1167,7 @@ private:
     span_visit (tmp, [&] (auto& v, uint i) {
       v = (T) (par.character[i] * 0.2_r);
     });
-    rev.run<20, 21> (sig, lfo2, nullptr, nullptr, tmp);
+    rev.run<20, 21> (sig, lfo2, blank, blank, tmp);
     // push to delay feedback
     rev.push<22> (sig.to_const());
 
@@ -1244,7 +1246,7 @@ private:
       lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
       lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
     });
-    rev.run<21> (loop, xspan {lfo1}, nullptr); // tmp1 free
+    rev.run<21> (loop, xspan {lfo1}, blank); // tmp1 free
     xspan c2 {tmp1.data(), loop.size()};
     rev.fetch_block<22> (c2);
     rev.push<22> (loop.to_const());
@@ -1259,7 +1261,7 @@ private:
       spls[0] = l[i];
       spls[1] = r[i];
     });
-    rev.run<23> (loop, xspan {lfo2}, nullptr); // tmp3 free
+    rev.run<23> (loop, xspan {lfo2}, blank); // tmp3 free
 
     T flo = load_float<T> (0.9f + _param.lf_amt * _param.lf_amt * 0.05f);
     T glo = load_float<T> (0.35f + _param.lf_amt * 0.6f);

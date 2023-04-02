@@ -127,10 +127,13 @@ function ap2 (in, spls1, spls2, g1, g2)
   yn2 = easyapv_del.delay_line_get (spls2, i2);
 
   u  = in;
+
   u += yn1 * g1;
   x  = yn1 - u * g1;
+
   u += yn2 * g2;
   u1 = yn2 - u * g2;
+
   easyapv_del.delay_line_set (u1, 0, i1);
   easyapv_del.delay_line_set (u, 0, i2);
   easyapv_del_idx += 2;
@@ -259,7 +262,6 @@ function ap3 (in, spls1, spls2, spls3, g1, g2, g3)
   u1 = yn2 - u * g2;
   u += yn3 * g3;
   u2 = yn3 - u * g3;
-
   easyapv_del.delay_line_set (u1, 0, i1);
   easyapv_del.delay_line_set (u2, 0, i2);
   easyapv_del.delay_line_set (u, 0, i3);

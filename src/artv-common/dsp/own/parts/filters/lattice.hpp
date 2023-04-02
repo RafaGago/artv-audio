@@ -45,11 +45,11 @@ struct lattice {
     assert (co.size() >= n_coeffs);
     assert (st.size() >= n_states);
 
-    T fwd = in + st[0] * -co[0];
-    T out = st[0] + fwd * co[0];
+    V fwd = in + st[0] * -co[0];
+    V out = st[0] + fwd * co[0];
     for (uint i = 1; i < N; ++i) {
       fwd += st[i] * co[i];
-      T bwd     = st[i] + fwd * -co[i];
+      V bwd     = st[i] + fwd * -co[i];
       st[i - 1] = bwd;
     }
     st[N - 1] = fwd; // this is the all-pole output, sending the allpass out
