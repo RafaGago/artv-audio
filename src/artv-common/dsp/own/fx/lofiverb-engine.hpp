@@ -545,6 +545,12 @@ public:
       && (... && (spec::is_allpass (Idxs) || spec::is_delay (Idxs)))) {
       run_nested_ap<Idx1, Idx2, Idxs...> (io, std::forward<Ts> (args)...);
     }
+    else if constexpr (
+      sizeof...(Idxs) == 0 && spec::is_lowpass_filter (Idx1)
+      && spec::is_lowpass_filter (Idx2)) {
+      // 3-band crossover
+      run_3band_crossover<Idx1, Idx2> (io, std::forward<Ts> (args)...);
+    }
     else {
       static_assert (
         sizeof (T) != sizeof (T), "Invalid type on one of the indexes");
@@ -560,7 +566,7 @@ private:
     if constexpr (is_generator<T, LfoDec>()) {
       return std::forward<LfoDec> (v);
     }
-    else if constexpr (is_xspan<LfoDec>) {
+    else if constexpr (is_array_subscriptable_v<LfoDec>) {
       return [v] (uint i) { return v[i]; };
     }
     else {
@@ -575,7 +581,7 @@ private:
     if constexpr (is_generator<T, GainDec>()) {
       return std::forward<GainDec> (v);
     }
-    else if constexpr (is_xspan<GainDec>) {
+    else if constexpr (is_array_subscriptable_v<Gain>) {
       return [v] (uint i) { return v[i]; };
     }
     else {
@@ -763,7 +769,7 @@ private:
       if constexpr (is_generator<fixpt_t, Gain>()) {
         gw = (fixpt_acum_t) g (i);
       }
-      else if constexpr (is_xspan<Gain>) {
+      else if constexpr (is_array_subscriptable_v<Gain>) {
         gw = (fixpt_acum_t) g[i];
       }
       else {
@@ -803,7 +809,7 @@ private:
       if constexpr (is_generator<float, Gain>()) {
         gv = (float) g (i);
       }
-      else if constexpr (is_xspan<Gain>) {
+      else if constexpr (is_array_subscriptable_v<Gain>) {
         gv = (float) g[i];
       }
       else {
@@ -846,6 +852,26 @@ private:
   void run_hp (xspan<T> io)
   {
     run_hp<Idx> (io, spec::get_gain (Idx));
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx1, uint Idx2, class T, class U>
+  void run_3band_crossover (xspan<T> io, U&& f_lo, U&& g_lo, U&& f_hi, U&& g_hi)
+  {
+    std::array<T, max_block_size> hi, mid;
+
+    assert (io.size() <= max_block_size);
+    xspan_memdump (hi.data(), io);
+    run_lp<Idx1> (io, f_hi); // io has lows + mids. highs removed
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      hi[i] = (T) (hi[i] - io[i]);
+    }
+    xspan_memdump (mid.data(), io);
+    run_lp<Idx2> (io, f_lo); // io has lows. mids + highs removed
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      io[i] = (T) ((io[i] * g_lo) + (hi[i] * g_hi) + mid[i] - io[i]);
+    }
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
@@ -1152,7 +1178,7 @@ private:
     if constexpr (is_generator<T, Gain>()) {
       gains[I] = gain_arg (n_spl);
     }
-    else if constexpr (is_xspan<Gain>) {
+    else if constexpr (is_array_subscriptable_v<Gain>) {
       gains[I] = gain_arg[n_spl];
     }
     else {
@@ -1434,6 +1460,5 @@ private:
   states_union                    _states {};
   lowbias32_hash<1>               _noise {};
 };
-
 }}} // namespace artv::detail::lofiverb
 //------------------------------------------------------------------------------

@@ -38,10 +38,17 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  damp,
+  lf_amt,
   1,
-  param_common ("Damp", declptr<lofiverb>(), declptr<lofiverb::damp_tag>()),
-  lofiverb::get_parameter (lofiverb::damp_tag {}),
+  param_common ("Lows", declptr<lofiverb>(), declptr<lofiverb::lf_amt_tag>()),
+  lofiverb::get_parameter (lofiverb::lf_amt_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  hf_amt,
+  1,
+  param_common ("Highs", declptr<lofiverb>(), declptr<lofiverb::hf_amt_tag>()),
+  lofiverb::get_parameter (lofiverb::hf_amt_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -59,16 +66,6 @@ parameter_cpp_class_define (
     declptr<lofiverb>(),
     declptr<lofiverb::predelay_tag>()),
   lofiverb::get_parameter (lofiverb::predelay_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
-  freq_balance,
-  1,
-  param_common (
-    "LF/HF",
-    declptr<lofiverb>(),
-    declptr<lofiverb::freq_balace_tag>()),
-  lofiverb::get_parameter (lofiverb::freq_balace_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -99,7 +96,7 @@ parameter_cpp_class_define (
   ducking_speed,
   1,
   param_common (
-    "Duck Spd",
+    "Duck Time",
     declptr<lofiverb>(),
     declptr<lofiverb::ducking_speed_tag>()),
   lofiverb::get_parameter (lofiverb::ducking_speed_tag {}),
@@ -150,10 +147,10 @@ using lofiverb_parameters = mp_list<
   predelay,
   clock,
   decay,
-  damp,
+  lf_amt,
+  hf_amt,
   stereo,
   character,
-  freq_balance,
   mod,
   ducking_threshold,
   ducking_speed,

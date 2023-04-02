@@ -7533,10 +7533,17 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_damp,
+  lofiverb_lf,
   n_stereo_busses,
-  param_common ("Damp", declptr<lofiverb>(), declptr<lofiverb::damp_tag>()),
-  lofiverb::get_parameter (lofiverb::damp_tag {}),
+  param_common ("Lows", declptr<lofiverb>(), declptr<lofiverb::lf_amt_tag>()),
+  lofiverb::get_parameter (lofiverb::lf_amt_tag {}),
+  slider_ext);
+
+parameter_cpp_class_define (
+  lofiverb_hf,
+  n_stereo_busses,
+  param_common ("Highs", declptr<lofiverb>(), declptr<lofiverb::hf_amt_tag>()),
+  lofiverb::get_parameter (lofiverb::hf_amt_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -7554,16 +7561,6 @@ parameter_cpp_class_define (
     declptr<lofiverb>(),
     declptr<lofiverb::predelay_tag>()),
   lofiverb::get_parameter (lofiverb::predelay_tag {}),
-  slider_ext);
-
-parameter_cpp_class_define (
-  lofiverb_freq_balance,
-  n_stereo_busses,
-  param_common (
-    "LF/HF",
-    declptr<lofiverb>(),
-    declptr<lofiverb::freq_balace_tag>()),
-  lofiverb::get_parameter (lofiverb::freq_balace_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -7614,11 +7611,11 @@ using lofiverb_params = mp_list<
   lofiverb_algorithm,
   lofiverb_predelay,
   lofiverb_decay,
-  lofiverb_damp,
-  lofiverb_stereo,
   lofiverb_character,
-  lofiverb_freq_balance,
+  lofiverb_stereo,
   lofiverb_mod,
+  lofiverb_lf,
+  lofiverb_hf,
 
   lofiverb_ducking_threshold,
   lofiverb_ducking_speed,

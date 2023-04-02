@@ -429,8 +429,8 @@ public:
       freq,
       freq.getWidth(),
       make_array (label_h, knob_h, label_h, knob_h),
-      grid_label_on_top (*_params.p_get (parameters::freq_balance {})[0]),
-      grid_label_on_top (*_params.p_get (parameters::damp {})[0]));
+      grid_label_on_top (*_params.p_get (parameters::hf_amt {})[0]),
+      grid_label_on_top (*_params.p_get (parameters::lf_amt {})[0]));
 
     auto stereo
       = main.removeFromLeft (sep_w + (w * (float) sizes::main_w_divs) + sep_w);

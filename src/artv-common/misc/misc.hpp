@@ -9,7 +9,6 @@
 #include <cstdio>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #include <gcem.hpp>
 
@@ -456,5 +455,29 @@ constexpr void constexpr_memcpy (void* dst, void const* src, std::size_t size)
 {
   __builtin_memcpy (dst, src, size);
 }
+//------------------------------------------------------------------------------
+template <int I>
+struct priority_tag : priority_tag<I - 1> {};
+template <>
+struct priority_tag<0> {};
+//------------------------------------------------------------------------------
+namespace detail {
+// Inspired on this
+// https://twitter.com/ericniebler/status/852192542653329408
+
+template <class T>
+char (&is_array_subscriptable (priority_tag<0>))[1]; // no
+
+template <class T, class = decltype (std::declval<T>()[0])>
+char (&is_array_subscriptable (priority_tag<1>))[2]; // yes
+} // namespace detail
+
+template <typename T>
+struct is_array_subscriptable
+  : k_bool<
+      sizeof (detail::is_array_subscriptable<T> (priority_tag<1> {})) == 2> {};
+
+template <typename T>
+constexpr bool is_array_subscriptable_v = is_array_subscriptable<T>::value;
 
 } // namespace artv
