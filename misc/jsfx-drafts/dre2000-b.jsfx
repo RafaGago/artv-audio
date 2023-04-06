@@ -72,25 +72,21 @@ loop(floor (srate / 44100) * 2,
 );
 
 // Actual reverb stuff ---------------------------------------------------------
-n_lfos = 2;
-lfo.lfo_bank_init (n_lfos, 4);
+n_lfos = 4;
+lfo.lfo_bank_init (n_lfos, 1);
 lfo.ret.array_init (n_lfos);
 lfo.lfo_bank_reset_phase (0);
 
-m_lfo.lfo_bank_init (n_lfos, 2);
-m_lfo.ret.array_init (n_lfos);
-m_lfo.lfo_bank_reset_phase (0);
-
 @slider
 
-lfo.lfo_bank_reset_freq (0, 0.25 + mod * 0.75, k.src.srate);
-m_lfo.lfo_bank_reset_freq (0, 0.1 + mod * 3., k.src.srate);
+lfo.lfo_bank_reset_freq (0, 0.25 + mod * .15, k.src.srate);
 
 dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
 
 decayfb = 0.2 + decay_p * 0.7;
-sumgain = 0.125;
+
+sumgain =  0.125;
 
 flo = 0.90 + lo * lo * 0.05;
 glo = 0.7 + lo * 0.3;
@@ -111,8 +107,8 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   // halving an additional time to leave headroom
   m = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5 * 0.5;
-  m = fi1.lp (m, 0.05);
-  m = fi2.hp (m, 0.995);
+  m = fi1.lp (m, 0.01);
+  m = fi2.hp (m, 0.99);
   ml = m;
  
 
@@ -124,6 +120,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   ci = ml + fb1;
   fb1 = fb1.crossv2 (ci, flo, fhi, glo, ghi);
   fb1 = delay (fb1, 3789, lfo.ret.ptr[0] * mod, 54) * -decayfb;
+//  fb1 = delay (fb1, 3789) * -decayfb;
   fb1 = delay (fb1, 32);
   t = delay (ci, 429) * -sumgain; // notice assign not sum
   t += delay (ci, 1000) * sumgain;
@@ -135,6 +132,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   ci = ml + fb2;
   fb2 = fb2.crossv2 (ci, flo, fhi, glo, ghi);
   fb2 = delay (fb2, 4004, lfo.ret.ptr[1] * mod, 53) * decayfb;
+//  fb2 = delay (fb2, 4004) * decayfb;
   fb2 = delay (fb2, 32);
   t += delay (ci, 616) * -sumgain;
   t += delay (ci, 1225) * sumgain;
@@ -157,12 +155,25 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   t = ap (t, 282, -0.7);
   t = ap (t, 343, -0.7);
 
-  l = ap (t, 233, -0.7);
+  eramt = abs ((character - 0.5)) * 2;
+  eramt = 1 - eramt * eramt;
+  eramt = 0.4 * eramt;
+  mainamt = 1 - eramt;
+
+  l = t;
+  l = delay (ml, 311, character, 311) * eramt + l * mainamt;
+//  l = delay (ml, 577, character, 311) * 0.125 + l * 0.875;
+  l = ap (l, 233, -0.7);
   l = ap (l, 273, -0.7);
+//  l = ap (l, 534, -0.7, lfo.ret.ptr[2] * mod, 22);
   l = ap (l, 534, -0.7);
 
-  r = ap (t, 194, -0.7);
+  r = t;
+  r = delay (ml, 277, character, 400) * eramt + r * mainamt;
+//  r = delay (ml, 311, character, 400) * 0.125 + r * 0.875;
+  r = ap (r, 194, -0.7);
   r = ap (r, 426, -0.7);
+//  r = ap (r, 566, -0.7, lfo.ret.ptr[3] * mod, 17);
   r = ap (r, 566, -0.7);
   
   // more boilerplate (summing + downsample)
