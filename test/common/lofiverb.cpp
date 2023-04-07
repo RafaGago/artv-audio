@@ -35,7 +35,7 @@ TEST (lofiverb, block_processed_delays)
   for (uint i = 0; i < max_block_size; ++i) {
     in[i] = ((float) ++in_counter) * 0.01;
   }
-  e.fetch_block<0> (xspan {out});
+  e.fetch_block<0> (xspan {out}, 0);
   e.push<0> (xspan {in}.to_const());
 
   for (uint i = 0; i < max_block_size; ++i) {
@@ -45,7 +45,7 @@ TEST (lofiverb, block_processed_delays)
   for (uint i = 0; i < max_block_size; ++i) {
     in[i] = ((float) ++in_counter) * 0.01;
   }
-  e.fetch_block<0> (xspan {out});
+  e.fetch_block<0> (xspan {out}, 0);
   e.push<0> (xspan {in}.to_const());
 
   auto expected_data_bound = max_block_size / 2;
@@ -61,7 +61,7 @@ TEST (lofiverb, block_processed_delays)
   for (uint i = 0; i < max_block_size; ++i) {
     in[i] = ((float) ++in_counter) * 0.01;
   }
-  e.fetch_block<0> (xspan {out});
+  e.fetch_block<0> (xspan {out}, 0);
   e.push<0> (xspan {in}.to_const());
 
   for (uint i = 0; i < max_block_size; ++i) {
@@ -72,7 +72,7 @@ TEST (lofiverb, block_processed_delays)
   for (uint i = 0; i < max_block_size; ++i) {
     in[i] = ((float) ++in_counter) * 0.01;
   }
-  e.fetch_block<0> (xspan {out});
+  e.fetch_block<0> (xspan {out}, 0);
   e.push<0> (xspan {in}.to_const());
 
   for (uint i = 0; i < max_block_size; ++i) {

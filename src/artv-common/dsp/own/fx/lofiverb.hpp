@@ -234,7 +234,6 @@ static constexpr auto get_midifex49_spec()
 struct midifex49_spec {
   static constexpr auto values {get_midifex49_spec()};
 };
-
 //------------------------------------------------------------------------------
 static constexpr auto get_midifex50_spec()
 {
@@ -267,7 +266,7 @@ static constexpr auto get_midifex50_spec()
     make_ap (2083 - 32, 0.5, 127), // 23
     make_lp(), // 24
     make_lp(), // 25
-    make_block_delay (32) // 26 (FB point) (== blocksz + 1)
+    make_block_delay (max_block_size) // 26 (FB point) (== blocksz + 1)
   );
 }
 
@@ -1117,7 +1116,7 @@ private:
     // 1st output point for L and R signal
     xspan_memcpy (l, sig); // delay LT a block -> might overlap, requires copy
     rev.run<4> (l);
-    rev.fetch_block<5> (r); // delay GT a block will never overlap
+    rev.fetch_block<5> (r, 0); // delay GT a block will never overlap
     rev.push<5> (sig.to_const());
 
     // continuing the loop
@@ -1125,12 +1124,12 @@ private:
     rev.run<7> (sig, lfo1, blank);
 
     // 2nd output point for L and R signal
-    rev.fetch_block<8> (tmp); // delay GT a block will never overlap
+    rev.fetch_block<8> (tmp, 0); // delay GT a block will never overlap
     span_visit (l, [&] (auto& v, uint i) {
       v = (T) ((v + tmp[i]) * (2_r / 3_r));
     });
     rev.push<8> (sig.to_const());
-    rev.fetch_block<9> (tmp); // delay GT a block will never overlap
+    rev.fetch_block<9> (tmp, 0); // delay GT a block will never overlap
     span_visit (r, [&] (auto& v, uint i) {
       v = (T) ((v + tmp[i]) * (2_r / 3_r));
     });
@@ -1145,12 +1144,12 @@ private:
     rev.run<12, 13> (sig, blank, blank, blank, tmp);
 
     // 3rd output point for L and R signal
-    rev.fetch_block<14> (tmp); // delay GT a block will never overlap
+    rev.fetch_block<14> (tmp, 0); // delay GT a block will never overlap
     span_visit (l, [&] (auto& v, uint i) {
       v = (T) (v + tmp[i] * (1_r / 3_r));
     });
     rev.push<14> (sig.to_const());
-    rev.fetch_block<15> (tmp); // delay GT a block will never overlap
+    rev.fetch_block<15> (tmp, 0); // delay GT a block will never overlap
     span_visit (r, [&] (auto& v, uint i) {
       v = (T) (v + tmp[i] * (1_r / 3_r));
     });
@@ -1235,7 +1234,7 @@ private:
 
     xspan c1 {tmp2.data(), loop.size()};
     xspan lfo2 {tmp3.data(), loop.size()};
-    rev.fetch_block<20> (c1);
+    rev.fetch_block<20> (c1, 0);
     rev.push<20> (loop.to_const());
     auto lfo1 = loop; // data inserted already (lfo1 -> tmp1)
     loop      = c1; // avoid a copy. loop -> tmp2
@@ -1250,7 +1249,7 @@ private:
     });
     rev.run<21> (loop, xspan {lfo1}, blank); // tmp1 free
     xspan c2 {tmp1.data(), loop.size()};
-    rev.fetch_block<22> (c2);
+    rev.fetch_block<22> (c2, 0);
     rev.push<22> (loop.to_const());
     loop = c2; // avoid copy. tmp2 (loop) free.
     span_visit (r, [&] (auto& v, uint i) {
