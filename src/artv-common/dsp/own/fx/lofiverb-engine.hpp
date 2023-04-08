@@ -397,7 +397,8 @@ public:
       return std::max_element (ds.begin(), ds.end())->to_int();
     }
     else {
-      return get_delay_spls (i).to_int() + get_delay_mod_spls (i).to_int();
+      return get_delay_spls (i).to_int() + get_delay_mod_spls (i).to_int()
+        + (has_modulated_delay (i) ? 1 : 0); // extra spl for thiran
     }
   }
   //----------------------------------------------------------------------------

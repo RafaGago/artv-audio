@@ -19,6 +19,7 @@
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/juce/parameter_definitions.hpp"
 #include "artv-common/juce/parameter_types.hpp"
+#include "artv-common/misc/compiler.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/xspan.hpp"
 
@@ -365,7 +366,46 @@ struct dre2000b_spec {
 static constexpr auto get_dre2000c_spec()
 {
   constexpr float g = 0.125f;
-  return make_array<stage_data> (make_quantizer());
+  return make_array<stage_data> (
+    make_quantizer(), // 0
+    make_lp (0.1), // 1
+    make_hp (0.99), // 2
+    make_ap (115, -0.7f), // 3
+    make_ap (160, -0.7f), // 4
+    make_ap (231, -0.7f), // 5
+
+    make_comb (3794 - 1, 0.f, 23), // 6
+    make_lp(), // 7
+    make_lp(), // 8
+    make_parallel_delay (959, g, 2855, g), // 9 L
+    make_parallel_delay (20 + 13, -g, 1817, -g), // 10 R (+ 13 for block proc)
+
+    make_comb (3838 - 1, 0.f, 24), // 11
+    make_lp(), // 12
+    make_lp(), // 13
+    make_parallel_delay (1309, g, 3221, g), // 14 L
+    make_parallel_delay (339, -g, 2271, -g), // 15 R
+
+    make_comb (3861 - 1, 0.f, 25), // 16
+    make_lp(), // 17
+    make_lp(), // 18
+    make_parallel_delay (1104, g, 3391, g), // 19 L
+    make_parallel_delay (130, -g, 2065, -g), // 20 R
+
+    make_comb (3894 - 1, 0.f, 26), // 21
+    make_lp(), // 22
+    make_lp(), // 23
+    make_parallel_delay (1445, g, 2885, g), // 24 L
+    make_parallel_delay (499, -g, 2071, -g), // 25 R
+    // L
+    make_ap (140, -0.7), // 26
+    make_ap (160, -0.7), // 27
+    make_delay (212, 237), // 28
+    // R
+    make_ap (160, -0.7), // 29
+    make_ap (227, -0.7), // 30
+    make_delay (213, 126) // 31
+  );
 }
 
 struct dre2000c_spec {
@@ -375,7 +415,45 @@ struct dre2000c_spec {
 static constexpr auto get_dre2000d_spec()
 {
   constexpr float g = 0.125f;
-  return make_array<stage_data> (make_quantizer() // 0
+  return make_array<stage_data> (
+    make_quantizer(), // 0
+    make_lp (0.1), // 1
+    make_hp (0.99), // 2
+    make_ap (115, -0.7f), // 3
+    make_ap (214, -0.7f), // 4
+    make_ap (365, -0.7f), // 5
+
+    make_comb (5652 - 1, 0.f, 57), // 6
+    make_lp(), // 7
+    make_lp(), // 8
+    make_parallel_delay (2164, g, 5005, g), // 9 L
+    make_parallel_delay (745, -g, 2922, -g), // 10 R
+
+    make_comb (5679 - 1, 0.f), // 11
+    make_lp(), // 12
+    make_lp(), // 13
+    make_parallel_delay (2080, g, 4948, g), // 14 L
+    make_parallel_delay (625, -g, 3523, -g), // 15 R
+
+    make_comb (5689 - 1, 0.f), // 16
+    make_lp(), // 17
+    make_lp(), // 18
+    make_parallel_delay (1435, g, 4279, g), // 19 L
+    make_parallel_delay (11 + 21, -g, 2769, -g), // 20 R (+ 21 for block proc)
+
+    make_comb (5711 - 1, 0.f, 57), // 21
+    make_lp(), // 22
+    make_lp(), // 23
+    make_parallel_delay (1557, g, 4304, g), // 24 L
+    make_parallel_delay (59, -g, 3539, -g), // 25 R
+    // L
+    make_ap (214, -0.7, 30), // 26
+    make_ap (469, -0.7), // 27
+    make_delay (234, 337), // 28
+    // R
+    make_ap (245, -0.7, 29), // 29
+    make_ap (426, -0.7), // 30
+    make_delay (434, 247) // 31
   );
 }
 
@@ -418,7 +496,9 @@ public:
         "Acreil Midifex 49",
         "Acreil Midifex 50",
         "Acreil Dre-2000 A",
-        "Acreil Dre-2000 B"
+        "Acreil Dre-2000 B",
+        "Acreil Dre-2000 C",
+        "Acreil Dre-2000 D"
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
         ,
         "Debug "
@@ -1520,7 +1600,7 @@ private:
     rev.run<2> (in);
 
     T flo = load_float<T> (0.9f + _param.lf_amt * _param.lf_amt * 0.05f);
-    T glo = load_float<T> (0.7f + _param.lf_amt * 0.3f);
+    T glo = load_float<T> (0.7f + _param.lf_amt * 0.299f);
     T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
     T ghi = load_float<T> (0.5f + _param.hf_amt * 0.25f);
 
@@ -1592,11 +1672,210 @@ private:
   //----------------------------------------------------------------------------
   template <class T, class Params>
   void process_dre2000c (xspan<std::array<T, 2>> io, Params& par)
-  {}
+  {
+    auto& rev = std::get<dre2000c_type> (_modes);
+
+    block_arr<T> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, lfo4, tmp1, tmp2;
+    xspan        in {in_mem.data(), io.size()};
+    xspan        l {l_mem.data(), io.size()};
+    xspan        r {r_mem.data(), io.size()};
+
+    rev.run<0> (in, [&] (auto spl, uint i) {
+      auto lfo     = tick_lfo<T>();
+      lfo1[i]      = (T) (T {lfo[0]} * par.mod[i]);
+      lfo2[i]      = (T) (T {lfo[1]} * par.mod[i]);
+      lfo3[i]      = (T) (T {lfo[2]} * par.mod[i]);
+      lfo4[i]      = (T) (T {lfo[3]} * par.mod[i]);
+      par.decay[i] = (T) (par.decay[i] * 0.85_r);
+      return (io[i][0] + io[i][1]) * 0.25_r;
+    });
+    rev.run<1> (in);
+    rev.run<2> (in);
+    rev.run<3> (in);
+    rev.run<4> (in);
+    rev.run<5> (in);
+
+    T flo = load_float<T> (0.9f + _param.lf_amt * _param.lf_amt * 0.05f);
+    T glo = load_float<T> (0.55f + _param.lf_amt * 0.4499f);
+    T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
+    T ghi = load_float<T> (0.45f + _param.hf_amt * 0.5499f);
+
+    xspan_memdump (tmp1.data(), in);
+    xspan comb_out {tmp1.data(), io.size()};
+    xspan comb_fb {tmp2.data(), io.size()};
+    rev.fetch_block<6> (comb_out, comb_fb, lfo1, par.decay);
+    rev.run<7, 8> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<6> (comb_fb.to_const());
+    xspan_memdump (l.data(), comb_out);
+    xspan_memdump (r.data(), comb_out);
+    rev.run<9> (l);
+    rev.run<10> (r);
+
+    xspan_memdump (comb_out.data(), in);
+    rev.fetch_block<11> (comb_out, comb_fb, lfo2, par.decay);
+    rev.run<12, 13> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<11> (comb_fb.to_const());
+    auto lblock = comb_out;
+    auto rblock = comb_fb;
+    xspan_memdump (rblock.data(), lblock);
+    rev.run<14> (lblock);
+    rev.run<15> (rblock);
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      l[i] = (T) (l[i] + lblock[i]);
+      r[i] = (T) (r[i] + rblock[i]);
+    }
+
+    xspan_memdump (comb_out.data(), in);
+    rev.fetch_block<16> (comb_out, comb_fb, lfo3, par.decay);
+    rev.run<17, 18> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<16> (comb_fb.to_const());
+    xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_out
+    rev.run<19> (lblock);
+    rev.run<20> (rblock);
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      l[i] = (T) (l[i] + lblock[i]);
+      r[i] = (T) (r[i] + rblock[i]);
+    }
+
+    xspan_memdump (comb_out.data(), in);
+    rev.fetch_block<21> (comb_out, comb_fb, lfo4, par.decay);
+    rev.run<22, 23> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<21> (comb_fb.to_const());
+    xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_out
+    rev.run<24> (lblock);
+    rev.run<25> (rblock);
+    xspan eramt {tmp2.data(), io.size()};
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      l[i]     = (T) (l[i] + lblock[i]);
+      r[i]     = (T) (r[i] + rblock[i]);
+      auto c   = par.character[i];
+      c        = (T) ((c - one<T>() * 0.5_r) * 2_r);
+      c        = (T) ((one<T>() - c * c) * 0.4_r);
+      eramt[i] = c;
+    }
+
+    rev.run<26> (l);
+    rev.run<27> (l);
+    xspan_memdump (lblock.data(), in);
+    rev.run<28> (lblock, par.character);
+    crossfade (l, lblock, eramt);
+
+    rev.run<29> (r);
+    rev.run<30> (r);
+    rev.run<31> (in, par.character);
+    crossfade (l, in, eramt);
+
+    span_visit (io, [&] (auto& spls, uint i) {
+      spls[0] = l[i];
+      spls[1] = r[i];
+    });
+  }
   //----------------------------------------------------------------------------
   template <class T, class Params>
   void process_dre2000d (xspan<std::array<T, 2>> io, Params& par)
-  {}
+  {
+    auto& rev = std::get<dre2000d_type> (_modes);
+
+    block_arr<T> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, lfo4, tmp1, tmp2;
+    xspan        in {in_mem.data(), io.size()};
+    xspan        l {l_mem.data(), io.size()};
+    xspan        r {r_mem.data(), io.size()};
+
+    rev.run<0> (in, [&] (auto spl, uint i) {
+      auto lfo     = tick_lfo<T>();
+      lfo1[i]      = (T) (T {lfo[0]} * par.mod[i]);
+      lfo2[i]      = (T) (T {lfo[1]} * par.mod[i]);
+      lfo3[i]      = (T) (T {lfo[2]} * par.mod[i]);
+      lfo4[i]      = (T) (T {lfo[3]} * par.mod[i]);
+      par.decay[i] = (T) (par.decay[i] * 0.72_r);
+      return (io[i][0] + io[i][1]) * 0.25_r;
+    });
+    rev.run<1> (in);
+    rev.run<2> (in);
+    rev.run<3> (in);
+    rev.run<4> (in);
+    rev.run<5> (in);
+    T flo = load_float<T> (0.9f + _param.lf_amt * _param.lf_amt * 0.05f);
+    T glo = load_float<T> (0.55f + _param.lf_amt * 0.45f);
+    T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
+    T ghi = load_float<T> (0.45f + _param.hf_amt * 0.55f);
+
+    xspan_memdump (tmp1.data(), in);
+    xspan comb_out {tmp1.data(), io.size()};
+    xspan comb_fb {tmp2.data(), io.size()};
+    rev.fetch_block<6> (comb_out, comb_fb, lfo1, par.decay);
+    rev.run<7, 8> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<6> (comb_fb.to_const());
+    xspan_memdump (l.data(), comb_out);
+    xspan_memdump (r.data(), comb_out);
+    rev.run<9> (l);
+    rev.run<10> (r);
+
+    xspan_memdump (comb_out.data(), in);
+    rev.fetch_block<11> (comb_out, comb_fb, blank, par.decay);
+    rev.run<12, 13> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<11> (comb_fb.to_const());
+    auto lblock = comb_out;
+    auto rblock = comb_fb;
+    xspan_memdump (rblock.data(), lblock);
+    rev.run<14> (lblock);
+    rev.run<15> (rblock);
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      l[i] = (T) (l[i] + lblock[i]);
+      r[i] = (T) (r[i] + rblock[i]);
+    }
+
+    xspan_memdump (comb_out.data(), in);
+    rev.fetch_block<16> (comb_out, comb_fb, blank, par.decay);
+    rev.run<17, 18> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<16> (comb_fb.to_const());
+    xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_out
+    rev.run<19> (lblock);
+    rev.run<20> (rblock);
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      l[i] = (T) (l[i] + lblock[i]);
+      r[i] = (T) (r[i] + rblock[i]);
+    }
+
+    xspan_memdump (comb_out.data(), in);
+    rev.fetch_block<21> (comb_out, comb_fb, lfo4, par.decay);
+    rev.run<22, 23> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<21> (comb_fb.to_const());
+    xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_out
+    rev.run<24> (lblock);
+    rev.run<25> (rblock);
+    xspan eramt {tmp2.data(), io.size()};
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      l[i]     = (T) (l[i] + lblock[i]);
+      r[i]     = (T) (r[i] + rblock[i]);
+      auto c   = par.character[i];
+      c        = (T) ((c - one<T>() * 0.5_r) * 2_r);
+      c        = (T) ((one<T>() - c * c) * 0.4_r);
+      eramt[i] = c;
+    }
+
+    rev.run<26> (l, lfo2);
+    rev.run<27> (l);
+    xspan_memdump (lblock.data(), in);
+    rev.run<28> (lblock, par.character);
+    crossfade (l, lblock, eramt);
+
+    rev.run<29> (r, lfo3);
+    rev.run<30> (r);
+    rev.run<31> (in, par.character);
+    crossfade (l, in, eramt);
+
+    span_visit (io, [&] (auto& spls, uint i) {
+      spls[0] = l[i];
+      spls[1] = r[i];
+    });
+  }
   //----------------------------------------------------------------------------
   // 1 selects s2, 0 dst
   template <class T, class U, class V>
