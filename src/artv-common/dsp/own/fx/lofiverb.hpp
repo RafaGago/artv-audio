@@ -22,7 +22,7 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/xspan.hpp"
 
-#define LOFIVERB_ADD_DEBUG_ALGO 1
+// #define LOFIVERB_ADD_DEBUG_ALGO 1
 
 namespace artv {
 namespace detail { namespace lofiverb {
@@ -274,6 +274,51 @@ struct midifex50_spec {
   static constexpr auto values {get_midifex50_spec()};
 };
 
+//------------------------------------------------------------------------------
+static constexpr auto get_dre2000a_spec()
+{
+  constexpr float g = 0.125f;
+  return make_array<stage_data> (
+    // outputs first
+    make_quantizer(), // 0
+    make_lp (0.08), // 1
+    make_hp (0.99), // 2
+    make_parallel_delay (42, -g, 586, g, 1099, -g), // 3 (L)
+    make_parallel_delay (105, g, 490, -g, 1290, g), // 4 (R)
+
+    make_comb (5719, 0.f, 43.f), // 5
+    make_lp(), // 6
+    make_lp(), // 7
+    make_parallel_delay (
+      640, -g, 1494, g, 2199, -g, 3122, g, 4135, -g, 4952, g), // 8
+
+    make_comb (5779, 0.f, 44.f), // 9
+    make_lp(), // 10
+    make_lp(), // 11
+    make_parallel_delay (
+      902, -g, 1830, g, 2528, -g, 3641, g, 4670, -g, 5432, g), // 12
+
+    make_comb (5905, 0.f, 44.f), // 13
+    make_lp(), // 14
+    make_lp(), // 15
+    make_parallel_delay (
+      979, -g, 2031, g, 3267, -g, 4104, g, 5103, -g, 5886, g), // 16
+    // L
+    make_ap (224, -0.7), // 17
+    make_delay (311, 311), // 18
+    make_ap (227, -0.7), // 19
+    make_ap (1343, -0.7), // 20
+    // R
+    make_ap (224, -0.7), // 21
+    make_delay (277, 400), // 22
+    make_ap (91, -0.7), // 23
+    make_ap (1182, -0.7)); // 24
+}
+
+struct dre2000a_spec {
+  static constexpr auto values {get_dre2000a_spec()};
+};
+
 }} // namespace detail::lofiverb
 //------------------------------------------------------------------------------
 // A reverb using 16-bit fixed-point arithmetic on the main loop. One design
@@ -307,8 +352,9 @@ public:
       make_cstr_array (
         "Artv Abyss",
         "Artv Small",
-        "Midifex 49",
-        "Midifex 50"
+        "Acreil Midifex 49",
+        "Acreil Midifex 50",
+        "Acreil Dre-2000 A"
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
         ,
         "Debug "
@@ -623,6 +669,9 @@ private:
     case mode::midifex50:
       process_midifex50 (xspan {wet.data(), io.size()}, pars);
       break;
+    case mode::dre2000a:
+      process_dre2000a (xspan {wet.data(), io.size()}, pars);
+      break;
     default:
       assert (false);
     }
@@ -701,6 +750,9 @@ private:
     case mode::midifex50_flt:
       process_midifex50 (io, pars);
       break;
+    case mode::dre2000a_flt:
+      process_dre2000a (io, pars);
+      break;
     default:
       assert (false);
     }
@@ -726,8 +778,8 @@ private:
   {
     auto& rev = std::get<debug_algo_type> (_modes);
 
-    using arr    = std::array<T, max_block_size>;
-    using arr_fb = std::array<T, max_block_size + 1>;
+    using arr    = block_arr<T>;
+    using arr_fb = fb_block_arr<T>;
 
     arr    in_arr;
     arr_fb loop_arr;
@@ -754,8 +806,8 @@ private:
   {
     auto& rev = std::get<abyss_type> (_modes);
 
-    using arr    = std::array<T, max_block_size>;
-    using arr_fb = std::array<T, max_block_size + 1>;
+    using arr    = block_arr<T>;
+    using arr_fb = fb_block_arr<T>;
 
     arr late_in_arr;
     arr lfo1;
@@ -884,8 +936,8 @@ private:
   template <class T, class Params>
   void process_small_space (xspan<std::array<T, 2>> io, Params& par)
   {
-    using arr    = std::array<T, max_block_size>;
-    using arr_fb = std::array<T, max_block_size + 1>;
+    using arr    = block_arr<T>;
+    using arr_fb = fb_block_arr<T>;
 
     auto& rev = std::get<small_space_type> (_modes);
 
@@ -1076,7 +1128,7 @@ private:
   {
     auto& rev = std::get<midifex49_type> (_modes);
 
-    using arr = std::array<T, max_block_size>;
+    using arr = block_arr<T>;
 
     arr   tmp_arr;
     xspan tmp {tmp_arr.data(), io.size()};
@@ -1183,8 +1235,8 @@ private:
   {
     auto& rev = std::get<midifex50_type> (_modes);
 
-    using arr    = std::array<T, max_block_size>;
-    using arr_fb = std::array<T, max_block_size + 1>;
+    using arr    = block_arr<T>;
+    using arr_fb = fb_block_arr<T>;
 
     arr_fb tmp1;
     xspan  loop {tmp1.data(), io.size() + 1};
@@ -1273,6 +1325,106 @@ private:
     rev.push<26> (loop.to_const());
   }
   //----------------------------------------------------------------------------
+  template <class T, class Params>
+  void process_dre2000a (xspan<std::array<T, 2>> io, Params& par)
+  {
+    auto& rev = std::get<dre2000a_type> (_modes);
+
+    block_arr<T> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, tmp1, tmp2, tank;
+    xspan        in {in_mem.data(), io.size()};
+    xspan        l {l_mem.data(), io.size()};
+    xspan        r {r_mem.data(), io.size()};
+
+    rev.run<0> (in, [&] (auto spl, uint i) {
+      auto lfo     = tick_lfo<T>();
+      lfo1[i]      = (T) (T {lfo[0]} * par.mod[i]);
+      lfo2[i]      = (T) (T {lfo[1]} * par.mod[i]);
+      lfo3[i]      = (T) (T {lfo[2]} * par.mod[i]);
+      par.decay[i] = (T) (0.4_r + par.decay[i] * 0.45_r);
+      return (io[i][0] + io[i][1]) * 0.25_r;
+    });
+    rev.run<1> (in);
+    rev.run<2> (in);
+    xspan_memdump (l.data(), in);
+    xspan_memdump (r.data(), in);
+    rev.run<3> (l);
+    rev.run<4> (r);
+
+    T flo = load_float<T> (0.9f + _param.lf_amt * _param.lf_amt * 0.05f);
+    T glo = load_float<T> (0.7f + _param.lf_amt * 0.3f);
+    T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
+    T ghi = load_float<T> (0.6f + _param.hf_amt * 0.35f);
+
+    xspan_memdump (tmp1.data(), in);
+    xspan comb_out {tmp1.data(), io.size()};
+    xspan comb_fb {tmp2.data(), io.size()};
+    rev.fetch_block<5> (comb_out, comb_fb, lfo1, par.decay);
+    rev.run<6, 7> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<5> (comb_fb.to_const());
+    rev.run<8> (comb_out);
+    xspan_memdump (tank.data(), comb_out);
+
+    xspan_memdump (tmp1.data(), in);
+    comb_out = xspan {tmp1.data(), io.size()};
+    comb_fb  = xspan {tmp2.data(), io.size()};
+    rev.fetch_block<9> (comb_out, comb_fb, lfo2, par.decay);
+    rev.run<10, 11> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<9> (comb_fb.to_const());
+    rev.run<12> (comb_out);
+    span_visit (comb_out, [&] (auto spl, uint i) {
+      tank[i] = (T) (tank[i] + spl);
+    });
+
+    xspan_memdump (tmp1.data(), in);
+    comb_out = xspan {tmp1.data(), io.size()};
+    comb_fb  = xspan {tmp2.data(), io.size()};
+    rev.fetch_block<13> (comb_out, comb_fb, lfo3, par.decay);
+    rev.run<14, 15> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<13> (comb_fb.to_const());
+    rev.run<16> (comb_out);
+    xspan eramt {tmp2.data(), io.size()};
+    span_visit (comb_out, [&] (auto spl, uint i) {
+      l[i]     = (T) (l[i] + spl + tank[i]);
+      r[i]     = (T) (r[i] + spl + tank[i]);
+      auto c   = par.character[i];
+      c        = (T) ((c - 0.5_r) * 2_r);
+      c        = (c < T {}) ? -c : c; // abs
+      c        = (T) ((one<T>() - c * c) * 0.4_r);
+      eramt[i] = c;
+    });
+
+    rev.run<17> (l);
+    xspan_memdump (tmp1.data(), in);
+    xspan in_l {tmp1.data(), io.size()};
+    rev.run<18> (in_l, par.character);
+    crossfade (l, in_l, eramt);
+    rev.run<19> (l);
+    rev.run<20> (l);
+
+    rev.run<21> (r);
+    xspan_memdump (tmp1.data(), in);
+    xspan in_r {tmp1.data(), io.size()};
+    rev.run<22> (in_r, par.character);
+    crossfade (r, in_r, eramt);
+    rev.run<23> (r);
+    rev.run<24> (r);
+
+    span_visit (io, [&] (auto& spls, uint i) {
+      spls[0] = l[i];
+      spls[1] = r[i];
+    });
+  }
+  //----------------------------------------------------------------------------
+  // 1 selects s2, 0 dst
+  template <class T, class U, class V>
+  void crossfade (xspan<T> dst, U s2, V ctrl)
+  {
+    span_visit (dst, [&] (auto spl, uint i) {
+      auto ctrl2 = (T) (one<T>() - ctrl[i]);
+      dst[i]     = (T) (s2[i] * ctrl[i] + ctrl2 * spl);
+    });
+  }
+  //----------------------------------------------------------------------------
   template <class T>
   static T load_float (float v)
   {
@@ -1308,6 +1460,8 @@ private:
       midifex49,
       midifex50_flt,
       midifex50,
+      dre2000a_flt,
+      dre2000a,
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
       debug_algo_flt,
       debug_algo,
@@ -1388,6 +1542,12 @@ private:
         = make_array (10500, 16800, 21000, 23400, 33600, 42000, 63000);
       srate = srates[_param.srateid];
     } break;
+    case mode::dre2000a_flt:
+    case mode::dre2000a: {
+      constexpr auto srates
+        = make_array (16800, 21000, 25200, 32400, 40320, 57600, 63000);
+      srate = srates[_param.srateid];
+    } break;
     default:
       return;
     }
@@ -1422,6 +1582,13 @@ private:
     case mode::midifex50_flt:
     case mode::midifex50: {
       auto& rev = _modes.emplace<midifex50_type>();
+      rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    } break;
+    case mode::dre2000a_flt:
+    case mode::dre2000a: {
+      auto& rev = _modes.emplace<dre2000a_type>();
       rev.reset_memory (_mem_reverb);
       _lfo.set_phase (
         phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
@@ -1526,6 +1693,11 @@ private:
       auto f_late = 0.3f + mod * 0.1f;
       _lfo.set_freq (f32_x4 {f_late, f_late, f_late, f_late}, _t_spl);
     } break;
+    case mode::dre2000a_flt:
+    case mode::dre2000a: {
+      auto f_late = 0.25f + mod * 0.75f;
+      _lfo.set_freq (f32_x4 {f_late, f_late, f_late, f_late}, _t_spl);
+    } break;
     default:
       break;
     }
@@ -1561,6 +1733,11 @@ private:
     });
     return max_spls;
   }
+  //----------------------------------------------------------------------------
+  template <class T>
+  using block_arr = std::array<T, max_block_size>;
+  template <class T>
+  using fb_block_arr = std::array<T, max_block_size + 1>;
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
     u32   mode;
@@ -1610,10 +1787,16 @@ private:
     engine<detail::lofiverb::midifex49_spec, max_block_size>;
   using midifex50_type = detail::lofiverb::
     engine<detail::lofiverb::midifex50_spec, max_block_size>;
+  using dre2000a_type
+    = detail::lofiverb::engine<detail::lofiverb::dre2000a_spec, max_block_size>;
 
 #ifndef LOFIVERB_ADD_DEBUG_ALGO
-  using modes_type = std::
-    variant<abyss_type, small_space_type, midifex49_type, midifex50_type>;
+  using modes_type = std::variant<
+    abyss_type,
+    small_space_type,
+    midifex49_type,
+    midifex50_type,
+    dre2000a_type>;
 #else
   using debug_algo_type = detail::lofiverb::
     engine<detail::lofiverb::debug_algo_spec, max_block_size>;
@@ -1623,7 +1806,8 @@ private:
     abyss_type,
     small_space_type,
     midifex49_type,
-    midifex50_type>;
+    midifex50_type,
+    dre2000a_type>;
 #endif
 
   modes_type     _modes;

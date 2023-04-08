@@ -122,6 +122,13 @@ parameter_cpp_class_define (
   dry_wet_mixer::get_parameter (dry_wet_mixer::dry_tag {}),
   slider_ext);
 
+static constexpr auto wet_param = lambda_forward (
+  dry_wet_mixer::get_parameter (dry_wet_mixer::wet_tag {}),
+  [] (auto v) {
+    v.defaultv = -12.f;
+    return v;
+  });
+
 parameter_cpp_class_define (
   wet,
   1,
@@ -129,7 +136,7 @@ parameter_cpp_class_define (
     "Wet",
     declptr<dry_wet_mixer>(),
     declptr<dry_wet_mixer::wet_tag>()),
-  dry_wet_mixer::get_parameter (dry_wet_mixer::wet_tag {}),
+  wet_param,
   slider_ext);
 
 parameter_cpp_class_define (

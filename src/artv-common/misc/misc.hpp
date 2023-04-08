@@ -479,5 +479,13 @@ struct is_array_subscriptable
 
 template <typename T>
 constexpr bool is_array_subscriptable_v = is_array_subscriptable<T>::value;
+//------------------------------------------------------------------------------
+// forward a value to a lambda, useful for e.g. slightly modifying constexpr
+// variables.
+template <class V, class F>
+constexpr decltype (auto) lambda_forward (V&& value, F&& func)
+{
+  return func (std::forward<V> (value));
+}
 
 } // namespace artv
