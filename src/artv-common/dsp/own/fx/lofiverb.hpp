@@ -1524,17 +1524,17 @@ private:
     rev.fetch_block<5> (comb_out, comb_fb, lfo1, par.decay);
     rev.run<6, 7> (comb_fb, flo, glo, fhi, ghi);
     rev.push<5> (comb_fb.to_const());
-    rev.run<8> (comb_out);
-    xspan_memdump (tank.data(), comb_out);
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.run<8> (comb_fb);
+    xspan_memdump (tank.data(), comb_fb);
 
-    xspan_memdump (tmp1.data(), in);
-    comb_out = xspan {tmp1.data(), io.size()};
-    comb_fb  = xspan {tmp2.data(), io.size()};
+    xspan_memdump (comb_out.data(), in);
     rev.fetch_block<9> (comb_out, comb_fb, lfo2, par.decay);
     rev.run<10, 11> (comb_fb, flo, glo, fhi, ghi);
     rev.push<9> (comb_fb.to_const());
-    rev.run<12> (comb_out);
-    span_visit (comb_out, [&] (auto spl, uint i) {
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.run<12> (comb_fb);
+    span_visit (comb_fb, [&] (auto spl, uint i) {
       tank[i] = (T) (tank[i] + spl);
     });
 
@@ -1544,9 +1544,10 @@ private:
     rev.fetch_block<13> (comb_out, comb_fb, lfo3, par.decay);
     rev.run<14, 15> (comb_fb, flo, glo, fhi, ghi);
     rev.push<13> (comb_fb.to_const());
-    rev.run<16> (comb_out);
-    xspan eramt {tmp2.data(), io.size()};
-    span_visit (comb_out, [&] (auto spl, uint i) {
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.run<16> (comb_fb);
+    xspan eramt {tmp1.data(), io.size()};
+    span_visit (comb_fb, [&] (auto spl, uint i) {
       l[i]     = (T) (l[i] + spl + tank[i]);
       r[i]     = (T) (r[i] + spl + tank[i]);
       auto c   = par.character[i];
@@ -1556,18 +1557,17 @@ private:
     });
 
     rev.run<17> (l);
-    xspan_memdump (tmp1.data(), in);
-    xspan in_l {tmp1.data(), io.size()};
-    rev.run<18> (in_l, par.character);
-    crossfade (l, in_l, eramt);
+    xspan er {tmp2.data(), io.size()};
+    xspan_memdump (er.data(), in);
+    rev.run<18> (er, par.character);
+    crossfade (l, er, eramt);
     rev.run<19> (l);
     rev.run<20> (l);
 
     rev.run<21> (r);
-    xspan_memdump (tmp1.data(), in);
-    xspan in_r {tmp1.data(), io.size()};
-    rev.run<22> (in_r, par.character);
-    crossfade (r, in_r, eramt);
+    xspan_memdump (er.data(), in);
+    rev.run<22> (er, par.character);
+    crossfade (r, er, eramt);
     rev.run<23> (r);
     rev.run<24> (r);
 
@@ -1604,37 +1604,36 @@ private:
     T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
     T ghi = load_float<T> (0.5f + _param.hf_amt * 0.25f);
 
-    xspan_memdump (tmp1.data(), in);
     xspan comb_out {tmp1.data(), io.size()};
     xspan comb_fb {tmp2.data(), io.size()};
+    xspan_memdump (comb_out.data(), in);
     rev.fetch_block<3> (comb_out, comb_fb, lfo1, par.decay);
     rev.run<4, 5> (comb_fb, flo, glo, fhi, ghi);
     rev.push<3> (comb_fb.to_const());
-    rev.run<6> (comb_out);
-    xspan_memdump (tank.data(), comb_out);
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.run<6> (comb_fb);
+    xspan_memdump (tank.data(), comb_fb);
 
-    xspan_memdump (tmp1.data(), in);
-    comb_out = xspan {tmp1.data(), io.size()};
-    comb_fb  = xspan {tmp2.data(), io.size()};
+    xspan_memdump (comb_out.data(), in);
     rev.fetch_block<7> (comb_out, comb_fb, lfo2, [&] (uint i) {
       return -par.decay[i];
     });
     rev.run<8, 9> (comb_fb, flo, glo, fhi, ghi);
     rev.push<7> (comb_fb.to_const());
-    rev.run<10> (comb_out);
-    span_visit (comb_out, [&] (auto spl, uint i) {
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.run<10> (comb_fb);
+    span_visit (comb_fb, [&] (auto spl, uint i) {
       tank[i] = (T) (tank[i] + spl);
     });
 
-    xspan_memdump (tmp1.data(), in);
-    comb_out = xspan {tmp1.data(), io.size()};
-    comb_fb  = xspan {tmp2.data(), io.size()};
+    xspan_memdump (comb_out.data(), in);
     rev.fetch_block<11> (comb_out, comb_fb, lfo3, par.decay);
     rev.run<12, 13> (comb_fb, flo, glo, fhi, ghi);
     rev.push<11> (comb_fb.to_const());
-    rev.run<14> (comb_out);
-    xspan eramt {tmp2.data(), io.size()};
-    span_visit (comb_out, [&] (auto spl, uint i) {
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.run<14> (comb_fb);
+    xspan eramt {tmp1.data(), io.size()};
+    span_visit (comb_fb, [&] (auto spl, uint i) {
       tank[i]  = (T) (tank[i] + spl);
       auto c   = par.character[i];
       c        = (T) ((c - one<T>() * 0.5_r) * 2_r);
@@ -1648,18 +1647,17 @@ private:
     xspan_memdump (l.data(), stank);
     xspan_memdump (r.data(), stank);
 
-    xspan_memdump (tmp1.data(), in);
-    xspan in_l {tmp1.data(), io.size()};
-    rev.run<17> (in_l, par.character);
-    crossfade (l, in_l, eramt);
+    xspan er {tmp2.data(), io.size()};
+    xspan_memdump (er.data(), in);
+    rev.run<17> (er, par.character);
+    crossfade (l, er, eramt);
     rev.run<18> (l);
     rev.run<19> (l);
     rev.run<20> (l);
 
-    xspan_memdump (tmp1.data(), in);
-    xspan in_r {tmp1.data(), io.size()};
-    rev.run<21> (in_r, par.character);
-    crossfade (r, in_r, eramt);
+    xspan_memdump (er.data(), in);
+    rev.run<21> (er, par.character);
+    crossfade (r, er, eramt);
     rev.run<22> (r);
     rev.run<23> (r);
     rev.run<24> (r);
@@ -1700,14 +1698,15 @@ private:
     T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
     T ghi = load_float<T> (0.45f + _param.hf_amt * 0.5499f);
 
-    xspan_memdump (tmp1.data(), in);
     xspan comb_out {tmp1.data(), io.size()};
     xspan comb_fb {tmp2.data(), io.size()};
+    xspan_memdump (comb_out.data(), in);
     rev.fetch_block<6> (comb_out, comb_fb, lfo1, par.decay);
     rev.run<7, 8> (comb_fb, flo, glo, fhi, ghi);
     rev.push<6> (comb_fb.to_const());
-    xspan_memdump (l.data(), comb_out);
-    xspan_memdump (r.data(), comb_out);
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    xspan_memdump (l.data(), comb_fb);
+    xspan_memdump (r.data(), comb_fb);
     rev.run<9> (l);
     rev.run<10> (r);
 
@@ -1715,8 +1714,9 @@ private:
     rev.fetch_block<11> (comb_out, comb_fb, lfo2, par.decay);
     rev.run<12, 13> (comb_fb, flo, glo, fhi, ghi);
     rev.push<11> (comb_fb.to_const());
-    auto lblock = comb_out;
-    auto rblock = comb_fb;
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    auto lblock = comb_fb;
+    auto rblock = comb_out;
     xspan_memdump (rblock.data(), lblock);
     rev.run<14> (lblock);
     rev.run<15> (rblock);
@@ -1730,7 +1730,8 @@ private:
     rev.fetch_block<16> (comb_out, comb_fb, lfo3, par.decay);
     rev.run<17, 18> (comb_fb, flo, glo, fhi, ghi);
     rev.push<16> (comb_fb.to_const());
-    xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_out
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_fb
     rev.run<19> (lblock);
     rev.run<20> (rblock);
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
@@ -1743,10 +1744,11 @@ private:
     rev.fetch_block<21> (comb_out, comb_fb, lfo4, par.decay);
     rev.run<22, 23> (comb_fb, flo, glo, fhi, ghi);
     rev.push<21> (comb_fb.to_const());
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
     xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_out
     rev.run<24> (lblock);
     rev.run<25> (rblock);
-    xspan eramt {tmp2.data(), io.size()};
+    xspan eramt {tmp1.data(), io.size()};
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       l[i]     = (T) (l[i] + lblock[i]);
@@ -1803,14 +1805,15 @@ private:
     T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
     T ghi = load_float<T> (0.45f + _param.hf_amt * 0.55f);
 
-    xspan_memdump (tmp1.data(), in);
     xspan comb_out {tmp1.data(), io.size()};
     xspan comb_fb {tmp2.data(), io.size()};
+    xspan_memdump (comb_out.data(), in);
     rev.fetch_block<6> (comb_out, comb_fb, lfo1, par.decay);
     rev.run<7, 8> (comb_fb, flo, glo, fhi, ghi);
     rev.push<6> (comb_fb.to_const());
-    xspan_memdump (l.data(), comb_out);
-    xspan_memdump (r.data(), comb_out);
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    xspan_memdump (l.data(), comb_fb);
+    xspan_memdump (r.data(), comb_fb);
     rev.run<9> (l);
     rev.run<10> (r);
 
@@ -1818,8 +1821,9 @@ private:
     rev.fetch_block<11> (comb_out, comb_fb, blank, par.decay);
     rev.run<12, 13> (comb_fb, flo, glo, fhi, ghi);
     rev.push<11> (comb_fb.to_const());
-    auto lblock = comb_out;
-    auto rblock = comb_fb;
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    auto lblock = comb_fb;
+    auto rblock = comb_out;
     xspan_memdump (rblock.data(), lblock);
     rev.run<14> (lblock);
     rev.run<15> (rblock);
@@ -1833,7 +1837,8 @@ private:
     rev.fetch_block<16> (comb_out, comb_fb, blank, par.decay);
     rev.run<17, 18> (comb_fb, flo, glo, fhi, ghi);
     rev.push<16> (comb_fb.to_const());
-    xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_out
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_fb
     rev.run<19> (lblock);
     rev.run<20> (rblock);
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
@@ -1846,10 +1851,11 @@ private:
     rev.fetch_block<21> (comb_out, comb_fb, lfo4, par.decay);
     rev.run<22, 23> (comb_fb, flo, glo, fhi, ghi);
     rev.push<21> (comb_fb.to_const());
-    xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_out
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_fb
     rev.run<24> (lblock);
     rev.run<25> (rblock);
-    xspan eramt {tmp2.data(), io.size()};
+    xspan eramt {tmp1.data(), io.size()};
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       l[i]     = (T) (l[i] + lblock[i]);
