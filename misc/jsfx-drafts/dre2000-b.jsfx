@@ -110,7 +110,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   m = fi1.lp (m, 0.01);
   m = fi2.hp (m, 0.99);
   ml = m;
- 
+
 
 // block1
 // [[283, 293], [163, 167], [113, 127], [83, 89], [71, 73], 377]
@@ -119,7 +119,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   ci = ml + fb1;
   fb1 = fb1.crossv2 (ci, flo, fhi, glo, ghi);
-  fb1 = delay (fb1, 3789, lfo.ret.ptr[0] * mod, 54) * -decayfb;
+  fb1 = delay (fb1, 3821 - 32, lfo.ret.ptr[0] * mod, 54) * -decayfb;
 //  fb1 = delay (fb1, 3789) * -decayfb;
   fb1 = delay (fb1, 32);
   t = delay (ci, 429) * -sumgain; // notice assign not sum
@@ -131,7 +131,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   ci = ml + fb2;
   fb2 = fb2.crossv2 (ci, flo, fhi, glo, ghi);
-  fb2 = delay (fb2, 4004, lfo.ret.ptr[1] * mod, 53) * decayfb;
+  fb2 = delay (fb2, 4036 -32, lfo.ret.ptr[1] * mod, 53) * decayfb;
 //  fb2 = delay (fb2, 4004) * decayfb;
   fb2 = delay (fb2, 32);
   t += delay (ci, 616) * -sumgain;
@@ -143,7 +143,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   ci = ml + fb3;
   fb3 = fb3.crossv2 (ci, flo, fhi, glo, ghi);
-  fb3 = delay (fb3, 4027, lfo.ret.ptr[2] * mod, 52) * -decayfb;
+  fb3 = delay (fb3, 4059 -32, lfo.ret.ptr[2] * mod, 52) * -decayfb;
   fb3 = delay (fb3, 32);
   t += delay (ci, 657) * -sumgain;
   t += delay (ci, 1359) * sumgain; // notice assign not sum
@@ -175,7 +175,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   r = ap (r, 426, -0.7);
 //  r = ap (r, 566, -0.7, lfo.ret.ptr[3] * mod, 17);
   r = ap (r, 566, -0.7);
-  
+
   // more boilerplate (summing + downsample)
   easy_ap_next_sample();
   easy_fdn_next_sample();

@@ -279,26 +279,25 @@ static constexpr auto get_dre2000a_spec()
 {
   constexpr float g = 0.125f;
   return make_array<stage_data> (
-    // outputs first
     make_quantizer(), // 0
     make_lp (0.08), // 1
     make_hp (0.99), // 2
     make_parallel_delay (42, -g, 586, g, 1099, -g), // 3 (L)
     make_parallel_delay (105, g, 490, -g, 1290, g), // 4 (R)
 
-    make_comb (5719, 0.f, 43.f), // 5
+    make_comb (5719 - 1, 0.f, 43), // 5
     make_lp(), // 6
     make_lp(), // 7
     make_parallel_delay (
       640, -g, 1494, g, 2199, -g, 3122, g, 4135, -g, 4952, g), // 8
 
-    make_comb (5779, 0.f, 44.f), // 9
+    make_comb (5779 - 1, 0.f, 44), // 9
     make_lp(), // 10
     make_lp(), // 11
     make_parallel_delay (
       902, -g, 1830, g, 2528, -g, 3641, g, 4670, -g, 5432, g), // 12
 
-    make_comb (5905, 0.f, 44.f), // 13
+    make_comb (5905 - 1, 0.f, 42), // 13
     make_lp(), // 14
     make_lp(), // 15
     make_parallel_delay (
@@ -318,7 +317,71 @@ static constexpr auto get_dre2000a_spec()
 struct dre2000a_spec {
   static constexpr auto values {get_dre2000a_spec()};
 };
+//------------------------------------------------------------------------------
+static constexpr auto get_dre2000b_spec()
+{
+  constexpr float g = 0.125f;
+  return make_array<stage_data> (
+    make_quantizer(), // 0
+    make_lp (0.01), // 1
+    make_hp (0.99), // 2
 
+    make_comb (3821 - 1, 0.f, 54), // 3
+    make_lp(), // 4
+    make_lp(), // 5
+    make_parallel_delay (
+      429, -g, 1000, g, 1472, -g, 2088, g, 2765, -g, 3311, g), // 6
+
+    make_comb (4036 - 1, 0.f, 53), // 7
+    make_lp(), // 8
+    make_lp(), // 9
+    make_parallel_delay (
+      616, -g, 1225, g, 1691, -g, 2434, g, 3122, -g, 3631, g), // 10
+
+    make_comb (4059 - 1, 0.f, 44.f), // 11
+    make_lp(), // 12
+    make_lp(), // 13
+    make_parallel_delay (
+      657, -g, 1359, g, 2184, -g, 2744, g, 3411, -g, 3934, g), // 14
+
+    make_ap (282, -0.7), // 15
+    make_ap (343, -0.7), // 16
+    // L
+    make_delay (311, 311), // 17
+    make_ap (233, -0.7), // 18
+    make_ap (273, -0.7), // 19
+    make_ap (534, -0.7), // 20
+    // R
+    make_delay (277, 400), // 21
+    make_ap (194, -0.7), // 22
+    make_ap (426, -0.7), // 23
+    make_ap (566, -0.7)); // 24
+}
+
+struct dre2000b_spec {
+  static constexpr auto values {get_dre2000b_spec()};
+};
+//------------------------------------------------------------------------------
+static constexpr auto get_dre2000c_spec()
+{
+  constexpr float g = 0.125f;
+  return make_array<stage_data> (make_quantizer());
+}
+
+struct dre2000c_spec {
+  static constexpr auto values {get_dre2000c_spec()};
+};
+//------------------------------------------------------------------------------
+static constexpr auto get_dre2000d_spec()
+{
+  constexpr float g = 0.125f;
+  return make_array<stage_data> (make_quantizer() // 0
+  );
+}
+
+struct dre2000d_spec {
+  static constexpr auto values {get_dre2000d_spec()};
+};
 }} // namespace detail::lofiverb
 //------------------------------------------------------------------------------
 // A reverb using 16-bit fixed-point arithmetic on the main loop. One design
@@ -354,7 +417,8 @@ public:
         "Artv Small",
         "Acreil Midifex 49",
         "Acreil Midifex 50",
-        "Acreil Dre-2000 A"
+        "Acreil Dre-2000 A",
+        "Acreil Dre-2000 B"
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
         ,
         "Debug "
@@ -672,6 +736,15 @@ private:
     case mode::dre2000a:
       process_dre2000a (xspan {wet.data(), io.size()}, pars);
       break;
+    case mode::dre2000b:
+      process_dre2000b (xspan {wet.data(), io.size()}, pars);
+      break;
+    case mode::dre2000c:
+      process_dre2000c (xspan {wet.data(), io.size()}, pars);
+      break;
+    case mode::dre2000d:
+      process_dre2000d (xspan {wet.data(), io.size()}, pars);
+      break;
     default:
       assert (false);
     }
@@ -752,6 +825,15 @@ private:
       break;
     case mode::dre2000a_flt:
       process_dre2000a (io, pars);
+      break;
+    case mode::dre2000b_flt:
+      process_dre2000b (io, pars);
+      break;
+    case mode::dre2000c_flt:
+      process_dre2000c (io, pars);
+      break;
+    case mode::dre2000d_flt:
+      process_dre2000d (io, pars);
       break;
     default:
       assert (false);
@@ -1341,6 +1423,7 @@ private:
       lfo2[i]      = (T) (T {lfo[1]} * par.mod[i]);
       lfo3[i]      = (T) (T {lfo[2]} * par.mod[i]);
       par.decay[i] = (T) (0.4_r + par.decay[i] * 0.45_r);
+      par.decay[i] = -par.decay[i];
       return (io[i][0] + io[i][1]) * 0.25_r;
     });
     rev.run<1> (in);
@@ -1387,8 +1470,7 @@ private:
       l[i]     = (T) (l[i] + spl + tank[i]);
       r[i]     = (T) (r[i] + spl + tank[i]);
       auto c   = par.character[i];
-      c        = (T) ((c - 0.5_r) * 2_r);
-      c        = (c < T {}) ? -c : c; // abs
+      c        = (T) ((c - one<T>() * 0.5_r) * 2_r);
       c        = (T) ((one<T>() - c * c) * 0.4_r);
       eramt[i] = c;
     });
@@ -1414,6 +1496,107 @@ private:
       spls[1] = r[i];
     });
   }
+  //----------------------------------------------------------------------------
+  template <class T, class Params>
+  void process_dre2000b (xspan<std::array<T, 2>> io, Params& par)
+  {
+    auto& rev = std::get<dre2000b_type> (_modes);
+
+    block_arr<T> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, tmp1, tmp2, tank;
+    xspan        in {in_mem.data(), io.size()};
+    xspan        l {l_mem.data(), io.size()};
+    xspan        r {r_mem.data(), io.size()};
+
+    rev.run<0> (in, [&] (auto spl, uint i) {
+      auto lfo     = tick_lfo<T>();
+      lfo1[i]      = (T) (T {lfo[0]} * par.mod[i]);
+      lfo2[i]      = (T) (T {lfo[1]} * par.mod[i]);
+      lfo3[i]      = (T) (T {lfo[2]} * par.mod[i]);
+      par.decay[i] = (T) (0.2_r + par.decay[i] * 0.7_r);
+      par.decay[i] = -par.decay[i];
+      return (io[i][0] + io[i][1]) * 0.25_r;
+    });
+    rev.run<1> (in);
+    rev.run<2> (in);
+
+    T flo = load_float<T> (0.9f + _param.lf_amt * _param.lf_amt * 0.05f);
+    T glo = load_float<T> (0.7f + _param.lf_amt * 0.3f);
+    T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
+    T ghi = load_float<T> (0.5f + _param.hf_amt * 0.25f);
+
+    xspan_memdump (tmp1.data(), in);
+    xspan comb_out {tmp1.data(), io.size()};
+    xspan comb_fb {tmp2.data(), io.size()};
+    rev.fetch_block<3> (comb_out, comb_fb, lfo1, par.decay);
+    rev.run<4, 5> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<3> (comb_fb.to_const());
+    rev.run<6> (comb_out);
+    xspan_memdump (tank.data(), comb_out);
+
+    xspan_memdump (tmp1.data(), in);
+    comb_out = xspan {tmp1.data(), io.size()};
+    comb_fb  = xspan {tmp2.data(), io.size()};
+    rev.fetch_block<7> (comb_out, comb_fb, lfo2, [&] (uint i) {
+      return -par.decay[i];
+    });
+    rev.run<8, 9> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<7> (comb_fb.to_const());
+    rev.run<10> (comb_out);
+    span_visit (comb_out, [&] (auto spl, uint i) {
+      tank[i] = (T) (tank[i] + spl);
+    });
+
+    xspan_memdump (tmp1.data(), in);
+    comb_out = xspan {tmp1.data(), io.size()};
+    comb_fb  = xspan {tmp2.data(), io.size()};
+    rev.fetch_block<11> (comb_out, comb_fb, lfo3, par.decay);
+    rev.run<12, 13> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<11> (comb_fb.to_const());
+    rev.run<14> (comb_out);
+    xspan eramt {tmp2.data(), io.size()};
+    span_visit (comb_out, [&] (auto spl, uint i) {
+      tank[i]  = (T) (tank[i] + spl);
+      auto c   = par.character[i];
+      c        = (T) ((c - one<T>() * 0.5_r) * 2_r);
+      c        = (T) ((one<T>() - c * c) * 0.4_r);
+      eramt[i] = c;
+    });
+
+    xspan stank {tank.data(), io.size()};
+    rev.run<15> (stank);
+    rev.run<16> (stank);
+    xspan_memdump (l.data(), stank);
+    xspan_memdump (r.data(), stank);
+
+    xspan_memdump (tmp1.data(), in);
+    xspan in_l {tmp1.data(), io.size()};
+    rev.run<17> (in_l, par.character);
+    crossfade (l, in_l, eramt);
+    rev.run<18> (l);
+    rev.run<19> (l);
+    rev.run<20> (l);
+
+    xspan_memdump (tmp1.data(), in);
+    xspan in_r {tmp1.data(), io.size()};
+    rev.run<21> (in_r, par.character);
+    crossfade (r, in_r, eramt);
+    rev.run<22> (r);
+    rev.run<23> (r);
+    rev.run<24> (r);
+
+    span_visit (io, [&] (auto& spls, uint i) {
+      spls[0] = l[i];
+      spls[1] = r[i];
+    });
+  }
+  //----------------------------------------------------------------------------
+  template <class T, class Params>
+  void process_dre2000c (xspan<std::array<T, 2>> io, Params& par)
+  {}
+  //----------------------------------------------------------------------------
+  template <class T, class Params>
+  void process_dre2000d (xspan<std::array<T, 2>> io, Params& par)
+  {}
   //----------------------------------------------------------------------------
   // 1 selects s2, 0 dst
   template <class T, class U, class V>
@@ -1462,6 +1645,12 @@ private:
       midifex50,
       dre2000a_flt,
       dre2000a,
+      dre2000b_flt,
+      dre2000b,
+      dre2000c_flt,
+      dre2000c,
+      dre2000d_flt,
+      dre2000d,
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
       debug_algo_flt,
       debug_algo,
@@ -1543,7 +1732,13 @@ private:
       srate = srates[_param.srateid];
     } break;
     case mode::dre2000a_flt:
-    case mode::dre2000a: {
+    case mode::dre2000a:
+    case mode::dre2000b_flt:
+    case mode::dre2000b:
+    case mode::dre2000c_flt:
+    case mode::dre2000c:
+    case mode::dre2000d_flt:
+    case mode::dre2000d: {
       constexpr auto srates
         = make_array (16800, 21000, 25200, 32400, 40320, 57600, 63000);
       srate = srates[_param.srateid];
@@ -1591,8 +1786,30 @@ private:
       auto& rev = _modes.emplace<dre2000a_type>();
       rev.reset_memory (_mem_reverb);
       _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.3333f, 0.6666f, 0.75f});
+    } break;
+    case mode::dre2000b_flt:
+    case mode::dre2000b: {
+      auto& rev = _modes.emplace<dre2000b_type>();
+      rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.3333f, 0.6666f, 0.75f});
+    } break;
+    case mode::dre2000c_flt:
+    case mode::dre2000c: {
+      auto& rev = _modes.emplace<dre2000c_type>();
+      rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
         phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
     } break;
+    case mode::dre2000d_flt:
+    case mode::dre2000d: {
+      auto& rev = _modes.emplace<dre2000d_type>();
+      rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    } break;
+
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
     case mode::debug_algo_flt:
     case mode::debug_algo: {
@@ -1685,18 +1902,33 @@ private:
     } break;
     case mode::midifex49_flt:
     case mode::midifex49: {
-      auto f_late = 0.2f + mod * 0.2f;
-      _lfo.set_freq (f32_x4 {f_late, f_late, f_late, f_late}, _t_spl);
+      auto f = 0.2f + mod * 0.2f;
+      _lfo.set_freq (f32_x4 {f, f, f, f}, _t_spl);
     } break;
     case mode::midifex50_flt:
     case mode::midifex50: {
-      auto f_late = 0.3f + mod * 0.1f;
-      _lfo.set_freq (f32_x4 {f_late, f_late, f_late, f_late}, _t_spl);
+      auto f = 0.3f + mod * 0.1f;
+      _lfo.set_freq (f32_x4 {f, f, f, f}, _t_spl);
     } break;
     case mode::dre2000a_flt:
     case mode::dre2000a: {
-      auto f_late = 0.25f + mod * 0.75f;
-      _lfo.set_freq (f32_x4 {f_late, f_late, f_late, f_late}, _t_spl);
+      auto f = 0.25f + mod * 0.75f;
+      _lfo.set_freq (f32_x4 {f, f, f, f}, _t_spl);
+    } break;
+    case mode::dre2000b_flt:
+    case mode::dre2000b: {
+      auto f = 0.25f + mod * 0.15f;
+      _lfo.set_freq (f32_x4 {f, f, f, f}, _t_spl);
+    } break;
+    case mode::dre2000c_flt:
+    case mode::dre2000c: {
+      auto f = 0.25f + mod * 0.75f;
+      _lfo.set_freq (f32_x4 {f, f, f, f}, _t_spl);
+    } break;
+    case mode::dre2000d_flt:
+    case mode::dre2000d: {
+      auto f = 0.25f + mod * 0.35f;
+      _lfo.set_freq (f32_x4 {f, f, f, f}, _t_spl);
     } break;
     default:
       break;
@@ -1789,6 +2021,12 @@ private:
     engine<detail::lofiverb::midifex50_spec, max_block_size>;
   using dre2000a_type
     = detail::lofiverb::engine<detail::lofiverb::dre2000a_spec, max_block_size>;
+  using dre2000b_type
+    = detail::lofiverb::engine<detail::lofiverb::dre2000b_spec, max_block_size>;
+  using dre2000c_type
+    = detail::lofiverb::engine<detail::lofiverb::dre2000c_spec, max_block_size>;
+  using dre2000d_type
+    = detail::lofiverb::engine<detail::lofiverb::dre2000d_spec, max_block_size>;
 
 #ifndef LOFIVERB_ADD_DEBUG_ALGO
   using modes_type = std::variant<
@@ -1796,7 +2034,10 @@ private:
     small_space_type,
     midifex49_type,
     midifex50_type,
-    dre2000a_type>;
+    dre2000a_type,
+    dre2000b_type,
+    dre2000c_type,
+    dre2000d_type>;
 #else
   using debug_algo_type = detail::lofiverb::
     engine<detail::lofiverb::debug_algo_spec, max_block_size>;
@@ -1807,7 +2048,10 @@ private:
     small_space_type,
     midifex49_type,
     midifex50_type,
-    dre2000a_type>;
+    dre2000a_type,
+    dre2000b_type,
+    dre2000c_type,
+    dre2000d_type>;
 #endif
 
   modes_type     _modes;
