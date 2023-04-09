@@ -1801,8 +1801,8 @@ private:
 
     rev.run<22> (l);
     rev.run<23> (l);
-    rev.run<24> (comb_fb, in.to_const(), par.character);
-    crossfade (l, comb_fb, eramt);
+    rev.run<24, T> (lfo1, in.to_const(), par.character);
+    crossfade (l, lfo1, eramt);
 
     rev.run<25> (r);
     rev.run<26> (r);
@@ -1877,8 +1877,8 @@ private:
 
     rev.run<22> (l, lfo2);
     rev.run<23> (l);
-    rev.run<24> (comb_fb, in.to_const(), par.character);
-    crossfade (l, comb_fb, eramt);
+    rev.run<24, T> (lfo1, in.to_const(), par.character);
+    crossfade (l, lfo1, eramt);
 
     rev.run<25> (r, lfo3);
     rev.run<26> (r);
@@ -1974,22 +1974,22 @@ private:
       = rev.get_gain_for_rt60<T, 29, 33, 37, 41, 45> (1.f + dec2 * 5.f, _srate);
     // sub  reverb
     rev.fetch_block<29> (comb_fb, lfo2, gains[0]);
-    rev.run<30, 31> (comb_fb, flo, glo, fhi, (T) (ghi * 0.85_r));
+    rev.run<30, 31> (comb_fb, flo, glo, fhi, (T) (ghi * 0.9_r));
     rev.push<29> (comb_fb, comb_fb.to_const(), sub.to_const());
     rev.run<32> (comb_fb.to_const(), add_to, l, r);
 
     rev.fetch_block<33> (comb_fb, lfo4, gains[1]);
-    rev.run<34, 35> (comb_fb, flo, glo, fhi, (T) (ghi * 0.9_r));
+    rev.run<34, 35> (comb_fb, flo, glo, fhi, (T) (ghi * 0.93_r));
     rev.push<33> (comb_fb, comb_fb.to_const(), sub.to_const());
     rev.run<36> (comb_fb.to_const(), add_to, l, r);
 
     rev.fetch_block<37> (comb_fb, blank, gains[2]);
-    rev.run<38, 39> (comb_fb, flo, glo, fhi, (T) (ghi * 0.95_r));
+    rev.run<38, 39> (comb_fb, flo, glo, fhi, (T) (ghi * 0.97_r));
     rev.push<37> (comb_fb, comb_fb.to_const(), sub.to_const());
     rev.run<40> (comb_fb.to_const(), add_to, l, r);
 
     rev.fetch_block<41> (comb_fb, blank, gains[3]);
-    rev.run<42, 43> (comb_fb, flo, glo, fhi, (T) (ghi * 0.97_r));
+    rev.run<42, 43> (comb_fb, flo, glo, fhi, ghi);
     rev.push<41> (comb_fb, comb_fb.to_const(), sub.to_const());
     rev.run<44> (comb_fb.to_const(), add_to, l, r);
 
