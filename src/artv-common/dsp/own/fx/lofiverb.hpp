@@ -1344,7 +1344,7 @@ private:
 
     // damp -----------------------------------
     T flo = load_float<T> (0.9f + _param.lf_amt * _param.lf_amt * 0.05f);
-    T glo = load_float<T> (0.87f + _param.lf_amt * 0.13f);
+    T glo = load_float<T> (0.87f + _param.lf_amt * 0.1299f);
     T fhi = load_float<T> (0.75f - _param.hf_amt * _param.hf_amt * 0.55f);
     T ghi = load_float<T> (0.7f + _param.hf_amt * 0.24f);
 
