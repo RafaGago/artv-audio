@@ -70,22 +70,25 @@ struct delay_data {
   fixpt_spls_mod mod; // In samples. If 0 the delay is not modulated
 };
 
+struct variable_delay_data {
+  fixpt_spls min_spls;
+  fixpt_spls max_spls;
+};
+
 struct block_delay_data {
   fixpt_spls spls;
   fixpt_spls extra_spls; // In samples. To be able to do negative offsets
 };
 
 struct multitap_delay_data {
-  std::array<fixpt_spls, 6> spls;
-  uint                      count;
+  std::array<fixpt_spls, 12> spls;
+  uint                       count;
 };
 
 // A multitap delay summed in parallel
-struct parallel_delay_data {
-  std::array<fixpt_spls, 6> spls;
-  std::array<fixpt_t, 6>    g;
-  uint                      count;
-  uint                      n_outs;
+struct parallel_delay_data : public multitap_delay_data {
+  std::array<fixpt_t, 12> g;
+  uint                    n_outs;
 };
 
 struct filter_data {
@@ -113,6 +116,7 @@ using stage_data = std::variant<
   filter_data,
   crossover_data,
   quantizer_data,
+  variable_delay_data,
   free_storage_data>;
 //------------------------------------------------------------------------------
 static constexpr stage_data make_ap (u16 spls, float g = 0.f, u16 mod = 0)
@@ -230,7 +234,14 @@ static constexpr stage_data make_free_storage (uint n_elems)
   return free_storage_data {n_elems};
 }
 //------------------------------------------------------------------------------
-
+// regular delays user thiran for small interpolation. This uses quantization.
+// TODO: lerp
+static constexpr stage_data make_variable_delay (uint min_spls, uint max_spls)
+{
+  return variable_delay_data {
+    fixpt_spls::from_int (min_spls), fixpt_spls::from_int (max_spls)};
+}
+//------------------------------------------------------------------------------
 template <class Spec_array>
 class spec_access {
 public:
@@ -263,6 +274,11 @@ public:
   static constexpr bool is_parallel_delay (uint i)
   {
     return std::holds_alternative<parallel_delay_data> (values[i]);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr bool is_variable_delay (uint i)
+  {
+    return std::holds_alternative<variable_delay_data> (values[i]);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_filter (uint i)
@@ -428,6 +444,9 @@ public:
       auto ds = get_delays_spls (i);
       return std::max_element (ds.begin(), ds.end())->to_int();
     }
+    else if (is_variable_delay (i)) {
+      return std::get<variable_delay_data> (values[i]).max_spls.to_int();
+    }
     else {
       return get_delay_spls (i).to_int() + get_delay_mod_spls (i).to_int()
         + (has_modulated_delay (i) ? 1 : 0); // extra spl for thiran
@@ -439,6 +458,9 @@ public:
     if (is_parallel_delay (i) || is_multitap_delay (i)) {
       auto ds = get_delays_spls (i);
       return std::min_element (ds.begin(), ds.end())->to_int();
+    }
+    if (is_variable_delay (i)) {
+      return std::get<variable_delay_data> (values[i]).min_spls.to_int();
     }
     else {
       return get_delay_spls (i).to_int() - get_delay_mod_spls (i).to_int();
@@ -586,12 +608,21 @@ public:
   using spec = spec_access<Spec_array>;
   //----------------------------------------------------------------------------
   template <class T>
-  static constexpr void span_add (xspan<T> lhs, xspan<T const> rhs)
+  static constexpr void span_add (
+    xspan<T>       dst,
+    xspan<T const> lhs,
+    xspan<T const> rhs)
   {
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < rhs.size(); ++i) {
-      lhs[i] = (T) (lhs[i] + rhs[i]);
+      dst[i] = (T) (lhs[i] + rhs[i]);
     }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  static constexpr void span_add (xspan<T> lhs, xspan<T const> rhs)
+  {
+    span_add (lhs, lhs, rhs);
   }
   //----------------------------------------------------------------------------
   static constexpr uint max_block_size = Max_block_size;
@@ -671,7 +702,7 @@ public:
     decode_read (dst, get_read_buffers<Idx> (dst.size(), negative_offset));
   }
   //----------------------------------------------------------------------------
-  // fetches the output and feedback from a comb or allpass. The output will
+  // fetches the output and feedback from an allpass. The output will
   // be able to be used directly. The feedback signal will have to be manually
   // pushed (see push).
   //
@@ -689,7 +720,7 @@ public:
     Lfo&&          lfo,
     G&&            gain)
   {
-    static_assert (spec::is_comb (Idx) || spec::is_allpass (Idx));
+    static_assert (spec::is_allpass (Idx));
     static_assert (spec::get_min_delay_spls (Idx) >= max_block_size);
     assert (out && fb && in);
     assert (fb.size() >= in.size());
@@ -715,17 +746,43 @@ public:
   template <uint Idx, class T, class Lfo, class G>
   void fetch_block (xspan<T> io, xspan<T> fb, Lfo&& lfo, G&& gain)
   {
+    static_assert (spec::is_allpass (Idx));
     fetch_block<Idx> (
       io, fb, io.to_const(), std::forward<Lfo> (lfo), std::forward<G> (gain));
   }
+  //----------------------------------------------------------------------------
+  // Fetch for combs, gets the delay modulated and with gain applied
+  template <uint Idx, class T, class Lfo, class G>
+  void fetch_block (xspan<T> fb, Lfo&& lfo, G&& gain)
+  {
+    static_assert (spec::is_comb (Idx));
+    static_assert (spec::get_min_delay_spls (Idx) >= max_block_size);
+    assert (fb);
+    fetch_block_optmod<Idx> (fb, std::forward<Lfo> (lfo));
+    auto g_gen = get_gain_generator<Idx, T> (std::forward<G> (gain));
+    run_quantizer<Idx> (fb.data(), fb, [&] (auto v, uint i) {
+      return v * g_gen (i);
+    });
+  }
   // see comment on fetch_block overloads
+  //----------------------------------------------------------------------------
+  // Push for combs, gets the feedback signal (obtained from fetch_block and
+  // maybe filtered) and the input, returns the sum.
+  template <uint Idx, class T>
+  void push (xspan<T> sum, xspan<T const> fb, xspan<T const> in)
+  {
+    static_assert (spec::is_comb (Idx));
+    static_assert (spec::get_min_delay_spls (Idx) >= max_block_size);
+    assert (sum && fb && in);
+    assert (fb.size() && in.size());
+    span_add (sum, fb, in);
+    encode_write (prepare_block_insertion<Idx> (in.size()), sum.to_const());
+  }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
   void push (xspan<T const> src)
   {
-    static_assert (
-      spec::is_block_delay (Idx) || spec::is_comb (Idx)
-      || spec::is_allpass (Idx));
+    static_assert (spec::is_block_delay (Idx) || spec::is_allpass (Idx));
     static_assert (spec::get_min_delay_spls (Idx) >= max_block_size);
     assert (src);
     encode_write (prepare_block_insertion<Idx> (src.size()), src);
@@ -848,6 +905,11 @@ public:
             filler_defaulted {}));
       }
     }
+    else if constexpr (spec::is_variable_delay (Idx)) {
+      static_assert (
+        sizeof...(args) == 1, "variable delays always require mod");
+      run_variable_delay<Idx> (out, in, args...);
+    }
     else if constexpr (spec::is_filter (Idx)) {
       if constexpr (spec::is_crossover (Idx)) {
         run_crossover<Idx> (out.data(), in, std::forward<Ts> (args)...);
@@ -957,7 +1019,7 @@ private:
     || spec::is_lowpass (Idx) || spec::is_highpass (Idx);
   //----------------------------------------------------------------------------
   template <class T, class Lfo>
-  static constexpr auto get_lfo_generator (Lfo&& v)
+  static constexpr auto get_generic_generator (Lfo&& v)
   {
     using Lfo_no_cv_ref = std::remove_cv_t<std::remove_reference_t<Lfo>>;
     if constexpr (is_generator<T, Lfo_no_cv_ref>()) {
@@ -1251,10 +1313,10 @@ private:
   void run_3band_crossover (
     T*             out,
     xspan<T const> in,
-    U&&            f_lo,
-    U&&            g_lo,
-    U&&            f_hi,
-    U&&            g_hi)
+    U              f_lo,
+    U              g_lo,
+    U              f_hi,
+    U              g_hi)
   {
     block_array<T> hi, mid;
 
@@ -1391,7 +1453,7 @@ private:
     assert (dst.size() <= minsz);
     if constexpr (minsz >= max_block_size) {
       if constexpr (spec::has_modulated_delay (Idx)) {
-        auto lfo_gen = get_lfo_generator<T> (std::forward<Lfo> (lfo));
+        auto lfo_gen = get_generic_generator<T> (std::forward<Lfo> (lfo));
         run_thiran<Idx> (dst, lfo_gen);
       }
       else {
@@ -1439,7 +1501,7 @@ private:
       // overlap, needs single-sample iteration. (Notice that it could be
       // smarter and run in the smallest possible block size, as of now not
       // worth the complexity, as most delays are bigger than the block size)
-      auto lfo_gen = get_lfo_generator<T> (std::forward<Lfo> (lfo));
+      auto lfo_gen = get_generic_generator<T> (std::forward<Lfo> (lfo));
       auto g_gen   = get_gain_generator<Idx, T> (std::forward<G> (gain));
 
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
@@ -1598,6 +1660,37 @@ private:
     }
   }
   //----------------------------------------------------------------------------
+  template <uint Idx, class T, class Range>
+  void run_variable_delay (xspan<T> out, xspan<T const> in, Range&& gen)
+  {
+    constexpr uint min   = spec::get_min_delay_spls (Idx);
+    constexpr uint max   = spec::get_max_delay_spls (Idx);
+    constexpr uint range = max - min;
+    auto           rgen  = get_generic_generator<T> (std::forward<Range> (gen));
+    for (uint i = 0; i < in.size(); ++i) {
+      T v;
+      if constexpr (is_fixpt_v<T>) {
+        auto gv = rgen (i);
+        assert (gv >= T::from_int (0));
+        v = get<Idx, T> (
+          (T::from_int (min) + T::from_int (range) * gv).round());
+      }
+      else {
+        auto gv = rgen (i);
+        assert (gv >= T {0.});
+        v = get<Idx, T> ((uint) (min + range * gv)); // TODO: std::round too?
+      }
+      push_one<Idx> (in[i]);
+      out[i] = v; // they could be aliased...
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class Range>
+  void run_variable_delay (xspan<T> io, Range&& gen)
+  {
+    run_variable_delay<Idx, T> (io, io, std::forward<Range> (gen));
+  }
+  //----------------------------------------------------------------------------
   template <std::size_t N>
   static constexpr int get_previous_ap_pos (
     uint                       pos,
@@ -1692,7 +1785,7 @@ private:
           block_array<T> bwd;
           auto&&         lfo_arg = std::get<arg_offset[order]> (args);
           fetch_block_optmod<stage_idx> (
-            xspan {bwd.data(), in.size()}, get_lfo_generator<T> (lfo_arg));
+            xspan {bwd.data(), in.size()}, get_generic_generator<T> (lfo_arg));
 
           auto&& gain_arg = std::get<arg_offset[order] + 1> (args);
           auto   gain_gen = get_gain_generator<stage_idx, T> (gain_arg);
@@ -1730,7 +1823,7 @@ private:
                   run<rev_idx> (xspan {bwd.data(), in.size()}, gain);
                 }
                 else if (spec::is_1tap_delay (rev_idx)) {
-                  auto lfo_gen_rev = get_lfo_generator<T> (
+                  auto lfo_gen_rev = get_generic_generator<T> (
                     std::get<arg_offset[order_rev]> (args));
                   run<rev_idx> (xspan {bwd.data(), in.size()}, lfo_gen_rev);
                 }
@@ -1759,7 +1852,7 @@ private:
           }
           else if constexpr (spec::is_1tap_delay (stage_idx)) {
             auto lfo_gen_rev
-              = get_lfo_generator<T> (std::get<arg_offset[order]> (args));
+              = get_generic_generator<T> (std::get<arg_offset[order]> (args));
             run<stage_idx> (xspan {fwd.data(), in.size()}, lfo_gen_rev);
           }
           else {

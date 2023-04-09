@@ -452,20 +452,103 @@ static constexpr auto get_dre2000d_spec()
 struct dre2000d_spec {
   static constexpr auto values {get_dre2000d_spec()};
 };
-#if 0
+
 //------------------------------------------------------------------------------
 static constexpr auto get_rev5_l_hall_spec()
 {
   constexpr float g = 0.125f;
-  return make_array<stage_data>(
+  return make_array<stage_data> (
+    make_quantizer(), // 0
+    make_lp (0.32), // 1
+    make_hp (0.99), // 2
 
+    make_quantizer(), // 3
+    make_ap (1257, 0.75f), // 4
+    make_ap (978, 0.75f), // 5
+
+    // rev main
+    make_comb (2076, 0., 43), // 6
+    make_lp(), // 7
+    make_lp(), // 8
+    make_parallel_delay (2, 949, g, 837, g), // 9
+    make_comb (2894, 0., 43), // 10
+    make_lp(), // 11
+    make_lp(), // 12
+    make_parallel_delay (2, 1330, g, 1412, g), // 13
+    make_comb (3295, 0.), // 14
+    make_lp(), // 15
+    make_lp(), // 16
+    make_parallel_delay (2, 2393, g, 2704, g), // 17
+    make_comb (3919, 0.), // 18
+    make_lp(), // 19
+    make_lp(), // 20
+    make_parallel_delay (2, 3263, g, 3011, g), // 21
+    make_comb (4570, 0.), // 22
+    make_lp(), // 23
+    make_lp(), // 24
+    make_parallel_delay (2, 3667, g, 3667, g), // 25
+    // sub reverb cond
+    make_variable_delay (533, 533 + 2411), // 26
+    make_ap (1212, 0.75f), // 27
+    make_ap (960, 0.75f), // 28
+    // sub reverb
+    make_comb (3169, 0., 44), // 29
+    make_lp(), // 30
+    make_lp(), // 31
+    make_parallel_delay (2, 1757, g, 1644, g), // 32
+    make_comb (3753, 0., 44), // 33
+    make_lp(), // 34
+    make_lp(), // 35
+    make_parallel_delay (2, 1900, g, 1981, g), // 36
+    make_comb (4280, 0.), // 37
+    make_lp(), // 38
+    make_lp(), // 39
+    make_parallel_delay (2, 2838, g, 3148, g), // 40
+    make_comb (4491, 0.), // 41
+    make_lp(), // 42
+    make_lp(), // 43
+    make_parallel_delay (2, 3798, g, 3545, g), // 44
+    make_comb (5091, 0.), // 45
+    make_lp(), // 46
+    make_lp(), // 47
+    make_parallel_delay (2, 4298, g, 4298, g), // 48
+    make_ap (682, 0.75f), // 49
+    make_ap (830, 0.75f), // 50
+    make_ap (695, 0.75f), // 51
+    make_ap (844, 0.75f), // 52
+    make_parallel_delay (
+      2,
+      18 + 14,
+      0.95f,
+      18 + 14,
+      0.95f,
+      895,
+      0.95f,
+      695,
+      0.95f,
+      1238,
+      0.75f,
+      1487,
+      0.75f,
+      1870,
+      0.75f,
+      1936,
+      0.75f,
+      2724,
+      0.5f,
+      2635,
+      0.5f,
+      3365,
+      0.25f,
+      3609,
+      0.25f) // 53 L/R
   );
 }
 
 struct rev5_l_hall_spec {
   static constexpr auto values {get_rev5_l_hall_spec()};
 };
-#endif
+
 }} // namespace detail::lofiverb
 //------------------------------------------------------------------------------
 // A reverb using 16-bit fixed-point arithmetic on the main loop. One design
@@ -834,6 +917,9 @@ private:
     case mode::dre2000d:
       process_dre2000d (xspan {wet.data(), io.size()}, pars);
       break;
+    case mode::rev5_l_hall:
+      process_rev5_l_hall (xspan {wet.data(), io.size()}, pars);
+      break;
     default:
       assert (false);
     }
@@ -924,6 +1010,10 @@ private:
     case mode::dre2000d_flt:
       process_dre2000d (io, pars);
       break;
+    case mode::rev5_l_hall_flt:
+      process_rev5_l_hall (io, pars);
+      break;
+
     default:
       assert (false);
     }
@@ -1528,24 +1618,20 @@ private:
     T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
     T ghi = load_float<T> (0.4f + dec2 * 0.15f + _param.hf_amt * 0.35f);
 
-    xspan comb_out {tmp1.data(), io.size()};
-    xspan comb_fb {tmp2.data(), io.size()};
-    rev.fetch_block<5> (comb_out, comb_fb, in.to_const(), lfo1, -gains[0]);
+    xspan comb_fb {tmp1.data(), io.size()};
+    rev.fetch_block<5> (comb_fb, lfo1, -gains[0]);
     rev.run<6, 7> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<5> (comb_fb.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
-    rev.run<8, T> (comb_fb.to_const(), overwrite, tank);
+    rev.push<5> (comb_fb, comb_fb.to_const(), in.to_const());
+    rev.run<8> (comb_fb.to_const(), overwrite, tank);
 
-    rev.fetch_block<9> (comb_out, comb_fb, in.to_const(), lfo2, -gains[1]);
+    rev.fetch_block<9> (comb_fb, lfo2, -gains[1]);
     rev.run<10, 11> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<9> (comb_fb.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.push<9> (comb_fb, comb_fb.to_const(), in.to_const());
     rev.run<12> (comb_fb.to_const(), add_to, tank);
 
-    rev.fetch_block<13> (comb_out, comb_fb, in.to_const(), lfo3, -gains[2]);
+    rev.fetch_block<13> (comb_fb, lfo3, -gains[2]);
     rev.run<14, 15> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<13> (comb_fb.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.push<13> (comb_fb, comb_fb.to_const(), in.to_const());
     rev.run<16> (comb_fb.to_const(), add_to, tank);
     xspan eramt {tmp1.data(), io.size()};
     span_visit (xspan {par.character.data(), io.size()}, [&] (auto c, uint i) {
@@ -1605,23 +1691,21 @@ private:
     T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
     T ghi = load_float<T> (0.25f + dec2 * 0.4f + _param.hf_amt * 0.3f);
 
-    xspan comb_out {tmp1.data(), io.size()};
-    xspan comb_fb {tmp2.data(), io.size()};
-    rev.fetch_block<3> (comb_out, comb_fb, in.to_const(), lfo1, -gains[0]);
+    xspan comb_fb {tmp1.data(), io.size()};
+    rev.fetch_block<3> (comb_fb, lfo1, -gains[0]);
     rev.run<4, 5> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<3> (comb_fb.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
-    rev.run<6, T> (comb_fb.to_const(), overwrite, tank);
+    rev.push<3> (comb_fb, comb_fb.to_const(), in.to_const());
+    rev.run<6> (comb_fb.to_const(), overwrite, tank);
 
-    rev.fetch_block<7> (comb_out, comb_fb, in.to_const(), lfo2, -gains[1]);
+    rev.fetch_block<7> (comb_fb, lfo2, -gains[1]);
     rev.run<8, 9> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<7> (comb_fb.to_const());
+    rev.push<7> (comb_fb, comb_fb.to_const(), in.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
     rev.run<10> (comb_fb.to_const(), add_to, tank);
 
-    rev.fetch_block<11> (comb_out, comb_fb, in.to_const(), lfo3, -gains[2]);
+    rev.fetch_block<11> (comb_fb, lfo3, -gains[2]);
     rev.run<12, 13> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<11> (comb_fb.to_const());
+    rev.push<11> (comb_fb, comb_fb.to_const(), in.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
     rev.run<14> (comb_fb.to_const(), add_to, tank);
     xspan eramt {tmp1.data(), io.size()};
@@ -1660,7 +1744,7 @@ private:
   {
     auto& rev = std::get<dre2000c_type> (_modes);
 
-    block_arr<T> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, lfo4, tmp1, tmp2;
+    block_arr<T> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, lfo4, tmp1;
     xspan        in {in_mem.data(), io.size()};
     xspan        l {l_mem.data(), io.size()};
     xspan        r {r_mem.data(), io.size()};
@@ -1688,30 +1772,25 @@ private:
     T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
     T ghi = load_float<T> (0.3f + dec2 * 0.25f + _param.hf_amt * 0.4499f);
 
-    xspan comb_out {tmp1.data(), io.size()};
-    xspan comb_fb {tmp2.data(), io.size()};
-    rev.fetch_block<6> (comb_out, comb_fb, in.to_const(), lfo1, gains[0]);
+    xspan comb_fb {tmp1.data(), io.size()};
+    rev.fetch_block<6> (comb_fb, lfo1, gains[0]);
     rev.run<7, 8> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<6> (comb_fb.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.push<6> (comb_fb, comb_fb.to_const(), in.to_const());
     rev.run<9> (comb_fb.to_const(), overwrite, r, l);
 
-    rev.fetch_block<10> (comb_out, comb_fb, in.to_const(), lfo2, gains[1]);
+    rev.fetch_block<10> (comb_fb, lfo2, gains[1]);
     rev.run<11, 12> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<10> (comb_fb.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.push<10> (comb_fb, comb_fb.to_const(), in.to_const());
     rev.run<13> (comb_fb.to_const(), add_to, r, l);
 
-    rev.fetch_block<14> (comb_out, comb_fb, in.to_const(), lfo3, gains[2]);
+    rev.fetch_block<14> (comb_fb, lfo3, gains[2]);
     rev.run<15, 16> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<14> (comb_fb.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.push<14> (comb_fb, comb_fb.to_const(), in.to_const());
     rev.run<17> (comb_fb.to_const(), add_to, r, l);
 
-    rev.fetch_block<18> (comb_out, comb_fb, in.to_const(), lfo4, gains[3]);
+    rev.fetch_block<18> (comb_fb, lfo4, gains[3]);
     rev.run<19, 20> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<18> (comb_fb.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.push<18> (comb_fb, comb_fb.to_const(), in.to_const());
     rev.run<21> (comb_fb.to_const(), add_to, r, l);
     xspan eramt {tmp1.data(), io.size()};
     span_visit (xspan {par.character.data(), io.size()}, [&] (auto c, uint i) {
@@ -1769,30 +1848,25 @@ private:
     T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
     T ghi = load_float<T> (0.3f + dec2 * 0.3f + _param.hf_amt * 0.29f);
 
-    xspan comb_out {tmp1.data(), io.size()};
-    xspan comb_fb {tmp2.data(), io.size()};
-    rev.fetch_block<6> (comb_out, comb_fb, in.to_const(), lfo1, gains[0]);
+    xspan comb_fb {tmp1.data(), io.size()};
+    rev.fetch_block<6> (comb_fb, lfo1, gains[0]);
     rev.run<7, 8> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<6> (comb_fb.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.push<6> (comb_fb, comb_fb.to_const(), in.to_const());
     rev.run<9> (comb_fb.to_const(), overwrite, r, l);
 
-    rev.fetch_block<10> (comb_out, comb_fb, in.to_const(), blank, gains[1]);
+    rev.fetch_block<10> (comb_fb, blank, gains[1]);
     rev.run<11, 12> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<10> (comb_fb.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.push<10> (comb_fb, comb_fb.to_const(), in.to_const());
     rev.run<13> (comb_fb.to_const(), add_to, r, l);
 
-    rev.fetch_block<14> (comb_out, comb_fb, in.to_const(), blank, gains[2]);
+    rev.fetch_block<14> (comb_fb, blank, gains[2]);
     rev.run<15, 16> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<14> (comb_fb.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.push<14> (comb_fb, comb_fb.to_const(), in.to_const());
     rev.run<17> (comb_fb.to_const(), add_to, r, l);
 
-    rev.fetch_block<18> (comb_out, comb_fb, in.to_const(), lfo4, gains[3]);
+    rev.fetch_block<18> (comb_fb, lfo4, gains[3]);
     rev.run<19, 20> (comb_fb, flo, glo, fhi, ghi);
-    rev.push<18> (comb_fb.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
+    rev.push<18> (comb_fb, comb_fb.to_const(), in.to_const());
     rev.run<21> (comb_fb.to_const(), add_to, r, l);
     xspan eramt {tmp1.data(), io.size()};
     span_visit (xspan {par.character.data(), io.size()}, [&] (auto c, uint i) {
@@ -1815,6 +1889,146 @@ private:
       spls[0] = l[i];
       spls[1] = r[i];
     });
+  }
+  //----------------------------------------------------------------------------
+  template <class T, class Params>
+  void process_rev5_l_hall (xspan<std::array<T, 2>> io, Params& par)
+  {
+    auto& rev = std::get<rev5_l_hall_type> (_modes);
+
+    block_arr<T> in_mem, main_mem, sub_mem, l_mem, r_mem, lfo1, lfo2, lfo3,
+      lfo4, tmp1, tmp2;
+    xspan main {main_mem.data(), io.size()};
+    xspan sub {sub_mem.data(), io.size()};
+    xspan in {in_mem.data(), io.size()};
+    xspan l {l_mem.data(), io.size()};
+    xspan r {r_mem.data(), io.size()};
+
+    rev.run<0> (in, [&] (auto spl, uint i) {
+      auto lfo = tick_lfo<T>();
+      lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
+      lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
+      lfo3[i]  = (T) (T {lfo[2]} * par.mod[i]);
+      lfo4[i]  = (T) (T {lfo[3]} * par.mod[i]);
+      return (io[i][0] + io[i][1]) * 0.25_r;
+    });
+    rev.run<1> (in);
+    rev.run<2> (in);
+    xspan_memdump (main.data(), in);
+    xspan_memdump (sub.data(), in);
+    rev.run<3> (main, [&] (auto v, uint i) {
+      auto c  = par.character[i];
+      tmp1[i] = (T) (0.5_r + 0.2_r * c); // cg3
+      tmp2[i] = (T) (0.35_r + 0.7_r * clamp (c, 0._r, 0.4999_r)); // cg2
+      return v * 0.25_r;
+    });
+    rev.run<4> (main, blank, tmp1);
+    rev.run<5> (main, blank, tmp2);
+
+    float dec2 = as_float (par.decay[0]);
+    dec2 *= dec2;
+    auto gains
+      = rev.get_gain_for_rt60<T, 6, 10, 14, 18, 22> (1.f + dec2 * 9.f, _srate);
+    T flo = load_float<T> (0.9f + _param.lf_amt * _param.lf_amt * 0.05f);
+    T glo = load_float<T> (0.9f + _param.lf_amt * 0.09f);
+    T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
+    T ghi = load_float<T> (0.6f + _param.hf_amt * 0.35f);
+
+    xspan comb_fb {tmp1.data(), io.size()};
+    rev.fetch_block<6> (comb_fb, lfo1, gains[0]);
+    rev.run<7, 8> (comb_fb, flo, glo, fhi, (T) (ghi * 0.85_r));
+    rev.push<6> (comb_fb, comb_fb.to_const(), main.to_const());
+    rev.run<9> (comb_fb.to_const(), overwrite, l, r);
+
+    rev.fetch_block<10> (comb_fb, lfo3, gains[1]);
+    rev.run<11, 12> (comb_fb, flo, glo, fhi, (T) (ghi * 0.9_r));
+    rev.push<10> (comb_fb, comb_fb.to_const(), main.to_const());
+    rev.run<13> (comb_fb.to_const(), add_to, l, r);
+
+    rev.fetch_block<14> (comb_fb, blank, gains[2]);
+    rev.run<15, 16> (comb_fb, flo, glo, fhi, (T) (ghi * 0.95_r));
+    rev.push<14> (comb_fb, comb_fb.to_const(), main.to_const());
+    rev.run<17> (comb_fb.to_const(), add_to, l, r);
+
+    rev.fetch_block<18> (comb_fb, blank, gains[3]);
+    rev.run<19, 20> (comb_fb, flo, glo, fhi, (T) (ghi * 0.97_r));
+    rev.push<18> (comb_fb, comb_fb.to_const(), main.to_const());
+    rev.run<21> (comb_fb.to_const(), add_to, l, r);
+
+    rev.fetch_block<22> (comb_fb, blank, gains[4]);
+    rev.run<23, 24> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<22> (comb_fb, comb_fb.to_const(), main.to_const());
+    rev.run<25> (comb_fb.to_const(), add_to, l, r);
+
+    rev.run<26> (sub, par.character);
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      auto c  = par.character[i];
+      tmp1[i] = (T) (0.5_r + 0.2_r * c); // cg3
+      // tmp2 still not overwritten...
+      // tmp2[i] = (T) (0.35_r + 0.999_r * clamp (c, 0._r, 0.333_r)); // cg2
+    }
+    rev.run<27> (main, tmp2);
+    rev.run<28> (main, tmp1);
+    gains
+      = rev.get_gain_for_rt60<T, 29, 33, 37, 41, 45> (1.f + dec2 * 5.f, _srate);
+    // sub  reverb
+    rev.fetch_block<29> (comb_fb, lfo2, gains[0]);
+    rev.run<30, 31> (comb_fb, flo, glo, fhi, (T) (ghi * 0.85_r));
+    rev.push<29> (comb_fb, comb_fb.to_const(), sub.to_const());
+    rev.run<32> (comb_fb.to_const(), add_to, l, r);
+
+    rev.fetch_block<33> (comb_fb, lfo4, gains[1]);
+    rev.run<34, 35> (comb_fb, flo, glo, fhi, (T) (ghi * 0.9_r));
+    rev.push<33> (comb_fb, comb_fb.to_const(), sub.to_const());
+    rev.run<36> (comb_fb.to_const(), add_to, l, r);
+
+    rev.fetch_block<37> (comb_fb, blank, gains[2]);
+    rev.run<38, 39> (comb_fb, flo, glo, fhi, (T) (ghi * 0.95_r));
+    rev.push<37> (comb_fb, comb_fb.to_const(), sub.to_const());
+    rev.run<40> (comb_fb.to_const(), add_to, l, r);
+
+    rev.fetch_block<41> (comb_fb, blank, gains[3]);
+    rev.run<42, 43> (comb_fb, flo, glo, fhi, (T) (ghi * 0.97_r));
+    rev.push<41> (comb_fb, comb_fb.to_const(), sub.to_const());
+    rev.run<44> (comb_fb.to_const(), add_to, l, r);
+
+    rev.fetch_block<45> (comb_fb, blank, gains[4]);
+    rev.run<46, 47> (comb_fb, flo, glo, fhi, ghi);
+    rev.push<45> (comb_fb, comb_fb.to_const(), sub.to_const());
+    rev.run<48> (comb_fb.to_const(), add_to, l, r);
+
+    rev.run<49> (l, blank, [&] (uint i) {
+      return (T) (0.65_r + 0.1_r * lfo1[i]);
+    });
+    rev.run<50> (l, blank, [&] (uint i) {
+      auto c  = par.character[i];
+      tmp1[i] = (T) (0.325_r + 0.999_r * clamp (c, 0._r, 0.333_r)); // cg1
+      return (T) (tmp1[i] + 0.05_r * lfo2[i]);
+    });
+    rev.run<51> (r, blank, [&] (uint i) {
+      return (T) (0.65_r + 0.1_r * lfo3[i]);
+    });
+    rev.run<52> (r, blank, [&] (uint i) {
+      return (T) (tmp1[i] + 0.05_r * lfo4[i]);
+    });
+
+    rev.run<53> (in.to_const(), add_to, l, r); // ER
+    span_visit (io, [&] (auto& spls, uint i) {
+      spls[0] = l[i];
+      spls[1] = r[i];
+    });
+  }
+  //----------------------------------------------------------------------------
+  template <class T, class U, class V>
+  T clamp (T v, U min, V max)
+  {
+    if constexpr (std::is_same_v<T, float>) {
+      return std::clamp (v, T {} + min, T {} + max);
+    }
+    else {
+      return fixpt_clamp (v, T {} + min, T {} + max);
+    }
   }
   //----------------------------------------------------------------------------
   // 1 selects s2, 0 dst
@@ -1881,6 +2095,8 @@ private:
       dre2000c,
       dre2000d_flt,
       dre2000d,
+      rev5_l_hall_flt,
+      rev5_l_hall,
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
       debug_algo_flt,
       debug_algo,
@@ -1945,7 +2161,7 @@ private:
     case mode::small_space_flt:
     case mode::small_space: {
       constexpr auto srates
-        = make_array (10500, 16800, 21000, 25200, 31500, 40320, 63000);
+        = make_array (10500, 16800, 21000, 25200, 31500, 40320, 50400);
       srate = srates[_param.srateid];
     } break;
     case mode::midifex49_flt:
@@ -1958,7 +2174,7 @@ private:
 #endif
     {
       constexpr auto srates
-        = make_array (10500, 16800, 21000, 23400, 33600, 42000, 63000);
+        = make_array (10500, 16800, 21000, 23400, 33600, 42000, 50400);
       srate = srates[_param.srateid];
     } break;
     case mode::dre2000a_flt:
@@ -1970,13 +2186,19 @@ private:
     case mode::dre2000d_flt:
     case mode::dre2000d: {
       constexpr auto srates
-        = make_array (16800, 21000, 25200, 32400, 40320, 57600, 63000);
+        = make_array (16800, 21000, 25200, 32400, 40320, 57600, 57600);
       srate = srates[_param.srateid];
     } break;
+    case mode::rev5_l_hall_flt:
+    case mode::rev5_l_hall: {
+      constexpr auto srates
+        = make_array (25200, 33600, 40320, 44100, 45000, 52500, 57600);
+      srate = srates[_param.srateid];
+    } break;
+
     default:
       return;
     }
-
     if (_srate != srate) {
       _srate = srate;
       update_internal_srate (srate, (srate / 20) * 9);
@@ -2039,7 +2261,13 @@ private:
       _lfo.set_phase (
         phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
     } break;
-
+    case mode::rev5_l_hall_flt:
+    case mode::rev5_l_hall: {
+      auto& rev = _modes.emplace<rev5_l_hall_type>();
+      rev.reset_memory (_mem_reverb);
+      _lfo.set_phase (
+        phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    } break;
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
     case mode::debug_algo_flt:
     case mode::debug_algo: {
@@ -2160,6 +2388,11 @@ private:
       auto f = 0.25f + mod * 0.35f;
       _lfo.set_freq (f32_x4 {f, f, f, f}, _t_spl);
     } break;
+    case mode::rev5_l_hall_flt:
+    case mode::rev5_l_hall: {
+      auto f = 0.25f + mod * 0.35f;
+      _lfo.set_freq (f32_x4 {f, f, f, f}, _t_spl);
+    } break;
     default:
       break;
     }
@@ -2257,7 +2490,8 @@ private:
     = detail::lofiverb::engine<detail::lofiverb::dre2000c_spec, max_block_size>;
   using dre2000d_type
     = detail::lofiverb::engine<detail::lofiverb::dre2000d_spec, max_block_size>;
-
+  using rev5_l_hall_type = detail::lofiverb::
+    engine<detail::lofiverb::rev5_l_hall_spec, max_block_size>;
 #ifndef LOFIVERB_ADD_DEBUG_ALGO
   using modes_type = std::variant<
     abyss_type,
@@ -2267,7 +2501,8 @@ private:
     dre2000a_type,
     dre2000b_type,
     dre2000c_type,
-    dre2000d_type>;
+    dre2000d_type,
+    rev5_l_hall_type>;
 #else
   using debug_algo_type = detail::lofiverb::
     engine<detail::lofiverb::debug_algo_spec, max_block_size>;
@@ -2281,7 +2516,8 @@ private:
     dre2000a_type,
     dre2000b_type,
     dre2000c_type,
-    dre2000d_type>;
+    dre2000d_type,
+    rev5_l_hall_type>;
 #endif
 
   modes_type     _modes;

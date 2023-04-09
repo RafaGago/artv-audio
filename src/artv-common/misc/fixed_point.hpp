@@ -643,6 +643,11 @@ public:
   // Get value as a an int (equivalent to floor)
   constexpr value_type to_int() const noexcept { return ashr<n_frac> (_v); }
   //----------------------------------------------------------------------------
+  constexpr value_type round()
+  {
+    return to_rounding().template set_size<n_int, 0>().to_int();
+  }
+  //----------------------------------------------------------------------------
   // returns the fractional part only. for signed types it might be negative.
   constexpr fixpt<n_sign, 0, n_frac, flags, traits> fractional() const noexcept
   {
