@@ -681,7 +681,7 @@ public:
 
   static constexpr auto get_parameter (lf_amt_tag)
   {
-    return float_param ("%", 0., 100., 50., 0.01);
+    return float_param ("%", 0., 100., 80., 0.01);
   }
   //----------------------------------------------------------------------------
   struct hf_amt_tag {};
@@ -689,7 +689,7 @@ public:
   //----------------------------------------------------------------------------
   static constexpr auto get_parameter (hf_amt_tag)
   {
-    return float_param ("%", 0., 100., 50., 0.01);
+    return float_param ("%", 0., 100., 80., 0.01);
   }
   //----------------------------------------------------------------------------
   static constexpr uint max_predelay_qb = 4;
