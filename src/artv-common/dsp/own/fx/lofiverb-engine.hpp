@@ -136,8 +136,8 @@ static constexpr stage_data make_delay (u16 spls, u16 mod = 0)
 // even starting processing the incoming sample batch.
 //
 // If those samples are to be used as feedback to sum with the current input
-// batch, then the feedback samples need the last output from the past block to
-// be added with the first incoming sample.
+// batch, then the feedback samples need the last output from the past block
+// to be added with the first incoming sample.
 //
 // So in total it is needed to fetch 1 block plus one old sample for feedback
 // purposes, that's what the "extra_spls" parameter is for. This is used in
@@ -436,8 +436,8 @@ private:
 };
 //------------------------------------------------------------------------------
 namespace state {
-// these need to be outside of engine, as the constexpr function has to be fully
-// defined before.
+// these need to be outside of engine, as the constexpr function has to be
+// fully defined before.
 //------------------------------------------------------------------------------
 struct empty {
   // struct clang_bug_workaround {};
@@ -589,9 +589,9 @@ public:
   // feedbacks/outputs (minus the first) at once and then to push them all at
   // once. This is exactly what fetch/push accomplish.
   //
-  // dst has to contain one element more at the head, where the previous output
-  // will be placed. Once the feedback is applied to a current input, this head
-  // feedback sample (last output) can be dropped.
+  // dst has to contain one element more at the head, where the previous
+  // output will be placed. Once the feedback is applied to a current input,
+  // this head feedback sample (last output) can be dropped.
   template <uint Idx, class T>
   void fetch_block (xspan<T> dst, uint negative_offset = 0)
   {
@@ -605,8 +605,8 @@ public:
   // be able to be used directly. The feedback signal will have to be manually
   // pushed (see push).
   //
-  // The intent is to be able to process further (no gain) the feedback signal,
-  // e.g. filter it, before insertion.
+  // The intent is to be able to process further (no gain) the feedback
+  // signal, e.g. filter it, before insertion.
   //
   // io[in, out = input samples, outoput samples at out
   // fb[out] signal, the feedback. Can be processed (e.g) filtered and the a
@@ -1395,11 +1395,13 @@ private:
     mp11::mp_for_each<mp11::mp_iota_c<spls.size()>> ([&] (auto i) {
       static_assert (spls[i].to_int() >= max_block_size);
     });
-    // in and out can be aliased, hence the extra tap0
-    block_array<T>              tap0;
-    std::array<T*, spls.size()> tap_ptrs = std::apply (
+    // in and out can be aliased, but none of the outs shall be aliased with
+    // in or within.
+    block_array<T>                             tap0;
+    std::array<T * artv_restrict, spls.size()> tap_ptrs = std::apply (
       [&] (auto&&... args) {
-        return std::array {tap0.data(), static_cast<T*> (&args[0])...};
+        return make_array<T * artv_restrict> (
+          tap0.data(), static_cast<T*> (&args[0])...);
       },
       std::forward_as_tuple (outs...));
 
@@ -1408,10 +1410,12 @@ private:
       uint spls_u = spls[i].to_int();
       if constexpr (out_overwrite) {
         auto dst = xspan {tap_ptrs[i], in.size()};
+        assert (dst.data() != in.data()); // unwanted aliasing with input
         decode_read (dst, get_read_buffers<Idx> (in.size(), 0, spls_u));
       }
       else {
-        xspan          dst {tap_ptrs[i], in.size()};
+        xspan dst {tap_ptrs[i], in.size()};
+        assert (dst.data() != in.data()); // unwanted aliasing with input
         block_array<T> tmp_mem;
         xspan          tmp {tmp_mem.data(), in.size()};
         decode_read (tmp, get_read_buffers<Idx> (in.size(), 0, spls_u));
@@ -1434,8 +1438,8 @@ private:
     constexpr xspan<fixpt_t const> g = spec::get_gains (Idx);
     constexpr auto                 n_outs       = spec::get_n_outs (Idx);
     constexpr auto                 n_extra_buff = out_overwrite ? n_outs : 0;
-    static_assert (n_outs < g.size());
-    static_assert (sizeof...(outs_arg) < g.size());
+    static_assert (n_outs <= g.size());
+    static_assert (sizeof...(outs_arg) == n_outs);
 
     mp11::mp_repeat_c<std::tuple<block_array<T>>, g.size() - n_extra_buff>
       tapmem;
@@ -1566,8 +1570,8 @@ private:
   // For each stage all its arguments have to be given, those are
   // consumed positionally.
   //
-  // Not provided parameters will be defaulted. Use "defaulted_tag" instances to
-  // fill with defaults until the one you want to provide.
+  // Not provided parameters will be defaulted. Use "defaulted_tag" instances
+  // to fill with defaults until the one you want to provide.
   //----------------------------------------------------------------------------
   template <uint... Idx, class T, class... Ts>
   void run_nested_ap (T* out, xspan<T const> in, Ts&&... argsp)
@@ -1659,9 +1663,9 @@ private:
           // path so they are added to the last allpass on the final insertion
           // outside this foreach.
           //
-          // If implementing serial elements inside the nestings they will have
-          // to take this branch too, but instead of allpass they will have to
-          // take a class like "serial<allpass> and be unwrapped"
+          // If implementing serial elements inside the nestings they will
+          // have to take this branch too, but instead of allpass they will
+          // have to take a class like "serial<allpass> and be unwrapped"
           if constexpr (
             spec::is_highpass (stage_idx) || spec::is_lowpass (stage_idx)) {
             auto gain = std::get<arg_offset[order]> (args);
@@ -1677,8 +1681,8 @@ private:
           }
         }
         else {
-          // skipping nested non-allpass elements, these are handled inside the.
-          // allpass conditional.
+          // skipping nested non-allpass elements, these are handled inside
+          // the. allpass conditional.
         }
       });
     // the last allpass gets the fwd signal enqueued
@@ -1864,8 +1868,8 @@ private:
   template <class T>
   using block_array = std::array<T, max_block_size>;
   using indexes     = mp11::mp_iota_c<spec::size()>;
-  // TODO: maybe this class can be split on specializations for fixpt_t and then
-  // float it might result in more code bloat?
+  // TODO: maybe this class can be split on specializations for fixpt_t and
+  // then float it might result in more code bloat?
   using states_flt_typelist
     = mp11::mp_transform_q<state::index_to_state_qfn<float, spec>, indexes>;
   using states_fixpt_typelist

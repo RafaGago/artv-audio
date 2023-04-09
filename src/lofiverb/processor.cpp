@@ -17,7 +17,7 @@
 namespace artv {
 // -----------------------------------------------------------------------------
 // declared on editor.cpp
-juce::AudioProcessorEditor* new_editor (
+extern juce::AudioProcessorEditor* new_editor (
   juce::AudioProcessor&               p,
   juce::AudioProcessorValueTreeState& params,
   juce::ValueTree&                    gui_params);
