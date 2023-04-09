@@ -1672,13 +1672,12 @@ private:
       if constexpr (is_fixpt_v<T>) {
         auto gv = rgen (i);
         assert (gv >= T::from_int (0));
-        v = get<Idx, T> (
-          (T::from_int (min) + T::from_int (range) * gv).round());
+        v = get<Idx, T> ((uint) (min + range * gv.to_floatp()));
       }
       else {
         auto gv = rgen (i);
         assert (gv >= T {0.});
-        v = get<Idx, T> ((uint) (min + range * gv)); // TODO: std::round too?
+        v = get<Idx, T> ((uint) (min + range * gv));
       }
       push_one<Idx> (in[i]);
       out[i] = v; // they could be aliased...
