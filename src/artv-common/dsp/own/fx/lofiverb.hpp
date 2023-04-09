@@ -283,26 +283,26 @@ static constexpr auto get_dre2000a_spec()
     make_quantizer(), // 0
     make_lp (0.08), // 1
     make_hp (0.99), // 2
-    make_parallel_delay (42, -g, 586, g, 1099, -g), // 3 (L)
-    make_parallel_delay (105, g, 490, -g, 1290, g), // 4 (R)
+    make_parallel_delay (1, 42, -g, 586, g, 1099, -g), // 3 (L)
+    make_parallel_delay (1, 105, g, 490, -g, 1290, g), // 4 (R)
 
     make_comb (5719 - 1, 0.f, 43), // 5
     make_lp(), // 6
     make_lp(), // 7
     make_parallel_delay (
-      640, -g, 1494, g, 2199, -g, 3122, g, 4135, -g, 4952, g), // 8
+      1, 640, -g, 1494, g, 2199, -g, 3122, g, 4135, -g, 4952, g), // 8
 
     make_comb (5779 - 1, 0.f, 44), // 9
     make_lp(), // 10
     make_lp(), // 11
     make_parallel_delay (
-      902, -g, 1830, g, 2528, -g, 3641, g, 4670, -g, 5432, g), // 12
+      1, 902, -g, 1830, g, 2528, -g, 3641, g, 4670, -g, 5432, g), // 12
 
     make_comb (5905 - 1, 0.f, 42), // 13
     make_lp(), // 14
     make_lp(), // 15
     make_parallel_delay (
-      979, -g, 2031, g, 3267, -g, 4104, g, 5103, -g, 5886, g), // 16
+      1, 979, -g, 2031, g, 3267, -g, 4104, g, 5103, -g, 5886, g), // 16
     // L
     make_ap (224, -0.7), // 17
     make_delay (311, 311), // 18
@@ -331,19 +331,19 @@ static constexpr auto get_dre2000b_spec()
     make_lp(), // 4
     make_lp(), // 5
     make_parallel_delay (
-      429, -g, 1000, g, 1472, -g, 2088, g, 2765, -g, 3311, g), // 6
+      1, 429, -g, 1000, g, 1472, -g, 2088, g, 2765, -g, 3311, g), // 6
 
     make_comb (4036 - 1, 0.f, 53), // 7
     make_lp(), // 8
     make_lp(), // 9
     make_parallel_delay (
-      616, -g, 1225, g, 1691, -g, 2434, g, 3122, -g, 3631, g), // 10
+      1, 616, -g, 1225, g, 1691, -g, 2434, g, 3122, -g, 3631, g), // 10
 
     make_comb (4059 - 1, 0.f, 44.f), // 11
     make_lp(), // 12
     make_lp(), // 13
     make_parallel_delay (
-      657, -g, 1359, g, 2184, -g, 2744, g, 3411, -g, 3934, g), // 14
+      1, 657, -g, 1359, g, 2184, -g, 2744, g, 3411, -g, 3934, g), // 14
 
     make_ap (282, -0.7), // 15
     make_ap (343, -0.7), // 16
@@ -377,26 +377,27 @@ static constexpr auto get_dre2000c_spec()
     make_comb (3794 - 1, 0.f, 23), // 6
     make_lp(), // 7
     make_lp(), // 8
-    make_parallel_delay (959, g, 2855, g), // 9 L
-    make_parallel_delay (20 + 13, -g, 1817, -g), // 10 R (+ 13 for block proc)
+    make_parallel_delay (1, 959, g, 2855, g), // 9 L
+    make_parallel_delay (
+      1, 20 + 13, -g, 1817, -g), // 10 R (+ 13 for block proc)
 
     make_comb (3838 - 1, 0.f, 24), // 11
     make_lp(), // 12
     make_lp(), // 13
-    make_parallel_delay (1309, g, 3221, g), // 14 L
-    make_parallel_delay (339, -g, 2271, -g), // 15 R
+    make_parallel_delay (1, 1309, g, 3221, g), // 14 L
+    make_parallel_delay (1, 339, -g, 2271, -g), // 15 R
 
     make_comb (3861 - 1, 0.f, 25), // 16
     make_lp(), // 17
     make_lp(), // 18
-    make_parallel_delay (1104, g, 3391, g), // 19 L
-    make_parallel_delay (130, -g, 2065, -g), // 20 R
+    make_parallel_delay (1, 1104, g, 3391, g), // 19 L
+    make_parallel_delay (1, 130, -g, 2065, -g), // 20 R
 
     make_comb (3894 - 1, 0.f, 26), // 21
     make_lp(), // 22
     make_lp(), // 23
-    make_parallel_delay (1445, g, 2885, g), // 24 L
-    make_parallel_delay (499, -g, 2071, -g), // 25 R
+    make_parallel_delay (1, 1445, g, 2885, g), // 24 L
+    make_parallel_delay (1, 499, -g, 2071, -g), // 25 R
     // L
     make_ap (140, -0.7), // 26
     make_ap (160, -0.7), // 27
@@ -426,26 +427,27 @@ static constexpr auto get_dre2000d_spec()
     make_comb (5652 - 1, 0.f, 57), // 6
     make_lp(), // 7
     make_lp(), // 8
-    make_parallel_delay (2164, g, 5005, g), // 9 L
-    make_parallel_delay (745, -g, 2922, -g), // 10 R
+    make_parallel_delay (1, 2164, g, 5005, g), // 9 L
+    make_parallel_delay (1, 745, -g, 2922, -g), // 10 R
 
     make_comb (5679 - 1, 0.f), // 11
     make_lp(), // 12
     make_lp(), // 13
-    make_parallel_delay (2080, g, 4948, g), // 14 L
-    make_parallel_delay (625, -g, 3523, -g), // 15 R
+    make_parallel_delay (1, 2080, g, 4948, g), // 14 L
+    make_parallel_delay (1, 625, -g, 3523, -g), // 15 R
 
     make_comb (5689 - 1, 0.f), // 16
     make_lp(), // 17
     make_lp(), // 18
-    make_parallel_delay (1435, g, 4279, g), // 19 L
-    make_parallel_delay (11 + 21, -g, 2769, -g), // 20 R (+ 21 for block proc)
+    make_parallel_delay (1, 1435, g, 4279, g), // 19 L
+    make_parallel_delay (
+      1, 11 + 21, -g, 2769, -g), // 20 R (+ 21 for block proc)
 
     make_comb (5711 - 1, 0.f, 57), // 21
     make_lp(), // 22
     make_lp(), // 23
-    make_parallel_delay (1557, g, 4304, g), // 24 L
-    make_parallel_delay (59, -g, 3539, -g), // 25 R
+    make_parallel_delay (1, 1557, g, 4304, g), // 24 L
+    make_parallel_delay (1, 59, -g, 3539, -g), // 25 R
     // L
     make_ap (214, -0.7, 30), // 26
     make_ap (469, -0.7), // 27
@@ -728,7 +730,9 @@ private:
   using fixpt_tr = detail::lofiverb::fixpt_tr;
   using float16  = detail::lofiverb::float16;
 
-  static constexpr auto blank = detail::lofiverb::defaulted;
+  static constexpr auto blank     = detail::lofiverb::defaulted;
+  static constexpr auto add_to    = detail::lofiverb::add_to;
+  static constexpr auto overwrite = detail::lofiverb::overwrite;
   //----------------------------------------------------------------------------
   static constexpr uint max_block_size = detail::lofiverb::max_block_size;
   static constexpr uint n_channels     = 2;
@@ -1509,8 +1513,8 @@ private:
     rev.run<1> (in);
     rev.run<2> (l, in.to_const());
     xspan_memdump (r.data(), l);
-    rev.run<3> (l);
-    rev.run<4> (r);
+    rev.run<3> (l, overwrite);
+    rev.run<4> (r, overwrite);
 
     T flo = load_float<T> (0.9f + _param.lf_amt * _param.lf_amt * 0.05f);
     T glo = load_float<T> (0.7f + _param.lf_amt * 0.3f);
@@ -1523,13 +1527,13 @@ private:
     rev.run<6, 7> (comb_fb, flo, glo, fhi, ghi);
     rev.push<5> (comb_fb.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
-    rev.run<8, T> (tank, comb_fb.to_const());
+    rev.run<8, T> (comb_fb.to_const(), overwrite, tank);
 
     rev.fetch_block<9> (comb_out, comb_fb, in.to_const(), lfo2, par.decay);
     rev.run<10, 11> (comb_fb, flo, glo, fhi, ghi);
     rev.push<9> (comb_fb.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
-    rev.run<12> (comb_fb);
+    rev.run<12> (comb_fb, overwrite);
     span_visit (comb_fb, [&] (auto spl, uint i) {
       tank[i] = (T) (tank[i] + spl);
     });
@@ -1538,7 +1542,7 @@ private:
     rev.run<14, 15> (comb_fb, flo, glo, fhi, ghi);
     rev.push<13> (comb_fb.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
-    rev.run<16> (comb_fb);
+    rev.run<16> (comb_fb, overwrite);
     xspan eramt {tmp1.data(), io.size()};
     span_visit (comb_fb, [&] (auto spl, uint i) {
       l[i]     = (T) (l[i] + spl + tank[i]);
@@ -1601,7 +1605,7 @@ private:
     rev.run<4, 5> (comb_fb, flo, glo, fhi, ghi);
     rev.push<3> (comb_fb.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
-    rev.run<6, T> (tank, comb_fb.to_const());
+    rev.run<6, T> (comb_fb.to_const(), overwrite, tank);
 
     rev.fetch_block<7> (comb_out, comb_fb, in.to_const(), lfo2, [&] (uint i) {
       return -par.decay[i];
@@ -1609,7 +1613,7 @@ private:
     rev.run<8, 9> (comb_fb, flo, glo, fhi, ghi);
     rev.push<7> (comb_fb.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
-    rev.run<10> (comb_fb);
+    rev.run<10> (comb_fb, overwrite);
     span_visit (comb_fb, [&] (auto spl, uint i) {
       tank[i] = (T) (tank[i] + spl);
     });
@@ -1618,7 +1622,7 @@ private:
     rev.run<12, 13> (comb_fb, flo, glo, fhi, ghi);
     rev.push<11> (comb_fb.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
-    rev.run<14> (comb_fb);
+    rev.run<14> (comb_fb, overwrite);
     xspan eramt {tmp1.data(), io.size()};
     span_visit (comb_fb, [&] (auto spl, uint i) {
       tank[i]  = (T) (tank[i] + spl);
@@ -1689,8 +1693,8 @@ private:
     rev.push<6> (l.to_const());
     span_visit (l, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
     xspan_memdump (r.data(), l);
-    rev.run<9> (l);
-    rev.run<10> (r);
+    rev.run<9> (l, overwrite);
+    rev.run<10> (r, overwrite);
 
     rev.fetch_block<11> (comb_out, comb_fb, in.to_const(), lfo2, par.decay);
     rev.run<12, 13> (comb_fb, flo, glo, fhi, ghi);
@@ -1699,8 +1703,8 @@ private:
     auto lblock = comb_fb;
     auto rblock = comb_out;
     xspan_memdump (rblock.data(), lblock);
-    rev.run<14> (lblock);
-    rev.run<15> (rblock);
+    rev.run<14> (lblock, overwrite);
+    rev.run<15> (rblock, overwrite);
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       l[i] = (T) (l[i] + lblock[i]);
@@ -1712,8 +1716,8 @@ private:
     rev.push<16> (comb_fb.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
     xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_fb
-    rev.run<19> (lblock);
-    rev.run<20> (rblock);
+    rev.run<19> (lblock, overwrite);
+    rev.run<20> (rblock, overwrite);
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       l[i] = (T) (l[i] + lblock[i]);
@@ -1725,8 +1729,8 @@ private:
     rev.push<21> (comb_fb.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
     xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_out
-    rev.run<24> (lblock);
-    rev.run<25> (rblock);
+    rev.run<24> (lblock, overwrite);
+    rev.run<25> (rblock, overwrite);
     xspan eramt {tmp1.data(), io.size()};
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
@@ -1790,8 +1794,8 @@ private:
     rev.push<6> (l.to_const());
     span_visit (l, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
     xspan_memdump (r.data(), l);
-    rev.run<9> (l);
-    rev.run<10> (r);
+    rev.run<9> (l, overwrite);
+    rev.run<10> (r, overwrite);
 
     rev.fetch_block<11> (comb_out, comb_fb, in.to_const(), blank, par.decay);
     rev.run<12, 13> (comb_fb, flo, glo, fhi, ghi);
@@ -1800,8 +1804,8 @@ private:
     auto lblock = comb_fb;
     auto rblock = comb_out;
     xspan_memdump (rblock.data(), lblock);
-    rev.run<14> (lblock);
-    rev.run<15> (rblock);
+    rev.run<14> (lblock, overwrite);
+    rev.run<15> (rblock, overwrite);
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       l[i] = (T) (l[i] + lblock[i]);
@@ -1813,8 +1817,8 @@ private:
     rev.push<16> (comb_fb.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
     xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_fb
-    rev.run<19> (lblock);
-    rev.run<20> (rblock);
+    rev.run<19> (lblock, overwrite);
+    rev.run<20> (rblock, overwrite);
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       l[i] = (T) (l[i] + lblock[i]);
@@ -1826,8 +1830,8 @@ private:
     rev.push<21> (comb_fb.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
     xspan_memdump (rblock.data(), lblock); // lblock aliased to comb_fb
-    rev.run<24> (lblock);
-    rev.run<25> (rblock);
+    rev.run<24> (lblock, overwrite);
+    rev.run<25> (rblock, overwrite);
     xspan eramt {tmp1.data(), io.size()};
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {

@@ -15,6 +15,7 @@
 #include "artv-common/dsp/own/classes/noise.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/misc/bits.hpp"
+#include "artv-common/misc/compiler.hpp"
 #include "artv-common/misc/fixed_point.hpp"
 #include "artv-common/misc/float.hpp"
 #include "artv-common/misc/misc.hpp"
@@ -77,6 +78,7 @@ struct parallel_delay_data {
   std::array<fixpt_spls, 6> spls;
   std::array<fixpt_t, 6>    g;
   uint                      count;
+  uint                      n_outs;
 };
 
 struct filter_data {
@@ -164,7 +166,9 @@ static constexpr stage_data make_multitap_delay (Ts&&... delay_spls)
 }
 //------------------------------------------------------------------------------
 template <class... Ts>
-static constexpr stage_data make_parallel_delay (Ts&&... spl_gain_pair)
+static constexpr stage_data make_parallel_delay (
+  uint n_outs,
+  Ts&&... spl_gain_pair)
 {
   constexpr uint nargs = sizeof...(Ts);
   static_assert ((nargs % 2) == 0);
@@ -181,7 +185,8 @@ static constexpr stage_data make_parallel_delay (Ts&&... spl_gain_pair)
       ret.g[i / 2] = fixpt_t::from_float (std::get<i> (tpl));
     }
   });
-  ret.count = nargs / 2;
+  ret.count  = nargs / 2;
+  ret.n_outs = n_outs;
   return ret;
 }
 //------------------------------------------------------------------------------
@@ -413,6 +418,16 @@ public:
     }
   }
   //----------------------------------------------------------------------------
+  static constexpr uint get_n_outs (uint i)
+  {
+    if (is_parallel_delay (i)) {
+      return std::get<parallel_delay_data> (values[i]).n_outs;
+    }
+    else {
+      return 1;
+    }
+  }
+  //----------------------------------------------------------------------------
   static constexpr std::size_t size() { return values.size(); }
   //----------------------------------------------------------------------------
 private:
@@ -460,6 +475,11 @@ struct quantizer_fixpt {
   s16 err;
 };
 //------------------------------------------------------------------------------
+template <uint N>
+struct quantizer_arr_fixpt {
+  std::array<s16, N> err;
+};
+//------------------------------------------------------------------------------
 template <class T, uint Idx, class SpecAccess>
 static constexpr auto get_state_type()
 {
@@ -488,7 +508,7 @@ static constexpr auto get_state_type()
       return quantizer_fixpt {};
     }
     else if constexpr (SpecAccess::is_parallel_delay (Idx)) {
-      return quantizer_fixpt {};
+      return quantizer_arr_fixpt<SpecAccess::get_n_outs (Idx)> {};
     }
     else {
       return empty {};
@@ -516,8 +536,16 @@ struct index_to_state_qfn {
 
 } // namespace state
 
+struct lofiverb_io_tag {};
+
 struct defaulted_tag {};
 static constexpr defaulted_tag defaulted {};
+
+struct add_to_out_tag : public lofiverb_io_tag {};
+static constexpr add_to_out_tag add_to {};
+
+struct overwrite_out_tag : public lofiverb_io_tag {};
+static constexpr overwrite_out_tag overwrite {};
 //------------------------------------------------------------------------------
 // A class to abstract 16-bit storage, queue access and common DSP operations
 // when building reverbs based on allpass loops. Both on fixed and floating
@@ -527,6 +555,15 @@ class engine {
 public:
   //----------------------------------------------------------------------------
   using spec = spec_access<Spec_array>;
+  //----------------------------------------------------------------------------
+  template <class T>
+  static constexpr void span_add (xspan<T> lhs, xspan<T const> rhs)
+  {
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < rhs.size(); ++i) {
+      lhs[i] = (T) (lhs[i] + rhs[i]);
+    }
+  }
   //----------------------------------------------------------------------------
   static constexpr uint max_block_size = Max_block_size;
   //----------------------------------------------------------------------------
@@ -739,21 +776,63 @@ public:
     else if constexpr (spec::is_quantizer (Idx)) {
       run_quantizer<Idx> (out.data(), in, std::forward<Ts> (args)...);
     }
-    else if constexpr (spec::is_multitap_delay (Idx)) {
-      run_multitap_delay<Idx> (in, out.data(), std::forward<Ts> (args)...);
-    }
-    else if constexpr (spec::is_parallel_delay (Idx)) {
-      run_parallel_delays<Idx> (out.data(), in, std::forward<Ts> (args)...);
-    }
     else {
       static_assert (sizeof (T) != sizeof (T), "Invalid");
     }
   }
 
-  template <uint Idx, class T, class... Ts>
-  void run (xspan<T> io, Ts&&... args)
+  template <
+    uint Idx,
+    class T,
+    class U,
+    class Tag,
+    class... Ts,
+    std::enable_if_t<std::is_base_of_v<
+      lofiverb_io_tag,
+      std::remove_reference_t<Tag>>>* = nullptr>
+  void run (xspan<T const> in, Tag t, U&& out, Ts&&... outs)
   {
-    run<Idx> (io, io.to_const(), std::forward<Ts> (args)...);
+    assert (in);
+    if constexpr (spec::is_multitap_delay (Idx)) {
+      run_multitap_delay<Idx> (
+        in, t, std::forward<U> (out), std::forward<Ts> (outs)...);
+    }
+    else if constexpr (spec::is_parallel_delay (Idx)) {
+      run_parallel_delays<Idx> (
+        in, t, std::forward<U> (out), std::forward<Ts> (outs)...);
+    }
+  }
+
+  template <
+    uint Idx,
+    class T,
+    class Tag,
+    std::enable_if_t<std::is_base_of_v<
+      lofiverb_io_tag,
+      std::remove_reference_t<Tag>>>* = nullptr>
+  void run (xspan<T> io, Tag t)
+  {
+    run<Idx> (io.to_const(), t, io);
+  }
+
+  template <
+    uint Idx,
+    class T,
+    class U,
+    class... Ts,
+    std::enable_if_t<!std::is_base_of_v<
+      lofiverb_io_tag,
+      std::remove_reference_t<U>>>* = nullptr>
+  void run (xspan<T> io, U&& arg1, Ts&&... args)
+  {
+    run<Idx> (
+      io, io.to_const(), std::forward<U> (arg1), std::forward<Ts> (args)...);
+  }
+
+  template <uint Idx, class T, class... Ts>
+  void run (xspan<T> io)
+  {
+    run<Idx> (io, io.to_const());
   }
   //----------------------------------------------------------------------------
   // for arbitrarily nested allpasses or crossovers
@@ -1308,9 +1387,10 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T, class... P>
-  void run_multitap_delay (xspan<T const> in, T* out, P&&... outs)
+  template <uint Idx, class Tag, class T, class... P>
+  void run_multitap_delay (xspan<T const> in, Tag, T* out, P&&... outs)
   {
+    constexpr bool out_overwrite = !std::is_same_v<Tag, add_to_out_tag>;
     constexpr xspan<fixpt_spls const> spls = spec::get_delays_spls (Idx);
     mp11::mp_for_each<mp11::mp_iota_c<spls.size()>> ([&] (auto i) {
       static_assert (spls[i].to_int() >= max_block_size);
@@ -1326,60 +1406,103 @@ private:
     assert (in.size() <= max_block_size);
     for (uint i = 0; i < tap_ptrs.size(); ++i) {
       uint spls_u = spls[i].to_int();
-      auto dst    = xspan {tap_ptrs[i], in.size()};
-      decode_read (dst, get_read_buffers<Idx> (in.size(), 0, spls_u));
+      if constexpr (out_overwrite) {
+        auto dst = xspan {tap_ptrs[i], in.size()};
+        decode_read (dst, get_read_buffers<Idx> (in.size(), 0, spls_u));
+      }
+      else {
+        xspan          dst {tap_ptrs[i], in.size()};
+        block_array<T> tmp_mem;
+        xspan          tmp {tmp_mem.data(), in.size()};
+        decode_read (tmp, get_read_buffers<Idx> (in.size(), 0, spls_u));
+        span_add (dst, tmp);
+      }
     }
     encode_write (prepare_block_insertion<Idx> (in.size()), in.to_const());
-    xspan_memdump (out, xspan {tap0.data(), in.size()});
+    if constexpr (out_overwrite) {
+      xspan_memdump (out, xspan {tap0.data(), in.size()});
+    }
+    else {
+      span_add (out, xspan {tap0.data(), in.size()});
+    }
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class T>
-  void run_parallel_delays (
-    T*             out,
-    xspan<T const> in) // No gain modulation for now...
+  template <uint Idx, class T, class Tag, class... Args>
+  void run_parallel_delays (xspan<T const> in, Tag, Args&&... outs_arg)
   {
+    constexpr bool out_overwrite     = !std::is_same_v<Tag, add_to_out_tag>;
     constexpr xspan<fixpt_t const> g = spec::get_gains (Idx);
-    mp11::mp_repeat_c<std::tuple<block_array<T>>, g.size() - 1> tapmem;
+    constexpr auto                 n_outs       = spec::get_n_outs (Idx);
+    constexpr auto                 n_extra_buff = out_overwrite ? n_outs : 0;
+    static_assert (n_outs < g.size());
+    static_assert (sizeof...(outs_arg) < g.size());
+
+    mp11::mp_repeat_c<std::tuple<block_array<T>>, g.size() - n_extra_buff>
+      tapmem;
     std::apply (
       [&] (auto&&... args) {
-        run_multitap_delay<Idx> (in, out, args.data()...);
+        if constexpr (out_overwrite) {
+          run_multitap_delay<Idx> (
+            in, overwrite, &outs_arg[0]..., args.data()...);
+        }
+        else {
+          run_multitap_delay<Idx> (in, overwrite, args.data()...);
+        }
       },
       tapmem);
     std::array<T*, g.size()> tap_ptrs = std::apply (
       [&] (auto&&... args) {
-        return std::array {out, args.data()...};
+        if constexpr (out_overwrite) {
+          return std::array {&outs_arg[0]..., args.data()...};
+        }
+        else {
+          return std::array {args.data()...};
+        }
       },
       tapmem);
+    std::array<T*, n_outs> outs = std::apply (
+      [&] (auto&&... args) { return std::array {&args[0]...}; },
+      std::forward_as_tuple (outs_arg...));
+
     if constexpr (is_fixpt_v<T>) {
       // multiply and accumulate at high resolution
-      block_array<fixpt_acum_t> acum {};
+      std::array<block_array<fixpt_acum_t>, n_outs> acum {};
       for (uint tap = 0; tap < tap_ptrs.size(); ++tap) {
         ARTV_LOOP_UNROLL_SIZE_HINT (16)
         for (uint i = 0; i < in.size(); ++i) {
-          acum[i] += tap_ptrs[tap][i] * (T) g[tap];
+          acum[tap % n_outs][i] += tap_ptrs[tap][i] * (T) g[tap];
         }
       }
       // quantize
-      state::quantizer_fixpt& st  = std::get<Idx> (_states.fix);
-      auto                    err = st.err;
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < in.size(); ++i) {
-        auto [v, err_] = round (acum[i], err);
-        out[i]         = v;
-        err            = err_;
-      }
-      st.err = err;
-    }
-    else {
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < in.size(); ++i) {
-        // reminder: &out == &tap_ptrs[0]
-        out[i] *= (T) g[0];
-      }
-      for (uint tap = 1; tap < tap_ptrs.size(); ++tap) {
+      state::quantizer_arr_fixpt<n_outs>& st  = std::get<Idx> (_states.fix);
+      auto&                               err = st.err;
+
+      for (uint out = 0; out < n_outs; ++out) {
         ARTV_LOOP_UNROLL_SIZE_HINT (16)
         for (uint i = 0; i < in.size(); ++i) {
-          out[i] += tap_ptrs[tap][i] * (T) g[tap];
+          auto [v, err_] = round (acum[out][i], err[out]);
+          if constexpr (out_overwrite) {
+            outs[out][i] = v;
+          }
+          else {
+            outs[out][i] = (T) (v + outs[out][i]);
+          }
+          err[out] = err_;
+        }
+      }
+    }
+    else {
+      for (uint tap = 0; tap < n_extra_buff; ++tap) {
+        ARTV_LOOP_UNROLL_SIZE_HINT (16)
+        for (uint i = 0; i < in.size(); ++i) {
+          // reminder: &out == &tap_ptrs[0]
+          outs[tap][i] *= (T) g[tap];
+        }
+      }
+      for (uint tap = n_extra_buff; tap < tap_ptrs.size(); ++tap) {
+        ARTV_LOOP_UNROLL_SIZE_HINT (16)
+        for (uint i = 0; i < in.size(); ++i) {
+          outs[tap % n_outs][i] += tap_ptrs[tap][i] * (T) g[tap];
         }
       }
     }
