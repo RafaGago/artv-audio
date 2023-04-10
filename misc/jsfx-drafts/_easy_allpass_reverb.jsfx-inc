@@ -89,6 +89,43 @@ function delay (in, spls, lfo, max_lfo) local (x) global (easyapv_del*, easyapv_
   x;
 );
 
+function delay_fb (in, spls, decay_sec, srate)
+  local (x) global (easyapv_del*, easyapv_del_idx) (
+
+  x = easyapv_del.delay_line_get (spls, easyapv_del_idx);
+  easyapv_del.delay_line_set (in, 0, easyapv_del_idx);
+  easyapv_del_idx += 1;
+  x * pow (0.001, spls / (srate * decay_sec));
+);
+
+function delay_fb (in, spls, lfo, max_lfo, decay_sec, srate)
+  local (x) global (easyapv_del*, easyapv_del_idx) local(x, g) (
+
+  x = easyapv_del.delay_line_thiran1_get (spls + lfo * max_lfo, easyapv_del_idx);
+  easyapv_del.delay_line_set (in, 0, easyapv_del_idx);
+  easyapv_del_idx += 1;
+  x * pow (0.001, spls / (srate * decay_sec));
+);
+
+function delay_fb (in, spls, decay_sec, srate, gk)
+  local (x) global (easyapv_del*, easyapv_del_idx) (
+
+  x = easyapv_del.delay_line_get (spls, easyapv_del_idx);
+  easyapv_del.delay_line_set (in, 0, easyapv_del_idx);
+  easyapv_del_idx += 1;
+  x * pow (0.001, spls / (srate * decay_sec)) * gk;
+);
+
+function delay_fb (in, spls, lfo, max_lfo, decay_sec, srate, gk)
+  local (x) global (easyapv_del*, easyapv_del_idx) local(x, g) (
+
+  x = easyapv_del.delay_line_thiran1_get (spls + lfo * max_lfo, easyapv_del_idx);
+  easyapv_del.delay_line_set (in, 0, easyapv_del_idx);
+  easyapv_del_idx += 1;
+  x * pow (0.001, spls / (srate * decay_sec)) * gk;
+);
+
+
 // allpass
 function ap (in, spls, g) local (yn, u, x) global (easyapv_del*, easyapv_del_idx) (
   yn = easyapv_del.delay_line_get (spls, easyapv_del_idx);

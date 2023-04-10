@@ -22,7 +22,9 @@
 #include "artv-common/misc/mp11.hpp"
 #include "artv-common/misc/overaligned_allocator.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/vec_approx_math.hpp"
 #include "artv-common/misc/vec_math.hpp"
+#include "artv-common/misc/vec_util.hpp"
 #include "artv-common/misc/xspan.hpp"
 #include "boost/mp11/algorithm.hpp"
 
@@ -45,6 +47,11 @@ using fixpt_spls_mod = fixpt_m<0, 9, 0, 0>;
 
 using float16 = f16pack<5, -1, f16pack_dftz | f16pack_clamp>;
 //------------------------------------------------------------------------------
+
+struct free_storage_data {
+  uint count;
+};
+
 struct allpass_data {
   fixpt_spls     spls;
   fixpt_spls_mod mod; // In samples. If 0 the delay is not modulated
@@ -94,10 +101,6 @@ struct crossover_data {
 
 struct quantizer_data {
   fixpt_t g;
-};
-
-struct free_storage_data {
-  uint count;
 };
 
 using stage_data = std::variant<
@@ -608,6 +611,47 @@ public:
       _stage[i].z = mem.cut_head (get_delay_size (i)).data();
     }
     memset (&_states, 0, sizeof _states);
+  }
+  //----------------------------------------------------------------------------
+  template <class T, uint Idx, uint... Idxs>
+  auto get_gain_for_rt60 (float t_sec, uint srate)
+  {
+    constexpr uint vec_size    = 4;
+    using V                    = vec<float, vec_size>;
+    constexpr uint  n_vals     = 1 + sizeof...(Idxs);
+    constexpr uint  n_vecs     = div_ceil (n_vals, vec_size);
+    constexpr uint  n_rounded  = n_vecs * vec_size;
+    constexpr float log2_milli = -9.965784284662087f; // log2(0.001)
+
+    alignas (V) std::array<float, n_rounded> spls {
+      {(float) spec::get_delay_spls (Idx),
+       (float) spec::get_delay_spls (Idxs)...}};
+
+    std::array<float, n_vals> ret_flt;
+
+    for (uint i = 0; i < n_vecs; ++i) {
+      auto exps = vec_load<V> (&spls[i * vec_size]);
+      exps /= srate * t_sec;
+      auto gains = vec_exp2_2dat (exps * vec_set<V> (log2_milli));
+      if (i != (n_vecs - 1) || (n_rounded == n_vals)) {
+        vec_store_unaligned (&ret_flt[i * vec_size], gains);
+      }
+      else {
+        for (uint j = 0; j < (n_vals % vec_size); ++j) {
+          ret_flt[i * vec_size + j] = gains[j];
+        }
+      }
+    }
+    if constexpr (std::is_same_v<T, float>) {
+      return ret_flt;
+    }
+    else if constexpr (is_fixpt_v<T>) {
+      return std::apply (
+        [] (auto... x) { return make_array (T::from_float (x)...); }, ret_flt);
+    }
+    else {
+      static_assert (sizeof (T) != sizeof (T), "unsupported type");
+    }
   }
   //----------------------------------------------------------------------------
   // Pure delays with "size > blocksize" are placed before feedback loops to

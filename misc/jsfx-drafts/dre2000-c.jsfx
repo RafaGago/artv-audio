@@ -84,26 +84,14 @@ lfo.lfo_bank_reset_freq (0, 0.25 + mod * 0.75, k.src.srate);
 dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
 
-decayfb = 0 + decay_p * 0.85;
+decayx2 = decay_p * decay_p;
+decayfb = 0.25 + decayx2 * 20;
 sumgain = 0.125;
 
-(0) ? (
-g1 = 0.95;
-g2 = 1;
-g3 = 1;
-g4 = 1;
-) : (
-g1 = 1;
-g2 = 1;
-g3 = 1;
-g4 = 1;
-);
-
-
 flo = 0.90 + lo * lo * 0.05;
-glo = 0.55 + lo * 0.45;
+glo = 0.88 + lo * 0.1;
 fhi = 0.82 - hi * hi * 0.4;
-ghi = 0.45 + hi * 0.55;
+ghi = 0.3 + 0.25 * decayx2 + hi * 0.45;
 
 @sample
 
@@ -119,8 +107,8 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   // halving an additional time to leave headroom
   m = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5 * 0.5;
-  m = fi1.lp (m, 0.1);
-  m = fi2.hp (m, 0.99);
+  m = fi1.lp (m, 0.18);
+  m = fi2.hp (m, 0.985);
 
   ml = m;
   ml = ap (ml, 115, -0.7);
@@ -129,8 +117,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   ci = ml + fb1;
   fb1 = fb1.crossv2 (ci, flo, fhi, glo, ghi);
-  fb1 = delay (fb1, 3794 - 32, lfo.ret.ptr[0] * mod, 23) * decayfb * g1;
-  fb1 = delay (fb1, 32);
+  fb1 = delay_fb (fb1, 3794, lfo.ret.ptr[0] * mod, 23, decayfb, k.src.srate);
   // notice assign not sum
   r = delay (ci, 20) * -sumgain;
   // notice assign not sum
@@ -140,8 +127,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   ci = ml + fb2;
   fb2 = fb2.crossv2 (ci, flo, fhi, glo, ghi);
-  fb2 = delay (fb2, 3838 - 32, lfo.ret.ptr[1] * mod, 24) * decayfb * g2;
-  fb2 = delay (fb2, 32);
+  fb2 = delay_fb (fb2, 3838, lfo.ret.ptr[1] * mod, 24, decayfb, k.src.srate);
   r += delay (ci, 339) * -sumgain;
   l += delay (ci, 1309) * sumgain;
   r += delay (ci, 2271) * -sumgain;
@@ -149,8 +135,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   ci = ml + fb3;
   fb3 = fb3.crossv2 (ci, flo, fhi, glo, ghi);
-  fb3 = delay (fb3, 3861 - 32, lfo.ret.ptr[2] * mod, 25) * decayfb * g3;
-  fb3 = delay (fb3, 32);
+  fb3 = delay_fb (fb3, 3861, lfo.ret.ptr[2] * mod, 25, decayfb, k.src.srate);
   r += delay (ci, 130) * -sumgain;
   l += delay (ci, 1104) * sumgain;
   r += delay (ci, 2065) * -sumgain;
@@ -158,8 +143,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   ci = ml + fb4;
   fb4 = fb4.crossv2 (ci, flo, fhi, glo, ghi);
-  fb4 = delay (fb4, 3894 - 32, lfo.ret.ptr[3] * mod, 26) * decayfb * g4;
-  fb4 = delay (fb4, 32);
+  fb4 = delay_fb (fb4, 3894, lfo.ret.ptr[3] * mod, 26, decayfb, k.src.srate);
   r += delay (ci, 499) * -sumgain;
   l += delay (ci, 1445) * sumgain;
   r += delay (ci, 2071) * -sumgain;
