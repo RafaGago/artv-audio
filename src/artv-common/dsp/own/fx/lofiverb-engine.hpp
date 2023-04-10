@@ -96,6 +96,10 @@ struct quantizer_data {
   fixpt_t g;
 };
 
+struct free_storage_data {
+  uint count;
+};
+
 using stage_data = std::variant<
   allpass_data,
   comb_data,
@@ -105,7 +109,8 @@ using stage_data = std::variant<
   parallel_delay_data,
   filter_data,
   crossover_data,
-  quantizer_data>;
+  quantizer_data,
+  free_storage_data>;
 //------------------------------------------------------------------------------
 static constexpr stage_data make_ap (u16 spls, float g = 0.f, u16 mod = 0)
 {
@@ -114,6 +119,7 @@ static constexpr stage_data make_ap (u16 spls, float g = 0.f, u16 mod = 0)
     fixpt_spls_mod::from_int (mod),
     fixpt_t::from_float (g)};
 }
+//------------------------------------------------------------------------------
 static constexpr stage_data make_comb (u16 spls, float g = 0.f, u16 mod = 0)
 {
   return comb_data {
@@ -216,6 +222,11 @@ static constexpr stage_data make_quantizer()
   return quantizer_data {};
 }
 //------------------------------------------------------------------------------
+static constexpr stage_data make_free_storage (uint n_elems)
+{
+  return free_storage_data {n_elems};
+}
+//------------------------------------------------------------------------------
 
 template <class Spec_array>
 class spec_access {
@@ -280,6 +291,19 @@ public:
   static constexpr bool is_crossover (uint i)
   {
     return std::holds_alternative<crossover_data> (values[i]);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr bool is_free_storage (uint i)
+  {
+    return std::holds_alternative<free_storage_data> (values[i]);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint get_free_storage_count (uint i)
+  {
+    if (is_free_storage (i)) {
+      return std::get<free_storage_data> (values[i]).count;
+    }
+    return 0;
   }
   //----------------------------------------------------------------------------
   static constexpr xspan<fixpt_t const> get_gains (uint i)
@@ -458,19 +482,6 @@ struct allpass_fixpt {
   s16 u_err;
 };
 //------------------------------------------------------------------------------
-struct allpass_and_y1_fixpt {
-  fixpt_t y1;
-  s16     y1_err;
-  s16     x_err;
-  s16     u_err;
-};
-//------------------------------------------------------------------------------
-struct quantizer_and_y1_fixpt {
-  fixpt_t y1;
-  s16     y1_err;
-  s16     err;
-};
-//------------------------------------------------------------------------------
 struct quantizer_fixpt {
   s16 err;
 };
@@ -478,6 +489,15 @@ struct quantizer_fixpt {
 template <uint N>
 struct quantizer_arr_fixpt {
   std::array<s16, N> err;
+};
+//------------------------------------------------------------------------------
+struct allpass_and_y1_fixpt : public allpass_fixpt, public y1_fixpt {};
+//------------------------------------------------------------------------------
+struct quantizer_and_y1_fixpt : public quantizer_fixpt, public y1_fixpt {};
+//------------------------------------------------------------------------------
+template <class T, uint N>
+struct free_storage {
+  std::array<T, N> sto;
 };
 //------------------------------------------------------------------------------
 template <class T, uint Idx, class SpecAccess>
@@ -510,6 +530,9 @@ static constexpr auto get_state_type()
     else if constexpr (SpecAccess::is_parallel_delay (Idx)) {
       return quantizer_arr_fixpt<SpecAccess::get_n_outs (Idx)> {};
     }
+    else if constexpr (SpecAccess::is_free_storage (Idx)) {
+      return free_storage<T, SpecAccess::get_free_storage_count (Idx)> {};
+    }
     else {
       return empty {};
     }
@@ -519,6 +542,9 @@ static constexpr auto get_state_type()
     if constexpr (
       SpecAccess::has_modulated_delay (Idx) || SpecAccess::is_filter (Idx)) {
       return y1_float {};
+    }
+    else if constexpr (SpecAccess::is_free_storage (Idx)) {
+      return free_storage<T, SpecAccess::get_free_storage_count (Idx)> {};
     }
     else {
       return empty {};
@@ -733,6 +759,22 @@ public:
     }
   }
 #endif
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T>
+  xspan<T> get_storage()
+  {
+    static_assert (spec::is_free_storage (Idx));
+    if constexpr (std::is_same_v<T, fixpt_t>) {
+      return {std::get<Idx> (_states.fix).sto};
+    }
+    if constexpr (std::is_same_v<T, float>) {
+      return {std::get<Idx> (_states.flt).sto};
+    }
+    else {
+      static_assert (sizeof (T) != sizeof (T), "Unimplemented");
+      return {};
+    }
+  }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class... Ts>
   void run (xspan<T> out, xspan<T const> in, Ts&&... args)
