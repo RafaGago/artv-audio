@@ -1353,7 +1353,7 @@ private:
 
   using chnl_slider_array = std::array<slider_ext, num_page_params>;
   using chnl_page_btns
-    = std::array<add_juce_callbacks<juce::TextButton>, num_fx_pages>;
+    = std::array<add_juce_mouse_callbacks<juce::TextButton>, num_fx_pages>;
 
   std::array<chnl_slider_array, n_stereo_busses> _fx_off_sliders;
   std::array<chnl_page_btns, n_stereo_busses>    _page_buttons;

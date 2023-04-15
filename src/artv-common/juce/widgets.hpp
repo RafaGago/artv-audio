@@ -63,7 +63,7 @@ enum type {
 } // namespace drop_event
 // Move from an inheritance-based way of working to a callback based one.
 template <class T>
-struct add_juce_callbacks : public T, public juce::DragAndDropTarget {
+struct add_juce_mouse_callbacks : public T, public juce::DragAndDropTarget {
 
   static_assert (std::is_base_of<juce::Component, T>::value, "");
 
@@ -227,6 +227,21 @@ struct add_juce_callbacks : public T, public juce::DragAndDropTarget {
   }
 };
 // -----------------------------------------------------------------------------
+template <class T>
+class add_juce_component_callbacks : public T {
+public:
+  // drag and drop -------------------------------------------------------------
+  void resized() override
+  {
+    T::resized();
+    if (on_resized) {
+      on_resized (*this);
+    }
+  }
+  std::function<void (T&)> on_resized {};
+};
+
+// -----------------------------------------------------------------------------
 namespace detail {
 // -----------------------------------------------------------------------------
 template <class T>
@@ -280,40 +295,40 @@ public:
     exitModalState (0);
   }
 };
-// A slider that allows data entry on the center of the slider and doesn't have
-// the width limited to the actual slider size.
+// A slider that allows data entry on the center of the slider and doesn't
+// have the width limited to the actual slider size.
 class slider_w_data_entry : public juce::Slider {
 public:
   template <class... Ts>
   slider_w_data_entry (Ts&&... args)
   {
-    _edit.setScrollbarsShown (false);
-    _edit.setReadOnly (false);
-    _edit.onEscapeKey = [this]() {
-      _edit_win->setVisible (false);
-      _edit_win->exitModalState (0);
+    edit.setScrollbarsShown (false);
+    edit.setReadOnly (false);
+    edit.onEscapeKey = [this]() {
+      edit_win->setVisible (false);
+      edit_win->exitModalState (0);
     };
-    _edit.onReturnKey = [this]() {
-      setValue (getValueFromText (_edit.getText()));
-      _edit.onEscapeKey();
+    edit.onReturnKey = [this]() {
+      setValue (getValueFromText (edit.getText()));
+      edit.onEscapeKey();
     };
-    _edit.onFocusLost = [this]() { _edit.onEscapeKey(); };
+    edit.onFocusLost = [this]() { edit.onEscapeKey(); };
   }
 
   ~slider_w_data_entry()
   {
-    if (_edit_win) {
-      _edit_win->setLookAndFeel (nullptr);
+    if (edit_win) {
+      edit_win->setLookAndFeel (nullptr);
     }
-    _edit.setLookAndFeel (nullptr);
+    edit.setLookAndFeel (nullptr);
   }
 
   void lookAndFeelChanged() override
   {
     Slider::lookAndFeelChanged();
-    _edit.setLookAndFeel (&getLookAndFeel());
-    if (_edit_win) {
-      _edit_win->setLookAndFeel (&getLookAndFeel());
+    edit.setLookAndFeel (&getLookAndFeel());
+    if (edit_win) {
+      edit_win->setLookAndFeel (&getLookAndFeel());
     }
   }
 
@@ -322,8 +337,8 @@ public:
     // make the window be children of the main window
     Slider::parentHierarchyChanged();
     auto top = getTopLevelComponent();
-    if (top && _edit_win) {
-      top->addChildComponent (*_edit_win);
+    if (top && edit_win) {
+      top->addChildComponent (*edit_win);
     }
   }
 
@@ -331,37 +346,40 @@ public:
   {
     juce::ModifierKeys mods = juce::ModifierKeys::getCurrentModifiersRealtime();
     if (mods.isRightButtonDown() && isEnabled()) {
-      // lazy creation, Windows are expensive, at least on Linux
-      if (!_edit_win) {
-        _edit_win.emplace ("", true);
-        _edit_win->setLookAndFeel (&getLookAndFeel());
+      if (!edit_win) {
+        // lazy creation, Windows are expensive, at least on Linux
+        edit_win.emplace ("", true);
+        edit_win->setLookAndFeel (&getLookAndFeel());
         if (auto top = getTopLevelComponent()) {
-          top->addChildComponent (*_edit_win);
+          top->addChildComponent (*edit_win);
         }
       }
       adjust_positions();
-      _edit_win->setContentNonOwned (&_edit, false);
-      _edit_win->setVisible (true);
-      _edit_win->enterModalState (true, nullptr, false);
-      _edit.grabKeyboardFocus();
+      edit_win->setContentNonOwned (&edit, false);
+      edit_win->setVisible (true);
+      edit_win->enterModalState (true, nullptr, false);
+      edit.grabKeyboardFocus();
     }
     else {
       Slider::mouseDown (e);
     }
   }
 
+  std::optional<resizable_win_destroyed_clicking> edit_win;
+  juce::TextEditor                                edit;
+
 private:
   void adjust_positions()
   {
     auto b = getBounds();
-    _edit.setText (
+    edit.setText (""); // for when the fond size is externally reset
+    edit.setText (
       filter_number (getTextFromValue (getValue())),
       juce::dontSendNotification);
-    b = b.withSizeKeepingCentre (
-      std::max (
-        b.getWidth(),
-        _edit.getTextWidth() + _edit.getBorder().getLeftAndRight()),
-      _edit.getTextHeight());
+    auto text_h = edit.getTextHeight();
+    edit.setBounds (b); // to get the correct border sizes on the next call
+    auto edit_w = edit.getTextWidth() + edit.getBorder().getLeftAndRight();
+    b = b.withSizeKeepingCentre (std::max (b.getWidth(), edit_w), text_h);
     if (b.getX() < 0) {
       b = b.withX (0);
     }
@@ -372,8 +390,8 @@ private:
         b = b.withX (b.getX() + rdiff);
       }
     }
-    _edit_win->setBounds (b);
-    _edit.setBounds (b);
+    edit_win->setBounds (b);
+    edit.setBounds (b);
   }
 
   static juce::String filter_number (juce::String const& s)
@@ -404,9 +422,6 @@ private:
     }
     return num;
   }
-
-  std::optional<resizable_win_destroyed_clicking> _edit_win;
-  juce::TextEditor                                _edit;
 };
 
 // -----------------------------------------------------------------------------
@@ -455,8 +470,8 @@ struct slider_ext
 
   std::array<juce::Component*, 2> get_components() { return {&slider, &label}; }
 
-  add_juce_callbacks<detail::slider_w_data_entry> slider;
-  juce::Label                                     label;
+  add_juce_mouse_callbacks<detail::slider_w_data_entry> slider;
+  add_juce_component_callbacks<juce::Label>             label;
 
 private:
   void sliderValueChanged (juce::Slider* ptr) final
@@ -516,8 +531,8 @@ private:
       = [=] (double v) { return _paramslider.getTextFromValue (v); };
   }
 
-  // this allows us to have a different range on the real parameter than on the
-  // GUI. Just done for choice parameters.
+  // this allows us to have a different range on the real parameter than on
+  // the GUI. Just done for choice parameters.
   juce::Slider _paramslider;
   bool         _feedback = false;
 };
@@ -553,7 +568,7 @@ struct button_ext : public detail::has_button_attachment,
 
   std::array<juce::Component*, 1> get_components() { return {&button}; }
 
-  add_juce_callbacks<T> button;
+  add_juce_mouse_callbacks<T> button;
 };
 
 template <class T>
@@ -669,12 +684,12 @@ struct combobox_ext
   // otherwise it will place them at the right according to this value. Max =
   // 1f. E.g. 0.75f makes the combobox consume 75% of the width.
 
-  add_juce_callbacks<juce::ComboBox> combo;
+  add_juce_mouse_callbacks<juce::ComboBox> combo;
   // There are more fancy buttons but they aren't default constructible, as
-  // these members are public I don't want to have optionals on some components
-  // sometimes...
-  add_juce_callbacks<juce::TextButton> prev;
-  add_juce_callbacks<juce::TextButton> next;
+  // these members are public I don't want to have optionals on some
+  // components sometimes...
+  add_juce_mouse_callbacks<juce::TextButton> prev;
+  add_juce_mouse_callbacks<juce::TextButton> next;
 
 private:
   virtual void comboBoxChanged (juce::ComboBox* ptr) final
@@ -751,9 +766,9 @@ private:
 
   // "_paramcombo" is there only to have an easy implementation of range
   // reservation for future expansion (to don't break user automation), so
-  // "_paramcombo" is linked to the APVTS and has reserved values, while "combo"
-  // is linked via callbacks to "_paramcombo" but shown to the user without the
-  // reserved values.
+  // "_paramcombo" is linked to the APVTS and has reserved values, while
+  // "combo" is linked via callbacks to "_paramcombo" but shown to the user
+  // without the reserved values.
   juce::ComboBox _paramcombo;
   bool           _prev_next_enabled           = true;
   float          _prev_next_grid_width_factor = 0.f;
@@ -780,7 +795,8 @@ private:
   using bitfield_type = uint32_t;
 
 public:
-  toggle_buttons_impl (xspan<add_juce_callbacks<juce::TextButton>> txt_buttons)
+  toggle_buttons_impl (
+    xspan<add_juce_mouse_callbacks<juce::TextButton>> txt_buttons)
     : buttons (txt_buttons)
   {}
 
@@ -923,7 +939,7 @@ public:
   // has to return ptrs...
   auto get_components() { return buttons; }
 
-  xspan<add_juce_callbacks<juce::TextButton>> buttons;
+  xspan<add_juce_mouse_callbacks<juce::TextButton>> buttons;
 
 private:
   juce::Slider  _hidden_slider;
@@ -959,7 +975,7 @@ public:
   }
 
 private:
-  std::array<add_juce_callbacks<juce::TextButton>, N> _button_storage;
+  std::array<add_juce_mouse_callbacks<juce::TextButton>, N> _button_storage;
 };
 
 // TODO: is there a better way? Maybe all these should just take traits...

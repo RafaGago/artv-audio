@@ -28,9 +28,9 @@ static void draw_rotary_1 (
   int             y,
   int             width,
   int             height,
-  float           sliderPos,
-  float const     rotaryStartAngle,
-  float const     rotaryEndAngle,
+  float           pos,
+  float const     start_angle,
+  float const     end_angle,
   juce::Slider&   s)
 {
 
@@ -72,11 +72,10 @@ static void draw_rotary_1 (
 
   // pointer
   juce::Path p;
-  auto       angle
-    = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
-  auto in_radius = in.rw * 0.5f;
-  auto p_length  = in_radius * 0.33f;
-  auto p_width   = p_length * 0.33f;
+  auto       angle     = start_angle + pos * (end_angle - start_angle);
+  auto       in_radius = in.rw * 0.5f;
+  auto       p_length  = in_radius * 0.33f;
+  auto       p_width   = p_length * 0.33f;
   p.addRectangle (-p_width * 0.5f, -in_radius, p_width, p_length);
   p.applyTransform (
     juce::AffineTransform::rotation (angle).translated (centre_x, centre_y));
@@ -94,8 +93,7 @@ static void draw_rotary_1 (
     radius * arc_factor,
     radius * arc_factor,
     0.f,
-    center_track ? rotaryStartAngle + 0.5f * (rotaryEndAngle - rotaryStartAngle)
-                 : rotaryStartAngle,
+    center_track ? start_angle + 0.5f * (end_angle - start_angle) : start_angle,
     angle,
     true);
   g.setColour (s.findColour (juce::Slider::trackColourId));
@@ -113,18 +111,17 @@ public:
     int             y,
     int             width,
     int             height,
-    float           sliderPos,
-    float const     rotaryStartAngle,
-    float const     rotaryEndAngle,
+    float           pos,
+    float const     start_angle,
+    float const     end_angle,
     juce::Slider&   s) override
   {
     if (on_rotary_draw) {
-      on_rotary_draw (
-        g, x, y, width, height, sliderPos, rotaryStartAngle, rotaryEndAngle, s);
+      on_rotary_draw (g, x, y, width, height, pos, start_angle, end_angle, s);
     }
     else {
       juce::LookAndFeel_V4::drawRotarySlider (
-        g, x, y, width, height, sliderPos, rotaryStartAngle, rotaryEndAngle, s);
+        g, x, y, width, height, pos, start_angle, end_angle, s);
     }
   }
   std::function<void (
@@ -145,37 +142,19 @@ public:
     int                             y,
     int                             width,
     int                             height,
-    float                           sliderPos,
-    float                           minSliderPos,
-    float                           maxSliderPos,
+    float                           pos,
+    float                           min_pos,
+    float                           max_pos,
     const juce::Slider::SliderStyle style,
     juce::Slider&                   s) override
   {
     if (on_linear_slider_draw) {
       on_linear_slider_draw (
-        g,
-        x,
-        y,
-        width,
-        height,
-        sliderPos,
-        minSliderPos,
-        maxSliderPos,
-        style,
-        s);
+        g, x, y, width, height, pos, min_pos, max_pos, style, s);
     }
     else {
       LookAndFeel_V4::drawLinearSlider (
-        g,
-        x,
-        y,
-        width,
-        height,
-        sliderPos,
-        minSliderPos,
-        maxSliderPos,
-        style,
-        s);
+        g, x, y, width, height, pos, min_pos, max_pos, style, s);
     }
   }
   std::function<void (
@@ -199,6 +178,23 @@ public:
     return juce::LookAndFeel_V4::getLabelFont (obj);
   }
   std::function<juce::Font (juce::Label&)> on_get_label_font;
+  // ---------------------------------------------------------------------------
+  void fillTextEditorBackground (
+    juce::Graphics&   g,
+    int               width,
+    int               height,
+    juce::TextEditor& te) override
+  {
+    if (on_fill_text_editor_background) {
+      on_fill_text_editor_background (g, width, height, te);
+    }
+    else {
+      return juce::LookAndFeel_V4::fillTextEditorBackground (
+        g, width, height, te);
+    }
+  }
+  std::function<void (juce::Graphics&, int, int, juce::TextEditor&)>
+    on_fill_text_editor_background;
   // ---------------------------------------------------------------------------
 };
 

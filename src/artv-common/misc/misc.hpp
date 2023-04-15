@@ -6,6 +6,7 @@
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <type_traits>
 #include <utility>
@@ -346,7 +347,8 @@ static T sgn (T v)
   return (T) ((v > (T) 0) - (v < (T) 0));
 }
 //------------------------------------------------------------------------------
-// 0 to 44100/48000. 1 to 88/96KHz, etc... Assumes multiples of 44100 or 48000.
+// 0 to 44100/48000. 1 to 88/96KHz, etc... Assumes multiples of 44100 or
+// 48000.
 static uint get_samplerate_order (uint sample_rate)
 {
   uint sr_order = sample_rate;
@@ -487,5 +489,18 @@ constexpr decltype (auto) lambda_forward (V&& value, F&& func)
 {
   return func (std::forward<V> (value));
 }
+//------------------------------------------------------------------------------
+//clang-format off
+template <class P, class M>
+size_t cpp_offsetof (const M P::* member)
+{
+  return (size_t) & (reinterpret_cast<P*> (0)->*member);
+}
 
+template <class P, class M>
+P* container_of (M* ptr, const M P::* member)
+{
+  return (P*) ((char*) ptr - cpp_offsetof (member));
+}
+//clang-format on
 } // namespace artv

@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <stdint.h>
+#include <type_traits>
 #include <utility>
 
 #include <boost/hana.hpp>
@@ -121,6 +122,21 @@ public:
       }
       else {
         f.setHeight (h * 0.055f);
+        // there are many labels, so using "container_of" might be bug prone,
+        // brute force instead
+        slider_ext* sl = nullptr;
+        _params.pforeach ([&, this] (auto type, auto& warray) {
+          using T = std::decay_t<decltype (*warray[0])>;
+          if constexpr (std::is_same_v<T, slider_ext>) {
+            if (&obj == &warray[0]->label) {
+              sl = &*warray[0];
+            }
+          }
+        });
+        if (sl) {
+          auto& ed = sl->slider.edit;
+          ed.setFont (f);
+        }
       }
       return f;
     };
@@ -175,6 +191,9 @@ public:
 
     _lf.setColour (juce::TextButton::buttonColourId, light_grey);
     _lf.setColour (juce::TextButton::textColourOffId, label_txt);
+
+    _lf.setColour (juce::TextEditor::backgroundColourId, light_grey);
+    _lf.setColour (juce::TextEditor::textColourId, label_txt);
 
     // different colors and styles
     set_color (
