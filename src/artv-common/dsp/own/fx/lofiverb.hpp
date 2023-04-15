@@ -1928,7 +1928,7 @@ private:
     float dec2 = as_float (par.decay[0]);
     dec2 *= dec2;
     auto gains
-      = rev.get_gain_for_rt60<T, 6, 10, 14, 18, 22> (1.f + dec2 * 9.f, _srate);
+      = rev.get_gain_for_rt60<T, 6, 10, 14, 18, 22> (1.f + dec2 * 10.f, _srate);
     T flo = load_float<T> (0.9f + _param.lf_amt * _param.lf_amt * 0.05f);
     T glo = load_float<T> (0.9f + _param.lf_amt * 0.09f);
     T fhi = load_float<T> (0.82f - _param.hf_amt * _param.hf_amt * 0.4f);
@@ -1971,7 +1971,7 @@ private:
     rev.run<27> (main, tmp2);
     rev.run<28> (main, tmp1);
     gains
-      = rev.get_gain_for_rt60<T, 29, 33, 37, 41, 45> (1.f + dec2 * 5.f, _srate);
+      = rev.get_gain_for_rt60<T, 29, 33, 37, 41, 45> (1.f + dec2 * 6.f, _srate);
     // sub  reverb
     rev.fetch_block<29> (comb_fb, lfo2, gains[0]);
     rev.run<30, 31> (comb_fb, flo, glo, fhi, (T) (ghi * 0.9_r));
