@@ -74,6 +74,36 @@ import _delay-line.jsfx-inc
 
 @init
 
+function dampfilter (in, g)  local (y1) global() (
+  in = (1 - g) * in + this.y1 * g;
+  this.y1 = in;
+);
+
+function lp (in, g)  global() (
+  this.dampfilter (in, g);
+);
+
+function hp (in, g)  global() (
+  in - this.dampfilter (in, g);
+);
+
+
+function crossv (in, fg, glp, ghp) global() local (lp, hp) (
+  lp = this.lp (in, fg);
+  hp = in - lp;
+  glp * lp + ghp * hp;
+);
+
+
+function crossv2 (in, flow, fhigh, glow, ghigh) global() local (mid, lo, hi) (
+  mid = this.lp1.lp (in, fhigh);
+  hi = in - mid;
+  lo = this.lp2.lp (mid, flow);
+  mid -= lo;
+  (glow * lo) + (ghigh * hi) + mid;
+);
+
+
 // TODO: nested lattice
 function delay (in, spls) local (x) global (easyapv_del*, easyapv_del_idx) (
   x = easyapv_del.delay_line_get (spls, easyapv_del_idx);
@@ -342,6 +372,34 @@ function ap3 (in, spls1, spls2, spls3, g1, g2, g3, lfo, maxlfo)
   x;
 );
 
+// 3 nested allpasses (lattice) with outer modulation and a tail crossover
+function ap3_m1_crossv (in, spls1, spls2, spls3, g1, g2, g3, lfo, maxlfo, flo, fhi, glo, ghi)
+  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (easyapv_del*, easyapv_del_idx) (
+  i1 = easyapv_del_idx;
+  i2 = easyapv_del_idx + 1;
+  i3 = easyapv_del_idx + 2;
+
+  spls1 += lfo * maxlfo;
+  yn1 = easyapv_del.delay_line_thiran1_get (spls1, i1);
+  yn2 = easyapv_del.delay_line_get (spls2, i2);
+  yn3 = easyapv_del.delay_line_get (spls2, i3);
+
+  u  = in + yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  u += yn3 * g3;
+  u2 = yn3 - u * g3;
+
+  u2 = this.crossv2 (u2, flo, fhi, glo, ghi);
+
+  easyapv_del.delay_line_set (u1, 0, i1);
+  easyapv_del.delay_line_set (u2, 0, i2);
+  easyapv_del.delay_line_set (u, 0, i3);
+  easyapv_del_idx += 3;
+  x;
+);
+
 // 3 nested allpasses (lattice) with outer and middle modulation
 function ap3 (in, spls1, spls2, spls3, g1, g2, g3, lfo1, maxlfo1, lfo2, maxlfo2)
   local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (easyapv_del*, easyapv_del_idx) (
@@ -429,36 +487,6 @@ function ap3_d (in, spls1, spls2, spls3, d1, d2, g1, g2, g3, lfo, maxlfo)
   easyapv_del_idx += 5;
   x;
 );
-
-function dampfilter (in, g)  local (y1) global() (
-  in = (1 - g) * in + this.y1 * g;
-  this.y1 = in;
-);
-
-function lp (in, g)  global() (
-  this.dampfilter (in, g);
-);
-
-function hp (in, g)  global() (
-  in - this.dampfilter (in, g);
-);
-
-
-function crossv (in, fg, glp, ghp) global() local (lp, hp) (
-  lp = this.lp (in, fg);
-  hp = in - lp;
-  glp * lp + ghp * hp;
-);
-
-
-function crossv2 (in, flow, fhigh, glow, ghigh) global() local (mid, lo, hi) (
-  mid = this.lp1.lp (in, fhigh);
-  hi = in - mid;
-  lo = this.lp2.lp (mid, flow);
-  mid -= lo;
-  (glow * lo) + (ghigh * hi) + mid;
-);
-
 
 function easy_ap_next_sample() local() global (easyapv_del*, easyapv_del_idx) (
   easyapv_del.delay_line_advance();
