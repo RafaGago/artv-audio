@@ -259,59 +259,59 @@ static constexpr stage_data make_variable_delay (uint min_spls, uint max_spls)
     fixpt_spls::from_int (min_spls), fixpt_spls::from_int (max_spls)};
 }
 //------------------------------------------------------------------------------
-template <class Spec_array>
+template <class Algorithm>
 class spec_access {
 public:
   //----------------------------------------------------------------------------
   static constexpr bool is_allpass (uint i)
   {
-    return std::holds_alternative<allpass_data> (values[i]);
+    return std::holds_alternative<allpass_data> (spec[i]);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_comb (uint i)
   {
-    return std::holds_alternative<comb_data> (values[i]);
+    return std::holds_alternative<comb_data> (spec[i]);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_block_delay (uint i)
   {
-    return std::holds_alternative<block_delay_data> (values[i]);
+    return std::holds_alternative<block_delay_data> (spec[i]);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_1tap_delay (uint i)
   {
-    return std::holds_alternative<delay_data> (values[i]) || is_block_delay (i);
+    return std::holds_alternative<delay_data> (spec[i]) || is_block_delay (i);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_multitap_delay (uint i)
   {
-    return std::holds_alternative<multitap_delay_data> (values[i]);
+    return std::holds_alternative<multitap_delay_data> (spec[i]);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_parallel_delay (uint i)
   {
-    return std::holds_alternative<parallel_delay_data> (values[i]);
+    return std::holds_alternative<parallel_delay_data> (spec[i]);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_variable_delay (uint i)
   {
-    return std::holds_alternative<variable_delay_data> (values[i]);
+    return std::holds_alternative<variable_delay_data> (spec[i]);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_filter (uint i)
   {
-    return std::holds_alternative<filter_data> (values[i]) || is_crossover (i);
+    return std::holds_alternative<filter_data> (spec[i]) || is_crossover (i);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_quantizer (uint i)
   {
-    return std::holds_alternative<quantizer_data> (values[i]);
+    return std::holds_alternative<quantizer_data> (spec[i]);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_lowpass (uint i)
   {
     if (is_filter (i) && !is_crossover (i)) {
-      return std::get<filter_data> (values[i]).is_lowpass;
+      return std::get<filter_data> (spec[i]).is_lowpass;
     }
     return false;
   }
@@ -319,25 +319,25 @@ public:
   static constexpr bool is_highpass (uint i)
   {
     if (is_filter (i) && !is_crossover (i)) {
-      return !std::get<filter_data> (values[i]).is_lowpass;
+      return !std::get<filter_data> (spec[i]).is_lowpass;
     }
     return false;
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_crossover (uint i)
   {
-    return std::holds_alternative<crossover_data> (values[i]);
+    return std::holds_alternative<crossover_data> (spec[i]);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_free_storage (uint i)
   {
-    return std::holds_alternative<free_storage_data> (values[i]);
+    return std::holds_alternative<free_storage_data> (spec[i]);
   }
   //----------------------------------------------------------------------------
   static constexpr uint get_free_storage_count (uint i)
   {
     if (is_free_storage (i)) {
-      return std::get<free_storage_data> (values[i]).count;
+      return std::get<free_storage_data> (spec[i]).count;
     }
     return 0;
   }
@@ -345,20 +345,20 @@ public:
   static constexpr xspan<fixpt_t const> get_gains (uint i)
   {
     if (is_parallel_delay (i)) {
-      auto& v = std::get<parallel_delay_data> (values[i]);
+      auto& v = std::get<parallel_delay_data> (spec[i]);
       return {v.g.data(), v.count};
     }
     else if (is_allpass (i)) {
-      return {&std::get<allpass_data> (values[i]).g, 1};
+      return {&std::get<allpass_data> (spec[i]).g, 1};
     }
     else if (is_crossover (i)) {
-      return {&std::get<crossover_data> (values[i]).g, 1};
+      return {&std::get<crossover_data> (spec[i]).g, 1};
     }
     else if (is_filter (i)) {
-      return {&std::get<filter_data> (values[i]).g, 1};
+      return {&std::get<filter_data> (spec[i]).g, 1};
     }
     else if (is_comb (i)) {
-      return {&std::get<comb_data> (values[i]).g, 1};
+      return {&std::get<comb_data> (spec[i]).g, 1};
     }
     else {
       return {};
@@ -379,7 +379,7 @@ public:
   static constexpr auto get_crossover_data (uint i)
   {
     if (is_crossover (i)) {
-      return std::get<crossover_data> (values[i]);
+      return std::get<crossover_data> (spec[i]);
     }
     else {
       return nullptr;
@@ -389,24 +389,24 @@ public:
   static constexpr xspan<fixpt_spls const> get_delays_spls (uint i)
   {
     if (is_multitap_delay (i)) {
-      auto& v = std::get<multitap_delay_data> (values[i]);
+      auto& v = std::get<multitap_delay_data> (spec[i]);
       return {v.spls.data(), v.count};
     }
     else if (is_parallel_delay (i)) {
-      auto& v = std::get<parallel_delay_data> (values[i]);
+      auto& v = std::get<parallel_delay_data> (spec[i]);
       return {v.spls.data(), v.count};
     }
     else if (is_allpass (i)) {
-      return {&std::get<allpass_data> (values[i]).spls, 1};
+      return {&std::get<allpass_data> (spec[i]).spls, 1};
     }
     if (is_comb (i)) {
-      return {&std::get<comb_data> (values[i]).spls, 1};
+      return {&std::get<comb_data> (spec[i]).spls, 1};
     }
     else if (is_block_delay (i)) {
-      return {&std::get<block_delay_data> (values[i]).spls, 1};
+      return {&std::get<block_delay_data> (spec[i]).spls, 1};
     }
     else if (is_1tap_delay (i)) {
-      return {&std::get<delay_data> (values[i]).spls, 1};
+      return {&std::get<delay_data> (spec[i]).spls, 1};
     }
     else {
       return {};
@@ -427,13 +427,13 @@ public:
   static constexpr fixpt_spls_mod get_delay_mod_spls (uint i)
   {
     if (is_allpass (i)) {
-      return std::get<allpass_data> (values[i]).mod;
+      return std::get<allpass_data> (spec[i]).mod;
     }
     else if (is_comb (i)) {
-      return std::get<comb_data> (values[i]).mod;
+      return std::get<comb_data> (spec[i]).mod;
     }
     else if (is_1tap_delay (i) && !is_block_delay (i)) {
-      return std::get<delay_data> (values[i]).mod;
+      return std::get<delay_data> (spec[i]).mod;
     }
     else {
       return {};
@@ -443,7 +443,7 @@ public:
   static constexpr uint get_delay_extra_spls (uint i)
   {
     if (is_block_delay (i)) {
-      return std::get<block_delay_data> (values[i]).extra_spls.to_int();
+      return std::get<block_delay_data> (spec[i]).extra_spls.to_int();
     }
     else {
       return {};
@@ -462,7 +462,7 @@ public:
       return std::max_element (ds.begin(), ds.end())->to_int();
     }
     else if (is_variable_delay (i)) {
-      return std::get<variable_delay_data> (values[i]).max_spls.to_int();
+      return std::get<variable_delay_data> (spec[i]).max_spls.to_int();
     }
     else {
       return get_delay_spls (i).to_int() + get_delay_mod_spls (i).to_int()
@@ -478,7 +478,7 @@ public:
       return std::min_element (ds.begin(), ds.end())->to_int();
     }
     if (is_variable_delay (i)) {
-      return std::get<variable_delay_data> (values[i]).min_spls.to_int();
+      return std::get<variable_delay_data> (spec[i]).min_spls.to_int();
     }
     else {
       return get_delay_spls (i).to_int() - get_delay_mod_spls (i).to_int();
@@ -488,7 +488,7 @@ public:
   static constexpr uint get_n_outs (uint i)
   {
     if (is_parallel_delay (i)) {
-      return std::get<parallel_delay_data> (values[i]).n_outs;
+      return std::get<parallel_delay_data> (spec[i]).n_outs;
     }
     else {
       return 1;
@@ -498,23 +498,23 @@ public:
   static constexpr std::optional<interpolation> get_interp (uint i)
   {
     if (is_allpass (i) && has_modulated_delay (i)) {
-      return std::get<allpass_data> (values[i]).interp;
+      return std::get<allpass_data> (spec[i]).interp;
     }
     else if (is_comb (i) && has_modulated_delay (i)) {
-      return std::get<comb_data> (values[i]).interp;
+      return std::get<comb_data> (spec[i]).interp;
     }
     else if (is_1tap_delay (i) && has_modulated_delay (i)) {
-      return std::get<delay_data> (values[i]).interp;
+      return std::get<delay_data> (spec[i]).interp;
     }
     else {
       return {};
     }
   }
   //----------------------------------------------------------------------------
-  static constexpr std::size_t size() { return values.size(); }
+  static constexpr std::size_t size() { return spec.size(); }
   //----------------------------------------------------------------------------
 private:
-  static constexpr auto values {Spec_array::values};
+  static constexpr auto spec {Algorithm::get_spec()};
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
@@ -644,11 +644,12 @@ static constexpr overwrite_out_tag overwrite {};
 // A class to abstract 16-bit storage, queue access and common DSP operations
 // when building reverbs based on allpass loops. Both on fixed and floating
 // point.
-template <class Spec_array, uint Max_block_size>
+template <class Algorithm, uint Max_block_size>
 class engine {
 public:
   //----------------------------------------------------------------------------
-  using spec = spec_access<Spec_array>;
+  using algorithm = Algorithm;
+  using spec      = spec_access<Algorithm>;
   //----------------------------------------------------------------------------
   template <class T>
   static constexpr void span_add (
