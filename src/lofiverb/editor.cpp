@@ -188,6 +188,10 @@ public:
     _lf.setColour (juce::ComboBox::outlineColourId, outline);
     _lf.setColour (juce::ComboBox::arrowColourId, light_grey);
     _lf.setColour (juce::ComboBox::textColourId, label_txt);
+    _lf.setColour (juce::PopupMenu::textColourId, label_txt);
+    _lf.setColour (juce::PopupMenu::highlightedTextColourId, label_txt);
+    _lf.setColour (juce::PopupMenu::backgroundColourId, light_grey);
+    _lf.setColour (juce::PopupMenu::highlightedBackgroundColourId, dark_grey);
 
     _lf.setColour (juce::TextButton::buttonColourId, light_grey);
     _lf.setColour (juce::TextButton::textColourOffId, label_txt);
