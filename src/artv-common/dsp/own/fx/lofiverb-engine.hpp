@@ -47,6 +47,7 @@ using fixpt_spls_mod = fixpt_m<0, 9, 0, 0>;
 
 using float16 = f16pack<5, -1, f16pack_dftz | f16pack_clamp>;
 //------------------------------------------------------------------------------
+enum class interpolation : u8 { thiran, linear };
 
 struct free_storage_data {
   uint count;
@@ -56,18 +57,21 @@ struct allpass_data {
   fixpt_spls     spls;
   fixpt_spls_mod mod; // In samples. If 0 the delay is not modulated
   fixpt_t        g;
+  interpolation  interp;
 };
 
 struct comb_data {
   fixpt_spls     spls;
   fixpt_spls_mod mod; // In samples. If 0 the delay is not modulated
   fixpt_t        g;
+  interpolation  interp;
 };
 
 // 1 tap delay
 struct delay_data {
   fixpt_spls     spls;
   fixpt_spls_mod mod; // In samples. If 0 the delay is not modulated
+  interpolation  interp;
 };
 
 struct variable_delay_data {
@@ -119,26 +123,39 @@ using stage_data = std::variant<
   variable_delay_data,
   free_storage_data>;
 //------------------------------------------------------------------------------
-static constexpr stage_data make_ap (u16 spls, float g = 0.f, u16 mod = 0)
+static constexpr stage_data make_ap (
+  u16           spls,
+  float         g      = 0.f,
+  u16           mod    = 0,
+  interpolation interp = interpolation::thiran)
 {
   return allpass_data {
     fixpt_spls::from_int (spls),
     fixpt_spls_mod::from_int (mod),
-    fixpt_t::from_float (g)};
+    fixpt_t::from_float (g),
+    interp};
 }
 //------------------------------------------------------------------------------
-static constexpr stage_data make_comb (u16 spls, float g = 0.f, u16 mod = 0)
+static constexpr stage_data make_comb (
+  u16           spls,
+  float         g      = 0.f,
+  u16           mod    = 0,
+  interpolation interp = interpolation::thiran)
 {
   return comb_data {
     fixpt_spls::from_int (spls),
     fixpt_spls_mod::from_int (mod),
-    fixpt_t::from_float (g)};
+    fixpt_t::from_float (g),
+    interp};
 }
 //------------------------------------------------------------------------------
-static constexpr stage_data make_delay (u16 spls, u16 mod = 0)
+static constexpr stage_data make_delay (
+  u16           spls,
+  u16           mod    = 0,
+  interpolation interp = interpolation::thiran)
 {
   return delay_data {
-    fixpt_spls::from_int (spls), fixpt_spls_mod::from_int (mod)};
+    fixpt_spls::from_int (spls), fixpt_spls_mod::from_int (mod), interp};
 }
 //------------------------------------------------------------------------------
 // block delays have to be at least one block long. It has an additional
@@ -412,7 +429,7 @@ public:
     if (is_allpass (i)) {
       return std::get<allpass_data> (values[i]).mod;
     }
-    if (is_comb (i)) {
+    else if (is_comb (i)) {
       return std::get<comb_data> (values[i]).mod;
     }
     else if (is_1tap_delay (i) && !is_block_delay (i)) {
@@ -449,7 +466,8 @@ public:
     }
     else {
       return get_delay_spls (i).to_int() + get_delay_mod_spls (i).to_int()
-        + (has_modulated_delay (i) ? 1 : 0); // extra spl for thiran
+        + ((has_modulated_delay (i)) ? 1 // extra tail spl for thiran/lerp
+                                     : 0);
     }
   }
   //----------------------------------------------------------------------------
@@ -474,6 +492,22 @@ public:
     }
     else {
       return 1;
+    }
+  }
+  //----------------------------------------------------------------------------
+  static constexpr std::optional<interpolation> get_interp (uint i)
+  {
+    if (is_allpass (i) && has_modulated_delay (i)) {
+      return std::get<allpass_data> (values[i]).interp;
+    }
+    else if (is_comb (i) && has_modulated_delay (i)) {
+      return std::get<comb_data> (values[i]).interp;
+    }
+    else if (is_1tap_delay (i) && has_modulated_delay (i)) {
+      return std::get<delay_data> (values[i]).interp;
+    }
+    else {
+      return {};
     }
   }
   //----------------------------------------------------------------------------
@@ -528,23 +562,31 @@ struct free_storage {
 template <class T, uint Idx, class SpecAccess>
 static constexpr auto get_state_type()
 {
+  constexpr auto interp = SpecAccess::get_interp (Idx);
   if constexpr (is_fixpt_v<T>) {
-    if constexpr (SpecAccess::has_modulated_delay (Idx)) {
-      if constexpr (SpecAccess::is_allpass (Idx)) {
+    if constexpr (SpecAccess::is_allpass (Idx)) {
+      if constexpr (!!interp && *interp == interpolation::thiran) {
         return allpass_and_y1_fixpt {};
       }
-      else if constexpr (SpecAccess::is_comb (Idx)) {
+      else {
+        return allpass_fixpt {};
+      }
+    }
+    else if constexpr (SpecAccess::is_comb (Idx)) {
+      if constexpr (!!interp && *interp == interpolation::thiran) {
         return quantizer_and_y1_fixpt {};
       }
       else {
-        return y1_fixpt {};
+        return quantizer_fixpt {};
       }
     }
-    else if constexpr (SpecAccess::is_allpass (Idx)) {
-      return allpass_fixpt {};
-    }
-    else if constexpr (SpecAccess::is_comb (Idx)) {
-      return quantizer_fixpt {};
+    else if constexpr (SpecAccess::is_1tap_delay (Idx)) {
+      if constexpr (!!interp && *interp == interpolation::thiran) {
+        return y1_fixpt {};
+      }
+      else {
+        return empty {};
+      }
     }
     else if constexpr (SpecAccess::is_filter (Idx)) {
       return y1_fixpt {};
@@ -565,7 +607,8 @@ static constexpr auto get_state_type()
   else {
     static_assert (std::is_same_v<T, float>);
     if constexpr (
-      SpecAccess::has_modulated_delay (Idx) || SpecAccess::is_filter (Idx)) {
+      (!!interp && *interp == interpolation::thiran)
+      || SpecAccess::is_filter (Idx)) {
       return y1_float {};
     }
     else if constexpr (SpecAccess::is_free_storage (Idx)) {
@@ -1384,6 +1427,27 @@ private:
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class LF>
+  void run_lerp (xspan<fixpt_t> dst, LF&& lfo_gen)
+  {
+    static_assert (spec::has_modulated_delay (Idx));
+    constexpr auto delay_spls     = spec::get_delay_spls (Idx).add_sign();
+    constexpr auto delay_mod_spls = spec::get_delay_mod_spls (Idx).add_sign();
+
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < dst.size(); ++i) {
+      auto fixpt_spls = (delay_spls + (lfo_gen (i) * delay_mod_spls));
+      auto n_spls     = fixpt_spls.to_int();
+      n_spls -= i;
+      auto n_spls_frac = fixpt_spls.fractional();
+      auto zb          = get<Idx, fixpt_t> (n_spls + 1);
+      auto z           = get<Idx, fixpt_t> (n_spls);
+      static_assert (n_spls_frac.n_int == 0);
+      dst[i]
+        = (fixpt_t) (z * (n_spls_frac.max() - n_spls_frac) + zb * n_spls_frac);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class LF>
   void run_thiran (xspan<float> dst, LF&& lfo_gen)
   {
     static_assert (spec::has_modulated_delay (Idx));
@@ -1409,6 +1473,25 @@ private:
       dst[i]  = y1;
     }
     st.y1 = y1;
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class LF>
+  void run_lerp (xspan<float> dst, LF&& lfo_gen)
+  {
+    static_assert (spec::has_modulated_delay (Idx));
+    constexpr auto delay_spls     = spec::get_delay_spls (Idx).to_floatp();
+    constexpr auto delay_mod_spls = spec::get_delay_mod_spls (Idx).to_floatp();
+
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < dst.size(); ++i) {
+      float fixpt_spls  = (delay_spls + (lfo_gen (i) * delay_mod_spls));
+      uint  n_spls      = (uint) fixpt_spls;
+      float n_spls_frac = fixpt_spls - n_spls;
+      n_spls -= i;
+      auto zb = get<Idx, float> (n_spls + 1);
+      auto z  = get<Idx, float> (n_spls);
+      dst[i]  = z * (1.f - n_spls_frac) + zb * n_spls_frac;
+    }
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
@@ -1452,12 +1535,19 @@ private:
     constexpr auto minsz = spec::get_min_delay_spls (Idx);
     assert (dst.size() <= minsz);
     if constexpr (minsz >= max_block_size) {
-      if constexpr (spec::has_modulated_delay (Idx)) {
-        auto lfo_gen = get_generic_generator<T> (std::forward<Lfo> (lfo));
-        run_thiran<Idx> (dst, lfo_gen);
+      constexpr std::optional<interpolation> interp = spec::get_interp (Idx);
+      if constexpr (!interp) {
+        decode_read (dst, get_read_buffers<Idx> (dst.size(), 0));
       }
       else {
-        decode_read (dst, get_read_buffers<Idx> (dst.size(), 0));
+        auto lfo_gen = get_generic_generator<T> (std::forward<Lfo> (lfo));
+        if constexpr (*interp == interpolation::linear) {
+          run_lerp<Idx> (dst, lfo_gen);
+        }
+        else {
+          static_assert (*interp == interpolation::thiran);
+          run_thiran<Idx> (dst, lfo_gen);
+        }
       }
     }
   }
@@ -1503,20 +1593,29 @@ private:
       // worth the complexity, as most delays are bigger than the block size)
       auto lfo_gen = get_generic_generator<T> (std::forward<Lfo> (lfo));
       auto g_gen   = get_gain_generator<Idx, T> (std::forward<G> (gain));
+      constexpr std::optional<interpolation> interp = spec::get_interp (Idx);
 
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < in.size(); ++i) {
         T z;
-        if constexpr (spec::has_modulated_delay (Idx)) {
+        if constexpr (!interp) {
+          z = read_next<Idx, T>();
+        }
+        else {
           // this is for completeness, modulations under the block size are
           // unlikely.
           z = in[i];
-          run_thiran<Idx> (xspan {&z, 1}, [i, &lfo_gen] (uint) {
-            return lfo_gen (i);
-          });
-        }
-        else {
-          z = read_next<Idx, T>();
+          if constexpr (*interp == interpolation::linear) {
+            run_lerp<Idx> (xspan {&z, 1}, [i, &lfo_gen] (uint) {
+              return lfo_gen (i);
+            });
+          }
+          else {
+            static_assert (*interp == interpolation::thiran);
+            run_thiran<Idx> (xspan {&z, 1}, [i, &lfo_gen] (uint) {
+              return lfo_gen (i);
+            });
+          }
         }
         if constexpr (spec::is_allpass (Idx) || spec::is_comb (Idx)) {
           if constexpr (spec::is_allpass (Idx)) {
