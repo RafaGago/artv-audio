@@ -1,0 +1,213 @@
+desc:ER
+slider1:decay_p=0.8<0,1,0.01> Decay
+
+slider3:mod=0.5<0,1,0.01> Mod
+slider4:character=0.5<0,1,0.01> Character
+
+slider6:hi=0.5<0,1,0.01> highs
+slider7:lo=0.5<0,1,0.01> lows
+
+slider9:stereo=1<-1,1, 0.01> Stereo
+slider10:predelay=1<1, 2400, 1> Predelay
+
+slider21:db_wet=-12<-40, 12,0.1> Wet dB
+slider20:db_dry=0<-60, 0,0.1> Dry dB
+
+slider23:offset=0<-50, 50, 1> Offset
+
+import _core.jsfx-inc
+import _easy_allpass_reverb.jsfx-inc
+import _easy_fdn.jsfx-inc
+import _reverb.jsfx-inc
+import _lfo.jsfx-inc
+import _fir.jsfx-inc
+
+@init
+
+// SRC stuff -------------------------------------------------------------------
+BYPASS_SRC = 0;
+
+k.src.kaiser_att_db = 210;
+k.src.taps_branch = 32;
+k.src.taps_branch_frac = 16;
+k.src.cutoff = 10500;
+k.src.srate = BYPASS_SRC ? srate : 23400;
+
+src.down.resampler_2c_init(
+  k.src.srate,
+  srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.up.resampler_2c_init(
+  srate,
+  k.src.srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.out_q.deque_init(
+  src.up.resampler_2c_max_n_out_samples() * 2
+  );
+
+src.ins.array_init (src.down.resampler_2c_max_n_out_samples() * 2);
+src.outs.array_init (src.up.resampler_2c_max_n_out_samples() * 2);
+
+src.ins.array_clear();
+src.outs.array_clear();
+
+mtx.array_init (4);
+mtxcp.array_init (4);
+
+// TODO how many?
+loop(floor (srate / 44100) * 2,
+  src.out_q.deque_push (0);
+  src.out_q.deque_push (0);
+);
+
+// Actual reverb stuff ---------------------------------------------------------
+n_lfos = 4;
+lfo.lfo_bank_init (n_lfos, 1);
+lfo.ret.array_init (n_lfos);
+lfo.lfo_bank_reset_phase (0);
+
+m_lfo.lfo_bank_init (n_lfos, 1);
+m_lfo.ret.array_init (n_lfos);
+m_lfo.lfo_bank_reset_phase (0);
+
+function hadamard2(x) global() local(x0, x1) (
+  x0 = x[0];
+  x1 = x[1];
+  x[0] = (x0 - x1) * 0.7071067811865475;
+  x[1] = (x0 + x1) * 0.7071067811865475;
+);
+
+h2.array_init (2);
+td.array_init (16);
+
+@slider
+
+lfo.lfo_bank_reset_freq (0, 0.63 + mod * 0.33, k.src.srate);
+
+dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
+wet_gain = db_to_lin (db_wet);
+
+decay = 0.05 + decay_p * 0.85;
+
+flo = 0.90 + lo * lo * 0.05;
+glo = 0.85 + lo * 0.13;
+fhi = 0.55 - hi * hi * 0.15;
+ghi = 0.35 + 0.1 * decay2 + hi * 0.14;
+
+@sample
+
+// Downsampling
+n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
+
+(n_spls_down) ? (
+  lfo.lfo_bank_tick_tri (lfo.ret.ptr, 0);
+
+  // halving an additional time to leave headroom
+  l = src.ins.ptr[0] * 0.5;
+  r = src.ins.ptr[1] * 0.5;
+
+  l = fil1.lp (l, 0.75 - hi * 0.2);
+  l = fil2.hp (l, 0.9 + lo * 0.075);
+  r = fir1.lp (r, 0.75 - hi * 0.2);
+  r = fir2.hp (r, 0.9 + lo * 0.075);
+
+  pidx = 8 + floor(decay_p * 16);
+  (1) ? (
+  td.ptr[0]   = primes.ptr[pidx + 0];
+  td.ptr[1]   = primes.ptr[pidx + 1];
+  td.ptr[2]   = primes.ptr[pidx + 2];
+  td.ptr[3]   = primes.ptr[pidx + 3];
+  td.ptr[4]   = primes.ptr[pidx + 4];
+  td.ptr[5]   = primes.ptr[pidx + 5];
+  td.ptr[6]   = primes.ptr[pidx + 6];
+  td.ptr[7]   = primes.ptr[pidx + 7];
+  td.ptr[8]   = primes.ptr[pidx + 8];
+  td.ptr[9]   = primes.ptr[pidx + 9];
+  td.ptr[10]  = primes.ptr[pidx + 10];
+  td.ptr[11]  = primes.ptr[pidx + 11];
+  td.ptr[12]  = primes.ptr[pidx + 12];
+  td.ptr[13]  = primes.ptr[pidx + 13];
+  td.ptr[14]  = primes.ptr[pidx + 14];
+  td.ptr[15]  = primes.ptr[pidx + 15];
+  ) : (
+  td.ptr[15]   = primes.ptr[pidx + 0];
+  td.ptr[14]   = primes.ptr[pidx + 1];
+  td.ptr[13]   = primes.ptr[pidx + 2];
+  td.ptr[12]   = primes.ptr[pidx + 3];
+  td.ptr[11]   = primes.ptr[pidx + 4];
+  td.ptr[10]   = primes.ptr[pidx + 5];
+  td.ptr[9]   = primes.ptr[pidx + 6];
+  td.ptr[8]   = primes.ptr[pidx + 7];
+  td.ptr[7]   = primes.ptr[pidx + 8];
+  td.ptr[6]   = primes.ptr[pidx + 9];
+  td.ptr[5]  = primes.ptr[pidx + 10];
+  td.ptr[4]  = primes.ptr[pidx + 11];
+  td.ptr[3]  = primes.ptr[pidx + 12];
+  td.ptr[2]  = primes.ptr[pidx + 13];
+  td.ptr[1]  = primes.ptr[pidx + 14];
+  td.ptr[0]  = primes.ptr[pidx + 15];
+  );
+  h2.ptr[0] = l;
+  h2.ptr[1] = r;
+  i = 0;
+
+  loop(16,
+    h2.ptr[i & 1] = delay (h2.ptr[i & 1], td.ptr[i]);
+//    h2.ptr[(i + 1) & 1] = h2.ptr[(i + 1) & 1];
+    hadamard2 (h2.ptr);
+    i += 1;
+  );
+  l = h2.ptr[0];
+  r = h2.ptr[1];
+
+  m = (l + r) * 0.5;
+  ltdec = decay_p * decay_p; //0.001 + (0.001) * decay;
+  lt = m;
+  lt = ap3_crossv (lt, 911 + character * 413, 491 + character * 213, 211, 0.39 * ltdec, -0.28 * ltdec, 0.19 * ltdec, flo, glo, fhi, ghi);
+  lt = ap (lt, 133, 0.3 + ltdec * 0.3);
+  lt = ap (lt, 191, -0.25 - ltdec * 0.3);
+  lt = ap (lt, 211, 0.25 + ltdec * 0.3);
+  lt1 = lt;
+  lt = ap (lt, 311, 0.265 + ltdec * 0.3, lfo.ret.ptr[0] * mod, 83);
+  lt2 = lt;
+  l += lt2;
+  r -= lt1;
+
+  // LOW MID EQ! 16-bit ZDF PEAK?
+
+  // more boilerplate (summing + downsample)
+  easy_ap_next_sample();
+  easy_fdn_next_sample();
+
+  l = r * (1 - abs (stereo)) + l * abs (stereo);
+  stereo < 0 ? (
+    tmp = r;
+    r = l;
+    l = tmp;
+  );
+
+  // Upsampling
+  n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);
+  i = 0;
+  loop (n_spls_up * 2, // *2 : two channels
+    src.out_q.deque_push (src.outs.ptr[i]);
+    i += 1;
+  );
+);
+
+spl0 *= dry_gain;
+spl1 *= dry_gain;
+spl0 += src.out_q.deque_pop() * wet_gain;
+spl1 += src.out_q.deque_pop() * wet_gain;
