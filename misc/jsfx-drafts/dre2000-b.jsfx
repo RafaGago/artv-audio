@@ -91,7 +91,7 @@ sumgain = 0.125;
 flo = 0.90 + lo * lo * 0.05;
 glo = 0.88 + lo * 0.1;
 fhi = 0.82 - hi * hi * 0.4;
-ghi = 0.25 + 0.4 * decayx2 + hi * 0.3;
+ghi = 0.4 + 0.4 * decayx2 + hi * 0.15;
 
 
 @sample

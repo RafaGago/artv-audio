@@ -119,8 +119,8 @@ wet_gain = db_to_lin (db_wet);
 
 flo = 0.90 + lo * lo * 0.05;
 glo = 0.55 + lo * 0.4;
-fhi = 0.82 - hi * hi * 0.4;
-ghi = 0.45 + hi * 0.4;
+fhi = 0.62 - hi * hi * 0.2;
+ghi = 0.6 + hi * 0.25;
 
 hp_fact = 1 - hp * hp;
 hp_fact *= 0.39;
@@ -141,11 +141,12 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   // in
   x = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5;
   // diffusion
+  x = lp (x, 0.3);
   x = ap (x, 147, -0.707);
   x = ap (x, 183, 0.707);
   x = ap (x, 389, -0.6);
   x = ap (x, 401, 0.6);
-  late_in = x; // 0-1 range (bipolar)
+  late_in = x;
 
   // ER
   er_lfo.lfo_bank_tick_sin (lfo.ret.ptr, 0);

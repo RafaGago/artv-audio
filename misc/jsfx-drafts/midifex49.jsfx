@@ -161,8 +161,8 @@ wet_gain = db_to_lin (db_wet);
 
 flo = 0.90 + lo * lo * 0.05;
 glo = 0.35 + lo * 0.6;
-fhi = 0.82 - hi * hi * 0.4;
-ghi = 0.35 + hi * 0.5;
+fhi = 0.8 - hi * hi * 0.1;
+ghi = 0.05 + hi * 0.6;
 
 hp_fact = 1 - hp * hp;
 hp_fact *= 0.39;

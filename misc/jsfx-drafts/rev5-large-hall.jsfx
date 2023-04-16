@@ -99,13 +99,13 @@ g4 = 0.25;
 
 flo = 0.90 + lo * lo * 0.05;
 glo = 0.9 + lo * 0.09;
-fhi = 0.82 - hi * hi * 0.4;
-ghi = 0.6 + hi * 0.35;
+fhi = 0.82 - hi * hi * 0.1;
+ghi = 0.75 + hi * 0.2;
 
 flo2 = 0.90 + lo * lo * 0.05;
 glo2 = 0.9 + lo * 0.04;
-fhi2 = 0.82 - hi * hi * 0.4;
-ghi2 = 0.6 + hi * 0.3;
+fhi2 = 0.82 - hi * hi * 0.2;
+ghi2 = 0.7 + hi * 0.25;
 
 @sample
 
@@ -121,8 +121,8 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   // halving an additional time to leave headroom
   in = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5 * 0.5;
   m = in;
-  m = fi1.lp (m, 0.32);
-  m = fi2.hp (m, 0.99);
+  m = fi1.lp (m, 0.18);
+  m = fi2.hp (m, 0.987);
 
   cx3 = 0.5 + (character * 3);
   cx2 = 0.5 + (character * 2);

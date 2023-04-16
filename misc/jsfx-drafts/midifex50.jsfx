@@ -165,8 +165,8 @@ er_amt = (er_fact * er_fact) * 0.4;
 
 flo = 0.90 + lo * lo * 0.05;
 glo = 0.35 + lo * 0.6;
-fhi = 0.82 - hi * hi * 0.4;
-ghi = 0.35 + hi * 0.5;
+fhi = 0.62 - hi * hi * 0.2;
+ghi = 0.35 + hi * 0.3;
 
 @sample
 
