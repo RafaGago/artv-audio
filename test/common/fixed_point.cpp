@@ -619,6 +619,34 @@ TEST (fixed_point, integer_operators)
   EXPECT_TRUE (v >= w);
   EXPECT_TRUE (v >= w);
 }
+//------------------------------------------------------------------------------
+TEST (fixed_point, sqrt_isqrt_half)
+{
+  float x              = 511.999;
+  auto  v              = fixpt_d<1, 9, 11>::from_float (x);
+  auto [sqrtv, isqrt2] = fixpt_sqrt_isqrt_half (v);
 
+  float xback = v.to_floatp();
+  auto  a     = sqrtv.to_floatp();
+  auto  b     = sqrt (xback);
+  auto  c     = isqrt2.to_floatp() * 2.f;
+  auto  d     = 1. / b;
+
+  EXPECT_NEAR (a, b, a / 1000.f);
+  EXPECT_NEAR (c, d, c / 1000.f);
+
+  x                        = 1.f / (3 << 10);
+  v                        = fixpt_d<1, 9, 11>::from_float (x);
+  auto [sqrtv_2, isqrt2_2] = fixpt_sqrt_isqrt_half (v);
+
+  xback = v.to_floatp();
+  a     = sqrtv_2.to_floatp();
+  b     = sqrt (xback);
+  c     = isqrt2_2.to_floatp() * 2.f;
+  d     = 1. / b;
+
+  EXPECT_NEAR (a, b, a / 1000.f);
+  EXPECT_NEAR (c, d, c / 1000.f);
+}
 //------------------------------------------------------------------------------
 } // namespace artv

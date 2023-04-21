@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <gcem.hpp>
+#include <tuple>
 #include <type_traits>
 
 #include "artv-common/misc/bits.hpp"
@@ -83,12 +85,12 @@ struct fixpt_arith_tag {};
 // They also allow adding signedness as the result of arithmetic operations.
 // Non-dynamic types can only operate with types of the same signedness.
 static constexpr uint fixpt_dynamic = 1 << 0;
-// mixed: Like "dynamic" but tries to truncate all fractional bits before
-// failing compilation.
+// mixed: Like "dynamic" but tries to drop fractional bits before failing
+// compilation.
 //
 // They also allow adding signedness as the result of arithmetic operations, but
 // only when bits to allocate are free.
-static constexpr uint fixpt_mixed = fixpt_dynamic | (1 << 1);
+static constexpr uint fixpt_mixed = 1 << 1;
 // rounding: Conversions of fixed point types do round to the nearest instead of
 // truncating
 static constexpr uint fixpt_rounding = 1 << 2;
@@ -138,7 +140,7 @@ template <class T>
 static constexpr bool is_fixpt_v = is_fixpt<T>::value;
 
 template <class T1, class T2>
-struct fixpt_are_compatible : public std::false_type {};
+struct fixpt_has_same_traits : public std::false_type {};
 
 // check if two fixed point types are compatible (same sign and conversions)
 template <
@@ -151,13 +153,13 @@ template <
   uint Flags1,
   uint Flags2,
   class Traits>
-struct fixpt_are_compatible<
+struct fixpt_has_same_traits<
   fixpt<N_sign1, N_int1, N_frac1, Flags1, Traits>,
   fixpt<N_sign2, N_int2, N_frac2, Flags2, Traits>> : public std::true_type {};
 
 template <class T1, class T2>
-static constexpr bool fixpt_are_compatible_v
-  = fixpt_are_compatible<T1, T2>::value;
+static constexpr bool fixpt_has_same_traits_v
+  = fixpt_has_same_traits<T1, T2>::value;
 
 //------------------------------------------------------------------------------
 // A fixed point arithmetic class that can use native GCC/clang vector types.
@@ -260,65 +262,72 @@ private:
   // by default unsigned are compatible with signed, but not the other way
   // around
   template <class T>
-  static constexpr bool rhs_is_compatible = fixpt_are_compatible_v<T, mytype>;
+  static constexpr bool rhs_has_same_traits
+    = fixpt_has_same_traits_v<T, mytype>;
 
   template <class T>
   static constexpr bool rhs_is_assign_compat
-    = rhs_is_compatible<T> && (n_sign >= fixpt_sign<T>())
+    = rhs_has_same_traits<T> && (n_sign >= fixpt_sign<T>())
     && (relaxed_frac_assign || (n_frac >= fixpt_n_frac<T>()))
     && (relaxed_int_assign || (n_int >= fixpt_n_int<T>()));
 
   template <class T>
-  using enable_if_comparable = std::enable_if_t<rhs_is_compatible<T>>;
+  using enable_if_comparable = std::enable_if_t<rhs_has_same_traits<T>>;
 
   template <class T>
   using enable_if_operand_w_dynamic
-    = std::enable_if_t<rhs_is_compatible<T> && is_dynamic>;
+    = std::enable_if_t<rhs_has_same_traits<T> && is_dynamic>;
 
   template <class T>
   using enable_if_operand_w_static = std::enable_if_t<
-    rhs_is_compatible<T> && (n_sign >= fixpt_sign<T>()) && !is_dynamic>;
+    rhs_has_same_traits<T> && (n_sign >= fixpt_sign<T>()) && !is_dynamic>;
   //----------------------------------------------------------------------------
-  template <uint N_intb, uint N_fracb, uint N_signv, uint Flagsv>
-  static constexpr auto convert_impl()
-  {
-    constexpr bool saturating = (Flagsv & fixpt_mixed) != 0;
-    constexpr bool dynamic    = (Flagsv & fixpt_dynamic) != 0 || is_saturating;
+  struct dummy_allow_decltype_private {
+    template <uint N_intb, uint N_fracb, uint N_signv, uint Flagsv>
+    static constexpr auto convert_impl()
+    {
+      // returns a ptr to be able to operate with incomplete types
+      constexpr bool saturating = (Flagsv & fixpt_mixed) != 0;
+      constexpr bool dynamic    = (Flagsv & fixpt_dynamic) != 0 || saturating;
 
-    if constexpr (dynamic && saturating) {
-      return fixpt<
-        N_signv,
-        N_intb, // the most significant integer bits are always respected
-        std::min (N_fracb, max_conversion_bits - N_signv - N_intb),
-        Flagsv,
-        traits> {};
+      if constexpr (dynamic && saturating) {
+        using T = fixpt<
+          N_signv,
+          N_intb, // the most significant integer bits are always respected
+          std::min (N_fracb, max_conversion_bits - N_signv - N_intb), // ?drop
+          Flagsv,
+          traits>;
+        return (T*) nullptr;
+      }
+      else if constexpr (dynamic) {
+        using T = fixpt<N_signv, N_intb, N_fracb, Flagsv, traits>;
+        return (T*) nullptr;
+      }
+      else {
+        using cdynamic
+          = fixpt<N_signv, N_intb, N_fracb, Flagsv | fixpt_dynamic, traits>;
+        using T = fixpt<
+          N_signv,
+          cdynamic::scalar_bits - N_signv - N_fracb, // fill
+          N_fracb,
+          Flagsv,
+          traits>;
+        return (T*) nullptr;
+      }
     }
-    else if constexpr (is_dynamic) {
-      return fixpt<N_signv, N_intb, N_fracb, Flagsv, traits> {};
-    }
-    else {
-      // static
-      using cdynamic
-        = fixpt<N_signv, N_intb, N_fracb, Flagsv | fixpt_dynamic, traits>;
-      return fixpt<
-        N_signv,
-        cdynamic::scalar_bits - N_signv - N_fracb,
-        N_fracb,
-        Flagsv,
-        traits> {};
-    }
-  }
+  };
   //----------------------------------------------------------------------------
-  template <uint C_Flags>
-  using convert_flags = fixpt<n_sign, n_int, n_frac, C_Flags, traits>;
-
   template <
     uint N_intb,
     uint N_fracb,
     uint N_signv = n_sign,
     uint Flagsv  = flags>
-  using convert_raw
-    = decltype (convert_impl<N_intb, N_fracb, N_signv, Flagsv>());
+  using convert_raw = std::remove_pointer_t<
+    decltype (dummy_allow_decltype_private::
+                template convert_impl<N_intb, N_fracb, N_signv, Flagsv>())>;
+
+  template <uint C_flags>
+  using convert_flags = convert_raw<n_int, n_frac, n_sign, C_flags>;
   //----------------------------------------------------------------------------
 public:
   using type = mp11::mp_at_c<conversions, type_idx>;
@@ -404,7 +413,7 @@ public:
   //
   // error: type 'artv::fixpt<1, 0, 15, true> &' cannot be used prior to
   // '::' because it has no members
-  //    = fixpt_are_compatible_v<T, mytype> && (n_sign == T::n_sign);
+  //    = fixpt_has_same_traits_v<T, mytype> && (n_sign == T::n_sign);
   //
   // fixpt(fixpt&&) = default
   // fixpt& operator= (fixpt&&) = default;
@@ -483,7 +492,7 @@ public:
   // apply e.g. signedness and range issues might not be respected.
   template <
     class T,
-    std::enable_if_t<fixpt_are_compatible_v<T, mytype>>* = nullptr>
+    std::enable_if_t<fixpt_has_same_traits_v<T, mytype>>* = nullptr>
   constexpr T cast (T) const noexcept
   {
     // notice that the casts are ignoring the sign...
@@ -506,7 +515,7 @@ public:
   //----------------------------------------------------------------------------
   template <
     class T,
-    std::enable_if_t<fixpt_are_compatible_v<T, mytype>>* = nullptr>
+    std::enable_if_t<fixpt_has_same_traits_v<T, mytype>>* = nullptr>
   constexpr T cast() const noexcept
   {
     return cast (T {});
@@ -526,8 +535,9 @@ public:
     return spec_cast (T {});
   }
   //----------------------------------------------------------------------------
-  // casting flags may result in invalid sizes for static types (they might
-  // expand the integer part).
+  // casting flags may result in static types expanding the integer part to make
+  // room for all bits, as static types only allow full ocupation of the scalar
+  // type bits.
   template <uint Flags_v>
   constexpr auto flags_cast() const noexcept
   {
@@ -827,7 +837,7 @@ public:
   //----------------------------------------------------------------------------
   template <
     class T,
-    std::enable_if_t<fixpt_are_compatible_v<T, mytype>>* = nullptr>
+    std::enable_if_t<fixpt_has_same_traits_v<T, mytype>>* = nullptr>
   explicit constexpr operator T() const noexcept
   {
     return cast (T {});
@@ -1146,7 +1156,7 @@ public:
     }
     else {
       auto r = *this;
-      r._v   = ash<N> (r._v);
+      r._v   = artv::ash<N> (r._v);
       return r;
     }
   }
@@ -1171,7 +1181,7 @@ private:
         (required_bits - G_frac) <= max_conversion_bits,
         "Arithmetic operation needs more integer bits than the biggest convertible type supports");
       static_assert (
-        (required_bits - G_frac) > max_conversion_bits,
+        (required_bits - G_int) > max_conversion_bits,
         "Arithmetic operation needs more fractional bits than the biggest convertible type supports");
     }
     return 0;
@@ -1407,8 +1417,8 @@ static constexpr auto fixpt_from_ratio_impl (ratio<Num, Den>, Fixpt)
 {
   constexpr auto fixdyn = fixpt_from_ratio<Num, Den, typename Fixpt::traits>();
   if constexpr (Fixpt::is_dynamic) {
-    constexpr auto fix = fixdyn.template flags_cast<Fixpt::flags>();
-    using T            = decltype (fix);
+    /*constexpr*/ auto fix = fixdyn.template flags_cast<Fixpt::flags>();
+    using T                = decltype (fix);
     if constexpr (T::n_frac > Max_frac_bits) {
       // limit to the same fractional size than its operand
       constexpr int n_reduce = T::n_frac - Max_frac_bits;
@@ -1419,12 +1429,8 @@ static constexpr auto fixpt_from_ratio_impl (ratio<Num, Den>, Fixpt)
     }
   }
   else {
-    // The sum of bits (sign + int + frac) of static types has to match the sum
-    // of bits of its underlying scalar representation. So trying to cast
-    // the spec from "fixdyn" can fail on a static_assertion that verifies that.
-    //
     // As the other operator is not a dynamic type we don't need to optimize
-    // bits, just cat the optimized/packed ratio to the other operand's type.
+    // bits, just cast the optimized/packed ratio to the other operand's type.
     return fixdyn.template cast<Fixpt>();
   }
 }
@@ -1495,22 +1501,24 @@ constexpr auto ratio_mul (T lhs, Ratio rhs) noexcept
       // integer bits drop (move right)
       constexpr int rshift   = v.n_frac - last_bit_set (v_abs);
       constexpr int int_drop = -std::min (rshift, (int) T::n_int);
-      return (lhs * fixpt_from_ratio_impl<maxfrac> (rat {}, lhs))
-        .template resize<int_drop>();
+      auto          rfp      = fixpt_from_ratio_impl<maxfrac> (rat {}, lhs);
+      return (lhs * rfp).template resize<int_drop>();
     }
     else if constexpr (v.n_frac == 0) {
       // fractional bits drop (move left)
       constexpr int lshift    = first_bit_set (v_abs) - 1;
       constexpr int frac_drop = -std::min (lshift, (int) T::n_frac);
-      return (lhs * fixpt_from_ratio_impl<maxfrac> (rat {}, lhs))
-        .template resize<0, frac_drop>();
+      auto          rfp       = fixpt_from_ratio_impl<maxfrac> (rat {}, lhs);
+      return (lhs * rfp).template resize<0, frac_drop>();
     }
     else {
-      return lhs * fixpt_from_ratio_impl<maxfrac> (rat {}, lhs);
+      auto rfp = fixpt_from_ratio_impl<maxfrac> (rat {}, lhs);
+      return lhs * rfp;
     }
   }
   else {
-    return lhs * fixpt_from_ratio_impl<maxfrac> (rat {}, lhs);
+    auto rfp = fixpt_from_ratio_impl<maxfrac> (rat {}, lhs);
+    return lhs * rfp;
   }
 }
 //------------------------------------------------------------------------------
@@ -2102,7 +2110,93 @@ constexpr auto fixpt_clamp (T v, U min, U max) noexcept
   return ret;
 }
 //------------------------------------------------------------------------------
+// just as an exercise, most of the time on modern architectures the conversion
+// from fixed to floating point and back will be much faster. Making this
+// properly requires going down the rabbit hole a lot.
+//
+// As of now the range and loss of resolution inside the iteration loop is
+// uncorrected/untreated. There are 3 serial multiplications, so the range
+// expands 4 times.
+//------------------------------------------------------------------------------
+template <class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+constexpr auto fixpt_sqrt_isqrt_half (T in) noexcept
+{
+  // for the estimate (exact powers of 2) sqrt halves the range
+  constexpr uint n_int     = in.n_int;
+  constexpr uint n_frac    = in.n_frac;
+  constexpr uint n_max     = std::max (n_int, n_frac);
+  constexpr uint n_int_d2  = div_ceil<uint> (in.n_int, 2);
+  constexpr uint n_frac_d2 = div_ceil<uint> (in.n_frac, 2);
 
+  // sqrt reduces the range compared to a regular div
+  using Tdyn          = typename T::dynamic_twin;
+  using Guess_pre_dyn = typename Tdyn::template convert<n_frac_d2, n_int_d2>;
+  using Acum_dyn      = decltype ((Tdyn {} * Guess_pre_dyn {}));
+  using Acum          = typename Acum_dyn::static_twin;
+
+  // Goldschmidt algo (less multiplications in series required than for NR)
+  // https://cs.stackexchange.com/questions/113107/finding-square-root-without-division-and-initial-guess
+
+  // Newton might have a lower error, but requires a lot of muls chained (test)
+
+  assert (in >= T {0});
+  // TODO is there a smarter range reduction/scaling to avoid requiring that
+  // much integer width?
+  // TODO smarter determination of number of iterations required.
+  Acum guess;
+  if constexpr (is_vec_v<decltype (guess)>) {
+    static_assert ("TBI");
+  }
+  else {
+    using Vt               = typename Acum::value_type;
+    constexpr Vt   one     = Vt {1} << Vt {Acum::n_frac};
+    constexpr auto sqrt2   = Acum::from_float (M_SQRT2);
+    int            bit     = last_bit_set (((Acum) in).value()) - 1;
+    int            shift   = bit - Acum::n_frac;
+    int            shift_r = shift / 2;
+    guess = Acum {(Vt) ((shift_r > 0) ? one >> shift_r : one << -shift_r)};
+    if ((shift & 1) == 1) {
+      constexpr auto odd_corr_a = Acum::from_float (M_SQRT2);
+      constexpr auto odd_corr_b = Acum::from_float (M_SQRT1_2);
+      guess *= ((shift < 0) ? odd_corr_a : odd_corr_b);
+    }
+  }
+
+  // auto guessf = guess.to_floatp();
+  Acum x = ((Acum) in) * guess;
+  Acum h = guess / 2._r;
+
+  // this is a guess/heuristic, nothing serious but seems to work up to 20 bit
+  // which is what this function allows now.
+  constexpr uint n_iter = div_ceil<uint> (T::n_bits, 6);
+  for (uint i = 0; i < n_iter; ++i) {
+    // auto xf = x.to_floatp();
+    // auto hf = h.to_floatp();
+    Acum xh = x * h;
+    static_assert (Acum::n_frac > 0);
+    Acum r = (0.5_r - xh);
+    x      = (x + r * x);
+    h      = (h + r * h);
+  }
+  auto sqrtv            = x.template set_size<n_int_d2, x.n_frac>();
+  auto sqrtv_recip_half = h.template set_size<Guess_pre_dyn::n_int, h.n_frac>();
+  return std::make_tuple (
+    sqrtv.template flags_cast<in.flags>(),
+    sqrtv_recip_half.template flags_cast<in.flags>());
+}
+//------------------------------------------------------------------------------
+template <class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+constexpr auto fixpt_sqrt (T in) noexcept
+{
+  return std::get<0> (fixpt_sqrt_isqrt_half (in));
+}
+//------------------------------------------------------------------------------
+// inverse/reciprocal sqrt
+template <class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
+constexpr auto fixpt_isqrt (T in) noexcept
+{
+  return std::get<1> (fixpt_sqrt_isqrt_half (in) * 2_r);
+}
 // TODO: fixpt_ceil, fixpt_floor, fixpt_round, fixpt_exp2...
 //------------------------------------------------------------------------------
 } // namespace artv
