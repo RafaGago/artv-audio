@@ -331,11 +331,13 @@ private:
   //----------------------------------------------------------------------------
 public:
   using type = mp11::mp_at_c<conversions, type_idx>;
-  // types next might or not be vectors
+  using wider_type
+    = mp11::mp_at_c<conversions, std::min (type_idx + 1, n_conversions - 1)>;
+  // types below might or not be vectors
   using uint_type  = typename type::tunsigned;
   using sint_type  = typename type::tsigned;
   using float_type = typename type::tfloat;
-  // types next are obviously scalars
+  // types below are obviously scalars
   using scalar_sint  = typename type::scalar_signed;
   using scalar_uint  = typename type::scalar_unsigned;
   using scalar_float = typename type::scalar_float;
@@ -2110,13 +2112,12 @@ constexpr auto fixpt_clamp (T v, U min, U max) noexcept
   return ret;
 }
 //------------------------------------------------------------------------------
-// just as an exercise, most of the time on modern architectures the conversion
-// from fixed to floating point and back will be much faster. Making this
-// properly requires going down the rabbit hole a lot.
+// Dont't use, just as an exercise, on the target architectures it will be
+// harder to beat a hardware-aided sqrt + the float/integer conversions.
 //
-// As of now the range and loss of resolution inside the iteration loop is
-// uncorrected/untreated. There are 3 serial multiplications, so the range
-// expands 4 times.
+// Making this properly requires going down the rabbit hole _a_lot_, so it is
+// left half in half-finished state. As of now integer width optimization is
+// unstudied/uncorrected/untreated.
 //------------------------------------------------------------------------------
 template <class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
 constexpr auto fixpt_sqrt_isqrt_half (T in) noexcept
@@ -2129,57 +2130,58 @@ constexpr auto fixpt_sqrt_isqrt_half (T in) noexcept
   constexpr uint n_frac_d2 = div_ceil<uint> (in.n_frac, 2);
 
   // sqrt reduces the range compared to a regular div
-  using Tdyn          = typename T::dynamic_twin;
-  using Guess_pre_dyn = typename Tdyn::template convert<n_frac_d2, n_int_d2>;
-  using Acum_dyn      = decltype ((Tdyn {} * Guess_pre_dyn {}));
-  using Acum          = typename Acum_dyn::static_twin;
+  using tdyn          = typename T::dynamic_twin;
+  using guess_pre_dyn = typename tdyn::template convert<n_frac_d2, n_int_d2>;
+  using acum_dyn      = decltype ((tdyn {} * guess_pre_dyn {}));
+  using acum          = typename acum_dyn::static_twin;
 
   // Goldschmidt algo (less multiplications in series required than for NR)
   // https://cs.stackexchange.com/questions/113107/finding-square-root-without-division-and-initial-guess
 
-  // Newton might have a lower error, but requires a lot of muls chained (test)
-
   assert (in >= T {0});
-  // TODO is there a smarter range reduction/scaling to avoid requiring that
-  // much integer width?
-  // TODO smarter determination of number of iterations required.
-  Acum guess;
+  // TODO is there a way to avoid requiring that much integer width?
+  // e.g.
+  // https://jet.ro/files/The_neglected_art_of_Fixed_Point_arithmetic_20060913.pdf
+  acum guess;
   if constexpr (is_vec_v<decltype (guess)>) {
     static_assert ("TBI");
   }
   else {
-    using Vt               = typename Acum::value_type;
-    constexpr Vt   one     = Vt {1} << Vt {Acum::n_frac};
-    constexpr auto sqrt2   = Acum::from_float (M_SQRT2);
-    int            bit     = last_bit_set (((Acum) in).value()) - 1;
-    int            shift   = bit - Acum::n_frac;
-    int            shift_r = shift / 2;
-    guess = Acum {(Vt) ((shift_r > 0) ? one >> shift_r : one << -shift_r)};
-    if ((shift & 1) == 1) {
-      constexpr auto odd_corr_a = Acum::from_float (M_SQRT2);
-      constexpr auto odd_corr_b = Acum::from_float (M_SQRT1_2);
-      guess *= ((shift < 0) ? odd_corr_a : odd_corr_b);
+    // Better guesses than only the MSB? Yes, using the FPU, but that defeats
+    // the purpose because in such case why not using RSQRT, so other stuff that
+    // could run without FPU.
+    //
+    // logb(1/sqrt(x)) = logb(x^(-1/2)) = -1/2 logb(x)
+    using vt            = typename acum::value_type;
+    vt  val             = ((acum) in).value();
+    int log2            = last_bit_set (val) - 1;
+    int from_frac       = log2 - acum::n_frac;
+    int from_frac_after = from_frac / 2;
+    int dst_bit         = acum::n_frac - from_frac_after;
+    guess               = acum {(vt) vt {1} << dst_bit};
+    if ((from_frac & 1) == 1) {
+      constexpr auto odd_corr_a = acum::from_float (M_SQRT2);
+      constexpr auto odd_corr_b = acum::from_float (M_SQRT1_2);
+      guess *= ((from_frac < 0) ? odd_corr_a : odd_corr_b);
     }
   }
-
-  // auto guessf = guess.to_floatp();
-  Acum x = ((Acum) in) * guess;
-  Acum h = guess / 2._r;
-
-  // this is a guess/heuristic, nothing serious but seems to work up to 20 bit
-  // which is what this function allows now.
+  auto guessf = guess.to_floatp();
+  acum x      = ((acum) in) * guess; // x * 1/sqrt = sqrt
+  acum h      = guess / 2._r; // 1/(2*sqrt)
+  // TODO: this is a guess/heuristic, nothing serious but seems to work up to 20
+  // bit which is what this function allows now.
   constexpr uint n_iter = div_ceil<uint> (T::n_bits, 6);
   for (uint i = 0; i < n_iter; ++i) {
-    // auto xf = x.to_floatp();
-    // auto hf = h.to_floatp();
-    Acum xh = x * h;
-    static_assert (Acum::n_frac > 0);
-    Acum r = (0.5_r - xh);
+    auto xf = x.to_floatp();
+    auto hf = h.to_floatp();
+    acum xh = x * h;
+    static_assert (acum::n_frac > 0);
+    acum r = (0.5_r - xh);
     x      = (x + r * x);
     h      = (h + r * h);
   }
   auto sqrtv            = x.template set_size<n_int_d2, x.n_frac>();
-  auto sqrtv_recip_half = h.template set_size<Guess_pre_dyn::n_int, h.n_frac>();
+  auto sqrtv_recip_half = h.template set_size<n_frac_d2, h.n_frac>();
   return std::make_tuple (
     sqrtv.template flags_cast<in.flags>(),
     sqrtv_recip_half.template flags_cast<in.flags>());
@@ -2195,8 +2197,9 @@ constexpr auto fixpt_sqrt (T in) noexcept
 template <class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
 constexpr auto fixpt_isqrt (T in) noexcept
 {
-  return std::get<1> (fixpt_sqrt_isqrt_half (in) * 2_r);
+  return std::get<1> (fixpt_sqrt_isqrt_half (in));
 }
+
 // TODO: fixpt_ceil, fixpt_floor, fixpt_round, fixpt_exp2...
 //------------------------------------------------------------------------------
 } // namespace artv
