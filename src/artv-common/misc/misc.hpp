@@ -310,6 +310,13 @@ static constexpr T round_ceil (T num, T round)
 }
 //------------------------------------------------------------------------------
 template <class T>
+static constexpr T round_floor (T num, T round)
+{
+  static_assert (std::is_integral<T>::value, "");
+  return (num / round) * round;
+}
+//------------------------------------------------------------------------------
+template <class T>
 static constexpr T constexpr_db_to_gain (T db, T m_inf_db = T {-130.})
 {
   return db > m_inf_db ? gcem::exp (db * (T) (M_LN10 / 20.)) : T {0.};
@@ -490,17 +497,19 @@ constexpr decltype (auto) lambda_forward (V&& value, F&& func)
   return func (std::forward<V> (value));
 }
 //------------------------------------------------------------------------------
+#if 0
 //clang-format off
 template <class P, class M>
-size_t cpp_offsetof (const M P::* member)
+size_t cpp_offsetof (M P::const* member)
 {
   return (size_t) & (reinterpret_cast<P*> (0)->*member);
 }
 
 template <class P, class M>
-P* container_of (M* ptr, const M P::* member)
+P* container_of (M* ptr, M P::const* member)
 {
   return (P*) ((char*) ptr - cpp_offsetof (member));
 }
 //clang-format on
+#endif
 } // namespace artv

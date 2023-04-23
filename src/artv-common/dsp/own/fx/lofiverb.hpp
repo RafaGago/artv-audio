@@ -45,11 +45,11 @@ public:
   struct algorithm_tag {};
   void set (algorithm_tag, int v)
   {
-    u32 curr = _param.mode / 2;
+    u32 curr = _param.mode / n_bit_formats;
     if (v == curr) {
       return;
     }
-    _param.mode = (_param.mode % 2) | (v * 2);
+    _param.mode = (_param.mode % n_bit_formats) + (v * n_bit_formats);
     update_operation_mode();
   }
   //----------------------------------------------------------------------------
@@ -79,18 +79,20 @@ public:
   struct mode_tag {};
   void set (mode_tag, int v)
   {
-    u32 curr = _param.mode & 1;
+    u32 curr = _param.mode % n_bit_formats;
     if (v == curr) {
       return;
     }
-    _param.mode = (_param.mode & ~(1u)) | (v & 1);
+    _param.mode = round_floor (_param.mode, n_bit_formats) + v;
     update_operation_mode();
   }
+
+  static constexpr uint n_bit_formats = 3;
 
   static constexpr auto get_parameter (mode_tag)
   {
     return choice_param (
-      1, make_cstr_array ("16-bit float point", "16-bit fixed point"), 16);
+      1, make_cstr_array ("16-bit fixed", "16-bit float", "32-bit float"), 16);
   }
   //----------------------------------------------------------------------------
   struct clock_tag {};
@@ -269,11 +271,11 @@ public:
     assert (ins.size() >= (n_inputs * (uint) bus_type));
 
     _resampler.process (outs, ins, samples, [=] (auto io) {
-      if ((_param.mode % 2) == 0) {
-        process_float (io);
+      if ((_param.mode % n_bit_formats) == 0) {
+        process_fixed_point (io);
       }
       else {
-        process_fixed_point (io);
+        process_float (io);
       }
     });
   }
@@ -448,29 +450,40 @@ private:
   //----------------------------------------------------------------------------
   struct mode {
     enum {
-      abyss_flt16,
       abyss_fix16,
-      small_space_flt16,
+      abyss_flt16,
+      abyss_flt32,
       small_space_fix16,
-      room_flt16,
+      small_space_flt16,
+      small_space_flt32,
       room_fix16,
-      midifex49_flt16,
+      room_flt16,
+      room_flt32,
       midifex49_fix16,
-      midifex50_flt16,
+      midifex49_flt16,
+      midifex49_flt32,
       midifex50_fix16,
-      dre2000a_flt16,
+      midifex50_flt16,
+      midifex50_flt32,
       dre2000a_fix16,
-      dre2000b_flt16,
+      dre2000a_flt16,
+      dre2000a_flt32,
       dre2000b_fix16,
-      dre2000c_flt16,
+      dre2000b_flt16,
+      dre2000b_flt32,
       dre2000c_fix16,
-      dre2000d_flt16,
+      dre2000c_flt16,
+      dre2000c_flt32,
       dre2000d_fix16,
-      rev5_l_hall_flt16,
+      dre2000d_flt16,
+      dre2000d_flt32,
       rev5_l_hall_fix16,
+      rev5_l_hall_flt16,
+      rev5_l_hall_flt32,
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
-      debug_algo_flt16,
       debug_algo_fix16,
+      debug_algo_flt16,
+      debug_algo_flt32,
 #endif
     };
   };
@@ -527,42 +540,53 @@ private:
     uint srate {};
 
     switch (_param.mode) {
-    case mode::abyss_flt16:
     case mode::abyss_fix16:
+    case mode::abyss_flt16:
+    case mode::abyss_flt32:
+    case mode::small_space_fix16:
     case mode::small_space_flt16:
-    case mode::small_space_fix16: {
+    case mode::small_space_flt32: {
       constexpr auto srates
         = make_array (10500, 16800, 21000, 25200, 31500, 40320, 50400);
       srate = srates[_param.srateid];
     } break;
-    case mode::midifex49_flt16:
     case mode::midifex49_fix16:
-    case mode::midifex50_flt16:
+    case mode::midifex49_flt16:
+    case mode::midifex49_flt32:
     case mode::midifex50_fix16:
+    case mode::midifex50_flt16:
+    case mode::midifex50_flt32:
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
+    case mode::debug_algo_fix16:
     case mode::debug_algo_flt16:
-    case mode::debug_algo:
+    case mode::debug_algo_flt32:
 #endif
+    case mode::room_fix16:
     case mode::room_flt16:
-    case mode::room_fix16: {
+    case mode::room_flt32: {
       constexpr auto srates
         = make_array (10500, 16800, 21000, 23400, 33600, 42000, 50400);
       srate = srates[_param.srateid];
     } break;
-    case mode::dre2000a_flt16:
     case mode::dre2000a_fix16:
-    case mode::dre2000b_flt16:
+    case mode::dre2000a_flt16:
+    case mode::dre2000a_flt32:
     case mode::dre2000b_fix16:
-    case mode::dre2000c_flt16:
+    case mode::dre2000b_flt16:
+    case mode::dre2000b_flt32:
     case mode::dre2000c_fix16:
+    case mode::dre2000c_flt16:
+    case mode::dre2000c_flt32:
+    case mode::dre2000d_fix16:
     case mode::dre2000d_flt16:
-    case mode::dre2000d_fix16: {
+    case mode::dre2000d_flt32: {
       constexpr auto srates
         = make_array (16800, 21000, 25200, 32400, 40320, 57600, 57600);
       srate = srates[_param.srateid];
     } break;
+    case mode::rev5_l_hall_fix16:
     case mode::rev5_l_hall_flt16:
-    case mode::rev5_l_hall_fix16: {
+    case mode::rev5_l_hall_flt32: {
       constexpr auto srates
         = make_array (25200, 33600, 40320, 44100, 45000, 52500, 57600);
       srate = srates[_param.srateid];
@@ -577,145 +601,179 @@ private:
     }
 
     switch (_param.mode) {
-    case mode::abyss_flt16: {
-      auto& rev
-        = _algorithms.emplace<detail::lofiverb::abyss::engine<dt_flt16>>();
-      detail::lofiverb::abyss::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
-    } break;
     case mode::abyss_fix16: {
       auto& rev
         = _algorithms.emplace<detail::lofiverb::abyss::engine<dt_fix16>>();
       detail::lofiverb::abyss::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
     } break;
-    case mode::small_space_flt16: {
-      auto& rev = _algorithms
-                    .emplace<detail::lofiverb::small_space::engine<dt_flt16>>();
-      detail::lofiverb::small_space::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
+    case mode::abyss_flt16: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::abyss::engine<dt_flt16>>();
+      detail::lofiverb::abyss::reset_lfo_phase (_lfo);
+    } break;
+    case mode::abyss_flt32: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::abyss::engine<dt_flt32>>();
+      detail::lofiverb::abyss::reset_lfo_phase (_lfo);
     } break;
     case mode::small_space_fix16: {
       auto& rev = _algorithms
                     .emplace<detail::lofiverb::small_space::engine<dt_fix16>>();
       detail::lofiverb::small_space::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
     } break;
-    case mode::room_flt16: {
-      auto& rev
-        = _algorithms.emplace<detail::lofiverb::room::engine<dt_flt16>>();
-      detail::lofiverb::room::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
+    case mode::small_space_flt16: {
+      auto& rev = _algorithms
+                    .emplace<detail::lofiverb::small_space::engine<dt_flt16>>();
+      detail::lofiverb::small_space::reset_lfo_phase (_lfo);
+    } break;
+    case mode::small_space_flt32: {
+      auto& rev = _algorithms
+                    .emplace<detail::lofiverb::small_space::engine<dt_flt32>>();
+      detail::lofiverb::small_space::reset_lfo_phase (_lfo);
     } break;
     case mode::room_fix16: {
       auto& rev
         = _algorithms.emplace<detail::lofiverb::room::engine<dt_fix16>>();
       detail::lofiverb::room::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
     } break;
-    case mode::midifex49_flt16: {
+    case mode::room_flt16: {
       auto& rev
-        = _algorithms.emplace<detail::lofiverb::midifex49::engine<dt_flt16>>();
-      detail::lofiverb::midifex49::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
+        = _algorithms.emplace<detail::lofiverb::room::engine<dt_flt16>>();
+      detail::lofiverb::room::reset_lfo_phase (_lfo);
+    } break;
+    case mode::room_flt32: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::room::engine<dt_flt32>>();
+      detail::lofiverb::room::reset_lfo_phase (_lfo);
     } break;
     case mode::midifex49_fix16: {
       auto& rev
         = _algorithms.emplace<detail::lofiverb::midifex49::engine<dt_fix16>>();
       detail::lofiverb::midifex49::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
     } break;
-    case mode::midifex50_flt16: {
+    case mode::midifex49_flt16: {
       auto& rev
-        = _algorithms.emplace<detail::lofiverb::midifex50::engine<dt_flt16>>();
-      detail::lofiverb::midifex50::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
+        = _algorithms.emplace<detail::lofiverb::midifex49::engine<dt_flt16>>();
+      detail::lofiverb::midifex49::reset_lfo_phase (_lfo);
+    } break;
+    case mode::midifex49_flt32: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::midifex49::engine<dt_flt32>>();
+      detail::lofiverb::midifex49::reset_lfo_phase (_lfo);
     } break;
     case mode::midifex50_fix16: {
       auto& rev
         = _algorithms.emplace<detail::lofiverb::midifex50::engine<dt_fix16>>();
       detail::lofiverb::midifex50::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
     } break;
-    case mode::dre2000a_flt16: {
+    case mode::midifex50_flt16: {
       auto& rev
-        = _algorithms.emplace<detail::lofiverb::dre2000a::engine<dt_flt16>>();
-      detail::lofiverb::dre2000a::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
+        = _algorithms.emplace<detail::lofiverb::midifex50::engine<dt_flt16>>();
+      detail::lofiverb::midifex50::reset_lfo_phase (_lfo);
+    } break;
+    case mode::midifex50_flt32: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::midifex50::engine<dt_flt32>>();
+      detail::lofiverb::midifex50::reset_lfo_phase (_lfo);
     } break;
     case mode::dre2000a_fix16: {
       auto& rev
         = _algorithms.emplace<detail::lofiverb::dre2000a::engine<dt_fix16>>();
       detail::lofiverb::dre2000a::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
     } break;
-    case mode::dre2000b_flt16: {
+    case mode::dre2000a_flt16: {
       auto& rev
-        = _algorithms.emplace<detail::lofiverb::dre2000b::engine<dt_flt16>>();
-      detail::lofiverb::dre2000b::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
+        = _algorithms.emplace<detail::lofiverb::dre2000a::engine<dt_flt16>>();
+      detail::lofiverb::dre2000a::reset_lfo_phase (_lfo);
+    } break;
+    case mode::dre2000a_flt32: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::dre2000a::engine<dt_flt32>>();
+      detail::lofiverb::dre2000a::reset_lfo_phase (_lfo);
     } break;
     case mode::dre2000b_fix16: {
       auto& rev
         = _algorithms.emplace<detail::lofiverb::dre2000b::engine<dt_fix16>>();
       detail::lofiverb::dre2000b::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
     } break;
-    case mode::dre2000c_flt16: {
+    case mode::dre2000b_flt16: {
       auto& rev
-        = _algorithms.emplace<detail::lofiverb::dre2000c::engine<dt_flt16>>();
-      detail::lofiverb::dre2000c::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
+        = _algorithms.emplace<detail::lofiverb::dre2000b::engine<dt_flt16>>();
+      detail::lofiverb::dre2000b::reset_lfo_phase (_lfo);
+    } break;
+    case mode::dre2000b_flt32: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::dre2000b::engine<dt_flt32>>();
+      detail::lofiverb::dre2000b::reset_lfo_phase (_lfo);
     } break;
     case mode::dre2000c_fix16: {
       auto& rev
         = _algorithms.emplace<detail::lofiverb::dre2000c::engine<dt_fix16>>();
       detail::lofiverb::dre2000c::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
     } break;
-    case mode::dre2000d_flt16: {
+    case mode::dre2000c_flt16: {
       auto& rev
-        = _algorithms.emplace<detail::lofiverb::dre2000d::engine<dt_flt16>>();
-      detail::lofiverb::dre2000d::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
+        = _algorithms.emplace<detail::lofiverb::dre2000c::engine<dt_flt16>>();
+      detail::lofiverb::dre2000c::reset_lfo_phase (_lfo);
+    } break;
+    case mode::dre2000c_flt32: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::dre2000c::engine<dt_flt32>>();
+      detail::lofiverb::dre2000c::reset_lfo_phase (_lfo);
     } break;
     case mode::dre2000d_fix16: {
       auto& rev
         = _algorithms.emplace<detail::lofiverb::dre2000d::engine<dt_fix16>>();
       detail::lofiverb::dre2000d::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
     } break;
-    case mode::rev5_l_hall_flt16: {
-      auto& rev = _algorithms
-                    .emplace<detail::lofiverb::rev5_l_hall::engine<dt_flt16>>();
-      detail::lofiverb::rev5_l_hall::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
+    case mode::dre2000d_flt16: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::dre2000d::engine<dt_flt16>>();
+      detail::lofiverb::dre2000d::reset_lfo_phase (_lfo);
+    } break;
+    case mode::dre2000d_flt32: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::dre2000d::engine<dt_flt32>>();
+      detail::lofiverb::dre2000d::reset_lfo_phase (_lfo);
     } break;
     case mode::rev5_l_hall_fix16: {
       auto& rev = _algorithms
                     .emplace<detail::lofiverb::rev5_l_hall::engine<dt_fix16>>();
       detail::lofiverb::rev5_l_hall::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
+    } break;
+    case mode::rev5_l_hall_flt16: {
+      auto& rev = _algorithms
+                    .emplace<detail::lofiverb::rev5_l_hall::engine<dt_flt16>>();
+      detail::lofiverb::rev5_l_hall::reset_lfo_phase (_lfo);
+    } break;
+    case mode::rev5_l_hall_flt32: {
+      auto& rev = _algorithms
+                    .emplace<detail::lofiverb::rev5_l_hall::engine<dt_flt32>>();
+      detail::lofiverb::rev5_l_hall::reset_lfo_phase (_lfo);
     } break;
 #ifdef LOFIVERB_ADD_DEBUG_ALGO
-    case mode::debug_algo_flt16: {
-      auto& rev
-        = _algorithms.emplace<detail::lofiverb::debug::engine<dt_flt16>>();
-      detail::lofiverb::debug::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
-    } break;
     case mode::debug_algo_fix16: {
       auto& rev
         = _algorithms.emplace<detail::lofiverb::debug::engine<dt_fix16>>();
       detail::lofiverb::debug::reset_lfo_phase (_lfo);
-      rev.reset_memory (_mem_reverb);
+    } break;
+    case mode::debug_algo_flt16: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::debug::engine<dt_flt16>>();
+      detail::lofiverb::debug::reset_lfo_phase (_lfo);
+    } break;
+    case mode::debug_algo_flt32: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::debug::engine<dt_flt32>>();
+      detail::lofiverb::debug::reset_lfo_phase (_lfo);
     } break;
 #endif
     default:
       return;
     }
+    std::visit (
+      [&] (auto& rev) { rev.reset_memory (_mem_reverb); }, _algorithms);
     _n_processed_samples = 0; // trigger the control block on first sample
-    xspan_memset (_mem_reverb, 0);
     update_mod();
   }
   //----------------------------------------------------------------------------
@@ -826,48 +884,69 @@ private:
   using algorithms_type = std::variant<
     detail::lofiverb::abyss::engine<dt_fix16>,
     detail::lofiverb::abyss::engine<dt_flt16>,
+    detail::lofiverb::abyss::engine<dt_flt32>,
     detail::lofiverb::small_space::engine<dt_fix16>,
     detail::lofiverb::small_space::engine<dt_flt16>,
+    detail::lofiverb::small_space::engine<dt_flt32>,
     detail::lofiverb::room::engine<dt_fix16>,
     detail::lofiverb::room::engine<dt_flt16>,
+    detail::lofiverb::room::engine<dt_flt32>,
     detail::lofiverb::midifex49::engine<dt_fix16>,
     detail::lofiverb::midifex49::engine<dt_flt16>,
+    detail::lofiverb::midifex49::engine<dt_flt32>,
     detail::lofiverb::midifex50::engine<dt_fix16>,
     detail::lofiverb::midifex50::engine<dt_flt16>,
+    detail::lofiverb::midifex50::engine<dt_flt32>,
     detail::lofiverb::dre2000a::engine<dt_fix16>,
     detail::lofiverb::dre2000a::engine<dt_flt16>,
+    detail::lofiverb::dre2000a::engine<dt_flt32>,
     detail::lofiverb::dre2000b::engine<dt_fix16>,
     detail::lofiverb::dre2000b::engine<dt_flt16>,
+    detail::lofiverb::dre2000b::engine<dt_flt32>,
     detail::lofiverb::dre2000c::engine<dt_fix16>,
     detail::lofiverb::dre2000c::engine<dt_flt16>,
+    detail::lofiverb::dre2000c::engine<dt_flt32>,
     detail::lofiverb::dre2000d::engine<dt_fix16>,
     detail::lofiverb::dre2000d::engine<dt_flt16>,
+    detail::lofiverb::dre2000d::engine<dt_flt32>,
     detail::lofiverb::rev5_l_hall::engine<dt_fix16>,
-    detail::lofiverb::rev5_l_hall::engine<dt_flt16>>;
+    detail::lofiverb::rev5_l_hall::engine<dt_flt16>,
+    detail::lofiverb::rev5_l_hall::engine<dt_flt32>>;
 #else
   using algorithms_type = std::variant<
     detail::lofiverb::abyss::engine<dt_fix16>,
     detail::lofiverb::abyss::engine<dt_flt16>,
+    detail::lofiverb::abyss::engine<dt_flt32>,
     detail::lofiverb::small_space::engine<dt_fix16>,
     detail::lofiverb::small_space::engine<dt_flt16>,
+    detail::lofiverb::small_space::engine<dt_flt32>,
     detail::lofiverb::room::engine<dt_fix16>,
     detail::lofiverb::room::engine<dt_flt16>,
+    detail::lofiverb::room::engine<dt_flt32>,
     detail::lofiverb::midifex49::engine<dt_fix16>,
     detail::lofiverb::midifex49::engine<dt_flt16>,
+    detail::lofiverb::midifex49::engine<dt_flt32>,
     detail::lofiverb::midifex50::engine<dt_fix16>,
     detail::lofiverb::midifex50::engine<dt_flt16>,
+    detail::lofiverb::midifex50::engine<dt_flt32>,
     detail::lofiverb::dre2000a::engine<dt_fix16>,
     detail::lofiverb::dre2000a::engine<dt_flt16>,
+    detail::lofiverb::dre2000a::engine<dt_flt32>,
     detail::lofiverb::dre2000b::engine<dt_fix16>,
     detail::lofiverb::dre2000b::engine<dt_flt16>,
+    detail::lofiverb::dre2000b::engine<dt_flt32>,
     detail::lofiverb::dre2000c::engine<dt_fix16>,
     detail::lofiverb::dre2000c::engine<dt_flt16>,
+    detail::lofiverb::dre2000c::engine<dt_flt32>,
     detail::lofiverb::dre2000d::engine<dt_fix16>,
     detail::lofiverb::dre2000d::engine<dt_flt16>,
+    detail::lofiverb::dre2000d::engine<dt_flt32>,
     detail::lofiverb::rev5_l_hall::engine<dt_fix16>,
     detail::lofiverb::rev5_l_hall::engine<dt_flt16>,
+    detail::lofiverb::rev5_l_hall::engine<dt_flt32>,
     detail::lofiverb::debug::engine<dt_fix16>,
-    detail::lofiverb::debug::engine<dt_flt16>>;
+    detail::lofiverb::debug::engine<dt_flt16>,
+    detail::lofiverb::debug::engine<dt_flt32>>;
 #endif
   algorithms_type _algorithms;
   ducker<f32_x2>  _ducker;
