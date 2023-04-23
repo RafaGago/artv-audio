@@ -736,7 +736,6 @@ struct small_space : private algorithm {
     rev.push<63> (d.to_const());
   }
 };
-#if 0
 //------------------------------------------------------------------------------
 static constexpr std::array<u8, 32> get_room_ffwd_table()
 {
@@ -749,7 +748,7 @@ static constexpr std::array<u8, 32> get_room_ffwd_table()
   for (uint i = 3; i < r.size(); ++i) {
     r[i] = primes_table_raw[8 + i];
   }
-  return ret;
+  return r;
 }
 //------------------------------------------------------------------------------
 class room : private algorithm {
@@ -791,16 +790,15 @@ public:
       make_variable_delay (ffwd_table[12], ffwd_table[16 + 12], true),
       make_variable_delay (ffwd_table[13], ffwd_table[16 + 13], true),
       make_variable_delay (ffwd_table[14], ffwd_table[16 + 14], true),
-      make_variable_delay (ffwd_table[15], ffwd_table[16 + 15], true), // 18
-      make_ap (913, 0.f, 413, interpolation::linear), // 19
-      make_ap (491, 0.f, 213, interpolation::linear), // 20
-      make_ap (211, 0.f), // 21
-      make_lp(), // 22
-      make_lp(), // 23
+      make_variable_delay (ffwd_table[15], ffwd_table[16 + 15], true), // 19
+      make_ap (913, 0.f, 413, interpolation::linear), // 20
+      make_ap (491, 0.f, 213, interpolation::linear), // 21
+      make_ap (211, 0.f), // 22
+      make_crossover2(), // 23
       make_ap (133, 0.f), // 24
       make_ap (191, 0.f), // 25
       make_ap (211, 0.f), // 26
-      make_ap (311, 0.f)); // 27
+      make_ap (311, 0.f, 73)); // 27
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -820,43 +818,90 @@ public:
 
     span_visit (io, [&] (auto& spl, uint i) {
       // Midside signal
-      l[i] = (T) (spl[0] * 0.5_r);
-      r[i] = (T) (spl[1] * 0.5_r);
+      l[i] = (T) (spl[0] * 0.25_r);
+      r[i] = (T) (spl[1] * 0.25_r);
     });
 
-    rev.run<0> (l);
-    rev.run<1> (l);
-    rev.run<2> (r);
-    rev.run<3> (r);
+    T lo = load_float<T> (0.75f - upar.hf_amt * 0.2f);
+    T hi = load_float<T> (0.9f + upar.lf_amt * 0.075f);
+
+    rev.run<0> (l, lo);
+    rev.run<1> (l, hi);
+    rev.run<2> (r, lo);
+    rev.run<3> (r, hi);
+
     // Mystran's diffusor
     mp11::mp_for_each<mp11::mp_from_sequence<std::make_index_sequence<16>>> (
-      [&, this] (auto idx) {
-        rev.run<idx + 4> ((idx & 1) ? l : r, [this] (uint i) {
-          uint tblidx;
-          if constexpr (is_fixpt_v<T>) {
-            tblidx = (par.decay[i] * 16.99_r).to_int();
-          }
-          else {
-            tblidx = par.decay[i] * 16.99f;
-          }
-          return ffwd_table[tblidx];
+      [&] (auto idx) {
+        rev.run<idx + 4> ((idx & 1) ? l : r, [&] (uint i) {
+          return ffwd_table[idx + (uint) (par.decay[i] * 16_r)];
         });
         hadamard2 (make_array (l.data(), r.data()), l.size());
       });
-    arr   m_m, ltdec;
+
+    arr   m_m, ltdec, t1, t2, t3;
     xspan m {m_m.data(), io.size()};
 
+    rev.fetch_block<20> (xspan {t1.data(), io.size()}, 33);
+    rev.fetch_block<20> (xspan {t2.data(), io.size()}, 157);
+
     span_visit (m, [&] (auto& spl, uint i) {
-      spl   = (T) (l[i] + r[i] * 0.5_r);
-      ltdec = (T) (par.decay[i] * par.decay[i]);
+      spl      = (T) ((l[i] + r[i]) * 0.25_r);
+      auto inv = one<T>() - par.decay[i];
+#if 1
+      l[i] = r[i] = T {0};
+      spl         = (T) ((io[i][0] + io[i][1]) * 0.25_r);
+#endif
+#if 0
+      l[i]     = (T) (l[i] + t1[i] * inv);
+      r[i]     = (T) (r[i] - t2[i] * inv);
+#endif
+      ltdec[i] = (T) (par.decay[i] * par.decay[i]);
+      t1[i]    = (T) (0.39_r * ltdec[i]);
+      t2[i]    = (T) (-0.28_r * ltdec[i]);
+      t3[i]    = (T) (0.19_r * ltdec[i]);
     });
     // triple nested AP with crossover
-    rev.run<19, 20, 21, 22>();
+    rev.run<20, 21, 22, 23> (
+      m,
+      par.character,
+      t1,
+      par.character,
+      t2,
+      blank,
+      t3,
+      load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f),
+      load_float<T> (0.85f + upar.lf_amt * 0.13f),
+      load_float<T> (0.55f - upar.hf_amt * upar.hf_amt * 0.15f),
+      one<T>(),
+      load_float<T> (0.35f + upar.hf_amt * 0.14f));
+
+#if 0
+    span_visit (xspan {ltdec.data(), io.size()}, [&] (auto& v, uint i) {
+      t1[i] = (T) (0.3_r + v * 0.3_r);
+      t2[i] = (T) (-0.25_r - v * 0.3_r);
+      t3[i] = (T) (0.25_r + v * 0.3_r);
+    });
+    rev.run<24> (m, blank, t1);
+    rev.run<25> (m, blank, t2);
+    rev.run<26> (m, blank, t3);
+
+    span_visit (xspan {par.mod.data(), io.size()}, [&] (auto& v, uint i) {
+      t1[i] = (T) (T {tick_lfo<T> (lfo_obj)[0]} * v);
+      t2[i] = (T) (0.365_r + v * 0.2_r);
+    });
+    rev.run<27> (xspan {t3.data(), io.size()}, m.to_const(), t1, t2);
+#else
+    xspan_memcpy<T> (t3, m);
+#endif
+    span_visit (io, [&] (auto& spl, uint i) {
+      spl[0] = (T) (l[i] + par.decay[i] * t3[i]);
+      spl[1] = (T) (r[i] - par.decay[i] * m[i]);
+    });
   }
   //----------------------------------------------------------------------------
   static constexpr auto ffwd_table {get_room_ffwd_table()};
 };
-#endif
 //------------------------------------------------------------------------------
 struct midifex49 : private algorithm {
   //----------------------------------------------------------------------------

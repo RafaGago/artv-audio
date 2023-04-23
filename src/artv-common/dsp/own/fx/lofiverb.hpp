@@ -60,6 +60,7 @@ public:
       make_cstr_array (
         "Artv Abyss",
         "Artv Small",
+        "Artv Room",
         "Acreil Midifex 49",
         "Acreil Midifex 50",
         "Acreil Dre-2000 A",
@@ -444,6 +445,8 @@ private:
       abyss,
       small_space_flt,
       small_space,
+      room_flt,
+      room,
       midifex49_flt,
       midifex49,
       midifex50_flt,
@@ -533,7 +536,8 @@ private:
     case mode::debug_algo_flt:
     case mode::debug_algo:
 #endif
-    {
+    case mode::room_flt:
+    case mode::room: {
       constexpr auto srates
         = make_array (10500, 16800, 21000, 23400, 33600, 42000, 50400);
       srate = srates[_param.srateid];
@@ -576,6 +580,12 @@ private:
     case mode::small_space: {
       auto& rev = _algorithms.emplace<detail::lofiverb::small_space::engine>();
       detail::lofiverb::small_space::reset_lfo_phase (_lfo);
+      rev.reset_memory (_mem_reverb);
+    } break;
+    case mode::room_flt:
+    case mode::room: {
+      auto& rev = _algorithms.emplace<detail::lofiverb::room::engine>();
+      detail::lofiverb::room::reset_lfo_phase (_lfo);
       rev.reset_memory (_mem_reverb);
     } break;
     case mode::midifex49_flt:
@@ -749,6 +759,7 @@ private:
   using algorithms_type = std::variant<
     detail::lofiverb::abyss::engine,
     detail::lofiverb::small_space::engine,
+    detail::lofiverb::room::engine,
     detail::lofiverb::midifex49::engine,
     detail::lofiverb::midifex50::engine,
     detail::lofiverb::dre2000a::engine,
@@ -760,6 +771,7 @@ private:
   using algorithms_type = std::variant<
     detail::lofiverb::abyss::engine,
     detail::lofiverb::small_space::engine,
+    detail::lofiverb::room::engine,
     detail::lofiverb::midifex49::engine,
     detail::lofiverb::midifex50::engine,
     detail::lofiverb::dre2000a::engine,
