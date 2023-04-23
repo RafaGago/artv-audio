@@ -86,6 +86,8 @@ public:
   static constexpr bool rounds_nearest = !!(flags & f16pack_nearest);
   static constexpr bool denormal_ftz   = !!(flags & f16pack_dftz);
   static constexpr bool clamp_input    = !!(flags & f16pack_clamp);
+  using value_type                     = u16;
+  using float_type                     = float;
   //----------------------------------------------------------------------------
   static constexpr u16 encode (float f)
   {

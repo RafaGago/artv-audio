@@ -48,7 +48,7 @@ using to_typelist_with_indexes =
   typename detail::to_typelist_with_indexes<Tl>::type;
 //------------------------------------------------------------------------------
 template <template <class...> class L, class... Ts, class F>
-void mp_foreach_idx (L<Ts...>, F&& f)
+constexpr void mp_foreach_idx (L<Ts...>, F&& f)
 {
   using with_idx = to_typelist_with_indexes<L<Ts...>>;
 
@@ -58,14 +58,14 @@ void mp_foreach_idx (L<Ts...>, F&& f)
 }
 //------------------------------------------------------------------------------
 template <uint End, class F>
-void mp_foreach_idx (F&& f)
+constexpr void mp_foreach_idx (F&& f)
 {
   mp11::mp_for_each<
     mp11::mp_from_sequence<mp11::make_integer_sequence<uint, End>>> (f);
 }
 //------------------------------------------------------------------------------
 template <template <class...> class L, class... Ts, class F>
-void mp_foreach_idx_reverse (L<Ts...>, F&& f)
+constexpr void mp_foreach_idx_reverse (L<Ts...>, F&& f)
 {
   using with_idx = to_typelist_with_indexes<L<Ts...>>;
 
@@ -75,7 +75,7 @@ void mp_foreach_idx_reverse (L<Ts...>, F&& f)
 }
 //------------------------------------------------------------------------------
 template <uint Start, class F>
-void mp_foreach_idx_reverse (F&& f)
+constexpr void mp_foreach_idx_reverse (F&& f)
 {
   mp11::mp_for_each<mp11::mp_reverse<
     mp11::mp_from_sequence<mp11::make_integer_sequence<uint, Start + 1>>>> (f);
