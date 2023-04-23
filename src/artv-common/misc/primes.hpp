@@ -11,7 +11,7 @@ namespace artv {
 // not winning a competition with these, but easy code for the intended range.
 //------------------------------------------------------------------------------
 template <class T>
-T primes_table_size_guess (T minv, T maxv)
+inline constexpr T primes_table_size_guess (T minv, T maxv)
 {
   T n_guess = maxv - minv;
   n_guess   = div_ceil<T> (n_guess, 2); // even numbers
@@ -20,7 +20,7 @@ T primes_table_size_guess (T minv, T maxv)
 }
 //------------------------------------------------------------------------------
 template <class T>
-xspan<T> make_primes_table (xspan<T> mem, T minv, T maxv)
+inline constexpr xspan<T> make_primes_table (xspan<T> mem, T minv, T maxv)
 {
   static_assert (std::is_unsigned_v<T>);
 

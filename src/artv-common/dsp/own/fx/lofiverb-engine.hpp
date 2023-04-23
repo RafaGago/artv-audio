@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -13,6 +14,7 @@
 #include <vector>
 
 #include "artv-common/dsp/own/classes/noise.hpp"
+#include "artv-common/dsp/own/fx/lofiverb-algorithms.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/compiler.hpp"
@@ -77,6 +79,7 @@ struct delay_data {
 struct variable_delay_data {
   fixpt_spls min_spls;
   fixpt_spls max_spls;
+  bool       mod_is_abs;
 };
 
 struct block_delay_data {
@@ -101,9 +104,10 @@ struct filter_data {
 };
 
 struct crossover_data {
-  fixpt_t g; // fc
-  fixpt_t g_lp; // lowpass gain
-  fixpt_t g_hp; // lowpass highpass gain
+  static constexpr uint                max_n_bands = 2;
+  std::array<fixpt_t, max_n_bands>     g; // fc
+  std::array<fixpt_t, max_n_bands + 1> band_gain;
+  uint                                 n_bands;
 };
 
 struct quantizer_data {
@@ -231,14 +235,33 @@ static constexpr stage_data make_lp (float g = 0)
 }
 //------------------------------------------------------------------------------
 static constexpr stage_data make_crossover (
-  float g    = 0,
-  float g_lp = 0,
-  float g_hp = 0)
+  float f    = 0,
+  float g_lo = 0,
+  float g_hi = 0)
 {
-  return crossover_data {
-    fixpt_t::from_float (g),
-    fixpt_t::from_float (g_lp),
-    fixpt_t::from_float (g_hp)};
+  crossover_data r {};
+  r.g[0]         = fixpt_t::from_float (f);
+  r.band_gain[0] = fixpt_t::from_float (g_lo);
+  r.band_gain[1] = fixpt_t::from_float (g_hi);
+  r.n_bands      = 1;
+  return r;
+}
+//------------------------------------------------------------------------------
+static constexpr stage_data make_crossover2 (
+  float f_lo  = 0,
+  float f_hi  = 0,
+  float g_lo  = 0,
+  float g_mid = 0,
+  float g_hi  = 0)
+{
+  crossover_data r {};
+  r.g[0]         = fixpt_t::from_float (f_lo);
+  r.g[1]         = fixpt_t::from_float (f_hi);
+  r.band_gain[0] = fixpt_t::from_float (g_lo);
+  r.band_gain[1] = fixpt_t::from_float (g_mid);
+  r.band_gain[2] = fixpt_t::from_float (g_hi);
+  r.n_bands      = 2;
+  return r;
 }
 //------------------------------------------------------------------------------
 static constexpr stage_data make_quantizer()
@@ -253,10 +276,13 @@ static constexpr stage_data make_free_storage (uint n_elems)
 //------------------------------------------------------------------------------
 // regular delays user thiran for small interpolation. This uses quantization.
 // TODO: lerp
-static constexpr stage_data make_variable_delay (uint min_spls, uint max_spls)
+static constexpr stage_data make_variable_delay (
+  uint min_spls,
+  uint max_spls,
+  bool abs_mod = false)
 {
   return variable_delay_data {
-    fixpt_spls::from_int (min_spls), fixpt_spls::from_int (max_spls)};
+    fixpt_spls::from_int (min_spls), fixpt_spls::from_int (max_spls), abs_mod};
 }
 //------------------------------------------------------------------------------
 template <class Algorithm>
@@ -298,9 +324,19 @@ public:
     return std::holds_alternative<variable_delay_data> (spec[i]);
   }
   //----------------------------------------------------------------------------
+  static constexpr bool uses_absolute_delay_modulation (uint i)
+  {
+    if (is_variable_delay (i)) {
+      return std::get<variable_delay_data> (spec[i]).mod_is_abs;
+    }
+    else {
+      return false;
+    }
+  }
+  //----------------------------------------------------------------------------
   static constexpr bool is_filter (uint i)
   {
-    return std::holds_alternative<filter_data> (spec[i]) || is_crossover (i);
+    return std::holds_alternative<filter_data> (spec[i]);
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_quantizer (uint i)
@@ -310,7 +346,7 @@ public:
   //----------------------------------------------------------------------------
   static constexpr bool is_lowpass (uint i)
   {
-    if (is_filter (i) && !is_crossover (i)) {
+    if (is_filter (i)) {
       return std::get<filter_data> (spec[i]).is_lowpass;
     }
     return false;
@@ -318,15 +354,20 @@ public:
   //----------------------------------------------------------------------------
   static constexpr bool is_highpass (uint i)
   {
-    if (is_filter (i) && !is_crossover (i)) {
+    if (is_filter (i)) {
       return !std::get<filter_data> (spec[i]).is_lowpass;
     }
     return false;
   }
   //----------------------------------------------------------------------------
-  static constexpr bool is_crossover (uint i)
+  static constexpr uint get_crossover_n_bands (uint i)
   {
-    return std::holds_alternative<crossover_data> (spec[i]);
+    if (std::holds_alternative<crossover_data> (spec[i])) {
+      return std::get<crossover_data> (spec[i]).n_bands;
+    }
+    else {
+      return 0;
+    }
   }
   //----------------------------------------------------------------------------
   static constexpr bool is_free_storage (uint i)
@@ -342,6 +383,16 @@ public:
     return 0;
   }
   //----------------------------------------------------------------------------
+  static constexpr crossover_data get_crossover_data (uint i)
+  {
+    if (get_crossover_n_bands (i)) {
+      return std::get<crossover_data> (spec[i]);
+    }
+    else {
+      return {};
+    }
+  }
+  //----------------------------------------------------------------------------
   static constexpr xspan<fixpt_t const> get_gains (uint i)
   {
     if (is_parallel_delay (i)) {
@@ -351,8 +402,8 @@ public:
     else if (is_allpass (i)) {
       return {&std::get<allpass_data> (spec[i]).g, 1};
     }
-    else if (is_crossover (i)) {
-      return {&std::get<crossover_data> (spec[i]).g, 1};
+    else if (get_crossover_n_bands (i)) {
+      return {get_crossover_data (i).g};
     }
     else if (is_filter (i)) {
       return {&std::get<filter_data> (spec[i]).g, 1};
@@ -373,16 +424,6 @@ public:
     }
     else {
       return {};
-    }
-  }
-  //----------------------------------------------------------------------------
-  static constexpr auto get_crossover_data (uint i)
-  {
-    if (is_crossover (i)) {
-      return std::get<crossover_data> (spec[i]);
-    }
-    else {
-      return nullptr;
     }
   }
   //----------------------------------------------------------------------------
@@ -531,10 +572,21 @@ struct y1_float {
   float y1;
 };
 //------------------------------------------------------------------------------
+template <uint N>
+struct y1_float_arr {
+  std::array<y1_float, N> arr;
+};
+//------------------------------------------------------------------------------
 struct y1_fixpt {
   fixpt_t y1;
   s16     y1_err;
 };
+//------------------------------------------------------------------------------
+template <uint N>
+struct y1_fixpt_arr {
+  std::array<y1_fixpt, N> arr;
+};
+
 //------------------------------------------------------------------------------
 struct allpass_fixpt {
   s16 x_err;
@@ -591,6 +643,9 @@ static constexpr auto get_state_type()
     else if constexpr (SpecAccess::is_filter (Idx)) {
       return y1_fixpt {};
     }
+    else if constexpr (SpecAccess::get_crossover_n_bands (Idx)) {
+      return y1_fixpt_arr<SpecAccess::get_crossover_n_bands (Idx)> {};
+    }
     else if constexpr (SpecAccess::is_quantizer (Idx)) {
       return quantizer_fixpt {};
     }
@@ -610,6 +665,9 @@ static constexpr auto get_state_type()
       (!!interp && *interp == interpolation::thiran)
       || SpecAccess::is_filter (Idx)) {
       return y1_float {};
+    }
+    else if constexpr (SpecAccess::get_crossover_n_bands (Idx)) {
+      return y1_float_arr<SpecAccess::get_crossover_n_bands (Idx)> {};
     }
     else if constexpr (SpecAccess::is_free_storage (Idx)) {
       return free_storage<T, SpecAccess::get_free_storage_count (Idx)> {};
@@ -650,24 +708,6 @@ public:
   //----------------------------------------------------------------------------
   using algorithm = Algorithm;
   using spec      = spec_access<Algorithm>;
-  //----------------------------------------------------------------------------
-  template <class T>
-  static constexpr void span_add (
-    xspan<T>       dst,
-    xspan<T const> lhs,
-    xspan<T const> rhs)
-  {
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < rhs.size(); ++i) {
-      dst[i] = (T) (lhs[i] + rhs[i]);
-    }
-  }
-  //----------------------------------------------------------------------------
-  template <class T>
-  static constexpr void span_add (xspan<T> lhs, xspan<T const> rhs)
-  {
-    span_add (lhs, lhs, rhs);
-  }
   //----------------------------------------------------------------------------
   static constexpr uint max_block_size = Max_block_size;
   //----------------------------------------------------------------------------
@@ -737,13 +777,30 @@ public:
   // dst has to contain one element more at the head, where the previous
   // output will be placed. Once the feedback is applied to a current input,
   // this head feedback sample (last output) can be dropped.
-  template <uint Idx, class T>
+  template <
+    uint Idx,
+    class T,
+    std::enable_if_t<spec::is_block_delay (Idx)>* = nullptr>
   void fetch_block (xspan<T> dst, uint negative_offset = 0)
   {
-    static_assert (spec::is_block_delay (Idx), "Only usable on block delays");
     static_assert (spec::get_min_delay_spls (Idx) >= max_block_size);
     assert (dst);
     decode_read (dst, get_read_buffers<Idx> (dst.size(), negative_offset));
+  }
+  //----------------------------------------------------------------------------
+  // Fetch samples from the queue of a processed allpass. The allpass has to be
+  // independenly processed.
+  template <
+    uint Idx,
+    class T,
+    std::enable_if_t<spec::is_allpass (Idx)>* = nullptr>
+  void fetch_block (xspan<T> dst, uint spls)
+  {
+    static_assert (spec::get_min_delay_spls (Idx) >= max_block_size);
+    assert (dst);
+    assert (spls <= spec::get_max_delay_spls (Idx));
+    assert (spls >= max_block_size);
+    decode_read (dst, get_read_buffers<Idx> (dst.size(), 0, spls));
   }
   //----------------------------------------------------------------------------
   // fetches the output and feedback from an allpass. The output will
@@ -831,79 +888,6 @@ public:
     assert (src);
     encode_write (prepare_block_insertion<Idx> (src.size()), src);
   }
-#if 0
-  //----------------------------------------------------------------------------
-  template <uint Start_idx, uint N, class T>
-  void run_multichannel (std::array<T*, N> io, uint block_size)
-  {
-    mp11::mp_for_each<mp11::mp_iota_c<N>> ([&] (auto idx) {
-      run<Start_idx + idx.value> (xspan {io[idx.value], block_size});
-    });
-  }
-
-  // This doesn't optimize the datatype range, for ints it truncates more times
-  // than necessary
-  //----------------------------------------------------------------------------
-  template <class T, uint N>
-  static void hadamard_no_norm (std::array<T*, N> io, uint block_size)
-  {
-    static_assert (is_pow2 (N));
-    if constexpr (N > 1) {
-      constexpr int half_n = N / 2;
-      // all this superfluous array copying stuff should be removed by the
-      // optimizer.
-      hadamard_no_norm (array_slice<0, half_n> (io), block_size);
-      hadamard_no_norm (array_slice<half_n, half_n> (io), block_size);
-
-      for (uint n = 0; n < half_n; ++n) {
-        uint n1 = n;
-        uint n2 = n + half_n;
-        ARTV_LOOP_UNROLL_SIZE_HINT (16)
-        for (uint i = 0; i < block_size; ++i) {
-          T a       = io[n1][i];
-          T b       = io[n2][i];
-          io[n1][i] = (a + b);
-          io[n2][i] = (a - b);
-        }
-      }
-    }
-  }
-  //----------------------------------------------------------------------------
-  template <class T, uint N>
-  static void hadamard (std::array<T*, N> io, uint block_size)
-  {
-    hadamard_no_norm (io, block_size);
-    // normalize by 1/sqrtn, not using GCEM because this benefits from fixed
-    // point constant literals.
-    if constexpr (N == 2) {
-      for (auto iov : io) {
-        ARTV_LOOP_UNROLL_SIZE_HINT (16)
-        for (uint i = 0; i < block_size; ++i) {
-          io[i] = (T) (io[i] * get_hadamard_ratio<N>());
-        }
-      }
-    }
-  }
-#else
-  // this might belong somewhere else
-  template <class T>
-  static void hadamard4 (std::array<T*, 4> io, uint block_size)
-  {
-    // these quantizations could use fraction saving too...
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < block_size; ++i) {
-      auto y1 = io[0][i] - io[1][i];
-      auto y2 = io[0][i] + io[1][i];
-      auto y3 = io[2][i] - io[3][i];
-      auto y4 = io[2][i] + io[3][i];
-
-      io[0][i] = (T) ((y1 - y3) * 0.5_r);
-      io[1][i] = (T) ((y2 - y4) * 0.5_r);
-      io[2][i] = (T) ((y1 + y3) * 0.5_r);
-      io[3][i] = (T) ((y2 + y4) * 0.5_r);
-    }
-  }
-#endif
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
   xspan<T> get_storage()
@@ -952,18 +936,18 @@ public:
     else if constexpr (spec::is_variable_delay (Idx)) {
       static_assert (
         sizeof...(args) == 1, "variable delays always require mod");
-      run_variable_delay<Idx> (out, in, args...);
+      run_variable_delay<Idx> (out, in, std::forward<Ts> (args)...);
     }
     else if constexpr (spec::is_filter (Idx)) {
-      if constexpr (spec::is_crossover (Idx)) {
-        run_crossover<Idx> (out.data(), in, std::forward<Ts> (args)...);
-      }
-      else if constexpr (spec::is_lowpass (Idx)) {
+      if constexpr (spec::is_lowpass (Idx)) {
         run_lp<Idx> (out.data(), in, std::forward<Ts> (args)...);
       }
       else {
         run_hp<Idx> (out.data(), in, std::forward<Ts> (args)...);
       }
+    }
+    else if constexpr (spec::get_crossover_n_bands (Idx)) {
+      run_crossover<Idx> (out.data(), in, std::forward<Ts> (args)...);
     }
     else if constexpr (spec::is_quantizer (Idx)) {
       run_quantizer<Idx> (out.data(), in, std::forward<Ts> (args)...);
@@ -1037,13 +1021,6 @@ public:
       run_nested_ap<Idx1, Idx2, Idxs...> (
         out.data(), in, std::forward<Ts> (args)...);
     }
-    else if constexpr (
-      sizeof...(Idxs) == 0 && spec::is_lowpass (Idx1)
-      && spec::is_lowpass (Idx2)) {
-      // 3-band crossover
-      run_3band_crossover<Idx1, Idx2> (
-        out.data(), in, std::forward<Ts> (args)...);
-    }
     else {
       static_assert (
         sizeof (T) != sizeof (T), "Invalid type on one of the indexes");
@@ -1058,15 +1035,33 @@ public:
   //----------------------------------------------------------------------------
 private:
   template <uint Idx>
-  static constexpr bool can_be_placed_on_nested_allpass
-    = spec::is_allpass (Idx) || spec::is_1tap_delay (Idx)
-    || spec::is_lowpass (Idx) || spec::is_highpass (Idx);
+  static constexpr bool can_be_placed_on_nested_allpass = spec::is_allpass (Idx)
+    || spec::is_1tap_delay (Idx) || spec::is_lowpass (Idx)
+    || spec::is_highpass (Idx) || spec::get_crossover_n_bands (Idx) != 0;
   //----------------------------------------------------------------------------
   template <class T, class Lfo>
   static constexpr auto get_generic_generator (Lfo&& v)
   {
     using Lfo_no_cv_ref = std::remove_cv_t<std::remove_reference_t<Lfo>>;
     if constexpr (is_generator<T, Lfo_no_cv_ref>()) {
+      return std::forward<Lfo_no_cv_ref> (v);
+    }
+    else if constexpr (is_array_subscriptable_v<Lfo_no_cv_ref>) {
+      return [v] (uint i) { return v[i]; };
+    }
+    else {
+      return defaulted_tag {};
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T, class Lfo>
+  static constexpr auto get_sample_generator (Lfo&& v)
+  {
+    using Lfo_no_cv_ref = std::remove_cv_t<std::remove_reference_t<Lfo>>;
+    if constexpr (is_generator<T, Lfo_no_cv_ref>()) {
+      return std::forward<Lfo_no_cv_ref> (v);
+    }
+    else if constexpr (is_uint_generator<T, Lfo_no_cv_ref>()) {
       return std::forward<Lfo_no_cv_ref> (v);
     }
     else if constexpr (is_array_subscriptable_v<Lfo_no_cv_ref>) {
@@ -1239,22 +1234,19 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  enum onepole_type { lp, hp, crossv };
+  enum onepole_type { lp, hp };
   //----------------------------------------------------------------------------
-  template <uint Idx, onepole_type Type, class Gain>
+  template <onepole_type Type, class Gain>
   void run_1pole (
     fixpt_t*             out,
     xspan<fixpt_t const> in,
     Gain                 g,
-    fixpt_t              g_lp,
-    fixpt_t              g_hp)
+    state::y1_fixpt&     st)
   {
-    static_assert (spec::is_filter (Idx));
     assert (out && in);
 
-    state::y1_fixpt& st  = std::get<Idx> (_states.fix);
-    auto             y1  = st.y1;
-    auto             err = st.y1_err;
+    auto y1  = st.y1;
+    auto err = st.y1_err;
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < in.size(); ++i) {
@@ -1276,30 +1268,25 @@ private:
       if constexpr (Type == onepole_type::lp) {
         out[i] = y1;
       }
-      else if constexpr (Type == onepole_type::hp) {
-        out[i] = (fixpt_t) (x - y1);
-      }
       else {
-        out[i] = (fixpt_t) (x * g_lp + (x - y1) * g_hp);
+        static_assert (Type == onepole_type::hp);
+        out[i] = (fixpt_t) (x - y1);
       }
     }
     st.y1     = y1;
     st.y1_err = err;
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, onepole_type Type, class Gain>
+  template <onepole_type Type, class Gain>
   void run_1pole (
     float*             out,
     xspan<float const> in,
     Gain               g,
-    float              g_lp,
-    float              g_hp)
+    state::y1_float&   st)
   {
-    static_assert (spec::is_filter (Idx));
     assert (in && out);
 
-    state::y1_float& st = std::get<Idx> (_states.flt);
-    float            y1 = st.y1;
+    float y1 = st.y1;
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < in.size(); ++i) {
@@ -1318,21 +1305,30 @@ private:
       if constexpr (Type == onepole_type::lp) {
         out[i] = y1;
       }
-      else if constexpr (Type == onepole_type::hp) {
-        out[i] = (float) (x - y1);
-      }
       else {
-        out[i] = (float) (x * g_lp + (x - y1) * g_hp);
+        static_assert (Type == onepole_type::hp);
+        out[i] = (float) (x - y1);
       }
     }
     st.y1 = y1;
   }
-
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T>
+  decltype (auto) get_state()
+  {
+    if constexpr (is_fixpt_v<T>) {
+      return std::get<Idx> (_states.fix);
+    }
+    else {
+      return std::get<Idx> (_states.flt);
+    }
+  }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
   void run_lp (T* out, xspan<T const> in, U&& g)
   {
-    run_1pole<Idx, onepole_type::lp> (out, in, std::forward<U> (g), T {}, T {});
+    run_1pole<onepole_type::lp> (
+      out, in, std::forward<U> (g), get_state<Idx, T>());
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -1344,7 +1340,8 @@ private:
   template <uint Idx, class T, class U>
   void run_hp (T* out, xspan<T const> in, U&& g)
   {
-    run_1pole<Idx, onepole_type::hp> (out, in, std::forward<U> (g), T {}, T {});
+    run_1pole<onepole_type::hp> (
+      out, in, std::forward<U> (g), get_state<Idx, T>());
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T>
@@ -1353,44 +1350,86 @@ private:
     run_hp<Idx> (out, in, spec::get_gain (Idx));
   }
   //----------------------------------------------------------------------------
-  template <uint Idx1, uint Idx2, class T, class U>
-  void run_3band_crossover (
-    T*             out,
-    xspan<T const> in,
-    U              f_lo,
-    U              g_lo,
-    U              f_hi,
-    U              g_hi)
+  template <uint Idx, std::size_t N, class T>
+  void run_crossover_impl (
+    T*                   out,
+    xspan<T const>       in,
+    std::array<T, N>     freq,
+    std::array<T, N + 1> gain)
   {
-    block_array<T> hi, mid;
+    constexpr uint                      n_bands = N;
+    std::array<block_array<T>, n_bands> band_mem;
 
-    assert (in.size() <= max_block_size);
-    assert (in && out);
-    run_lp<Idx1> (mid.data(), in, f_hi); // mid has lows + mids. highs removed
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < in.size(); ++i) {
-      hi[i] = (T) (in[i] - mid[i]);
+    auto& st = get_state<Idx, T>();
+
+    xspan_memdump (band_mem[0].data(), in);
+    std::array<T*, n_bands + 1> band;
+    for (uint i = 0; i < n_bands; ++i) {
+      band[i] = band_mem[i].data();
     }
-    run_lp<Idx2> (out, xspan {mid.data(), in.size()}.to_const(), f_lo);
-    // out has lows. mids + highs removed
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < in.size(); ++i) {
-      out[i] = (T) ((out[i] * g_lo) + (hi[i] * g_hi) + mid[i] - out[i]);
+    band[n_bands] = out;
+    // compute bands, scale each one except the lowpass
+    for (uint b = 0; b < n_bands; ++b) {
+      // starting from higher to lower freq.
+      uint idx = n_bands - 1 - b;
+      run_1pole<onepole_type::lp> (
+        band[b + 1], xspan {band[b], in.size()}, freq[idx], st.arr[b]);
+
+      ARTV_LOOP_UNROLL_SIZE_HINT (16)
+      for (uint i = 0; i < in.size(); ++i) {
+        // finishing the previous band by subtracting this one and gain scaling
+        band[b][i] = (T) (band[b][i] - band[b + 1][i]);
+        band[b][i] = (T) (band[b][i] * gain[idx + 1]);
+      }
     }
-  }
-  //----------------------------------------------------------------------------
-  template <uint Idx, class T, class U>
-  void run_crossover (T* out, xspan<T const> in, U&& g, U&& g_lp, U&& g_hp)
-  {
-    run_1pole<Idx, onepole_type::crossover> (out, in, g, g_lp, g_hp);
+    // scale lowpass band and sum
+    std::apply (
+      [out, &band, &gain, &in] (auto&&... bands) {
+        ARTV_LOOP_UNROLL_SIZE_HINT (16)
+        for (uint i = 0; i < in.size(); ++i) {
+          band[n_bands][i] = (T) (band[n_bands][i] * gain[0]);
+          out[i]           = (T) (bands[i] + ...);
+        }
+      },
+      band);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class T, class U>
   void run_crossover (T* out, xspan<T const> in)
   {
-    constexpr detail::lofiverb::crossover_data d
-      = spec::get_crossover_data (Idx);
-    run_crossover (out, in, (T) d.g, (T) d.g_lp, (T) d.g_hp);
+    static constexpr auto        d = spec::get_crossover_data (Idx);
+    std::array<T, d.n_bands>     g;
+    std::array<T, d.n_bands + 1> bg;
+    for (uint i = 0; i < d.n_bands; ++i) {
+      g[i]  = d.g[i];
+      bg[i] = d.bg[i];
+    }
+    bg[d.n_bands] = d.bg[d.n_bands];
+    run_crossover_impl<Idx> (out, in, g, bg);
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class U>
+  void run_crossover (T* out, xspan<T const> in, U&& f_lo, U&& g_lo, U&& g_hi)
+  {
+    run_crossover_impl<Idx> (
+      out, in, make_array ((T) f_lo), make_array ((T) g_lo, (T) g_hi));
+  }
+  //----------------------------------------------------------------------------
+  template <uint Idx, class T, class U>
+  void run_crossover (
+    T*             out,
+    xspan<T const> in,
+    U              f_lo,
+    U              g_lo,
+    U              f_mid,
+    U              g_mid,
+    U              g_hi)
+  {
+    run_crossover_impl<Idx> (
+      out,
+      in,
+      make_array ((T) f_lo, (T) f_mid),
+      make_array ((T) g_lo, (T) g_mid, (T) g_hi));
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class LF>
@@ -1766,19 +1805,27 @@ private:
     constexpr uint min   = spec::get_min_delay_spls (Idx);
     constexpr uint max   = spec::get_max_delay_spls (Idx);
     constexpr uint range = max - min;
-    auto           rgen  = get_generic_generator<T> (std::forward<Range> (gen));
+    auto           rgen  = get_sample_generator<T> (std::forward<Range> (gen));
+
+    static_assert (min >= max_block_size);
+
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < in.size(); ++i) {
-      T v;
-      if constexpr (is_fixpt_v<T>) {
-        auto gv = rgen (i);
-        assert (gv >= T::from_int (0));
-        v = get<Idx, T> ((uint) (min + range * gv.to_floatp()));
+      T    v;
+      uint spls;
+      auto gv = rgen (i);
+      if constexpr (spec::uses_absolute_delay_modulation (Idx)) {
+        spls = (uint) gv;
+      }
+      else if constexpr (is_fixpt_v<T>) {
+        spls = (uint) (min + range * gv.to_floatp());
       }
       else {
-        auto gv = rgen (i);
-        assert (gv >= T {0.});
-        v = get<Idx, T> ((uint) (min + range * gv));
+        spls = (uint) (min + range * gv);
       }
+      assert (spls >= min);
+      assert (spls <= max);
+      v = get<Idx, T> (spls);
       push_one<Idx> (in[i]);
       out[i] = v; // they could be aliased...
     }
@@ -1810,36 +1857,36 @@ private:
   static constexpr std::array<uint, N + 1> get_arg_offsets (
     std::array<uint, N> idxs)
   {
+    uint                    arg = 0;
     std::array<uint, N + 1> ret {};
     for (uint i = 0; i < idxs.size(); ++i) {
       if (spec::is_allpass (idxs[i])) {
         // lfo + gain parameter.
-        ret[i + 1] = 2;
+        arg += 2;
+        ret[i + 1] = arg;
         continue;
       }
       else if (spec::is_1tap_delay (idxs[i])) {
         // lfo for modulation
-        ret[i + 1] = 1;
+        arg += 1;
+        ret[i + 1] = arg;
         continue;
       }
       else if (spec::is_lowpass (idxs[i]) || spec::is_highpass (idxs[i])) {
         // gain parameter.
-        ret[i + 1] = 1;
+        arg += 1;
+        ret[i + 1] = arg;
+        continue;
+      }
+      else if (spec::get_crossover_n_bands (idxs[i]) != 0) {
+        // [freq, gain]... gain
+        arg += (spec::get_crossover_n_bands (idxs[i]) * 2) + 1;
+        ret[i + 1] = arg;
         continue;
       }
       else {
         assert (false); // Type not supported/added yet
       }
-    }
-    return ret;
-  }
-  //----------------------------------------------------------------------------
-  template <std::size_t N>
-  static constexpr uint constexpr_accumulate (std::array<uint, N> v)
-  {
-    uint ret = 0;
-    for (auto n : v) {
-      ret += n;
     }
     return ret;
   }
@@ -1856,7 +1903,7 @@ private:
   {
     constexpr auto idxs        = make_array (Idx...);
     constexpr auto arg_offset  = get_arg_offsets (idxs);
-    constexpr uint max_n_args  = constexpr_accumulate (arg_offset);
+    constexpr uint max_n_args  = arg_offset.back();
     constexpr int  last_ap_pos = get_previous_ap_pos (idxs.size(), idxs);
 
     static_assert (
@@ -1869,100 +1916,135 @@ private:
     auto args = std::tuple_cat (std::forward_as_tuple (argsp...), defaults {});
     xspan_memdump (fwd.data(), in);
 
-    mp_foreach_idx (
-      mp_list<k_uint<Idx>...> {}, [&] (auto order, auto stage_idx) {
-        bool constexpr is_serial = false; // not nested element // TBD
+    using idxlist = mp_list<k_uint<Idx>...>;
 
-        if constexpr (spec::is_allpass (stage_idx) && !is_serial) {
-          // having delays bigger than the block size allows to run each stage
-          // once for all samples instead of each sample having to loop over
-          // each stage.
-          static_assert (
-            spec::get_min_delay_spls (stage_idx) >= max_block_size,
-            "Nested AP delays have to be GE than the block size");
+    mp_foreach_idx (idxlist {}, [&] (auto order, auto stage_idx) {
+      bool constexpr is_serial = false; // not nested element // TBD
 
-          block_array<T> bwd;
-          auto&&         lfo_arg = std::get<arg_offset[order]> (args);
-          fetch_block_optmod<stage_idx> (
-            xspan {bwd.data(), in.size()}, get_generic_generator<T> (lfo_arg));
+      if constexpr (spec::is_allpass (stage_idx) && !is_serial) {
+        // having delays bigger than the block size allows to run each stage
+        // once for all samples instead of each sample having to loop over
+        // each stage.
+        static_assert (
+          spec::get_min_delay_spls (stage_idx) >= max_block_size,
+          "Nested AP delays have to be GE than the block size");
 
-          auto&& gain_arg = std::get<arg_offset[order] + 1> (args);
-          auto   gain_gen = get_gain_generator<stage_idx, T> (gain_arg);
+        block_array<T> bwd;
+        fetch_block_optmod<stage_idx> (
+          xspan {bwd.data(), in.size()}, std::get<arg_offset[order]> (args));
 
-          ARTV_LOOP_UNROLL_SIZE_HINT (16)
-          for (uint i = 0; i < in.size(); ++i) {
-            // See lattice form:
-            // https://www.dsprelated.com/freebooks/pasp/Nested_Allpass_Filters.html
-            std::tie (bwd[i], fwd[i])
-              = run_allpass<stage_idx, T> (fwd[i], bwd[i], gain_gen (i));
-          }
-          if constexpr (order.value == 0) {
-            // first allpass stage: backwards signal is the output
-            xspan_memdump (out, xspan {bwd.data(), in.size()});
-          }
-          else {
-            // try to process the backwards signal with nested stages in
-            // backwards order until another allpass is found.
-            constexpr int ap_pos = get_previous_ap_pos (order.value, idxs);
-            static_assert (ap_pos >= 0);
-            constexpr uint n_steps = (order - ap_pos) - 1;
-            using seq = add_offset_t<ap_pos, std::make_index_sequence<n_steps>>;
+        auto&& gain_arg = std::get<arg_offset[order] + 1> (args);
+        auto   gain_gen = get_gain_generator<stage_idx, T> (gain_arg);
 
-            // process backward signal with nested non-allpass elements
-            mp11::mp_for_each<mp11::mp_from_sequence<seq>> (
-              [&] (auto order_rev) {
-                constexpr uint rev_idx       = idxs[order_rev];
-                constexpr bool is_serial_rev = false; // TBD
-                if constexpr (is_serial_rev) {
-                  // skip... not belonging to the backwards path
-                }
-                if constexpr (
-                  spec::is_highpass (rev_idx) || spec::is_lowpass (rev_idx)) {
-                  auto gain = std::get<arg_offset[order_rev]> (args);
-                  run<rev_idx> (xspan {bwd.data(), in.size()}, gain);
-                }
-                else if (spec::is_1tap_delay (rev_idx)) {
-                  auto lfo_gen_rev = get_generic_generator<T> (
-                    std::get<arg_offset[order_rev]> (args));
-                  run<rev_idx> (xspan {bwd.data(), in.size()}, lfo_gen_rev);
-                }
-                else {
-                  static_assert (sizeof (order_rev), "Not implemented yet");
-                }
-              });
-            // insert the backwards signal on the previous allpass...
-            encode_write (
-              prepare_block_insertion<idxs[ap_pos]> (in.size()),
-              xspan {bwd.data(), in.size()}.to_const());
-          }
-        } // is_allpass
-        else if constexpr ((order > last_ap_pos) || is_serial) {
-          // elements after the last allpass can be processed on the forward
-          // path so they are added to the last allpass on the final insertion
-          // outside this foreach.
-          //
-          // If implementing serial elements inside the nestings they will
-          // have to take this branch too, but instead of allpass they will
-          // have to take a class like "serial<allpass> and be unwrapped"
-          if constexpr (
-            spec::is_highpass (stage_idx) || spec::is_lowpass (stage_idx)) {
-            auto gain = std::get<arg_offset[order]> (args);
-            run<stage_idx> (xspan {fwd.data(), in.size()}, gain);
-          }
-          else if constexpr (spec::is_1tap_delay (stage_idx)) {
-            auto lfo_gen_rev
-              = get_generic_generator<T> (std::get<arg_offset[order]> (args));
-            run<stage_idx> (xspan {fwd.data(), in.size()}, lfo_gen_rev);
-          }
-          else {
-            static_assert (sizeof (stage_idx), "Not implemented yet");
-          }
+        ARTV_LOOP_UNROLL_SIZE_HINT (16)
+        for (uint i = 0; i < in.size(); ++i) {
+          // See lattice form:
+          // https://www.dsprelated.com/freebooks/pasp/Nested_Allpass_Filters.html
+          std::tie (bwd[i], fwd[i])
+            = run_allpass<stage_idx, T> (fwd[i], bwd[i], gain_gen (i));
+        }
+        if constexpr (order.value == 0) {
+          // first allpass stage: backwards signal is the output
+          xspan_memdump (out, xspan {bwd.data(), in.size()});
         }
         else {
-          // skipping nested non-allpass elements, these are handled inside
-          // the. allpass conditional.
+          // try to process the backwards signal with nested stages in
+          // backwards order until another allpass is found.
+          constexpr int ap_pos = get_previous_ap_pos (order.value, idxs);
+          static_assert (ap_pos >= 0);
+          constexpr uint n_steps = (order - ap_pos) - 1;
+          using seq = add_offset_t<ap_pos, std::make_index_sequence<n_steps>>;
+
+          // process backward signal with nested non-allpass elements
+          mp11::mp_for_each<mp11::mp_from_sequence<seq>> ([&] (auto order_rev) {
+            constexpr uint rev_idx       = idxs[order_rev];
+            constexpr bool is_serial_rev = false; // TBD
+            if constexpr (is_serial_rev) {
+              // skip... not belonging to the backwards path
+            }
+            else if constexpr (
+              spec::is_highpass (rev_idx) || spec::is_lowpass (rev_idx)) {
+              auto gain = std::get<arg_offset[order_rev]> (args);
+              run<rev_idx> (xspan {bwd.data(), in.size()}, gain);
+            }
+            else if constexpr (spec::is_1tap_delay (rev_idx)) {
+              auto lfo_gen_rev = get_generic_generator<T> (
+                std::get<arg_offset[order_rev]> (args));
+              run<rev_idx> (xspan {bwd.data(), in.size()}, lfo_gen_rev);
+            }
+            else if constexpr (spec::get_crossover_n_bands (rev_idx) == 1) {
+              static constexpr uint a1 = arg_offset[order_rev];
+              run<rev_idx> (
+                xspan {bwd.data(), in.size()},
+                std::get<a1> (args),
+                std::get<a1 + 1> (args),
+                std::get<a1 + 2> (args));
+            }
+            else if constexpr (spec::get_crossover_n_bands (rev_idx) == 2) {
+              static constexpr uint a1 = arg_offset[order_rev];
+              run<rev_idx> (
+                xspan {bwd.data(), in.size()},
+                std::get<a1> (args),
+                std::get<a1 + 1> (args),
+                std::get<a1 + 2> (args),
+                std::get<a1 + 3> (args),
+                std::get<a1 + 4> (args));
+            }
+            else {
+              static_assert (sizeof (order_rev), "Not implemented yet");
+            }
+          });
+          // insert the backwards signal on the previous allpass...
+          encode_write (
+            prepare_block_insertion<idxs[ap_pos]> (in.size()),
+            xspan {bwd.data(), in.size()}.to_const());
         }
-      });
+      } // is_allpass
+      else if constexpr ((order > last_ap_pos) || is_serial) {
+        // elements after the last allpass can be processed on the forward
+        // path so they are added to the last allpass on the final insertion
+        // outside this foreach.
+        //
+        // If implementing serial elements inside the nestings they will
+        // have to take this branch too, but instead of allpass they will
+        // have to take a class like "serial<allpass> and be unwrapped"
+        if constexpr (
+          spec::is_highpass (stage_idx) || spec::is_lowpass (stage_idx)) {
+          auto gain = std::get<arg_offset[order]> (args);
+          run<stage_idx> (xspan {fwd.data(), in.size()}, gain);
+        }
+        else if constexpr (spec::is_1tap_delay (stage_idx)) {
+          auto lfo_gen_rev
+            = get_generic_generator<T> (std::get<arg_offset[order]> (args));
+          run<stage_idx> (xspan {fwd.data(), in.size()}, lfo_gen_rev);
+        }
+        else if constexpr (spec::get_crossover_n_bands (stage_idx) == 1) {
+          static constexpr uint a1 = arg_offset[order];
+          run<stage_idx> (
+            xspan {fwd.data(), in.size()},
+            std::get<a1> (args),
+            std::get<a1 + 1> (args),
+            std::get<a1 + 2> (args));
+        }
+        else if constexpr (spec::get_crossover_n_bands (stage_idx) == 2) {
+          static constexpr uint a1 = arg_offset[order];
+          run<stage_idx> (
+            xspan {fwd.data(), in.size()},
+            std::get<a1> (args),
+            std::get<a1 + 1> (args),
+            std::get<a1 + 2> (args),
+            std::get<a1 + 3> (args),
+            std::get<a1 + 4> (args));
+        }
+        else {
+          static_assert (sizeof (stage_idx), "Not implemented yet");
+        }
+      }
+      else {
+        // skipping nested non-allpass elements, these are handdebugled inside
+        // the. allpass conditional.
+      }
+    });
     // the last allpass gets the fwd signal enqueued
     static_assert (last_ap_pos > 0);
     encode_write (
@@ -2141,6 +2223,32 @@ private:
     using C = std::remove_reference_t<Candidate>;
     return std::is_convertible_v<C, std::function<T (uint)>>
       && !std::is_same_v<C, std::nullptr_t>;
+  }
+  //----------------------------------------------------------------------------
+  template <class T, class Candidate>
+  static constexpr bool is_uint_generator()
+  {
+    using C = std::remove_reference_t<Candidate>;
+    return std::is_convertible_v<C, std::function<uint (uint)>>
+      && !std::is_same_v<C, std::nullptr_t>;
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  static constexpr void span_add (
+    xspan<T>       dst,
+    xspan<T const> lhs,
+    xspan<T const> rhs)
+  {
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < rhs.size(); ++i) {
+      dst[i] = (T) (lhs[i] + rhs[i]);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  static constexpr void span_add (xspan<T> lhs, xspan<T const> rhs)
+  {
+    span_add (lhs, lhs, rhs);
   }
   //----------------------------------------------------------------------------
   template <class T>

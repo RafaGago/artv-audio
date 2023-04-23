@@ -531,6 +531,11 @@ function easy_ap_next_sample() local() global (easyapv_del*, easyapv_del_idx) (
   easyapv_del_idx = 0;
 );
 
+function easyapv_get (idx, spls) local() global (easyapv_del*) (
+  easyapv_del.delay_line_get (spls, idx);
+);
+
+
 n_lines = 96; // more than we need
 max_delay = 8192;
 easyapv_del_idx = 0; // to avoid passing parameters

@@ -9,14 +9,12 @@ namespace artv {
 static constexpr uint max_block_size = 8;
 static constexpr uint delay_size     = max_block_size * 2 - max_block_size / 2;
 
-static constexpr auto get_delay_test_spec()
-{
-  return make_array<detail::lofiverb::stage_data> (
-    detail::lofiverb::make_block_delay (delay_size, 1));
-}
-
 struct delay_test_spec {
-  static constexpr auto values {get_delay_test_spec()};
+  static constexpr auto get_spec()
+  {
+    return make_array<detail::lofiverb::stage_data> (
+      detail::lofiverb::make_block_delay (delay_size, 1));
+  }
 };
 
 //------------------------------------------------------------------------------
