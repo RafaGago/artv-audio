@@ -526,6 +526,11 @@ public:
     }
   }
   //----------------------------------------------------------------------------
+  static constexpr uint get_delay_buffer_size (uint i)
+  {
+    return (uint) get_max_delay_spls (i) + (uint) get_delay_extra_spls (i);
+  }
+  //----------------------------------------------------------------------------
   static constexpr uint get_n_outs (uint i)
   {
     if (is_parallel_delay (i)) {
@@ -696,12 +701,19 @@ namespace delay {
 
 //------------------------------------------------------------------------------
 // TODO: move to delay_line? this one provides the functions to get the segments
-template <class T, uint Size>
+template <class T>
 class static_buffer {
 public:
   //----------------------------------------------------------------------------
-  using value_type           = T;
-  static constexpr uint size = Size;
+  using value_type = T;
+  //----------------------------------------------------------------------------
+  void reset (xspan<T> mem)
+  {
+    xspan_memset (mem);
+    _z    = mem.data();
+    _size = mem.size();
+    _pos  = 0;
+  }
   //----------------------------------------------------------------------------
   void insert (value_type v)
   {
@@ -715,11 +727,11 @@ public:
   std::array<xspan<value_type>, 2> insert_block (uint blocksize)
   {
     assert (blocksize);
-    assert (_z.size() >= blocksize);
+    assert (_size >= blocksize);
 
     uint block1 = _pos;
     uint end    = block1 + blocksize - 1;
-    end -= (end >= _z.size()) ? _z.size() : 0;
+    end -= (end >= _size) ? _size : 0;
     _pos = end;
     advance_one();
 
@@ -731,7 +743,7 @@ public:
     }
     else {
       // truncated
-      block1sz = _z.size() - block1;
+      block1sz = _size - block1;
       block2sz = blocksize - block1sz;
     }
     return {xspan {&_z[block1], block1sz}, xspan {&_z[0], block2sz}};
@@ -739,23 +751,23 @@ public:
   //----------------------------------------------------------------------------
   value_type read (uint delay_spls)
   {
-    assert (delay_spls <= _z.size());
+    assert (delay_spls <= _size);
     uint z = _pos - delay_spls;
-    z += (z >= _z.size()) ? _z.size() : 0;
+    z += (z >= _size) ? _size : 0;
     return _z[z];
   }
   //----------------------------------------------------------------------------
   std::array<xspan<value_type>, 2> read_block (uint blocksize, uint del_spls)
   {
     assert (blocksize);
-    assert (del_spls <= _z.size());
+    assert (del_spls <= _size);
     assert (del_spls >= blocksize);
-    assert (_z.size() >= blocksize);
+    assert (_size >= blocksize);
 
     uint block1 = _pos - del_spls;
-    block1 += (block1 >= _z.size()) ? _z.size() : 0;
+    block1 += (block1 >= _size) ? _size : 0;
     uint end = _pos - del_spls + blocksize - 1;
-    end += (end >= _z.size()) ? _z.size() : 0;
+    end += (end >= _size) ? _size : 0;
 
     uint block1sz, block2sz;
     if (block1 <= end) {
@@ -765,7 +777,7 @@ public:
     }
     else {
       // truncated
-      block1sz = _z.size() - block1;
+      block1sz = _size - block1;
       block2sz = blocksize - block1sz;
     }
     return {xspan {&_z[block1], block1sz}, xspan {&_z[0], block2sz}};
@@ -776,32 +788,34 @@ private:
   void advance_one()
   {
     ++_pos;
-    if (_pos == _z.size()) {
+    if (_pos == _size) {
       _pos = 0;
     }
   }
   //----------------------------------------------------------------------------
-  std::array<value_type, size> _z {};
-  uint                         _pos {};
+  value_type* _z {};
+  u32         _pos {};
+  u32         _size {};
 };
 //------------------------------------------------------------------------------
 
-template <class T, uint Size, class C>
+template <class T, class C>
 class static_encoded_buffer {
 public:
   //----------------------------------------------------------------------------
-  using value_type     = T;
-  using enconder       = C;
-  using enconding_type = typename enconder::value_type;
-  static constexpr bool has_enconding
-    = !std::is_same_v<value_type, enconding_type>;
-  static constexpr uint size = Size;
+  using value_type   = T;
+  using encoder      = C;
+  using storage_type = typename encoder::value_type;
+  static constexpr bool has_encoding
+    = !std::is_same_v<value_type, storage_type>;
+  //----------------------------------------------------------------------------
+  void reset (xspan<storage_type> mem) { _z.reset (mem); }
   //----------------------------------------------------------------------------
   value_type read (uint spl)
   {
     assert (spl);
-    if constexpr (has_enconding) {
-      return enconder::decode (_z.read (spl));
+    if constexpr (has_encoding) {
+      return encoder::decode (_z.read (spl));
     }
     else {
       return _z.read (spl);
@@ -810,8 +824,8 @@ public:
   //----------------------------------------------------------------------------
   void push (value_type v)
   {
-    if constexpr (has_enconding) {
-      _z.insert (enconder::encode (v));
+    if constexpr (has_encoding) {
+      _z.insert (encoder::encode (v));
     }
     else {
       _z.insert (v);
@@ -820,18 +834,18 @@ public:
   //----------------------------------------------------------------------------
   void read_block (xspan<value_type> dst, uint del_spls)
   {
-    std::array<xspan<enconding_type>, 2> src
+    std::array<xspan<storage_type>, 2> src
       = _z.read_block (dst.size(), del_spls);
     assert (dst.size() == (src[0].size() + src[1].size()));
-    if constexpr (has_enconding) {
+    if constexpr (has_encoding) {
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < src[0].size(); ++i) {
-        dst[i] = enconder::decode (src[0][i]);
+        dst[i] = encoder::decode (src[0][i]);
       }
       dst.cut_head (src[0].size());
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < src[1].size(); ++i) {
-        dst[i] = enconder::decode (src[1][i]);
+        dst[i] = encoder::decode (src[1][i]);
       }
     }
     else {
@@ -843,17 +857,17 @@ public:
   //----------------------------------------------------------------------------
   void push_block (xspan<value_type const> src)
   {
-    std::array<xspan<enconding_type>, 2> dst = _z.insert_block (src.size());
+    std::array<xspan<storage_type>, 2> dst = _z.insert_block (src.size());
     assert (src.size() == (dst[0].size() + dst[1].size()));
-    if constexpr (has_enconding) {
+    if constexpr (has_encoding) {
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < dst[0].size(); ++i) {
-        dst[0][i] = enconder::encode (src[i]);
+        dst[0][i] = encoder::encode (src[i]);
       }
       src.cut_head (dst[0].size());
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < dst[1].size(); ++i) {
-        dst[1][i] = enconder::encode (src[i]);
+        dst[1][i] = encoder::encode (src[i]);
       }
     }
     else {
@@ -864,7 +878,7 @@ public:
   }
   //----------------------------------------------------------------------------
 private:
-  static_buffer<enconding_type, size> _z {};
+  static_buffer<storage_type> _z {};
 };
 //------------------------------------------------------------------------------
 
@@ -876,50 +890,44 @@ struct no_enconding {
 //------------------------------------------------------------------------------
 enum class data_type : uint { fixpt16, float16, float32 };
 //------------------------------------------------------------------------------
-template <data_type Te, uint Size>
+template <data_type Te>
 class delay_buffer;
 
 template <>
-class delay_buffer<data_type::fixpt16, 0> {};
-
-template <>
-class delay_buffer<data_type::float16, 0> {};
-
-template <>
-class delay_buffer<data_type::float32, 0> {};
-
-template <uint Size>
-class delay_buffer<data_type::fixpt16, Size>
-  : public static_encoded_buffer<fixpt_t, Size, no_enconding<fixpt_t>> {
+class delay_buffer<data_type::fixpt16>
+  : public static_encoded_buffer<fixpt_t, no_enconding<fixpt_t>> {
 public:
-  using value_type = fixpt_t;
+  using value_type   = fixpt_t;
+  using storage_type = fixpt_t;
 };
 
 using float16_encoder = f16pack<5, -1, f16pack_dftz | f16pack_clamp>;
 
-template <uint Size>
-class delay_buffer<data_type::float16, Size>
-  : public static_encoded_buffer<float, Size, float16_encoder> {
-public:
-  using value_type =
-    typename static_encoded_buffer<float, Size, float16_encoder>::value_type;
-};
-
-template <uint Size>
-class delay_buffer<data_type::float32, Size>
-  : public static_encoded_buffer<float, Size, no_enconding<float>> {
+template <>
+class delay_buffer<data_type::float16>
+  : public static_encoded_buffer<float, float16_encoder> {
 public:
   using value_type = float;
+  using storage_type =
+    typename static_encoded_buffer<float, float16_encoder>::storage_type;
+};
+
+template <>
+class delay_buffer<data_type::float32>
+  : public static_encoded_buffer<float, no_enconding<float>> {
+public:
+  using value_type   = float;
+  using storage_type = float;
 };
 //------------------------------------------------------------------------------
 template <data_type Te, class SpecAccess>
 struct index_to_delay_buffer_qfn {
 
   template <class Idx>
-  using fn = delay_buffer<
-    Te,
-    (uint) SpecAccess::get_max_delay_spls (Idx::value)
-      + (uint) SpecAccess::get_delay_extra_spls (Idx::value)>;
+  using fn = std::conditional_t<
+    SpecAccess::get_delay_buffer_size (Idx::value) != 0,
+    delay_buffer<Te>,
+    std::monostate>;
 };
 //------------------------------------------------------------------------------
 } // namespace delay
@@ -946,19 +954,33 @@ template <class Algorithm, delay::data_type Data_type, uint Max_block_size>
 class engine {
 public:
   //----------------------------------------------------------------------------
-  using value_type = typename delay::delay_buffer<Data_type, 1>::value_type;
-  using algorithm  = Algorithm;
-  using spec       = spec_access<Algorithm>;
+  using value_type   = typename delay::delay_buffer<Data_type>::value_type;
+  using storage_type = typename delay::delay_buffer<Data_type>::storage_type;
+  using algorithm    = Algorithm;
+  using spec         = spec_access<Algorithm>;
   //----------------------------------------------------------------------------
   static constexpr uint max_block_size = Max_block_size;
   //----------------------------------------------------------------------------
-  static constexpr uint get_required_bytes() { return sizeof *_delay; }
+  static constexpr uint get_required_bytes()
+  {
+    uint elems = 0;
+    mp11::mp_for_each<mp11::mp_iota_c<spec::size()>> ([&] (auto i) {
+      elems += spec::get_delay_buffer_size (i);
+    });
+    return elems * sizeof (storage_type);
+  }
   //----------------------------------------------------------------------------
   constexpr void reset_memory (xspan<u8> mem) // needs malloc/new alignment
   {
-    assert (mem.size() >= sizeof (*_delay));
-    // Tuple of trivial types, no destructor required.
-    _delay = new (mem.data()) std::decay_t<decltype (*_delay)> {};
+    assert (mem.size() >= get_required_bytes());
+    // xspan_memset (mem);
+    auto elems = mem.cast<storage_type>();
+    mp11::mp_for_each<mp11::mp_iota_c<spec::size()>> ([&] (auto i) {
+      constexpr uint n_elems = spec::get_delay_buffer_size (i);
+      if constexpr (n_elems > 0) {
+        std::get<i.value> (_stages).delay.reset (elems.cut_head (n_elems));
+      }
+    });
   }
   //----------------------------------------------------------------------------
   template <uint Idx, uint... Idxs>
@@ -1018,7 +1040,7 @@ public:
     uint              negative_offset = 0)
   {
     static_assert (spec::get_min_delay_spls (Idx) >= max_block_size);
-    std::get<Idx> (*_delay).read_block (
+    std::get<Idx> (_stages).delay.read_block (
       dst, spec::get_delay_spls (Idx).to_int() + negative_offset);
   }
   //----------------------------------------------------------------------------
@@ -1031,7 +1053,7 @@ public:
     assert (dst);
     assert (spls <= spec::get_max_delay_spls (Idx));
     assert (spls >= max_block_size);
-    std::get<Idx> (*_delay).read_block (dst, spls);
+    std::get<Idx> (_stages).delay.read_block (dst, spls);
   }
   //----------------------------------------------------------------------------
   // fetches the output and feedback from an allpass. The output will
@@ -1117,7 +1139,7 @@ public:
     assert (sum && fb && in);
     assert (fb.size() && in.size());
     span_add (sum, fb, in);
-    std::get<Idx> (*_delay).push_block (xspan {sum.data(), in.size()});
+    std::get<Idx> (_stages).delay.push_block (xspan {sum.data(), in.size()});
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class value_type>
@@ -1125,14 +1147,14 @@ public:
   {
     static_assert (spec::is_block_delay (Idx) || spec::is_allpass (Idx));
     static_assert (spec::get_min_delay_spls (Idx) >= max_block_size);
-    std::get<Idx> (*_delay).push_block (src);
+    std::get<Idx> (_stages).delay.push_block (src);
   }
   //----------------------------------------------------------------------------
   template <uint Idx>
   xspan<value_type> get_storage (stage_list<Idx>)
   {
     static_assert (spec::is_free_storage (Idx));
-    return {std::get<Idx> (_states).sto};
+    return {std::get<Idx> (_stages).state.sto};
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class... Ts>
@@ -1339,7 +1361,7 @@ private:
   template <uint Idx>
   value_type get (uint delay_spls)
   {
-    return std::get<Idx> (*_delay).read (delay_spls);
+    return std::get<Idx> (_stages).delay.read (delay_spls);
   }
   //----------------------------------------------------------------------------
   template <uint Idx>
@@ -1354,7 +1376,7 @@ private:
   {
     if constexpr (is_fixpt_v<value_type>) {
       // decay with error-feedback/ fraction saving
-      state::quantizer_fixpt& st  = std::get<Idx> (_states);
+      state::quantizer_fixpt& st  = std::get<Idx> (_stages).state;
       auto                    err = st.err;
 
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
@@ -1448,7 +1470,7 @@ private:
   void run_lp (value_type* out, xspan<value_type const> in, U&& g)
   {
     run_1pole<onepole_type::lp> (
-      out, in, std::forward<U> (g), std::get<Idx> (_states));
+      out, in, std::forward<U> (g), std::get<Idx> (_stages).state);
   }
   //----------------------------------------------------------------------------
   template <uint Idx>
@@ -1461,7 +1483,7 @@ private:
   void run_hp (value_type* out, xspan<value_type const> in, U&& g)
   {
     run_1pole<onepole_type::hp> (
-      out, in, std::forward<U> (g), std::get<Idx> (_states));
+      out, in, std::forward<U> (g), std::get<Idx> (_stages).state);
   }
   //----------------------------------------------------------------------------
   template <uint Idx>
@@ -1480,7 +1502,7 @@ private:
     constexpr uint                   n_bands = N;
     std::array<block_array, n_bands> band_mem;
 
-    auto& st = std::get<Idx> (_states);
+    auto& st = std::get<Idx> (_stages).state;
 
     xspan_memdump (band_mem[0].data(), in);
     std::array<value_type*, n_bands + 1> band;
@@ -1566,7 +1588,7 @@ private:
     static_assert (spec::has_modulated_delay (Idx));
     constexpr auto delay_spls     = spec::get_delay_spls (Idx).add_sign();
     constexpr auto delay_mod_spls = spec::get_delay_mod_spls (Idx).add_sign();
-    auto&          st             = std::get<Idx> (_states);
+    auto&          st             = std::get<Idx> (_stages).state;
 
     if constexpr (is_fixpt_v<value_type>) {
       using fixpt_th = decltype (fixpt_acum_t {}.resize<2, -2>());
@@ -1662,7 +1684,7 @@ private:
       return std::make_tuple (x, u);
     }
     else {
-      auto& st          = std::get<Idx> (_states);
+      auto& st          = std::get<Idx> (_stages).state;
       auto [q_x, x_err] = truncate (x, st.x_err);
       auto [q_u, u_err] = truncate (u, st.u_err);
       st.x_err          = x_err;
@@ -1680,7 +1702,7 @@ private:
       return std::make_tuple (z, u);
     }
     else {
-      auto& st        = std::get<Idx> (_states.fix);
+      auto& st        = std::get<Idx> (_stages).state;
       auto [q_u, err] = truncate (u, st.err);
       st.err          = err;
       return std::make_tuple (z, q_u);
@@ -1695,7 +1717,7 @@ private:
     if constexpr (minsz >= max_block_size) {
       constexpr std::optional<interpolation> interp = spec::get_interp (Idx);
       if constexpr (!interp) {
-        std::get<Idx> (*_delay).read_block (
+        std::get<Idx> (_stages).delay.read_block (
           dst, (uint) spec::get_delay_spls (Idx));
       }
       else {
@@ -1743,11 +1765,11 @@ private:
           in.to_const(),
           std::forward<Lfo> (lfo),
           std::forward<G> (gain));
-        std::get<Idx> (*_delay).push_block (xspan {z.data(), in.size()});
+        std::get<Idx> (_stages).delay.push_block (xspan {z.data(), in.size()});
       }
       else {
         fetch_block_optmod<Idx> (z, std::forward<Lfo> (lfo));
-        std::get<Idx> (*_delay).push_block (in);
+        std::get<Idx> (_stages).delay.push_block (in);
         xspan_memcpy (sout, z);
       }
     }
@@ -1790,10 +1812,10 @@ private:
             std::tie (out[i], z)
               = run_comb<Idx, value_type> (in[i], z, g_gen (i));
           }
-          std::get<Idx> (*_delay).push (z);
+          std::get<Idx> (_stages).delay.push (z);
         }
         else {
-          std::get<Idx> (*_delay).push (in[i]);
+          std::get<Idx> (_stages).delay.push (in[i]);
           out[i] = z;
         }
       }
@@ -1828,7 +1850,7 @@ private:
       if constexpr (out_overwrite) {
         auto dst = xspan {tap_ptrs[i], in.size()};
         assert (dst.data() != in.data()); // unwanted aliasing with input
-        std::get<Idx> (*_delay).read_block (
+        std::get<Idx> (_stages).delay.read_block (
           xspan {dst.data(), in.size()}, spls_u);
       }
       else {
@@ -1836,12 +1858,12 @@ private:
         assert (dst.data() != in.data()); // unwanted aliasing with input
         block_array tmp_mem;
         xspan       tmp {tmp_mem.data(), in.size()};
-        std::get<Idx> (*_delay).read_block (
+        std::get<Idx> (_stages).delay.read_block (
           xspan {tmp.data(), in.size()}, spls_u);
         span_add (dst, tmp);
       }
     }
-    std::get<Idx> (*_delay).push_block (in);
+    std::get<Idx> (_stages).delay.push_block (in);
     if constexpr (out_overwrite) {
       xspan_memdump (out, xspan {tap0.data(), in.size()});
     }
@@ -1896,7 +1918,7 @@ private:
         }
       }
       // quantize
-      state::quantizer_arr_fixpt<n_outs>& st  = std::get<Idx> (_states);
+      state::quantizer_arr_fixpt<n_outs>& st  = std::get<Idx> (_stages).state;
       auto&                               err = st.err;
 
       for (uint out = 0; out < n_outs; ++out) {
@@ -1960,7 +1982,7 @@ private:
       assert (spls >= min);
       assert (spls <= max);
       v = get<Idx> (spls);
-      std::get<Idx> (*_delay).push (in[i]);
+      std::get<Idx> (_stages).delay.push (in[i]);
       out[i] = v; // they could be aliased...
     }
   }
@@ -2137,7 +2159,7 @@ private:
             }
           });
           // insert the backwards signal on the previous allpass...
-          std::get<idxs[ap_pos]> (*_delay).push_block (
+          std::get<idxs[ap_pos]> (_stages).delay.push_block (
             xspan {bwd.data(), in.size()});
         }
       } // is_allpass
@@ -2193,7 +2215,7 @@ private:
     });
     // the last allpass gets the fwd signal enqueued
     static_assert (last_ap_pos > 0);
-    std::get<idxs[last_ap_pos]> (*_delay).push_block (
+    std::get<idxs[last_ap_pos]> (_stages).delay.push_block (
       xspan {fwd.data(), in.size()});
   }
   //----------------------------------------------------------------------------
@@ -2330,10 +2352,16 @@ private:
 
   using delays_typelist = mp11::
     mp_transform_q<delay::index_to_delay_buffer_qfn<Data_type, spec>, indexes>;
-  using delays_tuple = mp11::mp_rename<delays_typelist, std::tuple>;
 
-  delays_tuple*     _delay {nullptr};
-  states_tuple      _states {};
+  template <class S, class D>
+  struct stage_type {
+    S state;
+    D delay;
+  };
+
+  using stages_tuple = mp_mix<stage_type, states_tuple, delays_typelist>;
+
+  stages_tuple      _stages {};
   lowbias32_hash<1> _noise {};
 };
 }}} // namespace artv::detail::lofiverb

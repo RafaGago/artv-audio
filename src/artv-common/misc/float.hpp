@@ -91,6 +91,7 @@ public:
   //----------------------------------------------------------------------------
   static constexpr u16 encode (float f)
   {
+    // TODO: vectorize?
     if constexpr (clamp_input) {
       f = std::clamp (f, min(), max());
     }
@@ -152,6 +153,8 @@ public:
   //----------------------------------------------------------------------------
   static constexpr float decode (u16 u)
   {
+    // TODO: vectorize?
+
     f32_layout single {};
     layout     half {};
 

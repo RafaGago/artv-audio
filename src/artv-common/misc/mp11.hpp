@@ -115,6 +115,42 @@ template <uint Offset, class T>
 using add_offset_t = typename add_offset<Offset, T>::type;
 //------------------------------------------------------------------------------
 
+namespace detail {
+
+template <template <class...> class Mixed, class... Ls>
+struct mp_mix_impl;
+
+template <
+  template <class...>
+  class Pair,
+  template <class...>
+  class L1,
+  template <class...>
+  class L2,
+  class... LE1,
+  class... LE2>
+struct mp_mix_impl<Pair, L1<LE1...>, L2<LE2...>> {
+  using type = L1<Pair<LE1, LE2>...>;
+};
+
+} // namespace detail
+
+// mix lists of the same size, e.g.
+//
+// template <class T1, class T2>
+// struct P{};
+//
+//  template <class... TS>
+//  struct L2 {};
+// //
+//  static_assert (std::is_same_v<
+//                mp_list<P<char, float>, P<int, double>>,
+//                mp_mix<P, mp_list<char, int>, L2<float, double>>
+//                >);
+
+template <template <class...> class Mixed, class... Ls>
+using mp_mix = typename detail::mp_mix_impl<Mixed, Ls...>::type;
+
 } // namespace artv
 
 #else
@@ -123,7 +159,6 @@ namespace artv {
 
 template <class... T>
 struct mp_list {}
-};
-}
+}; // namespace artv
 
 #endif
