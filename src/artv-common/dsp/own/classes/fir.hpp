@@ -1053,6 +1053,18 @@ public:
     }
   }
   //----------------------------------------------------------------------------
+  // ratio as a fraction, the first element is the target rate, the second the
+  // source.
+  fraction<uint> ratio_frac() const
+  {
+    if (_fractional) {
+      return _fractional->ratio();
+    }
+    else {
+      return {};
+    }
+  }
+  //----------------------------------------------------------------------------
   // position in the resampling cycle, normalized to the ratio (read comment for
   // function below).
   fraction<uint> pos() const

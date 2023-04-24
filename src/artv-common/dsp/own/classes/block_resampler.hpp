@@ -74,15 +74,20 @@ public:
         block_spls_in);
       assert (blocksize <= _max_block_size && "Bug!!!");
 
-      // process
-      block = block.get_head (blocksize);
-      block_processor_fn (block); // It this doesn't inline, then CRTP
+      xspan<sample_type> converted {};
+      if (likely (blocksize > 0)) {
+        //  process
+        block = block.get_head (blocksize);
+        block_processor_fn (block); // It this doesn't inline, then CRTP
 
-      // resample
-      auto converted   = src_rate_bf;
-      uint n_converted = _converter_out.tick (
-        converted.cast (value_type {}), block.cast (value_type {}), blocksize);
-      converted = converted.get_head (n_converted);
+        // resample
+        converted        = src_rate_bf;
+        uint n_converted = _converter_out.tick (
+          converted.cast (value_type {}),
+          block.cast (value_type {}),
+          blocksize);
+        converted = converted.get_head (n_converted);
+      }
 
       // try to clear remaining samples from past runs
       uint allowed_spls_out = spls_out + block_spls_in;
@@ -172,13 +177,30 @@ public:
     }
     else {
       // downsampler first
-      uint ratio = div_ceil (src_srate, tgt_srate);
       // A downsampler always outputs 0 or 1 samples, so the desired block size
       // will never be surpassed.
       _tgt_rate_bf_spls = max_block_size;
-      // The upsampler will never output more samples than the scaled up ratio
-      _src_rate_bf_spls = _tgt_rate_bf_spls * ratio;
-      // Having a remainder queue with a surplus of samples equal to the ratio.
+      uint ratio        = div_ceil (src_srate, tgt_srate);
+      uint ratio_int    = src_srate / tgt_srate;
+      auto ratio_frac   = _converter_out.ratio_frac();
+      // in some stages the fractional resampler (max 1.999 ratio) will be
+      // feeding 2 samples to the integer 2x-4x... upsampler. Other cycles one.
+      // The periodicity has to be computed.
+      uint n_spls2x     = ratio_frac.num - ratio_frac.den; // num: out, den: in
+      uint in_cycle_len = ratio_frac.den;
+      uint n_spls1x     = in_cycle_len - n_spls2x;
+
+      uint full_cycles = max_block_size / in_cycle_len;
+      uint cycle_rem   = max_block_size % in_cycle_len;
+
+      _src_rate_bf_spls = full_cycles * ((n_spls2x * 2 + n_spls1x) * ratio_int);
+      uint rem2x        = std::min (cycle_rem, n_spls2x);
+      _src_rate_bf_spls += rem2x * 2 * ratio_int;
+      cycle_rem -= rem2x;
+      uint rem1x = std::min (cycle_rem, n_spls1x);
+      _src_rate_bf_spls += rem1x * ratio_int;
+      // Having a remainder queue with a surplus of samples equal to the ratio
+      // rounded up.
       remainder_n_spls = ratio;
     }
 
