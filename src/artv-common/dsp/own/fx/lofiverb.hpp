@@ -24,7 +24,7 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/xspan.hpp"
 
-// #define LOFIVERB_ADD_DEBUG_ALGO 1
+// #define LOFIVERB_DEBUG_ALGO 1
 
 namespace artv {
 
@@ -58,6 +58,7 @@ public:
     return choice_param (
       0,
       make_cstr_array (
+#ifndef LOFIVERB_DEBUG_ALGO
         "Artv Abyss",
         "Artv Small",
         "Artv Room",
@@ -68,8 +69,7 @@ public:
         "Acreil Dre-2000 C",
         "Acreil Dre-2000 D",
         "Acreil REV5 L Hall"
-#ifdef LOFIVERB_ADD_DEBUG_ALGO
-        ,
+#else
         "Debug "
 #endif
         ),
@@ -450,6 +450,7 @@ private:
   //----------------------------------------------------------------------------
   struct mode {
     enum {
+#ifndef LOFIVERB_DEBUG_ALGO
       abyss_fix16,
       abyss_flt16,
       abyss_flt32,
@@ -480,7 +481,7 @@ private:
       rev5_l_hall_fix16,
       rev5_l_hall_flt16,
       rev5_l_hall_flt32,
-#ifdef LOFIVERB_ADD_DEBUG_ALGO
+#else
       debug_algo_fix16,
       debug_algo_flt16,
       debug_algo_flt32,
@@ -540,6 +541,7 @@ private:
     uint srate {};
 
     switch (_param.mode) {
+#ifndef LOFIVERB_DEBUG_ALGO
     case mode::abyss_fix16:
     case mode::abyss_flt16:
     case mode::abyss_flt32:
@@ -556,11 +558,6 @@ private:
     case mode::midifex50_fix16:
     case mode::midifex50_flt16:
     case mode::midifex50_flt32:
-#ifdef LOFIVERB_ADD_DEBUG_ALGO
-    case mode::debug_algo_fix16:
-    case mode::debug_algo_flt16:
-    case mode::debug_algo_flt32:
-#endif
     case mode::room_fix16:
     case mode::room_flt16:
     case mode::room_flt32: {
@@ -591,7 +588,16 @@ private:
         = make_array (25200, 33600, 40320, 44100, 45000, 52500, 57600);
       srate = srates[_param.srateid];
     } break;
-
+#else
+    case mode::debug_algo_fix16:
+    case mode::debug_algo_flt16:
+    case mode::debug_algo_flt32:
+      constexpr auto srates
+        = make_array (10500, 16800, 21000, 23400, 33600, 42000, 50400);
+      srate = srates[_param.srateid];
+    }
+    break;
+#endif
     default:
       return;
     }
@@ -601,6 +607,7 @@ private:
     }
 
     switch (_param.mode) {
+#ifndef LOFIVERB_DEBUG_ALGO
     case mode::abyss_fix16: {
       auto& rev
         = _algorithms.emplace<detail::lofiverb::abyss::engine<dt_fix16>>();
@@ -751,22 +758,22 @@ private:
                     .emplace<detail::lofiverb::rev5_l_hall::engine<dt_flt32>>();
       detail::lofiverb::rev5_l_hall::reset_lfo_phase (_lfo);
     } break;
-#ifdef LOFIVERB_ADD_DEBUG_ALGO
-    case mode::debug_algo_fix16: {
-      auto& rev
-        = _algorithms.emplace<detail::lofiverb::debug::engine<dt_fix16>>();
-      detail::lofiverb::debug::reset_lfo_phase (_lfo);
-    } break;
-    case mode::debug_algo_flt16: {
-      auto& rev
-        = _algorithms.emplace<detail::lofiverb::debug::engine<dt_flt16>>();
-      detail::lofiverb::debug::reset_lfo_phase (_lfo);
-    } break;
-    case mode::debug_algo_flt32: {
-      auto& rev
-        = _algorithms.emplace<detail::lofiverb::debug::engine<dt_flt32>>();
-      detail::lofiverb::debug::reset_lfo_phase (_lfo);
-    } break;
+#else
+  case mode::debug_algo_fix16: {
+    auto& rev
+      = _algorithms.emplace<detail::lofiverb::debug::engine<dt_fix16>>();
+    detail::lofiverb::debug::reset_lfo_phase (_lfo);
+  } break;
+  case mode::debug_algo_flt16: {
+    auto& rev
+      = _algorithms.emplace<detail::lofiverb::debug::engine<dt_flt16>>();
+    detail::lofiverb::debug::reset_lfo_phase (_lfo);
+  } break;
+  case mode::debug_algo_flt32: {
+    auto& rev
+      = _algorithms.emplace<detail::lofiverb::debug::engine<dt_flt32>>();
+    detail::lofiverb::debug::reset_lfo_phase (_lfo);
+  } break;
 #endif
     default:
       return;
@@ -880,8 +887,8 @@ private:
 
   lfo<4> _lfo;
 
-#ifndef LOFIVERB_ADD_DEBUG_ALGO
   using algorithms_type = std::variant<
+#ifndef LOFIVERB_DEBUG_ALGO
     detail::lofiverb::abyss::engine<dt_fix16>,
     detail::lofiverb::abyss::engine<dt_flt16>,
     detail::lofiverb::abyss::engine<dt_flt32>,
@@ -911,43 +918,15 @@ private:
     detail::lofiverb::dre2000d::engine<dt_flt32>,
     detail::lofiverb::rev5_l_hall::engine<dt_fix16>,
     detail::lofiverb::rev5_l_hall::engine<dt_flt16>,
-    detail::lofiverb::rev5_l_hall::engine<dt_flt32>>;
+    detail::lofiverb::rev5_l_hall::engine<dt_flt32>
 #else
-  using algorithms_type = std::variant<
-    detail::lofiverb::abyss::engine<dt_fix16>,
-    detail::lofiverb::abyss::engine<dt_flt16>,
-    detail::lofiverb::abyss::engine<dt_flt32>,
-    detail::lofiverb::small_space::engine<dt_fix16>,
-    detail::lofiverb::small_space::engine<dt_flt16>,
-    detail::lofiverb::small_space::engine<dt_flt32>,
-    detail::lofiverb::room::engine<dt_fix16>,
-    detail::lofiverb::room::engine<dt_flt16>,
-    detail::lofiverb::room::engine<dt_flt32>,
-    detail::lofiverb::midifex49::engine<dt_fix16>,
-    detail::lofiverb::midifex49::engine<dt_flt16>,
-    detail::lofiverb::midifex49::engine<dt_flt32>,
-    detail::lofiverb::midifex50::engine<dt_fix16>,
-    detail::lofiverb::midifex50::engine<dt_flt16>,
-    detail::lofiverb::midifex50::engine<dt_flt32>,
-    detail::lofiverb::dre2000a::engine<dt_fix16>,
-    detail::lofiverb::dre2000a::engine<dt_flt16>,
-    detail::lofiverb::dre2000a::engine<dt_flt32>,
-    detail::lofiverb::dre2000b::engine<dt_fix16>,
-    detail::lofiverb::dre2000b::engine<dt_flt16>,
-    detail::lofiverb::dre2000b::engine<dt_flt32>,
-    detail::lofiverb::dre2000c::engine<dt_fix16>,
-    detail::lofiverb::dre2000c::engine<dt_flt16>,
-    detail::lofiverb::dre2000c::engine<dt_flt32>,
-    detail::lofiverb::dre2000d::engine<dt_fix16>,
-    detail::lofiverb::dre2000d::engine<dt_flt16>,
-    detail::lofiverb::dre2000d::engine<dt_flt32>,
-    detail::lofiverb::rev5_l_hall::engine<dt_fix16>,
-    detail::lofiverb::rev5_l_hall::engine<dt_flt16>,
-    detail::lofiverb::rev5_l_hall::engine<dt_flt32>,
+  // clang-format off
     detail::lofiverb::debug::engine<dt_fix16>,
     detail::lofiverb::debug::engine<dt_flt16>,
-    detail::lofiverb::debug::engine<dt_flt32>>;
+    detail::lofiverb::debug::engine<dt_flt32
+// clang-format on
 #endif
+    >;
   algorithms_type _algorithms;
   ducker<f32_x2>  _ducker;
 
