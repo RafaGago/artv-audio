@@ -717,8 +717,6 @@ public:
   //----------------------------------------------------------------------------
   void insert (value_type v)
   {
-    // TODO: should the advance should be done before? to get this sample now
-    // requires a call to read spl0
     _z[_pos] = v;
     advance_one();
   }
@@ -897,6 +895,7 @@ template <>
 class delay_buffer<data_type::fixpt16>
   : public static_encoded_buffer<fixpt_t, no_enconding<fixpt_t>> {
 public:
+  // TODO: companding and using a high resolution type as input?
   using value_type   = fixpt_t;
   using storage_type = fixpt_t;
 };
@@ -907,6 +906,7 @@ template <>
 class delay_buffer<data_type::float16>
   : public static_encoded_buffer<float, float16_encoder> {
 public:
+  // TODO: companding and using a higher resolution type as input?
   using value_type = float;
   using storage_type =
     typename static_encoded_buffer<float, float16_encoder>::storage_type;
@@ -952,6 +952,21 @@ struct stage_list {}; // stage list, used for avoiding the template keyword
 // point.
 template <class Algorithm, delay::data_type Data_type, uint Max_block_size>
 class engine {
+private:
+  //----------------------------------------------------------------------------
+  static constexpr auto one_impl()
+  {
+    if constexpr (Data_type == delay::data_type::fixpt16) {
+      return fixpt_t::max();
+    }
+    else if constexpr (Data_type == delay::data_type::float16) {
+      return fixpt_t::max_float(); // still can't represent 1
+    }
+    else if constexpr (Data_type == delay::data_type::float32) {
+      return 1.f;
+    }
+  }
+  //----------------------------------------------------------------------------
 public:
   //----------------------------------------------------------------------------
   using value_type   = typename delay::delay_buffer<Data_type>::value_type;
@@ -959,7 +974,8 @@ public:
   using algorithm    = Algorithm;
   using spec         = spec_access<Algorithm>;
   //----------------------------------------------------------------------------
-  static constexpr uint max_block_size = Max_block_size;
+  static constexpr uint       max_block_size = Max_block_size;
+  static constexpr value_type one            = one_impl();
   //----------------------------------------------------------------------------
   static constexpr uint get_required_bytes()
   {

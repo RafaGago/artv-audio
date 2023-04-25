@@ -24,9 +24,12 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/xspan.hpp"
 
-// #define LOFIVERB_DEBUG_ALGO 1
+#define LOFIVERB_DEBUG_ALGO 1
 
 namespace artv {
+
+// TODO: pre and postprocessing hooks on each algorithm, to be run on float,
+// e.g for pre-eq and  post gains
 
 //------------------------------------------------------------------------------
 // A reverb using 16-bit fixed-point arithmetic on the main loop. One design
@@ -591,12 +594,11 @@ private:
 #else
     case mode::debug_algo_fix16:
     case mode::debug_algo_flt16:
-    case mode::debug_algo_flt32:
+    case mode::debug_algo_flt32: {
       constexpr auto srates
         = make_array (10500, 16800, 21000, 23400, 33600, 42000, 50400);
       srate = srates[_param.srateid];
-    }
-    break;
+    } break;
 #endif
     default:
       return;
@@ -759,21 +761,21 @@ private:
       detail::lofiverb::rev5_l_hall::reset_lfo_phase (_lfo);
     } break;
 #else
-  case mode::debug_algo_fix16: {
-    auto& rev
-      = _algorithms.emplace<detail::lofiverb::debug::engine<dt_fix16>>();
-    detail::lofiverb::debug::reset_lfo_phase (_lfo);
-  } break;
-  case mode::debug_algo_flt16: {
-    auto& rev
-      = _algorithms.emplace<detail::lofiverb::debug::engine<dt_flt16>>();
-    detail::lofiverb::debug::reset_lfo_phase (_lfo);
-  } break;
-  case mode::debug_algo_flt32: {
-    auto& rev
-      = _algorithms.emplace<detail::lofiverb::debug::engine<dt_flt32>>();
-    detail::lofiverb::debug::reset_lfo_phase (_lfo);
-  } break;
+    case mode::debug_algo_fix16: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::debug::engine<dt_fix16>>();
+      detail::lofiverb::debug::reset_lfo_phase (_lfo);
+    } break;
+    case mode::debug_algo_flt16: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::debug::engine<dt_flt16>>();
+      detail::lofiverb::debug::reset_lfo_phase (_lfo);
+    } break;
+    case mode::debug_algo_flt32: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::debug::engine<dt_flt32>>();
+      detail::lofiverb::debug::reset_lfo_phase (_lfo);
+    } break;
 #endif
     default:
       return;
@@ -920,11 +922,9 @@ private:
     detail::lofiverb::rev5_l_hall::engine<dt_flt16>,
     detail::lofiverb::rev5_l_hall::engine<dt_flt32>
 #else
-  // clang-format off
     detail::lofiverb::debug::engine<dt_fix16>,
     detail::lofiverb::debug::engine<dt_flt16>,
-    detail::lofiverb::debug::engine<dt_flt32
-// clang-format on
+    detail::lofiverb::debug::engine<dt_flt32>
 #endif
     >;
   algorithms_type _algorithms;

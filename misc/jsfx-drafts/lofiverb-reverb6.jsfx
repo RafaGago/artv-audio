@@ -102,8 +102,8 @@ wet_gain = db_to_lin (db_wet);
 decay = 0.05 + decay_p * 0.85;
 
 flo = 0.90 + lo * lo * 0.05;
-glo = 0.85 + lo * 0.13;
-fhi = 0.55 - hi * hi * 0.15;
+fhi = 0.85 + lo * 0.13; // notice, was a mistake, a happy one
+glo = 0.55 - hi * hi * 0.15;
 ghi = 0.35 + 0.1 * decay2 + hi * 0.14;
 
 @sample
@@ -174,23 +174,19 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
 
   m = (l + r) * 0.5;
-  (1) ? ( // TODO RM
-  l = r = 0;
-  m = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.25;
-  );
   ltdec = decay_p * decay_p; //0.001 + (0.001) * decay;
   lt = m;
   ap3i = easyapv_del_idx;
-  lt = ap3_crossv (lt, 911 + character * 413, 491 + character * 213, 211, 0.39 * ltdec, -0.28 * ltdec, 0.19 * ltdec, flo, glo, fhi, ghi);
-//  lt = ap (lt, 133, 0.3 + ltdec * 0.3);
-//  lt = ap (lt, 191, -0.25 - ltdec * 0.3);
-//  lt = ap (lt, 211, 0.25 + ltdec * 0.3);
+  lt = ap3_crossv (lt, 911 + character * 413, 491 + character * 213, 491 + character * 213, 0.39 * ltdec, -0.28 * ltdec, 0.19 * ltdec, flo, fhi, glo, ghi);
+  lt = ap (lt, 133, 0.3 + ltdec * 0.3);
+  lt = ap (lt, 191, -0.25 - ltdec * 0.3);
+  lt = ap (lt, 211, 0.25 + ltdec * 0.3);
   lt1 = lt;
-//  lt = ap (lt, 311, 0.365 + ltdec * 0.2, lfo.ret.ptr[0] * mod, 73);
+  lt = ap (lt, 311, 0.365 + ltdec * 0.2, lfo.ret.ptr[0] * mod, 23);
   lt2 = lt;
   // TODO: less delay on small decay
-  l += lt2 * decay_p; //+ easyapv_get (ap3i, 33) * (1 - decay_p);
-  r -= lt1 * decay_p; //+ easyapv_get (ap3i, 157) * (1 - decay_p);
+  l += lt2 * decay_p + easyapv_get (ap3i, 33) * (1 - decay_p);
+  r -= lt1 * decay_p + easyapv_get (ap3i, 157) * (1 - decay_p);
 
   // LOW MID EQ! 16-bit ZDF PEAK?
 
