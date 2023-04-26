@@ -5,6 +5,7 @@
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/short_ints.hpp"
+#include "artv-common/misc/vec_util.hpp"
 
 namespace artv {
 
@@ -70,9 +71,6 @@ constexpr uint f16pack_clamp   = 1 << 2;
 // -"f16pack_dftz": Flush denormalized float16 values to zero. Denormals allow
 //  to win some extra low precision digits at the expense of CPU.'
 //
-// -"f16pack_dftz": Flush denormalized float16 values to zero. Denormals allow
-//  to win some extra low precision digits at the expense of CPU.
-//
 // -"f16pack_clamp": Clamp values to the valid range before encoding.
 //
 template <
@@ -89,9 +87,10 @@ public:
   using value_type                     = u16;
   using float_type                     = float;
   //----------------------------------------------------------------------------
+  // scalar version, kept for understanding/doc purposes, probably the
+  // vectorized version will be faster even for vectors of size 1.
   static constexpr u16 encode (float f)
   {
-    // TODO: vectorize?
     if constexpr (clamp_input) {
       f = std::clamp (f, min(), max());
     }
@@ -136,7 +135,7 @@ public:
         half.sign  = single.sign;
         half.exp   = 0;
         half.frac  = 0;
-        if ((-exp) <= half.n_frac) {
+        if ((-exp) < half.n_frac) {
           uint frac = single.frac | bit<uint> (single.n_frac); // Hidden 1 bit
           uint fixed_shift = (shift + 1) - exp;
           half.frac        = frac >> fixed_shift;
@@ -151,10 +150,63 @@ public:
     }
   }
   //----------------------------------------------------------------------------
+  template <class V, enable_if_vec_t<V>* = nullptr>
+  static auto encode (V f)
+  {
+    static_assert (std::is_same_v<vec_value_type_t<V>, float>, "only floats");
+
+    static constexpr uint n          = vec_traits_t<V>::size;
+    static constexpr u32  src_n_exp  = f32_layout::n_exp;
+    static constexpr u32  src_n_frac = f32_layout::n_frac;
+    static constexpr u32  dst_n_exp  = layout::n_exp;
+    static constexpr u32  dst_n_frac = layout::n_frac;
+
+    using u32vec = vec<u32, n>;
+    using s32vec = vec<s32, n>;
+
+    if constexpr (clamp_input) {
+      f = vec_clamp (f, min(), max());
+    }
+    auto as_u32 = vec_bit_cast<u32vec> (f);
+    auto exp_u  = (as_u32 >> src_n_frac) & lsb_mask<u32> (src_n_exp);
+    auto exp    = vec_bit_cast<s32vec> (exp_u);
+    exp -= rebias;
+
+    for (uint i = 0; i < n; ++i) {
+      assert (exp[i] < exp_end);
+    }
+    // normal path
+    auto normal = (as_u32 >> shift) & lsb_mask<u32> (dst_n_frac);
+    exp_u       = vec_bit_cast<u32vec> (exp) & lsb_mask<u32> (dst_n_exp);
+    normal |= (exp_u << dst_n_frac);
+
+    vec<u32, n> denormal {}; // 0's handled here
+    if constexpr (!denormal_ftz) {
+      // denormal path
+      auto denormal_c = as_u32 & lsb_mask<u32> (src_n_frac);
+      denormal_c |= bit<u32> (src_n_frac); // implicit 1bit
+      denormal_c >>= ((shift + 1) - exp);
+      denormal = ((-exp) <= dst_n_frac) ? denormal_c : denormal;
+    }
+    auto is_normal = (exp > 0);
+    auto ret       = is_normal ? normal : denormal;
+    if constexpr (rounds_nearest) {
+      u32vec nshift = vec_set<u32vec> (shift - 1);
+      if constexpr (!denormal_ftz) {
+        u32vec sdenorm = vec_bit_cast<u32vec> (shift - 1 - exp);
+        nshift         = (is_normal ? nshift : sdenorm);
+      };
+      ret += ((as_u32 >> nshift) & 1);
+    }
+    auto sign_dst = (as_u32 >> 16) & bit<u32> (dst_n_frac + dst_n_exp);
+    ret |= sign_dst;
+    return make_array ((u16) ret[0], (u16) ret[1], (u16) ret[2], (u16) ret[3]);
+  }
+  //----------------------------------------------------------------------------
+  // scalar version, kept for understanding/doc purposes, probably the
+  // vectorized version will be faster even for vectors of size 1.
   static constexpr float decode (u16 u)
   {
-    // TODO: vectorize?
-
     f32_layout single {};
     layout     half {};
 
@@ -214,6 +266,43 @@ public:
     }
   }
   //----------------------------------------------------------------------------
+  template <std::size_t N>
+  static vec<float, N> decode (std::array<u16, N> v)
+  {
+    static constexpr uint n          = N;
+    static constexpr u32  dst_n_exp  = f32_layout::n_exp;
+    static constexpr u32  dst_n_frac = f32_layout::n_frac;
+    static constexpr u32  src_n_exp  = layout::n_exp;
+    static constexpr u32  src_n_frac = layout::n_frac;
+
+    using u32vec = vec<u32, n>;
+    using s32vec = vec<s32, n>;
+    using f32vec = vec<float, n>;
+
+    u32vec as_u32
+      = std::apply ([] (auto&&... vs) { return u32vec {vs...}; }, v);
+
+    u32vec normal = (as_u32 << shift) & lsb_mask<u32> (dst_n_frac);
+    u32vec exp    = (as_u32 >> src_n_frac) & lsb_mask<u32> (src_n_exp);
+    normal |= (exp + rebias) << dst_n_frac;
+
+    u32vec denormal {};
+    if constexpr (!denormal_ftz) {
+      // using FPU renormalization
+      constexpr u32 k_renorm = (rebias + 1) << dst_n_frac;
+      auto          renorm = vec_bit_cast<f32vec> (vec_set<u32vec> (k_renorm));
+      // the optimizer should see that this is done also on the normal part
+      denormal = (as_u32 << shift) & lsb_mask<u32> (dst_n_frac);
+      denormal |= (exp + rebias + 1) << dst_n_frac;
+      auto renormalized = vec_bit_cast<f32vec> (denormal) - renorm;
+      denormal          = vec_bit_cast<u32vec> (renormalized);
+    }
+    u32vec ret  = (exp == 0) ? denormal : normal;
+    u32vec sign = (as_u32 << 16) & bit<u32> (31);
+    ret |= sign;
+    return vec_bit_cast<f32vec> (ret);
+  }
+  //----------------------------------------------------------------------------
   static constexpr float max()
   {
     constexpr u32 exp  = lsb_mask<u32> (layout::n_exp) + rebias;
@@ -230,6 +319,15 @@ public:
   }
   //----------------------------------------------------------------------------
   static constexpr float min() { return -max(); }
+  //----------------------------------------------------------------------------
+  static float denormal_min()
+  {
+    f32_layout f {};
+    f.exp = rebias - layout::n_frac + 1;
+    float r;
+    memcpy (&r, &f, sizeof f);
+    return r;
+  }
   //----------------------------------------------------------------------------
 private:
   static constexpr uint bias_s = 127; // lsb_mask<uint> (f32_layout::n_exp - 1);

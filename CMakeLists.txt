@@ -662,6 +662,7 @@ target_link_libraries(
 add_executable(
     common-test
     test/common/delay_compensation_buffers.cpp
+    test/common/float.cpp
     test/common/fft.cpp
     test/common/simd.cpp
     test/common/fixed_point.cpp

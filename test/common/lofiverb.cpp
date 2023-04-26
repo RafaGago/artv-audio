@@ -6,8 +6,9 @@
 
 namespace artv {
 
-static constexpr uint max_block_size = 8;
-static constexpr uint delay_size     = max_block_size * 2 - max_block_size / 2;
+static constexpr uint max_block_size_test = 8;
+static constexpr uint delay_size
+  = max_block_size_test * 2 - max_block_size_test / 2;
 
 struct delay_test_spec {
   static constexpr auto get_spec()
@@ -20,60 +21,63 @@ struct delay_test_spec {
 //------------------------------------------------------------------------------
 TEST (lofiverb, block_processed_delays)
 {
-  detail::lofiverb::engine<delay_test_spec, max_block_size> e;
-  std::vector<s16>                                          mem;
-  std::array<float, max_block_size>                         in, out;
+  using namespace detail::lofiverb;
 
-  mem.resize (e.get_required_size());
+  engine<delay_test_spec, delay::data_type::float32, max_block_size_test> e;
+
+  std::vector<u8>                        mem;
+  std::array<float, max_block_size_test> in, out;
+
+  mem.resize (e.get_required_bytes());
   e.reset_memory (mem);
 
   s16 in_counter  = 0;
   s16 out_counter = 0;
   // block 1
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     in[i] = ((float) ++in_counter) * 0.01;
   }
-  e.fetch_block<0> (xspan {out}, 0);
-  e.push<0> (xspan {in}.to_const());
+  e.fetch_block (stage_list<0> {}, xspan {out}, 0);
+  e.push (stage_list<0> {}, xspan {in}.to_const());
 
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     EXPECT_EQ (0.f, out[i]);
   }
   // block 2
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     in[i] = ((float) ++in_counter) * 0.01;
   }
-  e.fetch_block<0> (xspan {out}, 0);
-  e.push<0> (xspan {in}.to_const());
+  e.fetch_block (stage_list<0> {}, xspan {out}, 0);
+  e.push (stage_list<0> {}, xspan {in}.to_const());
 
-  auto expected_data_bound = max_block_size / 2;
+  auto expected_data_bound = max_block_size_test / 2;
   for (uint i = 0; i < expected_data_bound; ++i) {
     EXPECT_EQ (0.f, out[i]);
   }
   // first sample should come out
-  for (uint i = expected_data_bound; i < max_block_size; ++i) {
+  for (uint i = expected_data_bound; i < max_block_size_test; ++i) {
     ++out_counter;
     EXPECT_NEAR (((float) out_counter) * 0.01, out[i], 0.001f);
   }
   // block 3
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     in[i] = ((float) ++in_counter) * 0.01;
   }
-  e.fetch_block<0> (xspan {out}, 0);
-  e.push<0> (xspan {in}.to_const());
+  e.fetch_block (stage_list<0> {}, xspan {out}, 0);
+  e.push (stage_list<0> {}, xspan {in}.to_const());
 
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     ++out_counter;
     EXPECT_NEAR (((float) out_counter) * 0.01, out[i], 0.001f);
   }
   // block 4
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     in[i] = ((float) ++in_counter) * 0.01;
   }
-  e.fetch_block<0> (xspan {out}, 0);
-  e.push<0> (xspan {in}.to_const());
+  e.fetch_block (stage_list<0> {}, xspan {out}, 0);
+  e.push (stage_list<0> {}, xspan {in}.to_const());
 
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     ++out_counter;
     EXPECT_NEAR (((float) out_counter) * 0.01, out[i], 0.001f);
   }
@@ -81,60 +85,62 @@ TEST (lofiverb, block_processed_delays)
 //------------------------------------------------------------------------------
 TEST (lofiverb, block_processed_delays_witch_shift)
 {
-  detail::lofiverb::engine<delay_test_spec, max_block_size> e;
-  std::vector<s16>                                          mem;
-  std::array<float, max_block_size>                         in, out;
+  using namespace detail::lofiverb;
 
-  mem.resize (e.get_required_size());
+  engine<delay_test_spec, delay::data_type::float32, max_block_size_test> e;
+  std::vector<u8>                                                         mem;
+  std::array<float, max_block_size_test> in, out;
+
+  mem.resize (e.get_required_bytes());
   e.reset_memory (mem);
 
   s16 in_counter  = 0;
   s16 out_counter = 0;
   // block 1
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     in[i] = ((float) ++in_counter) * 0.01;
   }
-  e.fetch_block<0> (xspan {out}, 1);
-  e.push<0> (xspan {in}.to_const());
+  e.fetch_block (stage_list<0> {}, xspan {out}, 1);
+  e.push (stage_list<0> {}, xspan {in}.to_const());
 
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     EXPECT_EQ (0.f, out[i]);
   }
   // block 2
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     in[i] = ((float) ++in_counter) * 0.01;
   }
-  e.fetch_block<0> (xspan {out}, 1);
-  e.push<0> (xspan {in}.to_const());
+  e.fetch_block (stage_list<0> {}, xspan {out}, 1);
+  e.push (stage_list<0> {}, xspan {in}.to_const());
 
-  auto expected_data_bound = (max_block_size / 2) + 1;
+  auto expected_data_bound = (max_block_size_test / 2) + 1;
   for (uint i = 0; i < expected_data_bound; ++i) {
     EXPECT_EQ (0.f, out[i]);
   }
   // first sample should come out
-  for (uint i = expected_data_bound; i < max_block_size; ++i) {
+  for (uint i = expected_data_bound; i < max_block_size_test; ++i) {
     ++out_counter;
     EXPECT_NEAR (((float) out_counter) * 0.01, out[i], 0.001f);
   }
   // block 3
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     in[i] = ((float) ++in_counter) * 0.01;
   }
-  e.fetch_block<0> (xspan {out}, 1);
-  e.push<0> (xspan {in}.to_const());
+  e.fetch_block (stage_list<0> {}, xspan {out}, 1);
+  e.push (stage_list<0> {}, xspan {in}.to_const());
 
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     ++out_counter;
     EXPECT_NEAR (((float) out_counter) * 0.01, out[i], 0.001f);
   }
   // block 4
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     in[i] = ((float) ++in_counter) * 0.01;
   }
-  e.fetch_block<0> (xspan {out}, 1);
-  e.push<0> (xspan {in}.to_const());
+  e.fetch_block (stage_list<0> {}, xspan {out}, 1);
+  e.push (stage_list<0> {}, xspan {in}.to_const());
 
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     ++out_counter;
     EXPECT_NEAR (((float) out_counter) * 0.01, out[i], 0.001f);
   }
@@ -142,43 +148,44 @@ TEST (lofiverb, block_processed_delays_witch_shift)
 //------------------------------------------------------------------------------
 TEST (lofiverb, plain_delays)
 {
-  detail::lofiverb::engine<delay_test_spec, max_block_size> e;
-  std::vector<s16>                                          mem;
-  std::array<float, max_block_size>                         io;
+  using namespace detail::lofiverb;
+  engine<delay_test_spec, delay::data_type::float32, max_block_size_test> e;
+  std::vector<u8>                                                         mem;
+  std::array<float, max_block_size_test>                                  io;
 
-  mem.resize (e.get_required_size());
+  mem.resize (e.get_required_bytes());
   e.reset_memory (mem);
 
   s16 in_counter  = 0;
   s16 out_counter = 0;
   // block 1
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     io[i] = ((float) ++in_counter) * 0.01;
   }
-  e.run<0> (xspan {io});
-  for (uint i = 0; i < max_block_size; ++i) {
+  e.run (stage_list<0> {}, xspan {io});
+  for (uint i = 0; i < max_block_size_test; ++i) {
     EXPECT_EQ (0.f, io[i]);
   }
   // block 2
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     io[i] = ((float) ++in_counter) * 0.01;
   }
-  e.run<0> (xspan {io});
-  auto expected_data_bound = (max_block_size / 2);
+  e.run (stage_list<0> {}, xspan {io});
+  auto expected_data_bound = (max_block_size_test / 2);
   for (uint i = 0; i < expected_data_bound; ++i) {
     EXPECT_EQ (0.f, io[i]);
   }
   // first sample should come out
-  for (uint i = expected_data_bound; i < max_block_size; ++i) {
+  for (uint i = expected_data_bound; i < max_block_size_test; ++i) {
     ++out_counter;
     EXPECT_NEAR (((float) out_counter) * 0.01, io[i], 0.001f);
   }
   // block 3
-  for (uint i = 0; i < max_block_size; ++i) {
+  for (uint i = 0; i < max_block_size_test; ++i) {
     io[i] = ((float) ++in_counter) * 0.01;
   }
-  e.run<0> (xspan {io});
-  for (uint i = 0; i < max_block_size; ++i) {
+  e.run (stage_list<0> {}, xspan {io});
+  for (uint i = 0; i < max_block_size_test; ++i) {
     ++out_counter;
     EXPECT_NEAR (((float) out_counter) * 0.01, io[i], 0.001f);
   }
