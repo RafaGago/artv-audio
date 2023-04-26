@@ -30,7 +30,7 @@ namespace artv {
 
 // TODO: pre and postprocessing hooks on each algorithm, to be run on float,
 // e.g for pre-eq and  post gains
-
+// TODO: multitaps with lerp, to do modulations on output taps<
 //------------------------------------------------------------------------------
 // A reverb using 16-bit fixed-point arithmetic on the main loop. One design
 // criteria has been for it to be extremely CPU friendly.

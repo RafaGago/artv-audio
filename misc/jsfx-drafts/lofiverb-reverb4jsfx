@@ -11,7 +11,7 @@ slider9:stereo=1<-1,1, 0.01> Stereo
 slider21:db_wet=-12<-40, 12,0.1> Wet dB
 slider20:db_dry=0<-60, 0,0.1> Dry dB
 
-slider23:offset=0<0, 30, 1> Offset
+slider23:offset=0<-50, 50, 1> Offset
 
 import _core.jsfx-inc
 import _easy_allpass_reverb.jsfx-inc
@@ -86,12 +86,12 @@ dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
 
 dp = 1 - decay_p;
-decay = 0.9 - dp * dp * 0.2;
+decay = 0.985 - dp * dp * 0.2;
 
 flo = 0.90 + lo * lo * 0.05;
 glo = 0.87 + lo * 0.13;
 fhi = 0.75 - hi * hi * 0.55;
-ghi = 0.7 + hi * 0.24;
+ghi = 0.55 + hi * 0.24;
 
 @sample
 
@@ -139,18 +139,20 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 // [153.8046190129675, 87.13169661547329, 60.78286847796119, 201
   a = mtx.ptr[0];
   a = ap3 (a, 153, 89, 60, 0.1 + 0.1 * lfo.ret.ptr[0], -0.04, g3);
+  ia = easyapv_del_idx;
   a = delay(a, 201);
 
 // [[139, 149], [79, 83], [53, 59], 185]
 // [141.56146526069148, 80.19584016847044, 55.94443118618319, 185]
   b = mtx.ptr[1];
-  b = ap3 (b, 139, 79, 53, -0.1 - 0.1 * lfo.ret.ptr[1], -0.04, g3);
+//  b = ap3 (b, 139, 79, 53, -0.1 - 0.1 * lfo.ret.ptr[1], -0.04, g3);
   b = delay(b, 185);
 
 // [[139, 149], [83, 89], [53, 59], 193]
 // [147.68304213682947, 83.66376839197186, 58.363649832072184, 193]
   c = mtx.ptr[2];
   c = ap3 (c, 149, 83, 59, 0.1 + 0.1 * m_lfo.ret.ptr[2], 0.04, -g3);
+  ic = easyapv_del_idx;
   c = delay(c, 193);
 
 // [[167, 173], [89, 97], [61, 67], 221]
@@ -177,12 +179,12 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   a = mtx.ptr[3];
 
   a = f1.crossv2 (a, flo, fhi, glo, ghi);
-  a = ap3 (a, 113, 67, 47, 0.1, 0.04, -g3);
+//  a = ap3 (a, 113, 67, 47, 0.1, 0.04, -g3);
   a = delay (a, 122);
   a = ap (a, 119, 0.6);
   a = ap (a, 67, 0.6);
   a = ap (a, 47, -0.6);
-  a = delay (a, 32);
+  a = delay (a, 32 + 27);
 // [[113, 127], [67, 71], [43, 47], 155]
 // [118.60555197517394, 67.1911093303401, 46.872361264099425, 155]
 
@@ -192,7 +194,8 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   b = f2.crossv2 (b, flo, fhi, glo, ghi);
   b = ap3 (b, 114, 66, 47, -0.1, -0.04, -g3);
   b = ap (b, 9, 0.4 + (lfo.ret.ptr[1] * modv) * 0.4, lfo.ret.ptr[0], 2 * modv);
-  b = delay(b, 149);
+  ib = easyapv_del_idx;
+  b = delay(b, 149 + 36);
 
   // [[113, 127], [61, 67], [43, 47], 151]
 // [115.54476353710493, 65.45714521858937, 45.66275194115492, 151]
@@ -200,7 +203,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   c = f3.crossv2 (c, flo, fhi, glo, ghi);
   c = ap3 (c, 116, 65, 46, -0.1, -0.04, -g3);
   c = ap (c, 3, 0.6 - (lfo.ret.ptr[3] * modv) * 0.4, lfo.ret.ptr[2], 2 * modv);
-  c = delay(c, 151);
+  c = delay(c, 151 + 27);
 //  c = delay(c, 33);
 
 // [[113, 127], [67, 71], [47, 53], 157]
@@ -208,7 +211,8 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   d = mtx.ptr[1];
   d = f4.crossv2 (d, flo, fhi, glo, ghi);
   d = ap3 (d, 121, 69, 47, -0.1, 0.04, g3);
-  d = delay(d, 157);
+  id = easyapv_del_idx;
+  d = delay(d, 157 + 18);
 
   mtx.ptr[0] = a;
   mtx.ptr[1] = b;
@@ -218,14 +222,21 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   l = a;
   l = ap (l, 71, 0.4 + 0.3 * character);
   l = ap (l, 116, -0.6 * character);
+//  l += easyapv_get (ia, 73);
   l = ap (l, 172, -0.6 * character);
+//  l += easyapv_get (ib, 54);
   l = ap (l, 277, 0.6 * character);
+//  l += easyapv_get (id, 131);
 
   r = d;
   r = ap (r, 72, 0.4 + 0.3 * character);
   r = ap (r, 117, -0.6 * character);
+//  r += easyapv_get (ib, 167);
   r = ap (r, 175, -0.6 * character);
+//  r += easyapv_get (ib, 52);
   r = ap (r, 274, 0.6 * character);
+//  r += easyapv_get (ic, 89);
+  
 
   // more boilerplate (summing + downsample)
   easy_ap_next_sample();

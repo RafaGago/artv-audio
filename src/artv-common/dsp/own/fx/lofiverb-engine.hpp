@@ -14,7 +14,6 @@
 #include <vector>
 
 #include "artv-common/dsp/own/classes/noise.hpp"
-#include "artv-common/dsp/own/fx/lofiverb-algorithms.hpp"
 #include "artv-common/dsp/types.hpp"
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/compiler.hpp"
@@ -48,6 +47,13 @@ using fixpt_spls     = fixpt_m<0, 14, 0, 0>;
 using fixpt_spls_mod = fixpt_m<0, 9, 0, 0>;
 
 using float16 = f16pack<5, -1, f16pack_dftz | f16pack_clamp>;
+
+static constexpr uint max_block_size = 32;
+
+// this is using 16 bits fixed-point arithmetic, positive values can't
+// represent one, so instead of correcting everywhere the parameters are
+// scaled instead to never reach 1.
+static constexpr auto fixpt_max_flt = fixpt_t::max_float();
 //------------------------------------------------------------------------------
 enum class interpolation : u8 { thiran, linear };
 

@@ -11,12 +11,6 @@
 namespace artv { namespace detail { namespace lofiverb {
 
 //------------------------------------------------------------------------------
-static constexpr uint max_block_size = 32;
-
-// this is using 16 bits fixed-point arithmetic, positive values can't
-// represent one, so instead of correcting everywhere the parameters are
-// scaled instead to never reach 1.
-static constexpr auto fixpt_max_flt = fixpt_t::max_float();
 
 struct algorithm {
 
@@ -172,26 +166,114 @@ struct algorithm {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-class debug : private algorithm {
-public:
+
+struct debug : private algorithm {
   //----------------------------------------------------------------------------
   template <delay::data_type Dt>
   using engine = detail::lofiverb::engine<debug, Dt, max_block_size>;
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
-    auto f = 0.63f + mod * 0.33f;
-    lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
+    auto f1 = 0.1f + mod * 0.2f;
+    lfo.set_freq (f32_x4 {f1, f1, f1, f1}, t_spl);
   }
   //----------------------------------------------------------------------------
   static void reset_lfo_phase (lfo<4>& lfo)
   {
-    lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 1.f});
+    lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
   }
   //------------------------------------------------------------------------------
   static constexpr auto get_spec()
   {
-    return make_array<stage_data> (make_lp());
+    return make_array<stage_data> (
+      // left channel output conditioning
+      make_ap (71), // 0
+      make_ap (116), // 1
+      make_ap (172), // 2
+      make_ap (277), // 3
+
+      // right channel output conditioning
+      make_ap (72), // 4
+      make_ap (117), // 5
+      make_ap (175), // 6
+      make_ap (274), // 7
+
+      // m diffusors
+      make_ap (23, 0.8), // 8
+      make_ap (130, 0.8), // 9
+      make_ap (217, 0.8), // 10
+      // s diffusors
+      make_ap (22, 0.8), // 11
+      make_ap (131, 0.8), // 12
+      make_ap (219, 0.8), // 13
+
+      make_quantizer(), // 14
+      make_quantizer(), // 15
+      make_quantizer(), // 16
+      make_quantizer(), // 17
+      // block a iteration 1
+      make_ap (153), // nested 3x (mod g) // 18
+      make_ap (89, -0.04), // 19
+      make_ap (60, 0.04), // 20
+      make_delay (201), // 21
+
+      // block b iteration 1
+      make_ap (139), // nested 3x (mod g) // 22
+      make_ap (79, -0.04), // 23
+      make_ap (53, 0.04), // 24
+      make_delay (185), // mod delay // 25
+
+      // block c iteration 1
+      make_ap (149), // nested 3x (mod g) // 26
+      make_ap (83, 0.04), // 27
+      make_ap (59, -0.04), // 28
+      make_delay (193), // 29
+
+      // block d iteration 1
+      make_ap (167), // nested 3x (mod g) // 30
+      make_ap (97, -0.04), // 31
+      make_ap (67, 0.04), // 32
+      make_delay (221), // mod delay // 33
+
+      make_quantizer(), // 34
+      make_quantizer(), // 35
+      make_quantizer(), // 36
+      make_quantizer(), // 37
+
+      // block a iteration 2
+      make_crossover2(), // 38
+      make_ap (113, 0.1), // nested 3x // 39
+      make_ap (67, 0.04), // 40
+      make_ap (47, -0.04), // nested end // 41
+      make_delay (122), // 42
+      make_ap (119, 0.6), // 43
+      make_ap (67, 0.6), // 44
+      make_ap (47, -0.6), // 45
+      make_block_delay (32), // feedback point // 46
+
+      // block b iteration 2
+      make_crossover2(), // 47
+      make_ap (114, -0.1), // nested 3x // 48
+      make_ap (66, -0.04), // 49
+      make_ap (47, -0.04), // 50
+      make_ap (9, 0, 2), // single. modulated both gain and time // 51
+      make_block_delay (149), // feedback point // 52
+
+      // block c iteration 2
+      make_crossover2(), // 53
+      make_ap (116, -0.1), // nested 3x // 54
+      make_ap (65, -0.04), // 55
+      make_ap (46, -0.04), // 56
+      make_ap (9, 0, 3), // single. modulated both gain and time // 57
+      make_block_delay (151), // feedback point // 58
+
+      // block d iteration 2
+      make_crossover2(), // 59
+      make_ap (121, -0.1), // nested 3x // 60
+      make_ap (69, 0.04), // 61
+      make_ap (47, 0.04), // 62
+      make_block_delay (157) // feedback point // 63
+    );
   }
   //----------------------------------------------------------------------------
   template <class T, delay::data_type Dt>
@@ -202,8 +284,189 @@ public:
     smoothed_parameters<T>&      par,
     unsmoothed_parameters const& upar,
     uint)
-  {}
-  //----------------------------------------------------------------------------
+  {
+    using arr    = block_arr<T>;
+    using arr_fb = fb_block_arr<T>;
+
+    arr_fb a_mem, d_mem;
+    arr    b_mem, c_mem, tmp1, tmp2, tmp3;
+    arr    lfo1, lfo2;
+
+    xspan a {a_mem.data(), io.size() + 1};
+    xspan b {b_mem.data(), io.size()};
+    xspan c {c_mem.data(), io.size()};
+    xspan d {d_mem.data(), io.size() + 1};
+
+    // fetch a block from the output (a and d)
+    rev.fetch_block (sl<46> {}, a, 1); // feedback, fetching block + 1 samples
+    rev.fetch_block (sl<63> {}, d, 1); // feedback, fetching block + 1 samples
+
+    xspan_memcpy (b, a.advanced (1)); // L out on b
+    a.cut_tail (1); // fb samples on a.
+
+    xspan_memcpy (c, d.advanced (1)); // R out on c
+    d.cut_tail (1); // fb samples on d.
+
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      // invert character first
+      par.character[i] = (T) (rev.one - par.character[i]);
+      tmp1[i]          = (T) (0.4_r + 0.3_r * par.character[i]);
+      tmp2[i]          = (T) (-0.6_r * par.character[i]);
+      tmp3[i]          = (T) (0.6_r * par.character[i]);
+      // decay fixup
+      auto d       = rev.one - par.decay[i];
+      par.decay[i] = (T) (0.9_r - d * d * 0.2_r);
+    }
+
+    // output preconditioning
+    rev.run (sl<0> {}, b, 0, tmp1);
+    rev.run (sl<1> {}, b, 0, tmp2);
+    rev.run (sl<2> {}, b, 0, tmp2);
+    rev.run (sl<3> {}, b, 0, tmp3);
+
+    rev.run (sl<4> {}, c, 0, tmp1);
+    rev.run (sl<5> {}, c, 0, tmp2);
+    rev.run (sl<6> {}, c, 0, tmp2);
+    rev.run (sl<7> {}, c, 0, tmp3);
+
+    xspan i1 {tmp1.data(), io.size()};
+    xspan i2 {tmp2.data(), io.size()};
+    // output write + preparations
+    span_visit (io, [&] (auto& spls, uint i) {
+      i1[i]   = (T) ((spls[0] + spls[1]) * 0.25_r); // m
+      i2[i]   = (T) ((spls[0] - spls[1]) * 0.25_r); // s
+      spls[0] = b[i];
+      spls[1] = c[i];
+      b[i]    = (T) (0.8_r + 0.1_r * par.character[i]); // character 1 on b
+      c[i]    = (T) (0.8_r * par.character[i]); // character 2 on c
+    });
+
+    // input preconditioning
+    rev.run (sl<8> {}, i1, 0, b);
+    rev.run (sl<9> {}, i1, 0, c);
+    rev.run (sl<10> {}, i1, 0, c);
+
+    rev.run (sl<11> {}, i2, 0, b);
+    rev.run (sl<12> {}, i2, 0, c);
+    rev.run (sl<13> {}, i2, 0, c);
+
+    // fetch b and d feedback (a and d are already ready) 1 block only
+    rev.fetch_block (sl<52> {}, b, 1); // feedback
+    rev.fetch_block (sl<58> {}, c, 1); // feedback
+
+    // quantized decay
+    rev.run (sl<14> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<15> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<16> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<17> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
+
+    // sum inputs to feedback
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      // a single hadamard iteration can duplicate the range on one
+      // of the channels, so halving once more.
+      b[i] = (T) (b[i] + tmp1[i] * 0.5_r);
+      d[i] = (T) (d[i] + tmp2[i] * 0.5_r);
+    }
+    hadamard4 (make_array (a.data(), b.data(), c.data(), d.data()), a.size());
+
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      auto lfo = tick_lfo<T> (lfo_obj);
+      lfo1[i]  = T {lfo[0]};
+      lfo2[i]  = T {lfo[1]};
+      // lfo3 = -lfo1, lfo4 = -lfo2
+      // mod fixup
+      par.mod[i] = (T) (rev.one - par.mod[i]);
+      par.mod[i] = (T) (rev.one - (par.mod[i] * par.mod[i]));
+      // preparing modlations for block a
+      tmp1[i] = (T) (0.1_r + 0.1_r * lfo1[i]);
+    }
+    // channel a block 1
+    rev.run (sl<18, 19, 20> {}, a, blank, tmp1);
+    rev.run (sl<21> {}, a);
+
+    // channel b block 1
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      tmp1[i] = (T) (-0.1_r - 0.1_r * -lfo1[i]); // lfo3 = -lfo1
+    }
+    rev.run (sl<22, 23, 24> {}, b, 0, tmp1);
+    rev.run (sl<25> {}, b);
+
+    // channel c block 1
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      tmp1[i] = (T) (0.1_r + 0.1_r * -lfo2[i]); // lfo4 = -lfo2
+    }
+    rev.run (sl<26, 27, 28> {}, c, 0, tmp1);
+    rev.run (sl<29> {}, c);
+
+    // channel d block 1
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      tmp1[i] = (T) (0.1_r - 0.1_r * lfo2[i]);
+    }
+    rev.run (sl<30, 31, 32> {}, d, 0, tmp1);
+    rev.run (sl<33> {}, d);
+
+    // quantized decay
+    rev.run (sl<34> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<35> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<36> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<37> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
+
+    // block 2
+    hadamard4 (make_array (a.data(), b.data(), c.data(), d.data()), a.size());
+
+    // swaps.
+    a = xspan {d_mem.data(), io.size()};
+    b = xspan {c_mem.data(), io.size()};
+    c = xspan {a_mem.data(), io.size()};
+    d = xspan {b_mem.data(), io.size()};
+
+    // damp -----------------------------------
+    T flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
+    T glo = load_float<T> (0.87f + upar.lf_amt * 0.1299f);
+    T fhi = load_float<T> (0.75f - upar.hf_amt * upar.hf_amt * 0.55f);
+    T ghi = load_float<T> (0.7f + upar.hf_amt * 0.24f);
+
+    // channel a block 2
+    rev.run (sl<38> {}, a, flo, glo, fhi, rev.one, ghi);
+    rev.run (sl<39, 40, 41> {}, a);
+    rev.run (sl<42> {}, a);
+    rev.run (sl<43> {}, a);
+    rev.run (sl<44> {}, a);
+    rev.run (sl<45> {}, a);
+    rev.push (sl<46> {}, a.to_const());
+
+    // channel b block 2
+    rev.run (sl<47> {}, b, flo, glo, fhi, rev.one, ghi);
+    rev.run (sl<48, 49, 50> {}, b);
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      tmp1[i] = (T) (lfo1[i] * par.mod[i]);
+      tmp2[i] = (T) (0.4_r + 0.4_r * lfo2[i] * par.mod[i]);
+    }
+    rev.run (sl<51> {}, b, tmp1, tmp2);
+    rev.push (sl<52> {}, b.to_const());
+
+    // channel c block 2
+    rev.run (sl<53> {}, c, flo, glo, fhi, rev.one, ghi);
+    rev.run (sl<54, 55, 56> {}, c);
+    for (uint i = 0; i < io.size(); ++i) {
+      tmp1[i] = (T) (-tmp1[i]); // lfo3 = -lfo1.
+      tmp2[i] = (T) (0.6_r - 0.4_r * -lfo2[i] * par.mod[i]); // lfo4 = -lfo2
+    }
+    rev.run (sl<57> {}, c, tmp1, tmp2);
+    rev.push (sl<58> {}, c.to_const());
+
+    // channel d block 2
+    rev.run (sl<59> {}, d, flo, glo, fhi, rev.one, ghi);
+    rev.run (sl<60, 61, 62> {}, d);
+    rev.push (sl<63> {}, d.to_const());
+  }
 };
 
 class abyss : private algorithm {

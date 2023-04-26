@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cmath>
 #include <complex>
+#include <numeric>
 #include <type_traits>
 #include <vector>
 
