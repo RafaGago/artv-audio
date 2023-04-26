@@ -842,15 +842,9 @@ public:
       = _z.read_block (dst.size(), del_spls);
     assert (dst.size() == (src[0].size() + src[1].size()));
     if constexpr (has_encoding) {
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < src[0].size(); ++i) {
-        dst[i] = encoder::decode (src[0][i]);
-      }
+      encoder::decode (dst.data(), src[0].data(), src[0].size());
       dst.cut_head (src[0].size());
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < src[1].size(); ++i) {
-        dst[i] = encoder::decode (src[1][i]);
-      }
+      encoder::decode (dst.data(), src[1].data(), src[1].size());
     }
     else {
       xspan_memdump (dst.data(), src[0]);
@@ -864,15 +858,9 @@ public:
     std::array<xspan<storage_type>, 2> dst = _z.insert_block (src.size());
     assert (src.size() == (dst[0].size() + dst[1].size()));
     if constexpr (has_encoding) {
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < dst[0].size(); ++i) {
-        dst[0][i] = encoder::encode (src[i]);
-      }
+      encoder::encode (dst[0].data(), src.data(), dst[0].size());
       src.cut_head (dst[0].size());
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < dst[1].size(); ++i) {
-        dst[1][i] = encoder::encode (src[i]);
-      }
+      encoder::encode (dst[1].data(), src.data(), dst[1].size());
     }
     else {
       xspan_memcpy (dst[0], src);

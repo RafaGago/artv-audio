@@ -24,7 +24,7 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/xspan.hpp"
 
-#define LOFIVERB_DEBUG_ALGO 1
+// #define LOFIVERB_DEBUG_ALGO 1
 
 namespace artv {
 

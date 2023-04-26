@@ -52,7 +52,7 @@ TEST (float_packing, vec_float_dtfz_clamp)
   f32_x4 got = float16::decode (float16::encode (expected));
   // regular value
   for (uint i = 0; i < 4; ++i) {
-    EXPECT_NEAR (expected[i], got[i], expected[i] * 0.001f);
+    EXPECT_NEAR (expected[i], got[i], abs (expected[i] * 0.001f));
   }
   got = float16::decode (
     float16::encode (vec_set<f32_x4> (float16::denormal_min())));
@@ -73,7 +73,7 @@ TEST (float_packing, vec_float_clamp)
   f32_x4 got = float16::decode (float16::encode (expected));
   // regular value
   for (uint i = 0; i < 4; ++i) {
-    EXPECT_NEAR (expected[i], got[i], expected[i] * 0.001f);
+    EXPECT_NEAR (expected[i], got[i], abs (expected[i] * 0.001f));
   }
   expected = f32_x4 {
     float16::denormal_min(),
@@ -83,7 +83,7 @@ TEST (float_packing, vec_float_clamp)
 
   got = float16::decode (float16::encode (expected));
   for (uint i = 0; i < 4; ++i) {
-    EXPECT_NEAR (expected[i], got[i], expected[i] * 0.001f);
+    EXPECT_NEAR (expected[i], got[i], abs (expected[i] * 0.001f));
   }
   got = float16::decode (
     float16::encode (vec_set<f32_x4> (float16::max() * 4.f)));
