@@ -182,7 +182,7 @@ struct debug : private algorithm {
   {
     lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
   }
-  //------------------------------------------------------------------------------
+  //----------------------------------------------------------------------------
   static constexpr auto get_spec()
   {
     return make_array<stage_data> (
