@@ -96,7 +96,7 @@ if ("${CMAKE_BUILD_TYPE}" MATCHES "Release")
     # REMINDER: "-fopt-info-vec-missed" to see missed vectorizations.
     set (ARTV_DSP_COMPILE_OPTIONS_LIST -ffast-math -ftree-vectorize)
 
-    set (ARTV_PLAIN_COMPILE_OPTIONS_LIST -Os)
+    set (ARTV_PLAIN_COMPILE_OPTIONS_LIST -Oz)
     # TODO: detecting target architecture is nontrivial from CMake, if compiling
     # for other arch than x64 the sse flags will need to be conditional
     set (ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST -O3 -DNDEBUG -msse4.2)
@@ -113,6 +113,7 @@ else()
     # Warnings on debug/dev builds
     set (ARTV_DSP_COMPILE_OPTIONS_LIST -ffast-math)
     set (ARTV_PLAIN_COMPILE_OPTIONS_LIST -ffast-math)
+    set (ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST ${ARTV_CMAKE_CXX_FLAGS_RELEASE_LIST})
 
     if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     else()
@@ -819,7 +820,7 @@ set_source_files_properties(
     src/lofiverb/processor.cpp
     PROPERTIES
     COMPILE_FLAGS
-    "${ARTV_DSP_COMPILE_OPTIONS}"
+    "${ARTV_DSP_COMPILE_OPTIONS} ${ARTV_LOFIVERB_COMPILE_OPTIONS}"
     )
 target_compile_definitions(
     lofiverb
