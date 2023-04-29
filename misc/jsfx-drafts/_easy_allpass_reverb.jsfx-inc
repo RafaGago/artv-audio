@@ -347,7 +347,7 @@ function ap3 (in, spls1, spls2, spls3, g1, g2, g3)
 );
 
 // 3 nested allpasses (lattice)
-function ap3_crossv (in, spls1, spls2, spls3, g1, g2, g3, flo, fhi, glo, ghi)
+function ap3_crossv2 (in, spls1, spls2, spls3, g1, g2, g3, flo, fhi, glo, ghi)
   local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (easyapv_del*, easyapv_del_idx) (
   i1 = easyapv_del_idx;
   i2 = easyapv_del_idx + 1;

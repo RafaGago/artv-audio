@@ -1,4 +1,3 @@
-desc:ER
 slider1:decay_p=0.8<0,1,0.01> Decay
 
 slider3:mod=0.5<0,1,0.01> Mod
@@ -115,8 +114,8 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   lfo.lfo_bank_tick_tri (lfo.ret.ptr, 0);
 
   // halving an additional time to leave headroom
-  l = src.ins.ptr[0] * 0.5;
-  r = src.ins.ptr[1] * 0.5;
+  l = src.ins.ptr[0] * 0.25;
+  r = src.ins.ptr[1] * 0.25;
 
   l = fil1.lp (l, 0.75 - hi * 0.2);
   l = fil2.hp (l, 0.9 + lo * 0.075);
@@ -177,7 +176,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   ltdec = decay_p * decay_p; //0.001 + (0.001) * decay;
   lt = m;
   ap3i = easyapv_del_idx;
-  lt = ap3_crossv (lt, 911 + character * 413, 491 + character * 213, 491 + character * 213, 0.39 * ltdec, -0.28 * ltdec, 0.19 * ltdec, flo, fhi, glo, ghi);
+  lt = ap3_crossv2 (lt, 911 + character * 413, 491 + character * 213, 491 + character * 213, 0.39 * ltdec, -0.28 * ltdec, 0.19 * ltdec, flo, fhi, glo, ghi);
   lt = ap (lt, 133, 0.3 + ltdec * 0.3);
   lt = ap (lt, 191, -0.25 - ltdec * 0.3);
   lt = ap (lt, 211, 0.25 + ltdec * 0.3);

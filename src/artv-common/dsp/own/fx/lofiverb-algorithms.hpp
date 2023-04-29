@@ -4,6 +4,7 @@
 
 #include "artv-common/dsp/own/fx/lofiverb-engine.hpp"
 #include "artv-common/dsp/own/parts/oscillators/lfo.hpp"
+#include "artv-common/misc/compiler.hpp"
 #include "artv-common/misc/fixed_point.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/primes_table.hpp"
@@ -12,8 +13,8 @@ namespace artv { namespace detail { namespace lofiverb {
 
 //------------------------------------------------------------------------------
 
-struct algorithm {
-
+class algorithm {
+public:
   template <class T>
   struct smoothed_parameters {
     std::array<T, max_block_size>     decay;
@@ -49,6 +50,7 @@ struct algorithm {
   template <uint... Idxs>
   using sl = stage_list<Idxs...>;
 
+protected:
   // just a convenience function for iterating block loops while not bloating
   // the code with more loop unroll hints than necessary
   template <class T, class F>
@@ -70,7 +72,24 @@ struct algorithm {
       block[i] = (T) (block[i] * val);
     }
   }
-
+  //----------------------------------------------------------------------------
+  template <class T>
+  static constexpr void span_add (
+    xspan<T>       dst,
+    xspan<T const> lhs,
+    xspan<T const> rhs)
+  {
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < rhs.size(); ++i) {
+      dst[i] = (T) (lhs[i] + rhs[i]);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T>
+  static constexpr void span_add (xspan<T> dst_lhs, xspan<T const> rhs)
+  {
+    span_add<T> (dst_lhs, dst_lhs, rhs);
+  }
   //----------------------------------------------------------------------------
   template <class T, class U, class V>
   static T clamp (T v, U min, V max)
@@ -83,7 +102,7 @@ struct algorithm {
     }
   }
   //----------------------------------------------------------------------------
-  // 1 selects s2, 0 dst
+  // naive linear crossfade. 1 selects s2, 0 dst
   template <class T, class U, class V, class W>
   static void crossfade (xspan<T> dst, U s2, V ctrl, W one)
   {
@@ -164,56 +183,193 @@ struct algorithm {
     }
   }
   //----------------------------------------------------------------------------
+  // 1 - (x - 1) * (x - 1) : a cheap curve that grows faster than linear,
+  // similar to sqrt but compresses more the values closer to one instead of the
+  // ones closer to zero
+  template <class T, class U>
+  static auto fastgrowth (T x, U one)
+  {
+    x = (T) (x - one);
+    return (T) (one - x * x);
+  }
+  //----------------------------------------------------------------------------
+  // Equal power crossfade approx, 0 selects v1. 1 selects v2, results on v1
+  template <class T, class F>
+  static void ep_crossfade (
+    xspan<T*>       v1, // in/out
+    xspan<T const*> v2,
+    T const*        cf,
+    uint            block_size,
+    F&&             cf_transform)
+  {
+    crossfade_impl (
+      v1, v2, cf, block_size, std::forward<F> (cf_transform), 1.4186_r);
+  }
+  //----------------------------------------------------------------------------
+  // Equal gain crossfade approx, 0 selects v1. 1 selects v2, results on v1
+  template <class T, class F>
+  static void eg_crossfade (
+    xspan<T*>       v1, // in/out
+    xspan<T const*> v2,
+    T const*        cf,
+    uint            block_size,
+    F&&             cf_transform)
+  {
+    crossfade_impl (
+      v1, v2, cf, block_size, std::forward<F> (cf_transform), 0.70912_r);
+  }
+  //----------------------------------------------------------------------------
+protected:
+  //----------------------------------------------------------------------------
+  // https://signalsmith-audio.co.uk/writing/2021/cheap-energy-crossfade/
+  // 0 selects v1. 1 selects v2
+  template <class T, class R, class F>
+  static void crossfade_impl (
+    xspan<T*>       v1,
+    xspan<T const*> v2,
+    T const*        cf,
+    uint            block_size,
+    F&&             transform,
+    R               constant)
+  {
+    using acum
+      = std::conditional_t<std::is_floating_point_v<T>, T, fixpt_s<1, 4, 27>>;
+    assert (v1.size() == v2.size());
+    // not optimized, just eyebaled the values
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < block_size; ++i) {
+      acum x2 = transform (cf[i]);
+      acum x1 = 1_r - x2;
+      acum a  = x1 * x2;
+      acum b  = a * (1_r + constant * a);
+      acum c  = b + x1;
+      acum d  = b + x2;
+      c *= c;
+      d *= d;
+      for (uint j = 0; j < v1.size(); ++j) {
+        v1[j][i] = (T) (v1[j][i] * c + v2[j][i] * d);
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-class debug : private algorithm {
-public:
+struct debug : public algorithm {
   //----------------------------------------------------------------------------
   template <delay::data_type Dt>
   using engine = detail::lofiverb::engine<debug, Dt, max_block_size>;
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
-    auto f = 0.43f + mod * 0.2f;
-    lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
+    auto f1 = 0.43f + mod * 0.2f;
+    lfo.set_freq (f32_x4 {f1, f1, f1, f1}, t_spl);
   }
   //----------------------------------------------------------------------------
   static void reset_lfo_phase (lfo<4>& lfo)
   {
-    lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 1.f});
+    lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.75f, 1.f});
   }
-  //----------------------------------------------------------------------------
+  //------------------------------------------------------------------------------
   static constexpr auto get_spec()
   {
     return make_array<stage_data> (
-      make_lp(),
-      make_hp(),
-      make_lp(),
-      make_hp(), // 3
-      make_variable_delay (ffwd_table[0], ffwd_table[16 + 0], true),
-      make_variable_delay (ffwd_table[1], ffwd_table[16 + 1], true),
-      make_variable_delay (ffwd_table[2], ffwd_table[16 + 2], true),
-      make_variable_delay (ffwd_table[3], ffwd_table[16 + 3], true),
-      make_variable_delay (ffwd_table[4], ffwd_table[16 + 4], true),
-      make_variable_delay (ffwd_table[5], ffwd_table[16 + 5], true),
-      make_variable_delay (ffwd_table[6], ffwd_table[16 + 6], true),
-      make_variable_delay (ffwd_table[7], ffwd_table[16 + 7], true),
-      make_variable_delay (ffwd_table[8], ffwd_table[16 + 8], true),
-      make_variable_delay (ffwd_table[9], ffwd_table[16 + 9], true),
-      make_variable_delay (ffwd_table[10], ffwd_table[16 + 10], true),
-      make_variable_delay (ffwd_table[11], ffwd_table[16 + 11], true),
-      make_variable_delay (ffwd_table[12], ffwd_table[16 + 12], true),
-      make_variable_delay (ffwd_table[13], ffwd_table[16 + 13], true),
-      make_variable_delay (ffwd_table[14], ffwd_table[16 + 14], true),
-      make_variable_delay (ffwd_table[15], ffwd_table[16 + 15], true), // 19
-      make_ap (913, 0.f, 413, interpolation::linear), // 20
-      make_ap (491, 0.f, 213, interpolation::linear), // 21
-      make_crossover2(), // 22
-      make_ap (491, 0.f, 213, interpolation::linear), // 23
-      make_ap (133, 0.f), // 24
-      make_ap (191, 0.f), // 25
-      make_ap (211, 0.f), // 26
-      make_ap (311, 0.f, 73)); // 27
+      // left channel output conditioning part 1
+      make_ap (71), // 0
+      make_ap (116), // 1
+      make_ap (172), // 2
+
+      // right channel output conditioning part 2
+      make_ap (72), // 3
+      make_ap (117), // 4
+      make_ap (175), // 5
+
+      // left channel output conditioning part 2 (chorus)
+      make_ap (1987, 0, 123), // 6
+      make_lp(), // 7
+      // right channel output conditioning part 2 (chorus)
+      make_ap (2177, 0, 138), // 8
+      make_lp(), // 9
+
+      make_ap (277), // 10 // L last AP
+      make_ap (274), // 11 // R last AP
+
+      // m conditioning-diffusors
+      make_lp (0.5f), // 12
+      make_hp (0.87f), // 13
+      make_ap (23, 0.8), // 14
+      make_ap (130, 0.8), // 15
+      make_ap (217, 0.8), // 16
+
+      // s conditioning-diffusors
+      make_lp (0.5f), // 17
+      make_hp (0.87f), // 18
+      make_ap (22, 0.8), // 19
+      make_ap (131, 0.8), // 20
+      make_ap (219, 0.8), // 21
+
+      make_quantizer(), // 22
+      make_quantizer(), // 23
+      make_quantizer(), // 24
+      make_quantizer(), // 25
+
+      // block a iteration 1
+      make_ap (153, 0.2), // 26
+      make_ap (89, -0.04), // 27
+      make_ap (60, 0.04), // 28
+      make_delay (201), // 29
+
+      // block b iteration 1
+      make_delay (185), // 39
+
+      // block c iteration 1
+      make_ap (149, 0.2), // 31
+      make_ap (83, 0.04), // 32
+      make_ap (59, -0.04), // 33
+      make_delay (225), // 34
+
+      // block d iteration 1
+      make_ap (167, -0.2), // 35
+      make_ap (97, -0.04), // 36
+      make_ap (67, 0.04), // 37
+      make_delay (221), // 38
+
+      make_quantizer(), // 39
+      make_quantizer(), // 40
+      make_quantizer(), // 41
+      make_quantizer(), // 42
+
+      // crossovers
+      make_crossover2(), // 43
+      make_crossover2(), // 44
+      make_crossover2(), // 45
+      make_crossover2(), // 46
+
+      // block a iteration 2
+      make_ap (119, 0.6), // 47
+      make_ap (67, 0.6), // 48
+      make_ap (47, -0.6), // 49
+      make_block_delay (171), // feedback point // 50
+
+      // block b iteration 2
+      make_ap (114, -0.1), // nested 3x // 51
+      make_ap (66, -0.04), // 52
+      make_ap (47, -0.04), // 53
+      make_ap (9), // 54
+      make_block_delay (185), // feedback point // 55
+
+      // block c iteration 2
+      make_ap (116, -0.1), // nested 3x // 56
+      make_ap (65, -0.04), // 57
+      make_ap (46, -0.04), // 58
+      make_ap (3), //  59
+      make_block_delay (179), // feedback point // 60
+
+      // block d iteration 2
+      make_ap (121, -0.1), // nested 3x // 61
+      make_ap (69, 0.04), // 62
+      make_ap (47, 0.04), // 63
+      make_block_delay (175) // feedback point // 64
+    );
   }
   //----------------------------------------------------------------------------
   template <class T, delay::data_type Dt>
@@ -225,91 +381,194 @@ public:
     unsmoothed_parameters const& upar,
     uint)
   {
-    using arr = block_arr<T>;
+    using arr    = block_arr<T>;
+    using arr_fb = fb_block_arr<T>;
 
-    arr   l_m, r_m;
-    xspan l {l_m.data(), io.size()};
-    xspan r {r_m.data(), io.size()};
+    arr_fb a_mem, d_mem;
+    arr    b_mem, c_mem, tmp1, tmp2, tmp3;
+    arr    lfo1, lfo2;
 
-    span_visit (io, [&] (auto& spl, uint i) {
-      // Midside signal
-      l[i] = (T) (spl[0] * 0.25_r);
-      r[i] = (T) (spl[1] * 0.25_r);
-    });
+    xspan a {a_mem.data(), io.size() + 1};
+    xspan b {b_mem.data(), io.size()};
+    xspan c {c_mem.data(), io.size()};
+    xspan d {d_mem.data(), io.size() + 1};
 
-    T lo = load_float<T> (0.75f - upar.hf_amt * 0.2f);
-    T hi = load_float<T> (0.9f + upar.lf_amt * 0.075f);
+    // fetch a block from the output (a and d)
+    rev.fetch_block (sl<50> {}, a, 1); // feedback, fetching block + 1 samples
+    rev.fetch_block (sl<64> {}, d, 1); // feedback, fetching block + 1 samples
 
-    rev.run (sl<0> {}, l, lo);
-    rev.run (sl<1> {}, l, hi);
-    rev.run (sl<2> {}, r, lo);
-    rev.run (sl<3> {}, r, hi);
+    xspan_memcpy (b, a.advanced (1)); // L out on b
+    a.cut_tail (1); // fb samples on a.
 
-    // Mystran's feedforward diffusor
-    mp11::mp_for_each<mp11::mp_from_sequence<std::make_index_sequence<16>>> (
-      [&] (auto idx) {
-        rev.run (sl<idx + 4> {}, (idx & 1) ? r : l, [&] (uint i) {
-          return ffwd_table[idx + (uint) (par.decay[i] * 16_r)];
-        });
-        hadamard2 (make_array (l.data(), r.data()), l.size());
-      });
+    xspan_memcpy (c, d.advanced (1)); // R out on c
+    d.cut_tail (1); // fb samples on d.
 
-    arr   m_m, ltdec, t1, t2, t3;
-    xspan m {m_m.data(), io.size()};
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      // invert character first
+      par.character[i] = (T) (rev.one - par.character[i]);
+      tmp1[i]          = (T) (0.4_r + 0.3_r * par.character[i]);
+      tmp2[i]          = (T) (-0.6_r * par.character[i]);
+      tmp3[i]          = (T) (0.6_r * par.character[i]);
+      // decay fixup
+      auto d       = rev.one - par.decay[i];
+      par.decay[i] = (T) (0.985_r - d * d * 0.21_r);
+      // lfo
+      auto lfo = tick_lfo<T> (lfo_obj);
+      lfo1[i]  = T {lfo[0]};
+      lfo2[i]  = T {lfo[1]};
+      // lfo3 = -lfo1, lfo4 = -lfo2
+    }
 
-    rev.fetch_block (sl<20> {}, xspan {t1.data(), io.size()}, 33);
-    rev.fetch_block (sl<20> {}, xspan {t2.data(), io.size()}, 157);
+    // output preconditioning
+    rev.run (sl<0> {}, b, blank, tmp1);
+    rev.run (sl<1> {}, b, blank, tmp2);
+    rev.run (sl<2> {}, b, blank, tmp2);
 
-    span_visit (m, [&] (auto& spl, uint i) {
-      spl      = (T) ((l[i] + r[i]) * 0.25_r);
-      auto inv = rev.one - par.decay[i];
-      l[i]     = (T) (l[i] + t1[i] * inv);
-      r[i]     = (T) (r[i] - t2[i] * inv);
-      ltdec[i] = (T) (par.decay[i] * par.decay[i]);
-      t1[i]    = (T) (0.39_r * ltdec[i]);
-      t2[i]    = (T) (-0.28_r * ltdec[i]);
-      t3[i]    = (T) (0.19_r * ltdec[i]);
-    });
-    // triple nested AP with crossover
+    rev.run (sl<3> {}, c, blank, tmp1);
+    rev.run (sl<4> {}, c, blank, tmp2);
+    rev.run (sl<5> {}, c, blank, tmp2);
+
+    // tmp1 and tmp2 free
+    xspan cho1 {tmp1.data(), io.size()};
+    xspan cho2 {tmp2.data(), io.size()};
+
+    rev.run (sl<6> {}, cho1, b.to_const(), lfo1, tmp3);
+    rev.run (sl<7> {}, cho1);
     rev.run (
-      sl<20, 21, 22, 23> {},
-      m,
-      par.character,
-      t1,
-      par.character,
-      t2,
-      load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f),
-      load_float<T> (0.55f - upar.hf_amt * upar.hf_amt * 0.15f),
-      load_float<T> (0.85f + upar.lf_amt * 0.13f),
-      rev.one,
-      load_float<T> (0.35f + upar.hf_amt * 0.14f),
-      par.character,
-      t3);
+      sl<8> {}, cho2, c.to_const(), [&] (uint i) { return -lfo1[i]; }, tmp3);
+    rev.run (sl<9> {}, cho2);
 
-    span_visit (xspan {ltdec.data(), io.size()}, [&] (auto& v, uint i) {
-      t1[i] = (T) (0.3_r + v * 0.3_r);
-      t2[i] = (T) (-0.25_r - v * 0.3_r);
-      t3[i] = (T) (0.25_r + v * 0.3_r);
+    auto v1 = make_array (&b[0], &c[0]);
+    auto v2 = make_array<T const*> (&cho1[0], &cho2[0]);
+    ep_crossfade<T> (v1, v2, &par.mod[0], io.size(), [=] (auto v) {
+      return fastgrowth ((T) (v * 0.5_r), rev.one);
     });
-    rev.run (sl<24> {}, m, blank, t1);
-    rev.run (sl<25> {}, m, blank, t2);
-    rev.run (sl<26> {}, m, blank, t3);
 
-    span_visit (xspan {par.mod.data(), io.size()}, [&] (auto& v, uint i) {
-      t1[i] = (T) (T {tick_lfo<T> (lfo_obj)[0]} * v);
-      t2[i] = (T) (0.365_r + v * 0.2_r);
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      b[i] = (T) (b[i] + cho1[i]);
+      c[i] = (T) (c[i] + cho2[i]);
+    }
+
+    rev.run (sl<10> {}, b, blank, tmp3);
+    rev.run (sl<11> {}, c, blank, tmp3); // tmp3 free
+
+    xspan i1 {tmp1.data(), io.size()};
+    xspan i2 {tmp2.data(), io.size()};
+    // output write + preparations
+    span_visit (io, [&] (auto& spls, uint i) {
+      i1[i]   = (T) ((spls[0] + spls[1]) * 0.25_r); // m
+      i2[i]   = (T) ((spls[0] - spls[1]) * 0.25_r); // s
+      spls[0] = b[i];
+      spls[1] = c[i];
+      b[i]    = (T) (0.8_r + 0.1_r * par.character[i]); // character 1 on b
+      c[i]    = (T) (0.8_r * par.character[i]); // character 2 on c
     });
-    rev.run (sl<27> {}, xspan {t3.data(), io.size()}, m.to_const(), t1, t2);
-    span_visit (io, [&] (auto& spl, uint i) {
-      spl[0] = (T) (l[i] + par.decay[i] * t3[i]);
-      spl[1] = (T) (r[i] - par.decay[i] * m[i]);
-    });
+
+    // input preconditioning
+    rev.run (sl<12> {}, i1);
+    rev.run (sl<13> {}, i1);
+    rev.run (sl<14> {}, i1, blank, b);
+    rev.run (sl<15> {}, i1, blank, c);
+    rev.run (sl<16> {}, i1, blank, c);
+
+    rev.run (sl<17> {}, i2);
+    rev.run (sl<18> {}, i2);
+    rev.run (sl<19> {}, i2, blank, b);
+    rev.run (sl<20> {}, i2, blank, c);
+    rev.run (sl<21> {}, i2, blank, c);
+
+    // fetch b and d feedback (a and d are already ready) 1 block only
+    rev.fetch_block (sl<55> {}, b, 1); // feedback
+    rev.fetch_block (sl<60> {}, c, 1); // feedback
+
+    // quantized decay
+    rev.run (sl<22> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<23> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<24> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<25> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
+
+    // sum inputs to feedback
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      // a single hadamard iteration can duplicate the range on one
+      // of the channels, so halving once more (TODO needed?).
+      b[i] = (T) (b[i] + tmp1[i] * 0.5_r);
+      d[i] = (T) (d[i] + tmp2[i] * 0.5_r);
+    }
+    hadamard4 (make_array (a.data(), b.data(), c.data(), d.data()), a.size());
+
+    // channel a block 1
+    rev.run (sl<26, 27, 28> {}, a);
+    rev.run (sl<29> {}, a);
+
+    // channel b block 1
+    rev.run (sl<30> {}, b);
+
+    // channel c block 1
+    rev.run (sl<31, 32, 33> {}, c);
+    rev.run (sl<34> {}, c);
+
+    // channel d block 1
+    rev.run (sl<35, 36, 37> {}, d);
+    rev.run (sl<38> {}, d);
+
+    // quantized decay
+    rev.run (sl<39> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<40> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<41> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<42> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
+
+    // block 2
+    hadamard4 (make_array (a.data(), b.data(), c.data(), d.data()), a.size());
+
+    // swaps.
+    a = xspan {d_mem.data(), io.size()};
+    b = xspan {c_mem.data(), io.size()};
+    c = xspan {a_mem.data(), io.size()};
+    d = xspan {b_mem.data(), io.size()};
+
+    // damp -----------------------------------
+    T flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
+    T glo = load_float<T> (0.9f + upar.lf_amt * 0.09f);
+    T fhi = load_float<T> (0.61f - upar.hf_amt * upar.hf_amt * 0.12f);
+    T ghi = load_float<T> (0.6f + upar.hf_amt * 0.18f);
+
+    rev.run (sl<43> {}, a, flo, glo, fhi, rev.one, ghi);
+    rev.run (sl<44> {}, b, flo, glo, fhi, rev.one, ghi);
+    rev.run (sl<45> {}, c, flo, glo, fhi, rev.one, ghi);
+    rev.run (sl<46> {}, d, flo, glo, fhi, rev.one, ghi);
+
+    // channel a block 2
+    rev.run (sl<47> {}, a);
+    rev.run (sl<48> {}, a);
+    rev.run (sl<49> {}, a);
+    rev.push (sl<50> {}, a.to_const());
+
+    // channel b block 2
+    rev.run (sl<51, 52, 53> {}, b);
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      T m     = fastgrowth (par.mod[i], rev.one);
+      tmp1[i] = (T) (0.4_r + 0.4_r * lfo2[i] * m);
+      tmp2[i] = (T) (0.6_r + 0.4_r * -lfo2[i] * m); // for block c
+    }
+    rev.run (sl<54> {}, b, tmp1);
+    rev.push (sl<55> {}, b.to_const());
+
+    // channel c block 2
+    rev.run (sl<56, 57, 58> {}, c);
+    rev.run (sl<59> {}, c, tmp2);
+    rev.push (sl<60> {}, c.to_const());
+
+    // channel d block 2
+    rev.run (sl<61, 62, 63> {}, d);
+    rev.push (sl<64> {}, d.to_const());
   }
-  //----------------------------------------------------------------------------
-  static constexpr std::array<u8, 32> ffwd_table {get_debug_ffwd_table()};
 };
 //------------------------------------------------------------------------------
-class abyss : private algorithm {
+class abyss : public algorithm {
 public:
   //----------------------------------------------------------------------------
   template <delay::data_type Dt>
@@ -438,6 +697,14 @@ public:
     rev.run (sl<8> {}, er1b, xspan {lfo1});
     rev.push (sl<9> {}, er1b.to_const()); // feedback point
 
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      auto e_l = (T) (-er1[i] * 0.66_r - er2[i] * 0.34_r);
+      auto e_r = (T) (-er1[i] * 0.66_r + er2[i] * 0.34_r);
+      er1[i]   = e_l;
+      er2[i]   = e_r;
+    }
+
     // Late -----------------------------
     arr    late_arr;
     arr_fb l_arr;
@@ -501,125 +768,135 @@ public:
     rev.push (sl<28> {}, late.to_const()); // feedback point
 
     // Mixdown
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < io.size(); ++i) {
-      auto er_amt     = par.character[i] * 0.2_r;
-      auto e_l        = (-er1[i] * 0.66_r - er2[i] * 0.34_r) * er_amt;
-      auto e_r        = (-er1[i] * 0.66_r + er2[i] * 0.34_r) * er_amt;
-      auto direct_amt = rev.one - er_amt;
-      io[i][0]        = (T) (l[i] * direct_amt + e_l);
-      io[i][1]        = (T) (r[i] * direct_amt + e_r);
-    }
+    auto v1 = make_array (&l[0], &er1[0]);
+    auto v2 = make_array<T const*> (&r[0], &er2[0]);
+    ep_crossfade<T> (v1, v2, &par.character[0], io.size(), [=] (auto v) {
+      return fastgrowth ((T) (v * 0.1_r), rev.one);
+    });
+
+    span_visit (io, [&] (auto& spls, uint i) {
+      spls[0] = l[i];
+      spls[1] = r[i];
+    });
   }
   //----------------------------------------------------------------------------
 };
-
-struct small_space : private algorithm {
+//------------------------------------------------------------------------------
+struct plate1 : public algorithm {
   //----------------------------------------------------------------------------
   template <delay::data_type Dt>
-  using engine = detail::lofiverb::engine<small_space, Dt, max_block_size>;
+  using engine = detail::lofiverb::engine<plate1, Dt, max_block_size>;
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
-    auto f1 = 0.1f + mod * 0.2f;
+    auto f1 = 0.43f + mod * 0.2f;
     lfo.set_freq (f32_x4 {f1, f1, f1, f1}, t_spl);
   }
   //----------------------------------------------------------------------------
   static void reset_lfo_phase (lfo<4>& lfo)
   {
-    lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
+    lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.75f, 1.f});
   }
   //------------------------------------------------------------------------------
   static constexpr auto get_spec()
   {
     return make_array<stage_data> (
-      // left channel output conditioning
+      // left channel output conditioning part 1
       make_ap (71), // 0
       make_ap (116), // 1
       make_ap (172), // 2
-      make_ap (277), // 3
 
-      // right channel output conditioning
-      make_ap (72), // 4
-      make_ap (117), // 5
-      make_ap (175), // 6
-      make_ap (274), // 7
+      // right channel output conditioning part 2
+      make_ap (72), // 3
+      make_ap (117), // 4
+      make_ap (175), // 5
 
-      // m diffusors
-      make_ap (23, 0.8), // 8
-      make_ap (130, 0.8), // 9
-      make_ap (217, 0.8), // 10
-      // s diffusors
-      make_ap (22, 0.8), // 11
-      make_ap (131, 0.8), // 12
-      make_ap (219, 0.8), // 13
+      // left channel output conditioning part 2 (chorus)
+      make_ap (1987, 0, 123), // 6
+      make_lp(), // 7
+      // right channel output conditioning part 2 (chorus)
+      make_ap (2177, 0, 138), // 8
+      make_lp(), // 9
 
-      make_quantizer(), // 14
-      make_quantizer(), // 15
-      make_quantizer(), // 16
-      make_quantizer(), // 17
+      make_ap (277), // 10 // L last AP
+      make_ap (274), // 11 // R last AP
+
+      // m conditioning-diffusors
+      make_lp (0.5f), // 12
+      make_hp (0.87f), // 13
+      make_ap (23, 0.8), // 14
+      make_ap (130, 0.8), // 15
+      make_ap (217, 0.8), // 16
+
+      // s conditioning-diffusors
+      make_lp (0.5f), // 17
+      make_hp (0.87f), // 18
+      make_ap (22, 0.8), // 19
+      make_ap (131, 0.8), // 20
+      make_ap (219, 0.8), // 21
+
+      make_quantizer(), // 22
+      make_quantizer(), // 23
+      make_quantizer(), // 24
+      make_quantizer(), // 25
+
       // block a iteration 1
-      make_ap (153), // nested 3x (mod g) // 18
-      make_ap (89, -0.04), // 19
-      make_ap (60, 0.04), // 20
-      make_delay (201), // 21
+      make_ap (153, 0.2), // 26
+      make_ap (89, -0.04), // 27
+      make_ap (60, 0.04), // 28
+      make_delay (201), // 29
 
       // block b iteration 1
-      make_ap (139), // nested 3x (mod g) // 22
-      make_ap (79, -0.04), // 23
-      make_ap (53, 0.04), // 24
-      make_delay (185), // mod delay // 25
+      make_delay (185), // 39
 
       // block c iteration 1
-      make_ap (149), // nested 3x (mod g) // 26
-      make_ap (83, 0.04), // 27
-      make_ap (59, -0.04), // 28
-      make_delay (193), // 29
+      make_ap (149, 0.2), // 31
+      make_ap (83, 0.04), // 32
+      make_ap (59, -0.04), // 33
+      make_delay (225), // 34
 
       // block d iteration 1
-      make_ap (167), // nested 3x (mod g) // 30
-      make_ap (97, -0.04), // 31
-      make_ap (67, 0.04), // 32
-      make_delay (221), // mod delay // 33
+      make_ap (167, -0.2), // 35
+      make_ap (97, -0.04), // 36
+      make_ap (67, 0.04), // 37
+      make_delay (221), // 38
 
-      make_quantizer(), // 34
-      make_quantizer(), // 35
-      make_quantizer(), // 36
-      make_quantizer(), // 37
+      make_quantizer(), // 39
+      make_quantizer(), // 40
+      make_quantizer(), // 41
+      make_quantizer(), // 42
+
+      // crossovers
+      make_crossover2(), // 43
+      make_crossover2(), // 44
+      make_crossover2(), // 45
+      make_crossover2(), // 46
 
       // block a iteration 2
-      make_crossover2(), // 38
-      make_ap (113, 0.1), // nested 3x // 39
-      make_ap (67, 0.04), // 40
-      make_ap (47, -0.04), // nested end // 41
-      make_delay (122), // 42
-      make_ap (119, 0.6), // 43
-      make_ap (67, 0.6), // 44
-      make_ap (47, -0.6), // 45
-      make_block_delay (32), // feedback point // 46
+      make_ap (119, 0.6), // 47
+      make_ap (67, 0.6), // 48
+      make_ap (47, -0.6), // 49
+      make_block_delay (171), // feedback point // 50
 
       // block b iteration 2
-      make_crossover2(), // 47
-      make_ap (114, -0.1), // nested 3x // 48
-      make_ap (66, -0.04), // 49
-      make_ap (47, -0.04), // 50
-      make_ap (9, 0, 2), // single. modulated both gain and time // 51
-      make_block_delay (149), // feedback point // 52
+      make_ap (114, -0.1), // nested 3x // 51
+      make_ap (66, -0.04), // 52
+      make_ap (47, -0.04), // 53
+      make_ap (9), // 54
+      make_block_delay (185), // feedback point // 55
 
       // block c iteration 2
-      make_crossover2(), // 53
-      make_ap (116, -0.1), // nested 3x // 54
-      make_ap (65, -0.04), // 55
-      make_ap (46, -0.04), // 56
-      make_ap (9, 0, 3), // single. modulated both gain and time // 57
-      make_block_delay (151), // feedback point // 58
+      make_ap (116, -0.1), // nested 3x // 56
+      make_ap (65, -0.04), // 57
+      make_ap (46, -0.04), // 58
+      make_ap (3), //  59
+      make_block_delay (179), // feedback point // 60
 
       // block d iteration 2
-      make_crossover2(), // 59
-      make_ap (121, -0.1), // nested 3x // 60
-      make_ap (69, 0.04), // 61
-      make_ap (47, 0.04), // 62
-      make_block_delay (157) // feedback point // 63
+      make_ap (121, -0.1), // nested 3x // 61
+      make_ap (69, 0.04), // 62
+      make_ap (47, 0.04), // 63
+      make_block_delay (175) // feedback point // 64
     );
   }
   //----------------------------------------------------------------------------
@@ -645,8 +922,8 @@ struct small_space : private algorithm {
     xspan d {d_mem.data(), io.size() + 1};
 
     // fetch a block from the output (a and d)
-    rev.fetch_block (sl<46> {}, a, 1); // feedback, fetching block + 1 samples
-    rev.fetch_block (sl<63> {}, d, 1); // feedback, fetching block + 1 samples
+    rev.fetch_block (sl<50> {}, a, 1); // feedback, fetching block + 1 samples
+    rev.fetch_block (sl<64> {}, d, 1); // feedback, fetching block + 1 samples
 
     xspan_memcpy (b, a.advanced (1)); // L out on b
     a.cut_tail (1); // fb samples on a.
@@ -663,19 +940,46 @@ struct small_space : private algorithm {
       tmp3[i]          = (T) (0.6_r * par.character[i]);
       // decay fixup
       auto d       = rev.one - par.decay[i];
-      par.decay[i] = (T) (0.9_r - d * d * 0.2_r);
+      par.decay[i] = (T) (0.985_r - d * d * 0.21_r);
+      // lfo
+      auto lfo = tick_lfo<T> (lfo_obj);
+      lfo1[i]  = T {lfo[0]};
+      lfo2[i]  = T {lfo[1]};
+      // lfo3 = -lfo1, lfo4 = -lfo2
     }
 
     // output preconditioning
-    rev.run (sl<0> {}, b, 0, tmp1);
-    rev.run (sl<1> {}, b, 0, tmp2);
-    rev.run (sl<2> {}, b, 0, tmp2);
-    rev.run (sl<3> {}, b, 0, tmp3);
+    rev.run (sl<0> {}, b, blank, tmp1);
+    rev.run (sl<1> {}, b, blank, tmp2);
+    rev.run (sl<2> {}, b, blank, tmp2);
 
-    rev.run (sl<4> {}, c, 0, tmp1);
-    rev.run (sl<5> {}, c, 0, tmp2);
-    rev.run (sl<6> {}, c, 0, tmp2);
-    rev.run (sl<7> {}, c, 0, tmp3);
+    rev.run (sl<3> {}, c, blank, tmp1);
+    rev.run (sl<4> {}, c, blank, tmp2);
+    rev.run (sl<5> {}, c, blank, tmp2);
+
+    // tmp1 and tmp2 free
+    xspan cho1 {tmp1.data(), io.size()};
+    xspan cho2 {tmp2.data(), io.size()};
+
+    rev.run (sl<6> {}, cho1, b.to_const(), lfo1, tmp3);
+    rev.run (sl<7> {}, cho1);
+    rev.run (
+      sl<8> {}, cho2, c.to_const(), [&] (uint i) { return -lfo1[i]; }, tmp3);
+    rev.run (sl<9> {}, cho2);
+    auto v1 = make_array (&b[0], &c[0]);
+    auto v2 = make_array<T const*> (&cho1[0], &cho2[0]);
+    ep_crossfade<T> (v1, v2, &par.mod[0], io.size(), [=] (auto v) {
+      return fastgrowth ((T) (v * 0.5_r), rev.one);
+    });
+
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < io.size(); ++i) {
+      b[i] = (T) (b[i] + cho1[i]);
+      c[i] = (T) (c[i] + cho2[i]);
+    }
+
+    rev.run (sl<10> {}, b, blank, tmp3);
+    rev.run (sl<11> {}, c, blank, tmp3); // tmp3 free
 
     xspan i1 {tmp1.data(), io.size()};
     xspan i2 {tmp2.data(), io.size()};
@@ -690,79 +994,58 @@ struct small_space : private algorithm {
     });
 
     // input preconditioning
-    rev.run (sl<8> {}, i1, 0, b);
-    rev.run (sl<9> {}, i1, 0, c);
-    rev.run (sl<10> {}, i1, 0, c);
+    rev.run (sl<12> {}, i1);
+    rev.run (sl<13> {}, i1);
+    rev.run (sl<14> {}, i1, blank, b);
+    rev.run (sl<15> {}, i1, blank, c);
+    rev.run (sl<16> {}, i1, blank, c);
 
-    rev.run (sl<11> {}, i2, 0, b);
-    rev.run (sl<12> {}, i2, 0, c);
-    rev.run (sl<13> {}, i2, 0, c);
+    rev.run (sl<17> {}, i2);
+    rev.run (sl<18> {}, i2);
+    rev.run (sl<19> {}, i2, blank, b);
+    rev.run (sl<20> {}, i2, blank, c);
+    rev.run (sl<21> {}, i2, blank, c);
 
     // fetch b and d feedback (a and d are already ready) 1 block only
-    rev.fetch_block (sl<52> {}, b, 1); // feedback
-    rev.fetch_block (sl<58> {}, c, 1); // feedback
+    rev.fetch_block (sl<55> {}, b, 1); // feedback
+    rev.fetch_block (sl<60> {}, c, 1); // feedback
 
     // quantized decay
-    rev.run (sl<14> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<15> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<16> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<17> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<22> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<23> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<24> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<25> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
 
     // sum inputs to feedback
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       // a single hadamard iteration can duplicate the range on one
-      // of the channels, so halving once more.
+      // of the channels, so halving once more (TODO needed?).
       b[i] = (T) (b[i] + tmp1[i] * 0.5_r);
       d[i] = (T) (d[i] + tmp2[i] * 0.5_r);
     }
     hadamard4 (make_array (a.data(), b.data(), c.data(), d.data()), a.size());
 
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < io.size(); ++i) {
-      auto lfo = tick_lfo<T> (lfo_obj);
-      lfo1[i]  = T {lfo[0]};
-      lfo2[i]  = T {lfo[1]};
-      // lfo3 = -lfo1, lfo4 = -lfo2
-      // mod fixup
-      par.mod[i] = (T) (rev.one - par.mod[i]);
-      par.mod[i] = (T) (rev.one - (par.mod[i] * par.mod[i]));
-      // preparing modlations for block a
-      tmp1[i] = (T) (0.1_r + 0.1_r * lfo1[i]);
-    }
     // channel a block 1
-    rev.run (sl<18, 19, 20> {}, a, blank, tmp1);
-    rev.run (sl<21> {}, a);
+    rev.run (sl<26, 27, 28> {}, a);
+    rev.run (sl<29> {}, a);
 
     // channel b block 1
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < io.size(); ++i) {
-      tmp1[i] = (T) (-0.1_r - 0.1_r * -lfo1[i]); // lfo3 = -lfo1
-    }
-    rev.run (sl<22, 23, 24> {}, b, 0, tmp1);
-    rev.run (sl<25> {}, b);
+    rev.run (sl<30> {}, b);
 
     // channel c block 1
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < io.size(); ++i) {
-      tmp1[i] = (T) (0.1_r + 0.1_r * -lfo2[i]); // lfo4 = -lfo2
-    }
-    rev.run (sl<26, 27, 28> {}, c, 0, tmp1);
-    rev.run (sl<29> {}, c);
+    rev.run (sl<31, 32, 33> {}, c);
+    rev.run (sl<34> {}, c);
 
     // channel d block 1
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < io.size(); ++i) {
-      tmp1[i] = (T) (0.1_r - 0.1_r * lfo2[i]);
-    }
-    rev.run (sl<30, 31, 32> {}, d, 0, tmp1);
-    rev.run (sl<33> {}, d);
+    rev.run (sl<35, 36, 37> {}, d);
+    rev.run (sl<38> {}, d);
 
     // quantized decay
-    rev.run (sl<34> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<35> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<36> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<37> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<39> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<40> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<41> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
+    rev.run (sl<42> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
 
     // block 2
     hadamard4 (make_array (a.data(), b.data(), c.data(), d.data()), a.size());
@@ -775,44 +1058,40 @@ struct small_space : private algorithm {
 
     // damp -----------------------------------
     T flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
-    T glo = load_float<T> (0.87f + upar.lf_amt * 0.1299f);
-    T fhi = load_float<T> (0.75f - upar.hf_amt * upar.hf_amt * 0.55f);
-    T ghi = load_float<T> (0.7f + upar.hf_amt * 0.24f);
+    T glo = load_float<T> (0.9f + upar.lf_amt * 0.09f);
+    T fhi = load_float<T> (0.61f - upar.hf_amt * upar.hf_amt * 0.12f);
+    T ghi = load_float<T> (0.6f + upar.hf_amt * 0.18f);
+
+    rev.run (sl<43> {}, a, flo, glo, fhi, rev.one, ghi);
+    rev.run (sl<44> {}, b, flo, glo, fhi, rev.one, ghi);
+    rev.run (sl<45> {}, c, flo, glo, fhi, rev.one, ghi);
+    rev.run (sl<46> {}, d, flo, glo, fhi, rev.one, ghi);
 
     // channel a block 2
-    rev.run (sl<38> {}, a, flo, glo, fhi, rev.one, ghi);
-    rev.run (sl<39, 40, 41> {}, a);
-    rev.run (sl<42> {}, a);
-    rev.run (sl<43> {}, a);
-    rev.run (sl<44> {}, a);
-    rev.run (sl<45> {}, a);
-    rev.push (sl<46> {}, a.to_const());
+    rev.run (sl<47> {}, a);
+    rev.run (sl<48> {}, a);
+    rev.run (sl<49> {}, a);
+    rev.push (sl<50> {}, a.to_const());
 
     // channel b block 2
-    rev.run (sl<47> {}, b, flo, glo, fhi, rev.one, ghi);
-    rev.run (sl<48, 49, 50> {}, b);
+    rev.run (sl<51, 52, 53> {}, b);
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      tmp1[i] = (T) (lfo1[i] * par.mod[i]);
-      tmp2[i] = (T) (0.4_r + 0.4_r * lfo2[i] * par.mod[i]);
+      T m     = fastgrowth (par.mod[i], rev.one);
+      tmp1[i] = (T) (0.4_r + 0.4_r * lfo2[i] * m);
+      tmp2[i] = (T) (0.6_r + 0.4_r * -lfo2[i] * m); // for block c
     }
-    rev.run (sl<51> {}, b, tmp1, tmp2);
-    rev.push (sl<52> {}, b.to_const());
+    rev.run (sl<54> {}, b, tmp1);
+    rev.push (sl<55> {}, b.to_const());
 
     // channel c block 2
-    rev.run (sl<53> {}, c, flo, glo, fhi, rev.one, ghi);
-    rev.run (sl<54, 55, 56> {}, c);
-    for (uint i = 0; i < io.size(); ++i) {
-      tmp1[i] = (T) (-tmp1[i]); // lfo3 = -lfo1.
-      tmp2[i] = (T) (0.6_r - 0.4_r * -lfo2[i] * par.mod[i]); // lfo4 = -lfo2
-    }
-    rev.run (sl<57> {}, c, tmp1, tmp2);
-    rev.push (sl<58> {}, c.to_const());
+    rev.run (sl<56, 57, 58> {}, c);
+    rev.run (sl<59> {}, c, tmp2);
+    rev.push (sl<60> {}, c.to_const());
 
     // channel d block 2
-    rev.run (sl<59> {}, d, flo, glo, fhi, rev.one, ghi);
-    rev.run (sl<60, 61, 62> {}, d);
-    rev.push (sl<63> {}, d.to_const());
+    rev.run (sl<61, 62, 63> {}, d);
+    rev.push (sl<64> {}, d.to_const());
   }
 };
 //------------------------------------------------------------------------------
@@ -830,7 +1109,7 @@ static constexpr std::array<u8, 32> get_room_ffwd_table()
   return r;
 }
 //------------------------------------------------------------------------------
-class room : private algorithm {
+class room : public algorithm {
 public:
   //----------------------------------------------------------------------------
   template <delay::data_type Dt>
@@ -844,7 +1123,7 @@ public:
   //----------------------------------------------------------------------------
   static void reset_lfo_phase (lfo<4>& lfo)
   {
-    lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 1.f});
+    lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 1.f});
   }
   //----------------------------------------------------------------------------
   static constexpr auto get_spec()
@@ -973,7 +1252,7 @@ public:
   static constexpr std::array<u8, 32> ffwd_table {get_room_ffwd_table()};
 };
 //------------------------------------------------------------------------------
-struct midifex49 : private algorithm {
+struct midifex49 : public algorithm {
   //----------------------------------------------------------------------------
   template <delay::data_type Dt>
   using engine = detail::lofiverb::engine<midifex49, Dt, max_block_size>;
@@ -1138,7 +1417,7 @@ struct midifex49 : private algorithm {
   }
 };
 
-struct midifex50 : private algorithm {
+struct midifex50 : public algorithm {
   //----------------------------------------------------------------------------
   template <delay::data_type Dt>
   using engine = detail::lofiverb::engine<midifex50, Dt, max_block_size>;
@@ -1290,7 +1569,7 @@ struct midifex50 : private algorithm {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-struct dre2000a : private algorithm {
+struct dre2000a : public algorithm {
   //----------------------------------------------------------------------------
   template <delay::data_type Dt>
   using engine = detail::lofiverb::engine<dre2000a, Dt, max_block_size>;
@@ -1449,7 +1728,7 @@ struct dre2000a : private algorithm {
   //----------------------------------------------------------------------------
 };
 
-struct dre2000b : private algorithm {
+struct dre2000b : public algorithm {
   //----------------------------------------------------------------------------
   template <delay::data_type Dt>
   using engine = detail::lofiverb::engine<dre2000b, Dt, max_block_size>;
@@ -1610,7 +1889,7 @@ struct dre2000b : private algorithm {
   //----------------------------------------------------------------------------
 };
 
-struct dre2000c : private algorithm {
+struct dre2000c : public algorithm {
   //----------------------------------------------------------------------------
   template <delay::data_type Dt>
   using engine = detail::lofiverb::engine<dre2000c, Dt, max_block_size>;
@@ -1746,7 +2025,7 @@ struct dre2000c : private algorithm {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-struct dre2000d : private algorithm {
+struct dre2000d : public algorithm {
   //----------------------------------------------------------------------------
   template <delay::data_type Dt>
   using engine = detail::lofiverb::engine<dre2000d, Dt, max_block_size>;
@@ -1883,7 +2162,7 @@ struct dre2000d : private algorithm {
   //----------------------------------------------------------------------------
 };
 //------------------------------------------------------------------------------
-struct rev5_l_hall : private algorithm {
+struct rev5_l_hall : public algorithm {
   //----------------------------------------------------------------------------
   template <delay::data_type Dt>
   using engine = detail::lofiverb::engine<rev5_l_hall, Dt, max_block_size>;

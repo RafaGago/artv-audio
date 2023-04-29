@@ -69,7 +69,7 @@ public:
       make_cstr_array (
 #ifndef LOFIVERB_DEBUG_ALGO
         "Artv Abyss",
-        "Artv Small",
+        "Artv Plate",
         "Artv Room",
         "Acreil Midifex 49",
         "Acreil Midifex 50",
@@ -463,9 +463,9 @@ private:
       abyss_fix16,
       abyss_flt16,
       abyss_flt32,
-      small_space_fix16,
-      small_space_flt16,
-      small_space_flt32,
+      plate1_fix16,
+      plate1_flt16,
+      plate1_flt32,
       room_fix16,
       room_flt16,
       room_flt32,
@@ -554,9 +554,9 @@ private:
     case mode::abyss_fix16:
     case mode::abyss_flt16:
     case mode::abyss_flt32:
-    case mode::small_space_fix16:
-    case mode::small_space_flt16:
-    case mode::small_space_flt32: {
+    case mode::plate1_fix16:
+    case mode::plate1_flt16:
+    case mode::plate1_flt32: {
       constexpr auto srates
         = make_array (10500, 16800, 21000, 25200, 31500, 40320, 50400);
       srate = srates[_param.srateid];
@@ -631,20 +631,20 @@ private:
         = _algorithms.emplace<detail::lofiverb::abyss::engine<dt_flt32>>();
       detail::lofiverb::abyss::reset_lfo_phase (_lfo);
     } break;
-    case mode::small_space_fix16: {
-      auto& rev = _algorithms
-                    .emplace<detail::lofiverb::small_space::engine<dt_fix16>>();
-      detail::lofiverb::small_space::reset_lfo_phase (_lfo);
+    case mode::plate1_fix16: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::plate1::engine<dt_fix16>>();
+      detail::lofiverb::plate1::reset_lfo_phase (_lfo);
     } break;
-    case mode::small_space_flt16: {
-      auto& rev = _algorithms
-                    .emplace<detail::lofiverb::small_space::engine<dt_flt16>>();
-      detail::lofiverb::small_space::reset_lfo_phase (_lfo);
+    case mode::plate1_flt16: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::plate1::engine<dt_flt16>>();
+      detail::lofiverb::plate1::reset_lfo_phase (_lfo);
     } break;
-    case mode::small_space_flt32: {
-      auto& rev = _algorithms
-                    .emplace<detail::lofiverb::small_space::engine<dt_flt32>>();
-      detail::lofiverb::small_space::reset_lfo_phase (_lfo);
+    case mode::plate1_flt32: {
+      auto& rev
+        = _algorithms.emplace<detail::lofiverb::plate1::engine<dt_flt32>>();
+      detail::lofiverb::plate1::reset_lfo_phase (_lfo);
     } break;
     case mode::room_fix16: {
       auto& rev
@@ -900,9 +900,9 @@ private:
     detail::lofiverb::abyss::engine<dt_fix16>,
     detail::lofiverb::abyss::engine<dt_flt16>,
     detail::lofiverb::abyss::engine<dt_flt32>,
-    detail::lofiverb::small_space::engine<dt_fix16>,
-    detail::lofiverb::small_space::engine<dt_flt16>,
-    detail::lofiverb::small_space::engine<dt_flt32>,
+    detail::lofiverb::plate1::engine<dt_fix16>,
+    detail::lofiverb::plate1::engine<dt_flt16>,
+    detail::lofiverb::plate1::engine<dt_flt32>,
     detail::lofiverb::room::engine<dt_fix16>,
     detail::lofiverb::room::engine<dt_flt16>,
     detail::lofiverb::room::engine<dt_flt32>,

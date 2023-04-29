@@ -471,6 +471,26 @@ function tanh_vaneev (x)
 );
 
 // -----------------------------------------------------------------------------
+// https://signalsmith-audio.co.uk/writing/2021/cheap-energy-crossfade/
+// 0 selects v1. 1 selects v2
+function ep_crossfade (x2, v1, v2) global() local (x1, a , b, c, d) (
+  x1 = 1 - x2;
+  a = x1 * x2;
+  b = a * (1 + 1.4186 * a);
+  c = b + x1;
+  d = b + x2;
+  v1 * c * c + v2 * d * d;
+);
+
+function eg_crossfade (x2, v1, v2) global() local (x1, a , b, c, d) (
+  x1 = 1 - x2;
+  a = x1 * x2;
+  b = a * (1 - 0.70912 * a);
+  c = b + x1;
+  d = b + x2;
+  v1 * c * c + v2 * d * d;
+);
+// -----------------------------------------------------------------------------
 // Memory inspection functions.Usage e.g. from inside a function:
 //
 //  "this.dbg_varname.debug_xx (this.varname)"

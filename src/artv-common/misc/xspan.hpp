@@ -397,6 +397,7 @@ static uint xspan_copy (xspan<T> dst, xspan<T> const src)
 {
   return xspan_memcpy (dst, src) / sizeof (T);
 }
+
 //------------------------------------------------------------------------------
 #if defined(__cpp_deduction_guides)
 
@@ -416,6 +417,7 @@ xspan (Container&) -> xspan<
 template <class Container>
 xspan (Container const&) -> xspan<const typename Container::value_type>;
 
+//------------------------------------------------------------------------------
 #else
 #error "This span implementation requires __cpp_deduction_guides"
 #endif
