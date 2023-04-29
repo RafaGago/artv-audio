@@ -2302,10 +2302,10 @@ private:
           constexpr int ap_pos = get_previous_ap_pos (order.value, idxs);
           static_assert (ap_pos >= 0);
           constexpr uint n_steps = (order - ap_pos) - 1;
-          using seq = add_offset_t<ap_pos, std::make_index_sequence<n_steps>>;
 
           // process backward signal with nested non-allpass elements
-          mp11::mp_for_each<mp11::mp_from_sequence<seq>> ([&] (auto order_rev) {
+          mp11::mp_for_each<mp11::mp_iota_c<n_steps>> ([&] (auto i) {
+            constexpr uint order_rev     = order - i - 1; // reverse iter
             constexpr uint rev_idx       = idxs[order_rev];
             constexpr bool is_serial_rev = false; // TBD
             if constexpr (is_serial_rev) {

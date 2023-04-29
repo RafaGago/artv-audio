@@ -28,15 +28,21 @@
 
 namespace artv {
 
-// TODO: pre and postprocessing hooks on each algorithm, to be run on float,
-// e.g for pre-eq and  post gains
-// TODO: multitaps with lerp, to do modulations on output taps<
+// TODO list
+// - predelay broken
+// - rename room to ambience
+// - dre algorithms are too dark now
+// - add pre and post hooks for eq and gain
+// - companding on saving fixed point? e.g from a Q0.20
+// - wider fixed point type
+// - dither?
+// - multitaps with lerp, to do modulations on output taps
+
 //------------------------------------------------------------------------------
-// A reverb using 16-bit fixed-point arithmetic on the main loop. One design
-// criteria has been for it to be extremely CPU friendly.
-// Notice: __fp16 (half-precision floating point storage) could achieve the
-// same memory savings with more dynamic range. This is still kept as a 16-bit
-// fixed-point reverb.
+// A reverb supporting 16-bit fixed-point arithmetic on the main loop. One
+// design criteria has been for it to be extremely CPU friendly. Notice: __fp16
+// (half-precision floating point storage) could achieve the same memory savings
+// with more dynamic range. This is still kept as a 16-bit fixed-point reverb.
 class lofiverb {
 public:
   //----------------------------------------------------------------------------
