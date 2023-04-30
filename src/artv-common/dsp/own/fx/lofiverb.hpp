@@ -72,7 +72,7 @@ public:
       make_cstr_array (
 #ifndef LOFIVERB_DEBUG_ALGO
         "Artv Abyss",
-        "Artv Plate",
+        "Artv FlutterPlate",
         "Artv Room",
         "Acreil Midifex 49",
         "Acreil Midifex 50",

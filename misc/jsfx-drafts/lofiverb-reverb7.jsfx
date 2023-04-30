@@ -64,8 +64,8 @@ src.outs.array_init (src.up.resampler_2c_max_n_out_samples() * 2);
 src.ins.array_clear();
 src.outs.array_clear();
 
-mtx.array_init (4);
-mtxcp.array_init (4);
+mtxa.array_init (8);
+mtxb.array_init (8);
 
 // TODO how many?
 loop(floor (srate / 44100) * 2,
@@ -183,29 +183,43 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   h = delay (h, 1447);
   fb = h * decay;
 
+  (1) ? (
   l = a1;
   r = delay (a1, 400) * 0.4;
-  
+
   l += delay (b1, 777) * 0.4;
   r += b1;
-  
+
   l -= c1;
   r -= delay (c1, 1001) * 0.42;
-  
+
   l += delay (d1, 777) * 0.42;
   r -= d1 * 0.49;
-  
+
   l += e1 * 0.49;
   r -= delay (e1, 0801);
-  
+
   l += delay (f1, 777);
   r += f1 ;
-  
+
   l -= g1 ;
   r -= delay (g1, 1001);
-  
+
   l += h1 * 0.2;
   r += delay (h1, 1001) * 0.2;
+  ) : (
+  mtxb.ptr[0] = a1;
+  mtxb.ptr[1] = c1;
+  mtxb.ptr[2] = e1;
+  mtxb.ptr[3] = g1;
+  mtxb.ptr[4] = b1;
+  mtxb.ptr[5] = d1;
+  mtxb.ptr[6] = f1;
+  mtxb.ptr[7] = h1;
+  hadamard_8 (mtxa.ptr, mtxb.ptr);
+  l =  mtxa.ptr[0];
+  r =  mtxa.ptr[7];
+  );
 //  l -= easyapv_del.delay_line_get (173, ap3i1);
 //  r -= easyapv_del.delay_line_get (515, ap3i1);
 
