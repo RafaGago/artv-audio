@@ -1,5 +1,7 @@
 #pragma once
 
+// #define LOFIVERB_DEBUG_ALGO 1
+
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -11,8 +13,12 @@
 #include "artv-common/dsp/own/classes/ducker.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/value_smoother.hpp"
-#include "artv-common/dsp/own/fx/lofiverb-algorithms.hpp"
-#include "artv-common/dsp/own/fx/lofiverb-engine.hpp"
+#ifndef LOFIVERB_DEBUG_ALGO
+#include "artv-common/dsp/own/fx/lofiverb/acreil-algos.hpp"
+#include "artv-common/dsp/own/fx/lofiverb/artv-algos.hpp"
+#else
+#include "artv-common/dsp/own/fx/lofiverb/debug-algo.hpp"
+#endif
 #include "artv-common/dsp/own/parts/filters/composite/tilt.hpp"
 #include "artv-common/dsp/own/parts/oscillators/lfo.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"

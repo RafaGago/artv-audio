@@ -1,6 +1,6 @@
 #pragma once
 
-// internals of lofiverb.hpp
+// the engine to define all the algorithm blocks at compile time.
 
 #include <array>
 #include <cmath>

@@ -125,6 +125,7 @@ parameter_cpp_class_define (
 static constexpr auto wet_param = lambda_forward (
   dry_wet_mixer::get_parameter (dry_wet_mixer::wet_tag {}),
   [] (auto v) {
+    v.max      = 12.f;
     v.defaultv = -6.f;
     return v;
   });
