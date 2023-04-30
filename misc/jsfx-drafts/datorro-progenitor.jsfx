@@ -1,0 +1,200 @@
+slider1:decay_p=0.8<0,1,0.01> Decay
+
+slider3:mod=0.5<0,1,0.01> Mod
+slider4:character=0.5<0,1,0.01> Character
+
+slider6:hi=0.5<0,1,0.01> highs
+slider7:lo=0.5<0,1,0.01> lows
+
+slider9:stereo=1<-1,1, 0.01> Stereo
+slider10:predelay=1<1, 2400, 1> Predelay
+
+slider21:db_wet=-12<-40, 12,0.1> Wet dB
+slider20:db_dry=0<-60, 0,0.1> Dry dB
+
+slider23:offset=0<0, 30, 1> Offset
+
+import _core.jsfx-inc
+import _easy_allpass_reverb.jsfx-inc
+import _easy_fdn.jsfx-inc
+import _reverb.jsfx-inc
+import _lfo.jsfx-inc
+import _fir.jsfx-inc
+
+@init
+
+// SRC stuff -------------------------------------------------------------------
+BYPASS_SRC = 0;
+
+k.src.kaiser_att_db = 210;
+k.src.taps_branch = 32;
+k.src.taps_branch_frac = 16;
+k.src.cutoff = 15500;
+k.src.srate = BYPASS_SRC ? srate : 34200;
+
+src.down.resampler_2c_init(
+  k.src.srate,
+  srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.up.resampler_2c_init(
+  srate,
+  k.src.srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.out_q.deque_init(
+  src.up.resampler_2c_max_n_out_samples() * 2
+  );
+
+src.ins.array_init (src.down.resampler_2c_max_n_out_samples() * 2);
+src.outs.array_init (src.up.resampler_2c_max_n_out_samples() * 2);
+
+src.ins.array_clear();
+src.outs.array_clear();
+
+mtx.array_init (4);
+mtxcp.array_init (4);
+
+// TODO how many?
+loop(floor (srate / 44100) * 2,
+  src.out_q.deque_push (0);
+  src.out_q.deque_push (0);
+);
+
+// Actual reverb stuff ---------------------------------------------------------
+n_lfos = 4;
+lfo.lfo_bank_init (n_lfos, 1);
+lfo.ret.array_init (n_lfos);
+lfo.lfo_bank_reset_phase (0);
+
+@slider
+
+lfo.lfo_bank_reset_freq (0, 0.25 + mod * 0.35, k.src.srate);
+
+dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
+wet_gain = db_to_lin (db_wet);
+
+dec = 1 - decay_p;
+dec = 1 - dec * dec;
+dec = 0.6 + 0.4 * dec;
+
+att1 = dec;
+att2 = 0.844 * dec * (1 / 0.938);
+att3 = 0.906 * dec * (1 / 0.938);
+
+@sample
+
+// Downsampling
+n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
+
+(n_spls_down) ? (
+  m_lfo.lfo_bank_tick_tri (m_lfo.ret.ptr, 0);
+  lfo.lfo_bank_tick_tri (lfo.ret.ptr, 0);
+
+// https://www.convexoptimization.com/wikimization/images/3/3c/Progenitor.jpg
+
+  // more boilerplate (summing + downsample)
+  easy_ap_next_sample();
+  easy_fdn_next_sample();
+
+  li = src.ins.ptr[0];
+  ri = src.ins.ptr[1];
+
+  ri = hp (ri, 0.98);
+  ri = delay (ri, 1) * 0.5;
+  l2 = l2c.crossv (l2, 0.875, 0.344 * 2, 0.156 * 2);
+  l1 = l2 + ri;
+  l1 = lp (l1, 0.312);
+  l1 = ap_att (l1, 205, 0.375, att2);
+  l1 = delay (l1, 1);
+  l1 = ap_att (l1, 329, 0.312, att3);
+  n40_42 = easyapv_del_idx;
+  l1 = delay (l1, 625 + 835);
+  l1 = ap2_att (l1, 368, 2032, 0.406, 0.25, att2, att1);
+  n45_49 = easyapv_del_idx;
+  l1 = delay (l1, 500);
+  l1 = l1.ap3_att_lp_mod3(
+    l1,
+    1340, 688, 1452 - 3,
+    0.406, 0.25, 0.25,
+    att2, att1, att1,
+    0.812,
+//    0.219,
+    lfo.ret.ptr[2] * mod,
+    3);
+  n55_58 = easyapv_del_idx;
+  l1 = delay (l1, 16);
+
+  li = hp (li, 0.98);
+  li = delay (li, 1) * 0.5;
+  l1 = l1c.crossv (l1, 0.875, 0.344 * 2, 0.156 * 2);
+  l2 = l1 + li;
+  l2 = lp (l2, 0.312);
+  l2 = ap_att (l2, 239, 0.375, att2);
+  l2 = delay (l2, 2);
+  l2 = ap_att (l2, 392, 0.312, att3);
+  n23 = l2;
+  l2 = delay (l2, 1055);
+  l2 = ap2_att (l2, 612, 1944, 0.406, 0.25, att2, att1);
+  n27_31 = easyapv_del_idx;
+  l2 = delay (l2, 344);
+  l2 = l2.ap3_att_lp_mod3(
+    l2,
+    1264, 816, 1212 - 60,
+    0.406, 0.25, 0.25,
+    att2, att1, att1,
+    0.812,
+//    0.219,
+    lfo.ret.ptr[0] * mod,
+    61);
+  n37_39 = easyapv_del_idx;
+  l2 = delay(l2, 1572);
+
+  a = easyapv_get (n27_31, 276) * 0.938;
+
+  b = easyapv_get (n45_49, 468) * 0.438;
+  b += easyapv_get (n45_49, 468) * 0.938;
+  b -= easyapv_get (n27_31, 312) * 0.438;
+  b += easyapv_get (n55_58, 5) * 0.125;
+
+  c = easyapv_get (n45_49, 24) * 0.938;
+  c += easyapv_get (n37_39, 36) * 0.469;
+
+  d = easyapv_get (n27_31, 40) * 0.438;
+  d += n23 * 0.938;
+  d -= easyapv_get (n45_49, 192) * 0.438;
+  d += l2 * 0.125;
+
+  l = a;
+  r = c;
+
+  l = r * (1 - abs (stereo)) + l * abs (stereo);
+  stereo < 0 ? (
+    tmp = r;
+    r = l;
+    l = tmp;
+  );
+
+  // Upsampling
+  n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);
+  i = 0;
+  loop (n_spls_up * 2, // *2 : two channels
+    src.out_q.deque_push (src.outs.ptr[i]);
+    i += 1;
+  );
+);
+
+spl0 *= dry_gain;
+spl1 *= dry_gain;
+spl0 += src.out_q.deque_pop() * wet_gain;
+spl1 += src.out_q.deque_pop() * wet_gain;
