@@ -1,0 +1,309 @@
+desc:dynamic plate
+slider1:decay_p=0.8<0,1,0.01> Decay
+
+slider3:mod=0.5<0,1,0.01> Mod
+slider4:character=0.5<0,1,0.01> Character
+
+slider6:hi=0.5<0,1,0.01> highs
+slider7:lo=0.5<0,1,0.01> lows
+
+slider9:stereo=1<-1,1, 0.01> Stereo
+
+slider21:db_wet=-12<-40, 12,0.1> Wet dB
+slider20:db_dry=0<-60, 0,0.1> Dry dB
+
+slider23:offset=0<-50, 50, 1> Offset
+
+import _core.jsfx-inc
+import _easy_allpass_reverb.jsfx-inc
+import _easy_fdn.jsfx-inc
+import _reverb.jsfx-inc
+import _lfo.jsfx-inc
+import _fir.jsfx-inc
+import _filters.jsfx-inc
+import _dynamics.jsfx-inc
+
+@init
+
+// SRC stuff -------------------------------------------------------------------
+BYPASS_SRC = 0;
+
+k.src.kaiser_att_db = 210;
+k.src.taps_branch = 32;
+k.src.taps_branch_frac = 16;
+k.src.cutoff = 10500;
+k.src.srate = BYPASS_SRC ? srate : 23400;
+
+src.down.resampler_2c_init(
+  k.src.srate,
+  srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.up.resampler_2c_init(
+  srate,
+  k.src.srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.out_q.deque_init(
+  src.up.resampler_2c_max_n_out_samples() * 2
+  );
+
+src.ins.array_init (src.down.resampler_2c_max_n_out_samples() * 2);
+src.outs.array_init (src.up.resampler_2c_max_n_out_samples() * 2);
+
+src.ins.array_clear();
+src.outs.array_clear();
+
+mtx.array_init (4);
+mtxcp.array_init (4);
+
+// TODO how many?
+loop(floor (srate / 44100) * 2,
+  src.out_q.deque_push (0);
+  src.out_q.deque_push (0);
+);
+
+eq1l.svf_bell (300, 0.55, 1.75, k.src.srate);
+eq1r.svf_bell (300, 0.55, 1.75, k.src.srate);
+// Actual reverb stuff ---------------------------------------------------------
+n_lfos = 4;
+lfo.lfo_bank_init (n_lfos, 1);
+lfo.ret.array_init (n_lfos);
+lfo.lfo_bank_reset_phase (0);
+
+n_lfos = 4;
+lfoenv.lfo_bank_init (n_lfos, 1);
+lfoenv.ret.array_init (n_lfos);
+lfoenv.lfo_bank_reset_phase (0);
+
+@slider
+
+lfo.lfo_bank_reset_freq (0, 0.43 + mod * .2, k.src.srate);
+lfoenv.lfo_bank_reset_freq (0, 0.83, k.src.srate);
+
+dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
+wet_gain = db_to_lin (db_wet);
+
+dp = 1 - decay_p;
+decay = 0.985 - dp * dp * 0.21;
+
+flo = 0.90 + lo * lo * 0.05;
+glo = 0.9 + lo * 0.09;
+fhi = 0.61 - hi * hi * 0.12;
+ghi = 0.6 + hi * 0.18;
+
+lpfr = 0.5;
+hpfr = 0.87;
+
+efol.transient_gate_reset(
+  DEFAULT_TGATE_K, 0.001, 0.05 + decay * 0.05 + mod * 0.7, 2, 200, k.src.srate
+  );
+efol2.transient_gate_reset(
+  DEFAULT_TGATE_K, 0.001, 0.07 + decay * 0.07 + mod * 0.6, 2, 200, k.src.srate
+  );
+
+@sample
+
+// Downsampling
+n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
+
+(n_spls_down) ? (
+
+  // halving an additional time to leave headroom
+  m = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5 * 0.5;
+  s = (src.ins.ptr[0] - src.ins.ptr[1]) * 0.5 * 0.5;
+
+  lfo.lfo_bank_tick_tri (lfo.ret.ptr, 0);
+
+  env1 = efol.transient_gate_tick(src.ins.ptr[0], src.ins.ptr[1]);
+  env2 = efol2.transient_gate_tick(src.ins.ptr[0], src.ins.ptr[1]);
+  lfoenv.lfo_bank_reset_freq (0, 1.73 - (1 - env) * .9, k.src.srate);
+  lfoenv.lfo_bank_tick_sin(lfoenv.ret.ptr, 0) ;
+
+  env1 = (1 - env1) * (0.5 * (1 + abs (lfoenv.ret.ptr[0])));
+  env2 = (1 - env2) * (0.5 * (1 +  abs (lfoenv.ret.ptr[1])));
+
+
+  m = lpl.lp (m, lpfr);
+  m = hpl.hp (m, hpfr);
+  s = lpr.lp (s, lpfr);
+  s = hpr.hp (s, hpfr);
+
+  m = ap (m, 23, 0.8 + 0.1 * character);
+  m = ap (m, 130, 0.8 * character);
+  m = ap (m, 217, 0.8 * character);
+
+  s = ap (s, 22, 0.8 + 0.1 * character);
+  s = ap (s, 131, 0.8 * character);
+  s = ap (s, 219, 0.8 * character);
+
+  // a single hadamard iteration can duplicate the range on one
+  // of the signals, so we halve once more.
+
+  m *= 0.5;
+  s *= 0.5;
+
+
+  // end of boilerplate, reverb algo
+
+  // approx 3ms ((23400/1000)*3 = 70.2 spls) -> 1meter
+
+  range_mul_k (mtx.ptr, decay, mtx.size);
+  mtx.ptr[1] += m;
+  mtx.ptr[3] += s;
+  hadamard_4(mtxcp.ptr, mtx.ptr);
+  mtx.array_copy (mtxcp);
+
+  modv = 1 - ((1 - mod) * (1 - mod));
+
+  g3 = 0.04;
+  mod_spls = 3;
+
+// [[151, 157], [83, 89], [59, 61], 201]
+// [153.8046190129675, 87.13169661547329, 60.78286847796119, 201
+  a = mtx.ptr[0];
+  a = ap3 (a, 153, 89, 60, 0.1 + 0.1, -0.04, g3);
+  ia = easyapv_del_idx;
+  a = delay_lerp(a, 201, env1, 33);
+
+// [[139, 149], [79, 83], [53, 59], 185]
+// [141.56146526069148, 80.19584016847044, 55.94443118618319, 185]
+  b = mtx.ptr[1];
+//  b = ap3 (b, 139, 79, 53, -0.1 - 0.1, -0.04, g3);
+  b = delay_lerp(b, 185, env2, 44);
+
+// [[139, 149], [83, 89], [53, 59], 193]
+// [147.68304213682947, 83.66376839197186, 58.363649832072184, 193]
+  c = mtx.ptr[2];
+  c = ap3 (c, 149, 83, 59, 0.1 + 0.1, 0.04, -g3);
+  ic = easyapv_del_idx;
+  c = delay_lerp(c, 193 + 32, env1, 77);
+
+// [[167, 173], [89, 97], [61, 67], 221]
+// [169.10856120331252, 95.80151717422684, 66.8309150926837, 221]
+  d = mtx.ptr[3];
+  d = ap3 (d, 167, 97, 67, -0.1 - 0.1, -0.04, g3);
+//  d = delay(d, 221, lfo.ret.ptr[1] * modv, mod_spls);
+  d = delay_lerp(d, 221, env2, 57);
+
+// [[167, 173], [89, 97], [61, 67], 221]
+// [169.10856120331252, 95.80151717422684, 66.8309150926837, 221]
+
+  mtx.ptr[0] = a;
+  mtx.ptr[1] = b;
+  mtx.ptr[2] = c;
+  mtx.ptr[3] = d;
+
+  range_mul_k (mtx.ptr, decay, mtx.size);
+  hadamard_4(mtxcp.ptr, mtx.ptr);
+  mtx.array_copy (mtxcp);
+
+// [[113, 127], [67, 71], [43, 47], 155]
+// [118.60555197517394, 67.1911093303401, 46.872361264099425, 155]
+  a = mtx.ptr[3];
+
+  a = f1.crossv2 (a, flo, fhi, glo, ghi);
+//  a = ap3 (a, 113, 67, 47, 0.1, 0.04, -g3);
+//  a = delay (a, 122);
+  a = ap (a, 119, 0.6);
+  a = ap (a, 67, 0.6);
+  a = ap (a, 47, -0.6);
+  a = delay_lerp (a, 32 + 27 + 122, env1, 68);
+// [[113, 127], [67, 71], [43, 47], 155]
+// [118.60555197517394, 67.1911093303401, 46.872361264099425, 155]
+
+// [[113, 127], [61, 67], [43, 47], 149]
+// [114.01436931807042, 64.59016316271402, 45.05794727968267, 149]
+  b = mtx.ptr[2];
+  b = f2.crossv2 (b, flo, fhi, glo, ghi);
+  b = ap3 (b, 114, 66, 47, -0.1, -0.04, -g3);
+  b = ap (b, 9, 0.4 + (lfo.ret.ptr[1] * modv) * 0.4);
+  ib = easyapv_del_idx;
+  b = delay_lerp(b, 149 + 36, env2, 43);
+
+  // [[113, 127], [61, 67], [43, 47], 151]
+// [115.54476353710493, 65.45714521858937, 45.66275194115492, 151]
+  c = mtx.ptr[0];
+  c = f3.crossv2 (c, flo, fhi, glo, ghi);
+  c = ap3 (c, 116, 65, 46, -0.1, -0.04, -g3);
+  c = ap (c, 3, 0.6 - (lfo.ret.ptr[3] * modv) * 0.4);
+  c = delay_lerp(c, 151 + 27, env1, 63);
+//  c = delay(c, 33);
+
+// [[113, 127], [67, 71], [47, 53], 157]
+// [120.13594619420843, 68.05809138621545, 47.477165925571676, 157]
+  d = mtx.ptr[1];
+  d = f4.crossv2 (d, flo, fhi, glo, ghi);
+  d = ap3 (d, 121, 69, 47, -0.1, 0.04, g3);
+  id = easyapv_del_idx;
+  d = delay_lerp(d, 157 + 18, env2, 43);
+
+  mtx.ptr[0] = a;
+  mtx.ptr[1] = b;
+  mtx.ptr[2] = c;
+  mtx.ptr[3] = d;
+
+
+  l = a;
+  l = ap (l, 71, 0.4 + 0.3 * character);
+  l = ap (l, 116, -0.6 * character);
+//  l += easyapv_get (ia, 73) * 0.2;
+  l = ap (l, 172, -0.6 * character);
+//  l += easyapv_get (ib, 54) * 0.2;
+//  m = ap (l, 1987, 0.65 * character, lfo.ret.ptr[0], 123);
+//  m = lpm1.lp (m, 0.5);
+//  l = ep_crossfade (0.5 * sqrt (mod), l , m);
+
+  l = ap (l, 277, 0.6 * character);
+//  l += easyapv_get (id, 131) * 0.2;
+
+  r = d;
+  r = ap (r, 72, 0.4 + 0.3 * character);
+  r = ap (r, 117, -0.6 * character);
+//  r += easyapv_get (id, 167) * 0.2;
+  r = ap (r, 175, -0.6 * character);
+//  r += easyapv_get (ic, 52) * 0.2;
+//  m = ap (r, 2117, 0.65 * character, lfo.ret.ptr[2], 138);
+//  m = lpm2.lp (m, 0.5);
+//  r = ep_crossfade (0.5 * sqrt (mod), r , m);
+  r = ap (r, 274, 0.6 * character);
+//  r -= easyapv_get (ia, 89) * 0.2;
+
+
+  // more boilerplate (summing + downsample)
+  easy_ap_next_sample();
+  easy_fdn_next_sample();
+
+  l = r * (1 - abs (stereo)) + l * abs (stereo);
+  stereo < 0 ? (
+    tmp = r;
+    r = l;
+    l = tmp;
+  );
+
+  l = eq1l.svf_tick (l);
+  r = eq1r.svf_tick (r);
+
+  // Upsampling
+  n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);
+  i = 0;
+  loop (n_spls_up * 2, // *2 : two channels
+    src.out_q.deque_push (src.outs.ptr[i]);
+    i += 1;
+  );
+);
+
+spl0 *= dry_gain;
+spl1 *= dry_gain;
+spl0 += src.out_q.deque_pop() * wet_gain;
+spl1 += src.out_q.deque_pop() * wet_gain;
