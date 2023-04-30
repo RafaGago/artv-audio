@@ -20,6 +20,7 @@ import _easy_fdn.jsfx-inc
 import _reverb.jsfx-inc
 import _lfo.jsfx-inc
 import _fir.jsfx-inc
+import _filters.jsfx-inc
 
 @init
 
@@ -76,6 +77,9 @@ n_lfos = 4;
 lfo.lfo_bank_init (n_lfos, 1);
 lfo.ret.array_init (n_lfos);
 lfo.lfo_bank_reset_phase (0);
+
+eq1l.svf_bell (305, 0.34, 3., k.src.srate);
+eq1r.svf_bell (305, 0.34, 3., k.src.srate);
 
 @slider
 
@@ -153,13 +157,12 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   t = ap (t, 282, -0.7);
   t = ap (t, 343, -0.7);
 
-  eramt = abs ((character - 0.5)) * 2;
-  eramt = 1 - eramt * eramt;
-  eramt = 0.4 * eramt;
-  mainamt = 1 - eramt;
+  mainamt = abs ((character - 0.5)) * 2;
+  mainamt = 0.6 * mainamt;
+
 
   l = t;
-  l = delay (ml, 311, character, 311) * eramt + l * mainamt;
+  l = ep_crossfade (mainamt, l, delay (ml, 311, character, 311));
 //  l = delay (ml, 577, character, 311) * 0.125 + l * 0.875;
   l = ap (l, 233, -0.7);
   l = ap (l, 273, -0.7);
@@ -167,7 +170,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   l = ap (l, 534, -0.7);
 
   r = t;
-  r = delay (ml, 277, character, 400) * eramt + r * mainamt;
+  r = ep_crossfade (mainamt, r, delay (ml, 277, character, 400));
 //  r = delay (ml, 311, character, 400) * 0.125 + r * 0.875;
   r = ap (r, 194, -0.7);
   r = ap (r, 426, -0.7);
@@ -184,6 +187,9 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
     r = l;
     l = tmp;
   );
+
+  l = eq1l.svf_tick (l);
+  r = eq1r.svf_tick (r);
 
   // Upsampling
   n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);

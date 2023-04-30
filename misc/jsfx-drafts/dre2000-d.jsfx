@@ -20,6 +20,7 @@ import _easy_fdn.jsfx-inc
 import _reverb.jsfx-inc
 import _lfo.jsfx-inc
 import _fir.jsfx-inc
+import _filters.jsfx-inc
 
 @init
 
@@ -71,6 +72,9 @@ loop(floor (srate / 44100) * 2,
   src.out_q.deque_push (0);
 );
 
+eq1l.svf_bell (600, 0.5, 2.5, k.src.srate);
+eq1r.svf_bell (600, 0.5, 2.5, k.src.srate);
+
 // Actual reverb stuff ---------------------------------------------------------
 n_lfos = 4;
 lfo.lfo_bank_init (n_lfos, 1);
@@ -92,7 +96,7 @@ sumgain = 0.125;
 flo = 0.90 + lo * lo * 0.05;
 glo = 0.8 + lo * 0.1999;
 fhi = 0.82 - hi * hi * 0.2;
-ghi = 0.4 + 0.1 * decayx2 + hi * 0.49;
+ghi = 0.5 + 0.1 * decayx2 + hi * 0.39;
 
 @sample
 
@@ -108,7 +112,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   // halving an additional time to leave headroom
   m = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5 * 0.5;
-  m = fi1.lp (m, 0.185);
+  m = fi1.lp (m, 0.45);
   m = fi2.hp (m, 0.99);
 
   ml = delay (m, predelay);
@@ -150,18 +154,16 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   r += delay (ci, 3539) * -sumgain;
   l += delay (ci, 4304) * sumgain;
 
-  eramt = abs ((character - 0.5)) * 2;
-  eramt = 1 - eramt * eramt;
-  eramt = 0.4 * eramt;
-  mainamt = 1 - eramt;
+  mainamt = abs ((character - 0.5)) * 2;
+  mainamt = 0.6 * mainamt;
 
   l = ap (l, 214, -0.7, lfo.ret.ptr[2] * mod, 30);
   l = ap (l, 469, -0.7);
-  l = l * mainamt + delay (ml1, 234, character, 337) * eramt;
+  l = ep_crossfade (mainamt, l, delay (ml1, 234, character, 337));
 
   r = ap (r, 245, -0.7, lfo.ret.ptr[3] * mod, 29);
   r = ap (r, 426, -0.7);
-  r = r * mainamt + delay (ml1, 434, character, 247) * eramt;
+  r = ep_crossfade (mainamt, r, delay (ml1, 434, character, 247));
 
  // more boilerplate (summing + downsample)
   easy_ap_next_sample();
@@ -173,6 +175,9 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
     r = l;
     l = tmp;
   );
+
+  l = eq1l.svf_tick (l);
+  r = eq1r.svf_tick (r);
 
   // Upsampling
   n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);

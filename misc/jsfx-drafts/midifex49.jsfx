@@ -18,6 +18,7 @@ import _delay-line.jsfx-inc
 import _reverb.jsfx-inc
 import _lfo.jsfx-inc
 import _fir.jsfx-inc
+import _filters.jsfx-inc
 
 // ratios starting point
 // http://www.voxangelica.net/transfer/magic%20numbers%20for%20reverb%20design%203b.pdf
@@ -132,6 +133,9 @@ loop(floor (srate / 44100) * 2,
   src.out_q.deque_push (0);
 );
 
+eq1l.svf_bell (550, 0.64, 1.8, k.src.srate);
+eq1r.svf_bell (550, 0.64, 1.8, k.src.srate);
+
 // Actual reverb stuff ---------------------------------------------------------
 
 n_lfos = 2;
@@ -162,7 +166,7 @@ wet_gain = db_to_lin (db_wet);
 flo = 0.90 + lo * lo * 0.05;
 glo = 0.35 + lo * 0.6;
 fhi = 0.8 - hi * hi * 0.1;
-ghi = 0.05 + hi * 0.6;
+ghi = 0.25 + 0.1 * decay +  hi * 0.5;
 
 hp_fact = 1 - hp * hp;
 hp_fact *= 0.39;
@@ -234,6 +238,9 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
     r = l;
     l = tmp;
   );
+
+//  l = eq1l.svf_tick (l);
+//  r = eq1r.svf_tick (r);
 
   // Upsampling
   n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);

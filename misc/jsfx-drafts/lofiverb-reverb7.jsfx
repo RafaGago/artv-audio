@@ -1,3 +1,4 @@
+desc: large hall
 slider1:decay_p=0.8<0,1,0.01> Decay
 
 slider3:mod=0.5<0,1,0.01> Mod
@@ -12,7 +13,7 @@ slider10:predelay=1<1, 2400, 1> Predelay
 slider21:db_wet=-12<-40, 12,0.1> Wet dB
 slider20:db_dry=0<-60, 0,0.1> Dry dB
 
-slider23:offset=0<-50, 50, 1> Offset
+slider23:offset=0<-100, 100, 1> Offset
 
 import _core.jsfx-inc
 import _easy_allpass_reverb.jsfx-inc
@@ -20,6 +21,7 @@ import _easy_fdn.jsfx-inc
 import _reverb.jsfx-inc
 import _lfo.jsfx-inc
 import _fir.jsfx-inc
+import _filters.jsfx-inc
 
 @init
 
@@ -72,19 +74,22 @@ loop(floor (srate / 44100) * 2,
 );
 
 // Actual reverb stuff ---------------------------------------------------------
-n_lfos = 4;
-lfo.lfo_bank_init (n_lfos, 1);
-lfo.ret.array_init (n_lfos);
-lfo.lfo_bank_reset_phase (0);
+n_lfos = 2;
+lfo1.lfo_bank_init (n_lfos, 1);
+lfo1.ret.array_init (n_lfos);
+lfo1.lfo_bank_reset_phase (0);
 
-m_lfo.lfo_bank_init (n_lfos, 1);
-m_lfo.ret.array_init (n_lfos);
-m_lfo.lfo_bank_reset_phase (0);
+lfo2.lfo_bank_init (n_lfos, 1);
+lfo2.ret.array_init (n_lfos);
+lfo2.lfo_bank_reset_phase (0);
 
+eq1l.svf_bell (360, 0.45, 2.6, k.src.srate);
+eq1r.svf_bell (360, 0.45, 2.6, k.src.srate);
 
 @slider
 
-lfo.lfo_bank_reset_freq (0, 1.73 - mod * 0.63, k.src.srate);
+lfo1.lfo_bank_reset_freq (0, 1.73 - mod * 0.63, k.src.srate);
+lfo2.lfo_bank_reset_freq (0, 1.53 - mod * 0.43, k.src.srate);
 
 dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
@@ -93,8 +98,8 @@ decay = 0.05 + decay_p * 0.92;
 
 flo = 0.90 + lo * lo * 0.05;
 glo = 0.75 + lo * 0.23;
-fhi = 0.55 - hi * hi * 0.1;
-ghi = 0.7 + 0.1 * decay2 + hi * 0.19;
+fhi = 0.9 - hi * hi * 0.4;
+ghi = 0.7 + 0.06 * decay2 + hi * 0.23;
 
 @sample
 
@@ -102,15 +107,16 @@ ghi = 0.7 + 0.1 * decay2 + hi * 0.19;
 n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
 (n_spls_down) ? (
-  lfo.lfo_bank_tick_tri (lfo.ret.ptr, 0);
+  lfo1.lfo_bank_tick_tri (lfo1.ret.ptr, 0);
+  lfo2.lfo_bank_tick_tri (lfo2.ret.ptr, 0);
 
   // halving an additional time to leave headroom
   l = src.ins.ptr[0] * 0.5;
   r = src.ins.ptr[1] * 0.5;
 
-  l = fil1.lp (l, 0.46);
+  l = fil1.lp (l, 0.26);
   l = fil2.hp (l, 0.975);
-  r = fir1.lp (r, 0.46);
+  r = fir1.lp (r, 0.26);
   r = fir2.hp (r, 0.974);
 
 //  l = ap (l, 171, 0.2 + 0.6 * character);
@@ -129,12 +135,12 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   j = ap3 (m, 1105, 773, 123, 0.1 * decay, 0.1 * decay, 0.05);
 
 
-  k1 = 0.4 + character * 0.3;
-  k2 = 0.4 + character * 0.2;
+  k1 = 0.4 + character * 0.2;
+  k2 = 0.4 + character * 0.15;
 
   // approx 3ms ((23400/1000)*3 = 70.2 spls) -> 1meter
   a = l * 0.75 + m * 0.25 + fb;
-  a = ap (a, 376, k1, lfo.ret.ptr[0] * mod, 27);
+  a = ap (a, 376, k1, lfo1.ret.ptr[0] * mod, 27);
   a1 = a;
   a = delay (a, 1007);
 
@@ -145,7 +151,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   b *= decay;
 
   c = b + s;
-  c = ap (c, 414, -k2, lfo.ret.ptr[1] * mod, 23);
+  c = ap (c, 414, -k2, lfo2.ret.ptr[0] * mod, 23);
   c1 = c;
   c = delay (c, 1207);
 
@@ -156,7 +162,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   d *= decay;
 
   e = r * 0.75 + m * 0.25 + d;
-  e = ap (e, 420, k1, lfo.ret.ptr[2] * mod, 31);
+  e = ap (e, 420, k1, lfo1.ret.ptr[0] * mod, 21);
   e1 = e;
   e = delay (e, 1407);
 
@@ -167,7 +173,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   f *= decay;
 
   g = f + s;
-  g = ap (g, 413, k2, lfo.ret.ptr[3] * mod, 29);
+  g = ap (g, 413, k2, lfo2.ret.ptr[1] * mod, 22);
   g1 = g;
   g = delay (g, 1607);
 
@@ -178,23 +184,30 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   fb = h * decay;
 
   l = a1;
-  r = delay (a1, 400);
-  l += delay (b1, 777);
+  r = delay (a1, 400) * 0.4;
+  
+  l += delay (b1, 777) * 0.4;
   r += b1;
+  
   l -= c1;
-  r -= delay (c1, 1001);
-  l += delay (d1, 777);
-  r += d1;
-  l -= e1;
+  r -= delay (c1, 1001) * 0.42;
+  
+  l += delay (d1, 777) * 0.42;
+  r -= d1 * 0.49;
+  
+  l += e1 * 0.49;
   r -= delay (e1, 0801);
+  
   l += delay (f1, 777);
-  r += f1;
-  l -= g1;
-  r -= delay (g1, 1001 + offset);
-  l += h1;
-  r += delay (h1, 1001 + offset);
-  l -= easyapv_del.delay_line_get (173, ap3i1);
-  r -= easyapv_del.delay_line_get (515, ap3i1);
+  r += f1 ;
+  
+  l -= g1 ;
+  r -= delay (g1, 1001);
+  
+  l += h1 * 0.2;
+  r += delay (h1, 1001) * 0.2;
+//  l -= easyapv_del.delay_line_get (173, ap3i1);
+//  r -= easyapv_del.delay_line_get (515, ap3i1);
 
 
   extrad = (1 - decay) * 0.3;
@@ -211,6 +224,9 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
     r = l;
     l = tmp;
   );
+
+//  l = eq1l.svf_tick (l);
+//  r = eq1r.svf_tick (r);
 
   // Upsampling
   n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);

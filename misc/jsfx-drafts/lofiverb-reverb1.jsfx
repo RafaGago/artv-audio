@@ -19,6 +19,7 @@ import _delay-line.jsfx-inc
 import _reverb.jsfx-inc
 import _lfo.jsfx-inc
 import _fir.jsfx-inc
+import _filters.jsfx-inc
 
 // ratios starting point
 // http://www.voxangelica.net/transfer/magic%20numbers%20for%20reverb%20design%203b.pdf
@@ -98,6 +99,9 @@ loop(floor (srate / 44100) * 2,
   src.out_q.deque_push (0);
   src.out_q.deque_push (0);
 );
+
+eq1l.svf_bell (1000, 0.42, 3.85, k.src.srate);
+eq1r.svf_bell (1000, 0.42, 3.85, k.src.srate);
 
 // Actual reverb stuff ---------------------------------------------------------
 @slider
@@ -210,6 +214,10 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   r = r * (1 - er_cf) + (-er1 * 0.66 + er2 * 0.34) * er_cf;
 
   l = r * (1 - abs (stereo)) + l * abs (stereo);
+
+  l = eq1l.svf_tick (l);
+  r = eq1r.svf_tick (r);
+
   stereo < 0 ? (
     tmp = r;
     r = l;

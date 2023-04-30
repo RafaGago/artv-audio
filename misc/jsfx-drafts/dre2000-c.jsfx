@@ -20,6 +20,7 @@ import _easy_fdn.jsfx-inc
 import _reverb.jsfx-inc
 import _lfo.jsfx-inc
 import _fir.jsfx-inc
+import _filters.jsfx-inc
 
 @init
 
@@ -76,6 +77,9 @@ n_lfos = 4;
 lfo.lfo_bank_init (n_lfos, 1);
 lfo.ret.array_init (n_lfos);
 lfo.lfo_bank_reset_phase (0);
+
+eq1l.svf_bell (305, 0.4, 6., k.src.srate);
+eq1r.svf_bell (305, 0.4, 6., k.src.srate);
 
 @slider
 
@@ -155,13 +159,11 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   r = ap (r, 160, -0.7);
   r = ap (r, 227, -0.7);
 
-  eramt = abs ((character - 0.5)) * 2;
-  eramt = 1 - eramt * eramt;
-  eramt = 0.4 * eramt;
-  mainamt = 1 - eramt;
+  mainamt = abs ((character - 0.5)) * 2;
+  mainamt = 0.6 * mainamt;
 
-  l = l * mainamt + delay (ml, 212, character, 237) * eramt;
-  r = r * mainamt + delay (ml, 213, character, 126) * eramt;
+  l = ep_crossfade (mainamt, l, delay (ml, 202, character, 237));
+  r = ep_crossfade (mainamt, r, delay (ml, 213, character, 126));
 
   // more boilerplate (summing + downsample)
   easy_ap_next_sample();
@@ -173,6 +175,9 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
     r = l;
     l = tmp;
   );
+
+  l = eq1l.svf_tick (l);
+  r = eq1r.svf_tick (r);
 
   // Upsampling
   n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);

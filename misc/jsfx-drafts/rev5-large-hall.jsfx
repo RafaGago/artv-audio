@@ -20,6 +20,7 @@ import _easy_fdn.jsfx-inc
 import _reverb.jsfx-inc
 import _lfo.jsfx-inc
 import _fir.jsfx-inc
+import _filters.jsfx-inc
 
 @init
 
@@ -77,6 +78,9 @@ lfo.lfo_bank_init (n_lfos, 1);
 lfo.ret.array_init (n_lfos);
 lfo.lfo_bank_reset_phase (0);
 
+eq1l.svf_bell (313, 0.38, 1.75, k.src.srate);
+eq1r.svf_bell (313, 0.38, 1.75, k.src.srate);
+
 @slider
 
 lfo.lfo_bank_reset_freq (0, 0.1 + mod * 0.15, k.src.srate);
@@ -121,7 +125,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   // halving an additional time to leave headroom
   in = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5 * 0.5;
   m = in;
-  m = fi1.lp (m, 0.18);
+  m = fi1.lp (m, 0.3);
   m = fi2.hp (m, 0.987);
 
   cx3 = 0.5 + (character * 3);
@@ -238,6 +242,9 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
     r = l;
     l = tmp;
   );
+
+//  l = eq1l.svf_tick (l);
+//  r = eq1r.svf_tick (r);
 
   // Upsampling
   n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);
