@@ -9,8 +9,58 @@
 #include "artv-common/misc/misc.hpp"
 #include "artv-common/misc/primes_table.hpp"
 
+// #define LOFIVERB_DEBUG_ALGO 1
+
 namespace artv { namespace detail { namespace lofiverb {
 
+/* reminder_ sample rates that result in a low number of interpolator/decimator
+  tables.
+   srate t44k t48k
+  7200 49    20
+  8400 21    40
+  9000 49    16
+  10500 21   32
+  10800 49   40
+  13500 49   32
+  14400 49   10
+  16800 21   20
+  18000 49   08
+  20160 35   50
+  21000 21   16
+  21600 49   20
+  22500 49   32
+  25200 07   40
+  27000 49   16
+  28800 49   05
+  31500 07   32
+  32400 49   40
+  33600 21   10
+  36000 49   04
+  39200 09   60
+  39600 49   40
+  40320 35   25
+  40500 49   32
+  42000 21   08
+  43200 49   10
+  45000 50   16
+  46800 52   40
+  47040 16   50
+  49000 10   49
+  49500 55   33
+  50400 08   21
+  52500 25   35
+  54000 60   09
+  57600 64   06
+  58500 65   39
+  58800 04   49
+  60480 48   63
+  61200 68   51
+  63000 10   21
+  64800 72   27
+  67200 32   07
+  67500 75   45
+  68400 76   57
+*/
 //------------------------------------------------------------------------------
 
 class algorithm {
@@ -253,11 +303,22 @@ protected:
   }
   //----------------------------------------------------------------------------
 };
+
+#ifdef LOFIVERB_DEBUG_ALGO
 //------------------------------------------------------------------------------
-struct debug : public algorithm {
+template <delay::data_type Dt>
+class debug : public algorithm {
+private:
+  using engine = detail::lofiverb::algo_engine<debug<Dt>, Dt, max_block_size>;
+
+public:
   //----------------------------------------------------------------------------
-  template <delay::data_type Dt>
-  using engine = detail::lofiverb::engine<debug, Dt, max_block_size>;
+  static constexpr uint get_required_bytes()
+  {
+    return engine::get_required_bytes();
+  }
+  //----------------------------------------------------------------------------
+  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
@@ -372,17 +433,18 @@ struct debug : public algorithm {
     );
   }
   //----------------------------------------------------------------------------
-  template <class T, delay::data_type Dt>
-  static void process_block (
-    engine<Dt>&                  rev,
+  using value_type = typename engine::value_type;
+  using sample     = value_type;
+  //----------------------------------------------------------------------------
+  void process_block (
     lfo<4>&                      lfo_obj,
-    xspan<std::array<T, 2>>      io,
-    smoothed_parameters<T>&      par,
+    xspan<std::array<sample, 2>> io,
+    smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
     uint)
   {
-    using arr    = block_arr<T>;
-    using arr_fb = fb_block_arr<T>;
+    using arr    = block_arr<sample>;
+    using arr_fb = fb_block_arr<sample>;
 
     arr_fb a_mem, d_mem;
     arr    b_mem, c_mem, tmp1, tmp2, tmp3;
@@ -394,8 +456,8 @@ struct debug : public algorithm {
     xspan d {d_mem.data(), io.size() + 1};
 
     // fetch a block from the output (a and d)
-    rev.fetch_block (sl<50> {}, a, 1); // feedback, fetching block + 1 samples
-    rev.fetch_block (sl<64> {}, d, 1); // feedback, fetching block + 1 samples
+    _eng.fetch_block (sl<50> {}, a, 1); // feedback, fetching block + 1 samples
+    _eng.fetch_block (sl<64> {}, d, 1); // feedback, fetching block + 1 samples
 
     xspan_memcpy (b, a.advanced (1)); // L out on b
     a.cut_tail (1); // fb samples on a.
@@ -406,119 +468,119 @@ struct debug : public algorithm {
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       // invert character first
-      par.character[i] = (T) (rev.one - par.character[i]);
-      tmp1[i]          = (T) (0.4_r + 0.3_r * par.character[i]);
-      tmp2[i]          = (T) (-0.6_r * par.character[i]);
-      tmp3[i]          = (T) (0.6_r * par.character[i]);
+      par.character[i] = (sample) (_eng.one - par.character[i]);
+      tmp1[i]          = (sample) (0.4_r + 0.3_r * par.character[i]);
+      tmp2[i]          = (sample) (-0.6_r * par.character[i]);
+      tmp3[i]          = (sample) (0.6_r * par.character[i]);
       // decay fixup
-      auto d       = rev.one - par.decay[i];
-      par.decay[i] = (T) (0.985_r - d * d * 0.21_r);
+      auto d       = _eng.one - par.decay[i];
+      par.decay[i] = (sample) (0.985_r - d * d * 0.21_r);
       // lfo
-      auto lfo = tick_lfo<T> (lfo_obj);
-      lfo1[i]  = T {lfo[0]};
-      lfo2[i]  = T {lfo[1]};
+      auto lfo = tick_lfo<sample> (lfo_obj);
+      lfo1[i]  = sample {lfo[0]};
+      lfo2[i]  = sample {lfo[1]};
       // lfo3 = -lfo1, lfo4 = -lfo2
     }
 
     // output preconditioning
-    rev.run (sl<0> {}, b, blank, tmp1);
-    rev.run (sl<1> {}, b, blank, tmp2);
-    rev.run (sl<2> {}, b, blank, tmp2);
+    _eng.run (sl<0> {}, b, blank, tmp1);
+    _eng.run (sl<1> {}, b, blank, tmp2);
+    _eng.run (sl<2> {}, b, blank, tmp2);
 
-    rev.run (sl<3> {}, c, blank, tmp1);
-    rev.run (sl<4> {}, c, blank, tmp2);
-    rev.run (sl<5> {}, c, blank, tmp2);
+    _eng.run (sl<3> {}, c, blank, tmp1);
+    _eng.run (sl<4> {}, c, blank, tmp2);
+    _eng.run (sl<5> {}, c, blank, tmp2);
 
     // tmp1 and tmp2 free
     xspan cho1 {tmp1.data(), io.size()};
     xspan cho2 {tmp2.data(), io.size()};
 
-    rev.run (sl<6> {}, cho1, b.to_const(), lfo1, tmp3);
-    rev.run (sl<7> {}, cho1);
-    rev.run (
+    _eng.run (sl<6> {}, cho1, b.to_const(), lfo1, tmp3);
+    _eng.run (sl<7> {}, cho1);
+    _eng.run (
       sl<8> {}, cho2, c.to_const(), [&] (uint i) { return -lfo1[i]; }, tmp3);
-    rev.run (sl<9> {}, cho2);
+    _eng.run (sl<9> {}, cho2);
 
     auto v1 = make_array (&b[0], &c[0]);
-    auto v2 = make_array<T const*> (&cho1[0], &cho2[0]);
-    ep_crossfade<T> (v1, v2, &par.mod[0], io.size(), [=] (auto v) {
-      return fastgrowth ((T) (v * 0.5_r), rev.one);
+    auto v2 = make_array<sample const*> (&cho1[0], &cho2[0]);
+    ep_crossfade<sample> (v1, v2, &par.mod[0], io.size(), [=] (auto v) {
+      return fastgrowth ((sample) (v * 0.5_r), _eng.one);
     });
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      b[i] = (T) (b[i] + cho1[i]);
-      c[i] = (T) (c[i] + cho2[i]);
+      b[i] = (sample) (b[i] + cho1[i]);
+      c[i] = (sample) (c[i] + cho2[i]);
     }
 
-    rev.run (sl<10> {}, b, blank, tmp3);
-    rev.run (sl<11> {}, c, blank, tmp3); // tmp3 free
+    _eng.run (sl<10> {}, b, blank, tmp3);
+    _eng.run (sl<11> {}, c, blank, tmp3); // tmp3 free
 
     xspan i1 {tmp1.data(), io.size()};
     xspan i2 {tmp2.data(), io.size()};
     // output write + preparations
     span_visit (io, [&] (auto& spls, uint i) {
-      i1[i]   = (T) ((spls[0] + spls[1]) * 0.25_r); // m
-      i2[i]   = (T) ((spls[0] - spls[1]) * 0.25_r); // s
+      i1[i]   = (sample) ((spls[0] + spls[1]) * 0.25_r); // m
+      i2[i]   = (sample) ((spls[0] - spls[1]) * 0.25_r); // s
       spls[0] = b[i];
       spls[1] = c[i];
-      b[i]    = (T) (0.8_r + 0.1_r * par.character[i]); // character 1 on b
-      c[i]    = (T) (0.8_r * par.character[i]); // character 2 on c
+      b[i]    = (sample) (0.8_r + 0.1_r * par.character[i]); // character 1 on b
+      c[i]    = (sample) (0.8_r * par.character[i]); // character 2 on c
     });
 
     // input preconditioning
-    rev.run (sl<12> {}, i1);
-    rev.run (sl<13> {}, i1);
-    rev.run (sl<14> {}, i1, blank, b);
-    rev.run (sl<15> {}, i1, blank, c);
-    rev.run (sl<16> {}, i1, blank, c);
+    _eng.run (sl<12> {}, i1);
+    _eng.run (sl<13> {}, i1);
+    _eng.run (sl<14> {}, i1, blank, b);
+    _eng.run (sl<15> {}, i1, blank, c);
+    _eng.run (sl<16> {}, i1, blank, c);
 
-    rev.run (sl<17> {}, i2);
-    rev.run (sl<18> {}, i2);
-    rev.run (sl<19> {}, i2, blank, b);
-    rev.run (sl<20> {}, i2, blank, c);
-    rev.run (sl<21> {}, i2, blank, c);
+    _eng.run (sl<17> {}, i2);
+    _eng.run (sl<18> {}, i2);
+    _eng.run (sl<19> {}, i2, blank, b);
+    _eng.run (sl<20> {}, i2, blank, c);
+    _eng.run (sl<21> {}, i2, blank, c);
 
     // fetch b and d feedback (a and d are already ready) 1 block only
-    rev.fetch_block (sl<55> {}, b, 1); // feedback
-    rev.fetch_block (sl<60> {}, c, 1); // feedback
+    _eng.fetch_block (sl<55> {}, b, 1); // feedback
+    _eng.fetch_block (sl<60> {}, c, 1); // feedback
 
     // quantized decay
-    rev.run (sl<22> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<23> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<24> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<25> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<22> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<23> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<24> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<25> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
 
     // sum inputs to feedback
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       // a single hadamard iteration can duplicate the range on one
       // of the channels, so halving once more (TODO needed?).
-      b[i] = (T) (b[i] + tmp1[i] * 0.5_r);
-      d[i] = (T) (d[i] + tmp2[i] * 0.5_r);
+      b[i] = (sample) (b[i] + tmp1[i] * 0.5_r);
+      d[i] = (sample) (d[i] + tmp2[i] * 0.5_r);
     }
     hadamard4 (make_array (a.data(), b.data(), c.data(), d.data()), a.size());
 
     // channel a block 1
-    rev.run (sl<26, 27, 28> {}, a);
-    rev.run (sl<29> {}, a);
+    _eng.run (sl<26, 27, 28> {}, a);
+    _eng.run (sl<29> {}, a);
 
     // channel b block 1
-    rev.run (sl<30> {}, b);
+    _eng.run (sl<30> {}, b);
 
     // channel c block 1
-    rev.run (sl<31, 32, 33> {}, c);
-    rev.run (sl<34> {}, c);
+    _eng.run (sl<31, 32, 33> {}, c);
+    _eng.run (sl<34> {}, c);
 
     // channel d block 1
-    rev.run (sl<35, 36, 37> {}, d);
-    rev.run (sl<38> {}, d);
+    _eng.run (sl<35, 36, 37> {}, d);
+    _eng.run (sl<38> {}, d);
 
     // quantized decay
-    rev.run (sl<39> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<40> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<41> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<42> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<39> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<40> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<41> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<42> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
 
     // block 2
     hadamard4 (make_array (a.data(), b.data(), c.data(), d.data()), a.size());
@@ -530,49 +592,68 @@ struct debug : public algorithm {
     d = xspan {b_mem.data(), io.size()};
 
     // damp -----------------------------------
-    T flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
-    T glo = load_float<T> (0.9f + upar.lf_amt * 0.09f);
-    T fhi = load_float<T> (0.61f - upar.hf_amt * upar.hf_amt * 0.12f);
-    T ghi = load_float<T> (0.6f + upar.hf_amt * 0.18f);
+    sample flo = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
+    sample glo = load_float<sample> (0.9f + upar.lf_amt * 0.09f);
+    sample fhi = load_float<sample> (0.61f - upar.hf_amt * upar.hf_amt * 0.12f);
+    sample ghi = load_float<sample> (0.6f + upar.hf_amt * 0.18f);
 
-    rev.run (sl<43> {}, a, flo, glo, fhi, rev.one, ghi);
-    rev.run (sl<44> {}, b, flo, glo, fhi, rev.one, ghi);
-    rev.run (sl<45> {}, c, flo, glo, fhi, rev.one, ghi);
-    rev.run (sl<46> {}, d, flo, glo, fhi, rev.one, ghi);
+    _eng.run (sl<43> {}, a, flo, glo, fhi, _eng.one, ghi);
+    _eng.run (sl<44> {}, b, flo, glo, fhi, _eng.one, ghi);
+    _eng.run (sl<45> {}, c, flo, glo, fhi, _eng.one, ghi);
+    _eng.run (sl<46> {}, d, flo, glo, fhi, _eng.one, ghi);
 
     // channel a block 2
-    rev.run (sl<47> {}, a);
-    rev.run (sl<48> {}, a);
-    rev.run (sl<49> {}, a);
-    rev.push (sl<50> {}, a.to_const());
+    _eng.run (sl<47> {}, a);
+    _eng.run (sl<48> {}, a);
+    _eng.run (sl<49> {}, a);
+    _eng.push (sl<50> {}, a.to_const());
 
     // channel b block 2
-    rev.run (sl<51, 52, 53> {}, b);
+    _eng.run (sl<51, 52, 53> {}, b);
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      T m     = fastgrowth (par.mod[i], rev.one);
-      tmp1[i] = (T) (0.4_r + 0.4_r * lfo2[i] * m);
-      tmp2[i] = (T) (0.6_r + 0.4_r * -lfo2[i] * m); // for block c
+      sample m = fastgrowth (par.mod[i], _eng.one);
+      tmp1[i]  = (sample) (0.4_r + 0.4_r * lfo2[i] * m);
+      tmp2[i]  = (sample) (0.6_r + 0.4_r * -lfo2[i] * m); // for block c
     }
-    rev.run (sl<54> {}, b, tmp1);
-    rev.push (sl<55> {}, b.to_const());
+    _eng.run (sl<54> {}, b, tmp1);
+    _eng.push (sl<55> {}, b.to_const());
 
     // channel c block 2
-    rev.run (sl<56, 57, 58> {}, c);
-    rev.run (sl<59> {}, c, tmp2);
-    rev.push (sl<60> {}, c.to_const());
+    _eng.run (sl<56, 57, 58> {}, c);
+    _eng.run (sl<59> {}, c, tmp2);
+    _eng.push (sl<60> {}, c.to_const());
 
     // channel d block 2
-    rev.run (sl<61, 62, 63> {}, d);
-    rev.push (sl<64> {}, d.to_const());
+    _eng.run (sl<61, 62, 63> {}, d);
+    _eng.push (sl<64> {}, d.to_const());
   }
+  //----------------------------------------------------------------------------
+private:
+  engine _eng;
 };
 //------------------------------------------------------------------------------
+
+#else
+//------------------------------------------------------------------------------
+template <delay::data_type Dt>
 class abyss : public algorithm {
+private:
+  using engine = detail::lofiverb::algo_engine<abyss<Dt>, Dt, max_block_size>;
+
 public:
   //----------------------------------------------------------------------------
-  template <delay::data_type Dt>
-  using engine = detail::lofiverb::engine<abyss, Dt, max_block_size>;
+  static constexpr auto get_sample_rates()
+  {
+    return make_array (10500, 16800, 21000, 25200, 31500, 40320, 50400);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint get_required_bytes()
+  {
+    return engine::get_required_bytes();
+  }
+  //----------------------------------------------------------------------------
+  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
@@ -626,17 +707,18 @@ public:
         647)); // 28 delay (allows block processing) (> blocksz + 1)
   }
   //----------------------------------------------------------------------------
-  template <class T, delay::data_type Dt>
-  static void process_block (
-    engine<Dt>&                  rev,
+  using value_type = typename engine::value_type;
+  using sample     = value_type;
+  //----------------------------------------------------------------------------
+  void process_block (
     lfo<4>&                      lfo_obj,
-    xspan<std::array<T, 2>>      io,
-    smoothed_parameters<T>&      par,
+    xspan<std::array<sample, 2>> io,
+    smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
     uint)
   {
-    using arr    = block_arr<T>;
-    using arr_fb = fb_block_arr<T>;
+    using arr    = block_arr<sample>;
+    using arr_fb = fb_block_arr<sample>;
 
     arr late_in_arr;
     arr lfo1;
@@ -647,32 +729,32 @@ public:
     auto late_in = xspan {late_in_arr.data(), io.size()};
     for (uint i = 0; i < io.size(); ++i) {
       // to MS
-      late_in[i] = (T) ((io[i][0] + io[i][1]) * 0.5_r);
-      auto mod   = (T) (0.25_r + (1_r - par.mod[i]) * 0.75_r);
+      late_in[i] = (sample) ((io[i][0] + io[i][1]) * 0.5_r);
+      auto mod   = (sample) (0.25_r + (1_r - par.mod[i]) * 0.75_r);
       // ER + late lfo
-      auto lfo = tick_lfo<T> (lfo_obj);
-      lfo1[i]  = T {lfo[0]};
-      lfo2[i]  = (T) (T {lfo[1]} * (0.5_r + par.character[i] * 0.5_r));
-      lfo3[i]  = (T) (T {lfo[2]} * mod);
-      lfo4[i]  = (T) (T {lfo[3]} * mod);
+      auto lfo = tick_lfo<sample> (lfo_obj);
+      lfo1[i]  = sample {lfo[0]};
+      lfo2[i] = (sample) (sample {lfo[1]} * (0.5_r + par.character[i] * 0.5_r));
+      lfo3[i] = (sample) (sample {lfo[2]} * mod);
+      lfo4[i] = (sample) (sample {lfo[3]} * mod);
 
       // decay fixup
-      auto decay   = (T) (rev.one - par.decay[i]);
-      decay        = (T) (rev.one - decay * decay);
-      par.decay[i] = (T) (0.6_r + decay * 0.38_r);
+      auto decay   = (sample) (_eng.one - par.decay[i]);
+      decay        = (sample) (_eng.one - decay * decay);
+      par.decay[i] = (sample) (0.6_r + decay * 0.38_r);
     }
     // damp -----------------------------------
-    T flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
-    T glo = load_float<T> (0.55f + upar.lf_amt * 0.4f);
-    T fhi = load_float<T> (0.62f - upar.hf_amt * upar.hf_amt * 0.2f);
-    T ghi = load_float<T> (0.6f + upar.hf_amt * 0.25f);
+    sample flo = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
+    sample glo = load_float<sample> (0.55f + upar.lf_amt * 0.4f);
+    sample fhi = load_float<sample> (0.62f - upar.hf_amt * upar.hf_amt * 0.2f);
+    sample ghi = load_float<sample> (0.6f + upar.hf_amt * 0.25f);
 
-    rev.run (sl<0> {}, late_in);
+    _eng.run (sl<0> {}, late_in);
     // diffusion -----------------------------
-    rev.run (sl<1> {}, late_in);
-    rev.run (sl<2> {}, late_in);
-    rev.run (sl<3> {}, late_in);
-    rev.run (sl<4> {}, late_in);
+    _eng.run (sl<1> {}, late_in);
+    _eng.run (sl<2> {}, late_in);
+    _eng.run (sl<3> {}, late_in);
+    _eng.run (sl<4> {}, late_in);
 
     // ER (first reverb, not exactly ER at the end...) -----------------------
     arr    early1_arr;
@@ -683,24 +765,26 @@ public:
     auto er1b = xspan {early1b_arr.data(), io.size()};
     auto er2 = xspan {early2_arr.data(), io.size() + 1}; // +1: Feedback on head
 
-    rev.fetch_block (sl<9> {}, er2, 1); // feedback, fetching block + 1 samples
+    _eng.fetch_block (sl<9> {}, er2, 1); // feedback, fetching block + 1 samples
 
     span_visit (er1, [&] (auto& v, uint i) {
-      v = (T) (late_in[i] * 0.5_r + er2[i]);
+      v = (sample) (late_in[i] * 0.5_r + er2[i]);
     });
     er2.cut_head (1); // drop feedback sample from previous block
 
-    rev.run (sl<5> {}, er1, xspan {lfo2});
-    rev.run (sl<6> {}, er1, flo, glo, fhi, rev.one, ghi);
+    _eng.run (sl<5> {}, er1, xspan {lfo2});
+    _eng.run (sl<6> {}, er1, flo, glo, fhi, _eng.one, ghi);
     xspan_memcpy (er1b, er1);
-    rev.run (sl<7> {}, er1b, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<8> {}, er1b, xspan {lfo1});
-    rev.push (sl<9> {}, er1b.to_const()); // feedback point
+    _eng.run (sl<7> {}, er1b, [&] (auto v, uint i) {
+      return v * par.decay[i];
+    });
+    _eng.run (sl<8> {}, er1b, xspan {lfo1});
+    _eng.push (sl<9> {}, er1b.to_const()); // feedback point
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto e_l = (T) (-er1[i] * 0.66_r - er2[i] * 0.34_r);
-      auto e_r = (T) (-er1[i] * 0.66_r + er2[i] * 0.34_r);
+      auto e_l = (sample) (-er1[i] * 0.66_r - er2[i] * 0.34_r);
+      auto e_r = (sample) (-er1[i] * 0.66_r + er2[i] * 0.34_r);
       er1[i]   = e_l;
       er2[i]   = e_r;
     }
@@ -717,31 +801,32 @@ public:
     auto r    = xspan {r_arr.data(), io.size() + 1}; // +1: Feedback on head
 
     // feedback handling
-    rev.fetch_block (sl<18> {}, l, 1); // feedback, fetching block + 1 samples
-    rev.fetch_block (sl<28> {}, r, 1); // feedback, fetching block + 1 samples
+    _eng.fetch_block (sl<18> {}, l, 1); // feedback, fetching block + 1 samples
+    _eng.fetch_block (sl<28> {}, r, 1); // feedback, fetching block + 1 samples
 
     for (uint i = 0; i < io.size(); ++i) {
       auto loopsig = late_in[i] * 0.5_r + r[i];
       auto er_sig  = (er1[i] + er2[i]) * 0.25_r;
       auto er_amt  = par.character[i] * 0.5_r;
-      late[i]      = (T) (loopsig * (rev.one - er_amt) + er_sig * er_amt);
-      g[i] = (T) (0.618_r + par.character[i] * ((0.707_r - 0.618_r) * 2_r));
+      late[i]      = (sample) (loopsig * (_eng.one - er_amt) + er_sig * er_amt);
+      g[i]
+        = (sample) (0.618_r + par.character[i] * ((0.707_r - 0.618_r) * 2_r));
     }
     r.cut_head (1); // drop feedback sample from previous block
 
-    rev.run (sl<10> {}, late, xspan {lfo3}, g);
-    rev.run (sl<11> {}, late);
-    rev.run (sl<12> {}, late, flo, glo, fhi, rev.one, ghi);
-    rev.run (sl<13> {}, late, [&] (auto v, uint i) {
+    _eng.run (sl<10> {}, late, xspan {lfo3}, g);
+    _eng.run (sl<11> {}, late);
+    _eng.run (sl<12> {}, late, flo, glo, fhi, _eng.one, ghi);
+    _eng.run (sl<13> {}, late, [&] (auto v, uint i) {
       return v * par.decay[i];
     });
-    rev.run (sl<14> {}, late, blank, [g] (uint i) { return -g[i]; });
-    rev.run (sl<15> {}, late);
-    rev.run (sl<16> {}, late, [&] (auto v, uint i) {
+    _eng.run (sl<14> {}, late, blank, [g] (uint i) { return -g[i]; });
+    _eng.run (sl<15> {}, late);
+    _eng.run (sl<16> {}, late, [&] (auto v, uint i) {
       return v * par.decay[i];
     });
-    rev.run (sl<17> {}, late);
-    rev.push (sl<18> {}, late.to_const()); // feedback point
+    _eng.run (sl<17> {}, late);
+    _eng.push (sl<18> {}, late.to_const()); // feedback point
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
@@ -749,29 +834,29 @@ public:
       auto loopsig = late_in[i] * 0.5_r + l[i];
       auto er_sig  = (er1[i] - er2[i]) * 0.25_r;
       auto er_amt  = par.character[i] * 0.5_r;
-      late[i]      = (T) (loopsig * (rev.one - er_amt) + er_sig * er_amt);
+      late[i]      = (sample) (loopsig * (_eng.one - er_amt) + er_sig * er_amt);
     }
     l.cut_head (1); // drop feedback sample from previous block
-    rev.run (sl<19> {}, late, xspan {lfo4}, g);
-    rev.run (sl<20> {}, late);
-    rev.run (sl<21> {}, late, flo, glo, fhi, rev.one, ghi);
-    rev.run (sl<22> {}, late, [&] (auto v, uint i) {
+    _eng.run (sl<19> {}, late, xspan {lfo4}, g);
+    _eng.run (sl<20> {}, late);
+    _eng.run (sl<21> {}, late, flo, glo, fhi, _eng.one, ghi);
+    _eng.run (sl<22> {}, late, [&] (auto v, uint i) {
       return v * par.decay[i];
     });
-    rev.run (sl<23> {}, late, blank, [g] (uint i) { return -g[i]; });
-    rev.run (sl<24> {}, late);
-    rev.run (sl<25> {}, late, [&] (auto v, uint i) {
+    _eng.run (sl<23> {}, late, blank, [g] (uint i) { return -g[i]; });
+    _eng.run (sl<24> {}, late);
+    _eng.run (sl<25> {}, late, [&] (auto v, uint i) {
       return v * par.decay[i];
     });
-    rev.run (sl<26> {}, late);
-    rev.run (sl<27> {}, late);
-    rev.push (sl<28> {}, late.to_const()); // feedback point
+    _eng.run (sl<26> {}, late);
+    _eng.run (sl<27> {}, late);
+    _eng.push (sl<28> {}, late.to_const()); // feedback point
 
     // Mixdown
     auto v1 = make_array (&l[0], &er1[0]);
-    auto v2 = make_array<T const*> (&r[0], &er2[0]);
-    ep_crossfade<T> (v1, v2, &par.character[0], io.size(), [=] (auto v) {
-      return fastgrowth ((T) (v * 0.1_r), rev.one);
+    auto v2 = make_array<sample const*> (&r[0], &er2[0]);
+    ep_crossfade<sample> (v1, v2, &par.character[0], io.size(), [=] (auto v) {
+      return fastgrowth ((sample) (v * 0.1_r), _eng.one);
     });
 
     span_visit (io, [&] (auto& spls, uint i) {
@@ -780,12 +865,28 @@ public:
     });
   }
   //----------------------------------------------------------------------------
+private:
+  engine _eng;
 };
 //------------------------------------------------------------------------------
-struct plate1 : public algorithm {
+template <delay::data_type Dt>
+class plate1 : public algorithm {
+private:
+  using engine = detail::lofiverb::algo_engine<plate1<Dt>, Dt, max_block_size>;
+
+public:
   //----------------------------------------------------------------------------
-  template <delay::data_type Dt>
-  using engine = detail::lofiverb::engine<plate1, Dt, max_block_size>;
+  static constexpr auto get_sample_rates()
+  {
+    return make_array (10500, 16800, 21000, 25200, 31500, 40320, 50400);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint get_required_bytes()
+  {
+    return engine::get_required_bytes();
+  }
+  //----------------------------------------------------------------------------
+  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
@@ -900,17 +1001,18 @@ struct plate1 : public algorithm {
     );
   }
   //----------------------------------------------------------------------------
-  template <class T, delay::data_type Dt>
-  static void process_block (
-    engine<Dt>&                  rev,
+  using value_type = typename engine::value_type;
+  using sample     = value_type;
+  //----------------------------------------------------------------------------
+  void process_block (
     lfo<4>&                      lfo_obj,
-    xspan<std::array<T, 2>>      io,
-    smoothed_parameters<T>&      par,
+    xspan<std::array<sample, 2>> io,
+    smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
     uint)
   {
-    using arr    = block_arr<T>;
-    using arr_fb = fb_block_arr<T>;
+    using arr    = block_arr<sample>;
+    using arr_fb = fb_block_arr<sample>;
 
     arr_fb a_mem, d_mem;
     arr    b_mem, c_mem, tmp1, tmp2, tmp3;
@@ -922,8 +1024,8 @@ struct plate1 : public algorithm {
     xspan d {d_mem.data(), io.size() + 1};
 
     // fetch a block from the output (a and d)
-    rev.fetch_block (sl<50> {}, a, 1); // feedback, fetching block + 1 samples
-    rev.fetch_block (sl<64> {}, d, 1); // feedback, fetching block + 1 samples
+    _eng.fetch_block (sl<50> {}, a, 1); // feedback, fetching block + 1 samples
+    _eng.fetch_block (sl<64> {}, d, 1); // feedback, fetching block + 1 samples
 
     xspan_memcpy (b, a.advanced (1)); // L out on b
     a.cut_tail (1); // fb samples on a.
@@ -934,118 +1036,118 @@ struct plate1 : public algorithm {
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       // invert character first
-      par.character[i] = (T) (rev.one - par.character[i]);
-      tmp1[i]          = (T) (0.4_r + 0.3_r * par.character[i]);
-      tmp2[i]          = (T) (-0.6_r * par.character[i]);
-      tmp3[i]          = (T) (0.6_r * par.character[i]);
+      par.character[i] = (sample) (_eng.one - par.character[i]);
+      tmp1[i]          = (sample) (0.4_r + 0.3_r * par.character[i]);
+      tmp2[i]          = (sample) (-0.6_r * par.character[i]);
+      tmp3[i]          = (sample) (0.6_r * par.character[i]);
       // decay fixup
-      auto d       = rev.one - par.decay[i];
-      par.decay[i] = (T) (0.985_r - d * d * 0.21_r);
+      auto d       = _eng.one - par.decay[i];
+      par.decay[i] = (sample) (0.985_r - d * d * 0.21_r);
       // lfo
-      auto lfo = tick_lfo<T> (lfo_obj);
-      lfo1[i]  = T {lfo[0]};
-      lfo2[i]  = T {lfo[1]};
+      auto lfo = tick_lfo<sample> (lfo_obj);
+      lfo1[i]  = sample {lfo[0]};
+      lfo2[i]  = sample {lfo[1]};
       // lfo3 = -lfo1, lfo4 = -lfo2
     }
 
     // output preconditioning
-    rev.run (sl<0> {}, b, blank, tmp1);
-    rev.run (sl<1> {}, b, blank, tmp2);
-    rev.run (sl<2> {}, b, blank, tmp2);
+    _eng.run (sl<0> {}, b, blank, tmp1);
+    _eng.run (sl<1> {}, b, blank, tmp2);
+    _eng.run (sl<2> {}, b, blank, tmp2);
 
-    rev.run (sl<3> {}, c, blank, tmp1);
-    rev.run (sl<4> {}, c, blank, tmp2);
-    rev.run (sl<5> {}, c, blank, tmp2);
+    _eng.run (sl<3> {}, c, blank, tmp1);
+    _eng.run (sl<4> {}, c, blank, tmp2);
+    _eng.run (sl<5> {}, c, blank, tmp2);
 
     // tmp1 and tmp2 free
     xspan cho1 {tmp1.data(), io.size()};
     xspan cho2 {tmp2.data(), io.size()};
 
-    rev.run (sl<6> {}, cho1, b.to_const(), lfo1, tmp3);
-    rev.run (sl<7> {}, cho1);
-    rev.run (
+    _eng.run (sl<6> {}, cho1, b.to_const(), lfo1, tmp3);
+    _eng.run (sl<7> {}, cho1);
+    _eng.run (
       sl<8> {}, cho2, c.to_const(), [&] (uint i) { return -lfo1[i]; }, tmp3);
-    rev.run (sl<9> {}, cho2);
+    _eng.run (sl<9> {}, cho2);
     auto v1 = make_array (&b[0], &c[0]);
-    auto v2 = make_array<T const*> (&cho1[0], &cho2[0]);
-    ep_crossfade<T> (v1, v2, &par.mod[0], io.size(), [=] (auto v) {
-      return fastgrowth ((T) (v * 0.5_r), rev.one);
+    auto v2 = make_array<sample const*> (&cho1[0], &cho2[0]);
+    ep_crossfade<sample> (v1, v2, &par.mod[0], io.size(), [=] (auto v) {
+      return fastgrowth ((sample) (v * 0.5_r), _eng.one);
     });
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      b[i] = (T) (b[i] + cho1[i]);
-      c[i] = (T) (c[i] + cho2[i]);
+      b[i] = (sample) (b[i] + cho1[i]);
+      c[i] = (sample) (c[i] + cho2[i]);
     }
 
-    rev.run (sl<10> {}, b, blank, tmp3);
-    rev.run (sl<11> {}, c, blank, tmp3); // tmp3 free
+    _eng.run (sl<10> {}, b, blank, tmp3);
+    _eng.run (sl<11> {}, c, blank, tmp3); // tmp3 free
 
     xspan i1 {tmp1.data(), io.size()};
     xspan i2 {tmp2.data(), io.size()};
     // output write + preparations
     span_visit (io, [&] (auto& spls, uint i) {
-      i1[i]   = (T) ((spls[0] + spls[1]) * 0.25_r); // m
-      i2[i]   = (T) ((spls[0] - spls[1]) * 0.25_r); // s
+      i1[i]   = (sample) ((spls[0] + spls[1]) * 0.25_r); // m
+      i2[i]   = (sample) ((spls[0] - spls[1]) * 0.25_r); // s
       spls[0] = b[i];
       spls[1] = c[i];
-      b[i]    = (T) (0.8_r + 0.1_r * par.character[i]); // character 1 on b
-      c[i]    = (T) (0.8_r * par.character[i]); // character 2 on c
+      b[i]    = (sample) (0.8_r + 0.1_r * par.character[i]); // character 1 on b
+      c[i]    = (sample) (0.8_r * par.character[i]); // character 2 on c
     });
 
     // input preconditioning
-    rev.run (sl<12> {}, i1);
-    rev.run (sl<13> {}, i1);
-    rev.run (sl<14> {}, i1, blank, b);
-    rev.run (sl<15> {}, i1, blank, c);
-    rev.run (sl<16> {}, i1, blank, c);
+    _eng.run (sl<12> {}, i1);
+    _eng.run (sl<13> {}, i1);
+    _eng.run (sl<14> {}, i1, blank, b);
+    _eng.run (sl<15> {}, i1, blank, c);
+    _eng.run (sl<16> {}, i1, blank, c);
 
-    rev.run (sl<17> {}, i2);
-    rev.run (sl<18> {}, i2);
-    rev.run (sl<19> {}, i2, blank, b);
-    rev.run (sl<20> {}, i2, blank, c);
-    rev.run (sl<21> {}, i2, blank, c);
+    _eng.run (sl<17> {}, i2);
+    _eng.run (sl<18> {}, i2);
+    _eng.run (sl<19> {}, i2, blank, b);
+    _eng.run (sl<20> {}, i2, blank, c);
+    _eng.run (sl<21> {}, i2, blank, c);
 
     // fetch b and d feedback (a and d are already ready) 1 block only
-    rev.fetch_block (sl<55> {}, b, 1); // feedback
-    rev.fetch_block (sl<60> {}, c, 1); // feedback
+    _eng.fetch_block (sl<55> {}, b, 1); // feedback
+    _eng.fetch_block (sl<60> {}, c, 1); // feedback
 
     // quantized decay
-    rev.run (sl<22> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<23> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<24> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<25> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<22> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<23> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<24> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<25> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
 
     // sum inputs to feedback
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       // a single hadamard iteration can duplicate the range on one
       // of the channels, so halving once more (TODO needed?).
-      b[i] = (T) (b[i] + tmp1[i] * 0.5_r);
-      d[i] = (T) (d[i] + tmp2[i] * 0.5_r);
+      b[i] = (sample) (b[i] + tmp1[i] * 0.5_r);
+      d[i] = (sample) (d[i] + tmp2[i] * 0.5_r);
     }
     hadamard4 (make_array (a.data(), b.data(), c.data(), d.data()), a.size());
 
     // channel a block 1
-    rev.run (sl<26, 27, 28> {}, a);
-    rev.run (sl<29> {}, a);
+    _eng.run (sl<26, 27, 28> {}, a);
+    _eng.run (sl<29> {}, a);
 
     // channel b block 1
-    rev.run (sl<30> {}, b);
+    _eng.run (sl<30> {}, b);
 
     // channel c block 1
-    rev.run (sl<31, 32, 33> {}, c);
-    rev.run (sl<34> {}, c);
+    _eng.run (sl<31, 32, 33> {}, c);
+    _eng.run (sl<34> {}, c);
 
     // channel d block 1
-    rev.run (sl<35, 36, 37> {}, d);
-    rev.run (sl<38> {}, d);
+    _eng.run (sl<35, 36, 37> {}, d);
+    _eng.run (sl<38> {}, d);
 
     // quantized decay
-    rev.run (sl<39> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<40> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<41> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
-    rev.run (sl<42> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<39> {}, a, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<40> {}, b, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<41> {}, c, [&] (auto v, uint i) { return v * par.decay[i]; });
+    _eng.run (sl<42> {}, d, [&] (auto v, uint i) { return v * par.decay[i]; });
 
     // block 2
     hadamard4 (make_array (a.data(), b.data(), c.data(), d.data()), a.size());
@@ -1057,42 +1159,45 @@ struct plate1 : public algorithm {
     d = xspan {b_mem.data(), io.size()};
 
     // damp -----------------------------------
-    T flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
-    T glo = load_float<T> (0.9f + upar.lf_amt * 0.09f);
-    T fhi = load_float<T> (0.61f - upar.hf_amt * upar.hf_amt * 0.12f);
-    T ghi = load_float<T> (0.6f + upar.hf_amt * 0.18f);
+    sample flo = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
+    sample glo = load_float<sample> (0.9f + upar.lf_amt * 0.09f);
+    sample fhi = load_float<sample> (0.61f - upar.hf_amt * upar.hf_amt * 0.12f);
+    sample ghi = load_float<sample> (0.6f + upar.hf_amt * 0.18f);
 
-    rev.run (sl<43> {}, a, flo, glo, fhi, rev.one, ghi);
-    rev.run (sl<44> {}, b, flo, glo, fhi, rev.one, ghi);
-    rev.run (sl<45> {}, c, flo, glo, fhi, rev.one, ghi);
-    rev.run (sl<46> {}, d, flo, glo, fhi, rev.one, ghi);
+    _eng.run (sl<43> {}, a, flo, glo, fhi, _eng.one, ghi);
+    _eng.run (sl<44> {}, b, flo, glo, fhi, _eng.one, ghi);
+    _eng.run (sl<45> {}, c, flo, glo, fhi, _eng.one, ghi);
+    _eng.run (sl<46> {}, d, flo, glo, fhi, _eng.one, ghi);
 
     // channel a block 2
-    rev.run (sl<47> {}, a);
-    rev.run (sl<48> {}, a);
-    rev.run (sl<49> {}, a);
-    rev.push (sl<50> {}, a.to_const());
+    _eng.run (sl<47> {}, a);
+    _eng.run (sl<48> {}, a);
+    _eng.run (sl<49> {}, a);
+    _eng.push (sl<50> {}, a.to_const());
 
     // channel b block 2
-    rev.run (sl<51, 52, 53> {}, b);
+    _eng.run (sl<51, 52, 53> {}, b);
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      T m     = fastgrowth (par.mod[i], rev.one);
-      tmp1[i] = (T) (0.4_r + 0.4_r * lfo2[i] * m);
-      tmp2[i] = (T) (0.6_r + 0.4_r * -lfo2[i] * m); // for block c
+      sample m = fastgrowth (par.mod[i], _eng.one);
+      tmp1[i]  = (sample) (0.4_r + 0.4_r * lfo2[i] * m);
+      tmp2[i]  = (sample) (0.6_r + 0.4_r * -lfo2[i] * m); // for block c
     }
-    rev.run (sl<54> {}, b, tmp1);
-    rev.push (sl<55> {}, b.to_const());
+    _eng.run (sl<54> {}, b, tmp1);
+    _eng.push (sl<55> {}, b.to_const());
 
     // channel c block 2
-    rev.run (sl<56, 57, 58> {}, c);
-    rev.run (sl<59> {}, c, tmp2);
-    rev.push (sl<60> {}, c.to_const());
+    _eng.run (sl<56, 57, 58> {}, c);
+    _eng.run (sl<59> {}, c, tmp2);
+    _eng.push (sl<60> {}, c.to_const());
 
     // channel d block 2
-    rev.run (sl<61, 62, 63> {}, d);
-    rev.push (sl<64> {}, d.to_const());
+    _eng.run (sl<61, 62, 63> {}, d);
+    _eng.push (sl<64> {}, d.to_const());
   }
+
+private:
+  engine _eng;
 };
 //------------------------------------------------------------------------------
 static constexpr std::array<u8, 32> get_room_ffwd_table()
@@ -1109,11 +1214,25 @@ static constexpr std::array<u8, 32> get_room_ffwd_table()
   return r;
 }
 //------------------------------------------------------------------------------
+template <delay::data_type Dt>
 class room : public algorithm {
+private:
+  using engine = detail::lofiverb::algo_engine<room<Dt>, Dt, max_block_size>;
+  static constexpr std::array<u8, 32> ffwd_table {get_room_ffwd_table()};
+
 public:
   //----------------------------------------------------------------------------
-  template <delay::data_type Dt>
-  using engine = detail::lofiverb::engine<room, Dt, max_block_size>;
+  static constexpr auto get_sample_rates()
+  {
+    return make_array (10500, 16800, 21000, 23400, 33600, 42000, 50400);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint get_required_bytes()
+  {
+    return engine::get_required_bytes();
+  }
+  //----------------------------------------------------------------------------
+  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
@@ -1159,16 +1278,17 @@ public:
       make_ap (311, 0.f, 73)); // 27
   }
   //----------------------------------------------------------------------------
-  template <class T, delay::data_type Dt>
-  static void process_block (
-    engine<Dt>&                  rev,
+  using value_type = typename engine::value_type;
+  using sample     = value_type;
+  //----------------------------------------------------------------------------
+  void process_block (
     lfo<4>&                      lfo_obj,
-    xspan<std::array<T, 2>>      io,
-    smoothed_parameters<T>&      par,
+    xspan<std::array<sample, 2>> io,
+    smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
     uint)
   {
-    using arr = block_arr<T>;
+    using arr = block_arr<sample>;
 
     arr   l_m, r_m;
     xspan l {l_m.data(), io.size()};
@@ -1176,22 +1296,22 @@ public:
 
     span_visit (io, [&] (auto& spl, uint i) {
       // Midside signal
-      l[i] = (T) (spl[0] * 0.25_r);
-      r[i] = (T) (spl[1] * 0.25_r);
+      l[i] = (sample) (spl[0] * 0.25_r);
+      r[i] = (sample) (spl[1] * 0.25_r);
     });
 
-    T lo = load_float<T> (0.75f - upar.hf_amt * 0.2f);
-    T hi = load_float<T> (0.9f + upar.lf_amt * 0.075f);
+    sample lo = load_float<sample> (0.75f - upar.hf_amt * 0.2f);
+    sample hi = load_float<sample> (0.9f + upar.lf_amt * 0.075f);
 
-    rev.run (sl<0> {}, l, lo);
-    rev.run (sl<1> {}, l, hi);
-    rev.run (sl<2> {}, r, lo);
-    rev.run (sl<3> {}, r, hi);
+    _eng.run (sl<0> {}, l, lo);
+    _eng.run (sl<1> {}, l, hi);
+    _eng.run (sl<2> {}, r, lo);
+    _eng.run (sl<3> {}, r, hi);
 
     // Mystran's feedforward diffusor
     mp11::mp_for_each<mp11::mp_from_sequence<std::make_index_sequence<16>>> (
       [&] (auto idx) {
-        rev.run (sl<idx + 4> {}, (idx & 1) ? r : l, [&] (uint i) {
+        _eng.run (sl<idx + 4> {}, (idx & 1) ? r : l, [&] (uint i) {
           return ffwd_table[idx + (uint) (par.decay[i] * 16_r)];
         });
         hadamard2 (make_array (l.data(), r.data()), l.size());
@@ -1200,62 +1320,78 @@ public:
     arr   m_m, ltdec, t1, t2, t3;
     xspan m {m_m.data(), io.size()};
 
-    rev.fetch_block (sl<20> {}, xspan {t1.data(), io.size()}, 33);
-    rev.fetch_block (sl<20> {}, xspan {t2.data(), io.size()}, 157);
+    _eng.fetch_block (sl<20> {}, xspan {t1.data(), io.size()}, 33);
+    _eng.fetch_block (sl<20> {}, xspan {t2.data(), io.size()}, 157);
 
     span_visit (m, [&] (auto& spl, uint i) {
-      spl      = (T) ((l[i] + r[i]) * 0.25_r);
-      auto inv = rev.one - par.decay[i];
-      l[i]     = (T) (l[i] + t1[i] * inv);
-      r[i]     = (T) (r[i] - t2[i] * inv);
-      ltdec[i] = (T) (par.decay[i] * par.decay[i]);
-      t1[i]    = (T) (0.39_r * ltdec[i]);
-      t2[i]    = (T) (-0.28_r * ltdec[i]);
-      t3[i]    = (T) (0.19_r * ltdec[i]);
+      spl      = (sample) ((l[i] + r[i]) * 0.25_r);
+      auto inv = _eng.one - par.decay[i];
+      l[i]     = (sample) (l[i] + t1[i] * inv);
+      r[i]     = (sample) (r[i] - t2[i] * inv);
+      ltdec[i] = (sample) (par.decay[i] * par.decay[i]);
+      t1[i]    = (sample) (0.39_r * ltdec[i]);
+      t2[i]    = (sample) (-0.28_r * ltdec[i]);
+      t3[i]    = (sample) (0.19_r * ltdec[i]);
     });
     // triple nested AP with crossover
-    rev.run (
+    _eng.run (
       sl<20, 21, 22, 23> {},
       m,
       par.character,
       t1,
       par.character,
       t2,
-      load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f),
-      load_float<T> (0.55f - upar.hf_amt * upar.hf_amt * 0.15f),
-      load_float<T> (0.85f + upar.lf_amt * 0.13f),
-      rev.one,
-      load_float<T> (0.35f + upar.hf_amt * 0.14f),
+      load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f),
+      load_float<sample> (0.55f - upar.hf_amt * upar.hf_amt * 0.15f),
+      load_float<sample> (0.85f + upar.lf_amt * 0.13f),
+      _eng.one,
+      load_float<sample> (0.35f + upar.hf_amt * 0.14f),
       par.character,
       t3);
 
     span_visit (xspan {ltdec.data(), io.size()}, [&] (auto& v, uint i) {
-      t1[i] = (T) (0.3_r + v * 0.3_r);
-      t2[i] = (T) (-0.25_r - v * 0.3_r);
-      t3[i] = (T) (0.25_r + v * 0.3_r);
+      t1[i] = (sample) (0.3_r + v * 0.3_r);
+      t2[i] = (sample) (-0.25_r - v * 0.3_r);
+      t3[i] = (sample) (0.25_r + v * 0.3_r);
     });
-    rev.run (sl<24> {}, m, blank, t1);
-    rev.run (sl<25> {}, m, blank, t2);
-    rev.run (sl<26> {}, m, blank, t3);
+    _eng.run (sl<24> {}, m, blank, t1);
+    _eng.run (sl<25> {}, m, blank, t2);
+    _eng.run (sl<26> {}, m, blank, t3);
 
     span_visit (xspan {par.mod.data(), io.size()}, [&] (auto& v, uint i) {
-      t1[i] = (T) (T {tick_lfo<T> (lfo_obj)[0]} * v);
-      t2[i] = (T) (0.365_r + v * 0.2_r);
+      t1[i] = (sample) (sample {tick_lfo<sample> (lfo_obj)[0]} * v);
+      t2[i] = (sample) (0.365_r + v * 0.2_r);
     });
-    rev.run (sl<27> {}, xspan {t3.data(), io.size()}, m.to_const(), t1, t2);
+    _eng.run (sl<27> {}, xspan {t3.data(), io.size()}, m.to_const(), t1, t2);
     span_visit (io, [&] (auto& spl, uint i) {
-      spl[0] = (T) (l[i] + par.decay[i] * t3[i]);
-      spl[1] = (T) (r[i] - par.decay[i] * m[i]);
+      spl[0] = (sample) (l[i] + par.decay[i] * t3[i]);
+      spl[1] = (sample) (r[i] - par.decay[i] * m[i]);
     });
   }
   //----------------------------------------------------------------------------
-  static constexpr std::array<u8, 32> ffwd_table {get_room_ffwd_table()};
+private:
+  engine _eng;
 };
 //------------------------------------------------------------------------------
-struct midifex49 : public algorithm {
+template <delay::data_type Dt>
+class midifex49 : public algorithm {
+private:
+  using engine
+    = detail::lofiverb::algo_engine<midifex49<Dt>, Dt, max_block_size>;
+
+public:
   //----------------------------------------------------------------------------
-  template <delay::data_type Dt>
-  using engine = detail::lofiverb::engine<midifex49, Dt, max_block_size>;
+  static constexpr auto get_sample_rates()
+  {
+    return make_array (10500, 16800, 21000, 23400, 33600, 42000, 50400);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint get_required_bytes()
+  {
+    return engine::get_required_bytes();
+  }
+  //----------------------------------------------------------------------------
+  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
@@ -1305,16 +1441,17 @@ struct midifex49 : public algorithm {
     );
   }
   //----------------------------------------------------------------------------
-  template <class T, delay::data_type Dt>
-  static void process_block (
-    engine<Dt>&                  rev,
+  using value_type = typename engine::value_type;
+  using sample     = value_type;
+  //----------------------------------------------------------------------------
+  void process_block (
     lfo<4>&                      lfo_obj,
-    xspan<std::array<T, 2>>      io,
-    smoothed_parameters<T>&      par,
+    xspan<std::array<sample, 2>> io,
+    smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
     uint)
   {
-    using arr = block_arr<T>;
+    using arr = block_arr<sample>;
 
     arr   tmp_arr;
     xspan tmp {tmp_arr.data(), io.size()};
@@ -1331,96 +1468,119 @@ struct midifex49 : public algorithm {
 
     span_visit (io, [&] (auto& spl, uint i) {
       // Midside signal
-      sig[i] = (T) (((spl[0] + spl[1]) * 0.25_r)); // gain = 0.5 + feedback = 1
+      sig[i]
+        = (sample) (((spl[0] + spl[1]) * 0.25_r)); // gain = 0.5 + feedback = 1
       // LFO
-      auto lfo = tick_lfo<T> (lfo_obj);
-      lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
-      lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
+      auto lfo = tick_lfo<sample> (lfo_obj);
+      lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
+      lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
       // decay fixup
-      auto decay   = (T) (rev.one - par.decay[i]);
-      decay        = (T) (rev.one - decay * decay);
-      par.decay[i] = (T) (0.1_r + decay * 0.8375_r);
+      auto decay   = (sample) (_eng.one - par.decay[i]);
+      decay        = (sample) (_eng.one - decay * decay);
+      par.decay[i] = (sample) (0.1_r + decay * 0.8375_r);
     });
 
-    rev.run (sl<0> {}, sig);
-    rev.run (sl<1> {}, sig);
-    rev.run (sl<2> {}, sig);
-    rev.run (sl<3> {}, sig);
+    _eng.run (sl<0> {}, sig);
+    _eng.run (sl<1> {}, sig);
+    _eng.run (sl<2> {}, sig);
+    _eng.run (sl<3> {}, sig);
 
     // feedback handling, fetching the block with a negative offset of 1
-    rev.fetch_block (sl<21> {}, tmp, 1);
-    span_visit (sig, [&] (auto& v, uint i) { v = (T) (v + tmp[i]); });
+    _eng.fetch_block (sl<21> {}, tmp, 1);
+    span_visit (sig, [&] (auto& v, uint i) { v = (sample) (v + tmp[i]); });
 
     // 1st output point for L and R signal
     xspan_memcpy (l, sig); // delay LT a block -> might overlap, requires copy
-    rev.run (sl<4> {}, l);
-    rev.fetch_block (sl<5> {}, r, 0); // delay GT a block will never overlap
-    rev.push (sl<5> {}, sig.to_const());
+    _eng.run (sl<4> {}, l);
+    _eng.fetch_block (sl<5> {}, r, 0); // delay GT a block will never overlap
+    _eng.push (sl<5> {}, sig.to_const());
 
     // continuing the loop
-    rev.run (sl<6> {}, sig);
-    rev.run (sl<7> {}, sig, lfo1, blank);
+    _eng.run (sl<6> {}, sig);
+    _eng.run (sl<7> {}, sig, lfo1, blank);
 
     // 2nd output point for L and R signal
-    rev.fetch_block (sl<8> {}, tmp, 0); // delay GT a block will never overlap
+    _eng.fetch_block (sl<8> {}, tmp, 0); // delay GT a block will never overlap
     span_visit (l, [&] (auto& v, uint i) {
-      v = (T) ((v + tmp[i]) * (2_r / 3_r));
+      v = (sample) ((v + tmp[i]) * (2_r / 3_r));
     });
-    rev.push (sl<8> {}, sig.to_const());
-    rev.fetch_block (sl<9> {}, tmp, 0); // delay GT a block will never overlap
+    _eng.push (sl<8> {}, sig.to_const());
+    _eng.fetch_block (sl<9> {}, tmp, 0); // delay GT a block will never overlap
     span_visit (r, [&] (auto& v, uint i) {
-      v = (T) ((v + tmp[i]) * (2_r / 3_r));
+      v = (sample) ((v + tmp[i]) * (2_r / 3_r));
     });
-    rev.push (sl<9> {}, sig.to_const());
+    _eng.push (sl<9> {}, sig.to_const());
 
     // continuing the loop
-    rev.run (sl<10> {}, sig);
-    rev.run (sl<11> {}, sig, [&] (auto v, uint i) { return v * par.decay[i]; });
-    span_visit (tmp, [&] (auto& v, uint i) {
-      v = (T) (par.character[i] * 0.14_r);
+    _eng.run (sl<10> {}, sig);
+    _eng.run (sl<11> {}, sig, [&] (auto v, uint i) {
+      return v * par.decay[i];
     });
-    rev.run (sl<12, 13> {}, sig, blank, blank, blank, tmp);
+    span_visit (tmp, [&] (auto& v, uint i) {
+      v = (sample) (par.character[i] * 0.14_r);
+    });
+    _eng.run (sl<12, 13> {}, sig, blank, blank, blank, tmp);
 
     // 3rd output point for L and R signal
-    rev.fetch_block (sl<14> {}, tmp, 0); // delay GT a block will never overlap
+    _eng.fetch_block (sl<14> {}, tmp, 0); // delay GT a block will never overlap
     span_visit (l, [&] (auto& v, uint i) {
-      v = (T) (v + tmp[i] * (1_r / 3_r));
+      v = (sample) (v + tmp[i] * (1_r / 3_r));
     });
-    rev.push (sl<14> {}, sig.to_const());
-    rev.fetch_block (sl<15> {}, tmp, 0); // delay GT a block will never overlap
+    _eng.push (sl<14> {}, sig.to_const());
+    _eng.fetch_block (sl<15> {}, tmp, 0); // delay GT a block will never overlap
     span_visit (r, [&] (auto& v, uint i) {
-      v = (T) (v + tmp[i] * (1_r / 3_r));
+      v = (sample) (v + tmp[i] * (1_r / 3_r));
     });
-    rev.push (sl<15> {}, sig.to_const());
+    _eng.push (sl<15> {}, sig.to_const());
 
     // continuing the loop
-    rev.run (sl<16> {}, sig);
-    rev.run (sl<17> {}, sig, [&] (auto v, uint i) { return v * par.decay[i]; });
-
-    T flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
-    T glo = load_float<T> (0.35f + upar.lf_amt * 0.6f);
-    T fhi = load_float<T> (0.8f - upar.hf_amt * upar.hf_amt * 0.1f);
-    T ghi = load_float<T> (0.05f + upar.hf_amt * 0.6f);
-
-    rev.run (sl<18> {}, sig, flo, glo, fhi, rev.one, ghi);
-    span_visit (tmp, [&] (auto& v, uint i) {
-      v = (T) (par.character[i] * 0.2_r);
+    _eng.run (sl<16> {}, sig);
+    _eng.run (sl<17> {}, sig, [&] (auto v, uint i) {
+      return v * par.decay[i];
     });
-    rev.run (sl<19, 20> {}, sig, lfo2, blank, blank, tmp);
+
+    sample flo = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
+    sample glo = load_float<sample> (0.35f + upar.lf_amt * 0.6f);
+    sample fhi = load_float<sample> (0.8f - upar.hf_amt * upar.hf_amt * 0.1f);
+    sample ghi = load_float<sample> (0.05f + upar.hf_amt * 0.6f);
+
+    _eng.run (sl<18> {}, sig, flo, glo, fhi, _eng.one, ghi);
+    span_visit (tmp, [&] (auto& v, uint i) {
+      v = (sample) (par.character[i] * 0.2_r);
+    });
+    _eng.run (sl<19, 20> {}, sig, lfo2, blank, blank, tmp);
     // push to delay feedback
-    rev.push (sl<21> {}, sig.to_const());
+    _eng.push (sl<21> {}, sig.to_const());
 
     span_visit (io, [&] (auto& spls, uint i) {
       spls[0] = l[i];
       spls[1] = r[i];
     });
   }
-};
 
-struct midifex50 : public algorithm {
+private:
+  engine _eng;
+};
+//------------------------------------------------------------------------------
+template <delay::data_type Dt>
+class midifex50 : public algorithm {
+private:
+  using engine
+    = detail::lofiverb::algo_engine<midifex50<Dt>, Dt, max_block_size>;
+
+public:
   //----------------------------------------------------------------------------
-  template <delay::data_type Dt>
-  using engine = detail::lofiverb::engine<midifex50, Dt, max_block_size>;
+  static constexpr auto get_sample_rates()
+  {
+    return make_array (10500, 16800, 21000, 23400, 33600, 42000, 50400);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint get_required_bytes()
+  {
+    return engine::get_required_bytes();
+  }
+  //----------------------------------------------------------------------------
+  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
@@ -1468,17 +1628,18 @@ struct midifex50 : public algorithm {
     );
   }
   //----------------------------------------------------------------------------
-  template <class T, delay::data_type Dt>
-  static void process_block (
-    engine<Dt>&                  rev,
+  using value_type = typename engine::value_type;
+  using sample     = value_type;
+  //----------------------------------------------------------------------------
+  void process_block (
     lfo<4>&                      lfo_obj,
-    xspan<std::array<T, 2>>      io,
-    smoothed_parameters<T>&      par,
+    xspan<std::array<sample, 2>> io,
+    smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
     uint)
   {
-    using arr    = block_arr<T>;
-    using arr_fb = fb_block_arr<T>;
+    using arr    = block_arr<sample>;
+    using arr_fb = fb_block_arr<sample>;
 
     arr_fb tmp1;
     xspan  loop {tmp1.data(), io.size() + 1};
@@ -1488,91 +1649,108 @@ struct midifex50 : public algorithm {
     xspan  r {r_arr.data(), io.size()};
 
     // xspan_memcpy (loop, io);
-    rev.fetch_block (sl<25> {}, loop, 1);
+    _eng.fetch_block (sl<25> {}, loop, 1);
     xspan_memcpy (r, loop.advanced (1));
     xspan_memcpy (l, loop.advanced (1));
 
     loop.cut_tail (1); // feedback samples
-    rev.run (sl<0> {}, loop, [&] (T fb_spl, uint i) {
+    _eng.run (sl<0> {}, loop, [&] (sample fb_spl, uint i) {
       // decay fixup
-      auto decay = (T) (rev.one - par.decay[i]);
-      decay      = (T) (rev.one - decay * decay);
-      decay      = (T) - (0.3_r + decay * 0.45_r);
+      auto decay = (sample) (_eng.one - par.decay[i]);
+      decay      = (sample) (_eng.one - decay * decay);
+      decay      = (sample) - (0.3_r + decay * 0.45_r);
       return (fb_spl * decay) + ((io[i][0] + io[i][1]) * 0.25_r); // gain = 1
     }); // feedback + input summing with quantizer
 
-    rev.run (sl<1> {}, l);
-    rev.run (sl<2> {}, l);
-    rev.run (sl<3> {}, l);
+    _eng.run (sl<1> {}, l);
+    _eng.run (sl<2> {}, l);
+    _eng.run (sl<3> {}, l);
 
-    rev.run (sl<4> {}, r);
-    rev.run (sl<5> {}, r);
-    rev.run (sl<6> {}, r);
+    _eng.run (sl<4> {}, r);
+    _eng.run (sl<5> {}, r);
+    _eng.run (sl<6> {}, r);
 
-    rev.run (sl<7> {}, loop);
-    rev.run (sl<8> {}, loop);
-    rev.run (sl<9> {}, loop);
-    rev.run (sl<10> {}, loop);
-    rev.run (sl<11> {}, loop);
-    rev.run (sl<12> {}, loop);
-    rev.run (sl<13> {}, loop);
-    rev.run (sl<14> {}, loop);
-    rev.run (sl<15> {}, loop);
-    rev.run (sl<16> {}, loop);
-    rev.run (sl<17> {}, loop);
-    rev.run (sl<18> {}, loop);
-    rev.run (sl<19> {}, loop);
+    _eng.run (sl<7> {}, loop);
+    _eng.run (sl<8> {}, loop);
+    _eng.run (sl<9> {}, loop);
+    _eng.run (sl<10> {}, loop);
+    _eng.run (sl<11> {}, loop);
+    _eng.run (sl<12> {}, loop);
+    _eng.run (sl<13> {}, loop);
+    _eng.run (sl<14> {}, loop);
+    _eng.run (sl<15> {}, loop);
+    _eng.run (sl<16> {}, loop);
+    _eng.run (sl<17> {}, loop);
+    _eng.run (sl<18> {}, loop);
+    _eng.run (sl<19> {}, loop);
 
     arr tmp2;
     arr tmp3;
 
     xspan c1 {tmp2.data(), loop.size()};
     xspan lfo2 {tmp3.data(), loop.size()};
-    rev.fetch_block (sl<20> {}, c1, 0);
-    rev.push (sl<20> {}, loop.to_const());
+    _eng.fetch_block (sl<20> {}, c1, 0);
+    _eng.push (sl<20> {}, loop.to_const());
     auto lfo1 = loop; // data inserted already (lfo1 -> tmp1)
     loop      = c1; // avoid a copy. loop -> tmp2
     span_visit (l, [&] (auto& v, uint i) {
       auto c = par.character[i] * 0.5_r;
-      auto k = rev.one - c;
-      v      = (T) (k * v + loop[i] * c); // L done
+      auto k = _eng.one - c;
+      v      = (sample) (k * v + loop[i] * c); // L done
       // unrelated but done here to skip one iteration
-      auto lfo = tick_lfo<T> (lfo_obj);
-      lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
-      lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
+      auto lfo = tick_lfo<sample> (lfo_obj);
+      lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
+      lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
     });
-    rev.run (sl<21> {}, loop, xspan {lfo1}, blank); // tmp1 free
+    _eng.run (sl<21> {}, loop, xspan {lfo1}, blank); // tmp1 free
     xspan c2 {tmp1.data(), loop.size()};
-    rev.fetch_block (sl<22> {}, c2, 0);
-    rev.push (sl<22> {}, loop.to_const());
+    _eng.fetch_block (sl<22> {}, c2, 0);
+    _eng.push (sl<22> {}, loop.to_const());
     loop = c2; // avoid copy. tmp2 (loop) free.
     span_visit (r, [&] (auto& v, uint i) {
       auto c = par.character[i] * 0.5_r;
-      auto k = rev.one - c;
-      v      = (T) (k * v + loop[i] * c); // R done
+      auto k = _eng.one - c;
+      v      = (sample) (k * v + loop[i] * c); // R done
     });
     // outputs done, dump now that they have been recently touched
     span_visit (io, [&] (auto& spls, uint i) {
       spls[0] = l[i];
       spls[1] = r[i];
     });
-    rev.run (sl<23> {}, loop, xspan {lfo2}, blank); // tmp3 free
+    _eng.run (sl<23> {}, loop, xspan {lfo2}, blank); // tmp3 free
 
-    T flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
-    T glo = load_float<T> (0.35f + upar.lf_amt * 0.6f);
-    T fhi = load_float<T> (0.62f - upar.hf_amt * upar.hf_amt * 0.2f);
-    T ghi = load_float<T> (0.35f + upar.hf_amt * 0.3f);
+    sample flo = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
+    sample glo = load_float<sample> (0.35f + upar.lf_amt * 0.6f);
+    sample fhi = load_float<sample> (0.62f - upar.hf_amt * upar.hf_amt * 0.2f);
+    sample ghi = load_float<sample> (0.35f + upar.hf_amt * 0.3f);
 
-    rev.run (sl<24> {}, loop, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<25> {}, loop.to_const());
+    _eng.run (sl<24> {}, loop, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<25> {}, loop.to_const());
   }
   //----------------------------------------------------------------------------
+private:
+  engine _eng;
 };
 //------------------------------------------------------------------------------
-struct dre2000a : public algorithm {
+template <delay::data_type Dt>
+class dre2000a : public algorithm {
+private:
+  using engine
+    = detail::lofiverb::algo_engine<dre2000a<Dt>, Dt, max_block_size>;
+
+public:
   //----------------------------------------------------------------------------
-  template <delay::data_type Dt>
-  using engine = detail::lofiverb::engine<dre2000a, Dt, max_block_size>;
+  static constexpr auto get_sample_rates()
+  {
+    return make_array (16800, 21000, 25200, 32400, 40320, 57600, 57600);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint get_required_bytes()
+  {
+    return engine::get_required_bytes();
+  }
+  //----------------------------------------------------------------------------
+  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
@@ -1646,79 +1824,80 @@ struct dre2000a : public algorithm {
       make_ap (1182, -0.7)); // 21
   }
   //----------------------------------------------------------------------------
-  template <class T, delay::data_type Dt>
-  static void process_block (
-    engine<Dt>&                  rev,
+  using value_type = typename engine::value_type;
+  using sample     = value_type;
+  //----------------------------------------------------------------------------
+  void process_block (
     lfo<4>&                      lfo_obj,
-    xspan<std::array<T, 2>>      io,
-    smoothed_parameters<T>&      par,
+    xspan<std::array<sample, 2>> io,
+    smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
     uint                         srate)
   {
-    block_arr<T> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, tmp1, tmp2, tank;
-    xspan        in {in_mem.data(), io.size()};
-    xspan        l {l_mem.data(), io.size()};
-    xspan        r {r_mem.data(), io.size()};
+    block_arr<sample> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, tmp1, tmp2, tank;
+    xspan             in {in_mem.data(), io.size()};
+    xspan             l {l_mem.data(), io.size()};
+    xspan             r {r_mem.data(), io.size()};
 
-    rev.run (sl<0> {}, in, [&] (auto spl, uint i) {
-      auto lfo = tick_lfo<T> (lfo_obj);
-      lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
-      lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
-      lfo3[i]  = (T) (T {lfo[2]} * par.mod[i]);
+    _eng.run (sl<0> {}, in, [&] (auto spl, uint i) {
+      auto lfo = tick_lfo<sample> (lfo_obj);
+      lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
+      lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
+      lfo3[i]  = (sample) (sample {lfo[2]} * par.mod[i]);
       return (io[i][0] + io[i][1]) * 0.25_r;
     });
-    rev.run (sl<1> {}, in);
-    rev.run (sl<2> {}, l, in.to_const());
+    _eng.run (sl<1> {}, in);
+    _eng.run (sl<2> {}, l, in.to_const());
     xspan_memdump (r.data(), l);
-    rev.run (sl<3> {}, l, overwrite);
-    rev.run (sl<4> {}, r, overwrite);
+    _eng.run (sl<3> {}, l, overwrite);
+    _eng.run (sl<4> {}, r, overwrite);
 
     float dec2 = as_float (par.decay[0]);
     dec2 *= dec2;
     auto gains
-      = rev.get_gain_for_rt60 (sl<5, 8, 11> {}, 0.9f + dec2 * 19.1f, srate);
-    T flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
-    T glo = load_float<T> (0.8f + upar.lf_amt * 0.18f);
-    T fhi = load_float<T> (0.7f - upar.hf_amt * upar.hf_amt * 0.05f);
-    T ghi = load_float<T> (dec2 * 0.25f + upar.hf_amt * 0.45f);
+      = _eng.get_gain_for_rt60 (sl<5, 8, 11> {}, 0.9f + dec2 * 19.1f, srate);
+    sample flo = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
+    sample glo = load_float<sample> (0.8f + upar.lf_amt * 0.18f);
+    sample fhi = load_float<sample> (0.7f - upar.hf_amt * upar.hf_amt * 0.05f);
+    sample ghi = load_float<sample> (dec2 * 0.25f + upar.hf_amt * 0.45f);
 
     xspan comb_fb {tmp1.data(), io.size()};
-    rev.fetch_block (sl<5> {}, comb_fb, lfo1, -gains[0]);
-    rev.run (sl<6> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<5> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    rev.run (sl<7> {}, comb_fb.to_const(), overwrite, tank);
+    _eng.fetch_block (sl<5> {}, comb_fb, lfo1, -gains[0]);
+    _eng.run (sl<6> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<5> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    _eng.run (sl<7> {}, comb_fb.to_const(), overwrite, tank);
 
-    rev.fetch_block (sl<8> {}, comb_fb, lfo2, -gains[1]);
-    rev.run (sl<9> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<8> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    rev.run (sl<10> {}, comb_fb.to_const(), add_to, tank);
+    _eng.fetch_block (sl<8> {}, comb_fb, lfo2, -gains[1]);
+    _eng.run (sl<9> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<8> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    _eng.run (sl<10> {}, comb_fb.to_const(), add_to, tank);
 
-    rev.fetch_block (sl<11> {}, comb_fb, lfo3, -gains[2]);
-    rev.run (sl<12> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<11> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    rev.run (sl<13> {}, comb_fb.to_const(), add_to, tank);
+    _eng.fetch_block (sl<11> {}, comb_fb, lfo3, -gains[2]);
+    _eng.run (sl<12> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<11> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    _eng.run (sl<13> {}, comb_fb.to_const(), add_to, tank);
     xspan eramt {tmp1.data(), io.size()};
     span_visit (xspan {par.character.data(), io.size()}, [&] (auto c, uint i) {
-      l[i]     = (T) (l[i] + tank[i]);
-      r[i]     = (T) (r[i] + tank[i]);
-      c        = (T) ((c - rev.one * 0.5_r) * 2_r);
-      c        = (T) ((rev.one - c * c) * 0.4_r);
+      l[i]     = (sample) (l[i] + tank[i]);
+      r[i]     = (sample) (r[i] + tank[i]);
+      c        = (sample) ((c - _eng.one * 0.5_r) * 2_r);
+      c        = (sample) ((_eng.one - c * c) * 0.4_r);
       eramt[i] = c;
     });
 
     auto stank = xspan {tank.data(), io.size()}.to_const();
-    rev.run (sl<14> {}, l, stank);
+    _eng.run (sl<14> {}, l, stank);
     xspan er {tmp2.data(), io.size()};
-    rev.run (sl<15> {}, er, in.to_const(), par.character);
-    crossfade (l, er, eramt, rev.one);
-    rev.run (sl<16> {}, l);
-    rev.run (sl<17> {}, l);
+    _eng.run (sl<15> {}, er, in.to_const(), par.character);
+    crossfade (l, er, eramt, _eng.one);
+    _eng.run (sl<16> {}, l);
+    _eng.run (sl<17> {}, l);
 
-    rev.run (sl<18> {}, r, stank);
-    rev.run (sl<19> {}, er, in.to_const(), par.character);
-    crossfade (r, er, eramt, rev.one);
-    rev.run (sl<20> {}, r);
-    rev.run (sl<21> {}, r);
+    _eng.run (sl<18> {}, r, stank);
+    _eng.run (sl<19> {}, er, in.to_const(), par.character);
+    crossfade (r, er, eramt, _eng.one);
+    _eng.run (sl<20> {}, r);
+    _eng.run (sl<21> {}, r);
 
     span_visit (io, [&] (auto& spls, uint i) {
       spls[0] = l[i];
@@ -1726,12 +1905,29 @@ struct dre2000a : public algorithm {
     });
   }
   //----------------------------------------------------------------------------
+private:
+  engine _eng;
 };
+//------------------------------------------------------------------------------
+template <delay::data_type Dt>
+class dre2000b : public algorithm {
+private:
+  using engine
+    = detail::lofiverb::algo_engine<dre2000b<Dt>, Dt, max_block_size>;
 
-struct dre2000b : public algorithm {
+public:
   //----------------------------------------------------------------------------
-  template <delay::data_type Dt>
-  using engine = detail::lofiverb::engine<dre2000b, Dt, max_block_size>;
+  static constexpr auto get_sample_rates()
+  {
+    return make_array (16800, 21000, 25200, 32400, 40320, 57600, 57600);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint get_required_bytes()
+  {
+    return engine::get_required_bytes();
+  }
+  //----------------------------------------------------------------------------
+  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
@@ -1806,80 +2002,81 @@ struct dre2000b : public algorithm {
       make_ap (566, -0.7)); // 21
   }
   //----------------------------------------------------------------------------
-  template <class T, delay::data_type Dt>
-  static void process_block (
-    engine<Dt>&                  rev,
+  using value_type = typename engine::value_type;
+  using sample     = value_type;
+  //----------------------------------------------------------------------------
+  void process_block (
     lfo<4>&                      lfo_obj,
-    xspan<std::array<T, 2>>      io,
-    smoothed_parameters<T>&      par,
+    xspan<std::array<sample, 2>> io,
+    smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
     uint                         srate)
   {
-    block_arr<T> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, tmp1, tmp2, tank;
-    xspan        in {in_mem.data(), io.size()};
-    xspan        l {l_mem.data(), io.size()};
-    xspan        r {r_mem.data(), io.size()};
+    block_arr<sample> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, tmp1, tmp2, tank;
+    xspan             in {in_mem.data(), io.size()};
+    xspan             l {l_mem.data(), io.size()};
+    xspan             r {r_mem.data(), io.size()};
 
-    rev.run (sl<0> {}, in, [&] (auto spl, uint i) {
-      auto lfo = tick_lfo<T> (lfo_obj);
-      lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
-      lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
-      lfo3[i]  = (T) (T {lfo[2]} * par.mod[i]);
+    _eng.run (sl<0> {}, in, [&] (auto spl, uint i) {
+      auto lfo = tick_lfo<sample> (lfo_obj);
+      lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
+      lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
+      lfo3[i]  = (sample) (sample {lfo[2]} * par.mod[i]);
       return (io[i][0] + io[i][1]) * 0.25_r;
     });
-    rev.run (sl<1> {}, in);
-    rev.run (sl<2> {}, in);
+    _eng.run (sl<1> {}, in);
+    _eng.run (sl<2> {}, in);
 
     float dec2 = as_float (par.decay[0]);
     dec2 *= dec2;
     auto gains
-      = rev.get_gain_for_rt60 (sl<3, 6, 9> {}, 0.25f + dec2 * 10.f, srate);
-    T flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
-    T glo = load_float<T> (0.88f + upar.lf_amt * 0.1f);
-    T fhi = load_float<T> (0.82f - upar.hf_amt * upar.hf_amt * 0.4f);
-    T ghi = load_float<T> (0.4f + dec2 * 0.4f + upar.hf_amt * 0.15f);
+      = _eng.get_gain_for_rt60 (sl<3, 6, 9> {}, 0.25f + dec2 * 10.f, srate);
+    sample flo = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
+    sample glo = load_float<sample> (0.88f + upar.lf_amt * 0.1f);
+    sample fhi = load_float<sample> (0.82f - upar.hf_amt * upar.hf_amt * 0.4f);
+    sample ghi = load_float<sample> (0.4f + dec2 * 0.4f + upar.hf_amt * 0.15f);
 
     xspan comb_fb {tmp1.data(), io.size()};
-    rev.fetch_block (sl<3> {}, comb_fb, lfo1, -gains[0]);
-    rev.run (sl<4> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<3> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    rev.run (sl<5> {}, comb_fb.to_const(), overwrite, tank);
+    _eng.fetch_block (sl<3> {}, comb_fb, lfo1, -gains[0]);
+    _eng.run (sl<4> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<3> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    _eng.run (sl<5> {}, comb_fb.to_const(), overwrite, tank);
 
-    rev.fetch_block (sl<6> {}, comb_fb, lfo2, -gains[1]);
-    rev.run (sl<7> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<6> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
-    rev.run (sl<8> {}, comb_fb.to_const(), add_to, tank);
+    _eng.fetch_block (sl<6> {}, comb_fb, lfo2, -gains[1]);
+    _eng.run (sl<7> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<6> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (sample) (s + in[i]); });
+    _eng.run (sl<8> {}, comb_fb.to_const(), add_to, tank);
 
-    rev.fetch_block (sl<9> {}, comb_fb, lfo3, -gains[2]);
-    rev.run (sl<10> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<9> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    span_visit (comb_fb, [&] (auto& s, uint i) { s = (T) (s + in[i]); });
-    rev.run (sl<11> {}, comb_fb.to_const(), add_to, tank);
+    _eng.fetch_block (sl<9> {}, comb_fb, lfo3, -gains[2]);
+    _eng.run (sl<10> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<9> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    span_visit (comb_fb, [&] (auto& s, uint i) { s = (sample) (s + in[i]); });
+    _eng.run (sl<11> {}, comb_fb.to_const(), add_to, tank);
     xspan eramt {tmp1.data(), io.size()};
     span_visit (xspan {par.character.data(), io.size()}, [&] (auto c, uint i) {
-      c        = (T) ((c - rev.one * 0.5_r) * 2_r);
-      c        = (T) ((rev.one - c * c) * 0.4_r);
+      c        = (sample) ((c - _eng.one * 0.5_r) * 2_r);
+      c        = (sample) ((_eng.one - c * c) * 0.4_r);
       eramt[i] = c;
     });
 
     xspan stank {tank.data(), io.size()};
-    rev.run (sl<12> {}, stank);
-    rev.run (sl<13> {}, l, stank.to_const());
+    _eng.run (sl<12> {}, stank);
+    _eng.run (sl<13> {}, l, stank.to_const());
     xspan_memdump (r.data(), l);
 
     xspan er {tmp2.data(), io.size()};
-    rev.run (sl<14> {}, er, in.to_const(), par.character);
-    crossfade (l, er, eramt, rev.one);
-    rev.run (sl<15> {}, l);
-    rev.run (sl<16> {}, l);
-    rev.run (sl<17> {}, l);
+    _eng.run (sl<14> {}, er, in.to_const(), par.character);
+    crossfade (l, er, eramt, _eng.one);
+    _eng.run (sl<15> {}, l);
+    _eng.run (sl<16> {}, l);
+    _eng.run (sl<17> {}, l);
 
-    rev.run (sl<18> {}, er, in.to_const(), par.character);
-    crossfade (r, er, eramt, rev.one);
-    rev.run (sl<19> {}, r);
-    rev.run (sl<20> {}, r);
-    rev.run (sl<21> {}, r);
+    _eng.run (sl<18> {}, er, in.to_const(), par.character);
+    crossfade (r, er, eramt, _eng.one);
+    _eng.run (sl<19> {}, r);
+    _eng.run (sl<20> {}, r);
+    _eng.run (sl<21> {}, r);
 
     span_visit (io, [&] (auto& spls, uint i) {
       spls[0] = l[i];
@@ -1887,12 +2084,29 @@ struct dre2000b : public algorithm {
     });
   }
   //----------------------------------------------------------------------------
+private:
+  engine _eng;
 };
+//------------------------------------------------------------------------------
+template <delay::data_type Dt>
+class dre2000c : public algorithm {
+private:
+  using engine
+    = detail::lofiverb::algo_engine<dre2000c<Dt>, Dt, max_block_size>;
 
-struct dre2000c : public algorithm {
+public:
   //----------------------------------------------------------------------------
-  template <delay::data_type Dt>
-  using engine = detail::lofiverb::engine<dre2000c, Dt, max_block_size>;
+  static constexpr auto get_sample_rates()
+  {
+    return make_array (16800, 21000, 25200, 32400, 40320, 57600, 57600);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint get_required_bytes()
+  {
+    return engine::get_required_bytes();
+  }
+  //----------------------------------------------------------------------------
+  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
@@ -1943,79 +2157,81 @@ struct dre2000c : public algorithm {
     );
   }
   //----------------------------------------------------------------------------
-  template <class T, delay::data_type Dt>
-  static void process_block (
-    engine<Dt>&                  rev,
+  using value_type = typename engine::value_type;
+  using sample     = value_type;
+  //----------------------------------------------------------------------------
+  void process_block (
     lfo<4>&                      lfo_obj,
-    xspan<std::array<T, 2>>      io,
-    smoothed_parameters<T>&      par,
+    xspan<std::array<sample, 2>> io,
+    smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
     uint                         srate)
   {
-    block_arr<T> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, lfo4, tmp1;
-    xspan        in {in_mem.data(), io.size()};
-    xspan        l {l_mem.data(), io.size()};
-    xspan        r {r_mem.data(), io.size()};
+    block_arr<sample> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, lfo4, tmp1;
+    xspan             in {in_mem.data(), io.size()};
+    xspan             l {l_mem.data(), io.size()};
+    xspan             r {r_mem.data(), io.size()};
 
-    rev.run (sl<0> {}, in, [&] (auto spl, uint i) {
-      auto lfo = tick_lfo<T> (lfo_obj);
-      lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
-      lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
-      lfo3[i]  = (T) (T {lfo[2]} * par.mod[i]);
-      lfo4[i]  = (T) (T {lfo[3]} * par.mod[i]);
+    _eng.run (sl<0> {}, in, [&] (auto spl, uint i) {
+      auto lfo = tick_lfo<sample> (lfo_obj);
+      lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
+      lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
+      lfo3[i]  = (sample) (sample {lfo[2]} * par.mod[i]);
+      lfo4[i]  = (sample) (sample {lfo[3]} * par.mod[i]);
       return (io[i][0] + io[i][1]) * 0.25_r;
     });
-    rev.run (sl<1> {}, in);
-    rev.run (sl<2> {}, in);
-    rev.run (sl<3> {}, in);
-    rev.run (sl<4> {}, in);
-    rev.run (sl<5> {}, in);
+    _eng.run (sl<1> {}, in);
+    _eng.run (sl<2> {}, in);
+    _eng.run (sl<3> {}, in);
+    _eng.run (sl<4> {}, in);
+    _eng.run (sl<5> {}, in);
 
     float dec2 = as_float (par.decay[0]);
     dec2 *= dec2;
-    auto gains
-      = rev.get_gain_for_rt60 (sl<6, 9, 12, 15> {}, 0.25f + dec2 * 20.f, srate);
-    T flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
-    T glo = load_float<T> (0.88f + upar.lf_amt * 0.1f);
-    T fhi = load_float<T> (0.82f - upar.hf_amt * upar.hf_amt * 0.2f);
-    T ghi = load_float<T> (0.3f + dec2 * 0.25f + upar.hf_amt * 0.4499f);
+    auto gains = _eng.get_gain_for_rt60 (
+      sl<6, 9, 12, 15> {}, 0.25f + dec2 * 20.f, srate);
+    sample flo = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
+    sample glo = load_float<sample> (0.88f + upar.lf_amt * 0.1f);
+    sample fhi = load_float<sample> (0.82f - upar.hf_amt * upar.hf_amt * 0.2f);
+    sample ghi
+      = load_float<sample> (0.3f + dec2 * 0.25f + upar.hf_amt * 0.4499f);
 
     xspan comb_fb {tmp1.data(), io.size()};
-    rev.fetch_block (sl<6> {}, comb_fb, lfo1, gains[0]);
-    rev.run (sl<7> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<6> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    rev.run (sl<8> {}, comb_fb.to_const(), overwrite, r, l);
+    _eng.fetch_block (sl<6> {}, comb_fb, lfo1, gains[0]);
+    _eng.run (sl<7> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<6> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    _eng.run (sl<8> {}, comb_fb.to_const(), overwrite, r, l);
 
-    rev.fetch_block (sl<9> {}, comb_fb, lfo2, gains[1]);
-    rev.run (sl<10> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<9> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    rev.run (sl<11> {}, comb_fb.to_const(), add_to, r, l);
+    _eng.fetch_block (sl<9> {}, comb_fb, lfo2, gains[1]);
+    _eng.run (sl<10> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<9> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    _eng.run (sl<11> {}, comb_fb.to_const(), add_to, r, l);
 
-    rev.fetch_block (sl<12> {}, comb_fb, lfo3, gains[2]);
-    rev.run (sl<13> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<12> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    rev.run (sl<14> {}, comb_fb.to_const(), add_to, r, l);
+    _eng.fetch_block (sl<12> {}, comb_fb, lfo3, gains[2]);
+    _eng.run (sl<13> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<12> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    _eng.run (sl<14> {}, comb_fb.to_const(), add_to, r, l);
 
-    rev.fetch_block (sl<15> {}, comb_fb, lfo4, gains[3]);
-    rev.run (sl<16> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<15> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    rev.run (sl<17> {}, comb_fb.to_const(), add_to, r, l);
+    _eng.fetch_block (sl<15> {}, comb_fb, lfo4, gains[3]);
+    _eng.run (sl<16> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<15> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    _eng.run (sl<17> {}, comb_fb.to_const(), add_to, r, l);
     xspan eramt {tmp1.data(), io.size()};
     span_visit (xspan {par.character.data(), io.size()}, [&] (auto c, uint i) {
-      c        = (T) ((c - rev.one * 0.5_r) * 2_r);
-      c        = (T) ((rev.one - c * c) * 0.4_r);
+      c        = (sample) ((c - _eng.one * 0.5_r) * 2_r);
+      c        = (sample) ((_eng.one - c * c) * 0.4_r);
       eramt[i] = c;
     });
 
-    rev.run (sl<18> {}, l);
-    rev.run (sl<19> {}, l);
-    rev.run (sl<20> {}, lfo1, in.to_const(), par.character);
-    crossfade (l, lfo1, eramt, rev.one);
+    _eng.run (sl<18> {}, l);
+    _eng.run (sl<19> {}, l);
+    _eng.run (sl<20> {}, lfo1, in.to_const(), par.character);
+    crossfade (l, lfo1, eramt, _eng.one);
 
-    rev.run (sl<21> {}, r);
-    rev.run (sl<22> {}, r);
-    rev.run (sl<23> {}, in, par.character);
-    crossfade (r, in, eramt, rev.one);
+    _eng.run (sl<21> {}, r);
+    _eng.run (sl<22> {}, r);
+    _eng.run (sl<23> {}, in, par.character);
+    crossfade (r, in, eramt, _eng.one);
 
     span_visit (io, [&] (auto& spls, uint i) {
       spls[0] = l[i];
@@ -2023,12 +2239,29 @@ struct dre2000c : public algorithm {
     });
   }
   //----------------------------------------------------------------------------
+private:
+  engine _eng;
 };
 //------------------------------------------------------------------------------
-struct dre2000d : public algorithm {
+template <delay::data_type Dt>
+class dre2000d : public algorithm {
+private:
+  using engine
+    = detail::lofiverb::algo_engine<dre2000d<Dt>, Dt, max_block_size>;
+
+public:
   //----------------------------------------------------------------------------
-  template <delay::data_type Dt>
-  using engine = detail::lofiverb::engine<dre2000d, Dt, max_block_size>;
+  static constexpr auto get_sample_rates()
+  {
+    return make_array (16800, 21000, 25200, 32400, 40320, 57600, 57600);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint get_required_bytes()
+  {
+    return engine::get_required_bytes();
+  }
+  //----------------------------------------------------------------------------
+  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
@@ -2080,79 +2313,81 @@ struct dre2000d : public algorithm {
     );
   }
   //----------------------------------------------------------------------------
-  template <class T, delay::data_type Dt>
-  static void process_block (
-    engine<Dt>&                  rev,
+
+  using value_type = typename engine::value_type;
+  using sample     = value_type;
+  //----------------------------------------------------------------------------
+  void process_block (
     lfo<4>&                      lfo_obj,
-    xspan<std::array<T, 2>>      io,
-    smoothed_parameters<T>&      par,
+    xspan<std::array<sample, 2>> io,
+    smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
     uint                         srate)
   {
-    block_arr<T> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, lfo4, tmp1, tmp2;
-    xspan        in {in_mem.data(), io.size()};
-    xspan        l {l_mem.data(), io.size()};
-    xspan        r {r_mem.data(), io.size()};
+    block_arr<sample> in_mem, l_mem, r_mem, lfo1, lfo2, lfo3, lfo4, tmp1, tmp2;
+    xspan             in {in_mem.data(), io.size()};
+    xspan             l {l_mem.data(), io.size()};
+    xspan             r {r_mem.data(), io.size()};
 
-    rev.run (sl<0> {}, in, [&] (auto spl, uint i) {
-      auto lfo = tick_lfo<T> (lfo_obj);
-      lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
-      lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
-      lfo3[i]  = (T) (T {lfo[2]} * par.mod[i]);
-      lfo4[i]  = (T) (T {lfo[3]} * par.mod[i]);
+    _eng.run (sl<0> {}, in, [&] (auto spl, uint i) {
+      auto lfo = tick_lfo<sample> (lfo_obj);
+      lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
+      lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
+      lfo3[i]  = (sample) (sample {lfo[2]} * par.mod[i]);
+      lfo4[i]  = (sample) (sample {lfo[3]} * par.mod[i]);
       return (io[i][0] + io[i][1]) * 0.25_r;
     });
-    rev.run (sl<1> {}, in);
-    rev.run (sl<2> {}, in);
-    rev.run (sl<3> {}, in);
-    rev.run (sl<4> {}, in);
-    rev.run (sl<5> {}, in);
+    _eng.run (sl<1> {}, in);
+    _eng.run (sl<2> {}, in);
+    _eng.run (sl<3> {}, in);
+    _eng.run (sl<4> {}, in);
+    _eng.run (sl<5> {}, in);
 
     float dec2 = as_float (par.decay[0]);
     dec2 *= dec2;
     auto gains
-      = rev.get_gain_for_rt60 (sl<6, 9, 12, 15> {}, 0.25f + dec2 * 5.f, srate);
-    T flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
-    T glo = load_float<T> (0.80f + upar.lf_amt * 0.199f);
-    T fhi = load_float<T> (0.82f - upar.hf_amt * upar.hf_amt * 0.2f);
-    T ghi = load_float<T> (0.4f + dec2 * 0.1f + upar.hf_amt * 0.49f);
+      = _eng.get_gain_for_rt60 (sl<6, 9, 12, 15> {}, 0.25f + dec2 * 5.f, srate);
+    sample flo = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
+    sample glo = load_float<sample> (0.80f + upar.lf_amt * 0.199f);
+    sample fhi = load_float<sample> (0.82f - upar.hf_amt * upar.hf_amt * 0.2f);
+    sample ghi = load_float<sample> (0.4f + dec2 * 0.1f + upar.hf_amt * 0.49f);
 
     xspan comb_fb {tmp1.data(), io.size()};
-    rev.fetch_block (sl<6> {}, comb_fb, lfo1, gains[0]);
-    rev.run (sl<7> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<6> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    rev.run (sl<8> {}, comb_fb.to_const(), overwrite, r, l);
+    _eng.fetch_block (sl<6> {}, comb_fb, lfo1, gains[0]);
+    _eng.run (sl<7> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<6> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    _eng.run (sl<8> {}, comb_fb.to_const(), overwrite, r, l);
 
-    rev.fetch_block (sl<9> {}, comb_fb, blank, gains[1]);
-    rev.run (sl<10> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<9> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    rev.run (sl<11> {}, comb_fb.to_const(), add_to, r, l);
+    _eng.fetch_block (sl<9> {}, comb_fb, blank, gains[1]);
+    _eng.run (sl<10> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<9> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    _eng.run (sl<11> {}, comb_fb.to_const(), add_to, r, l);
 
-    rev.fetch_block (sl<12> {}, comb_fb, blank, gains[2]);
-    rev.run (sl<13> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<12> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    rev.run (sl<14> {}, comb_fb.to_const(), add_to, r, l);
+    _eng.fetch_block (sl<12> {}, comb_fb, blank, gains[2]);
+    _eng.run (sl<13> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<12> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    _eng.run (sl<14> {}, comb_fb.to_const(), add_to, r, l);
 
-    rev.fetch_block (sl<15> {}, comb_fb, lfo4, gains[3]);
-    rev.run (sl<16> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<15> {}, comb_fb, comb_fb.to_const(), in.to_const());
-    rev.run (sl<17> {}, comb_fb.to_const(), add_to, r, l);
+    _eng.fetch_block (sl<15> {}, comb_fb, lfo4, gains[3]);
+    _eng.run (sl<16> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<15> {}, comb_fb, comb_fb.to_const(), in.to_const());
+    _eng.run (sl<17> {}, comb_fb.to_const(), add_to, r, l);
     xspan eramt {tmp1.data(), io.size()};
     span_visit (xspan {par.character.data(), io.size()}, [&] (auto c, uint i) {
-      c        = (T) ((c - rev.one * 0.5_r) * 2_r);
-      c        = (T) ((rev.one - c * c) * 0.4_r);
+      c        = (sample) ((c - _eng.one * 0.5_r) * 2_r);
+      c        = (sample) ((_eng.one - c * c) * 0.4_r);
       eramt[i] = c;
     });
 
-    rev.run (sl<18> {}, l, lfo2);
-    rev.run (sl<19> {}, l);
-    rev.run (sl<20> {}, lfo1, in.to_const(), par.character);
-    crossfade (l, lfo1, eramt, rev.one);
+    _eng.run (sl<18> {}, l, lfo2);
+    _eng.run (sl<19> {}, l);
+    _eng.run (sl<20> {}, lfo1, in.to_const(), par.character);
+    crossfade (l, lfo1, eramt, _eng.one);
 
-    rev.run (sl<21> {}, r, lfo3);
-    rev.run (sl<22> {}, r);
-    rev.run (sl<23> {}, in, par.character);
-    crossfade (r, in, eramt, rev.one);
+    _eng.run (sl<21> {}, r, lfo3);
+    _eng.run (sl<22> {}, r);
+    _eng.run (sl<23> {}, in, par.character);
+    crossfade (r, in, eramt, _eng.one);
 
     span_visit (io, [&] (auto& spls, uint i) {
       spls[0] = l[i];
@@ -2160,12 +2395,29 @@ struct dre2000d : public algorithm {
     });
   }
   //----------------------------------------------------------------------------
+private:
+  engine _eng;
 };
 //------------------------------------------------------------------------------
-struct rev5_l_hall : public algorithm {
+template <delay::data_type Dt>
+class rev5_l_hall : public algorithm {
+private:
+  using engine
+    = detail::lofiverb::algo_engine<rev5_l_hall<Dt>, Dt, max_block_size>;
+
+public:
   //----------------------------------------------------------------------------
-  template <delay::data_type Dt>
-  using engine = detail::lofiverb::engine<rev5_l_hall, Dt, max_block_size>;
+  static constexpr auto get_sample_rates()
+  {
+    return make_array (25200, 33600, 40320, 44100, 45000, 52500, 57600);
+  }
+  //----------------------------------------------------------------------------
+  static constexpr uint get_required_bytes()
+  {
+    return engine::get_required_bytes();
+  }
+  //----------------------------------------------------------------------------
+  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
   //----------------------------------------------------------------------------
   static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
   {
@@ -2260,16 +2512,17 @@ struct rev5_l_hall : public algorithm {
     );
   }
   //----------------------------------------------------------------------------
-  template <class T, delay::data_type Dt>
-  static void process_block (
-    engine<Dt>&                  rev,
+  using value_type = typename engine::value_type;
+  using sample     = value_type;
+  //----------------------------------------------------------------------------
+  void process_block (
     lfo<4>&                      lfo_obj,
-    xspan<std::array<T, 2>>      io,
-    smoothed_parameters<T>&      par,
+    xspan<std::array<sample, 2>> io,
+    smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
     uint                         srate)
   {
-    block_arr<T> in_mem, main_mem, sub_mem, l_mem, r_mem, lfo1, lfo2, lfo3,
+    block_arr<sample> in_mem, main_mem, sub_mem, l_mem, r_mem, lfo1, lfo2, lfo3,
       lfo4, tmp1, tmp2;
     xspan main {main_mem.data(), io.size()};
     xspan sub {sub_mem.data(), io.size()};
@@ -2277,128 +2530,140 @@ struct rev5_l_hall : public algorithm {
     xspan l {l_mem.data(), io.size()};
     xspan r {r_mem.data(), io.size()};
 
-    rev.run (sl<0> {}, in, [&] (auto spl, uint i) {
-      auto lfo = tick_lfo<T> (lfo_obj);
-      lfo1[i]  = (T) (T {lfo[0]} * par.mod[i]);
-      lfo2[i]  = (T) (T {lfo[1]} * par.mod[i]);
-      lfo3[i]  = (T) (T {lfo[2]} * par.mod[i]);
-      lfo4[i]  = (T) (T {lfo[3]} * par.mod[i]);
+    _eng.run (sl<0> {}, in, [&] (auto spl, uint i) {
+      auto lfo = tick_lfo<sample> (lfo_obj);
+      lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
+      lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
+      lfo3[i]  = (sample) (sample {lfo[2]} * par.mod[i]);
+      lfo4[i]  = (sample) (sample {lfo[3]} * par.mod[i]);
       return (io[i][0] + io[i][1]) * 0.25_r;
     });
-    rev.run (sl<1> {}, in);
-    rev.run (sl<2> {}, in);
+    _eng.run (sl<1> {}, in);
+    _eng.run (sl<2> {}, in);
     xspan_memdump (main.data(), in);
     xspan_memdump (sub.data(), in);
-    rev.run (sl<3> {}, main, [&] (auto v, uint i) {
+    _eng.run (sl<3> {}, main, [&] (auto v, uint i) {
       auto c  = par.character[i];
-      tmp1[i] = (T) (0.5_r + 0.2_r * c); // cg3
-      tmp2[i] = (T) (0.35_r + 0.7_r * clamp (c, 0._r, 0.4999_r)); // cg2
+      tmp1[i] = (sample) (0.5_r + 0.2_r * c); // cg3
+      tmp2[i] = (sample) (0.35_r + 0.7_r * clamp (c, 0._r, 0.4999_r)); // cg2
       return v * 0.25_r;
     });
-    rev.run (sl<4> {}, main, blank, tmp1);
-    rev.run (sl<5> {}, main, blank, tmp2);
+    _eng.run (sl<4> {}, main, blank, tmp1);
+    _eng.run (sl<5> {}, main, blank, tmp2);
 
     float dec2 = as_float (par.decay[0]);
     dec2 *= dec2;
-    auto gains = rev.get_gain_for_rt60 (
+    auto gains = _eng.get_gain_for_rt60 (
       sl<6, 9, 12, 15, 18> {}, 1.f + dec2 * 10.f, srate);
-    T flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
-    T glo = load_float<T> (0.9f + upar.lf_amt * 0.09f);
-    T fhi = load_float<T> (0.82f - upar.hf_amt * upar.hf_amt * 0.1f);
-    T ghi = load_float<T> (0.75f + upar.hf_amt * 0.2f);
+    sample flo = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
+    sample glo = load_float<sample> (0.9f + upar.lf_amt * 0.09f);
+    sample fhi = load_float<sample> (0.82f - upar.hf_amt * upar.hf_amt * 0.1f);
+    sample ghi = load_float<sample> (0.75f + upar.hf_amt * 0.2f);
 
     xspan comb_fb {tmp1.data(), io.size()};
-    rev.fetch_block (sl<6> {}, comb_fb, lfo1, gains[0]);
-    rev.run (sl<7> {}, comb_fb, flo, glo, fhi, rev.one, (T) (ghi * 0.85_r));
-    rev.push (sl<6> {}, comb_fb, comb_fb.to_const(), main.to_const());
-    rev.run (sl<8> {}, comb_fb.to_const(), overwrite, l, r);
+    _eng.fetch_block (sl<6> {}, comb_fb, lfo1, gains[0]);
+    _eng.run (
+      sl<7> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.85_r));
+    _eng.push (sl<6> {}, comb_fb, comb_fb.to_const(), main.to_const());
+    _eng.run (sl<8> {}, comb_fb.to_const(), overwrite, l, r);
 
-    rev.fetch_block (sl<9> {}, comb_fb, lfo3, gains[1]);
-    rev.run (sl<10> {}, comb_fb, flo, glo, fhi, rev.one, (T) (ghi * 0.9_r));
-    rev.push (sl<9> {}, comb_fb, comb_fb.to_const(), main.to_const());
-    rev.run (sl<11> {}, comb_fb.to_const(), add_to, l, r);
+    _eng.fetch_block (sl<9> {}, comb_fb, lfo3, gains[1]);
+    _eng.run (
+      sl<10> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.9_r));
+    _eng.push (sl<9> {}, comb_fb, comb_fb.to_const(), main.to_const());
+    _eng.run (sl<11> {}, comb_fb.to_const(), add_to, l, r);
 
-    rev.fetch_block (sl<12> {}, comb_fb, blank, gains[2]);
-    rev.run (sl<13> {}, comb_fb, flo, glo, fhi, rev.one, (T) (ghi * 0.95_r));
-    rev.push (sl<12> {}, comb_fb, comb_fb.to_const(), main.to_const());
-    rev.run (sl<14> {}, comb_fb.to_const(), add_to, l, r);
+    _eng.fetch_block (sl<12> {}, comb_fb, blank, gains[2]);
+    _eng.run (
+      sl<13> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.95_r));
+    _eng.push (sl<12> {}, comb_fb, comb_fb.to_const(), main.to_const());
+    _eng.run (sl<14> {}, comb_fb.to_const(), add_to, l, r);
 
-    rev.fetch_block (sl<15> {}, comb_fb, blank, gains[3]);
-    rev.run (sl<16> {}, comb_fb, flo, glo, fhi, rev.one, (T) (ghi * 0.97_r));
-    rev.push (sl<15> {}, comb_fb, comb_fb.to_const(), main.to_const());
-    rev.run (sl<17> {}, comb_fb.to_const(), add_to, l, r);
+    _eng.fetch_block (sl<15> {}, comb_fb, blank, gains[3]);
+    _eng.run (
+      sl<16> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.97_r));
+    _eng.push (sl<15> {}, comb_fb, comb_fb.to_const(), main.to_const());
+    _eng.run (sl<17> {}, comb_fb.to_const(), add_to, l, r);
 
-    rev.fetch_block (sl<18> {}, comb_fb, blank, gains[4]);
-    rev.run (sl<19> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<18> {}, comb_fb, comb_fb.to_const(), main.to_const());
-    rev.run (sl<20> {}, comb_fb.to_const(), add_to, l, r);
+    _eng.fetch_block (sl<18> {}, comb_fb, blank, gains[4]);
+    _eng.run (sl<19> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<18> {}, comb_fb, comb_fb.to_const(), main.to_const());
+    _eng.run (sl<20> {}, comb_fb.to_const(), add_to, l, r);
 
-    rev.run (sl<21> {}, sub, par.character);
+    _eng.run (sl<21> {}, sub, par.character);
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       auto c  = par.character[i];
-      tmp1[i] = (T) (0.5_r + 0.2_r * c); // cg3
+      tmp1[i] = (sample) (0.5_r + 0.2_r * c); // cg3
       // tmp2 still not overwritten...
-      // tmp2[i] = (T) (0.35_r + 0.999_r * clamp (c, 0._r, 0.333_r)); //
+      // tmp2[i] = (sample) (0.35_r + 0.999_r * clamp (c, 0._r, 0.333_r)); //
       // cg2
     }
-    rev.run (sl<22> {}, main, tmp2);
-    rev.run (sl<23> {}, main, tmp1);
-    gains = rev.get_gain_for_rt60 (
+    _eng.run (sl<22> {}, main, tmp2);
+    _eng.run (sl<23> {}, main, tmp1);
+    gains = _eng.get_gain_for_rt60 (
       sl<24, 27, 30, 33, 36> {}, 1.f + dec2 * 6.f, srate);
-    flo = load_float<T> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
-    glo = load_float<T> (0.9f + upar.lf_amt * 0.04f);
-    fhi = load_float<T> (0.82f - upar.hf_amt * upar.hf_amt * 0.2f);
-    ghi = load_float<T> (0.7f + upar.hf_amt * 0.25f);
+    flo = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
+    glo = load_float<sample> (0.9f + upar.lf_amt * 0.04f);
+    fhi = load_float<sample> (0.82f - upar.hf_amt * upar.hf_amt * 0.2f);
+    ghi = load_float<sample> (0.7f + upar.hf_amt * 0.25f);
 
     // sub  reverb
-    rev.fetch_block (sl<24> {}, comb_fb, lfo2, gains[0]);
-    rev.run (sl<25> {}, comb_fb, flo, glo, fhi, rev.one, (T) (ghi * 0.9_r));
-    rev.push (sl<24> {}, comb_fb, comb_fb.to_const(), sub.to_const());
-    rev.run (sl<26> {}, comb_fb.to_const(), add_to, l, r);
+    _eng.fetch_block (sl<24> {}, comb_fb, lfo2, gains[0]);
+    _eng.run (
+      sl<25> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.9_r));
+    _eng.push (sl<24> {}, comb_fb, comb_fb.to_const(), sub.to_const());
+    _eng.run (sl<26> {}, comb_fb.to_const(), add_to, l, r);
 
-    rev.fetch_block (sl<27> {}, comb_fb, lfo4, gains[1]);
-    rev.run (sl<28> {}, comb_fb, flo, glo, fhi, rev.one, (T) (ghi * 0.93_r));
-    rev.push (sl<27> {}, comb_fb, comb_fb.to_const(), sub.to_const());
-    rev.run (sl<29> {}, comb_fb.to_const(), add_to, l, r);
+    _eng.fetch_block (sl<27> {}, comb_fb, lfo4, gains[1]);
+    _eng.run (
+      sl<28> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.93_r));
+    _eng.push (sl<27> {}, comb_fb, comb_fb.to_const(), sub.to_const());
+    _eng.run (sl<29> {}, comb_fb.to_const(), add_to, l, r);
 
-    rev.fetch_block (sl<30> {}, comb_fb, blank, gains[2]);
-    rev.run (sl<31> {}, comb_fb, flo, glo, fhi, rev.one, (T) (ghi * 0.97_r));
-    rev.push (sl<30> {}, comb_fb, comb_fb.to_const(), sub.to_const());
-    rev.run (sl<32> {}, comb_fb.to_const(), add_to, l, r);
+    _eng.fetch_block (sl<30> {}, comb_fb, blank, gains[2]);
+    _eng.run (
+      sl<31> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.97_r));
+    _eng.push (sl<30> {}, comb_fb, comb_fb.to_const(), sub.to_const());
+    _eng.run (sl<32> {}, comb_fb.to_const(), add_to, l, r);
 
-    rev.fetch_block (sl<33> {}, comb_fb, blank, gains[3]);
-    rev.run (sl<34> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<33> {}, comb_fb, comb_fb.to_const(), sub.to_const());
-    rev.run (sl<35> {}, comb_fb.to_const(), add_to, l, r);
+    _eng.fetch_block (sl<33> {}, comb_fb, blank, gains[3]);
+    _eng.run (sl<34> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<33> {}, comb_fb, comb_fb.to_const(), sub.to_const());
+    _eng.run (sl<35> {}, comb_fb.to_const(), add_to, l, r);
 
-    rev.fetch_block (sl<36> {}, comb_fb, blank, gains[4]);
-    rev.run (sl<37> {}, comb_fb, flo, glo, fhi, rev.one, ghi);
-    rev.push (sl<36> {}, comb_fb, comb_fb.to_const(), sub.to_const());
-    rev.run (sl<38> {}, comb_fb.to_const(), add_to, l, r);
+    _eng.fetch_block (sl<36> {}, comb_fb, blank, gains[4]);
+    _eng.run (sl<37> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
+    _eng.push (sl<36> {}, comb_fb, comb_fb.to_const(), sub.to_const());
+    _eng.run (sl<38> {}, comb_fb.to_const(), add_to, l, r);
 
-    rev.run (sl<39> {}, l, blank, [&] (uint i) {
-      return (T) (0.65_r + 0.1_r * lfo1[i]);
+    _eng.run (sl<39> {}, l, blank, [&] (uint i) {
+      return (sample) (0.65_r + 0.1_r * lfo1[i]);
     });
-    rev.run (sl<40> {}, l, blank, [&] (uint i) {
+    _eng.run (sl<40> {}, l, blank, [&] (uint i) {
       auto c  = par.character[i];
-      tmp1[i] = (T) (0.325_r + 0.999_r * clamp (c, 0._r, 0.333_r)); // cg1
-      return (T) (tmp1[i] + 0.05_r * lfo2[i]);
+      tmp1[i] = (sample) (0.325_r + 0.999_r * clamp (c, 0._r, 0.333_r)); // cg1
+      return (sample) (tmp1[i] + 0.05_r * lfo2[i]);
     });
-    rev.run (sl<41> {}, r, blank, [&] (uint i) {
-      return (T) (0.65_r + 0.1_r * lfo3[i]);
+    _eng.run (sl<41> {}, r, blank, [&] (uint i) {
+      return (sample) (0.65_r + 0.1_r * lfo3[i]);
     });
-    rev.run (sl<42> {}, r, blank, [&] (uint i) {
-      return (T) (tmp1[i] + 0.05_r * lfo4[i]);
+    _eng.run (sl<42> {}, r, blank, [&] (uint i) {
+      return (sample) (tmp1[i] + 0.05_r * lfo4[i]);
     });
 
-    rev.run (sl<43> {}, in.to_const(), add_to, l, r); // ER
+    _eng.run (sl<43> {}, in.to_const(), add_to, l, r); // ER
     span_visit (io, [&] (auto& spls, uint i) {
       spls[0] = l[i];
       spls[1] = r[i];
     });
   }
   //----------------------------------------------------------------------------
+private:
+  engine _eng;
 };
+//------------------------------------------------------------------------------
+
+#endif // LOFIVERB_DEBUG_ALGO
 
 }}} // namespace artv::detail::lofiverb

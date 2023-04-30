@@ -943,7 +943,7 @@ struct stage_list {}; // stage list, used for avoiding the template keyword
 //------------------------------------------------------------------------------
 // A class whose only purpose is to decouple the index template parameters on
 // "engine" to try to reduce code-bloat and probably compile time;
-class engine_untemplated {
+class algo_engine_untemplated {
 public:
   //----------------------------------------------------------------------------
   template <class T, std::size_t N>
@@ -1460,7 +1460,7 @@ public:
 // when building reverbs based on allpass loops. Both on fixed and floating
 // point.
 template <class Algorithm, delay::data_type Data_type, uint Max_block_size>
-class engine : private engine_untemplated {
+class algo_engine : private algo_engine_untemplated {
 private:
   //----------------------------------------------------------------------------
   static constexpr auto one_impl()
@@ -2410,7 +2410,7 @@ private:
   }
   //----------------------------------------------------------------------------
   using block_array = std::array<value_type, max_block_size>;
-  using base        = engine_untemplated;
+  using base        = algo_engine_untemplated;
 
   using indexes = mp11::mp_iota_c<spec::size()>;
 
