@@ -123,15 +123,13 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   l1 = ap2_att (l1, 368, 2032, 0.406, 0.25, att2, att1);
   n45_49 = easyapv_del_idx;
   l1 = delay (l1, 500);
-  l1 = l1.ap3_att_lp_mod3(
+  l1 = l1.ap3_att_mod3(
     l1,
-    1340, 688, 1452 - 3,
+    1340, 688, 1452 + 5,
     0.406, 0.25, 0.25,
     att2, att1, att1,
-    0.812,
-//    0.219,
     lfo.ret.ptr[2] * mod,
-    3);
+    1);
   n55_58 = easyapv_del_idx;
   l1 = delay (l1, 16);
 
@@ -148,13 +146,11 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   l2 = ap2_att (l2, 612, 1944, 0.406, 0.25, att2, att1);
   n27_31 = easyapv_del_idx;
   l2 = delay (l2, 344);
-  l2 = l2.ap3_att_lp_mod3(
+  l2 = l2.ap3_att_mod3(
     l2,
     1264, 816, 1212 - 60,
     0.406, 0.25, 0.25,
     att2, att1, att1,
-    0.812,
-//    0.219,
     lfo.ret.ptr[0] * mod,
     61);
   n37_39 = easyapv_del_idx;
