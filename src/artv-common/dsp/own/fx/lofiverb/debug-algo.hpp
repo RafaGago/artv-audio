@@ -73,20 +73,20 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
+  void reset (xspan<u8> mem)
+  {
+    _eng.reset_memory (mem);
+    _lfo.reset();
+    _lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
+  }
   //----------------------------------------------------------------------------
-  static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
+  void mod_changed (float mod, float t_spl)
   {
     auto f1 = 1.73f - mod * 0.63f;
     auto f2 = 1.53f - mod * 0.43f;
-    lfo.set_freq (f32_x4 {f1, f1, f1, f1}, t_spl);
+    _lfo.set_freq (f32_x4 {f1, f1, f1, f1}, t_spl);
   }
   //----------------------------------------------------------------------------
-  static void reset_lfo_phase (lfo<4>& lfo)
-  {
-    lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
-  }
-  //------------------------------------------------------------------------------
   static constexpr auto get_spec()
   {
     return make_array<stage_data> (
@@ -134,7 +134,6 @@ public:
   using sample     = value_type;
   //----------------------------------------------------------------------------
   void process_block (
-    lfo<4>&                      lfo_obj,
     xspan<std::array<sample, 2>> io,
     smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
@@ -173,7 +172,7 @@ public:
       s[i]     = (sample) ((l[i] - r[i]) * 0.5_r);
       k1[i]    = (sample) (0.4_r + par.character[i] * 0.2_r);
       k2[i]    = (sample) (0.4_r + par.character[i] * 0.15_r);
-      auto lfo = tick_lfo<sample> (lfo_obj);
+      auto lfo = tick_lfo<sample> (_lfo);
       lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
       lfo2[i]  = (sample) (sample {lfo[2]} * par.mod[i]);
       v        = (sample) (v + l[i] * 0.75_r + m[i] * 0.25_r);
@@ -275,6 +274,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   engine _eng;
+  lfo<4> _lfo;
 };
 //------------------------------------------------------------------------------
 

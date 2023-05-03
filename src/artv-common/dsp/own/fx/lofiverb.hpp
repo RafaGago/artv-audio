@@ -364,7 +364,7 @@ private:
         using algo_type = typename std::decay_t<decltype (algo)>;
         if constexpr (std::is_same_v<fixpt_t, typename algo_type::value_type>) {
           algo.process_block (
-            _lfo, xspan {wet.data(), io.size()}, pars, _param.algo, _srate);
+            xspan {wet.data(), io.size()}, pars, _param.algo, _srate);
         }
       },
       _algorithms);
@@ -431,7 +431,7 @@ private:
       [&, this] (auto& algo) {
         using algo_type = typename std::decay_t<decltype (algo)>;
         if constexpr (std::is_same_v<float, typename algo_type::value_type>) {
-          algo.process_block (_lfo, io, pars, _param.algo, _srate);
+          algo.process_block (io, pars, _param.algo, _srate);
         }
       },
       _algorithms);
@@ -467,8 +467,7 @@ private:
           _srate = srate;
           update_internal_srate (srate, (srate / 20) * 9);
         }
-        algo.reset_memory (_mem_reverb);
-        algo.reset_lfo_phase (_lfo);
+        algo.reset (_mem_reverb);
       },
       _algorithms);
     _n_processed_samples = 0; // trigger the control block on first sample
@@ -501,7 +500,6 @@ private:
     _t_spl        = 1.f / srate;
 
     _ducker.reset();
-    _lfo.reset();
     _param_smooth.reset_srate (_t_spl);
 
     // resize memory
@@ -534,7 +532,7 @@ private:
   {
     std::visit (
       [this] (auto& algo) {
-        algo.reset_lfo_freq (_lfo, _param_smooth.target().mod, _t_spl);
+        algo.mod_changed (_param_smooth.target().mod, _t_spl);
       },
       _algorithms);
   }
@@ -574,8 +572,6 @@ private:
 
   block_resampler<float, 2>             _resampler {};
   static_delay_line<float, true, false> _predelay;
-
-  lfo<4> _lfo;
 
   using algorithms_type = std::variant<
 #ifndef LOFIVERB_DEBUG_ALGO

@@ -23,18 +23,18 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
-  //----------------------------------------------------------------------------
-  static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
+  void reset (xspan<u8> mem)
   {
-    auto f = 0.2f + mod * 0.2f;
-    lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
+    _eng.reset_memory (mem);
+    _lfo.reset();
+    _lfo.set_phase (
+      phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
   }
   //----------------------------------------------------------------------------
-  static void reset_lfo_phase (lfo<4>& lfo)
+  void mod_changed (float mod, float t_spl)
   {
-    lfo.set_phase (
-      phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    auto f = 0.2f + mod * 0.2f;
+    _lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
   }
   //----------------------------------------------------------------------------
   static constexpr auto get_spec()
@@ -77,7 +77,6 @@ public:
   using sample     = value_type;
   //----------------------------------------------------------------------------
   void process_block (
-    lfo<4>&                      lfo_obj,
     xspan<std::array<sample, 2>> io,
     smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
@@ -103,7 +102,7 @@ public:
       sig[i]
         = (sample) (((spl[0] + spl[1]) * 0.25_r)); // gain = 0.5 + feedback = 1
       // LFO
-      auto lfo = tick_lfo<sample> (lfo_obj);
+      auto lfo = tick_lfo<sample> (_lfo);
       lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
       lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
       // decay fixup
@@ -192,6 +191,7 @@ public:
 
 private:
   engine _eng;
+  lfo<4> _lfo;
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
@@ -212,18 +212,18 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
-  //----------------------------------------------------------------------------
-  static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
+  void reset (xspan<u8> mem)
   {
-    auto f = 0.3f + mod * 0.1f;
-    lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
+    _eng.reset_memory (mem);
+    _lfo.reset();
+    _lfo.set_phase (
+      phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
   }
   //----------------------------------------------------------------------------
-  static void reset_lfo_phase (lfo<4>& lfo)
+  void mod_changed (float mod, float t_spl)
   {
-    lfo.set_phase (
-      phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    auto f = 0.3f + mod * 0.1f;
+    _lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
   }
   //------------------------------------------------------------------------------
   static constexpr auto get_spec()
@@ -264,7 +264,6 @@ public:
   using sample     = value_type;
   //----------------------------------------------------------------------------
   void process_block (
-    lfo<4>&                      lfo_obj,
     xspan<std::array<sample, 2>> io,
     smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
@@ -330,7 +329,7 @@ public:
       auto k = _eng.one - c;
       v      = (sample) (k * v + loop[i] * c); // L done
       // unrelated but done here to skip one iteration
-      auto lfo = tick_lfo<sample> (lfo_obj);
+      auto lfo = tick_lfo<sample> (_lfo);
       lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
       lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
     });
@@ -362,6 +361,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   engine _eng;
+  lfo<4> _lfo;
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
@@ -382,18 +382,18 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
-  //----------------------------------------------------------------------------
-  static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
+  void reset (xspan<u8> mem)
   {
-    auto f = 0.25f + mod * 0.75f;
-    lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
+    _eng.reset_memory (mem);
+    _lfo.reset();
+    _lfo.set_phase (
+      phase<4> {phase_tag::normalized {}, 0.f, 0.3333f, 0.6666f, 0.75f});
   }
   //----------------------------------------------------------------------------
-  static void reset_lfo_phase (lfo<4>& lfo)
+  void mod_changed (float mod, float t_spl)
   {
-    lfo.set_phase (
-      phase<4> {phase_tag::normalized {}, 0.f, 0.3333f, 0.6666f, 0.75f});
+    auto f = 0.25f + mod * 0.75f;
+    _lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
   }
   //------------------------------------------------------------------------------
   static constexpr auto get_spec()
@@ -460,7 +460,6 @@ public:
   using sample     = value_type;
   //----------------------------------------------------------------------------
   void process_block (
-    lfo<4>&                      lfo_obj,
     xspan<std::array<sample, 2>> io,
     smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
@@ -472,7 +471,7 @@ public:
     xspan             r {r_mem.data(), io.size()};
 
     _eng.run (sl<0> {}, in, [&] (auto spl, uint i) {
-      auto lfo = tick_lfo<sample> (lfo_obj);
+      auto lfo = tick_lfo<sample> (_lfo);
       lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
       lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
       lfo3[i]  = (sample) (sample {lfo[2]} * par.mod[i]);
@@ -539,6 +538,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   engine _eng;
+  lfo<4> _lfo;
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
@@ -559,18 +559,18 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
-  //----------------------------------------------------------------------------
-  static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
+  void reset (xspan<u8> mem)
   {
-    auto f = 0.25f + mod * 0.15f;
-    lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
+    _eng.reset_memory (mem);
+    _lfo.reset();
+    _lfo.set_phase (
+      phase<4> {phase_tag::normalized {}, 0.f, 0.3333f, 0.6666f, 0.75f});
   }
   //----------------------------------------------------------------------------
-  static void reset_lfo_phase (lfo<4>& lfo)
+  void mod_changed (float mod, float t_spl)
   {
-    lfo.set_phase (
-      phase<4> {phase_tag::normalized {}, 0.f, 0.3333f, 0.6666f, 0.75f});
+    auto f = 0.25f + mod * 0.15f;
+    _lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
   }
   //------------------------------------------------------------------------------
   static constexpr auto get_spec()
@@ -638,7 +638,6 @@ public:
   using sample     = value_type;
   //----------------------------------------------------------------------------
   void process_block (
-    lfo<4>&                      lfo_obj,
     xspan<std::array<sample, 2>> io,
     smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
@@ -650,7 +649,7 @@ public:
     xspan             r {r_mem.data(), io.size()};
 
     _eng.run (sl<0> {}, in, [&] (auto spl, uint i) {
-      auto lfo = tick_lfo<sample> (lfo_obj);
+      auto lfo = tick_lfo<sample> (_lfo);
       lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
       lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
       lfo3[i]  = (sample) (sample {lfo[2]} * par.mod[i]);
@@ -718,6 +717,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   engine _eng;
+  lfo<4> _lfo;
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
@@ -738,18 +738,18 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
-  //----------------------------------------------------------------------------
-  static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
+  void reset (xspan<u8> mem)
   {
-    auto f = 0.25f + mod * 0.75f;
-    lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
+    _eng.reset_memory (mem);
+    _lfo.reset();
+    _lfo.set_phase (
+      phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
   }
   //----------------------------------------------------------------------------
-  static void reset_lfo_phase (lfo<4>& lfo)
+  void mod_changed (float mod, float t_spl)
   {
-    lfo.set_phase (
-      phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    auto f = 0.25f + mod * 0.75f;
+    _lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
   }
   //------------------------------------------------------------------------------
   static constexpr auto get_spec()
@@ -793,7 +793,6 @@ public:
   using sample     = value_type;
   //----------------------------------------------------------------------------
   void process_block (
-    lfo<4>&                      lfo_obj,
     xspan<std::array<sample, 2>> io,
     smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
@@ -805,7 +804,7 @@ public:
     xspan             r {r_mem.data(), io.size()};
 
     _eng.run (sl<0> {}, in, [&] (auto spl, uint i) {
-      auto lfo = tick_lfo<sample> (lfo_obj);
+      auto lfo = tick_lfo<sample> (_lfo);
       lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
       lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
       lfo3[i]  = (sample) (sample {lfo[2]} * par.mod[i]);
@@ -873,6 +872,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   engine _eng;
+  lfo<4> _lfo;
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
@@ -893,18 +893,18 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
-  //----------------------------------------------------------------------------
-  static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
+  void reset (xspan<u8> mem)
   {
-    auto f = 0.25f + mod * 0.35f;
-    lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
+    _eng.reset_memory (mem);
+    _lfo.reset();
+    _lfo.set_phase (
+      phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
   }
   //----------------------------------------------------------------------------
-  static void reset_lfo_phase (lfo<4>& lfo)
+  void mod_changed (float mod, float t_spl)
   {
-    lfo.set_phase (
-      phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    auto f = 0.25f + mod * 0.35f;
+    _lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
   }
   //----------------------------------------------------------------------------
   static constexpr auto get_spec()
@@ -950,7 +950,6 @@ public:
   using sample     = value_type;
   //----------------------------------------------------------------------------
   void process_block (
-    lfo<4>&                      lfo_obj,
     xspan<std::array<sample, 2>> io,
     smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
@@ -962,7 +961,7 @@ public:
     xspan             r {r_mem.data(), io.size()};
 
     _eng.run (sl<0> {}, in, [&] (auto spl, uint i) {
-      auto lfo = tick_lfo<sample> (lfo_obj);
+      auto lfo = tick_lfo<sample> (_lfo);
       lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
       lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
       lfo3[i]  = (sample) (sample {lfo[2]} * par.mod[i]);
@@ -1029,6 +1028,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   engine _eng;
+  lfo<4> _lfo;
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
@@ -1049,18 +1049,18 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  constexpr void reset_memory (xspan<u8> mem) { _eng.reset_memory (mem); }
-  //----------------------------------------------------------------------------
-  static void reset_lfo_freq (lfo<4>& lfo, float mod, float t_spl)
+  void reset (xspan<u8> mem)
   {
-    auto f = 0.25f + mod * 0.35f;
-    lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
+    _eng.reset_memory (mem);
+    _lfo.reset();
+    _lfo.set_phase (
+      phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
   }
   //----------------------------------------------------------------------------
-  static void reset_lfo_phase (lfo<4>& lfo)
+  void mod_changed (float mod, float t_spl)
   {
-    lfo.set_phase (
-      phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    auto f = 0.25f + mod * 0.35f;
+    _lfo.set_freq (f32_x4 {f, f, f, f}, t_spl);
   }
   //----------------------------------------------------------------------------
   static constexpr auto get_spec()
@@ -1148,7 +1148,6 @@ public:
   using sample     = value_type;
   //----------------------------------------------------------------------------
   void process_block (
-    lfo<4>&                      lfo_obj,
     xspan<std::array<sample, 2>> io,
     smoothed_parameters<sample>& par,
     unsmoothed_parameters const& upar,
@@ -1163,7 +1162,7 @@ public:
     xspan r {r_mem.data(), io.size()};
 
     _eng.run (sl<0> {}, in, [&] (auto spl, uint i) {
-      auto lfo = tick_lfo<sample> (lfo_obj);
+      auto lfo = tick_lfo<sample> (_lfo);
       lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
       lfo2[i]  = (sample) (sample {lfo[1]} * par.mod[i]);
       lfo3[i]  = (sample) (sample {lfo[2]} * par.mod[i]);
@@ -1293,6 +1292,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   engine _eng;
+  lfo<4> _lfo;
 };
 //------------------------------------------------------------------------------
 

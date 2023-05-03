@@ -1495,7 +1495,7 @@ public:
     return elems * sizeof (storage_type);
   }
   //----------------------------------------------------------------------------
-  constexpr void reset_memory (xspan<u8> mem) // needs malloc/new alignment
+  void reset_memory (xspan<u8> mem) // needs malloc/new alignment
   {
     assert (mem.size() >= get_required_bytes());
     // xspan_memset (mem);

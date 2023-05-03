@@ -62,8 +62,8 @@ src.outs.array_init (src.up.resampler_2c_max_n_out_samples() * 2);
 src.ins.array_clear();
 src.outs.array_clear();
 
-mtx.array_init (4);
-mtxcp.array_init (4);
+mtxa.array_init (8);
+mtxb.array_init (8);
 
 // TODO how many?
 loop(floor (srate / 44100) * 2,
@@ -79,7 +79,8 @@ lfo.lfo_bank_reset_phase (0);
 
 @slider
 
-lfo.lfo_bank_reset_freq (0, 0.25 + mod * 0.35, k.src.srate);
+lfo.lfo_bank_reset_freq (0, 0.75 + mod * 0.35, k.src.srate);
+m_lfo.lfo_bank_reset_freq (0, 0.65 + mod * 0.45, k.src.srate);
 
 dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
@@ -112,22 +113,22 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   ri = hp (ri, 0.98);
   ri = delay (ri, 1) * 0.5;
-  l2 = l2c.crossv (l2, 0.875, 0.344 * 2, 0.156 * 2);
+  l2 = l2c.crossv (l2, 0.575, 1, 0.2);
+  l2 = hp (l2, 0.995);
   l1 = l2 + ri;
   l1 = lp (l1, 0.312);
-  l1 = ap_att (l1, 205, 0.375, att2);
+  l1 = ap (l1, 205, 0.375);
   l1 = delay (l1, 1);
-  l1 = ap_att (l1, 329, 0.312, att3);
+  l1 = ap (l1, 329, 0.312);
   n40_42 = easyapv_del_idx;
   l1 = delay (l1, 625 + 835);
-  l1 = ap2_att (l1, 368, 2032, 0.406, 0.25, att2, att1);
+  l1 = ap2 (l1, 368, 2032, 0.406, 0.25, m_lfo.ret.ptr[0], 3);
   n45_49 = easyapv_del_idx;
   l1 = delay (l1, 500);
-  l1 = l1.ap3_att_mod3(
+  l1 = ap3_mod3(
     l1,
     1340, 688, 1452 + 5,
     0.406, 0.25, 0.25,
-    att2, att1, att1,
     lfo.ret.ptr[2] * mod,
     1);
   n55_58 = easyapv_del_idx;
@@ -135,31 +136,31 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   li = hp (li, 0.98);
   li = delay (li, 1) * 0.5;
-  l1 = l1c.crossv (l1, 0.875, 0.344 * 2, 0.156 * 2);
+  l1 = l1c.crossv (l1, 0.575, 1, 0.2);
   l2 = l1 + li;
   l2 = lp (l2, 0.312);
-  l2 = ap_att (l2, 239, 0.375, att2);
+  l2 = ap (l2, 239, 0.375);
   l2 = delay (l2, 2);
-  l2 = ap_att (l2, 392, 0.312, att3);
+  l2 = ap (l2, 392, 0.312);
   n23 = l2;
   l2 = delay (l2, 1055);
-  l2 = ap2_att (l2, 612, 1944, 0.406, 0.25, att2, att1);
+  l2 = ap2 (l2, 612, 1944, 0.406, 0.25, m_lfo.ret.ptr[2], 2);
   n27_31 = easyapv_del_idx;
   l2 = delay (l2, 344);
-  l2 = l2.ap3_att_mod3(
+  l2 = ap3_mod3(
     l2,
     1264, 816, 1212 - 60,
     0.406, 0.25, 0.25,
-    att2, att1, att1,
     lfo.ret.ptr[0] * mod,
-    61);
+    1);
   n37_39 = easyapv_del_idx;
   l2 = delay(l2, 1572);
 
+  (1) ? (
   a = easyapv_get (n27_31, 276) * 0.938;
 
   b = easyapv_get (n45_49, 468) * 0.438;
-  b += easyapv_get (n45_49, 468) * 0.938;
+  b += easyapv_get (n40_42, 625) * 0.938;
   b -= easyapv_get (n27_31, 312) * 0.438;
   b += easyapv_get (n55_58, 5) * 0.125;
 
@@ -173,6 +174,19 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   l = a;
   r = c;
+  ) : (
+  mtxb.ptr[0] = easyapv_get (n27_31, 276)  * 0.938;
+  mtxb.ptr[1] = easyapv_get (n45_49, 468)  * 0.438;
+  mtxb.ptr[2] = easyapv_get (n40_42, 625) * 0.93;
+  mtxb.ptr[3] = easyapv_get (n27_31, 312) * 0.438;
+  mtxb.ptr[4] = -easyapv_get (n27_31, 40) * 0.438;
+  mtxb.ptr[5] = easyapv_get (n45_49, 24) * 0.438;
+  mtxb.ptr[6] = n23 * 0.938;
+  mtxb.ptr[7] = l2 * 0.125;
+  hadamard_8 (mtxa.ptr, mtxb.ptr);
+  l =  mtxa.ptr[0];
+  r =  mtxa.ptr[7];
+  );
 
   l = r * (1 - abs (stereo)) + l * abs (stereo);
   stereo < 0 ? (
