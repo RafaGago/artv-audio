@@ -1,6 +1,6 @@
 #pragma once
 
-// #define LOFIVERB_DEBUG_ALGO 1
+#define LOFIVERB_DEBUG_ALGO 1
 
 #include <array>
 #include <cmath>
@@ -72,6 +72,7 @@ public:
       make_cstr_array (
 #ifndef LOFIVERB_DEBUG_ALGO
         "Artv Abyss",
+        "Artv Arena",
         "Artv FlutterPlate",
         "Artv Room",
         "Acreil Midifex 49",
@@ -581,6 +582,9 @@ private:
     detail::lofiverb::abyss<dt_fix16>,
     detail::lofiverb::abyss<dt_flt16>,
     detail::lofiverb::abyss<dt_flt32>,
+    detail::lofiverb::arena<dt_fix16>,
+    detail::lofiverb::arena<dt_flt16>,
+    detail::lofiverb::arena<dt_flt32>,
     detail::lofiverb::plate1<dt_fix16>,
     detail::lofiverb::plate1<dt_flt16>,
     detail::lofiverb::plate1<dt_flt32>,

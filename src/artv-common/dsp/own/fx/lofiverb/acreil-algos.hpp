@@ -494,17 +494,17 @@ public:
     sample ghi = load_float<sample> (dec2 * 0.25f + upar.hf_amt * 0.45f);
 
     xspan comb_fb {tmp1.data(), io.size()};
-    _eng.fetch_block (sl<5> {}, comb_fb, lfo1, -gains[0]);
+    _eng.fetch (sl<5> {}, comb_fb, lfo1, -gains[0]);
     _eng.run (sl<6> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<5> {}, comb_fb, comb_fb.to_const(), in.to_const());
     _eng.run (sl<7> {}, comb_fb.to_const(), overwrite, tank);
 
-    _eng.fetch_block (sl<8> {}, comb_fb, lfo2, -gains[1]);
+    _eng.fetch (sl<8> {}, comb_fb, lfo2, -gains[1]);
     _eng.run (sl<9> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<8> {}, comb_fb, comb_fb.to_const(), in.to_const());
     _eng.run (sl<10> {}, comb_fb.to_const(), add_to, tank);
 
-    _eng.fetch_block (sl<11> {}, comb_fb, lfo3, -gains[2]);
+    _eng.fetch (sl<11> {}, comb_fb, lfo3, -gains[2]);
     _eng.run (sl<12> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<11> {}, comb_fb, comb_fb.to_const(), in.to_const());
     _eng.run (sl<13> {}, comb_fb.to_const(), add_to, tank);
@@ -669,18 +669,18 @@ public:
     sample ghi = load_float<sample> (0.4f + dec2 * 0.4f + upar.hf_amt * 0.15f);
 
     xspan comb_fb {tmp1.data(), io.size()};
-    _eng.fetch_block (sl<3> {}, comb_fb, lfo1, -gains[0]);
+    _eng.fetch (sl<3> {}, comb_fb, lfo1, -gains[0]);
     _eng.run (sl<4> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<3> {}, comb_fb, comb_fb.to_const(), in.to_const());
     _eng.run (sl<5> {}, comb_fb.to_const(), overwrite, tank);
 
-    _eng.fetch_block (sl<6> {}, comb_fb, lfo2, -gains[1]);
+    _eng.fetch (sl<6> {}, comb_fb, lfo2, -gains[1]);
     _eng.run (sl<7> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<6> {}, comb_fb, comb_fb.to_const(), in.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (sample) (s + in[i]); });
     _eng.run (sl<8> {}, comb_fb.to_const(), add_to, tank);
 
-    _eng.fetch_block (sl<9> {}, comb_fb, lfo3, -gains[2]);
+    _eng.fetch (sl<9> {}, comb_fb, lfo3, -gains[2]);
     _eng.run (sl<10> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<9> {}, comb_fb, comb_fb.to_const(), in.to_const());
     span_visit (comb_fb, [&] (auto& s, uint i) { s = (sample) (s + in[i]); });
@@ -829,22 +829,22 @@ public:
       = load_float<sample> (0.3f + dec2 * 0.25f + upar.hf_amt * 0.4499f);
 
     xspan comb_fb {tmp1.data(), io.size()};
-    _eng.fetch_block (sl<6> {}, comb_fb, lfo1, gains[0]);
+    _eng.fetch (sl<6> {}, comb_fb, lfo1, gains[0]);
     _eng.run (sl<7> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<6> {}, comb_fb, comb_fb.to_const(), in.to_const());
     _eng.run (sl<8> {}, comb_fb.to_const(), overwrite, r, l);
 
-    _eng.fetch_block (sl<9> {}, comb_fb, lfo2, gains[1]);
+    _eng.fetch (sl<9> {}, comb_fb, lfo2, gains[1]);
     _eng.run (sl<10> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<9> {}, comb_fb, comb_fb.to_const(), in.to_const());
     _eng.run (sl<11> {}, comb_fb.to_const(), add_to, r, l);
 
-    _eng.fetch_block (sl<12> {}, comb_fb, lfo3, gains[2]);
+    _eng.fetch (sl<12> {}, comb_fb, lfo3, gains[2]);
     _eng.run (sl<13> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<12> {}, comb_fb, comb_fb.to_const(), in.to_const());
     _eng.run (sl<14> {}, comb_fb.to_const(), add_to, r, l);
 
-    _eng.fetch_block (sl<15> {}, comb_fb, lfo4, gains[3]);
+    _eng.fetch (sl<15> {}, comb_fb, lfo4, gains[3]);
     _eng.run (sl<16> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<15> {}, comb_fb, comb_fb.to_const(), in.to_const());
     _eng.run (sl<17> {}, comb_fb.to_const(), add_to, r, l);
@@ -985,22 +985,22 @@ public:
     sample ghi = load_float<sample> (0.4f + dec2 * 0.1f + upar.hf_amt * 0.49f);
 
     xspan comb_fb {tmp1.data(), io.size()};
-    _eng.fetch_block (sl<6> {}, comb_fb, lfo1, gains[0]);
+    _eng.fetch (sl<6> {}, comb_fb, lfo1, gains[0]);
     _eng.run (sl<7> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<6> {}, comb_fb, comb_fb.to_const(), in.to_const());
     _eng.run (sl<8> {}, comb_fb.to_const(), overwrite, r, l);
 
-    _eng.fetch_block (sl<9> {}, comb_fb, blank, gains[1]);
+    _eng.fetch (sl<9> {}, comb_fb, blank, gains[1]);
     _eng.run (sl<10> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<9> {}, comb_fb, comb_fb.to_const(), in.to_const());
     _eng.run (sl<11> {}, comb_fb.to_const(), add_to, r, l);
 
-    _eng.fetch_block (sl<12> {}, comb_fb, blank, gains[2]);
+    _eng.fetch (sl<12> {}, comb_fb, blank, gains[2]);
     _eng.run (sl<13> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<12> {}, comb_fb, comb_fb.to_const(), in.to_const());
     _eng.run (sl<14> {}, comb_fb.to_const(), add_to, r, l);
 
-    _eng.fetch_block (sl<15> {}, comb_fb, lfo4, gains[3]);
+    _eng.fetch (sl<15> {}, comb_fb, lfo4, gains[3]);
     _eng.run (sl<16> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<15> {}, comb_fb, comb_fb.to_const(), in.to_const());
     _eng.run (sl<17> {}, comb_fb.to_const(), add_to, r, l);
@@ -1193,31 +1193,31 @@ public:
     sample ghi = load_float<sample> (0.75f + upar.hf_amt * 0.2f);
 
     xspan comb_fb {tmp1.data(), io.size()};
-    _eng.fetch_block (sl<6> {}, comb_fb, lfo1, gains[0]);
+    _eng.fetch (sl<6> {}, comb_fb, lfo1, gains[0]);
     _eng.run (
       sl<7> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.85_r));
     _eng.push (sl<6> {}, comb_fb, comb_fb.to_const(), main.to_const());
     _eng.run (sl<8> {}, comb_fb.to_const(), overwrite, l, r);
 
-    _eng.fetch_block (sl<9> {}, comb_fb, lfo3, gains[1]);
+    _eng.fetch (sl<9> {}, comb_fb, lfo3, gains[1]);
     _eng.run (
       sl<10> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.9_r));
     _eng.push (sl<9> {}, comb_fb, comb_fb.to_const(), main.to_const());
     _eng.run (sl<11> {}, comb_fb.to_const(), add_to, l, r);
 
-    _eng.fetch_block (sl<12> {}, comb_fb, blank, gains[2]);
+    _eng.fetch (sl<12> {}, comb_fb, blank, gains[2]);
     _eng.run (
       sl<13> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.95_r));
     _eng.push (sl<12> {}, comb_fb, comb_fb.to_const(), main.to_const());
     _eng.run (sl<14> {}, comb_fb.to_const(), add_to, l, r);
 
-    _eng.fetch_block (sl<15> {}, comb_fb, blank, gains[3]);
+    _eng.fetch (sl<15> {}, comb_fb, blank, gains[3]);
     _eng.run (
       sl<16> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.97_r));
     _eng.push (sl<15> {}, comb_fb, comb_fb.to_const(), main.to_const());
     _eng.run (sl<17> {}, comb_fb.to_const(), add_to, l, r);
 
-    _eng.fetch_block (sl<18> {}, comb_fb, blank, gains[4]);
+    _eng.fetch (sl<18> {}, comb_fb, blank, gains[4]);
     _eng.run (sl<19> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<18> {}, comb_fb, comb_fb.to_const(), main.to_const());
     _eng.run (sl<20> {}, comb_fb.to_const(), add_to, l, r);
@@ -1241,30 +1241,30 @@ public:
     ghi = load_float<sample> (0.7f + upar.hf_amt * 0.25f);
 
     // sub  reverb
-    _eng.fetch_block (sl<24> {}, comb_fb, lfo2, gains[0]);
+    _eng.fetch (sl<24> {}, comb_fb, lfo2, gains[0]);
     _eng.run (
       sl<25> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.9_r));
     _eng.push (sl<24> {}, comb_fb, comb_fb.to_const(), sub.to_const());
     _eng.run (sl<26> {}, comb_fb.to_const(), add_to, l, r);
 
-    _eng.fetch_block (sl<27> {}, comb_fb, lfo4, gains[1]);
+    _eng.fetch (sl<27> {}, comb_fb, lfo4, gains[1]);
     _eng.run (
       sl<28> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.93_r));
     _eng.push (sl<27> {}, comb_fb, comb_fb.to_const(), sub.to_const());
     _eng.run (sl<29> {}, comb_fb.to_const(), add_to, l, r);
 
-    _eng.fetch_block (sl<30> {}, comb_fb, blank, gains[2]);
+    _eng.fetch (sl<30> {}, comb_fb, blank, gains[2]);
     _eng.run (
       sl<31> {}, comb_fb, flo, glo, fhi, _eng.one, (sample) (ghi * 0.97_r));
     _eng.push (sl<30> {}, comb_fb, comb_fb.to_const(), sub.to_const());
     _eng.run (sl<32> {}, comb_fb.to_const(), add_to, l, r);
 
-    _eng.fetch_block (sl<33> {}, comb_fb, blank, gains[3]);
+    _eng.fetch (sl<33> {}, comb_fb, blank, gains[3]);
     _eng.run (sl<34> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<33> {}, comb_fb, comb_fb.to_const(), sub.to_const());
     _eng.run (sl<35> {}, comb_fb.to_const(), add_to, l, r);
 
-    _eng.fetch_block (sl<36> {}, comb_fb, blank, gains[4]);
+    _eng.fetch (sl<36> {}, comb_fb, blank, gains[4]);
     _eng.run (sl<37> {}, comb_fb, flo, glo, fhi, _eng.one, ghi);
     _eng.push (sl<36> {}, comb_fb, comb_fb.to_const(), sub.to_const());
     _eng.run (sl<38> {}, comb_fb.to_const(), add_to, l, r);

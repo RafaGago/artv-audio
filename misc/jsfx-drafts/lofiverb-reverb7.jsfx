@@ -13,7 +13,7 @@ slider10:predelay=1<1, 2400, 1> Predelay
 slider21:db_wet=-12<-40, 12,0.1> Wet dB
 slider20:db_dry=0<-60, 0,0.1> Dry dB
 
-slider23:offset=0<-100, 100, 1> Offset
+slider23:offset=0<-50, 50, 1> Offset
 
 import _core.jsfx-inc
 import _easy_allpass_reverb.jsfx-inc
@@ -103,6 +103,8 @@ ghi = 0.7 + 0.06 * decay2 + hi * 0.23;
 
 @sample
 
+// decay = 1;
+
 // Downsampling
 n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
@@ -131,10 +133,6 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   s = (l - r) * 0.5;
 
   // end of boilerplate, reverb algo
-  ap3i1 = easyapv_del_idx;
-  j = ap3 (m, 1105, 773, 123, 0.1 * decay, 0.1 * decay, 0.05);
-
-
   k1 = 0.4 + character * 0.2;
   k2 = 0.4 + character * 0.15;
 
@@ -145,7 +143,8 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   a = delay (a, 1007);
 
   b = a;
-  b = cvb.ap_crossv (b, 363, k1, flo, fhi, glo, ghi);
+  b = bf.crossv2 (b, flo, fhi, glo, ghi);
+  b = ap (b, 363, k1);
   b1 = b;
   b = delay (b, 1107);
   b *= decay;
@@ -156,18 +155,20 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   c = delay (c, 1207);
 
   d = c;
-  d = cvd.ap_crossv (d, 477, k2, flo, fhi, glo, ghi);
+  d = df.crossv2 (d, flo, fhi, glo, ghi);
+  d = ap (d, 477, k2);
   d1 = d;
   d = delay (d, 1307);
   d *= decay;
 
   e = r * 0.75 + m * 0.25 + d;
-  e = ap (e, 420, k1, lfo1.ret.ptr[0] * mod, 21);
+  e = ap (e, 420, k1, lfo1.ret.ptr[1] * mod, 21);
   e1 = e;
   e = delay (e, 1407);
 
   f = e;
-  f = cvf.ap_crossv (f, 252, k1, flo, fhi, glo, ghi);
+  f = ff.crossv2 (f, flo, fhi, glo, ghi);
+  f = ap (f, 252, k1);
   f1 = f;
   f = delay (f, 1507);
   f *= decay;
@@ -178,7 +179,8 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   g = delay (g, 1607);
 
   h = g;
-  h = cvh.ap_crossv (h, 833, k2, flo, fhi, glo, ghi);
+  h = hf.crossv2 (h, flo, fhi, glo, ghi);
+  h = ap (h, 833, k2);
   h1 = h;
   h = delay (h, 1447);
   fb = h * decay;
@@ -197,13 +199,13 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   r -= d1 * 0.49;
 
   l += e1 * 0.49;
-  r -= delay (e1, 0801);
+  r -= delay (e1, 0801 - 37);
 
   l += delay (f1, 777);
   r += f1 ;
 
   l -= g1 ;
-  r -= delay (g1, 1001);
+  r -= delay (g1, 1001 - 27);
 
   l += h1 * 0.2;
   r += delay (h1, 1001) * 0.2;
@@ -220,13 +222,6 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   l =  mtxa.ptr[0];
   r =  mtxa.ptr[7];
   );
-//  l -= easyapv_del.delay_line_get (173, ap3i1);
-//  r -= easyapv_del.delay_line_get (515, ap3i1);
-
-
-  extrad = (1 - decay) * 0.3;
-
-//  l = r = j;
 
   // more boilerplate (summing + downsample)
   easy_ap_next_sample();
@@ -239,7 +234,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
     l = tmp;
   );
 
-//  l = eq1l.svf_tick (l);
+// l = eq1l.svf_tick (l);
 //  r = eq1r.svf_tick (r);
 
   // Upsampling

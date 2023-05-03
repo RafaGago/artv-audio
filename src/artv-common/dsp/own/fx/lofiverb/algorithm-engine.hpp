@@ -1527,21 +1527,27 @@ public:
   // dst has to contain one element more at the head, where the previous
   // output will be placed. Once the feedback is applied to a current input,
   // this head feedback sample (last output) can be dropped.
+  //
+  // Note: Regular delays and allpass delays have gained some of the abilities
+  // of block delays, the difference is that block delays can have overcapacity.
   template <uint Idx, std::enable_if_t<spec::is_block_delay (Idx)>* = nullptr>
   void fetch_block (
     stage_list<Idx>,
     xspan<value_type> dst,
-    uint              negative_offset = 0)
+    uint              negative_offset)
   {
     static_assert (spec::get_min_delay_spls (Idx) >= max_block_size);
     std::get<Idx> (_stages).delay.read_block (
       dst, spec::get_delay_spls (Idx).to_int() + negative_offset);
   }
   //----------------------------------------------------------------------------
-  // Fetch samples from the queue of a processed allpass. The allpass has to be
-  // independenly processed.
-  template <uint Idx, std::enable_if_t<spec::is_allpass (Idx)>* = nullptr>
-  void fetch_block (stage_list<Idx>, xspan<value_type> dst, uint spls)
+  // Fetch samples from the queue of a processed allpass or delay. The allpass
+  // or delay has to be independenly processed.
+  template <
+    uint Idx,
+    std::enable_if_t<
+      spec::is_allpass (Idx) || spec::is_1tap_delay (Idx)>* = nullptr>
+  void fetch (stage_list<Idx>, xspan<value_type> dst, uint spls)
   {
     static_assert (spec::get_min_delay_spls (Idx) >= max_block_size);
     assert (dst);
@@ -1561,7 +1567,7 @@ public:
   // fb[out] signal, the feedback. Can be processed (e.g) filtered and the a
   // call to push is required
   template <uint Idx, class Lfo, class G>
-  void fetch_block (
+  void fetch (
     stage_list<Idx>,
     xspan<value_type>       out,
     xspan<value_type>       fb,
@@ -1579,8 +1585,7 @@ public:
       std::forward<G> (gain), spec::get_gain (Idx));
 
     // no overlap, can run block-wise
-    fetch_block_optmod<Idx> (
-      xspan {fb.data(), in.size()}, std::forward<Lfo> (lfo));
+    fetch_mod_en<Idx> (xspan {fb.data(), in.size()}, std::forward<Lfo> (lfo));
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < in.size(); ++i) {
       if constexpr (spec::is_allpass (Idx)) {
@@ -1595,7 +1600,7 @@ public:
   }
 
   template <uint Idx, class Lfo, class G>
-  void fetch_block (
+  void fetch (
     stage_list<Idx>,
     xspan<value_type> io,
     xspan<value_type> fb,
@@ -1603,28 +1608,28 @@ public:
     G&&               gain)
   {
     static_assert (spec::is_allpass (Idx));
-    fetch_block<Idx> (
+    fetch<Idx> (
       io, fb, io.to_const(), std::forward<Lfo> (lfo), std::forward<G> (gain));
   }
   //----------------------------------------------------------------------------
   // Fetch for combs, gets the delay modulated and with gain applied
   template <uint Idx, class value_type, class Lfo, class G>
-  void fetch_block (stage_list<Idx>, xspan<value_type> fb, Lfo&& lfo, G&& gain)
+  void fetch (stage_list<Idx>, xspan<value_type> fb, Lfo&& lfo, G&& gain)
   {
     static_assert (spec::is_comb (Idx));
     static_assert (spec::get_min_delay_spls (Idx) >= max_block_size);
     assert (fb);
-    fetch_block_optmod<Idx> (fb, std::forward<Lfo> (lfo));
+    fetch_mod_en<Idx> (fb, std::forward<Lfo> (lfo));
     auto g_gen = base::get_gain_generator<value_type> (
       std::forward<G> (gain), spec::get_gain (Idx));
     run_quantizer<Idx> (fb.data(), fb, [&] (auto v, uint i) {
       return v * g_gen (i);
     });
   }
-  // see comment on fetch_block overloads
+  // see comment on fetch/fetch_block overloads
   //----------------------------------------------------------------------------
-  // Push for combs, gets the feedback signal (obtained from fetch_block and
-  // maybe filtered) and the input, returns the sum.
+  // Push for combs, gets the feedback signal (obtained from fetch/fetch_block
+  // and maybe filtered) and the input, returns the sum.
   template <uint Idx>
   void push (
     stage_list<Idx>,
@@ -1896,7 +1901,7 @@ private:
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class Lfo>
-  void fetch_block_optmod (xspan<value_type> dst, Lfo&& lfo)
+  void fetch_mod_en (xspan<value_type> dst, Lfo&& lfo)
   {
     constexpr auto delay_spls     = spec::get_delay_spls (Idx).add_sign();
     constexpr auto delay_mod_spls = spec::get_delay_mod_spls (Idx).add_sign();
@@ -1950,7 +1955,7 @@ private:
       block_array z_mem;
       xspan       z {z_mem.data(), in.size()};
       if constexpr (spec::is_allpass (Idx) || spec::is_comb (Idx)) {
-        fetch_block (
+        fetch (
           stage_list<Idx> {},
           sout,
           z,
@@ -1960,7 +1965,7 @@ private:
         std::get<Idx> (_stages).delay.push_block (xspan {z.data(), in.size()});
       }
       else {
-        fetch_block_optmod<Idx> (z, std::forward<Lfo> (lfo));
+        fetch_mod_en<Idx> (z, std::forward<Lfo> (lfo));
         std::get<Idx> (_stages).delay.push_block (in);
         xspan_memcpy (sout, z);
       }
@@ -2278,7 +2283,7 @@ private:
           "Nested AP delays have to be GE than the block size");
 
         block_array bwd;
-        fetch_block_optmod<stage_idx> (
+        fetch_mod_en<stage_idx> (
           xspan {bwd.data(), in.size()}, std::get<arg_offset[order]> (args));
 
         auto&& gain_arg = std::get<arg_offset[order] + 1> (args);
@@ -2404,7 +2409,7 @@ private:
       }
     });
     // the last allpass gets the fwd signal enqueued
-    static_assert (last_ap_pos > 0);
+    static_assert (last_ap_pos > 0 || !spec::is_allpass (idxs[1]));
     std::get<idxs[last_ap_pos]> (_stages).delay.push_block (
       xspan {fwd.data(), in.size()});
   }
