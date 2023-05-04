@@ -1,6 +1,6 @@
 #pragma once
 
-#define LOFIVERB_DEBUG_ALGO 1
+// #define LOFIVERB_DEBUG_ALGO 1
 
 #include <array>
 #include <cmath>
@@ -74,7 +74,7 @@ public:
         "Artv Abyss",
         "Artv Arena",
         "Artv FlutterPlate",
-        "Artv Room",
+        "Artv Ambience",
         "Acreil Midifex 49",
         "Acreil Midifex 50",
         "Acreil Dre-2000 A",
@@ -285,10 +285,10 @@ public:
 
     _resampler.process (outs, ins, samples, [=] (auto io) {
       if ((_param.mode % n_bit_formats) == 0) {
-        process_fixed_point (io);
+        process<fixpt_t> (io);
       }
       else {
-        process_float (io);
+        process<float> (io);
       }
     });
   }
@@ -316,17 +316,19 @@ private:
   struct unsmoothed_parameters;
   struct smoothed_parameters;
   //----------------------------------------------------------------------------
-  void process_fixed_point (xspan<std::array<float, 2>> io)
+  template <class T>
+  void process (xspan<std::array<float, 2>> io)
   {
     using algo = detail::lofiverb::algorithm;
     assert (io.size() <= max_block_size);
 
-    // clip + convert to u16
-    array2d<fixpt_t, 2, max_block_size>                       wet;
-    std::array<f32_x2, max_block_size>                        ducker_gain;
-    detail::lofiverb::algorithm::smoothed_parameters<fixpt_t> pars;
+    static constexpr bool is_fixpt_t = std::is_same_v<T, fixpt_t>;
 
-    auto pre_gain = (1.f / _param.gain);
+    std::array<f32_x2, max_block_size>                  ducker_gain;
+    detail::lofiverb::algorithm::smoothed_parameters<T> pars;
+
+    auto pre_gain      = (1.f / _param.gain);
+    uint predelay_spls = _1_4beat_spls * _param.predelay;
 
     // tilt + clamp + ducker measuring + param smoothing
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
@@ -337,88 +339,22 @@ private:
       io[i]          = vec_to_array (wetv);
       _param_smooth.tick();
       pars.stereo[i] = _param_smooth.get().stereo;
-      pars.decay[i].load_float (_param_smooth.get().decay);
-      pars.character[i].load_float (_param_smooth.get().character);
-      pars.mod[i].load_float (_param_smooth.get().mod);
-    }
-    // predelay + int conversion
-    if (_param.predelay != 0) {
-      uint predelay_spls = _1_4beat_spls * _param.predelay;
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < io.size(); ++i) {
-        wet[i][0].load_float (_predelay.get (predelay_spls, 0));
-        wet[i][1].load_float (_predelay.get (predelay_spls, 1));
-        _predelay.push (io[i]);
-      }
-    }
-    else {
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < io.size(); ++i) {
-        wet[i][0].load_float (io[i][0]);
-        wet[i][1].load_float (io[i][1]);
-      }
-    }
-
-    std::visit (
-      [&, this] (auto& algo) {
-        using algo_type = typename std::decay_t<decltype (algo)>;
-        if constexpr (std::is_same_v<fixpt_t, typename algo_type::value_type>) {
-          algo.process_block (
-            xspan {wet.data(), io.size()}, pars, _param.algo, _srate);
-        }
-      },
-      _algorithms);
-
-    // float conversion
-    auto postgain = _param.gain;
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < io.size(); ++i) {
-      auto l = wet[i][0].to_floatp();
-      auto r = wet[i][1].to_floatp();
-      l *= ducker_gain[i][0] * postgain;
-      r *= ducker_gain[i][1] * postgain;
-      l = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
-      if (pars.stereo[i] < 0) {
-        io[i][0] = r;
-        io[i][1] = l;
+      if constexpr (is_fixpt_t) {
+        pars.decay[i].load_float (_param_smooth.get().decay);
+        pars.character[i].load_float (_param_smooth.get().character);
+        pars.mod[i].load_float (_param_smooth.get().mod);
       }
       else {
-        io[i][0] = l;
-        io[i][1] = r;
+        pars.decay[i]     = _param_smooth.get().decay;
+        pars.character[i] = _param_smooth.get().character;
+        pars.mod[i]       = _param_smooth.get().mod;
       }
-    }
-  }
-  //----------------------------------------------------------------------------
-  void process_float (xspan<std::array<float, 2>> io)
-  {
-    assert (io.size() <= max_block_size);
-
-    // clip + convert to u16
-    std::array<f32_x2, max_block_size>                      ducker_gain;
-    detail::lofiverb::algorithm::smoothed_parameters<float> pars;
-    pars;
-
-    auto pre_gain = 1.f / _param.gain;
-
-    // tilt + clamp + ducker measuring + param smoothing
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < io.size(); ++i) {
-      auto wet       = vec_from_array (io[i]) * pre_gain;
-      wet            = vec_clamp (wet, -clip_value(), clip_value());
-      ducker_gain[i] = _ducker.tick (wet);
-      io[i]          = vec_to_array (wet);
-      _param_smooth.tick();
-      pars.stereo[i]    = _param_smooth.get().stereo;
-      pars.decay[i]     = _param_smooth.get().decay;
-      pars.character[i] = _param_smooth.get().character;
-      pars.mod[i]       = _param_smooth.get().mod;
     }
     // predelay
     if (_param.predelay != 0) {
       uint predelay_spls = _1_4beat_spls * _param.predelay;
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
-        // TODO: block fetch?
         std::array<float, 2> spl;
         spl[0] = _predelay.get (predelay_spls, 0);
         spl[1] = _predelay.get (predelay_spls, 1);
@@ -426,15 +362,33 @@ private:
         io[i] = spl;
       }
     }
-    // main loop
     std::visit (
       [&, this] (auto& algo) {
         using algo_type = typename std::decay_t<decltype (algo)>;
-        if constexpr (std::is_same_v<float, typename algo_type::value_type>) {
-          algo.process_block (io, pars, _param.algo, _srate);
+        if constexpr (std::is_same_v<T, typename algo_type::value_type>) {
+          if constexpr (is_fixpt_t) {
+            array2d<fixpt_t, 2, max_block_size> wet;
+            ARTV_LOOP_UNROLL_SIZE_HINT (16)
+            for (uint i = 0; i < io.size(); ++i) {
+              wet[i][0].load_float (io[i][0]);
+              wet[i][1].load_float (io[i][1]);
+            }
+            algo.process_block (
+              xspan {wet.data(), io.size()}, pars, _param.algo, _srate);
+            ARTV_LOOP_UNROLL_SIZE_HINT (16)
+            for (uint i = 0; i < io.size(); ++i) {
+              io[i][0] = wet[i][0].to_floatp();
+              io[i][1] = wet[i][1].to_floatp();
+            }
+          }
+          else {
+            algo.process_block (io, pars, _param.algo, _srate);
+          }
+          algo.post_process_block (io);
         }
       },
       _algorithms);
+
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       auto l = io[i][0] * ducker_gain[i][0] * _param.gain;
@@ -467,7 +421,7 @@ private:
           _srate = srate;
           update_internal_srate (srate, (srate / 20) * 9);
         }
-        algo.reset (_mem_reverb);
+        algo.reset (_mem_reverb, _t_spl);
       },
       _algorithms);
     _n_processed_samples = 0; // trigger the control block on first sample
@@ -584,9 +538,9 @@ private:
     detail::lofiverb::plate1<dt_fix16>,
     detail::lofiverb::plate1<dt_flt16>,
     detail::lofiverb::plate1<dt_flt32>,
-    detail::lofiverb::room<dt_fix16>,
-    detail::lofiverb::room<dt_flt16>,
-    detail::lofiverb::room<dt_flt32>,
+    detail::lofiverb::ambience<dt_fix16>,
+    detail::lofiverb::ambience<dt_flt16>,
+    detail::lofiverb::ambience<dt_flt32>,
     detail::lofiverb::midifex49<dt_fix16>,
     detail::lofiverb::midifex49<dt_flt16>,
     detail::lofiverb::midifex49<dt_flt32>,

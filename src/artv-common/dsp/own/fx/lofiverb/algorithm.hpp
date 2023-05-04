@@ -37,6 +37,10 @@ public:
   using block_arr = std::array<T, max_block_size>;
   template <class T>
   using fb_block_arr = std::array<T, max_block_size + 1>;
+  template <class T>
+  using acumulator_arr = std::array<
+    std::conditional_t<is_fixpt_v<T>, fixpt_acum_t, T>,
+    max_block_size + 1>;
   //----------------------------------------------------------------------------
   using fixpt_t  = detail::lofiverb::fixpt_t;
   using fixpt_tr = detail::lofiverb::fixpt_tr;

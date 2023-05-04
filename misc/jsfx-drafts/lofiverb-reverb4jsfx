@@ -19,6 +19,7 @@ import _easy_fdn.jsfx-inc
 import _reverb.jsfx-inc
 import _lfo.jsfx-inc
 import _fir.jsfx-inc
+import _filters.jsfx-inc
 
 @init
 
@@ -76,6 +77,8 @@ lfo.lfo_bank_init (n_lfos, 1);
 lfo.ret.array_init (n_lfos);
 lfo.lfo_bank_reset_phase (0);
 
+eq1l.svf_bell (144, 0.56, 4, k.src.srate);
+eq1r.svf_bell (144, 0.56, 4, k.src.srate);
 
 @slider
 
@@ -237,6 +240,9 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
     r = l;
     l = tmp;
   );
+
+  l = eq1l.svf_tick (l);
+  r = eq1r.svf_tick (r);
 
   // Upsampling
   n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);

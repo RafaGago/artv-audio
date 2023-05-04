@@ -1,6 +1,8 @@
 #pragma once
 
 #include "artv-common/dsp/own/fx/lofiverb/algorithm.hpp"
+#include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
+#include "artv-common/dsp/own/parts/parts_to_class.hpp"
 
 namespace artv { namespace detail { namespace lofiverb {
 
@@ -23,12 +25,19 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  void reset (xspan<u8> mem)
+  void reset (xspan<u8> mem, float t_spl)
   {
     _eng.reset_memory (mem);
     _lfo.reset();
     _lfo.set_phase (
       phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    _eq.reset_states_cascade();
+    _eq.reset_coeffs (
+      vec_set<f32_x2> (500.f),
+      vec_set<f32_x2> (0.64f),
+      vec_set<f32_x2> (1.8f),
+      t_spl,
+      bell_tag {});
   }
   //----------------------------------------------------------------------------
   void mod_changed (float mod, float t_spl)
@@ -188,10 +197,18 @@ public:
       spls[1] = r[i];
     });
   }
-
+  //----------------------------------------------------------------------------
+  void post_process_block (xspan<std::array<float, 2>> io)
+  {
+    span_visit (io, [&] (auto& v, uint) {
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+    });
+  }
+  //----------------------------------------------------------------------------
 private:
-  engine _eng;
-  lfo<4> _lfo;
+  engine                              _eng;
+  lfo<4>                              _lfo;
+  part_class_array<andy::svf, f32_x2> _eq;
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
@@ -212,12 +229,19 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  void reset (xspan<u8> mem)
+  void reset (xspan<u8> mem, float t_spl)
   {
     _eng.reset_memory (mem);
     _lfo.reset();
     _lfo.set_phase (
       phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    _eq.reset_states_cascade();
+    _eq.reset_coeffs (
+      vec_set<f32_x2> (700.f),
+      vec_set<f32_x2> (0.65f),
+      vec_set<f32_x2> (1.3f),
+      t_spl,
+      bell_tag {});
   }
   //----------------------------------------------------------------------------
   void mod_changed (float mod, float t_spl)
@@ -359,9 +383,17 @@ public:
     _eng.push (sl<25> {}, loop.to_const());
   }
   //----------------------------------------------------------------------------
+  void post_process_block (xspan<std::array<float, 2>> io)
+  {
+    span_visit (io, [&] (auto& v, uint) {
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+    });
+  }
+  //----------------------------------------------------------------------------
 private:
-  engine _eng;
-  lfo<4> _lfo;
+  engine                              _eng;
+  lfo<4>                              _lfo;
+  part_class_array<andy::svf, f32_x2> _eq;
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
@@ -382,12 +414,19 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  void reset (xspan<u8> mem)
+  void reset (xspan<u8> mem, float t_spl)
   {
     _eng.reset_memory (mem);
     _lfo.reset();
     _lfo.set_phase (
       phase<4> {phase_tag::normalized {}, 0.f, 0.3333f, 0.6666f, 0.75f});
+    _eq.reset_states_cascade();
+    _eq.reset_coeffs (
+      vec_set<f32_x2> (300.f),
+      vec_set<f32_x2> (0.45f),
+      vec_set<f32_x2> (5.f),
+      t_spl,
+      bell_tag {});
   }
   //----------------------------------------------------------------------------
   void mod_changed (float mod, float t_spl)
@@ -536,9 +575,17 @@ public:
     });
   }
   //----------------------------------------------------------------------------
+  void post_process_block (xspan<std::array<float, 2>> io)
+  {
+    span_visit (io, [&] (auto& v, uint) {
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+    });
+  }
+  //----------------------------------------------------------------------------
 private:
-  engine _eng;
-  lfo<4> _lfo;
+  engine                              _eng;
+  lfo<4>                              _lfo;
+  part_class_array<andy::svf, f32_x2> _eq;
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
@@ -559,12 +606,19 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  void reset (xspan<u8> mem)
+  void reset (xspan<u8> mem, float t_spl)
   {
     _eng.reset_memory (mem);
     _lfo.reset();
     _lfo.set_phase (
       phase<4> {phase_tag::normalized {}, 0.f, 0.3333f, 0.6666f, 0.75f});
+    _eq.reset_states_cascade();
+    _eq.reset_coeffs (
+      vec_set<f32_x2> (305.f),
+      vec_set<f32_x2> (0.34f),
+      vec_set<f32_x2> (3.f),
+      t_spl,
+      bell_tag {});
   }
   //----------------------------------------------------------------------------
   void mod_changed (float mod, float t_spl)
@@ -715,9 +769,17 @@ public:
     });
   }
   //----------------------------------------------------------------------------
+  void post_process_block (xspan<std::array<float, 2>> io)
+  {
+    span_visit (io, [&] (auto& v, uint) {
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+    });
+  }
+  //----------------------------------------------------------------------------
 private:
-  engine _eng;
-  lfo<4> _lfo;
+  engine                              _eng;
+  lfo<4>                              _lfo;
+  part_class_array<andy::svf, f32_x2> _eq;
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
@@ -738,12 +800,19 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  void reset (xspan<u8> mem)
+  void reset (xspan<u8> mem, float t_spl)
   {
     _eng.reset_memory (mem);
     _lfo.reset();
     _lfo.set_phase (
       phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    _eq.reset_states_cascade();
+    _eq.reset_coeffs (
+      vec_set<f32_x2> (305.f),
+      vec_set<f32_x2> (0.4f),
+      vec_set<f32_x2> (6.f),
+      t_spl,
+      bell_tag {});
   }
   //----------------------------------------------------------------------------
   void mod_changed (float mod, float t_spl)
@@ -870,9 +939,17 @@ public:
     });
   }
   //----------------------------------------------------------------------------
+  void post_process_block (xspan<std::array<float, 2>> io)
+  {
+    span_visit (io, [&] (auto& v, uint) {
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+    });
+  }
+  //----------------------------------------------------------------------------
 private:
-  engine _eng;
-  lfo<4> _lfo;
+  engine                              _eng;
+  lfo<4>                              _lfo;
+  part_class_array<andy::svf, f32_x2> _eq;
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
@@ -893,12 +970,19 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  void reset (xspan<u8> mem)
+  void reset (xspan<u8> mem, float t_spl)
   {
     _eng.reset_memory (mem);
     _lfo.reset();
     _lfo.set_phase (
       phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    _eq.reset_states_cascade();
+    _eq.reset_coeffs (
+      vec_set<f32_x2> (600.f),
+      vec_set<f32_x2> (0.5f),
+      vec_set<f32_x2> (2.5f),
+      t_spl,
+      bell_tag {});
   }
   //----------------------------------------------------------------------------
   void mod_changed (float mod, float t_spl)
@@ -1026,9 +1110,17 @@ public:
     });
   }
   //----------------------------------------------------------------------------
+  void post_process_block (xspan<std::array<float, 2>> io)
+  {
+    span_visit (io, [&] (auto& v, uint) {
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+    });
+  }
+  //----------------------------------------------------------------------------
 private:
-  engine _eng;
-  lfo<4> _lfo;
+  engine                              _eng;
+  lfo<4>                              _lfo;
+  part_class_array<andy::svf, f32_x2> _eq;
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
@@ -1049,12 +1141,19 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  void reset (xspan<u8> mem)
+  void reset (xspan<u8> mem, float t_spl)
   {
     _eng.reset_memory (mem);
     _lfo.reset();
     _lfo.set_phase (
       phase<4> {phase_tag::normalized {}, 0.f, 0.25f, 0.5f, 0.75f});
+    _eq.reset_states_cascade();
+    _eq.reset_coeffs (
+      vec_set<f32_x2> (313.f),
+      vec_set<f32_x2> (0.38),
+      vec_set<f32_x2> (1.75f),
+      t_spl,
+      bell_tag {});
   }
   //----------------------------------------------------------------------------
   void mod_changed (float mod, float t_spl)
@@ -1290,9 +1389,17 @@ public:
     });
   }
   //----------------------------------------------------------------------------
+  void post_process_block (xspan<std::array<float, 2>> io)
+  {
+    span_visit (io, [&] (auto& v, uint) {
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+    });
+  }
+  //----------------------------------------------------------------------------
 private:
-  engine _eng;
-  lfo<4> _lfo;
+  engine                              _eng;
+  lfo<4>                              _lfo;
+  part_class_array<andy::svf, f32_x2> _eq;
 };
 //------------------------------------------------------------------------------
 

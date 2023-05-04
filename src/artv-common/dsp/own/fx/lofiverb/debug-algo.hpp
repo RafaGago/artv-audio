@@ -2,6 +2,8 @@
 
 #include "artv-common/dsp/own/fx/lofiverb/algorithm-engine.hpp"
 #include "artv-common/dsp/own/fx/lofiverb/algorithm.hpp"
+#include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
+#include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/misc/xspan.hpp"
 #include <type_traits>
 
@@ -73,10 +75,11 @@ public:
     return engine::get_required_bytes();
   }
   //----------------------------------------------------------------------------
-  void reset (xspan<u8> mem)
+  void reset (xspan<u8> mem, float t_spl)
   {
     _eng.reset_memory (mem);
     _lfo.reset();
+    _eq.reset_states_cascade();
     _lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
   }
   //----------------------------------------------------------------------------
@@ -272,9 +275,17 @@ public:
     });
   }
   //----------------------------------------------------------------------------
+  void post_process_block (xspan<std::array<float, 2>> io)
+  {
+    span_visit (io, [&] (auto& v, uint) {
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+    });
+  }
+  //----------------------------------------------------------------------------
 private:
-  engine _eng;
-  lfo<4> _lfo;
+  engine                              _eng;
+  lfo<4>                              _lfo;
+  part_class_array<andy::svf, f32_x2> _eq;
 };
 //------------------------------------------------------------------------------
 

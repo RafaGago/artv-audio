@@ -39,7 +39,8 @@ using fixpt_tr = fixpt_d<1, 0, 15, fixpt_rounding>;
 
 using fixpt_t = fixpt_tt;
 
-using fixpt_acum_t = fixpt_s<1, 0, 31>;
+using fixpt_acum_t = fixpt_s<1, 4, 27, fixpt_relaxed_frac_assign>;
+// using fixpt_acum_t = fixpt_s<1, 0, 31, fixpt_relaxed_frac_assign>;
 
 // fixed point type for storage
 using fixpt_sto      = fixpt_s<1, 0, 15, 0>;
@@ -1031,7 +1032,7 @@ public:
     // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
     // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
     // noise shaping only
-    constexpr uint n_truncated   = fixpt_acum_t::n_bits - fixpt_t::n_bits;
+    constexpr uint n_truncated   = fixpt_acum_t::n_frac - fixpt_t::n_frac;
     constexpr uint mask          = lsb_mask<uint> (n_truncated);
     constexpr bool bidirectional = round || dither;
 
