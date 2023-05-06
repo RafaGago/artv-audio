@@ -94,7 +94,10 @@ lfo2.lfo_bank_reset_freq (0, 1.53 - mod * 0.43, k.src.srate);
 dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
 
-decay = 0.05 + decay_p * 0.92;
+decay = 1 - decay_p;
+decay *= decay;
+decay = 1 - decay;
+decay = 0.05 + decay * 0.95;
 
 flo = 0.90 + lo * lo * 0.05;
 glo = 0.75 + lo * 0.23;

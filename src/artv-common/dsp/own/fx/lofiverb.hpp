@@ -133,10 +133,7 @@ public:
   }
   //----------------------------------------------------------------------------
   struct decay_tag {};
-  void set (decay_tag, float v)
-  {
-    _param_smooth.target().decay = v * 0.01f * fixpt_max_flt;
-  }
+  void set (decay_tag, float v) { _param_smooth.target().decay = v * 0.01f; }
 
   static constexpr auto get_parameter (decay_tag)
   {
@@ -146,7 +143,7 @@ public:
   struct mod_tag {};
   void set (mod_tag, float v)
   {
-    v *= 0.01f * fixpt_max_flt;
+    v *= 0.01f;
     if (v == _param_smooth.target().mod) {
       return;
     }
@@ -162,7 +159,7 @@ public:
   struct character_tag {};
   void set (character_tag, float v)
   {
-    _param_smooth.target().character = v * 0.01f * fixpt_max_flt;
+    _param_smooth.target().character = v * 0.01f;
   }
 
   static constexpr auto get_parameter (character_tag)
@@ -171,10 +168,7 @@ public:
   }
   //----------------------------------------------------------------------------
   struct lf_amt_tag {};
-  void set (lf_amt_tag, float v)
-  {
-    _param.algo.lf_amt = v * 0.01f * fixpt_max_flt;
-  }
+  void set (lf_amt_tag, float v) { _param.algo.lf_amt = v * 0.01f; }
 
   static constexpr auto get_parameter (lf_amt_tag)
   {
@@ -182,10 +176,7 @@ public:
   }
   //----------------------------------------------------------------------------
   struct hf_amt_tag {};
-  void set (hf_amt_tag, float v)
-  {
-    _param.algo.hf_amt = v * 0.01f * fixpt_max_flt;
-  }
+  void set (hf_amt_tag, float v) { _param.algo.hf_amt = v * 0.01f; }
   //----------------------------------------------------------------------------
   static constexpr auto get_parameter (hf_amt_tag)
   {
@@ -491,7 +482,10 @@ private:
       _algorithms);
   }
   //----------------------------------------------------------------------------
-  static float clip_value() { return std::min (fixpt_max_flt, float16::max()); }
+  static float clip_value()
+  {
+    return std::min (fixpt_sto16::max_float(), float16::max());
+  }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
     u32                                                mode;
@@ -511,15 +505,13 @@ private:
     // dry, wet, ducker/gate
   };
   //----------------------------------------------------------------------------
-  using fixpt_t  = detail::lofiverb::fixpt_t;
-  using fixpt_tr = detail::lofiverb::fixpt_tr;
-  using float16  = detail::lofiverb::float16;
+  using fixpt_t     = detail::lofiverb::fixpt_t;
+  using fixpt_sto16 = detail::lofiverb::fixpt_sto16;
+  using float16     = detail::lofiverb::float16;
 
   static constexpr auto dt_fix16 = detail::lofiverb::delay::data_type::fixpt16;
   static constexpr auto dt_flt16 = detail::lofiverb::delay::data_type::float16;
   static constexpr auto dt_flt32 = detail::lofiverb::delay::data_type::float32;
-
-  static constexpr auto fixpt_max_flt = detail::lofiverb::fixpt_max_flt;
   //----------------------------------------------------------------------------
   unsmoothed_parameters                      _param;
   value_smoother<float, smoothed_parameters> _param_smooth;

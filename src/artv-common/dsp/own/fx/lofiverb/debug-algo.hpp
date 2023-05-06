@@ -4,6 +4,8 @@
 #include "artv-common/dsp/own/fx/lofiverb/algorithm.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
+#include "artv-common/misc/fixed_point.hpp"
+#include "artv-common/misc/primes_table.hpp"
 #include "artv-common/misc/xspan.hpp"
 #include <type_traits>
 
@@ -57,6 +59,7 @@ namespace artv { namespace detail { namespace lofiverb {
   67500 75   45
   68400 76   57
 */
+
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
 class debug : public algorithm {
@@ -79,8 +82,14 @@ public:
   {
     _eng.reset_memory (mem);
     _lfo.reset();
-    _eq.reset_states_cascade();
     _lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
+    _eq.reset_states_cascade();
+    _eq.reset_coeffs (
+      vec_set<f32_x2> (360.f),
+      vec_set<f32_x2> (0.45f),
+      vec_set<f32_x2> (2.6f),
+      t_spl,
+      bell_tag {});
   }
   //----------------------------------------------------------------------------
   void mod_changed (float mod, float t_spl)
@@ -89,7 +98,7 @@ public:
     auto f2 = 1.53f - mod * 0.43f;
     _lfo.set_freq (f32_x4 {f1, f1, f1, f1}, t_spl);
   }
-  //----------------------------------------------------------------------------
+  //------------------------------------------------------------------------------
   static constexpr auto get_spec()
   {
     return make_array<stage_data> (
@@ -99,37 +108,33 @@ public:
       make_hp (0.975f), // 3
 
       make_block_delay (1447), // feedback point -> h1 4
-      make_quantizer(), // 5
 
-      make_ap (376, 0, 27), // 6
-      make_delay (1007), // 7 -> a1
+      make_ap (376, 0, 27), // 5
+      make_delay (1007), // 6 -> a1
 
-      make_crossover2(), // 8
-      make_ap (363), // 9
-      make_delay (1107), // 10 -> b1
-      make_quantizer(), // 11
+      make_crossover2(), // 7
+      make_ap (363), // 8
+      make_delay (1107), // 9 -> b1
 
-      make_ap (414, 0, 23), // 12
-      make_delay (1207), // 13 -> c1
+      make_ap (414, 0, 23), // 10
+      make_delay (1207), // 11 -> c1
 
-      make_crossover2(), // 14
-      make_ap (477), // 15
-      make_delay (1307), // 16 -> d1
-      make_quantizer(), // 17
+      make_crossover2(), // 12
+      make_ap (477), // 13
+      make_delay (1307), // 14 -> d1
 
-      make_ap (420, 0, 21), // 18
-      make_delay (1407), // 19 -> e1
+      make_ap (420, 0, 21), // 15
+      make_delay (1407), // 16 -> e1
 
-      make_crossover2(), // 20
-      make_ap (252), // 21
-      make_delay (1507), // 22 -> f1
-      make_quantizer(), // 23
+      make_crossover2(), // 17
+      make_ap (252), // 18
+      make_delay (1507), // 19 -> f1
 
-      make_ap (413, 0, 22), // 24
-      make_delay (1607), // 25 -> g1
+      make_ap (413, 0, 22), // 20
+      make_delay (1607), // 21 -> g1
 
-      make_crossover2(), // 26
-      make_ap (813) // 27
+      make_crossover2(), // 22
+      make_ap (813) // 23
     );
   }
   //----------------------------------------------------------------------------
@@ -146,7 +151,7 @@ public:
     using arr_fb = fb_block_arr<sample>;
 
     arr loop_mem;
-    arr l, r, r_cp, m, s, k1, k2, tmp_mem, loop2_mem;
+    arr l, r, l_in, r_in, r_cp, m, s, k1, k2, tmp_mem, loop2_mem;
     arr lfo1, lfo2;
 
     xspan loop {loop_mem.data(), io.size()};
@@ -154,31 +159,27 @@ public:
     xspan tmp {tmp_mem.data(), io.size()};
 
     span_visit (io, [&] (auto& spl, uint i) {
-      l[i]    = (sample) (spl[0] * 0.25_r);
-      r[i]    = (sample) (spl[1] * 0.25_r);
-      r_cp[i] = r[i];
+      l_in[i] = spl[0] * 0.25_r;
+      r_in[i] = spl[1] * 0.25_r;
     });
-    _eng.run (sl<0> {}, xspan {l.data(), io.size()});
-    _eng.run (sl<1> {}, xspan {l.data(), io.size()});
-    _eng.run (sl<2> {}, xspan {r.data(), io.size()});
-    _eng.run (sl<3> {}, xspan {r.data(), io.size()});
+
+    _eng.run (sl<0> {}, xspan {l_in.data(), io.size()});
+    _eng.run (sl<1> {}, xspan {l_in.data(), io.size()});
+    _eng.run (sl<2> {}, xspan {r_in.data(), io.size()});
+    _eng.run (sl<3> {}, xspan {r_in.data(), io.size()});
     _eng.fetch_block (sl<4> {}, loop, 1); // feedback signal
 
-    constexpr auto sqrt8_recip = 0.3535534_r; // 1/sqrt(8), equal power mixing
-
-    _eng.run (sl<5> {}, loop, [&] (auto v, uint i) {
-      par.decay[i] = (sample) (0.05_r + par.decay[i] * 0.92_r);
-      return v * par.decay[i];
-    });
     span_visit (loop, [&] (auto& v, uint i) {
-      m[i]     = (sample) ((l[i] + r[i]) * 0.5_r);
-      s[i]     = (sample) ((l[i] - r[i]) * 0.5_r);
-      k1[i]    = (sample) (0.4_r + par.character[i] * 0.2_r);
-      k2[i]    = (sample) (0.4_r + par.character[i] * 0.15_r);
-      auto lfo = tick_lfo<sample> (_lfo);
-      lfo1[i]  = (sample) (sample {lfo[0]} * par.mod[i]);
-      lfo2[i]  = (sample) (sample {lfo[2]} * par.mod[i]);
-      v        = (sample) (v + l[i] * 0.75_r + m[i] * 0.25_r);
+      m[i]         = (l_in[i] + r_in[i]) * 0.5_r;
+      s[i]         = (l_in[i] - r_in[i]) * 0.5_r;
+      k1[i]        = 0.4_r + par.character[i] * 0.2_r;
+      k2[i]        = 0.4_r + par.character[i] * 0.15_r;
+      auto lfo     = tick_lfo<sample> (_lfo);
+      lfo1[i]      = sample {lfo[0]} * par.mod[i];
+      lfo2[i]      = sample {lfo[2]} * par.mod[i];
+      v            = v + l_in[i] * 0.75_r + m[i] * 0.25_r;
+      par.decay[i] = 0.05_r + par.decay[i] * 0.92_r;
+      loop[i] *= par.decay[i];
     });
 
     auto flo = load_float<sample> (0.90 + upar.lf_amt * upar.lf_amt * 0.05);
@@ -186,92 +187,88 @@ public:
     auto fhi = load_float<sample> (0.9 - upar.hf_amt * upar.hf_amt * 0.4);
     auto ghi = load_float<sample> (0.7 + upar.hf_amt * 0.23);
     // A
-    _eng.run (sl<6> {}, loop, lfo1, k1);
-    xspan_memdump (l.data(), loop);
-    _eng.fetch (sl<7> {}, r, 400 - 32);
-    span_mul (xspan {l.data(), io.size()}, sqrt8_recip);
-    span_mul (xspan {r.data(), io.size()}, sqrt8_recip * 0.4_r);
-    _eng.run (sl<7> {}, loop);
+    _eng.run (sl<5> {}, loop, lfo1, k1);
+    _eng.fetch (sl<6> {}, tmp, 400 - 32);
+    span_visit (tmp, [&] (auto v, uint i) {
+      l[i] = loop[i];
+      r[i] = v * 0.4_r;
+    });
+    _eng.run (sl<6> {}, loop);
     // B
-    _eng.run (sl<8> {}, loop, flo, glo, fhi, _eng.one, ghi);
-    _eng.run (sl<9> {}, loop, blank, k1);
-    _eng.fetch (sl<10> {}, tmp, 777 - 32);
+    _eng.run (sl<7> {}, loop, flo, glo, fhi, 1_r, ghi);
+    _eng.run (sl<8> {}, loop, blank, k1);
+    _eng.fetch (sl<9> {}, tmp, 777 - 32);
     span_visit (tmp, [&] (auto v, uint i) {
-      l[i] = (sample) (l[i] + v * 0.4_r * sqrt8_recip);
-      r[i] = (sample) (r[i] + loop[i] * sqrt8_recip);
+      l[i] += v * 0.4_r;
+      r[i] += loop[i];
     });
-    _eng.run (sl<10> {}, loop);
-    _eng.run (sl<11> {}, loop, [&] (auto v, uint i) {
-      return v * par.decay[i];
-    });
+    _eng.run (sl<9> {}, loop);
+    span_mul (loop, par.decay);
     // C
-    span_visit (loop, [&] (auto& v, uint i) { v = (sample) (s[i] + v); });
-    _eng.run (sl<12> {}, loop, lfo2, [&] (uint i) { return -k2[i]; });
-    _eng.fetch (sl<13> {}, tmp, 1001 - 32);
+    span_visit (loop, [&] (auto& v, uint i) { v += s[i]; });
+    _eng.run (sl<10> {}, loop, lfo2, [&] (uint i) { return -k2[i]; });
+    _eng.fetch (sl<11> {}, tmp, 1001 - 32);
     span_visit (tmp, [&] (auto v, uint i) {
-      l[i] = (sample) (l[i] - loop[i] * sqrt8_recip);
-      r[i] = (sample) (r[i] - v * 0.42_r * sqrt8_recip);
+      l[i] -= loop[i];
+      r[i] -= v * 0.42_r;
     });
-    _eng.run (sl<13> {}, loop);
+    _eng.run (sl<11> {}, loop);
     // D
-    _eng.run (sl<14> {}, loop, flo, glo, fhi, _eng.one, ghi);
-    _eng.run (sl<15> {}, loop, blank, k2);
-    _eng.fetch (sl<16> {}, tmp, 777 - 32);
+    _eng.run (sl<12> {}, loop, flo, glo, fhi, 1_r, ghi);
+    _eng.run (sl<13> {}, loop, blank, k2);
+    _eng.fetch (sl<14> {}, tmp, 777 - 32);
     span_visit (tmp, [&] (auto v, uint i) {
-      l[i] = (sample) (l[i] + v * 0.42_r * sqrt8_recip);
-      r[i] = (sample) (r[i] - loop[i] * 0.49_r * sqrt8_recip);
+      l[i] += v * 0.42_r;
+      r[i] -= loop[i] * 0.49_r;
     });
-    _eng.run (sl<16> {}, loop);
-    _eng.run (sl<17> {}, loop, [&] (auto v, uint i) {
-      return v * par.decay[i];
-    });
+    _eng.run (sl<14> {}, loop);
+    span_mul (loop, par.decay);
     // E
     span_visit (loop, [&] (auto& v, uint i) {
-      v = (sample) (v + r_cp[i] * 0.75_r + m[i] * 0.25_r);
+      v = v + r_in[i] * 0.75_r + m[i] * 0.25_r;
     });
     _eng.run (
-      sl<18> {}, loop, [&] (uint i) { return -lfo1[i]; }, k1);
-    _eng.fetch (sl<19> {}, tmp, 801 - 37 - 32);
+      sl<15> {}, loop, [&] (uint i) { return -lfo1[i]; }, k1);
+    _eng.fetch (sl<16> {}, tmp, 801 - 37 - 32);
     span_visit (tmp, [&] (auto v, uint i) {
-      l[i] = (sample) (l[i] + loop[i] * 0.49_r * sqrt8_recip);
-      r[i] = (sample) (r[i] - v * sqrt8_recip);
+      l[i] += loop[i] * 0.49_r;
+      r[i] -= v;
+    });
+    _eng.run (sl<16> {}, loop);
+    // F
+    _eng.run (sl<17> {}, loop, flo, glo, fhi, 1_r, ghi);
+    _eng.run (sl<18> {}, loop, blank, k1);
+    _eng.fetch (sl<19> {}, tmp, 777 - 32);
+    span_visit (tmp, [&] (auto v, uint i) {
+      l[i] += v;
+      r[i] += loop[i];
     });
     _eng.run (sl<19> {}, loop);
-    // F
-    _eng.run (sl<20> {}, loop, flo, glo, fhi, _eng.one, ghi);
-    _eng.run (sl<21> {}, loop, blank, k1);
-    _eng.fetch (sl<22> {}, tmp, 777 - 32);
-    span_visit (tmp, [&] (auto v, uint i) {
-      l[i] = (sample) (l[i] + v * sqrt8_recip);
-      r[i] = (sample) (r[i] + loop[i] * sqrt8_recip);
-    });
-    _eng.run (sl<22> {}, loop);
-    _eng.run (sl<23> {}, loop, [&] (auto v, uint i) {
-      return v * par.decay[i];
-    });
+    span_mul (loop, par.decay);
     // G
-    span_visit (loop, [&] (auto& v, uint i) { v = (sample) (v + s[i]); });
+    span_visit (loop, [&] (auto& v, uint i) { v += s[i]; });
     _eng.run (
-      sl<24> {}, loop, [&] (uint i) { return -lfo2[i]; }, k2);
-    _eng.fetch (sl<25> {}, tmp, 1001 - 27 - 32);
+      sl<20> {}, loop, [&] (uint i) { return -lfo2[i]; }, k2);
+    _eng.fetch (sl<21> {}, tmp, 1001 - 27 - 32);
     span_visit (tmp, [&] (auto v, uint i) {
-      l[i] = (sample) (l[i] - loop[i] * sqrt8_recip);
-      r[i] = (sample) (r[i] - v * sqrt8_recip);
+      l[i] -= loop[i];
+      r[i] -= v;
     });
-    _eng.run (sl<25> {}, loop);
+    _eng.run (sl<21> {}, loop);
     // H
-    _eng.run (sl<26> {}, loop, flo, glo, fhi, _eng.one, ghi);
-    _eng.run (sl<27> {}, loop, blank, k2);
+    _eng.run (sl<22> {}, loop, flo, glo, fhi, 1_r, ghi);
+    _eng.run (sl<23> {}, loop, blank, k2);
     _eng.fetch (sl<4> {}, tmp, 1001 - 32);
     span_visit (tmp, [&] (auto v, uint i) {
-      l[i] = (sample) (l[i] + loop[i] * 0.2_r * sqrt8_recip);
-      r[i] = (sample) (r[i] + v * 0.2_r * sqrt8_recip);
+      l[i] += loop[i] * 0.2_r;
+      r[i] += v * 0.2_r;
     });
     _eng.push (sl<4> {}, loop.to_const());
 
     span_visit (io, [&] (auto& spl, uint i) {
-      spl[0] = l[i];
-      spl[1] = r[i];
+      constexpr auto sqrt8_recip = 0.3535534_r; // 1/sqrt(8), equal power mixing
+      spl[0]                     = l[i] * sqrt8_recip;
+      spl[1]                     = r[i] * sqrt8_recip;
     });
   }
   //----------------------------------------------------------------------------
@@ -287,6 +284,4 @@ private:
   lfo<4>                              _lfo;
   part_class_array<andy::svf, f32_x2> _eq;
 };
-//------------------------------------------------------------------------------
-
 }}} // namespace artv::detail::lofiverb

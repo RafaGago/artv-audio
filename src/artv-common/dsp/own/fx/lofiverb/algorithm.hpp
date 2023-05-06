@@ -27,24 +27,13 @@ public:
     float hf_amt;
   };
 
-  // fixpt_t truncates when dropping fractional bits (leaky).
-  // fixpt_tr rounds to the nearest (never reaches full zero).
-  //
-  // Using fixpt_t as default, with fixpt_tr at some points compensate the
-  // truncating leakage.
   //----------------------------------------------------------------------------
   template <class T>
   using block_arr = std::array<T, max_block_size>;
   template <class T>
   using fb_block_arr = std::array<T, max_block_size + 1>;
-  template <class T>
-  using acumulator_arr = std::array<
-    std::conditional_t<is_fixpt_v<T>, fixpt_acum_t, T>,
-    max_block_size + 1>;
   //----------------------------------------------------------------------------
-  using fixpt_t  = detail::lofiverb::fixpt_t;
-  using fixpt_tr = detail::lofiverb::fixpt_tr;
-  using float16  = detail::lofiverb::float16;
+  using fixpt_t = detail::lofiverb::fixpt_t;
   //----------------------------------------------------------------------------
   static constexpr auto blank     = detail::lofiverb::defaulted;
   static constexpr auto add_to    = detail::lofiverb::add_to;
@@ -68,30 +57,43 @@ protected:
   // just a convenience function for iterating block loops while not bloating
   // the code with more loop unroll hints than necessary
   template <class T, class U>
-  static void span_mul (xspan<T> block, U val)
+  static void span_mul (xspan<T> dst_lhs, U rhs)
   {
-    ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < block.size(); ++i) {
-      block[i] = (T) (block[i] * val);
-    }
+    span_visit (dst_lhs, [&] (auto& v, uint i) {
+      if constexpr (is_array_subscriptable_v<U>) {
+        v = (T) (v * rhs[i]);
+      }
+      else {
+        v = (T) (v * rhs);
+      }
+    });
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static constexpr void span_add (
-    xspan<T>       dst,
-    xspan<T const> lhs,
-    xspan<T const> rhs)
+  template <class T, class U>
+  static constexpr void span_add (xspan<T> dst, xspan<T const> lhs, U rhs)
   {
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < rhs.size(); ++i) {
-      dst[i] = (T) (lhs[i] + rhs[i]);
+      if constexpr (is_array_subscriptable_v<U>) {
+        dst[i] = (T) (lhs[i] + rhs[i]);
+      }
+      else {
+        dst[i] = (T) (lhs[i] + rhs);
+      }
     }
   }
   //----------------------------------------------------------------------------
-  template <class T>
-  static constexpr void span_add (xspan<T> dst_lhs, xspan<T const> rhs)
+  template <class T, class U>
+  static constexpr void span_add (xspan<T> dst_lhs, U rhs)
   {
-    span_add<T> (dst_lhs, dst_lhs, rhs);
+    span_visit (dst_lhs, [&] (auto& v, uint i) {
+      if constexpr (is_array_subscriptable_v<U>) {
+        v = (T) (v + rhs[i]);
+      }
+      else {
+        v = (T) (v + rhs);
+      }
+    });
   }
   //----------------------------------------------------------------------------
   template <class T, class U, class V>
@@ -106,11 +108,11 @@ protected:
   }
   //----------------------------------------------------------------------------
   // naive linear crossfade. 1 selects s2, 0 dst
-  template <class T, class U, class V, class W>
-  static void crossfade (xspan<T> dst, U s2, V ctrl, W one)
+  template <class T, class U, class V>
+  static void crossfade (xspan<T> dst, U s2, V ctrl)
   {
     span_visit (dst, [&] (auto spl, uint i) {
-      auto ctrl2 = (T) (one - ctrl[i]);
+      auto ctrl2 = (T) (1_r - ctrl[i]);
       dst[i]     = (T) (s2[i] * ctrl[i] + ctrl2 * spl);
     });
   }
@@ -142,8 +144,7 @@ protected:
   {
     if constexpr (std::is_same_v<fixpt_t, T>) {
       auto ret = lfo.tick_sine_fixpt().spec_cast<fixpt_t>().value();
-      // At this point "ret" has fixed traits, but different fixed point
-      // conversions configured
+      // lfos return fixed points using vectors, we use scalars
       return vec_cast<fixpt_t::value_type> (ret);
     }
     else {
@@ -189,11 +190,11 @@ protected:
   // 1 - (x - 1) * (x - 1) : a cheap curve that grows faster than linear,
   // similar to sqrt but compresses more the values closer to one instead of the
   // ones closer to zero
-  template <class T, class U>
-  static auto fastgrowth (T x, U one)
+  template <class T>
+  static auto fastgrowth (T x)
   {
-    x = (T) (x - one);
-    return (T) (one - x * x);
+    x = (T) (x - 1_r);
+    return (T) (1_r - x * x);
   }
   //----------------------------------------------------------------------------
   // Equal power crossfade approx, 0 selects v1. 1 selects v2, results on v1

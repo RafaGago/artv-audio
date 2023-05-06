@@ -523,7 +523,7 @@ public:
     return cast (T {});
   }
   //----------------------------------------------------------------------------
-  // cast by capturing the specificatio of T, but keeping the current traits
+  // cast by capturing the specification of T, but keeping the current traits
   // (promotions/conversion types), as traits conversion is not possible
   template <class T, std::enable_if_t<is_fixpt_v<T>>* = nullptr>
   constexpr auto spec_cast (T) const noexcept
@@ -661,7 +661,7 @@ public:
   }
   //----------------------------------------------------------------------------
   // returns the fractional part only. for signed types it might be negative.
-  constexpr fixpt<n_sign, 0, n_frac, flags, traits> fractional() const noexcept
+  constexpr auto fractional() const noexcept
   {
     auto v = _v;
     if constexpr (is_signed) {
@@ -675,7 +675,8 @@ public:
     else {
       v &= frac_mask;
     }
-    return fixpt<n_sign, 0, n_frac, flags, traits>::from (v);
+    return fixpt<n_sign, (is_dynamic ? 0 : n_int), n_frac, flags, traits>::
+      from (v);
   }
   //----------------------------------------------------------------------------
   // useful E.g. after random loads to check that the value is in range.

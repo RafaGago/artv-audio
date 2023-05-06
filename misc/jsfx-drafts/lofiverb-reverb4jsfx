@@ -11,7 +11,7 @@ slider9:stereo=1<-1,1, 0.01> Stereo
 slider21:db_wet=-12<-40, 12,0.1> Wet dB
 slider20:db_dry=0<-60, 0,0.1> Dry dB
 
-slider23:offset=0<0, 30, 1> Offset
+slider23:offset=0<-50, 50, 1> Offset
 
 import _core.jsfx-inc
 import _easy_allpass_reverb.jsfx-inc
@@ -71,30 +71,31 @@ loop(floor (srate / 44100) * 2,
   src.out_q.deque_push (0);
 );
 
+eq1l.svf_bell (300, 0.55, 1.75, k.src.srate);
+eq1r.svf_bell (300, 0.55, 1.75, k.src.srate);
 // Actual reverb stuff ---------------------------------------------------------
 n_lfos = 4;
 lfo.lfo_bank_init (n_lfos, 1);
 lfo.ret.array_init (n_lfos);
 lfo.lfo_bank_reset_phase (0);
 
-eq1l.svf_bell (144, 0.56, 4, k.src.srate);
-eq1r.svf_bell (144, 0.56, 4, k.src.srate);
-
 @slider
 
-lfo.lfo_bank_reset_freq (0, 0.13, k.src.srate);
-m_lfo.lfo_bank_reset_freq (0, 0.1 + mod * 0.2, k.src.srate);
+lfo.lfo_bank_reset_freq (0, 0.43 + mod * .2, k.src.srate);
 
 dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
 
 dp = 1 - decay_p;
-decay = 0.9 - dp * dp * 0.2;
+decay = 0.985 - dp * dp * 0.21;
 
 flo = 0.90 + lo * lo * 0.05;
-glo = 0.87 + lo * 0.13;
-fhi = 0.75 - hi * hi * 0.55;
-ghi = 0.7 + hi * 0.24;
+glo = 0.9 + lo * 0.09;
+fhi = 0.61 - hi * hi * 0.12;
+ghi = 0.6 + hi * 0.28;
+
+lpfr = 0.1;
+hpfr = 0.96;
 
 @sample
 
@@ -107,13 +108,18 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   m = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5 * 0.5;
   s = (src.ins.ptr[0] - src.ins.ptr[1]) * 0.5 * 0.5;
 
-  m = ap (m, 23, 0.8 + 0.1 * character);
-  m = ap (m, 130, 0.8 * character);
-  m = ap (m, 217, 0.8 * character);
+  m = lpl.lp (m, lpfr);
+  m = hpl.hp (m, hpfr);
+  s = lpr.lp (s, lpfr);
+  s = hpr.hp (s, hpfr);
 
-  s = ap (s, 22, 0.8 + 0.1 * character);
-  s = ap (s, 131, 0.8 * character);
-  s = ap (s, 219, 0.8 * character);
+  m = ap (m, 23, 0.4 + 0.1 * character);
+  m = ap (m, 130, 0.6 * character);
+  m = ap (m, 217, 0.6 * character);
+
+  s = ap (s, 22, 0.4 + 0.1 * character);
+  s = ap (s, 131, 0.6 * character);
+  s = ap (s, 219, 0.6 * character);
 
   // a single hadamard iteration can duplicate the range on one
   // of the signals, so we halve once more.
@@ -141,25 +147,27 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 // [[151, 157], [83, 89], [59, 61], 201]
 // [153.8046190129675, 87.13169661547329, 60.78286847796119, 201
   a = mtx.ptr[0];
-  a = ap3 (a, 153, 89, 60, 0.1 + 0.1 * lfo.ret.ptr[0], -0.04, g3);
+  a = ap3 (a, 153, 89, 60, 0.1 + 0.1, -0.04, g3);
+  ia = easyapv_del_idx;
   a = delay(a, 201);
 
 // [[139, 149], [79, 83], [53, 59], 185]
 // [141.56146526069148, 80.19584016847044, 55.94443118618319, 185]
   b = mtx.ptr[1];
-  b = ap3 (b, 139, 79, 53, -0.1 - 0.1 * lfo.ret.ptr[1], -0.04, g3);
+//  b = ap3 (b, 139, 79, 53, -0.1 - 0.1, -0.04, g3);
   b = delay(b, 185);
 
 // [[139, 149], [83, 89], [53, 59], 193]
 // [147.68304213682947, 83.66376839197186, 58.363649832072184, 193]
   c = mtx.ptr[2];
-  c = ap3 (c, 149, 83, 59, 0.1 + 0.1 * m_lfo.ret.ptr[2], 0.04, -g3);
-  c = delay(c, 193);
+  c = ap3 (c, 149, 83, 59, 0.1 + 0.1, 0.04, -g3);
+  ic = easyapv_del_idx;
+  c = delay(c, 193 + 32);
 
 // [[167, 173], [89, 97], [61, 67], 221]
 // [169.10856120331252, 95.80151717422684, 66.8309150926837, 221]
   d = mtx.ptr[3];
-  d = ap3 (d, 167, 97, 67, 0.1 - 0.1 * lfo.ret.ptr[3], -0.04, g3);
+  d = ap3 (d, 167, 97, 67, -0.1 - 0.1, -0.04, g3);
 //  d = delay(d, 221, lfo.ret.ptr[1] * modv, mod_spls);
   d = delay(d, 221);
 
@@ -180,12 +188,12 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   a = mtx.ptr[3];
 
   a = f1.crossv2 (a, flo, fhi, glo, ghi);
-  a = ap3 (a, 113, 67, 47, 0.1, 0.04, -g3);
-  a = delay (a, 122);
+//  a = ap3 (a, 113, 67, 47, 0.1, 0.04, -g3);
+//  a = delay (a, 122);
   a = ap (a, 119, 0.6);
   a = ap (a, 67, 0.6);
   a = ap (a, 47, -0.6);
-  a = delay (a, 32);
+  a = delay (a, 32 + 27 + 122);
 // [[113, 127], [67, 71], [43, 47], 155]
 // [118.60555197517394, 67.1911093303401, 46.872361264099425, 155]
 
@@ -194,16 +202,17 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   b = mtx.ptr[2];
   b = f2.crossv2 (b, flo, fhi, glo, ghi);
   b = ap3 (b, 114, 66, 47, -0.1, -0.04, -g3);
-  b = ap (b, 9, 0.4 + (lfo.ret.ptr[1] * modv) * 0.4, lfo.ret.ptr[0], 2 * modv);
-  b = delay(b, 149);
+  b = ap (b, 9, 0.4 + (lfo.ret.ptr[1] * modv) * 0.4);
+  ib = easyapv_del_idx;
+  b = delay(b, 149 + 36, lfo.ret.ptr[1], 11);
 
   // [[113, 127], [61, 67], [43, 47], 151]
 // [115.54476353710493, 65.45714521858937, 45.66275194115492, 151]
   c = mtx.ptr[0];
   c = f3.crossv2 (c, flo, fhi, glo, ghi);
   c = ap3 (c, 116, 65, 46, -0.1, -0.04, -g3);
-  c = ap (c, 3, 0.6 - (lfo.ret.ptr[3] * modv) * 0.4, lfo.ret.ptr[2], 2 * modv);
-  c = delay(c, 151);
+  c = ap (c, 3, 0.6 - (lfo.ret.ptr[3] * modv) * 0.4);
+  c = delay(c, 151 + 27, lfo.ret.ptr[3], 11);
 //  c = delay(c, 33);
 
 // [[113, 127], [67, 71], [47, 53], 157]
@@ -211,24 +220,40 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   d = mtx.ptr[1];
   d = f4.crossv2 (d, flo, fhi, glo, ghi);
   d = ap3 (d, 121, 69, 47, -0.1, 0.04, g3);
-  d = delay(d, 157);
+  id = easyapv_del_idx;
+  d = delay(d, 157 + 18);
 
   mtx.ptr[0] = a;
   mtx.ptr[1] = b;
   mtx.ptr[2] = c;
   mtx.ptr[3] = d;
 
+
   l = a;
   l = ap (l, 71, 0.4 + 0.3 * character);
   l = ap (l, 116, -0.6 * character);
+//  l += easyapv_get (ia, 73) * 0.2;
   l = ap (l, 172, -0.6 * character);
+//  l += easyapv_get (ib, 54) * 0.2;
+  m = ap (l, 1987, 0.65 * character, lfo.ret.ptr[0], 123);
+  m = lpm1.lp (m, 0.5);
+  l = ep_crossfade (0.5 * sqrt (mod), l , m);
+
   l = ap (l, 277, 0.6 * character);
+//  l += easyapv_get (id, 131) * 0.2;
 
   r = d;
   r = ap (r, 72, 0.4 + 0.3 * character);
   r = ap (r, 117, -0.6 * character);
+//  r += easyapv_get (id, 167) * 0.2;
   r = ap (r, 175, -0.6 * character);
+//  r += easyapv_get (ic, 52) * 0.2;
+  m = ap (r, 2117, 0.65 * character, lfo.ret.ptr[2], 138);
+  m = lpm2.lp (m, 0.5);
+  r = ep_crossfade (0.5 * sqrt (mod), r ,   m);
   r = ap (r, 274, 0.6 * character);
+//  r -= easyapv_get (ia, 89) * 0.2;
+
 
   // more boilerplate (summing + downsample)
   easy_ap_next_sample();
@@ -241,8 +266,8 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
     l = tmp;
   );
 
-  l = eq1l.svf_tick (l);
-  r = eq1r.svf_tick (r);
+//  l = eq1l.svf_tick (l);
+//  r = eq1r.svf_tick (r);
 
   // Upsampling
   n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);

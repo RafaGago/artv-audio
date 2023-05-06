@@ -33,28 +33,16 @@ namespace artv { namespace detail { namespace lofiverb {
 
 //------------------------------------------------------------------------------
 // truncating fixed point type for computation
-using fixpt_tt = fixpt_d<1, 0, 15, 0>;
-// rounding fixed point type for computation
-using fixpt_tr = fixpt_d<1, 0, 15, fixpt_rounding>;
+using fixpt_tt = fixpt_s<1, 4, 27, fixpt_relaxed_frac_assign>;
 
-using fixpt_t = fixpt_tt;
-
-using fixpt_acum_t = fixpt_s<1, 4, 27, fixpt_relaxed_frac_assign>;
-// using fixpt_acum_t = fixpt_s<1, 0, 31, fixpt_relaxed_frac_assign>;
-
-// fixed point type for storage
-using fixpt_sto      = fixpt_s<1, 0, 15, 0>;
+using fixpt_t        = fixpt_tt;
+using fixpt_sto16    = fixpt_s<1, 0, 15, 0>;
 using fixpt_spls     = fixpt_m<0, 14, 0, 0>;
 using fixpt_spls_mod = fixpt_m<0, 9, 0, 0>;
 
 using float16 = f16pack<5, -1, f16pack_dftz | f16pack_clamp>;
 
 static constexpr uint max_block_size = 32;
-
-// this is using 16 bits fixed-point arithmetic, positive values can't
-// represent one, so instead of correcting everywhere the parameters are
-// scaled instead to never reach 1.
-static constexpr auto fixpt_max_flt = fixpt_t::max_float();
 //------------------------------------------------------------------------------
 enum class interpolation : u8 { thiran, linear };
 
@@ -591,32 +579,17 @@ struct y1_float_arr {
 //------------------------------------------------------------------------------
 struct y1_fixpt {
   fixpt_t y1;
-  s16     y1_err;
 };
 //------------------------------------------------------------------------------
 template <uint N>
 struct y1_fixpt_arr {
   std::array<y1_fixpt, N> arr;
 };
-
 //------------------------------------------------------------------------------
-struct allpass_fixpt {
-  s16 x_err;
-  s16 u_err;
-};
-//------------------------------------------------------------------------------
+template <class T_err>
 struct quantizer_fixpt {
-  s16 err;
+  T_err err;
 };
-//------------------------------------------------------------------------------
-template <uint N>
-struct quantizer_arr_fixpt {
-  std::array<s16, N> err;
-};
-//------------------------------------------------------------------------------
-struct allpass_and_y1_fixpt : public allpass_fixpt, public y1_fixpt {};
-//------------------------------------------------------------------------------
-struct quantizer_and_y1_fixpt : public quantizer_fixpt, public y1_fixpt {};
 //------------------------------------------------------------------------------
 template <class value_type, uint N>
 struct free_storage {
@@ -630,18 +603,18 @@ static constexpr auto get_state_type()
   if constexpr (is_fixpt_v<value_type>) {
     if constexpr (SpecAccess::is_allpass (Idx)) {
       if constexpr (!!interp && *interp == interpolation::thiran) {
-        return allpass_and_y1_fixpt {};
+        return y1_fixpt {};
       }
       else {
-        return allpass_fixpt {};
+        return empty {};
       }
     }
     else if constexpr (SpecAccess::is_comb (Idx)) {
       if constexpr (!!interp && *interp == interpolation::thiran) {
-        return quantizer_and_y1_fixpt {};
+        return y1_fixpt {};
       }
       else {
-        return quantizer_fixpt {};
+        return empty {};
       }
     }
     else if constexpr (SpecAccess::is_1tap_delay (Idx)) {
@@ -659,10 +632,11 @@ static constexpr auto get_state_type()
       return y1_fixpt_arr<SpecAccess::get_crossover_n_bands (Idx)> {};
     }
     else if constexpr (SpecAccess::is_quantizer (Idx)) {
-      return quantizer_fixpt {};
+      using integral_type = typename value_type::value_type;
+      return quantizer_fixpt<integral_type> {};
     }
     else if constexpr (SpecAccess::is_parallel_delay (Idx)) {
-      return quantizer_arr_fixpt<SpecAccess::get_n_outs (Idx)> {};
+      return empty {};
     }
     else if constexpr (SpecAccess::is_free_storage (Idx)) {
       return free_storage<
@@ -703,6 +677,94 @@ struct index_to_state_qfn {
 //------------------------------------------------------------------------------
 
 } // namespace state
+
+struct quantization {
+  //----------------------------------------------------------------------------
+  // This might belong somewhere else if made more generic. Do when required.
+  template <bool round, bool dither, class T_dst, class T>
+  static std::tuple<T_dst, typename T_dst::value_type> quantize (
+    T                          spl,
+    typename T_dst::value_type err_prev,
+    lowbias32_hash<1>*         noise_gen = nullptr)
+  {
+    using fixpt_src      = T;
+    using fixpt_dst      = T_dst;
+    using dst_value_type = typename T_dst::value_type;
+
+    static_assert (is_fixpt_v<fixpt_dst>);
+    static_assert (is_fixpt_v<fixpt_src>);
+    static_assert (
+      fixpt_src::n_frac > fixpt_dst::n_frac, "useless quantization");
+
+    // Fraction-saving quantization
+    // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
+    // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
+    // noise shaping only
+    constexpr uint n_truncated   = T::n_frac - fixpt_dst::n_frac;
+    constexpr uint mask          = lsb_mask<uint> (n_truncated);
+    constexpr bool bidirectional = round || dither;
+
+    if constexpr (dither) {
+      spl = fixpt_clamp (
+        spl,
+        fixpt_dst::min() + 3_r * fixpt_dst::epsilon(),
+        fixpt_dst::max() - 3_r * fixpt_dst::epsilon());
+    }
+    else {
+      spl = fixpt_clamp (
+        spl,
+        fixpt_dst::min() + fixpt_dst::epsilon(),
+        fixpt_dst::max() - fixpt_dst::epsilon());
+    }
+
+    auto    out = (fixpt_t) (spl + fixpt_t::from (err_prev));
+    fixpt_t d_out;
+    if constexpr (dither) {
+      // not throughly tested...
+      assert (noise_gen);
+      auto noise
+        = tpdf_dither<n_truncated, fixpt_dst::scalar_type> (*noise_gen);
+      d_out = out + fixpt_t::from (noise[0]);
+    }
+    else {
+      d_out = out;
+    }
+    assert (d_out.to_floatp() < 1.f);
+    fixpt_dst q_out;
+    if constexpr (round) {
+      q_out = (fixpt_dst) d_out;
+    }
+    else {
+      q_out = (fixpt_dst) d_out; // truncation
+    }
+    if constexpr (bidirectional) {
+      fixpt_t errv = out - q_out;
+      auto    err  = (dst_value_type) (errv.value() & mask);
+      return std::make_tuple ((fixpt_dst) q_out, err);
+    }
+    else {
+      auto err = (dst_value_type) (out.value() & mask);
+      return std::make_tuple (q_out, err);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <class T_dst, class T>
+  static std::tuple<T_dst, typename T_dst::value_type> round (
+    T                          v,
+    typename T_dst::value_type err_prev)
+  {
+    return quantize<true, false, T_dst> (v, err_prev);
+  }
+  //----------------------------------------------------------------------------
+  template <class T_dst, class T>
+  static std::tuple<T_dst, typename T_dst::value_type> truncate (
+    T                          v,
+    typename T_dst::value_type err_prev)
+  {
+    return quantize<false, false, T_dst> (v, err_prev);
+  }
+  //----------------------------------------------------------------------------
+};
 
 namespace delay {
 
@@ -820,7 +882,7 @@ public:
   {
     assert (spl);
     if constexpr (has_encoding) {
-      return encoder::decode (_z.read (spl));
+      return _encoder.decode (_z.read (spl));
     }
     else {
       return _z.read (spl);
@@ -830,7 +892,7 @@ public:
   void push (value_type v)
   {
     if constexpr (has_encoding) {
-      _z.insert (encoder::encode (v));
+      _z.insert (_encoder.encode (v));
     }
     else {
       _z.insert (v);
@@ -843,9 +905,9 @@ public:
       = _z.read_block (dst.size(), del_spls);
     assert (dst.size() == (src[0].size() + src[1].size()));
     if constexpr (has_encoding) {
-      encoder::decode (dst.data(), src[0].data(), src[0].size());
+      _encoder.decode (dst.data(), src[0].data(), src[0].size());
       dst.cut_head (src[0].size());
-      encoder::decode (dst.data(), src[1].data(), src[1].size());
+      _encoder.decode (dst.data(), src[1].data(), src[1].size());
     }
     else {
       xspan_memdump (dst.data(), src[0]);
@@ -859,9 +921,9 @@ public:
     std::array<xspan<storage_type>, 2> dst = _z.insert_block (src.size());
     assert (src.size() == (dst[0].size() + dst[1].size()));
     if constexpr (has_encoding) {
-      encoder::encode (dst[0].data(), src.data(), dst[0].size());
+      _encoder.encode (dst[0].data(), src.data(), dst[0].size());
       src.cut_head (dst[0].size());
-      encoder::encode (dst[1].data(), src.data(), dst[1].size());
+      _encoder.encode (dst[1].data(), src.data(), dst[1].size());
     }
     else {
       xspan_memcpy (dst[0], src);
@@ -872,6 +934,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   static_buffer<storage_type> _z {};
+  encoder                     _encoder {};
 };
 //------------------------------------------------------------------------------
 
@@ -880,19 +943,54 @@ struct no_enconding {
   using value_type = T;
 };
 //------------------------------------------------------------------------------
-//------------------------------------------------------------------------------
 enum class data_type : uint { fixpt16, float16, float32 };
+//------------------------------------------------------------------------------
+
+template <class T_sto>
+class fixpt_encoder {
+public:
+  using value_type  = T_sto;
+  using extern_type = fixpt_t;
+  //----------------------------------------------------------------------------
+  constexpr value_type encode (extern_type v)
+  {
+    auto [conv, err] = quantization::round<T_sto> (v, _err);
+    _err             = err;
+    return (value_type) v;
+  }
+  //----------------------------------------------------------------------------
+  void encode (value_type* dst, extern_type const* src, uint n)
+  {
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < n; ++i) {
+      dst[i] = encode (src[i]);
+    }
+  }
+  //----------------------------------------------------------------------------
+  constexpr extern_type decode (value_type u) { return (extern_type) u; }
+  //----------------------------------------------------------------------------
+  void decode (extern_type* dst, value_type const* src, uint n)
+  {
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < n; ++i) {
+      dst[i] = decode (src[i]);
+    }
+  }
+  //----------------------------------------------------------------------------
+private:
+  typename value_type::value_type _err {};
+};
+
 //------------------------------------------------------------------------------
 template <data_type Te>
 class delay_buffer;
 
 template <>
 class delay_buffer<data_type::fixpt16>
-  : public static_encoded_buffer<fixpt_t, no_enconding<fixpt_t>> {
+  : public static_encoded_buffer<fixpt_t, fixpt_encoder<fixpt_sto16>> {
 public:
-  // TODO: companding and using a high resolution type as input?
   using value_type   = fixpt_t;
-  using storage_type = fixpt_t;
+  using storage_type = fixpt_sto16;
 };
 
 using float16_encoder = f16pack<5, -1, f16pack_dftz | f16pack_clamp>;
@@ -997,97 +1095,14 @@ public:
   {
     auto u = in + yn * g;
     auto x = yn - u * g;
-    if constexpr (std::is_floating_point_v<T>) {
-      return std::make_tuple (x, u);
-    }
-    else {
-      auto [q_x, x_err] = truncate (x, state.x_err);
-      auto [q_u, u_err] = truncate (u, state.u_err);
-      state.x_err       = x_err;
-      state.u_err       = u_err;
-      return std::make_tuple (q_x, q_u);
-    }
+    return std::make_tuple (x, u);
   }
   //----------------------------------------------------------------------------
   template <class T, class U, class S>
   auto run_comb (T in, T z, U g, S& state)
   {
     auto u = in + z * g;
-    if constexpr (std::is_floating_point_v<T>) {
-      return std::make_tuple (z, u);
-    }
-    else {
-      auto [q_u, err] = truncate (u, state.err);
-      state.err       = err;
-      return std::make_tuple (z, q_u);
-    }
-  }
-  //----------------------------------------------------------------------------
-  // This might belong somewhere else if made more generic. Do when required.
-  template <bool round, bool dither, class T>
-  std::tuple<fixpt_t, s16> quantize (T spl, s16 err_prev)
-  {
-    static_assert (is_fixpt_v<T>);
-    // Fraction-saving quantization
-    // https://dsp.stackexchange.com/questions/66171/single-pole-iir-filter-fixed-point-design
-    // https://dsp.stackexchange.com/questions/21792/best-implementation-of-a-real-time-fixed-point-iir-filter-with-constant-coeffic
-    // noise shaping only
-    constexpr uint n_truncated   = fixpt_acum_t::n_frac - fixpt_t::n_frac;
-    constexpr uint mask          = lsb_mask<uint> (n_truncated);
-    constexpr bool bidirectional = round || dither;
-
-    if constexpr (dither) {
-      spl = fixpt_clamp (
-        spl,
-        fixpt_t::min() + 3_r * fixpt_t::epsilon(),
-        fixpt_t::max() - 3_r * fixpt_t::epsilon());
-    }
-    else {
-      spl = fixpt_clamp (
-        spl,
-        fixpt_t::min() + fixpt_t::epsilon(),
-        fixpt_t::max() - fixpt_t::epsilon());
-    }
-
-    auto         out = (fixpt_acum_t) (spl + fixpt_acum_t::from (err_prev));
-    fixpt_acum_t d_out;
-    if constexpr (dither) {
-      // not throughly tested...
-      auto noise = tpdf_dither<n_truncated, fixpt_acum_t::scalar_type> (_noise);
-      d_out      = out + fixpt_acum_t::from (noise[0]);
-    }
-    else {
-      d_out = out;
-    }
-    assert_range (d_out);
-    fixpt_t q_out;
-    if constexpr (round) {
-      q_out = (fixpt_tr) d_out;
-    }
-    else {
-      q_out = (fixpt_t) d_out; // truncation
-    }
-    if constexpr (bidirectional) {
-      fixpt_acum_t errv = out - q_out;
-      auto         err  = (s16) (errv.value() & mask);
-      return std::make_tuple ((fixpt_t) q_out, err);
-    }
-    else {
-      auto err = (s16) (out.value() & mask);
-      return std::make_tuple (q_out, err);
-    }
-  }
-  //----------------------------------------------------------------------------
-  template <class T>
-  std::tuple<fixpt_t, s16> round (T v, s16 err_prev)
-  {
-    return quantize<true, false> (v, err_prev);
-  }
-  //----------------------------------------------------------------------------
-  template <class T>
-  std::tuple<fixpt_t, s16> truncate (T v, s16 err_prev)
-  {
-    return quantize<false, false> (v, err_prev);
+    return std::make_tuple (z, u);
   }
   //----------------------------------------------------------------------------
   template <class T, class Candidate>
@@ -1169,7 +1184,7 @@ public:
       auto err = state.err;
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < in.size(); ++i) {
-        auto [v, err_] = round (fn (in[i], i), err);
+        auto [v, err_] = quantization::round<T> (fn (in[i], i), err);
         out[i]         = v;
         err            = err_;
       }
@@ -1190,64 +1205,30 @@ public:
   {
     assert (out && in);
 
-    if constexpr (is_fixpt_v<T>) {
-      auto y1  = st.y1;
-      auto err = st.y1_err;
-
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < in.size(); ++i) {
-        auto         x = (fixpt_acum_t) in[i];
-        fixpt_acum_t gw;
-        if constexpr (is_generator<T, Gain>()) {
-          gw = (fixpt_acum_t) g (i);
-        }
-        else if constexpr (is_array_subscriptable_v<Gain>) {
-          gw = (fixpt_acum_t) g[i];
-        }
-        else {
-          gw = (fixpt_acum_t) g;
-        }
-        auto y           = (1_r - g) * x + g * y1;
-        auto [y1_, err_] = truncate (y, err);
-        y1               = y1_;
-        err              = err_;
-        if constexpr (Type == onepole_type::lp) {
-          out[i] = y1;
-        }
-        else {
-          static_assert (Type == onepole_type::hp);
-          out[i] = (fixpt_t) (x - y1);
-        }
+    auto y1 = st.y1;
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < in.size(); ++i) {
+      auto x = in[i];
+      T    gv;
+      if constexpr (is_generator<T, Gain>()) {
+        gv = (T) g (i);
       }
-      st.y1     = y1;
-      st.y1_err = err;
-    }
-    else {
-      auto y1 = st.y1;
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < in.size(); ++i) {
-        auto x = in[i];
-        T    gv;
-        if constexpr (is_generator<T, Gain>()) {
-          gv = (T) g (i);
-        }
-        else if constexpr (is_array_subscriptable_v<Gain>) {
-          gv = (T) g[i];
-        }
-        else {
-          gv = (T) g;
-        }
-        y1 = (1.f - gv) * x + gv * y1;
-        if constexpr (Type == onepole_type::lp) {
-          out[i] = y1;
-        }
-        else {
-          static_assert (Type == onepole_type::hp);
-          out[i] = (T) (x - y1);
-        }
+      else if constexpr (is_array_subscriptable_v<Gain>) {
+        gv = (T) g[i];
       }
-      st.y1 = y1;
+      else {
+        gv = (T) g;
+      }
+      y1 = (1_r - gv) * x + gv * y1;
+      if constexpr (Type == onepole_type::lp) {
+        out[i] = y1;
+      }
+      else {
+        static_assert (Type == onepole_type::hp);
+        out[i] = (T) (x - y1);
+      }
     }
+    st.y1 = y1;
   }
   //----------------------------------------------------------------------------
   template <class T, std::size_t N, class S>
@@ -1303,39 +1284,48 @@ public:
     LF&&     lfo_gen)
   {
     if constexpr (is_fixpt_v<T>) {
-      using fixpt_th = decltype (fixpt_acum_t {}.resize<2, -2>());
-
-      auto y1  = state.y1;
-      auto err = state.y1_err;
+      auto y1 = state.y1;
 
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < dst.size(); ++i) {
-        auto fixpt_spls = (delay_spls + (lfo_gen (i) * delay_mod_spls));
-        auto n_spls     = fixpt_spls.to_int();
+        auto dlfo        = lfo_gen (i).to_dynamic();
+        auto n_spls_full = (delay_spls + (dlfo * delay_mod_spls));
+        uint n_spls      = n_spls_full.to_int();
         n_spls -= i;
-        auto n_spls_frac = (fixpt_th) fixpt_spls.fractional();
-        auto d           = n_spls_frac + 0.418_r; // this might exceed 1
-        auto a           = (1_r - d) / (1_r + d); // 0.4104 to -1
-        auto z0          = (fixpt_th) delay.read (n_spls - 1);
-        auto z1          = (fixpt_th) delay.read (n_spls);
-        auto y           = (z0 * a) + z1 - (a * y1);
-        auto [y1_, err_] = truncate (y, err);
-        y1               = y1_;
-        err              = err_;
+        auto n_spls_frac = n_spls_full.fractional();
+        auto d           = n_spls_frac + 0.418_r;
+        auto a           = ((1_r - d) / (1_r + d)); // 0.4104 to -0.172
+        auto z0          = delay.read (n_spls - 1);
+        auto z1          = delay.read (n_spls);
+        y1               = z0 * a + z1 - a * y1;
         dst[i]           = y1;
+#if 0
+        auto n_spls_full_f = n_spls_full.to_floatp();
+        auto n_spls_frac_f = n_spls_frac.to_floatp();
+        auto d_f           = d.to_floatp();
+        auto a_f           = a.to_floatp();
+        auto z0_f          = z0.to_floatp();
+        auto z1_f          = z1.to_floatp();
+        auto y1_f          = y1.to_floatp();
+
+        assert (d_f >= 0.418 && d_f <= 1.418);
+        assert (a_f >= -0.1729 && a_f <= 0.41049);
+        assert (abs (z0_f) <= 1.f);
+        assert (abs (z1_f) <= 1.f);
+        assert (abs (y1_f) <= 1.f);
+#endif
       }
-      state.y1     = y1;
-      state.y1_err = err;
+      state.y1 = y1;
     }
     else {
       T y1 = state.y1;
 
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < dst.size(); ++i) {
-        T fixpt_spls
+        T n_spls_full
           = delay_spls.to_floatp() + (lfo_gen (i) * delay_mod_spls.to_floatp());
-        uint n_spls      = (uint) fixpt_spls;
-        T    n_spls_frac = fixpt_spls - n_spls;
+        uint n_spls      = (uint) n_spls_full;
+        T    n_spls_frac = n_spls_full - n_spls;
         n_spls -= i;
 
         T d = n_spls_frac + 0.418_r;
@@ -1358,27 +1348,28 @@ public:
     D&       delay,
     LF&&     lfo_gen)
   {
+    static uint prev = 0;
     if constexpr (is_fixpt_v<T>) {
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < dst.size(); ++i) {
-        auto fixpt_spls = (delay_spls + (lfo_gen (i) * delay_mod_spls));
-        auto n_spls     = fixpt_spls.to_int();
+        auto dlfo        = lfo_gen (i).to_dynamic();
+        auto n_spls_full = (delay_spls + (dlfo * delay_mod_spls));
+        auto n_spls      = n_spls_full.to_int();
         n_spls -= i;
-        auto n_spls_frac = fixpt_spls.fractional();
+        auto n_spls_frac = n_spls_full.fractional();
         auto zb          = delay.read (n_spls + 1);
         auto z           = delay.read (n_spls);
         static_assert (n_spls_frac.n_int == 0);
-        dst[i]
-          = (fixpt_t) (z * (n_spls_frac.max() - n_spls_frac) + zb * n_spls_frac);
+        dst[i] = (fixpt_t) (z * (1_r - n_spls_frac) + zb * n_spls_frac);
       }
     }
     else {
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < dst.size(); ++i) {
-        T fixpt_spls
+        T n_spls_full
           = delay_spls.to_floatp() + (lfo_gen (i) * delay_mod_spls.to_floatp());
-        uint  n_spls      = (uint) fixpt_spls;
-        float n_spls_frac = fixpt_spls - n_spls;
+        uint  n_spls      = (uint) n_spls_full;
+        float n_spls_frac = n_spls_full - n_spls;
         n_spls -= i;
         auto zb = delay.read (n_spls + 1);
         auto z  = delay.read (n_spls);
@@ -1454,7 +1445,6 @@ public:
   template <class T>
   using block_array = std::array<T, max_block_size>;
   //----------------------------------------------------------------------------
-  lowbias32_hash<1> _noise {};
 };
 
 // A class to abstract 16-bit storage, queue access and common DSP operations
@@ -1462,20 +1452,6 @@ public:
 // point.
 template <class Algorithm, delay::data_type Data_type, uint Max_block_size>
 class algo_engine : private algo_engine_untemplated {
-private:
-  //----------------------------------------------------------------------------
-  static constexpr auto one_impl()
-  {
-    if constexpr (Data_type == delay::data_type::fixpt16) {
-      return fixpt_t::max();
-    }
-    else if constexpr (Data_type == delay::data_type::float16) {
-      return fixpt_t::max_float(); // still can't represent 1
-    }
-    else if constexpr (Data_type == delay::data_type::float32) {
-      return 1.f;
-    }
-  }
   //----------------------------------------------------------------------------
 public:
   //----------------------------------------------------------------------------
@@ -1484,8 +1460,7 @@ public:
   using algorithm    = Algorithm;
   using spec         = spec_access<Algorithm>;
   //----------------------------------------------------------------------------
-  static constexpr uint       max_block_size = Max_block_size;
-  static constexpr value_type one            = one_impl();
+  static constexpr uint max_block_size = Max_block_size;
   //----------------------------------------------------------------------------
   static constexpr uint get_required_bytes()
   {
@@ -1623,9 +1598,10 @@ public:
     fetch_mod_en<Idx> (fb, std::forward<Lfo> (lfo));
     auto g_gen = base::get_gain_generator<value_type> (
       std::forward<G> (gain), spec::get_gain (Idx));
-    run_quantizer<Idx> (fb.data(), fb, [&] (auto v, uint i) {
-      return v * g_gen (i);
-    });
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < fb.size(); ++i) {
+      fb[i] *= g_gen (i);
+    }
   }
   // see comment on fetch/fetch_block overloads
   //----------------------------------------------------------------------------
@@ -1867,37 +1843,40 @@ private:
     base::run_crossover (out, in, g, bg, std::get<Idx> (_stages).state);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class U>
+  template <uint Idx, class P1, class P2, class P3>
   void run_crossover (
     value_type*             out,
     xspan<value_type const> in,
-    U&&                     f_lo,
-    U&&                     g_lo,
-    U&&                     g_hi)
+    P1&&                    f_lo,
+    P2&&                    g_lo,
+    P3&&                    g_hi)
   {
+    using vt = value_type;
     base::run_crossover (
       out,
       in,
-      make_array ((value_type) f_lo),
-      make_array ((value_type) g_lo, (value_type) g_hi),
+      make_array (arith_cast<vt> (f_lo)),
+      make_array (arith_cast<vt> (g_lo), arith_cast<vt> (g_hi)),
       std::get<Idx> (_stages).state);
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class U>
+  template <uint Idx, class P1, class P2, class P3, class P4, class P5>
   void run_crossover (
     value_type*             out,
     xspan<value_type const> in,
-    U                       f_lo,
-    U                       g_lo,
-    U                       f_mid,
-    U                       g_mid,
-    U                       g_hi)
+    P1&&                    f_lo,
+    P2&&                    g_lo,
+    P3&&                    f_mid,
+    P4&&                    g_mid,
+    P5&&                    g_hi)
   {
+    using vt = value_type;
     base::run_crossover (
       out,
       in,
-      make_array ((value_type) f_lo, (value_type) f_mid),
-      make_array ((value_type) g_lo, (value_type) g_mid, (value_type) g_hi),
+      make_array (arith_cast<vt> (f_lo), arith_cast<vt> (f_mid)),
+      make_array (
+        arith_cast<vt> (g_lo), arith_cast<vt> (g_mid), arith_cast<vt> (g_hi)),
       std::get<Idx> (_stages).state);
   }
   //----------------------------------------------------------------------------
@@ -2102,46 +2081,17 @@ private:
       [&] (auto&&... args) { return std::array {&args[0]...}; },
       std::forward_as_tuple (outs_arg...));
 
-    if constexpr (is_fixpt_v<value_type>) {
-      // multiply and accumulate at high resolution
-      std::array<std::array<fixpt_acum_t, max_block_size>, n_outs> acum {};
-      for (uint tap = 0; tap < tap_ptrs.size(); ++tap) {
-        ARTV_LOOP_UNROLL_SIZE_HINT (16)
-        for (uint i = 0; i < in.size(); ++i) {
-          acum[tap % n_outs][i] += tap_ptrs[tap][i] * (value_type) g[tap];
-        }
-      }
-      // quantize
-      state::quantizer_arr_fixpt<n_outs>& st  = std::get<Idx> (_stages).state;
-      auto&                               err = st.err;
-
-      for (uint out = 0; out < n_outs; ++out) {
-        ARTV_LOOP_UNROLL_SIZE_HINT (16)
-        for (uint i = 0; i < in.size(); ++i) {
-          auto [v, err_] = round (acum[out][i], err[out]);
-          if constexpr (out_overwrite) {
-            outs[out][i] = v;
-          }
-          else {
-            outs[out][i] = (value_type) (v + outs[out][i]);
-          }
-          err[out] = err_;
-        }
+    for (uint tap = 0; tap < n_extra_buff; ++tap) {
+      ARTV_LOOP_UNROLL_SIZE_HINT (16)
+      for (uint i = 0; i < in.size(); ++i) {
+        // reminder: &out == &tap_ptrs[0]
+        outs[tap][i] *= (value_type) g[tap];
       }
     }
-    else {
-      for (uint tap = 0; tap < n_extra_buff; ++tap) {
-        ARTV_LOOP_UNROLL_SIZE_HINT (16)
-        for (uint i = 0; i < in.size(); ++i) {
-          // reminder: &out == &tap_ptrs[0]
-          outs[tap][i] *= (value_type) g[tap];
-        }
-      }
-      for (uint tap = n_extra_buff; tap < tap_ptrs.size(); ++tap) {
-        ARTV_LOOP_UNROLL_SIZE_HINT (16)
-        for (uint i = 0; i < in.size(); ++i) {
-          outs[tap % n_outs][i] += tap_ptrs[tap][i] * (value_type) g[tap];
-        }
+    for (uint tap = n_extra_buff; tap < tap_ptrs.size(); ++tap) {
+      ARTV_LOOP_UNROLL_SIZE_HINT (16)
+      for (uint i = 0; i < in.size(); ++i) {
+        outs[tap % n_outs][i] += tap_ptrs[tap][i] * (value_type) g[tap];
       }
     }
   }
@@ -2413,6 +2363,18 @@ private:
     static_assert (last_ap_pos > 0 || !spec::is_allpass (idxs[1]));
     std::get<idxs[last_ap_pos]> (_stages).delay.push_block (
       xspan {fwd.data(), in.size()});
+  }
+  //----------------------------------------------------------------------------
+  // cast handling ratios
+  template <class T, class U>
+  T arith_cast (U v)
+  {
+    if constexpr (is_ratio_v<U>) {
+      return T {} + v;
+    }
+    else {
+      return static_cast<T> (v);
+    }
   }
   //----------------------------------------------------------------------------
   using block_array = std::array<value_type, max_block_size>;

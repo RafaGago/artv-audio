@@ -67,6 +67,14 @@ public:
     return {neg ? -((int_type) quo) : (int_type) quo, neg, n_int, n_frac};
   }
   //----------------------------------------------------------------------------
+  static constexpr float to_float() { return (float) num / (float) den; }
+  //----------------------------------------------------------------------------
+  static constexpr double to_double() { return (double) num / (double) den; }
+  //----------------------------------------------------------------------------
+  constexpr operator float() const { return to_float(); }
+  //----------------------------------------------------------------------------
+  constexpr operator double() const { return to_double(); }
+  //----------------------------------------------------------------------------
 };
 
 template <typename T, typename = void>
