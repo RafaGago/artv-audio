@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -404,34 +405,6 @@ using k_s64 = std::integral_constant<s64, N>;
 template <u64 N>
 using k_u64 = std::integral_constant<u64, N>;
 //------------------------------------------------------------------------------
-namespace detail {
-template <class tuple_like, class Func, size_t... Idxs>
-auto tuple_unpack (
-  tuple_like&& t,
-  Func&&       unpack_f,
-  std::index_sequence<Idxs...>)
-{
-  using ret_t = decltype (unpack_f (std::get<Idxs> (t)...));
-
-  if constexpr (std::is_same_v<ret_t, void>) {
-    unpack_f (std::get<Idxs> (t)...);
-    return nullptr;
-  }
-  else {
-    return unpack_f (std::get<Idxs> (t)...);
-  }
-}
-} // namespace detail
-
-template <template <class...> class tuple_like, class Func, class... Ts>
-auto tuple_unpack (tuple_like<Ts...>&& t, Func&& unpack_f)
-{
-  return detail::tuple_unpack (
-    std::forward<tuple_like<Ts...>> (t),
-    std::forward<Func> (unpack_f),
-    std::index_sequence_for<Ts...> {});
-}
-//------------------------------------------------------------------------------
 template <class T>
 constexpr bool is_aligned_to (uint align, T* v)
 {
@@ -496,6 +469,91 @@ constexpr decltype (auto) lambda_forward (V&& value, F&& func)
 {
   return func (std::forward<V> (value));
 }
+//------------------------------------------------------------------------------
+template <uint Val, class T>
+struct index_seq_add;
+
+template <uint Val, uint... Idx>
+struct index_seq_add<Val, std::index_sequence<Idx...>> {
+  using type = std::index_sequence<(Val + Idx)...>;
+};
+
+template <uint Offset, class T>
+using index_seq_add_t = typename index_seq_add<Offset, T>::type;
+//------------------------------------------------------------------------------
+template <uint Val, class T>
+struct index_seq_mul;
+
+template <uint Val, uint... Idx>
+struct index_seq_mul<Val, std::index_sequence<Idx...>> {
+  using type = std::index_sequence<(Idx * Val)...>;
+};
+
+template <uint Val, class T>
+using index_seq_mul_t = typename index_seq_mul<Val, T>::type;
+//------------------------------------------------------------------------------
+// visit a variadic pack in a lambda
+//------------------------------------------------------------------------------
+template <std::size_t... Idxs, class... Ts, class Fn>
+constexpr auto vpack_visit (
+  std::index_sequence<Idxs...>,
+  Ts&&... args,
+  Fn&& visitor)
+{
+  auto tpl = std::forward_as_tuple (args...);
+  return visitor (std::get<Idxs> (tpl)...);
+}
+
+template <uint Offset, uint N, class... Ts, class Fn>
+constexpr auto vpack_visit (Ts&&... args, Fn&& visit)
+{
+  static_assert ((N + Offset) <= sizeof...(args));
+  return vpack_visit (
+    index_seq_add<Offset, std::make_index_sequence<N>> {},
+    std::forward<Ts> (args)...,
+    std::forward<Fn> (visit));
+}
+
+template <uint Offset, class... Ts, class Fn>
+constexpr auto vpack_visit (Ts&&... args, Fn&& visit)
+{
+  static_assert (Offset <= sizeof...(args));
+  return vpack_visit<sizeof...(Ts) - Offset, Offset> (
+    std::forward<Ts> (args)..., std::forward<Fn> (visit));
+}
+
+template <class... Ts, class Fn>
+constexpr auto vpack_visit (Ts&&... args, Fn&& visit)
+{
+  return vpack_visit<0> (std::forward<Ts> (args)..., std::forward<Fn> (visit));
+}
+//------------------------------------------------------------------------------
+template <std::size_t... Idxs, class... Ts>
+constexpr auto forward_range_as_tuple (
+  std::index_sequence<Idxs...> s,
+  Ts&&... args)
+{
+  return vpack_visit (s, std::forward<Ts> (args)..., [] (auto... targs) {
+    return std::forward_as_tuple (targs...);
+  });
+}
+
+template <uint Offset, uint N, class... Ts>
+constexpr auto forward_range_as_tuple (Ts&&... args)
+{
+  return vpack_visit<Offset, N> (
+    std::forward<Ts> (args)...,
+    [] (auto... targs) { return std::forward_as_tuple (targs...); });
+}
+
+template <uint Offset, class... Ts>
+constexpr auto forward_range_as_tuple (Ts&&... args)
+{
+  return vpack_visit<Offset> (std::forward<Ts> (args)..., [] (auto... targs) {
+    return std::forward_as_tuple (targs...);
+  });
+}
+
 //------------------------------------------------------------------------------
 #if 0
 //clang-format off

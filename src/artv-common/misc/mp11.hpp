@@ -98,23 +98,6 @@ struct mp_not_in_list_qm {
 template <class L, class L_rm>
 using mp_remove_all = mp11::mp_remove_if_q<L, mp_not_in_list_qm<L_rm>>;
 //------------------------------------------------------------------------------
-template <uint Offset, class T>
-struct add_offset;
-
-template <uint Offset, uint... Idx>
-struct add_offset<Offset, std::index_sequence<Idx...>> {
-  using type = std::index_sequence<(Offset + Idx)...>;
-};
-
-template <uint Offset, uint... Idx>
-struct add_offset<Offset, mp11::index_sequence<Idx...>> {
-  using type = mp11::index_sequence<(Offset + Idx)...>;
-};
-
-template <uint Offset, class T>
-using add_offset_t = typename add_offset<Offset, T>::type;
-//------------------------------------------------------------------------------
-
 namespace detail {
 
 template <template <class...> class Mixed, class... Ls>
@@ -150,7 +133,7 @@ struct mp_mix_impl<Pair, L1<LE1...>, L2<LE2...>> {
 
 template <template <class...> class Mixed, class... Ls>
 using mp_mix = typename detail::mp_mix_impl<Mixed, Ls...>::type;
-
+//------------------------------------------------------------------------------
 } // namespace artv
 
 #else
