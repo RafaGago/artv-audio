@@ -684,7 +684,7 @@ struct y1_float {
 //------------------------------------------------------------------------------
 template <uint N>
 struct y1_float_arr {
-  std::array<y1_float, N> arr;
+  std::array<y1_float, N> y1;
 };
 //------------------------------------------------------------------------------
 struct y1_fixpt {
@@ -693,7 +693,7 @@ struct y1_fixpt {
 //------------------------------------------------------------------------------
 template <uint N>
 struct y1_fixpt_arr {
-  std::array<y1_fixpt, N> arr;
+  std::array<y1_fixpt, N> y1;
 };
 //------------------------------------------------------------------------------
 template <class T_err>
@@ -1387,7 +1387,7 @@ public:
       // starting from higher to lower freq.
       uint idx = n_bands - 1 - b;
       run_1pole<onepole_type::lp, T> (
-        band[b + 1], xspan {band[b], in.size()}, freq[idx], state.arr[b]);
+        band[b + 1], xspan {band[b], in.size()}, freq[idx], state.y1[b]);
 
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < in.size(); ++i) {
@@ -1528,7 +1528,7 @@ public:
     delay.push_block (in);
   }
   //----------------------------------------------------------------------------
-  template <class T, class D, class... Lfo>
+  template <class T, class D>
   void run_thiran_mod_multitap_delay (
     xspan<T * artv_restrict>    outs,
     xspan<T const>              in,
@@ -1565,7 +1565,7 @@ public:
     delay.push_block (in);
   }
   //----------------------------------------------------------------------------
-  template <class T, class D, class... Lfo>
+  template <class T, class D>
   static void run_lerp_mod_multitap_delay (
     xspan<T * artv_restrict>    outs,
     xspan<T const>              in,
@@ -1583,6 +1583,7 @@ public:
       assert (dst.data() != in.data()); // unwanted aliasing with input
       block_array<T> tmp_mem;
       xspan out {out_overwrite ? dst.data() : tmp_mem.data(), in.size()};
+
       if (mod[i]) {
         run_lerp (out, spls[i], mod_spls[i], delay, [=] (uint j) {
           return mod[i][j];
@@ -2296,8 +2297,8 @@ private:
     uint                                       mod_mem_idx = 0;
 
     mp11::mp_for_each<mp11::mp_iota_c<mod.size()>> ([&] (auto i) {
-      auto p  = std::get<i> (mod_tpl);
-      using T = std::remove_cv_t<std::remove_reference_t<decltype (p)>>;
+      auto&& p = std::get<i> (mod_tpl);
+      using T  = std::remove_cv_t<std::remove_reference_t<decltype (p)>>;
       if constexpr (is_array_subscriptable_v<T>) {
         mod[i] = &p[0];
       }
@@ -2326,7 +2327,7 @@ private:
         out_overwrite,
         stage.delay,
         xspan {mod},
-        stage.state.arr);
+        stage.state.y1);
     }
     else {
       base::run_lerp_mod_multitap_delay<value_type> (
@@ -2341,117 +2342,146 @@ private:
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class Tag, class... Args>
-  void run_parallel_delays (xspan<value_type const> in, Tag, Args&&... outs_arg)
+  void run_parallel_delays (
+    xspan<value_type const> in_maybe_aliased,
+    Tag,
+    Args&&... outs_arg)
   {
-    constexpr bool out_overwrite     = !std::is_same_v<Tag, add_to_out_tag>;
-    constexpr xspan<fixpt_t const> g = spec::get_gains (Idx);
-    constexpr auto                 n_outs       = spec::get_n_outs (Idx);
-    constexpr auto                 n_out_reused = out_overwrite ? n_outs : 0;
-    static_assert (n_outs <= g.size());
+    constexpr bool out_overwrite = !std::is_same_v<Tag, add_to_out_tag>;
+    constexpr xspan<fixpt_spls const> spls   = spec::get_delays_spls (Idx);
+    constexpr xspan<fixpt_t const>    g      = spec::get_gains (Idx);
+    constexpr auto                    n_outs = spec::get_n_outs (Idx);
+    static_assert (n_outs <= spls.size());
     static_assert (sizeof...(outs_arg) == n_outs);
 
-    // TODO: would an implementation adding in place, aka, not reusing
-    // "run_multitap_delay" be better because of the reduced number of
-    // buffers/cache?
-
-    // prepare arguments for "run_multitap_delay"'
     std::array<value_type*, n_outs> outs
       = to_ptr_array (std::forward_as_tuple (outs_arg...));
-    std::array<block_array, g.size() - n_out_reused> tap_tmp;
-    std::array<value_type*, g.size()>                tap_ptrs;
-    for (uint i = 0; i < n_out_reused; ++i) {
-      tap_ptrs[i] = outs[i];
+    for (uint i = 1; i < outs.size(); ++i) {
+      // only the first out can alias
+      assert (&outs[i][0] != in_maybe_aliased.data());
     }
-    for (uint i = 0; i < tap_tmp.size(); ++i) {
-      tap_ptrs[n_out_reused + i] = tap_tmp[i].data();
+
+    block_array             in_cp_mem {};
+    xspan<value_type const> in;
+    if (out_overwrite || (&in_maybe_aliased[0] != &outs[0][0])) {
+      in = in_maybe_aliased;
     }
-    // call
-    std::apply (
-      [&] (auto&&... args) {
-        run_multitap_delay<Idx> (in, overwrite, args...);
-      },
-      tap_ptrs);
-    // output overwrite aware sum
-    for (uint tap = 0; tap < n_out_reused; ++tap) {
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < in.size(); ++i) {
-        // reminder: &out == &tap_ptrs[0]
-        outs[tap][i] *= (value_type) g[tap];
+    else {
+      // aliasing the first output with the input is allowed, but not others
+      xspan_memdump (in_cp_mem.data(), in_maybe_aliased);
+      in = xspan {in_cp_mem.data(), in_maybe_aliased.size()};
+    }
+    if (out_overwrite) {
+      for (auto& out : outs) {
+        memset (&out[0], 0, sizeof (out[0]) * in.size());
       }
     }
-    for (uint tap = n_out_reused; tap < tap_ptrs.size(); ++tap) {
+    auto&       delay = std::get<Idx> (_stages).delay;
+    block_array tmp_mem;
+    xspan       tmp {tmp_mem.data(), in.size()};
+    for (uint d = 0; d < spls.size(); ++d) {
+      delay.read_block (tmp, spls[d].to_int());
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < in.size(); ++i) {
-        outs[tap % n_outs][i] += tap_ptrs[tap][i] * (value_type) g[tap];
+        outs[d % n_outs][i] += tmp[i] * (value_type) g[d];
       }
     }
+    delay.push_block (in);
   }
   //----------------------------------------------------------------------------
-  // args contains n_outs followed by all the modulations
   template <uint Idx, class Tag, class... Ts>
-  void run_parallel_mod_delays (xspan<value_type const> in, Tag, Ts&&... args)
+  void run_parallel_mod_delays (
+    xspan<value_type const> in_maybe_aliased,
+    Tag,
+    Ts&&... args) // args contains n_outs followed by all the modulations
   {
-    constexpr bool out_overwrite        = !std::is_same_v<Tag, add_to_out_tag>;
-    constexpr xspan<fixpt_t const>  g   = spec::get_gains (Idx);
-    constexpr xspan<fixpt_spls_mod> mod = spec::get_delays_mod_spls (Idx);
-    constexpr auto                  n_outs       = spec::get_n_outs (Idx);
-    constexpr auto                  n_out_reused = out_overwrite ? n_outs : 0;
-    static_assert (n_outs <= g.size());
-    static_assert (sizeof...(args) == (n_outs + g.size()));
-
-    // TODO: would an implementation adding in place, aka, not reusing
-    // "run_multitap_mod_delay" be better because of the reduced number of
-    // buffers/cache?
+    constexpr bool out_overwrite = !std::is_same_v<Tag, add_to_out_tag>;
+    constexpr xspan<fixpt_spls const>     spls = spec::get_delays_spls (Idx);
+    constexpr xspan<fixpt_t const>        g    = spec::get_gains (Idx);
+    constexpr xspan<fixpt_spls_mod const> mod = spec::get_delays_mod_spls (Idx);
+    constexpr auto                        n_outs = spec::get_n_outs (Idx);
+    static_assert (n_outs <= spls.size());
+    static_assert (sizeof...(args) == (n_outs + spls.size()));
 
     // prepare output pointers to call "run_multitap_mod_delay"
     std::array<value_type*, n_outs> outs = to_ptr_array (
       forward_range_as_tuple<0, n_outs> (std::forward<Ts> (args)...));
-    std::array<block_array, g.size() - n_out_reused> tap_tmp;
-    std::array<value_type*, g.size()>                tap_ptrs;
-    for (uint i = 0; i < n_out_reused; ++i) {
-      tap_ptrs[i] = outs[i];
+    for (uint i = 1; i < outs.size(); ++i) {
+      // only the first out can alias
+      assert (&outs[i][0] != in_maybe_aliased.data());
     }
-    for (uint i = 0; i < tap_tmp.size(); ++i) {
-      tap_ptrs[n_out_reused + i] = tap_tmp[i].data();
-    }
-    // interleave modulator arguments to match "run_multitap_mod_delay"'s
-    // signature
-    auto mods_tpl = forward_range_as_tuple<n_outs> (std::forward<Ts> (args)...);
-    // intersperse, inserts value_type* at odd positions, add something to erase
-    using args_tmp1 = mp11::mp_push_front<decltype (mods_tpl), void>;
-    using args_tmp2 = mp11::mp_intersperse<args_tmp1, value_type*>;
-    // erase trailing dummy void type
-    using args_tpl = mp11::mp_pop_front<args_tmp2>;
 
-    args_tpl mtm_delay_args;
-    mp11::mp_for_each<mp11::mp_iota_c<n_outs>> ([&] (auto i) {
-      if constexpr ((i % 2) == 0) {
-        std::get<i> (mtm_delay_args) = tap_ptrs[i / 2];
+    block_array             in_cp_mem {};
+    xspan<value_type const> in;
+    if (out_overwrite || (&in_maybe_aliased[0] != &outs[0][0])) {
+      in = in_maybe_aliased;
+    }
+    else {
+      // aliasing the first output with the input is allowed, but not others
+      xspan_memdump (in_cp_mem.data(), in_maybe_aliased);
+      in = xspan {in_cp_mem.data(), in_maybe_aliased.size()};
+    }
+    if (out_overwrite) {
+      for (auto& out : outs) {
+        memset (&out[0], 0, sizeof (out[0]) * in.size());
+      }
+    }
+
+    auto mods_tpl = forward_range_as_tuple<n_outs> (std::forward<Ts> (args)...);
+    auto&       stage = std::get<Idx> (_stages);
+    block_array tmp_mem;
+    xspan       tmp {tmp_mem.data(), in.size()};
+
+    mp11::mp_for_each<mp11::mp_iota_c<spls.size()>> ([&] (auto d) {
+      auto&& dmod = std::get<d> (mods_tpl);
+      using T     = std::remove_cv_t<std::remove_reference_t<decltype (dmod)>>;
+      constexpr bool is_lerp = *spec::get_interp (Idx) == interpolation::linear;
+
+      if constexpr (is_array_subscriptable_v<T>) {
+        if constexpr (is_lerp) {
+          base::run_lerp (tmp, spls[d], mod[d], stage.delay, [&] (uint i) {
+            return dmod[i];
+          });
+        }
+        else {
+          base::run_thiran (
+            tmp, spls[d], mod[d], stage.delay, stage.state.y1[d], [&] (uint i) {
+              return dmod[i];
+            });
+        }
+      }
+      else if constexpr (
+        std::is_same_v<T, defaulted_tag> || std::is_same_v<T, std::nullptr_t>) {
+        stage.delay.read_block (tmp, spls[d].to_int());
       }
       else {
-        std::get<i> (mtm_delay_args) = std::get<i / 2> (mods_tpl);
+        static_assert (base::is_generator<value_type, T>);
+        if constexpr (is_lerp) {
+          base::run_lerp (
+            tmp,
+            spls[d],
+            mod[d],
+            stage.delay,
+            stage.state.y1[d],
+            std::move (dmod));
+        }
+        else {
+          base::run_thiran (
+            tmp,
+            spls[d],
+            mod[d],
+            stage.delay,
+            stage.state.y1[d],
+            std::move (dmod));
+        }
+      }
+      // sum and gain
+      ARTV_LOOP_UNROLL_SIZE_HINT (16)
+      for (uint i = 0; i < in.size(); ++i) {
+        outs[d % n_outs][i] += tmp[i] * (value_type) g[d];
       }
     });
-    // do the call itself
-    std::apply (
-      [&] (auto&&... args) {
-        run_multitap_mod_delay<Idx> (in, overwrite, args...);
-      },
-      mtm_delay_args);
-
-    for (uint tap = 0; tap < n_out_reused; ++tap) {
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < in.size(); ++i) {
-        // reminder: &out == &tap_ptrs[0]
-        outs[tap][i] *= (value_type) g[tap];
-      }
-    }
-    for (uint tap = n_out_reused; tap < tap_ptrs.size(); ++tap) {
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < in.size(); ++i) {
-        outs[tap % n_outs][i] += tap_ptrs[tap][i] * (value_type) g[tap];
-      }
-    }
+    stage.delay.push_block (in);
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class Range>
