@@ -12,7 +12,7 @@ slider10:predelay=1<1, 2400, 1> Predelay
 slider21:db_wet=-12<-40, 12,0.1> Wet dB
 slider20:db_dry=0<-60, 0,0.1> Dry dB
 
-slider23:offset=0<0, 30, 1> Offset
+slider23:offset=0<-50, 50, 1> Offset
 
 import _core.jsfx-inc
 import _easy_allpass_reverb.jsfx-inc
@@ -112,7 +112,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   // halving an additional time to leave headroom
   m = (src.ins.ptr[0] + src.ins.ptr[1]) * 0.5 * 0.5;
-  m = fi1.lp (m, 0.15);
+  m = fi1.lp (m, 0.1);
   m = fi2.hp (m, 0.985);
   ml = m;
 
@@ -124,7 +124,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   ci = ml + fb1;
   fb1 = fb1.crossv2 (ci, flo, fhi, glo, ghi);
-  fb1 = delay_fb (fb1, 3821, lfo.ret.ptr[0] * mod, 54, decayfb, k.src.srate, -1);
+  fb1 = delay_fb (fb1, 3821 - 1, lfo.ret.ptr[0] * mod, 54, decayfb, k.src.srate, -1);
 //  fb1 = delay (fb1, 3789) * -decayfb;
   t = delay (ci, 429) * -sumgain; // notice assign not sum
   t += delay (ci, 1000) * sumgain;
@@ -135,7 +135,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   ci = ml + fb2;
   fb2 = fb2.crossv2 (ci, flo, fhi, glo, ghi);
-  fb2 = delay_fb (fb2, 4036, lfo.ret.ptr[1] * mod, 53, decayfb, k.src.srate, -1);
+  fb2 = delay_fb (fb2, 4036 + 1, lfo.ret.ptr[1] * mod, 53, decayfb, k.src.srate, -1);
   fb2 = delay (fb2, 32);
   t += delay (ci, 616) * -sumgain;
   t += delay (ci, 1225) * sumgain;

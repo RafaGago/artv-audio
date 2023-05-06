@@ -745,7 +745,7 @@ function easyapv_get (idx, spls) local() global (easyapv_del*) (
 );
 
 
-n_lines = 96; // more than we need
+n_lines = 128; // more than we need
 max_delay = 8192;
 easyapv_del_idx = 0; // to avoid passing parameters
 easyapv_del.delay_line_init (round_next_pow2 (max_delay), n_lines);

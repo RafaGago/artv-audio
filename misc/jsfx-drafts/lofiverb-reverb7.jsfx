@@ -1,4 +1,4 @@
-desc: large hall
+//desc: large hall
 slider1:decay_p=0.8<0,1,0.01> Decay
 
 slider3:mod=0.5<0,1,0.01> Mod

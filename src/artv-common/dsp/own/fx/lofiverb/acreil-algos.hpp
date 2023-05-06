@@ -420,7 +420,7 @@ public:
   {
     constexpr float g = 0.125f;
     return make_array<stage_data> (
-      make_lp (0.12), // 0
+      make_lp (0.1), // 0
       make_hp (0.99), // 1
       make_parallel_delay (1, 42, -g, 586, g, 1099, -g), // 2 (L)
       make_parallel_delay (1, 105, g, 490, -g, 1290, g), // 3 (R)
@@ -430,7 +430,7 @@ public:
       make_parallel_delay (
         1, 640, -g, 1494, g, 2199, -g, 3122, g, 4135, -g, 4952, g), // 6
 
-      make_comb (5779 - 1, 0.f, 44), // 7
+      make_comb (5779 - 2, 0.f, 44), // 7
       make_crossover2(), // 8
       make_parallel_delay (
         1,
@@ -447,7 +447,7 @@ public:
         5432,
         g), // 9
 
-      make_comb (5905 - 1, 0.f, 42), // 10
+      make_comb (5905, 0.f, 42), // 10
       make_crossover2(), // 11
       make_parallel_delay (
         1,
@@ -509,7 +509,7 @@ public:
     sample flo = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
     sample glo = load_float<sample> (0.8f + upar.lf_amt * 0.18f);
     sample fhi = load_float<sample> (0.7f - upar.hf_amt * upar.hf_amt * 0.05f);
-    sample ghi = load_float<sample> (dec2 * 0.25f + upar.hf_amt * 0.45f);
+    sample ghi = load_float<sample> (dec2 * 0.54f + upar.hf_amt * 0.45f);
 
     xspan comb_fb {tmp1.data(), io.size()};
     _eng.fetch (sl<4> {}, comb_fb, lfo1, -gains[0]);
@@ -611,7 +611,7 @@ public:
   {
     constexpr float g = 0.125f;
     return make_array<stage_data> (
-      make_lp (0.15), // 0
+      make_lp (0.1), // 0
       make_hp (0.985), // 1
 
       make_comb (3821 - 1, 0.f, 54), // 2
@@ -619,7 +619,7 @@ public:
       make_parallel_delay (
         1, 429, -g, 1000, g, 1472, -g, 2088, g, 2765, -g, 3311, g), // 4
 
-      make_comb (4036 - 1, 0.f, 53), // 5
+      make_comb (4036 + 1, 0.f, 53), // 5
       make_crossover2(), // 6
       make_parallel_delay (
         1,
@@ -636,7 +636,7 @@ public:
         3631,
         g), // 7
 
-      make_comb (4059 - 1, 0.f, 44.f), // 8
+      make_comb (4059, 0.f, 44.f), // 8
       make_crossover2(), // 9
       make_parallel_delay (
         1,
@@ -694,7 +694,7 @@ public:
     float dec2 = as_float (par.decay[0]);
     dec2 *= dec2;
     auto gains
-      = _eng.get_gain_for_rt60 (sl<3, 6, 9> {}, 0.25f + dec2 * 10.f, srate);
+      = _eng.get_gain_for_rt60 (sl<2, 5, 8> {}, 0.25f + dec2 * 10.f, srate);
     sample flo = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
     sample glo = load_float<sample> (0.88f + upar.lf_amt * 0.1f);
     sample fhi = load_float<sample> (0.82f - upar.hf_amt * upar.hf_amt * 0.4f);
@@ -805,25 +805,25 @@ public:
   {
     constexpr float g = 0.125f;
     return make_array<stage_data> (
-      make_lp (0.18), // 0
+      make_lp (0.1), // 0
       make_hp (0.985), // 1
       make_ap (115, -0.7f), // 2
       make_ap (160, -0.7f), // 3
       make_ap (231, -0.7f), // 4
 
-      make_comb (3794 - 1, 0.f, 23), // 5
+      make_comb (3794, 0.f, 23), // 5
       make_crossover2(), // 6
       make_parallel_delay (2, 20 + 13, -g, 959, g, 1817, -g, 2855, g), // 7 R/L
 
-      make_comb (3838 - 1, 0.f, 24), // 8
+      make_comb (3838, 0.f, 24), // 8
       make_crossover2(), // 9
       make_parallel_delay (2, 339, -g, 1309, g, 2271, -g, 3221, g), // 10 R/L
 
-      make_comb (3861 - 1, 0.f, 25), // 11
+      make_comb (3861 - 2, 0.f, 25), // 11
       make_crossover2(), // 12
       make_parallel_delay (2, 130, -g, 1104, g, 2065, -g, 3391, g), // 13 R/L
 
-      make_comb (3894 - 1, 0.f, 26), // 14
+      make_comb (3894 + 1, 0.f, 26), // 14
       make_crossover2(), // 15
       make_parallel_delay (2, 499, -g, 1445, g, 2071, -g, 2885, g), // 16 R/L
       // L
@@ -974,17 +974,17 @@ public:
   {
     constexpr float g = 0.125f;
     return make_array<stage_data> (
-      make_lp (0.185), // 0
+      make_lp (0.35), // 0
       make_hp (0.99), // 1
       make_ap (115, -0.7f), // 2
       make_ap (214, -0.7f), // 3
       make_ap (365, -0.7f), // 4
 
-      make_comb (5652 - 1, 0.f, 57), // 5
+      make_comb (5652 - 5, 0.f, 57), // 5
       make_crossover2(), // 6
       make_parallel_delay (2, 745, -g, 2164, g, 2922, -g, 5005, g), // 7 R/L
 
-      make_comb (5679 - 1, 0.f), // 8
+      make_comb (5679 + 1, 0.f), // 8
       make_crossover2(), // 9
       make_parallel_delay (2, 625, -g, 2080, g, 3523, -g, 4948, g), // 10 R/L
 
@@ -993,7 +993,7 @@ public:
       make_parallel_delay (
         2, 11 + 21, -g, 1435, g, 2769, -g, 4279, g), // 13 R/L
 
-      make_comb (5711 - 1, 0.f, 57), // 14
+      make_comb (5711 + 3, 0.f, 57), // 14
       make_crossover2(), // 15
       make_parallel_delay (2, 59, -g, 1557, g, 3539, -g, 4304, g), // 16 R/L
       // L
@@ -1143,6 +1143,7 @@ public:
   static constexpr auto get_spec()
   {
     constexpr float g = 0.125f;
+    ;
     return make_array<stage_data> (
       make_lp (0.18), // 0
       make_hp (0.987), // 1
