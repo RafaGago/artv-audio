@@ -1487,10 +1487,7 @@ private:
     return ($m0 * sample + $m1 * $v1 + $m2 * $v2);
   }
   //----------------------------------------------------------------------------
-  double init$fastreciprocal (double value)
-  {
-    return jsfx_sqr (jsfx_invsqrt (value));
-  }
+  double init$fastreciprocal (double value) { return 1. / value; }
   //----------------------------------------------------------------------------
   double init$gaincalcsetup (
     double  dbthreshold,

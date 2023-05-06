@@ -1200,26 +1200,10 @@ private:
   }
 #if 1
   // Was missing, typical quake impl
-  double invsqrt (double number)
-  {
-    double       y  = number;
-    double       x2 = y * 0.5;
-    std::int64_t i  = *(std::int64_t*) &y;
-    // The magic number is for doubles is from
-    // https://cs.uwaterloo.ca/~m32rober/rsqrt.pdf
-    i = 0x5fe6eb50c7b537a9 - (i >> 1);
-    y = *(double*) &i;
-    y = y * (1.5 - (x2 * y * y)); // 1st iteration
-    y = y * (1.5 - (x2 * y * y)); // 2nd iteration, this can be removed
-    return y;
-  }
+  static double invsqrt (double v) { return 1. / sqrt (v); }
 #endif
   //----------------------------------------------------------------------------
-  double init$fastreciprocal (double value)
-  {
-    double v = invsqrt (value);
-    return v * v;
-  }
+  double init$fastreciprocal (double value) { return 1. / value; }
   //----------------------------------------------------------------------------
   double init$gaincalcsetup (
     double  dbthreshold,
