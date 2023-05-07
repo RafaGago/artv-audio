@@ -73,6 +73,7 @@ public:
 #ifndef LOFIVERB_DEBUG_ALGO
         "Artv Abyss",
         "Artv Arena",
+        "Artv Palace",
         "Artv FlutterPlate",
         "Artv Ambience",
         "Acreil Midifex 49",
@@ -527,6 +528,9 @@ private:
     detail::lofiverb::arena<dt_fix16>,
     detail::lofiverb::arena<dt_flt16>,
     detail::lofiverb::arena<dt_flt32>,
+    detail::lofiverb::palace<dt_fix16>,
+    detail::lofiverb::palace<dt_flt16>,
+    detail::lofiverb::palace<dt_flt32>,
     detail::lofiverb::plate1<dt_fix16>,
     detail::lofiverb::plate1<dt_flt16>,
     detail::lofiverb::plate1<dt_flt32>,

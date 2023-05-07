@@ -196,7 +196,7 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   l *= 0.1;
   r *= 0.1;
 
-+   l -= easyapv_get (q1i, 615) * 0.1;
+  l -= easyapv_get (q1i, 615) * 0.1;
   r += easyapv_get (q2i, 873) * 0.1;
 
 

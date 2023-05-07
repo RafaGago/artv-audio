@@ -39,7 +39,7 @@ using fixpt_tt = fixpt_s<1, 4, 27, fixpt_relaxed_frac_assign>;
 using fixpt_t        = fixpt_tt;
 using fixpt_sto16    = fixpt_s<1, 0, 15, 0>;
 using fixpt_spls     = fixpt_m<0, 14, 0, 0>;
-using fixpt_spls_mod = fixpt_m<0, 9, 0, 0>;
+using fixpt_spls_mod = fixpt_m<1, 9, 0, 0>;
 
 using float16 = f16pack<5, -1, f16pack_dftz | f16pack_clamp>;
 
@@ -280,7 +280,7 @@ static constexpr stage_data make_mod_parallel_delay (
       ret.g[i / 3] = fixpt_t::from_float (std::get<i> (tpl));
     }
     else {
-      ret.mod[i / 3] = fixpt_t::from_int (std::get<i> (tpl));
+      ret.mod[i / 3] = fixpt_spls_mod::from_int (std::get<i> (tpl));
     }
   });
   ret.count  = nargs / 3;
@@ -470,8 +470,12 @@ public:
   //----------------------------------------------------------------------------
   static constexpr xspan<fixpt_t const> get_gains (uint i)
   {
-    if (is_parallel_delay (i) || is_parallel_mod_delay (i)) {
+    if (is_parallel_delay (i)) {
       auto& v = std::get<parallel_delay_data> (spec[i]);
+      return {v.g.data(), v.count};
+    }
+    else if (is_parallel_mod_delay (i)) {
+      auto& v = std::get<parallel_mod_delay_data> (spec[i]);
       return {v.g.data(), v.count};
     }
     else if (is_allpass (i)) {
@@ -604,11 +608,24 @@ public:
       auto ds = get_delays_spls (i);
       return std::max_element (ds.begin(), ds.end())->to_int();
     }
+    if (is_parallel_mod_delay (i) || is_multitap_mod_delay (i)) {
+      auto ds  = get_delays_spls (i);
+      auto ms  = get_delays_mod_spls (i);
+      uint max = 0;
+      for (uint i = 0; i < ds.size(); ++i) {
+        auto mod  = ms[i].to_int();
+        mod       = mod >= 0 ? mod : -mod; // abs is not constexpr until C++23
+        uint absv = max = std::max<uint> (max, ds[i].to_int() + mod + 1);
+      }
+      return max;
+    }
     else if (is_variable_delay (i)) {
       return std::get<variable_delay_data> (spec[i]).max_spls.to_int();
     }
     else {
-      return get_delay_spls (i).to_int() + get_delay_mod_spls (i).to_int()
+      auto mod = get_delay_mod_spls (i).to_int();
+      mod      = mod >= 0 ? mod : -mod; // abs is not constexpr until C++23
+      return get_delay_spls (i).to_int() + mod
         + ((has_modulated_delay (i)) ? 1 // extra tail spl for thiran/lerp
                                      : 0);
     }
@@ -616,7 +633,9 @@ public:
   //----------------------------------------------------------------------------
   static constexpr uint get_min_delay_spls (uint i)
   {
-    if (is_parallel_delay (i) || is_multitap_delay (i)) {
+    if (
+      is_parallel_delay (i) || is_parallel_mod_delay (i)
+      || is_multitap_delay (i) || is_multitap_mod_delay (i)) {
       auto ds = get_delays_spls (i);
       return std::min_element (ds.begin(), ds.end())->to_int();
     }
@@ -637,6 +656,9 @@ public:
   {
     if (is_parallel_delay (i)) {
       return std::get<parallel_delay_data> (spec[i]).n_outs;
+    }
+    else if (is_parallel_mod_delay (i)) {
+      return std::get<parallel_mod_delay_data> (spec[i]).n_outs;
     }
     else {
       return 1;
@@ -684,7 +706,7 @@ struct y1_float {
 //------------------------------------------------------------------------------
 template <uint N>
 struct y1_float_arr {
-  std::array<y1_float, N> y1;
+  std::array<float, N> y1;
 };
 //------------------------------------------------------------------------------
 struct y1_fixpt {
@@ -693,7 +715,7 @@ struct y1_fixpt {
 //------------------------------------------------------------------------------
 template <uint N>
 struct y1_fixpt_arr {
-  std::array<y1_fixpt, N> y1;
+  std::array<fixpt_t, N> y1;
 };
 //------------------------------------------------------------------------------
 template <class T_err>
@@ -1335,11 +1357,11 @@ public:
   enum onepole_type { lp, hp };
   //----------------------------------------------------------------------------
   template <onepole_type Type, class T, class Gain, class State>
-  void run_1pole (T* out, xspan<T const> in, Gain g, State& st)
+  void run_1pole (T* out, xspan<T const> in, Gain g, State& y1s)
   {
     assert (out && in);
 
-    auto y1 = st.y1;
+    auto y1 = y1s;
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < in.size(); ++i) {
       auto x = in[i];
@@ -1362,7 +1384,7 @@ public:
         out[i] = (T) (x - y1);
       }
     }
-    st.y1 = y1;
+    y1s = y1;
   }
   //----------------------------------------------------------------------------
   template <class T, std::size_t N, class S>
@@ -1897,16 +1919,24 @@ public:
     xspan<value_type const> in,
     Tag                     t,
     U&&                     out,
-    Ts&&... outs)
+    Ts&&... args)
   {
     assert (in);
     if constexpr (spec::is_multitap_delay (Idx)) {
       run_multitap_delay<Idx> (
-        in, t, std::forward<U> (out), std::forward<Ts> (outs)...);
+        in, t, std::forward<U> (out), std::forward<Ts> (args)...);
+    }
+    else if constexpr (spec::is_multitap_mod_delay (Idx)) {
+      run_multitap_mod_delay<Idx> (
+        in, t, std::forward<U> (out), std::forward<Ts> (args)...);
     }
     else if constexpr (spec::is_parallel_delay (Idx)) {
       run_parallel_delays<Idx> (
-        in, t, std::forward<U> (out), std::forward<Ts> (outs)...);
+        in, t, std::forward<U> (out), std::forward<Ts> (args)...);
+    }
+    else if constexpr (spec::is_parallel_mod_delay (Idx)) {
+      run_parallel_mod_delays<Idx> (
+        in, t, std::forward<U> (out), std::forward<Ts> (args)...);
     }
   }
 
@@ -1998,7 +2028,7 @@ private:
   void run_lp (value_type* out, xspan<value_type const> in, U&& g)
   {
     base::run_1pole<base::onepole_type::lp> (
-      out, in, std::forward<U> (g), std::get<Idx> (_stages).state);
+      out, in, std::forward<U> (g), std::get<Idx> (_stages).state.y1);
   }
   //----------------------------------------------------------------------------
   template <uint Idx>
@@ -2011,7 +2041,7 @@ private:
   void run_hp (value_type* out, xspan<value_type const> in, U&& g)
   {
     base::run_1pole<base::onepole_type::hp> (
-      out, in, std::forward<U> (g), std::get<Idx> (_stages).state);
+      out, in, std::forward<U> (g), std::get<Idx> (_stages).state.y1);
   }
   //----------------------------------------------------------------------------
   template <uint Idx>
@@ -2402,10 +2432,15 @@ private:
     constexpr auto                        n_outs = spec::get_n_outs (Idx);
     static_assert (n_outs <= spls.size());
     static_assert (sizeof...(args) == (n_outs + spls.size()));
-
+#if 0
     // prepare output pointers to call "run_multitap_mod_delay"
     std::array<value_type*, n_outs> outs = to_ptr_array (
       forward_range_as_tuple<0, n_outs> (std::forward<Ts> (args)...));
+#else
+    auto wtftpl
+      = forward_range_as_tuple<0, n_outs> (std::forward<Ts> (args)...);
+    std::array<value_type*, n_outs> outs = to_ptr_array (wtftpl);
+#endif
     for (uint i = 1; i < outs.size(); ++i) {
       // only the first out can alias
       assert (&outs[i][0] != in_maybe_aliased.data());

@@ -497,35 +497,35 @@ using index_seq_mul_t = typename index_seq_mul<Val, T>::type;
 template <std::size_t... Idxs, class... Ts, class Fn>
 constexpr auto vpack_visit (
   std::index_sequence<Idxs...>,
-  Ts&&... args,
-  Fn&& visitor)
+  Fn&& visitor,
+  Ts&&... args)
 {
   auto tpl = std::forward_as_tuple (args...);
   return visitor (std::get<Idxs> (tpl)...);
 }
 
 template <uint Offset, uint N, class... Ts, class Fn>
-constexpr auto vpack_visit (Ts&&... args, Fn&& visit)
+constexpr auto vpack_visit (Fn&& visit, Ts&&... args)
 {
   static_assert ((N + Offset) <= sizeof...(args));
   return vpack_visit (
-    index_seq_add<Offset, std::make_index_sequence<N>> {},
-    std::forward<Ts> (args)...,
-    std::forward<Fn> (visit));
+    index_seq_add_t<Offset, std::make_index_sequence<N>> {},
+    std::forward<Fn> (visit),
+    std::forward<Ts> (args)...);
 }
 
 template <uint Offset, class... Ts, class Fn>
-constexpr auto vpack_visit (Ts&&... args, Fn&& visit)
+constexpr auto vpack_visit (Fn&& visit, Ts&&... args)
 {
   static_assert (Offset <= sizeof...(args));
-  return vpack_visit<sizeof...(Ts) - Offset, Offset> (
-    std::forward<Ts> (args)..., std::forward<Fn> (visit));
+  return vpack_visit<Offset, sizeof...(Ts) - Offset> (
+    std::forward<Fn> (visit), std::forward<Ts> (args)...);
 }
 
 template <class... Ts, class Fn>
-constexpr auto vpack_visit (Ts&&... args, Fn&& visit)
+constexpr auto vpack_visit (Fn&& visit, Ts&&... args)
 {
-  return vpack_visit<0> (std::forward<Ts> (args)..., std::forward<Fn> (visit));
+  return vpack_visit<0> (std::forward<Fn> (visit), std::forward<Ts> (args)...);
 }
 //------------------------------------------------------------------------------
 template <std::size_t... Idxs, class... Ts>
@@ -533,25 +533,26 @@ constexpr auto forward_range_as_tuple (
   std::index_sequence<Idxs...> s,
   Ts&&... args)
 {
-  return vpack_visit (s, std::forward<Ts> (args)..., [] (auto... targs) {
-    return std::forward_as_tuple (targs...);
-  });
+  return vpack_visit (
+    s,
+    [] (auto&&... targs) { return std::forward_as_tuple (targs...); },
+    std::forward<Ts> (args)...);
 }
 
 template <uint Offset, uint N, class... Ts>
 constexpr auto forward_range_as_tuple (Ts&&... args)
 {
   return vpack_visit<Offset, N> (
-    std::forward<Ts> (args)...,
-    [] (auto... targs) { return std::forward_as_tuple (targs...); });
+    [] (auto&&... targs) { return std::forward_as_tuple (targs...); },
+    std::forward<Ts> (args)...);
 }
 
 template <uint Offset, class... Ts>
 constexpr auto forward_range_as_tuple (Ts&&... args)
 {
-  return vpack_visit<Offset> (std::forward<Ts> (args)..., [] (auto... targs) {
-    return std::forward_as_tuple (targs...);
-  });
+  return vpack_visit<Offset> (
+    [] (auto&&... targs) { return std::forward_as_tuple (targs...); },
+    std::forward<Ts> (args)...);
 }
 
 //------------------------------------------------------------------------------

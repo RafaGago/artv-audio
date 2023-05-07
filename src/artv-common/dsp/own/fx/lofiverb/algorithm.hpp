@@ -8,6 +8,7 @@
 #include "artv-common/misc/compiler.hpp"
 #include "artv-common/misc/fixed_point.hpp"
 #include "artv-common/misc/misc.hpp"
+#include "boost/mp11/algorithm.hpp"
 
 namespace artv { namespace detail { namespace lofiverb {
 
@@ -43,6 +44,16 @@ public:
   using sl = stage_list<Idxs...>;
 
 protected:
+  //----------------------------------------------------------------------------
+  template <uint First, uint Last, class E, class T>
+  void run_cascade (E& engine, xspan<T> io)
+  {
+    static_assert (Last >= First);
+    mp11::mp_for_each<mp11::mp_iota_c<(Last + 1) - First>> ([&] (auto i) {
+      engine.run (sl<First + i> {}, io);
+    });
+  }
+  //----------------------------------------------------------------------------
   // just a convenience function for iterating block loops while not bloating
   // the code with more loop unroll hints than necessary
   template <class T, class F>
