@@ -45,12 +45,12 @@ public:
 
 protected:
   //----------------------------------------------------------------------------
-  template <uint First, uint Last, class E, class T>
-  void run_cascade (E& engine, xspan<T> io)
+  template <uint First, uint Last, class E, class T, class... Ts>
+  void run_cascade (E& engine, xspan<T> io, Ts&&... args)
   {
     static_assert (Last >= First);
     mp11::mp_for_each<mp11::mp_iota_c<(Last + 1) - First>> ([&] (auto i) {
-      engine.run (sl<First + i> {}, io);
+      engine.run (sl<First + i> {}, io, std::forward<Ts> (args)...);
     });
   }
   //----------------------------------------------------------------------------

@@ -114,7 +114,7 @@ ghi = 0.65 + hi * 0.35;
 // df = 0.878;
 df = 0.906;
 // df = 1;
-df1 = 3 * (.01 + character);
+df1 = 3 * (.01 + character * 0.99);
 
 @sample
 
@@ -150,12 +150,12 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   r += delay (v1, 112) * 0.25;
   l -= delay (v1, 342, lfo1.ret.ptr[0], 48) * 0.75;
   r += delay (v1, 377, lfo1.ret.ptr[1], 41) * 0.5;
-  l += delay (v1, 522, lfo1.ret.ptr[0] * mod, 27) * 0.5;
-  r -= delay (v1, 540, lfo1.ret.ptr[1] * mod, 28) * 0.25;
   l += delay (v1, 474 - 46, lfo1.ret.ptr[0] * mod, 89) * 0.125;
   r -= delay (v1, 472 - 45, lfo1.ret.ptr[1] * mod, 73) * 0.125;
+  l += delay (v1, 522, lfo1.ret.ptr[0] * mod, 27) * 0.5;
+  r -= delay (v1, 540, lfo1.ret.ptr[1] * mod, 28) * 0.25;
 
-  v2 = m - fb2;
+  v2 = m - fb2; // BEWARE THIS SUB!
   fb2 = delay_fb (v2, 1053 * df, decay, k.src.srate);
   fb2 = fb2.crossv2 (fb2, flo, fhi2, glo, ghi);
   fb2 = ap3 (fb2, 807 * df, 445 * df, 316* df, -k1, -k2, k3);
@@ -177,10 +177,10 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   r -= delay (v3, 415) * 0.5;
   l += delay (v3, 646, lfo2.ret.ptr[1] * mod, 57) * 0.75;
   r -= delay (v3, 647, lfo2.ret.ptr[0] * mod, 58) * 0.5;
-  l -= delay (v3, 858, lfo2.ret.ptr[1] * mod, 89) * 0.25;
-  r += delay (v3, 836, lfo2.ret.ptr[0] * mod, 73) * 0.25;
   l += delay (v3, 673, lfo2.ret.ptr[1], 7) * 0.125;
   r -= delay (v3, 671, lfo2.ret.ptr[0], 13) * 0.125;
+  l -= delay (v3, 858, lfo2.ret.ptr[1] * mod, 89) * 0.25;
+  r += delay (v3, 836, lfo2.ret.ptr[0] * mod, 73) * 0.25;
 
   q2i = easyapv_del_idx;
   v4 = ri + fb4;
@@ -189,12 +189,12 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   fb4 = ap3 (fb4, 1111* df, 635* df, 433* df, -k1, k2, k3);
   l += delay (v4, 267, lfo2.ret.ptr[0], 9) * 0.5;
   r -= delay (v4, 297, lfo2.ret.ptr[1], 10) * 0.75;
+  l += delay (v4, 776 + 39) * 0.125;
+  r += delay (v4, 775 + 39) * 0.125;
   l += delay (v4, 842, lfo2.ret.ptr[0] * mod, 39)  * 0.5;
   r += delay (v4, 877, lfo2.ret.ptr[1] * mod, 33)  * 0.75;
   l -= delay (v4, 1103, lfo2.ret.ptr[0 ] * mod, 77) * 0.25;
   r -= delay (v4, 1131, lfo2.ret.ptr[1] * mod, 98) * 0.25;
-  l += delay (v4, 776 + 39) * 0.125;
-  r += delay (v4, 775 + 39) * 0.125;
 
   l *= 0.1;
   r *= 0.1;

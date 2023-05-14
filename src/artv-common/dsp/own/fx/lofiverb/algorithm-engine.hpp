@@ -38,8 +38,8 @@ using fixpt_tt = fixpt_s<1, 4, 27, fixpt_relaxed_frac_assign>;
 
 using fixpt_t        = fixpt_tt;
 using fixpt_sto16    = fixpt_s<1, 0, 15, 0>;
-using fixpt_spls     = fixpt_m<0, 14, 0, 0>;
-using fixpt_spls_mod = fixpt_m<1, 9, 0, 0>;
+using fixpt_spls     = fixpt_m<0, 14, 0, 0>; // 16535 max
+using fixpt_spls_mod = fixpt_m<1, 12, 0, 0>; // 4096 max
 
 using float16 = f16pack<5, -1, f16pack_dftz | f16pack_clamp>;
 

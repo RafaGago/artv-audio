@@ -86,107 +86,116 @@ public:
     _lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.5f, 0.f, 0.5f});
     _eq.reset_states_cascade();
     _eq.reset_coeffs (
-      vec_set<f32_x2> (305.f),
-      vec_set<f32_x2> (0.64f),
-      vec_set<f32_x2> (3.f),
+      vec_set<f32_x2> (405.f),
+      vec_set<f32_x2> (0.78f),
+      vec_set<f32_x2> (2.5f),
       t_spl,
       bell_tag {});
   }
   //----------------------------------------------------------------------------
   void mod_changed (float mod, float t_spl)
   {
-    auto f1 = 1.73f - mod * 0.63f;
-    auto f2 = 1.53f - mod * 0.43f;
+    auto f1 = 1.73f - mod * 0.53f;
+    auto f2 = 1.51f - mod * 0.43f;
     _lfo.set_freq (f32_x4 {f1, f1, f2, f2}, t_spl);
   }
   //------------------------------------------------------------------------------
   static constexpr auto get_spec()
   {
-    constexpr float g = 0.0625f;
+    constexpr float g1 = 0.75f / 4.f;
+    constexpr float g2 = 0.5f / 4.f;
+    constexpr float g3 = 0.25f / 4.f;
+    constexpr float g4 = 0.125f / 4.f;
+    constexpr float sc = 0.906f; // algo sizes are scaled down by this factor
+
     return make_array<stage_data> (
       make_lp (0.16), // 0
       make_hp (0.99), // 1
-      make_ap (123, 0.), // 3
-      make_lp (0.16), // 4
-      make_hp (0.99), // 5
-      make_ap (124, 0.), // 6
+      make_lp (0.16), // 2
+      make_hp (0.99), // 3
 
-      make_comb (1821, 0.f), // 6
-      make_crossover2(), // 7
-      make_ap (912, 0.), // 8
-      make_ap (736, 0.), // 9
-      make_ap (515, 0.1), // 10
+      make_comb (1022 * sc, 0.f), // 4
+      make_crossover2(), // 5
+      make_ap (781 * sc, 0.), // 6
+      make_ap (436 * sc, 0.), // 7
+      make_ap (312 * sc, -0.05), // 8
       // clang-format off
       make_mod_parallel_delay (
         2,
         interpolation::thiran,
-        114, g, 0,
-        112, -g, 0,
-        342, g, 13,
-        377, g, 16,
-        412, g, 77,
-        410, -g, 88,
-        1112 - 46, g, 89,
-        1112 - 45, g, 73
-        ), // 11
+        97, g1, 0,
+        112, g3, 0,
+        342, -g1, 48,
+        377, g2, -41,
+        474 - 46, g4, 89,
+        472 - 45, -g4, -73,
+        522, g2, 27,
+        540, -g3, -28
+        ), // 9
       // clang-format on
-      make_comb (1827 + 387, 0.f), // 12
-      make_crossover2(), // 13
-      make_ap (772, 0.), // 14
-      make_ap (666, 0.), // 15
-      make_ap (535, 0.1), // 16
+      make_comb (1053 * sc, 0.f), // 10
+      make_crossover2(), // 11
+      make_ap (807 * sc, 0.), // 12
+      make_ap (445 * sc, 0.), // 13
+      make_ap (316 * sc, 0.05), // 14
       // clang-format off
       make_mod_parallel_delay (
         2,
         interpolation::thiran,
-        232, -g, 0,
-        230, g, 0,
-        666, g, -77,
-        667, g, -88,
-        812, g, -21,
-        831, -g,-15,
-        1312, -g, -89,
-        1312, g, -73
-        ), // 17
+        170, g2, 0,
+        160, -g1, 0,
+        396, -g1, -77,
+        397, g3, 88,
+        438, g3, -16,
+        471, -g2, 14,
+        512 - 18, g4, -89,
+        513 - 18, -g4, 73
+        ), // 15
       // clang-format on
-      make_comb (1827 + 38 + 56, 0.f), // 18
-      make_crossover2(), // 19
-      make_ap (672, 0.), // 20
-      make_ap (526, 0.), // 21
-      make_ap (425, 0.1), // 22
+      make_comb (955 * sc, 0.f), // 16
+      make_crossover2(), // 17
+      make_ap (734 * sc, 0.), // 18
+      make_ap (420 * sc, 0.), // 19
+      make_ap (282 * sc, 0.05), // 20
       // clang-format off
       make_mod_parallel_delay (
         2,
         interpolation::thiran,
-        192, -g, 0,
-        196, g, 0,
-        376, -g, 77,
-        377, g, 88,
-        777, -g, 89,
-        776, g, 73,
-        1472, g, 17,
-        1471, g, 23
-        ), // 23
+        422, -g1, 0,
+        415, -g2, 0,
+        646, g1, -57,
+        647, -g2, 58,
+        673, -g3, -7,
+        671, g3, 13,
+        858, g4, -89,
+        836, -g1, 73
+        ), // 21
       // clang-format on
-      make_comb (1827 + 38 + 56 + 37, 0.f), // 24
-      make_crossover2(), // 25
-      make_ap (572, 0.), // 26
-      make_ap (426, 0.), // 27
-      make_ap (325, 0.1), // 28
+      make_comb (1433 * sc, 0.f), // 22
+      make_crossover2(), // 23
+      make_ap (1111 * sc, 0.), // 24
+      make_ap (635 * sc, 0.), // 25
+      make_ap (433 * sc, 0.05), // 26
       // clang-format off
       make_mod_parallel_delay (
         2,
         interpolation::thiran,
-        377, -g, -22,
-        376, g, -17,
-        642, g, -89,
-        677, -g, -73,
-        992, g, -77,
-        992, g, -98,
-        1612, -g, 0,
-        1612, g, 0
-        ) // 29
+        267, g2, 9,
+        297, -g1, -10,
+        776 + 39, g4, 0,
+        775 + 39, g4, 0,
+        842, g2, 39,
+        877, g1, -33,
+        1103, -g3, 77,
+        1131, -g3, -98
+        ), // 27
       // clang-format on
+      make_ap (32, 0., (157 * 3) - 32, interpolation::linear), // 28
+      make_ap (32, 0., (243 * 3) - 32, interpolation::linear), // 29
+      make_ap (32, 0., (373 * 3) - 32, interpolation::linear), // 30
+      make_ap (32, 0., (167 * 3) - 32, interpolation::linear), // 31
+      make_ap (32, 0., (254 * 3) - 32, interpolation::linear), // 32
+      make_ap (32, 0., (383 * 3) - 32, interpolation::linear) // 33
     );
   }
   //----------------------------------------------------------------------------
@@ -211,24 +220,22 @@ public:
       lfo2m[i]      = lfo2[i] * par.mod[i];
       l_in[i]       = io[i][0] * 0.5_r;
       r_in[i]       = io[i][1] * 0.5_r;
-      k1[i]         = 0.12_r + par.decay[i] * 0.2_r;
-      k2[i]         = 0.12_r + par.decay[i] * 0.1_r;
+      k1[i]         = 0.08_r + par.decay[i] * 0.1_r;
+      k2[i]         = 0.08_r + par.decay[i] * 0.08_r;
       auto fg_decay = fastgrowth (par.decay[i]);
-      k4[i]         = 0.1_r + fg_decay * 0.1_r + par.character[i] * 0.3_r;
+      k4[i]         = 0.15_r + fg_decay * 0.15_r + par.character[i] * 0.2_r;
     }
     run_cascade<0, 1> (_eng, xspan {l_in.data(), io.size()});
-    _eng.run (sl<2> {}, xspan {l_in.data(), io.size()}, blank, k4);
-    run_cascade<3, 4> (_eng, xspan {r_in.data(), io.size()});
-    _eng.run (sl<5> {}, xspan {r_in.data(), io.size()}, blank, k4);
+    run_cascade<2, 3> (_eng, xspan {r_in.data(), io.size()});
 
     float dec   = as_float (par.decay[0]);
     auto  gains = _eng.get_gain_for_rt60 (
-      sl<6, 12, 18, 24> {}, 0.35f + dec * dec * 4.75f, srate);
+      sl<4, 10, 16, 22> {}, 0.3f + dec * dec * 4.75f, srate);
     sample flo  = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
     sample glo  = load_float<sample> (0.85f + upar.lf_amt * 0.145f);
     sample fhi1 = load_float<sample> (0.9f - upar.hf_amt * upar.hf_amt * 0.4f);
     sample fhi2 = load_float<sample> (0.93f - upar.hf_amt * upar.hf_amt * 0.4f);
-    sample ghi  = load_float<sample> (0.5f + upar.hf_amt * 0.5f);
+    sample ghi  = load_float<sample> (0.65f + upar.hf_amt * 0.35f);
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
@@ -239,12 +246,12 @@ public:
     xspan             comb {combmem.data(), io.size()};
     auto              in = xspan {m_in.data(), io.size()}.to_const();
 
-    _eng.fetch (sl<6> {}, comb, blank, gains[0]);
-    _eng.run (sl<7> {}, comb, flo, glo, fhi1, 1_r, ghi);
-    _eng.run (sl<8, 9, 10> {}, comb, blank, k1, blank, k2);
-    _eng.push (sl<6> {}, comb, comb.to_const(), in);
+    _eng.fetch (sl<4> {}, comb, blank, gains[0]);
+    _eng.run (sl<5> {}, comb, flo, glo, fhi1, 1_r, ghi);
+    _eng.run (sl<6, 7, 8> {}, comb, blank, k1, blank, k2);
+    _eng.push (sl<4> {}, comb, comb.to_const(), in);
     _eng.run (
-      sl<11> {},
+      sl<9> {},
       comb.to_const(),
       overwrite,
       l,
@@ -258,12 +265,12 @@ public:
       lfo1m,
       lfo1m);
 
-    _eng.fetch (sl<12> {}, comb, blank, gains[1]);
-    _eng.run (sl<13> {}, comb, flo, glo, fhi2, 1_r, ghi);
-    _eng.run (sl<14, 15, 16> {}, comb, blank, k1, blank, k2);
-    _eng.push (sl<12> {}, comb, comb.to_const(), in);
+    _eng.fetch (sl<10> {}, comb, blank, -gains[1]);
+    _eng.run (sl<11> {}, comb, flo, glo, fhi2, 1_r, ghi);
+    _eng.run (sl<12, 13, 14> {}, comb, blank, k1, blank, k2);
+    _eng.push (sl<10> {}, comb, comb.to_const(), in);
     _eng.run (
-      sl<17> {},
+      sl<15> {},
       comb.to_const(),
       add_to,
       l,
@@ -277,16 +284,16 @@ public:
       lfo1m,
       lfo1m);
 
-    _eng.fetch (sl<18> {}, comb, 615); // ER L
-    span_add_with_factor (xspan {l.data(), io.size()}, comb, -0.1_r);
+    _eng.fetch (sl<16> {}, comb, 215); // ER L
+    span_add_with_factor (xspan {l.data(), io.size()}, comb, 0.1_r);
 
     in = xspan {l_in.data(), io.size()}.to_const();
-    _eng.fetch (sl<18> {}, comb, blank, gains[2]);
-    _eng.run (sl<19> {}, comb, flo, glo, fhi1, 1_r, ghi);
-    _eng.run (sl<20, 21, 22> {}, comb, blank, k1, blank, k2);
-    _eng.push (sl<18> {}, comb, comb.to_const(), in);
+    _eng.fetch (sl<16> {}, comb, blank, gains[2]);
+    _eng.run (sl<17> {}, comb, flo, glo, fhi1, 1_r, ghi);
+    _eng.run (sl<18, 19, 20> {}, comb, blank, k1, blank, k2);
+    _eng.push (sl<16> {}, comb, comb.to_const(), in);
     _eng.run (
-      sl<23> {},
+      sl<21> {},
       comb.to_const(),
       add_to,
       l,
@@ -295,35 +302,45 @@ public:
       blank,
       lfo2m,
       lfo2m,
-      lfo2m,
-      lfo2m,
       lfo2,
-      lfo2);
+      lfo2,
+      lfo2m,
+      lfo2m);
 
-    _eng.fetch (sl<24> {}, comb, 873); // ER R
-    span_add_with_factor (xspan {r.data(), io.size()}, comb, 0.1_r);
+    _eng.fetch (sl<22> {}, comb, 298); // ER R
+    span_add_with_factor (xspan {r.data(), io.size()}, comb, -0.1_r);
 
     in = xspan {r_in.data(), io.size()}.to_const();
-    _eng.fetch (sl<24> {}, comb, blank, gains[3]);
-    _eng.run (sl<25> {}, comb, flo, glo, fhi2, 1_r, ghi);
-    _eng.run (sl<26, 27, 28> {}, comb, blank, k1, blank, k2);
-    _eng.push (sl<24> {}, comb, comb.to_const(), in);
+    _eng.fetch (sl<22> {}, comb, blank, gains[3]);
+    _eng.run (sl<23> {}, comb, flo, glo, fhi2, 1_r, ghi);
+    _eng.run (sl<24, 25, 26> {}, comb, blank, k1, blank, k2);
+    _eng.push (sl<22> {}, comb, comb.to_const(), in);
     _eng.run (
-      sl<29> {},
+      sl<27> {},
       comb.to_const(),
       add_to,
       l,
       r,
       lfo2,
       lfo2,
-      lfo2m,
-      lfo2m,
-      lfo2m,
-      lfo2m,
       blank,
-      blank);
+      blank,
+      lfo2m,
+      lfo2m,
+      lfo2m,
+      lfo2m);
 
-    // TODO: ER
+    xspan lspan {l.data(), io.size()};
+    xspan rspan {r.data(), io.size()};
+    _eng.run (sl<28> {}, lspan, par.character, [&k4] (uint i) {
+      return -k4[i];
+    });
+    run_cascade<29, 30> (_eng, lspan, par.character, k4);
+    _eng.run (sl<31> {}, rspan, par.character, [&k4] (uint i) {
+      return -k4[i];
+    });
+    run_cascade<32, 33> (_eng, rspan, par.character, k4);
+
     span_visit (io, [&] (auto& spls, uint i) {
       spls[0] = l[i];
       spls[1] = r[i];

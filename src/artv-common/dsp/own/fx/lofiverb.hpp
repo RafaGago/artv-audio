@@ -1,6 +1,6 @@
 #pragma once
 
-#define LOFIVERB_DEBUG_ALGO 1
+// #define LOFIVERB_DEBUG_ALGO 1
 
 #include <array>
 #include <cmath>
@@ -73,11 +73,12 @@ public:
       0,
       make_cstr_array (
 #ifndef LOFIVERB_DEBUG_ALGO
-        "Artv Abyss",
+        "Artv Ambience",
+        "Artv Hall",
         "Artv Arena",
         "Artv Palace",
         "Artv FlutterPlate",
-        "Artv Ambience",
+        "Artv Abyss",
         "Acreil Midifex 49",
         "Acreil Midifex 50",
         "Acreil Dre-2000 A",
@@ -524,9 +525,12 @@ private:
 
   using algorithms_type = std::variant<
 #ifndef LOFIVERB_DEBUG_ALGO
-    detail::lofiverb::abyss<dt_fix16>,
-    detail::lofiverb::abyss<dt_flt16>,
-    detail::lofiverb::abyss<dt_flt32>,
+    detail::lofiverb::ambience<dt_fix16>,
+    detail::lofiverb::ambience<dt_flt16>,
+    detail::lofiverb::ambience<dt_flt32>,
+    detail::lofiverb::hall<dt_fix16>,
+    detail::lofiverb::hall<dt_flt16>,
+    detail::lofiverb::hall<dt_flt32>,
     detail::lofiverb::arena<dt_fix16>,
     detail::lofiverb::arena<dt_flt16>,
     detail::lofiverb::arena<dt_flt32>,
@@ -536,9 +540,9 @@ private:
     detail::lofiverb::plate1<dt_fix16>,
     detail::lofiverb::plate1<dt_flt16>,
     detail::lofiverb::plate1<dt_flt32>,
-    detail::lofiverb::ambience<dt_fix16>,
-    detail::lofiverb::ambience<dt_flt16>,
-    detail::lofiverb::ambience<dt_flt32>,
+    detail::lofiverb::abyss<dt_fix16>,
+    detail::lofiverb::abyss<dt_flt16>,
+    detail::lofiverb::abyss<dt_flt32>,
     detail::lofiverb::midifex49<dt_fix16>,
     detail::lofiverb::midifex49<dt_flt16>,
     detail::lofiverb::midifex49<dt_flt32>,
