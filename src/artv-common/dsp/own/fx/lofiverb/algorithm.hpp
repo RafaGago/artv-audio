@@ -68,7 +68,7 @@ protected:
   // just a convenience function for iterating block loops while not bloating
   // the code with more loop unroll hints than necessary
   template <class T, class U>
-  static void span_mul (xspan<T> dst_lhs, U rhs)
+  static void span_mul (xspan<T> dst_lhs, U&& rhs)
   {
     span_visit (dst_lhs, [&] (auto& v, uint i) {
       if constexpr (is_array_subscriptable_v<U>) {
@@ -81,10 +81,10 @@ protected:
   }
   //----------------------------------------------------------------------------
   template <class T, class U>
-  static constexpr void span_add (xspan<T> dst, xspan<T const> lhs, U rhs)
+  static constexpr void span_add (xspan<T> dst, xspan<T const> lhs, U&& rhs)
   {
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
-    for (uint i = 0; i < rhs.size(); ++i) {
+    for (uint i = 0; i < lhs.size(); ++i) {
       if constexpr (is_array_subscriptable_v<U>) {
         dst[i] = (T) (lhs[i] + rhs[i]);
       }
@@ -93,9 +93,9 @@ protected:
       }
     }
   }
-  //----------------------------------------------------------------------------
+
   template <class T, class U>
-  static constexpr void span_add (xspan<T> dst_lhs, U rhs)
+  static constexpr void span_add (xspan<T> dst_lhs, U&& rhs)
   {
     span_visit (dst_lhs, [&] (auto& v, uint i) {
       if constexpr (is_array_subscriptable_v<U>) {
@@ -105,6 +105,46 @@ protected:
         v = (T) (v + rhs);
       }
     });
+  }
+  //----------------------------------------------------------------------------
+  template <class T, class U, class V>
+  static constexpr void span_add_with_factor (
+    xspan<T>       dst,
+    xspan<T const> lhs,
+    U&&            rhs,
+    V&&            factor)
+  {
+    constexpr bool u_subscriptable = is_array_subscriptable_v<U>;
+    constexpr bool v_subscriptable = is_array_subscriptable_v<V>;
+
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < lhs.size(); ++i) {
+      if constexpr (u_subscriptable && v_subscriptable) {
+        dst[i] = (T) (lhs[i] + rhs[i] * factor[i]);
+      }
+      else if constexpr (u_subscriptable && !v_subscriptable) {
+        dst[i] = (T) (lhs[i] + rhs[i] * factor);
+      }
+      else if constexpr (!u_subscriptable && v_subscriptable) {
+        dst[i] = (T) (lhs[i] + rhs * factor[i]);
+      }
+      else {
+        dst[i] = (T) (lhs[i] + rhs * factor);
+      }
+    }
+  }
+
+  template <class T, class U, class V>
+  static constexpr void span_add_with_factor (
+    xspan<T> dst_lhs,
+    U&&      rhs,
+    V&&      factor)
+  {
+    span_add_with_factor (
+      dst_lhs,
+      dst_lhs.to_const(),
+      std::forward<U> (rhs),
+      std::forward<V> (factor));
   }
   //----------------------------------------------------------------------------
   template <class T, class U, class V>

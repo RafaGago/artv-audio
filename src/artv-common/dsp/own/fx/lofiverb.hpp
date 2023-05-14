@@ -1,6 +1,6 @@
 #pragma once
 
-// #define LOFIVERB_DEBUG_ALGO 1
+#define LOFIVERB_DEBUG_ALGO 1
 
 #include <array>
 #include <cmath>
@@ -40,6 +40,8 @@ namespace artv {
 // - wider fixed point type
 // - dither?
 // - multitaps with lerp, to do modulations on output taps
+// - broken predelay!
+// - dynamics at the output compressor/expander)
 
 //------------------------------------------------------------------------------
 // A reverb supporting 16-bit fixed-point arithmetic on the main loop. One

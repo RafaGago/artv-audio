@@ -1730,12 +1730,13 @@ public:
       dst, spec::get_delay_spls (Idx).to_int() + negative_offset);
   }
   //----------------------------------------------------------------------------
-  // Fetch samples from the queue of a processed allpass or delay. The allpass
-  // or delay has to be independenly processed.
+  // Raw fetch samples from the queue of a processes allpass, comb or delay. The
+  // allpass, delay or comb has to be independenly processed.
   template <
     uint Idx,
     std::enable_if_t<
-      spec::is_allpass (Idx) || spec::is_1tap_delay (Idx)>* = nullptr>
+      spec::is_allpass (Idx) || spec::is_comb (Idx)
+      || spec::is_1tap_delay (Idx)>* = nullptr>
   void fetch (stage_list<Idx>, xspan<value_type> dst, uint spls)
   {
     static_assert (spec::get_min_delay_spls (Idx) >= max_block_size);

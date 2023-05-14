@@ -277,6 +277,9 @@ public:
       lfo1m,
       lfo1m);
 
+    _eng.fetch (sl<18> {}, comb, 615); // ER L
+    span_add_with_factor (xspan {l.data(), io.size()}, comb, -0.1_r);
+
     in = xspan {l_in.data(), io.size()}.to_const();
     _eng.fetch (sl<18> {}, comb, blank, gains[2]);
     _eng.run (sl<19> {}, comb, flo, glo, fhi1, 1_r, ghi);
@@ -296,6 +299,9 @@ public:
       lfo2m,
       lfo2,
       lfo2);
+
+    _eng.fetch (sl<24> {}, comb, 873); // ER R
+    span_add_with_factor (xspan {r.data(), io.size()}, comb, 0.1_r);
 
     in = xspan {r_in.data(), io.size()}.to_const();
     _eng.fetch (sl<24> {}, comb, blank, gains[3]);
