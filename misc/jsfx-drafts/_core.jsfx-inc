@@ -663,6 +663,30 @@ primes.ptr[51] = 239;
 primes.ptr[52] = 241;
 primes.ptr[53] = 251;
 
+// -----------------------------------------------------------------------------
+// N has to be GT 3
+function prime_floor (n) local (i, j, cont1, cont2) (
+  n = n | 0;
+  n -= (n & 1) ? 0 : 1;
+  i = n;
+  cont1 = 1;
+  cont2 = 1;
+
+  while ((i >= 2) && cont1) (
+    ((i % 2) == 1) ? (
+      j = 3;
+      cont2 = 1;
+      while ((j <= (sqrt(i) | 0)) && cont2) (
+        cont2 = ((i % j) != 0);
+        j += cont2 ? 2 : 0;
+      );
+      cont1 = j <= (sqrt(i) | 0);
+    );
+    i -= cont1 ? 2 : 0;
+  );
+  i >= 2 ? i : 2;
+);
+
 // table of predictable random numbers from 0 to 1 -----------------------------
 rnd_table.array_init (40);
 rnd_table.ptr[0] = 0.9171434810105141;

@@ -744,6 +744,14 @@ function easyapv_get (idx, spls) local() global (easyapv_del*) (
   easyapv_del.delay_line_get (spls, idx);
 );
 
+// used on the fixed point code to get paramters with a quick growin response, as
+// sqrt(x) does
+function fastgrowth(x) local() global ()(
+  x = 1 - x;
+  x *= x;
+  1 - x;
+);
+
 
 n_lines = 128; // more than we need
 max_delay = 8192;
