@@ -754,7 +754,7 @@ public:
   void post_process_block (xspan<std::array<float, 2>> io)
   {
     span_visit (io, [&] (auto& v, uint) {
-      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)) * 2.f);
     });
   }
   //----------------------------------------------------------------------------
@@ -978,7 +978,7 @@ public:
   void post_process_block (xspan<std::array<float, 2>> io)
   {
     span_visit (io, [&] (auto& v, uint) {
-      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)) * 4.f);
     });
   }
   //----------------------------------------------------------------------------
@@ -1262,7 +1262,7 @@ public:
   void post_process_block (xspan<std::array<float, 2>> io)
   {
     span_visit (io, [&] (auto& v, uint) {
-      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)) * 16.f);
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)) * 64.f);
     });
   }
   //----------------------------------------------------------------------------
@@ -1320,79 +1320,97 @@ public:
   static constexpr auto get_spec()
   {
     // just to avoid copy-paste issues from the prototype
-    stage b1 {}, b2 {}, b3 {}, b4 {}, b5 {}, b6 {}, b7 {}, b8 {};
-    b1.d1    = 571;
-    b1.d2    = 359;
-    b1.dd    = 857;
-    b1.fac_l = -0.40780916679832;
-    b1.fac_r = 0.59219083320168;
-    b1.k1    = -0.33;
-    b1.k2    = 0.14;
-    b1.tap_l = 329;
-    b1.tap_r = 343;
-    b2.d1    = 467;
-    b2.d2    = 257;
-    b2.dd    = 707;
-    b2.fac_l = -0.49429981212465;
-    b2.fac_r = 0.50570018787535;
-    b2.k1    = -0.32;
-    b2.k2    = 0.14;
-    b2.tap_l = 316;
-    b2.tap_r = 286;
-    b3.d1    = 577;
-    b3.d2    = 383;
-    b3.dd    = 941;
-    b3.fac_l = 0.25340987584866;
-    b3.fac_r = -0.74659012415134;
-    b3.k1    = -0.33;
-    b3.k2    = 0.14;
-    b3.tap_l = 492;
-    b3.tap_r = 456;
-    b4.d1    = 449;
-    b4.d2    = 283;
-    b4.dd    = 757;
-    b4.fac_l = -0.77724914480402;
-    b4.fac_r = 0.22275085519598;
-    b4.k1    = 0.32;
-    b4.k2    = 0.14;
-    b4.tap_l = 287;
-    b4.tap_r = 295;
-    b5.d1    = 619;
-    b5.d2    = 353;
-    b5.dd    = 991 + 100;
-    b5.fac_l = -0.4534214228516;
-    b5.fac_r = 0.5465785771484;
-    b5.k1    = -0.33;
-    b5.k2    = 0.13;
-    b5.tap_l = 353;
-    b5.tap_r = 388;
-    b6.d1    = 443;
-    b6.d2    = 241;
-    b6.dd    = 691 + 100;
-    b6.fac_l = 0.38615093528902;
-    b6.fac_r = -0.61384906471098;
-    b6.k1    = 0.32;
-    b6.k2    = -0.14;
-    b6.tap_l = 285;
-    b6.tap_r = 264;
-    b7.d1    = 599;
-    b7.d2    = 373;
-    b7.dd    = 919;
-    b7.fac_l = -0.93732491320402;
-    b7.fac_r = 0.06267508679598;
-    b7.k1    = -0.33;
-    b7.k2    = 0.14;
-    b7.tap_l = 424;
-    b7.tap_r = 459;
-    b8.d1    = 467;
-    b8.d2    = 269;
-    b8.dd    = 709 + 84;
-    b8.fac_l = -0.44557774496395;
-    b8.fac_r = 0.554422;
-    b8.k1    = -0.32;
-    b8.k2    = 0.14;
-    b8.tap_l = 302;
-    b8.tap_r = 265;
+    stage b1 {}, b2 {}, b3 {}, b4 {}, b5 {}, b6 {}, b7 {}, b8 {}, b9 {}, b10 {};
+    b1.d1     = 571;
+    b1.d2     = 359;
+    b1.dd     = 857;
+    b1.fac_l  = -0.40780916679832;
+    b1.fac_r  = 0.59219083320168;
+    b1.k1     = -0.33;
+    b1.k2     = 0.14;
+    b1.tap_l  = 329;
+    b1.tap_r  = 343;
+    b2.d1     = 467;
+    b2.d2     = 257;
+    b2.dd     = 707;
+    b2.fac_l  = -0.49429981212465;
+    b2.fac_r  = 0.50570018787535;
+    b2.k1     = -0.32;
+    b2.k2     = 0.14;
+    b2.tap_l  = 316;
+    b2.tap_r  = 286;
+    b3.d1     = 577;
+    b3.d2     = 383;
+    b3.dd     = 941;
+    b3.fac_l  = 0.25340987584866;
+    b3.fac_r  = -0.74659012415134;
+    b3.k1     = -0.33;
+    b3.k2     = 0.14;
+    b3.tap_l  = 492;
+    b3.tap_r  = 456;
+    b4.d1     = 449;
+    b4.d2     = 283;
+    b4.dd     = 757;
+    b4.fac_l  = -0.77724914480402;
+    b4.fac_r  = 0.22275085519598;
+    b4.k1     = 0.32;
+    b4.k2     = 0.14;
+    b4.tap_l  = 287;
+    b4.tap_r  = 295;
+    b5.d1     = 619;
+    b5.d2     = 353;
+    b5.dd     = 991 + 100;
+    b5.fac_l  = -0.4534214228516;
+    b5.fac_r  = 0.5465785771484;
+    b5.k1     = -0.33;
+    b5.k2     = 0.13;
+    b5.tap_l  = 353;
+    b5.tap_r  = 388;
+    b6.d1     = 443;
+    b6.d2     = 241;
+    b6.dd     = 691 + 100;
+    b6.fac_l  = 0.38615093528902;
+    b6.fac_r  = -0.61384906471098;
+    b6.k1     = 0.32;
+    b6.k2     = -0.14;
+    b6.tap_l  = 285;
+    b6.tap_r  = 264;
+    b7.d1     = 599;
+    b7.d2     = 373;
+    b7.dd     = 919;
+    b7.fac_l  = -0.93732491320402;
+    b7.fac_r  = 0.06267508679598;
+    b7.k1     = -0.33;
+    b7.k2     = 0.14;
+    b7.tap_l  = 424;
+    b7.tap_r  = 459;
+    b8.d1     = 467;
+    b8.d2     = 269;
+    b8.dd     = 709 + 84;
+    b8.fac_l  = -0.44557774496395;
+    b8.fac_r  = 0.554422;
+    b8.k1     = -0.32;
+    b8.k2     = 0.14;
+    b8.tap_l  = 302;
+    b8.tap_r  = 265;
+    b9.d1     = 601;
+    b9.d2     = 383;
+    b9.dd     = 919;
+    b9.fac_l  = 0.18701;
+    b9.fac_r  = 0.8129;
+    b9.k1     = -0.33;
+    b9.k2     = -0.14;
+    b9.tap_l  = 332;
+    b9.tap_r  = 354;
+    b10.d1    = 467;
+    b10.d2    = 277;
+    b10.dd    = 701;
+    b10.fac_l = 0.15538;
+    b10.fac_r = 0.8446;
+    b10.k1    = -0.32;
+    b10.k2    = -0.14;
+    b10.tap_l = 357;
+    b10.tap_r = 360;
 
     // on the prototype fetch is done after pushing, on here it's done before
     b1.tap_l -= 1;
@@ -1403,6 +1421,9 @@ public:
     b6.tap_l -= 1;
     b7.tap_l -= 1;
     b8.tap_l -= 1;
+    b9.tap_l -= 1;
+    b10.tap_l -= 1;
+
     b1.tap_r -= 1;
     b2.tap_r -= 1;
     b3.tap_r -= 1;
@@ -1411,6 +1432,8 @@ public:
     b6.tap_r -= 1;
     b7.tap_r -= 1;
     b8.tap_r -= 1;
+    b9.tap_r -= 1;
+    b10.tap_r -= 1;
 
     return make_array<stage_data> (
       make_lp (0.15), // 0
@@ -1460,7 +1483,19 @@ public:
       make_ap (b8.d1, b8.k1), // 29
       make_ap (b8.d2, b8.k2), // 30
       make_parallel_delay (
-        2, b8.dd, b8.tap_l, b8.fac_l, b8.tap_r, b8.fac_r) // 31
+        2, b8.dd, b8.tap_l, b8.fac_l, b8.tap_r, b8.fac_r), // 31
+
+      make_ap (b5.d1, b5.k1, -12), // 32
+      make_ap (b5.d2, b5.k2), // 33
+      make_parallel_delay (
+        2, b5.dd, b5.tap_l, b5.fac_l, b5.tap_r, b5.fac_r), // 34
+      make_crossover2(), // 35
+
+      make_ap (b6.d1, b6.k1), // 36
+      make_ap (b6.d2, b6.k2), // 37
+      make_parallel_delay (
+        2, b6.dd, b6.tap_l, b6.fac_l, b6.tap_r, b6.fac_r) // 38
+
     );
   }
   //----------------------------------------------------------------------------
@@ -1497,6 +1532,7 @@ public:
     sample glo  = load_float<sample> (0.75f + lf * 0.245f);
     sample fhi1 = load_float<sample> (0.9f - hf * hf * 0.4f);
     sample fhi2 = load_float<sample> (0.93f - hf * hf * 0.4f);
+    sample fhi3 = load_float<sample> (0.95f - hf * hf * 0.4f);
     sample ghi  = load_float<sample> (
       0.85f + hf * 0.1f + as_float (par.decay[0]) * 0.05f);
 
@@ -1507,7 +1543,7 @@ public:
 
     xspan loop {loopm.data(), io.size()};
 
-    _eng.fetch (sl<31> {}, loop);
+    _eng.fetch (sl<38> {}, loop);
     span_mul (loop, par.decay);
 
     span_add (loop, m_in);
@@ -1551,6 +1587,16 @@ public:
     _eng.run (sl<29, 30> {}, loop);
     _eng.run (sl<31> {}, loop, loop.to_const(), add_to, l2, r1);
     span_mul (loop, par.decay);
+
+    span_add (loop, m_in);
+
+    _eng.run (sl<32, 33> {}, loop, lfo1);
+    _eng.run (sl<34> {}, loop, loop.to_const(), add_to, l1, r2);
+    span_mul (loop, par.decay);
+    _eng.run (sl<35> {}, loop, flo, glo, fhi3, 1_r, ghi);
+
+    _eng.run (sl<36, 37> {}, loop);
+    _eng.run (sl<38> {}, loop, loop.to_const(), add_to, l2, r1);
 
     auto v1 = make_array (&l1[0], &r1[0]);
     auto v2 = make_array<sample const*> (&l2[0], &r2[0]);
