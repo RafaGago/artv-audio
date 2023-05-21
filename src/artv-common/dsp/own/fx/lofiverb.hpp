@@ -1,6 +1,6 @@
 #pragma once
 
-// #define LOFIVERB_DEBUG_ALGO 1
+#define LOFIVERB_DEBUG_ALGO 1
 
 #include <array>
 #include <cmath>
@@ -34,8 +34,6 @@ namespace artv {
 
 // TODO list
 // - dre algorithms are too dark now
-// - adjust gains, some algorithms are clipping, e.g the Dres
-// - broken predelay!
 // - dynamics at the output compressor/expander.
 
 //------------------------------------------------------------------------------
@@ -183,13 +181,13 @@ public:
     return float_param ("%", 0., 100., 80., 0.01);
   }
   //----------------------------------------------------------------------------
-  static constexpr uint max_predelay_qb = 4;
+  static constexpr uint max_predelay_msec = 1000;
   struct predelay_tag {};
-  void set (predelay_tag, float v) { _param.predelay = v; }
+  void set (predelay_tag, float v) { _param.predelay = v * 0.001f; }
 
   static constexpr auto get_parameter (predelay_tag)
   {
-    return float_param ("quarters", 0., max_predelay_qb, 0., 0.001);
+    return float_param ("msec", 0., max_predelay_msec, 0., 0.1, 0.6);
   }
   //----------------------------------------------------------------------------
   struct clip_level_tag {};
@@ -318,9 +316,7 @@ private:
     std::array<f32_x2, max_block_size>                  ducker_gain;
     detail::lofiverb::algorithm::smoothed_parameters<T> pars;
 
-    auto pre_gain      = (1.f / _param.gain);
-    uint predelay_spls = _1_4beat_spls * _param.predelay;
-
+    auto pre_gain = (1.f / _param.gain);
     // tilt + clamp + ducker measuring + param smoothing
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
@@ -342,8 +338,8 @@ private:
       }
     }
     // predelay
-    if (_param.predelay != 0) {
-      uint predelay_spls = _1_4beat_spls * _param.predelay;
+    uint predelay_spls = _srate * _param.predelay;
+    if (predelay_spls != 0) {
       ARTV_LOOP_UNROLL_SIZE_HINT (16)
       for (uint i = 0; i < io.size(); ++i) {
         std::array<float, 2> spl;
@@ -436,7 +432,7 @@ private:
       6 * 1024);
 
     auto  state   = _pc->get_play_state();
-    float beat_hz = 120.f;
+    float beat_hz = 120.f * (1.f / 60.f);
     if (state.is_valid) {
       // playhead may not exist, eg. when scanning the plugin
       beat_hz = state.bpm * (1.f / 60.f);
@@ -448,7 +444,7 @@ private:
     _param_smooth.reset_srate (_t_spl);
 
     // resize memory
-    uint predelay_spls = std::ceil (_1_4beat_spls * max_predelay_qb) * 2;
+    uint predelay_spls = std::ceil (srate * max_predelay_msec * 0.001f) * 2;
     uint rev_bytes     = 0;
     mp11::mp_for_each<decltype (_algorithms)> ([&] (auto mode) {
       rev_bytes = std::max (mode.get_required_bytes(), rev_bytes);
