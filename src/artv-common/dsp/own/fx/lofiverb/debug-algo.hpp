@@ -194,12 +194,12 @@ public:
         1131, -g3, -98
         ), // 27
       // clang-format on
-      make_ap (32, 0., (157 * 3) - 32, interpolation::linear), // 28
-      make_ap (32, 0., (243 * 3) - 32, interpolation::linear), // 29
-      make_ap (32, 0., (373 * 3) - 32, interpolation::linear), // 30
-      make_ap (32, 0., (167 * 3) - 32, interpolation::linear), // 31
-      make_ap (32, 0., (254 * 3) - 32, interpolation::linear), // 32
-      make_ap (32, 0., (383 * 3) - 32, interpolation::linear) // 33
+      make_ap (32, 0., (157 * 3) - 32, interpolation::thiran), // 28
+      make_ap (32, 0., (243 * 3) - 32, interpolation::thiran), // 29
+      make_ap (32, 0., (373 * 3) - 32, interpolation::thiran), // 30
+      make_ap (32, 0., (167 * 3) - 32, interpolation::thiran), // 31
+      make_ap (32, 0., (254 * 3) - 32, interpolation::thiran), // 32
+      make_ap (32, 0., (383 * 3) - 32, interpolation::thiran) // 33
     );
   }
   //----------------------------------------------------------------------------
