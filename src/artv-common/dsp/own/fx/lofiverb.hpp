@@ -68,6 +68,7 @@ public:
 #ifndef LOFIVERB_DEBUG_ALGO
         "Artv Ambience",
         "Artv Room",
+        "Artv Hall",
         "Artv Broken Hall",
         "Artv Arena",
         "Artv Palace",
@@ -523,6 +524,9 @@ private:
     detail::lofiverb::room<dt_fix16>,
     detail::lofiverb::room<dt_flt16>,
     detail::lofiverb::room<dt_flt32>,
+    detail::lofiverb::hall<dt_fix16>,
+    detail::lofiverb::hall<dt_flt16>,
+    detail::lofiverb::hall<dt_flt32>,
     detail::lofiverb::broken_hall<dt_fix16>,
     detail::lofiverb::broken_hall<dt_flt16>,
     detail::lofiverb::broken_hall<dt_flt32>,
