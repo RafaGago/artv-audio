@@ -45,7 +45,7 @@ using float16 = f16pack<5, -1, f16pack_dftz | f16pack_clamp>;
 
 static constexpr uint max_block_size = 32;
 //------------------------------------------------------------------------------
-enum class interpolation : u8 { thiran, linear };
+enum class interpolation : u8 { zero_order_hold, linear, thiran };
 
 struct lofiverb_io_tag {};
 
@@ -1565,6 +1565,38 @@ public:
     }
   }
   //----------------------------------------------------------------------------
+  template <class T, class U, class V, class D, class LF>
+  static void run_zoh (
+    xspan<T> dst,
+    U        delay_spls,
+    V        delay_mod_spls,
+    D&       delay,
+    LF&&     lfo_gen)
+  {
+    static uint prev = 0;
+    if constexpr (is_fixpt_v<T>) {
+      ARTV_LOOP_UNROLL_SIZE_HINT (16)
+      for (uint i = 0; i < dst.size(); ++i) {
+        auto dlfo        = lfo_gen (i).to_dynamic();
+        auto n_spls_full = (delay_spls + (dlfo * delay_mod_spls));
+        auto n_spls      = n_spls_full.to_int();
+        n_spls -= i;
+        dst[i] = delay.read (n_spls);
+      }
+    }
+    else {
+      ARTV_LOOP_UNROLL_SIZE_HINT (16)
+      for (uint i = 0; i < dst.size(); ++i) {
+        T n_spls_full
+          = delay_spls.to_floatp() + (lfo_gen (i) * delay_mod_spls.to_floatp());
+        uint  n_spls      = (uint) n_spls_full;
+        float n_spls_frac = n_spls_full - n_spls;
+        n_spls -= i;
+        dst[i] = delay.read (n_spls);
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
   template <class T, class D>
   static void run_multitap_delay (
     xspan<T * artv_restrict> outs,
@@ -1658,6 +1690,40 @@ public:
       }
       else {
         run_lerp (out, spls[i], mod_spls[i], delay, [] (uint) { return T {}; });
+      }
+      if (!out_overwrite) {
+        span_add<T> (dst, out);
+      }
+    }
+    delay.push_block (in);
+  }
+  //----------------------------------------------------------------------------
+  template <class T, class D>
+  static void run_zoh_mod_multitap_delay (
+    xspan<T * artv_restrict>    outs,
+    xspan<T const>              in,
+    xspan<fixpt_spls const>     spls,
+    xspan<fixpt_spls_mod const> mod_spls,
+    bool                        out_overwrite,
+    D&                          delay,
+    xspan<T* const>             mod)
+  {
+    assert (spls.size() == outs.size());
+    assert (in.size() <= max_block_size);
+
+    for (uint i = 0; i < outs.size(); ++i) {
+      xspan dst {outs[i], in.size()};
+      assert (dst.data() != in.data()); // unwanted aliasing with input
+      block_array<T> tmp_mem;
+      xspan out {out_overwrite ? dst.data() : tmp_mem.data(), in.size()};
+
+      if (mod[i]) {
+        run_zoh (out, spls[i], mod_spls[i], delay, [=] (uint j) {
+          return mod[i][j];
+        });
+      }
+      else {
+        run_zoh (out, spls[i], mod_spls[i], delay, [] (uint) { return T {}; });
       }
       if (!out_overwrite) {
         span_add<T> (dst, out);
@@ -2210,10 +2276,13 @@ private:
         if constexpr (*interp == interpolation::linear) {
           base::run_lerp (dst, delay_spls, delay_mod_spls, stg.delay, lfo_gen);
         }
-        else {
-          static_assert (*interp == interpolation::thiran);
+        else if constexpr (*interp == interpolation::thiran) {
           base::run_thiran (
             dst, delay_spls, delay_mod_spls, stg.delay, stg.state.y1, lfo_gen);
+        }
+        else {
+          static_assert (*interp == interpolation::zero_order_hold);
+          base::run_zoh (dst, delay_spls, delay_mod_spls, stg.delay, lfo_gen);
         }
       }
     }
@@ -2291,14 +2360,22 @@ private:
               stg.delay,
               [i, &lfo_gen] (uint) { return lfo_gen (i); });
           }
-          else {
-            static_assert (*interp == interpolation::thiran);
+          else if constexpr (*interp == interpolation::thiran) {
             base::run_thiran (
               xspan {&z, 1},
               delay_spls,
               delay_mod_spls,
               stg.delay,
               stg.state.y1,
+              [i, &lfo_gen] (uint) { return lfo_gen (i); });
+          }
+          else {
+            static_assert (*interp == interpolation::zero_order_hold);
+            base::run_zoh (
+              xspan {&z, 1},
+              delay_spls,
+              delay_mod_spls,
+              stg.delay,
               [i, &lfo_gen] (uint) { return lfo_gen (i); });
           }
         }
@@ -2447,8 +2524,13 @@ private:
         xspan {mod},
         stage.state.y1);
     }
-    else {
+    else if constexpr (spec::get_interp (Idx) == interpolation::linear) {
       base::run_lerp_mod_multitap_delay<value_type> (
+        tap_ptrs, in, spls, mod_spls, out_overwrite, stage.delay, xspan {mod});
+    }
+    else {
+      static_assert (spec::get_interp (Idx) == interpolation::zero_order_hold);
+      base::run_zoh_mod_multitap_delay<value_type> (
         tap_ptrs, in, spls, mod_spls, out_overwrite, stage.delay, xspan {mod});
     }
     if constexpr (out_overwrite) {
@@ -2570,19 +2652,24 @@ private:
     mp11::mp_for_each<mp11::mp_iota_c<spls.size()>> ([&] (auto d) {
       auto&& dmod = std::get<d> (mods_tpl);
       using T     = std::remove_cv_t<std::remove_reference_t<decltype (dmod)>>;
-      constexpr bool is_lerp = *spec::get_interp (Idx) == interpolation::linear;
-
       if constexpr (is_array_subscriptable_v<T>) {
-        if constexpr (is_lerp) {
+        if constexpr (*spec::get_interp (Idx) == interpolation::linear) {
           base::run_lerp (tmp, spls[d], mod[d], stage.delay, [&] (uint i) {
             return dmod[i];
           });
         }
-        else {
+        else if constexpr (*spec::get_interp (Idx) == interpolation::thiran) {
           base::run_thiran (
             tmp, spls[d], mod[d], stage.delay, stage.state.y1[d], [&] (uint i) {
               return dmod[i];
             });
+        }
+        else {
+          static_assert (
+            *spec::get_interp (Idx) == interpolation::zero_order_hold);
+          base::run_zoh (tmp, spls[d], mod[d], stage.delay, [&] (uint i) {
+            return dmod[i];
+          });
         }
       }
       else if constexpr (
@@ -2591,8 +2678,11 @@ private:
       }
       else {
         static_assert (base::is_generator<value_type, T>);
-        if constexpr (is_lerp) {
-          base::run_lerp (
+        if constexpr (*spec::get_interp (Idx) == interpolation::linear) {
+          base::run_lerp (tmp, spls[d], mod[d], stage.delay, std::move (dmod));
+        }
+        else if constexpr (*spec::get_interp (Idx) == interpolation::thiran) {
+          base::run_thiran (
             tmp,
             spls[d],
             mod[d],
@@ -2601,13 +2691,9 @@ private:
             std::move (dmod));
         }
         else {
-          base::run_thiran (
-            tmp,
-            spls[d],
-            mod[d],
-            stage.delay,
-            stage.state.y1[d],
-            std::move (dmod));
+          static_assert (
+            *spec::get_interp (Idx) == interpolation::zero_order_hold);
+          base::run_zoh (tmp, spls[d], mod[d], stage.delay, std::move (dmod));
         }
       }
       // sum and gain

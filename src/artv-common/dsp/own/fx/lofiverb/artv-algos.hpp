@@ -651,10 +651,10 @@ public:
       make_variable_delay (ffwd_table[13], ffwd_table[16 + 13], true),
       make_variable_delay (ffwd_table[14], ffwd_table[16 + 14], true),
       make_variable_delay (ffwd_table[15], ffwd_table[16 + 15], true), // 19
-      make_ap (913, 0.f, 413, interpolation::linear), // 20
-      make_ap (491, 0.f, 213, interpolation::linear), // 21
+      make_ap (913, 0.f, 413, interpolation::zero_order_hold), // 20
+      make_ap (491, 0.f, 213, interpolation::zero_order_hold), // 21
       make_crossover2(), // 22
-      make_ap (491, 0.f, 213, interpolation::linear), // 23
+      make_ap (491, 0.f, 213, interpolation::zero_order_hold), // 23
       make_ap (133, 0.f), // 24
       make_ap (191, 0.f), // 25
       make_ap (211, 0.f), // 26
@@ -1709,12 +1709,12 @@ public:
         1131, -g3, -98
         ), // 27
       // clang-format on
-      make_ap (32, 0., (157 * 3) - 32, interpolation::linear), // 28
-      make_ap (32, 0., (243 * 3) - 32, interpolation::linear), // 29
-      make_ap (32, 0., (373 * 3) - 32, interpolation::linear), // 30
-      make_ap (32, 0., (167 * 3) - 32, interpolation::linear), // 31
-      make_ap (32, 0., (254 * 3) - 32, interpolation::linear), // 32
-      make_ap (32, 0., (383 * 3) - 32, interpolation::linear) // 33
+      make_ap (32, 0., (157 * 3) - 32, interpolation::zero_order_hold), // 28
+      make_ap (32, 0., (243 * 3) - 32, interpolation::zero_order_hold), // 29
+      make_ap (32, 0., (373 * 3) - 32, interpolation::zero_order_hold), // 30
+      make_ap (32, 0., (167 * 3) - 32, interpolation::zero_order_hold), // 31
+      make_ap (32, 0., (254 * 3) - 32, interpolation::zero_order_hold), // 32
+      make_ap (32, 0., (383 * 3) - 32, interpolation::zero_order_hold) // 33
     );
   }
   //----------------------------------------------------------------------------
