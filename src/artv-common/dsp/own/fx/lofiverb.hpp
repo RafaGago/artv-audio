@@ -33,15 +33,10 @@
 namespace artv {
 
 // TODO list
-// - rename room to ambience
 // - dre algorithms are too dark now
-// - add pre and post hooks for eq and gain
-// - companding on saving fixed point? e.g from a Q0.20
-// - wider fixed point type
-// - dither?
-// - multitaps with lerp, to do modulations on output taps
+// - adjust gains, some algorithms are clipping, e.g the Dres
 // - broken predelay!
-// - dynamics at the output compressor/expander)
+// - dynamics at the output compressor/expander.
 
 //------------------------------------------------------------------------------
 // A reverb supporting 16-bit fixed-point arithmetic on the main loop. One
@@ -74,7 +69,8 @@ public:
       make_cstr_array (
 #ifndef LOFIVERB_DEBUG_ALGO
         "Artv Ambience",
-        "Artv Hall",
+        "Artv Room",
+        "Artv Broken Hall",
         "Artv Arena",
         "Artv Palace",
         "Artv FlutterPlate",
@@ -90,7 +86,7 @@ public:
         "Debug "
 #endif
         ),
-      64);
+      128);
   }
   //----------------------------------------------------------------------------
   struct mode_tag {};
@@ -528,9 +524,12 @@ private:
     detail::lofiverb::ambience<dt_fix16>,
     detail::lofiverb::ambience<dt_flt16>,
     detail::lofiverb::ambience<dt_flt32>,
-    detail::lofiverb::hall<dt_fix16>,
-    detail::lofiverb::hall<dt_flt16>,
-    detail::lofiverb::hall<dt_flt32>,
+    detail::lofiverb::room<dt_fix16>,
+    detail::lofiverb::room<dt_flt16>,
+    detail::lofiverb::room<dt_flt32>,
+    detail::lofiverb::broken_hall<dt_fix16>,
+    detail::lofiverb::broken_hall<dt_flt16>,
+    detail::lofiverb::broken_hall<dt_flt32>,
     detail::lofiverb::arena<dt_fix16>,
     detail::lofiverb::arena<dt_flt16>,
     detail::lofiverb::arena<dt_flt32>,

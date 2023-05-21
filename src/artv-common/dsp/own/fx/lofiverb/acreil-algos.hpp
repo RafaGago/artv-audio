@@ -422,18 +422,19 @@ public:
     return make_array<stage_data> (
       make_lp (0.1), // 0
       make_hp (0.99), // 1
-      make_parallel_delay (1, 42, -g, 586, g, 1099, -g), // 2 (L)
-      make_parallel_delay (1, 105, g, 490, -g, 1290, g), // 3 (R)
+      make_parallel_delay (1, blank, 42, -g, 586, g, 1099, -g), // 2 (L)
+      make_parallel_delay (1, blank, 105, g, 490, -g, 1290, g), // 3 (R)
 
       make_comb (5719 - 1, 0.f, 43), // 4
       make_crossover2(), // 5
       make_parallel_delay (
-        1, 640, -g, 1494, g, 2199, -g, 3122, g, 4135, -g, 4952, g), // 6
+        1, blank, 640, -g, 1494, g, 2199, -g, 3122, g, 4135, -g, 4952, g), // 6
 
       make_comb (5779 - 2, 0.f, 44), // 7
       make_crossover2(), // 8
       make_parallel_delay (
         1,
+        blank,
         902,
         -g,
         1830,
@@ -451,6 +452,7 @@ public:
       make_crossover2(), // 11
       make_parallel_delay (
         1,
+        blank,
         979,
         -g,
         2031,
@@ -617,12 +619,13 @@ public:
       make_comb (3821 - 1, 0.f, 54), // 2
       make_crossover2(), // 3
       make_parallel_delay (
-        1, 429, -g, 1000, g, 1472, -g, 2088, g, 2765, -g, 3311, g), // 4
+        1, blank, 429, -g, 1000, g, 1472, -g, 2088, g, 2765, -g, 3311, g), // 4
 
       make_comb (4036 + 1, 0.f, 53), // 5
       make_crossover2(), // 6
       make_parallel_delay (
         1,
+        blank,
         616,
         -g,
         1225,
@@ -640,6 +643,7 @@ public:
       make_crossover2(), // 9
       make_parallel_delay (
         1,
+        blank,
         657,
         -g,
         1359,
@@ -813,19 +817,23 @@ public:
 
       make_comb (3794, 0.f, 23), // 5
       make_crossover2(), // 6
-      make_parallel_delay (2, 20 + 13, -g, 959, g, 1817, -g, 2855, g), // 7 R/L
+      make_parallel_delay (
+        2, blank, 20 + 13, -g, 959, g, 1817, -g, 2855, g), // 7 R/L
 
       make_comb (3838, 0.f, 24), // 8
       make_crossover2(), // 9
-      make_parallel_delay (2, 339, -g, 1309, g, 2271, -g, 3221, g), // 10 R/L
+      make_parallel_delay (
+        2, blank, 339, -g, 1309, g, 2271, -g, 3221, g), // 10 R/L
 
       make_comb (3861 - 2, 0.f, 25), // 11
       make_crossover2(), // 12
-      make_parallel_delay (2, 130, -g, 1104, g, 2065, -g, 3391, g), // 13 R/L
+      make_parallel_delay (
+        2, blank, 130, -g, 1104, g, 2065, -g, 3391, g), // 13 R/L
 
       make_comb (3894 + 1, 0.f, 26), // 14
       make_crossover2(), // 15
-      make_parallel_delay (2, 499, -g, 1445, g, 2071, -g, 2885, g), // 16 R/L
+      make_parallel_delay (
+        2, blank, 499, -g, 1445, g, 2071, -g, 2885, g), // 16 R/L
       // L
       make_ap (140, -0.7), // 17
       make_ap (160, -0.7), // 18
@@ -982,20 +990,23 @@ public:
 
       make_comb (5652 - 5, 0.f, 57), // 5
       make_crossover2(), // 6
-      make_parallel_delay (2, 745, -g, 2164, g, 2922, -g, 5005, g), // 7 R/L
+      make_parallel_delay (
+        2, blank, 745, -g, 2164, g, 2922, -g, 5005, g), // 7 R/L
 
       make_comb (5679 + 1, 0.f), // 8
       make_crossover2(), // 9
-      make_parallel_delay (2, 625, -g, 2080, g, 3523, -g, 4948, g), // 10 R/L
+      make_parallel_delay (
+        2, blank, 625, -g, 2080, g, 3523, -g, 4948, g), // 10 R/L
 
       make_comb (5689 - 1, 0.f), // 11
       make_crossover2(), // 12
       make_parallel_delay (
-        2, 11 + 21, -g, 1435, g, 2769, -g, 4279, g), // 13 R/L
+        2, blank, 11 + 21, -g, 1435, g, 2769, -g, 4279, g), // 13 R/L
 
       make_comb (5711 + 3, 0.f, 57), // 14
       make_crossover2(), // 15
-      make_parallel_delay (2, 59, -g, 1557, g, 3539, -g, 4304, g), // 16 R/L
+      make_parallel_delay (
+        2, blank, 59, -g, 1557, g, 3539, -g, 4304, g), // 16 R/L
       // L
       make_ap (214, -0.7, 30), // 17
       make_ap (469, -0.7), // 18
@@ -1154,19 +1165,19 @@ public:
       // rev main
       make_comb (2076, 0., 43), // 4
       make_crossover2(), // 5
-      make_parallel_delay (2, 949, g, 837, g), // 6
+      make_parallel_delay (2, blank, 949, g, 837, g), // 6
       make_comb (2894, 0., 43), // 7
       make_crossover2(), // 8
-      make_parallel_delay (2, 1330, g, 1412, g), // 9
+      make_parallel_delay (2, blank, 1330, g, 1412, g), // 9
       make_comb (3295, 0.), // 10
       make_crossover2(), // 11
-      make_parallel_delay (2, 2393, g, 2704, g), // 12
+      make_parallel_delay (2, blank, 2393, g, 2704, g), // 12
       make_comb (3919, 0.), // 13
       make_crossover2(), // 14
-      make_parallel_delay (2, 3263, g, 3011, g), // 15
+      make_parallel_delay (2, blank, 3263, g, 3011, g), // 15
       make_comb (4570, 0.), // 16
       make_crossover2(), // 17
-      make_parallel_delay (2, 3667, g, 3667, g), // 18
+      make_parallel_delay (2, blank, 3667, g, 3667, g), // 18
       // sub reverb cond
       make_variable_delay (533, 533 + 2411), // 19
       make_ap (1212, 0.75f), // 20
@@ -1174,25 +1185,26 @@ public:
       // sub reverb
       make_comb (3169, 0., 44), // 22
       make_crossover2(), // 23
-      make_parallel_delay (2, 1757, g, 1644, g), // 24
+      make_parallel_delay (2, blank, 1757, g, 1644, g), // 24
       make_comb (3753, 0., 44), // 25
       make_crossover2(), // 26
-      make_parallel_delay (2, 1900, g, 1981, g), // 27
+      make_parallel_delay (2, blank, 1900, g, 1981, g), // 27
       make_comb (4280, 0.), // 28
       make_crossover2(), // 29
-      make_parallel_delay (2, 2838, g, 3148, g), // 30
+      make_parallel_delay (2, blank, 2838, g, 3148, g), // 30
       make_comb (4491, 0.), // 31
       make_crossover2(), // 32
-      make_parallel_delay (2, 3798, g, 3545, g), // 33
+      make_parallel_delay (2, blank, 3798, g, 3545, g), // 33
       make_comb (5091, 0.), // 34
       make_crossover2(), // 35
-      make_parallel_delay (2, 4298, g, 4298, g), // 36
+      make_parallel_delay (2, blank, 4298, g, 4298, g), // 36
       make_ap (682, 0.75f), // 37
       make_ap (830, 0.75f), // 38
       make_ap (695, 0.75f), // 39
       make_ap (844, 0.75f), // 40
       make_parallel_delay (
         2,
+        blank,
         18 + 14,
         0.95f,
         18 + 14,

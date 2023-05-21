@@ -47,6 +47,21 @@ static constexpr uint max_block_size = 32;
 //------------------------------------------------------------------------------
 enum class interpolation : u8 { thiran, linear };
 
+struct lofiverb_io_tag {};
+
+struct defaulted_tag {};
+static constexpr defaulted_tag defaulted {};
+
+struct add_to_out_tag : public lofiverb_io_tag {};
+static constexpr add_to_out_tag add_to {};
+
+struct overwrite_out_tag : public lofiverb_io_tag {};
+static constexpr overwrite_out_tag overwrite {};
+
+//------------------------------------------------------------------------------
+template <uint... Idxs>
+struct stage_list {}; // stage list, used for avoiding the template keyword
+
 struct free_storage_data {
   uint count;
 };
@@ -99,11 +114,13 @@ struct multitap_mod_delay_data : public multitap_delay_data {
 struct parallel_delay_data : public multitap_delay_data {
   std::array<fixpt_t, max_multitap_n_elems> g;
   uint                                      n_outs;
+  uint                                      forced_size;
 };
 
 struct parallel_mod_delay_data : public multitap_mod_delay_data {
   std::array<fixpt_t, max_multitap_n_elems> g;
   uint                                      n_outs;
+  uint                                      forced_size;
 };
 
 struct filter_data {
@@ -236,6 +253,7 @@ static constexpr stage_data make_multitap_mod_delay (
 template <class... Ts>
 static constexpr stage_data make_parallel_delay (
   uint n_outs,
+  uint forced_size, // 0 = automatic
   Ts&&... spl_gain_pair)
 {
   constexpr uint nargs = sizeof...(Ts);
@@ -253,15 +271,26 @@ static constexpr stage_data make_parallel_delay (
       ret.g[i / 2] = fixpt_t::from_float (std::get<i> (tpl));
     }
   });
-  ret.count  = nargs / 2;
-  ret.n_outs = n_outs;
+  ret.count       = nargs / 2;
+  ret.n_outs      = n_outs;
+  ret.forced_size = forced_size;
   return ret;
+}
+
+template <class... Ts>
+static constexpr stage_data make_parallel_delay (
+  uint n_outs,
+  defaulted_tag,
+  Ts&&... spl_gain_pair)
+{
+  return make_parallel_delay (n_outs, 0, std::forward<Ts> (spl_gain_pair)...);
 }
 //------------------------------------------------------------------------------
 template <class... Ts>
 static constexpr stage_data make_mod_parallel_delay (
   uint          n_outs,
   interpolation interp,
+  uint          forced_size, // 0 = automatic
   Ts&&... spl_gain_mod_triplet)
 {
   constexpr uint nargs = sizeof...(Ts);
@@ -283,10 +312,22 @@ static constexpr stage_data make_mod_parallel_delay (
       ret.mod[i / 3] = fixpt_spls_mod::from_int (std::get<i> (tpl));
     }
   });
-  ret.count  = nargs / 3;
-  ret.n_outs = n_outs;
-  ret.interp = interp;
+  ret.count       = nargs / 3;
+  ret.n_outs      = n_outs;
+  ret.interp      = interp;
+  ret.forced_size = forced_size;
   return ret;
+}
+
+template <class... Ts>
+static constexpr stage_data make_mod_parallel_delay (
+  uint          n_outs,
+  interpolation interp,
+  defaulted_tag,
+  Ts&&... spl_gain_mod_triplet)
+{
+  return make_mod_parallel_delay (
+    n_outs, interp, 0, std::forward<Ts> (spl_gain_mod_triplet)...);
 }
 //------------------------------------------------------------------------------
 static constexpr stage_data make_hp (float g = 0)
@@ -576,6 +617,19 @@ public:
     }
   }
   //----------------------------------------------------------------------------
+  static constexpr uint get_forced_size (uint i)
+  {
+    if (is_parallel_delay (i)) {
+      return std::get<parallel_delay_data> (spec[i]).forced_size;
+    }
+    else if (is_parallel_mod_delay (i)) {
+      return std::get<parallel_mod_delay_data> (spec[i]).forced_size;
+    }
+    else {
+      return 0;
+    }
+  }
+  //----------------------------------------------------------------------------
   static constexpr fixpt_spls_mod get_delay_mod_spls (uint i)
   {
     auto spls = get_delays_mod_spls (i);
@@ -605,19 +659,24 @@ public:
   static constexpr uint get_max_delay_spls (uint i)
   {
     if (is_parallel_delay (i) || is_multitap_delay (i)) {
-      auto ds = get_delays_spls (i);
-      return std::max_element (ds.begin(), ds.end())->to_int();
+      auto ds     = get_delays_spls (i);
+      uint max    = std::max_element (ds.begin(), ds.end())->to_int();
+      uint forced = get_forced_size (i);
+      assert (forced == 0 || forced >= max);
+      return std::max (forced, max);
     }
     if (is_parallel_mod_delay (i) || is_multitap_mod_delay (i)) {
       auto ds  = get_delays_spls (i);
       auto ms  = get_delays_mod_spls (i);
       uint max = 0;
       for (uint i = 0; i < ds.size(); ++i) {
-        auto mod  = ms[i].to_int();
-        mod       = mod >= 0 ? mod : -mod; // abs is not constexpr until C++23
-        uint absv = max = std::max<uint> (max, ds[i].to_int() + mod + 1);
+        auto mod = ms[i].to_int();
+        mod      = mod >= 0 ? mod : -mod; // abs is not constexpr until C++23
+        max      = std::max<uint> (max, ds[i].to_int() + mod + 1);
       }
-      return max;
+      uint forced = get_forced_size (i);
+      assert (forced == 0 || forced >= max);
+      return std::max (forced, max);
     }
     else if (is_variable_delay (i)) {
       return std::get<variable_delay_data> (spec[i]).max_spls.to_int();
@@ -1181,20 +1240,6 @@ struct index_to_delay_buffer_qfn {
 //------------------------------------------------------------------------------
 } // namespace delay
 
-struct lofiverb_io_tag {};
-
-struct defaulted_tag {};
-static constexpr defaulted_tag defaulted {};
-
-struct add_to_out_tag : public lofiverb_io_tag {};
-static constexpr add_to_out_tag add_to {};
-
-struct overwrite_out_tag : public lofiverb_io_tag {};
-static constexpr overwrite_out_tag overwrite {};
-
-//------------------------------------------------------------------------------
-template <uint... Idxs>
-struct stage_list {}; // stage list, used for avoiding the template keyword
 //------------------------------------------------------------------------------
 // A class whose only purpose is to decouple the index template parameters on
 // "engine" to try to reduce code-bloat and probably compile time;
@@ -1730,13 +1775,11 @@ public:
       dst, spec::get_delay_spls (Idx).to_int() + negative_offset);
   }
   //----------------------------------------------------------------------------
-  // Raw fetch samples from the queue of a processes allpass, comb or delay. The
-  // allpass, delay or comb has to be independenly processed.
+  // Raw fetch samples from a queue of a processed element. The element has to
+  // be independenly processed.
   template <
     uint Idx,
-    std::enable_if_t<
-      spec::is_allpass (Idx) || spec::is_comb (Idx)
-      || spec::is_1tap_delay (Idx)>* = nullptr>
+    std::enable_if_t<spec::get_max_delay_spls (Idx) != 0>* = nullptr>
   void fetch (stage_list<Idx>, xspan<value_type> dst, uint spls)
   {
     static_assert (spec::get_min_delay_spls (Idx) >= max_block_size);
@@ -1744,6 +1787,15 @@ public:
     assert (spls <= spec::get_max_delay_spls (Idx));
     assert (spls >= max_block_size);
     std::get<Idx> (_stages).delay.read_block (dst, spls);
+  }
+
+  // raw fetch from the tail
+  template <
+    uint Idx,
+    std::enable_if_t<spec::get_max_delay_spls (Idx) != 0>* = nullptr>
+  void fetch (stage_list<Idx> s, xspan<value_type> dst)
+  {
+    fetch (s, dst, spec::get_max_delay_spls (Idx));
   }
   //----------------------------------------------------------------------------
   // fetches the output and feedback from an allpass. The output will
@@ -1917,6 +1969,33 @@ public:
       std::remove_reference_t<Tag>>>* = nullptr>
   void run (
     stage_list<Idx>,
+    xspan<value_type>       tail_out,
+    xspan<value_type const> in,
+    Tag                     t,
+    U&&                     out,
+    Ts&&... args)
+  {
+    assert (in);
+    if constexpr (spec::is_parallel_delay (Idx)) {
+      run_parallel_delays<Idx> (
+        tail_out, in, t, std::forward<U> (out), std::forward<Ts> (args)...);
+    }
+    else if constexpr (spec::is_parallel_mod_delay (Idx)) {
+      run_parallel_mod_delays<Idx> (
+        tail_out, in, t, std::forward<U> (out), std::forward<Ts> (args)...);
+    }
+  }
+  //----------------------------------------------------------------------------
+  template <
+    uint Idx,
+    class U,
+    class Tag,
+    class... Ts,
+    std::enable_if_t<std::is_base_of_v<
+      lofiverb_io_tag,
+      std::remove_reference_t<Tag>>>* = nullptr>
+  void run (
+    stage_list<Idx>,
     xspan<value_type const> in,
     Tag                     t,
     U&&                     out,
@@ -1933,11 +2012,19 @@ public:
     }
     else if constexpr (spec::is_parallel_delay (Idx)) {
       run_parallel_delays<Idx> (
-        in, t, std::forward<U> (out), std::forward<Ts> (args)...);
+        xspan<value_type> {},
+        in,
+        t,
+        std::forward<U> (out),
+        std::forward<Ts> (args)...);
     }
     else if constexpr (spec::is_parallel_mod_delay (Idx)) {
       run_parallel_mod_delays<Idx> (
-        in, t, std::forward<U> (out), std::forward<Ts> (args)...);
+        xspan<value_type> {},
+        in,
+        t,
+        std::forward<U> (out),
+        std::forward<Ts> (args)...);
     }
   }
 
@@ -1964,7 +2051,7 @@ public:
     run (
       l, io, io.to_const(), std::forward<U> (arg1), std::forward<Ts> (args)...);
   }
-
+  //----------------------------------------------------------------------------
   template <uint Idx>
   void run (stage_list<Idx> l, xspan<value_type> io)
   {
@@ -2372,11 +2459,12 @@ private:
     }
   }
   //----------------------------------------------------------------------------
-  template <uint Idx, class Tag, class... Args>
+  template <uint Idx, class Tag, class... Ts>
   void run_parallel_delays (
+    xspan<value_type>       tail_out, // might be empty or aliased against in
     xspan<value_type const> in_maybe_aliased,
     Tag,
-    Args&&... outs_arg)
+    Ts&&... outs_arg)
   {
     constexpr bool out_overwrite = !std::is_same_v<Tag, add_to_out_tag>;
     constexpr xspan<fixpt_spls const> spls   = spec::get_delays_spls (Idx);
@@ -2417,11 +2505,26 @@ private:
         outs[d % n_outs][i] += tmp[i] * (value_type) g[d];
       }
     }
-    delay.push_block (in);
+    if (!tail_out) {
+      delay.push_block (in);
+    }
+    else if (&tail_out[0] != &in[0]) {
+      // no aliasing
+      assert (tail_out.size() >= in.size());
+      delay.read_block (tail_out, spec::get_max_delay_spls (Idx));
+      delay.push_block (in);
+    }
+    else {
+      assert (tail_out.size() >= in.size());
+      delay.read_block (tmp, spec::get_max_delay_spls (Idx));
+      delay.push_block (in);
+      xspan_memdump (tail_out.data(), tmp);
+    }
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class Tag, class... Ts>
   void run_parallel_mod_delays (
+    xspan<value_type>       tail_out, // might be empty or aliased against in
     xspan<value_type const> in_maybe_aliased,
     Tag,
     Ts&&... args) // args contains n_outs followed by all the modulations
@@ -2433,15 +2536,11 @@ private:
     constexpr auto                        n_outs = spec::get_n_outs (Idx);
     static_assert (n_outs <= spls.size());
     static_assert (sizeof...(args) == (n_outs + spls.size()));
-#if 0
+
     // prepare output pointers to call "run_multitap_mod_delay"
     std::array<value_type*, n_outs> outs = to_ptr_array (
       forward_range_as_tuple<0, n_outs> (std::forward<Ts> (args)...));
-#else
-    auto wtftpl
-      = forward_range_as_tuple<0, n_outs> (std::forward<Ts> (args)...);
-    std::array<value_type*, n_outs> outs = to_ptr_array (wtftpl);
-#endif
+
     for (uint i = 1; i < outs.size(); ++i) {
       // only the first out can alias
       assert (&outs[i][0] != in_maybe_aliased.data());
@@ -2517,7 +2616,21 @@ private:
         outs[d % n_outs][i] += tmp[i] * (value_type) g[d];
       }
     });
-    stage.delay.push_block (in);
+    if (!tail_out) {
+      stage.delay.push_block (in);
+    }
+    else if (&tail_out[0] != &in[0]) {
+      // no aliasing
+      assert (tail_out.size() >= in.size());
+      stage.delay.read_block (tail_out, spec::get_max_delay_spls (Idx));
+      stage.delay.push_block (in);
+    }
+    else {
+      assert (tail_out.size() >= in.size());
+      stage.delay.read_block (tmp, spec::get_max_delay_spls (Idx));
+      stage.delay.push_block (in);
+      xspan_memdump (tail_out.data(), tmp);
+    }
   }
   //----------------------------------------------------------------------------
   template <uint Idx, class Range>

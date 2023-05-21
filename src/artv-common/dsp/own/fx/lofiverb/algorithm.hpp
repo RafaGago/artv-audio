@@ -260,6 +260,17 @@ protected:
     crossfade_impl (
       v1, v2, cf, block_size, std::forward<F> (cf_transform), 1.4186_r);
   }
+
+  template <class T, class F>
+  static void ep_crossfade (
+    xspan<T*>       v1, // in/out
+    xspan<T const*> v2,
+    T const*        cf,
+    uint            block_size)
+  {
+    crossfade_impl (
+      v1, v2, cf, block_size, [] (auto x) { return x; }, 1.4186_r);
+  }
   //----------------------------------------------------------------------------
   // Equal gain crossfade approx, 0 selects v1. 1 selects v2, results on v1
   template <class T, class F>
@@ -272,6 +283,17 @@ protected:
   {
     crossfade_impl (
       v1, v2, cf, block_size, std::forward<F> (cf_transform), 0.70912_r);
+  }
+
+  template <class T, class F>
+  static void eg_crossfade (
+    xspan<T*>       v1, // in/out
+    xspan<T const*> v2,
+    T const*        cf,
+    uint            block_size)
+  {
+    crossfade_impl (
+      v1, v2, cf, block_size, [] (auto x) { return x; }, 0.70912_r);
   }
   //----------------------------------------------------------------------------
 protected:
