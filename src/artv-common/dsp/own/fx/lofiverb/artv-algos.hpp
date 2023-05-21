@@ -1732,17 +1732,18 @@ public:
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto lfo      = tick_lfo<sample> (_lfo);
-      lfo1[i]       = sample {lfo[0]};
-      lfo2[i]       = sample {lfo[2]};
-      lfo1m[i]      = lfo1[i] * par.mod[i];
-      lfo2m[i]      = lfo2[i] * par.mod[i];
-      l_in[i]       = io[i][0] * 0.125_r * 0.25_r;
-      r_in[i]       = io[i][1] * 0.125_r * 0.25_r;
-      k1[i]         = 0.08_r + par.decay[i] * 0.1_r;
-      k2[i]         = 0.08_r + par.decay[i] * 0.08_r;
-      auto fg_decay = fastgrowth (par.decay[i]);
-      k4[i]         = 0.15_r + fg_decay * 0.15_r + par.character[i] * 0.2_r;
+      auto lfo         = tick_lfo<sample> (_lfo);
+      lfo1[i]          = sample {lfo[0]};
+      lfo2[i]          = sample {lfo[2]};
+      lfo1m[i]         = lfo1[i] * par.mod[i];
+      lfo2m[i]         = lfo2[i] * par.mod[i];
+      l_in[i]          = io[i][0] * 0.125_r * 0.25_r;
+      r_in[i]          = io[i][1] * 0.125_r * 0.25_r;
+      k1[i]            = 0.08_r + par.decay[i] * 0.1_r;
+      k2[i]            = 0.08_r + par.decay[i] * 0.08_r;
+      auto fg_decay    = fastgrowth (par.decay[i]);
+      par.character[i] = 1_r - par.character[i];
+      k4[i]            = 0.15_r + fg_decay * 0.15_r + par.character[i] * 0.2_r;
     }
     run_cascade<0, 1> (_eng, xspan {l_in.data(), io.size()});
     run_cascade<2, 3> (_eng, xspan {r_in.data(), io.size()});
