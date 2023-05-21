@@ -1,6 +1,6 @@
 #pragma once
 
-// #define LOFIVERB_DEBUG_ALGO 1
+#define LOFIVERB_DEBUG_ALGO 1
 
 #include <array>
 #include <cmath>

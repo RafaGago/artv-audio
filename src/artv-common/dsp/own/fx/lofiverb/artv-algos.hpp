@@ -1803,14 +1803,13 @@ public:
       lfo1m,
       lfo1m);
 
-    span_add_with_factor (xspan {l.data(), io.size()}, comb, 0.1_r);
-
     in = xspan {l_in.data(), io.size()}.to_const();
     _eng.fetch (sl<16> {}, comb, blank, gains[2]);
     _eng.run (sl<17> {}, comb, flo, glo, fhi1, 1_r, ghi);
     _eng.run (sl<18, 19, 20> {}, comb, blank, k1, blank, k2);
     _eng.push (sl<16> {}, comb, comb.to_const(), in);
     _eng.fetch (sl<16> {}, comb, 215); // ER L
+    span_add_with_factor (xspan {l.data(), io.size()}, comb, 0.1_r);
     _eng.run (
       sl<21> {},
       comb.to_const(),
@@ -1826,14 +1825,13 @@ public:
       lfo2m,
       lfo2m);
 
-    span_add_with_factor (xspan {r.data(), io.size()}, comb, -0.1_r);
-
     in = xspan {r_in.data(), io.size()}.to_const();
     _eng.fetch (sl<22> {}, comb, blank, gains[3]);
     _eng.run (sl<23> {}, comb, flo, glo, fhi2, 1_r, ghi);
     _eng.run (sl<24, 25, 26> {}, comb, blank, k1, blank, k2);
     _eng.push (sl<22> {}, comb, comb.to_const(), in);
     _eng.fetch (sl<22> {}, comb, 298); // ER R
+    span_add_with_factor (xspan {r.data(), io.size()}, comb, -0.1_r);
     _eng.run (
       sl<27> {},
       comb.to_const(),
