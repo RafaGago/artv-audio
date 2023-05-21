@@ -1139,8 +1139,8 @@ public:
       lfo2[i]       = sample {lfo[2]};
       lfo1m[i]      = lfo1[i] * par.mod[i];
       lfo2m[i]      = lfo2[i] * par.mod[i];
-      l_in[i]       = io[i][0] * 0.5_r;
-      r_in[i]       = io[i][1] * 0.5_r;
+      l_in[i]       = io[i][0] * 0.125_r * 0.125_r;
+      r_in[i]       = io[i][1] * 0.125_r * 0.125_r;
       k1[i]         = 0.12_r + par.decay[i] * 0.2_r;
       k2[i]         = 0.12_r + par.decay[i] * 0.1_r;
       auto fg_decay = fastgrowth (par.decay[i]);
@@ -1262,7 +1262,7 @@ public:
   void post_process_block (xspan<std::array<float, 2>> io)
   {
     span_visit (io, [&] (auto& v, uint) {
-      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)) * 16.f);
     });
   }
   //----------------------------------------------------------------------------
@@ -1380,10 +1380,10 @@ public:
         415, -g2, 0,
         646, g1, -57,
         647, -g2, 58,
-        673, -g3, -7,
-        671, g3, 13,
-        858, g4, -89,
-        836, -g1, 73
+        673, g4, -7,
+        671, -g4, 13,
+        858, -g3, -89,
+        836, g3, 73
         ), // 21
       // clang-format on
       make_comb (1433 * sc, 0.f), // 22
@@ -1434,8 +1434,8 @@ public:
       lfo2[i]       = sample {lfo[2]};
       lfo1m[i]      = lfo1[i] * par.mod[i];
       lfo2m[i]      = lfo2[i] * par.mod[i];
-      l_in[i]       = io[i][0] * 0.5_r;
-      r_in[i]       = io[i][1] * 0.5_r;
+      l_in[i]       = io[i][0] * 0.125_r * 0.25_r;
+      r_in[i]       = io[i][1] * 0.125_r * 0.25_r;
       k1[i]         = 0.08_r + par.decay[i] * 0.1_r;
       k2[i]         = 0.08_r + par.decay[i] * 0.08_r;
       auto fg_decay = fastgrowth (par.decay[i]);
@@ -1500,7 +1500,6 @@ public:
       lfo1m,
       lfo1m);
 
-    _eng.fetch (sl<16> {}, comb, 215); // ER L
     span_add_with_factor (xspan {l.data(), io.size()}, comb, 0.1_r);
 
     in = xspan {l_in.data(), io.size()}.to_const();
@@ -1508,6 +1507,7 @@ public:
     _eng.run (sl<17> {}, comb, flo, glo, fhi1, 1_r, ghi);
     _eng.run (sl<18, 19, 20> {}, comb, blank, k1, blank, k2);
     _eng.push (sl<16> {}, comb, comb.to_const(), in);
+    _eng.fetch (sl<16> {}, comb, 215); // ER L
     _eng.run (
       sl<21> {},
       comb.to_const(),
@@ -1523,7 +1523,6 @@ public:
       lfo2m,
       lfo2m);
 
-    _eng.fetch (sl<22> {}, comb, 298); // ER R
     span_add_with_factor (xspan {r.data(), io.size()}, comb, -0.1_r);
 
     in = xspan {r_in.data(), io.size()}.to_const();
@@ -1531,6 +1530,7 @@ public:
     _eng.run (sl<23> {}, comb, flo, glo, fhi2, 1_r, ghi);
     _eng.run (sl<24, 25, 26> {}, comb, blank, k1, blank, k2);
     _eng.push (sl<22> {}, comb, comb.to_const(), in);
+    _eng.fetch (sl<22> {}, comb, 298); // ER R
     _eng.run (
       sl<27> {},
       comb.to_const(),
@@ -1566,7 +1566,7 @@ public:
   void post_process_block (xspan<std::array<float, 2>> io)
   {
     span_visit (io, [&] (auto& v, uint) {
-      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)) * 16.f);
     });
   }
   //----------------------------------------------------------------------------

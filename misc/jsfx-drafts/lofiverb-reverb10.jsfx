@@ -199,12 +199,12 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   l *= 0.1;
   r *= 0.1;
 
-  l = ap (l, 157 * df1, -k4);
-  l = ap (l, 243 * df1, k4);
-  l = ap (l, 373 * df1, k4);
-  r = ap (r, 167 * df1, -k4);
-  r = ap (r, 254 * df1, k4);
-  r = ap (r, 383 * df1, k4);
+  l = ap (l, 32 + ((157 - 32)* df1), -k4);
+  l = ap (l, 32 + ((243 - 32)* df1), k4);
+  l = ap (l, 32 + ((373 - 32)* df1), k4);
+  r = ap (r, 32 + ((167 - 32)* df1), -k4);
+  r = ap (r, 32 + ((254 - 32)* df1), k4);
+  r = ap (r, 32 + ((383 - 32)* df1), k4);
 
 //  l = ap (l, 91, 0.4);
 //  l = ap (l, 131, 0.4);

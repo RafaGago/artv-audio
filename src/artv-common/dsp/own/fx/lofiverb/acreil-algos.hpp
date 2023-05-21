@@ -496,7 +496,7 @@ public:
       lfo1[i]  = sample {lfo[0]} * par.mod[i];
       lfo2[i]  = sample {lfo[1]} * par.mod[i];
       lfo3[i]  = sample {lfo[2]} * par.mod[i];
-      spl      = (io[i][0] + io[i][1]) * 0.25_r;
+      spl      = (io[i][0] + io[i][1]) * 0.125_r * 0.125_r;
     });
     _eng.run (sl<0> {}, in);
     _eng.run (sl<1> {}, l, in.to_const());
@@ -560,7 +560,7 @@ public:
   void post_process_block (xspan<std::array<float, 2>> io)
   {
     span_visit (io, [&] (auto& v, uint) {
-      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)) * 16.f);
     });
   }
   //----------------------------------------------------------------------------
@@ -690,7 +690,7 @@ public:
       lfo1[i]  = sample {lfo[0]} * par.mod[i];
       lfo2[i]  = sample {lfo[1]} * par.mod[i];
       lfo3[i]  = sample {lfo[2]} * par.mod[i];
-      spl      = (io[i][0] + io[i][1]) * 0.25_r;
+      spl      = (io[i][0] + io[i][1]) * 0.125_r * 0.125_r;
     });
     _eng.run (sl<0> {}, in);
     _eng.run (sl<1> {}, in);
@@ -756,7 +756,7 @@ public:
   void post_process_block (xspan<std::array<float, 2>> io)
   {
     span_visit (io, [&] (auto& v, uint) {
-      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)) * 16.f);
     });
   }
   //----------------------------------------------------------------------------
@@ -865,7 +865,7 @@ public:
       lfo2[i]  = sample {lfo[1]} * par.mod[i];
       lfo3[i]  = sample {lfo[2]} * par.mod[i];
       lfo4[i]  = sample {lfo[3]} * par.mod[i];
-      spl      = (io[i][0] + io[i][1]) * 0.25_r;
+      spl      = (io[i][0] + io[i][1]) * 0.125_r * 0.125_r;
     });
     _eng.run (sl<0> {}, in);
     _eng.run (sl<1> {}, in);
@@ -929,7 +929,7 @@ public:
   void post_process_block (xspan<std::array<float, 2>> io)
   {
     span_visit (io, [&] (auto& v, uint) {
-      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)) * 16.f);
     });
   }
   //----------------------------------------------------------------------------
@@ -1039,7 +1039,7 @@ public:
       lfo2[i]  = sample {lfo[1]} * par.mod[i];
       lfo3[i]  = sample {lfo[2]} * par.mod[i];
       lfo4[i]  = sample {lfo[3]} * par.mod[i];
-      spl      = (io[i][0] + io[i][1]) * 0.25_r;
+      spl      = (io[i][0] + io[i][1]) * 0.125_r * 0.125_r;
     });
     _eng.run (sl<0> {}, in);
     _eng.run (sl<1> {}, in);
@@ -1102,7 +1102,7 @@ public:
   void post_process_block (xspan<std::array<float, 2>> io)
   {
     span_visit (io, [&] (auto& v, uint) {
-      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)) * 16.f);
     });
   }
   //----------------------------------------------------------------------------
@@ -1255,7 +1255,7 @@ public:
       lfo2[i]  = sample {lfo[1]} * par.mod[i];
       lfo3[i]  = sample {lfo[2]} * par.mod[i];
       lfo4[i]  = sample {lfo[3]} * par.mod[i];
-      spl      = (io[i][0] + io[i][1]) * 0.25_r;
+      spl      = (io[i][0] + io[i][1]) * 0.125_r * 0.125_r;
     });
     _eng.run (sl<0> {}, in);
     _eng.run (sl<1> {}, in);
@@ -1374,7 +1374,7 @@ public:
   void post_process_block (xspan<std::array<float, 2>> io)
   {
     span_visit (io, [&] (auto& v, uint) {
-      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)));
+      v = vec_to_array (_eq.tick_cascade (vec_from_array (v)) * 16.f);
     });
   }
   //----------------------------------------------------------------------------
