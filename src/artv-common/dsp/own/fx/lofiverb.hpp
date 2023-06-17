@@ -210,8 +210,8 @@ public:
     return float_param ("%", -100., 100., 100., 0.01);
   }
   //----------------------------------------------------------------------------
-  struct ducking_threshold_tag {};
-  void set (ducking_threshold_tag, float v)
+  struct dyn_threshold_tag {};
+  void set (dyn_threshold_tag, float v)
   {
     if (v == _param.ducking_threshold) {
       return;
@@ -220,13 +220,13 @@ public:
     _ducker.set_threshold (vec_set<2> (v));
   }
 
-  static constexpr auto get_parameter (ducking_threshold_tag)
+  static constexpr auto get_parameter (dyn_threshold_tag)
   {
     return float_param ("dB", -60.f, 0.0f, 0.f, 0.01f);
   }
   //----------------------------------------------------------------------------
-  struct ducking_speed_tag {};
-  void set (ducking_speed_tag, float v)
+  struct dyn_speed_tag {};
+  void set (dyn_speed_tag, float v)
   {
     if (v == _param.ducking_speed) {
       return;
@@ -235,9 +235,9 @@ public:
     update_ducker();
   }
 
-  static constexpr auto get_parameter (ducking_speed_tag)
+  static constexpr auto get_parameter (dyn_speed_tag)
   {
-    return float_param ("%", 0.f, 100.f, 10.f, 0.01f);
+    return float_param ("%", -100.f, 100.f, 10.f, 0.01f);
   }
   //----------------------------------------------------------------------------
   void reset (plugin_context& pc)
@@ -295,8 +295,8 @@ public:
     clip_level_tag,
     mod_tag,
     stereo_tag,
-    ducking_threshold_tag,
-    ducking_speed_tag>;
+    dyn_threshold_tag,
+    dyn_speed_tag>;
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
@@ -316,6 +316,7 @@ private:
 
     std::array<f32_x2, max_block_size>                  ducker_gain;
     detail::lofiverb::algorithm::smoothed_parameters<T> pars;
+    bool gating = _param.ducking_speed < 0.f;
 
     auto pre_gain = (1.f / _param.gain);
     // tilt + clamp + ducker measuring + param smoothing
@@ -324,7 +325,10 @@ private:
       auto wetv      = vec_from_array (io[i]) * pre_gain;
       wetv           = vec_clamp (wetv, -clip_value(), clip_value());
       ducker_gain[i] = _ducker.tick (wetv);
-      io[i]          = vec_to_array (wetv);
+      if (gating) {
+        ducker_gain[i] = 1.f - ducker_gain[i];
+      }
+      io[i] = vec_to_array (wetv);
       _param_smooth.tick();
       pars.stereo[i] = _param_smooth.get().stereo;
       if constexpr (is_fixpt_t) {
@@ -466,7 +470,7 @@ private:
   //----------------------------------------------------------------------------
   void update_ducker()
   {
-    auto v = _param.ducking_speed * 0.01f;
+    float v = abs (_param.ducking_speed * 0.01f);
     _ducker.set_speed (vec_set<2> (v * v), _t_spl);
   }
   //----------------------------------------------------------------------------

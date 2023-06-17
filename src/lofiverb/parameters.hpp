@@ -93,23 +93,23 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  ducking_speed,
+  dyn_speed,
   1,
   param_common (
-    "Duck Time",
+    "Dyn Time",
     declptr<lofiverb>(),
-    declptr<lofiverb::ducking_speed_tag>()),
-  lofiverb::get_parameter (lofiverb::ducking_speed_tag {}),
+    declptr<lofiverb::dyn_speed_tag>()),
+  lofiverb::get_parameter (lofiverb::dyn_speed_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  ducking_threshold,
+  dyn_threshold,
   1,
   param_common (
-    "Duck Thrs",
+    "Dyn Thres",
     declptr<lofiverb>(),
-    declptr<lofiverb::ducking_threshold_tag>()),
-  lofiverb::get_parameter (lofiverb::ducking_threshold_tag {}),
+    declptr<lofiverb::dyn_threshold_tag>()),
+  lofiverb::get_parameter (lofiverb::dyn_threshold_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -160,8 +160,8 @@ using lofiverb_parameters = mp_list<
   stereo,
   character,
   mod,
-  ducking_threshold,
-  ducking_speed,
+  dyn_threshold,
+  dyn_speed,
   mode,
   operating_range>;
 

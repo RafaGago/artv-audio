@@ -479,8 +479,8 @@ public:
       duck,
       duck.getWidth(),
       make_array (label_h, knob_h, label_h, knob_h),
-      grid_label_on_top (*_params.p_get (parameters::ducking_threshold {})[0]),
-      grid_label_on_top (*_params.p_get (parameters::ducking_speed {})[0]));
+      grid_label_on_top (*_params.p_get (parameters::dyn_threshold {})[0]),
+      grid_label_on_top (*_params.p_get (parameters::dyn_speed {})[0]));
 
     auto footer
       = area.removeFromTop (sep_h + (sizes::footer_h_divs * h) + sep_h);
