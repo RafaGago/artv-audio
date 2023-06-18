@@ -45,7 +45,8 @@ public:
   {
     auto f_er   = 0.3f + mod * 0.3f;
     auto f_late = 0.1f + mod * 1.2f;
-    _lfo.set_freq (f32_x4 {f_er, f_er, f_late, f_late}, t_spl);
+    _lfo.set_freq (
+      f32_x4 {f_er, f_er * 1.1234f, f_late * 1.1234f, f_late}, t_spl);
   }
   //------------------------------------------------------------------------------
   static constexpr auto get_spec()
