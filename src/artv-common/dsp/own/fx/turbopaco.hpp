@@ -1,6 +1,6 @@
 #pragma once
 
-#define TURBOPACO_DEBUG_ALGO 1
+// #define TURBOPACO_DEBUG_ALGO 1
 
 #include <array>
 #include <cmath>
@@ -186,17 +186,20 @@ public:
   //----------------------------------------------------------------------------
   static constexpr uint max_predelay_msec = 1000;
   struct predelay_tag {};
-  void set (predelay_tag, float v) { _param.predelay = v * 0.001f; }
+  void set (predelay_tag, float v)
+  {
+    _param_smooth.target().predelay = v * 0.001f;
+  }
 
   static constexpr auto get_parameter (predelay_tag)
   {
-    return float_param ("msec", 0., max_predelay_msec, 0., 0.1, 0.6);
+    return float_param ("msec", 0., max_predelay_msec, 0., 0.01, 0.6);
   }
   //----------------------------------------------------------------------------
   struct clip_level_tag {};
   void set (clip_level_tag, float v)
   {
-    _param.gain = db_to_gain (v) * clip_value();
+    _param_smooth.target().gain = db_to_gain (v) * clip_value();
   }
 
   static constexpr auto get_parameter (clip_level_tag)
@@ -317,22 +320,17 @@ private:
     static constexpr bool is_fixpt_t = std::is_same_v<T, fixpt_t>;
 
     std::array<f32_x2, max_block_size>               ducker_gain;
+    std::array<float, max_block_size>                gain;
     detail::tpaco::algorithm::smoothed_parameters<T> pars;
     bool gating = _param.ducking_speed < 0.f;
 
-    auto pre_gain = (1.f / _param.gain);
     // tilt + clamp + ducker measuring + param smoothing
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto wetv      = vec_from_array (io[i]) * pre_gain;
-      wetv           = vec_clamp (wetv, -clip_value(), clip_value());
-      ducker_gain[i] = _ducker.tick (wetv);
-      if (gating) {
-        ducker_gain[i] = 1.f - ducker_gain[i];
-      }
-      io[i] = vec_to_array (wetv);
+      // smoothing
       _param_smooth.tick();
       pars.stereo[i] = _param_smooth.get().stereo;
+      gain[i]        = _param_smooth.get().gain;
       if constexpr (is_fixpt_t) {
         pars.decay[i].load_float (_param_smooth.get().decay);
         pars.character[i].load_float (_param_smooth.get().character);
@@ -343,18 +341,22 @@ private:
         pars.character[i] = _param_smooth.get().character;
         pars.mod[i]       = _param_smooth.get().mod;
       }
-    }
-    // predelay
-    uint predelay_spls = _srate * _param.predelay;
-    if (predelay_spls != 0) {
-      ARTV_LOOP_UNROLL_SIZE_HINT (16)
-      for (uint i = 0; i < io.size(); ++i) {
-        std::array<float, 2> spl;
-        spl[0] = _predelay.get (predelay_spls, 0);
-        spl[1] = _predelay.get (predelay_spls, 1);
-        _predelay.push (xspan {io[i]});
-        io[i] = spl;
+      // input cond
+      auto pre_gain  = (1.f / gain[i]);
+      auto wetv      = vec_from_array (io[i]) * pre_gain;
+      wetv           = vec_clamp (wetv, -clip_value(), clip_value());
+      ducker_gain[i] = _ducker.tick (wetv);
+      if (gating) {
+        ducker_gain[i] = 1.f - ducker_gain[i];
       }
+      // predelay
+      auto iov           = vec_to_array (wetv);
+      uint predelay_spls = _srate * _param_smooth.get().predelay;
+      std::array<float, 2> spl;
+      spl[0] = _predelay.get (predelay_spls, 0);
+      spl[1] = _predelay.get (predelay_spls, 1);
+      _predelay.push (xspan {iov});
+      io[i] = spl;
     }
     std::visit (
       [&, this] (auto& algo) {
@@ -385,8 +387,8 @@ private:
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
-      auto l = io[i][0] * ducker_gain[i][0] * _param.gain;
-      auto r = io[i][1] * ducker_gain[i][1] * _param.gain;
+      auto l = io[i][0] * ducker_gain[i][0] * gain[i];
+      auto r = io[i][1] * ducker_gain[i][1] * gain[i];
       l      = r * (1 - abs (pars.stereo[i])) + l * abs (pars.stereo[i]);
       if (pars.stereo[i] < 0) {
         io[i][0] = r;
@@ -493,8 +495,6 @@ private:
   struct unsmoothed_parameters {
     u32                                             mode;
     u32                                             srateid;
-    float                                           gain; // a parameter
-    float                                           predelay;
     detail::tpaco::algorithm::unsmoothed_parameters algo;
     float                                           ducking_threshold;
     float                                           ducking_speed;
@@ -505,7 +505,8 @@ private:
     float stereo;
     float decay;
     float character;
-    // dry, wet, ducker/gate
+    float predelay;
+    float gain;
   };
   //----------------------------------------------------------------------------
   using fixpt_t     = detail::tpaco::fixpt_t;
