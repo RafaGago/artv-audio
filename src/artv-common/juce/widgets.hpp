@@ -643,6 +643,7 @@ struct combobox_ext
         break;
       } while (combo.getSelectedItemIndex() != idx);
     };
+    prev.setConnectedEdges (juce::TextButton::ConnectedOnRight);
     parent.addAndMakeVisible (prev);
 
     next.setLookAndFeel (&parent.getLookAndFeel());

@@ -485,7 +485,6 @@ public:
     using phase_type = decltype (_mod_lfo)::phase_type;
     phase_type::float_vec phases {0.f, 0.25f, 0.5f, 0.75f};
     _mod_lfo.reset();
-    _eq.reset_states_cascade();
     _mod_lfo.set_phase (phase_type {phase_type::normalized {}, phases});
 
     for (uint i = 0; i < _ap_lfo.size(); ++i) {

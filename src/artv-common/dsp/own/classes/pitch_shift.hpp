@@ -53,12 +53,12 @@ public:
       tk.pos += tk.delta;
     }
     else {
-      tk.pos.load_int (wpos);
-      tk.pos *= tk.delta;
+      float fpos = tk.pos.to_floatp() * tk.delta.to_floatp();
+      tk.pos.load_float (fpos);
     }
 
     auto rint  = tk.pos.to_int();
-    auto rfrac = tk.pos.float_fractional();
+    auto rfrac = tk.pos.fractional().to_floatp();
 
     V p1  = _mem.get_abs (rint);
     V p2  = _mem.get_abs (rint + 1);

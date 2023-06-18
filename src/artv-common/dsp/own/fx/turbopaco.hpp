@@ -280,10 +280,10 @@ public:
 
     _resampler.process (outs, ins, samples, [=] (auto io) {
       if ((_param.mode % n_bit_formats) == 0) {
-        process<fixpt_t> (io);
+        process_downsampled<fixpt_t> (io);
       }
       else {
-        process<float> (io);
+        process_downsampled<float> (io);
       }
     });
   }
@@ -312,7 +312,7 @@ private:
   struct smoothed_parameters;
   //----------------------------------------------------------------------------
   template <class T>
-  void process (xspan<std::array<float, 2>> io)
+  void process_downsampled (xspan<std::array<float, 2>> io)
   {
     using algo = detail::tpaco::algorithm;
     assert (io.size() <= max_block_size);

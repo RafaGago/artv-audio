@@ -7594,23 +7594,23 @@ parameter_cpp_class_define (
   slider_ext);
 
 parameter_cpp_class_define (
-  turbopaco_ducking_speed,
+  turbopaco_dyn_speed,
   n_stereo_busses,
   param_common (
-    "Duck Spd",
+    "Dyn Spd",
     declptr<turbopaco>(),
-    declptr<turbopaco::ducking_speed_tag>()),
-  turbopaco::get_parameter (turbopaco::ducking_speed_tag {}),
+    declptr<turbopaco::dyn_speed_tag>()),
+  turbopaco::get_parameter (turbopaco::dyn_speed_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  turbopaco_ducking_threshold,
+  turbopaco_dyn_threshold,
   n_stereo_busses,
   param_common (
-    "Duck Thres",
+    "Dyn Thres",
     declptr<turbopaco>(),
-    declptr<turbopaco::ducking_threshold_tag>()),
-  turbopaco::get_parameter (turbopaco::ducking_threshold_tag {}),
+    declptr<turbopaco::dyn_threshold_tag>()),
+  turbopaco::get_parameter (turbopaco::dyn_threshold_tag {}),
   slider_ext);
 
 using turbopaco_params = mp_list<
@@ -7623,8 +7623,8 @@ using turbopaco_params = mp_list<
   turbopaco_lf,
   turbopaco_hf,
 
-  turbopaco_ducking_threshold,
-  turbopaco_ducking_speed,
+  turbopaco_dyn_threshold,
+  turbopaco_dyn_speed,
   turbopaco_mode,
   turbopaco_clock,
   turbopaco_operating_range>;
@@ -7697,7 +7697,7 @@ using experiments_params
 
 #endif // experiments
 
-#define TWEAK_BUILD 1
+#define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
 using all_fx_typelists = mp_list<
@@ -7763,7 +7763,8 @@ using all_fx_typelists = mp_list<
   soundtouch_params,
   reverb_params,
   diffuse_delay_params,
-  mod_params>;
+  mod_params,
+  turbopaco_params>;
 // clang-format on
 //------------------------------------------------------------------------------
 // ordering between "fx_choices" and "all_fx_params_typelists" MUST match!
@@ -7823,7 +7824,8 @@ static constexpr auto fx_choices = make_cstr_array (
   ":Pitch Soundtouch",
   ":Reverb Artv Reverb",
   ":Delay Artv DelayVerb",
-  ":Modulation: ArtV Mod");
+  ":Modulation: ArtV Mod",
+  ":Reverb Artv TurboPaco");
 
 #endif // #if TWEAK_BUILD
 
