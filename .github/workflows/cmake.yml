@@ -9,7 +9,7 @@ on:
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
-  VST3_TARGETS: MixMaxTrix_VST3
+  VST3_TARGETS: MixMaxTrix_VST3 turbopaco_VST3
 
 jobs:
   build:
@@ -64,7 +64,7 @@ jobs:
       - name: Configure Linux
         # Not using ninja. I don't remember the reason but it wasn't really running parallel builds
         run: |
-          CC=/usr/bin/clang-15 CXX=/usr/bin/clang++-15 cmake -B ${{github.workspace}}/build-linux -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_LV2=Off-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
+          CC=/usr/bin/clang-16 CXX=/usr/bin/clang++-16 cmake -B ${{github.workspace}}/build-linux -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLINK_TIME_OPTIMIZATION=On -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_LV2=Off-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
 
       - name: Build Linux
         run: |
@@ -82,7 +82,7 @@ jobs:
         # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
         run: ctest -C ${{env.BUILD_TYPE}}
 
-      # VST3 Linux
+      # MixMaxtrix VST3 Linux
       - uses: actions/upload-artifact@v2
         with:
           name: mix-maxtrix-linux-${{github.sha}}-x64-vst3
@@ -90,14 +90,14 @@ jobs:
             ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
             !**/*.syms
 
-      # Symbols VST3 Linux
+      # MixMaxtrix Symbols VST3 Linux
       - uses: actions/upload-artifact@v2
         with:
           name: mix-maxtrix-linux-${{github.sha}}-x64-vst3-debug-symbols
           path: |
             ${{github.workspace}}/build-linux/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**/*.syms
 
-      # VST3 Windows
+      # MixMaxtrix VST3 Windows
       - uses: actions/upload-artifact@v2
         with:
           name: mix-maxtrix-windows-${{github.sha}}-x64-vst3
@@ -105,14 +105,14 @@ jobs:
             ${{github.workspace}}/build-windows/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
             !**/*.pdb
 
-      # Symbols VST3 Windows
+      # MixMaxtrix Symbols VST3 Windows
       - uses: actions/upload-artifact@v2
         with:
           name: mix-maxtrix-windows-${{github.sha}}-x64-vst3-debug-symbols
           path: |
             ${{github.workspace}}/build-windows/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix.pdb
 
-      # VST3 Windows Zen3
+      # MixMaxtrix VST3 Windows Zen3
       - uses: actions/upload-artifact@v2
         with:
           name: mix-maxtrix-windows-${{github.sha}}-zen3-vst3
@@ -120,9 +120,54 @@ jobs:
             ${{github.workspace}}/build-windows-zen3/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix*.vst3/**
             !**/*.pdb
 
-      # Symbols Windows Zen3
+      # MixMaxtrix Symbols Windows Zen3
       - uses: actions/upload-artifact@v2
         with:
           name: mix-maxtrix-windows-${{github.sha}}-zen3-vst3-debug-symbols
           path: |
             ${{github.workspace}}/build-windows-zen3/MixMaxTrix_artefacts/${{env.BUILD_TYPE}}/VST3/MixMaxTrix.pdb
+
+      # TurboPaco VST3 Linux
+      - uses: actions/upload-artifact@v2
+        with:
+          name: turbopaco-linux-${{github.sha}}-x64-vst3
+          path: |
+            ${{github.workspace}}/build-linux/turbopaco_artefacts/${{env.BUILD_TYPE}}/VST3/TurboPaco*.vst3/**
+            !**/*.syms
+
+      # TurboPaco Symbols VST3 Linux
+      - uses: actions/upload-artifact@v2
+        with:
+          name: turbopaco-linux-${{github.sha}}-x64-vst3-debug-symbols
+          path: |
+            ${{github.workspace}}/build-linux/turbopaco_artefacts/${{env.BUILD_TYPE}}/VST3/TurboPaco*.vst3/**/*.syms
+
+      # TurboPaco VST3 Windows
+      - uses: actions/upload-artifact@v2
+        with:
+          name: turbopaco-windows-${{github.sha}}-x64-vst3
+          path: |
+            ${{github.workspace}}/build-windows/turbopaco_artefacts/${{env.BUILD_TYPE}}/VST3/TurboPaco*.vst3/**
+            !**/*.pdb
+
+      # TurboPaco Symbols VST3 Windows
+      - uses: actions/upload-artifact@v2
+        with:
+          name: turbopaco-windows-${{github.sha}}-x64-vst3-debug-symbols
+          path: |
+            ${{github.workspace}}/build-windows/turbopaco_artefacts/${{env.BUILD_TYPE}}/VST3/TurboPaco.pdb
+
+      # TurboPaco VST3 Windows Zen3
+      - uses: actions/upload-artifact@v2
+        with:
+          name: turbopaco-windows-${{github.sha}}-zen3-vst3
+          path: |
+            ${{github.workspace}}/build-windows-zen3/turbopaco_artefacts/${{env.BUILD_TYPE}}/VST3/TurboPaco*.vst3/**
+            !**/*.pdb
+
+      # TurboPaco Symbols Windows Zen3
+      - uses: actions/upload-artifact@v2
+        with:
+          name: turbopaco-windows-${{github.sha}}-zen3-vst3-debug-symbols
+          path: |
+            ${{github.workspace}}/build-windows-zen3/turbopaco_artefacts/${{env.BUILD_TYPE}}/VST3/TurboPaco.pdb
