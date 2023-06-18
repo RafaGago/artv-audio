@@ -667,7 +667,7 @@ add_executable(
     test/common/fft.cpp
     test/common/simd.cpp
     test/common/fixed_point.cpp
-    test/common/lofiverb.cpp
+    test/common/turbopaco.cpp
     )
 target_link_libraries (common-test PUBLIC test mufft-all pffft)
 #-- Mix-maxtrix ----------------------------------------------------------------
@@ -781,22 +781,22 @@ endif()
 #    headless/mix-maxtrix/main.cpp
 #    )
 #target_link_libraries (MixMaxTrix-headless PRIVATE headless MixMaxTrix)
-#-- Lofiverb ----------------------------------------------------------------
-set (LOFIVERB_VERSION_MAJOR 1)
-set (LOFIVERB_VERSION_MINOR 0)
-set (LOFIVERB_VERSION_REV 0)
+#-- TurboPaco ----------------------------------------------------------------
+set (TURBOPACO_VERSION_MAJOR 1)
+set (TURBOPACO_VERSION_MINOR 0)
+set (TURBOPACO_VERSION_REV 0)
 set(
-LOFIVERB_VERSION
-"${LOFIVERB_VERSION_MAJOR}.${LOFIVERB_VERSION_MINOR}.${LOFIVERB_VERSION_REV}"
+TURBOPACO_VERSION
+"${TURBOPACO_VERSION_MAJOR}.${TURBOPACO_VERSION_MINOR}.${TURBOPACO_VERSION_REV}"
 )
 juce_add_plugin(
-    lofiverb
+    turbopaco
     PLUGIN_MANUFACTURER_CODE ArtV
     PLUGIN_CODE Lfvb
-    PRODUCT_NAME LofiVerb
-    LV2_SHARED_LIBRARY_NAME lofiverb
+    PRODUCT_NAME TurboPaco
+    LV2_SHARED_LIBRARY_NAME turbopaco
     COMPANY_NAME ArtV
-    VERSION "${LOFIVERB_VERSION}"
+    VERSION "${TURBOPACO_VERSION}"
     VST3_CATEGORIES Reverb
     VST3_COPY_DIR ${VST3_COPY_DIR}
     FORMATS ${PLUGIN_FORMATS}
@@ -805,44 +805,44 @@ juce_add_plugin(
     LV2_URI https://github.com/RafaGago/artv-audio
     )
 target_sources(
-    lofiverb
+    turbopaco
     PRIVATE
-    src/lofiverb/processor.cpp
-    src/lofiverb/editor.cpp
+    src/turbopaco/processor.cpp
+    src/turbopaco/editor.cpp
     )
 set_source_files_properties(
-    src/lofiverb/editor.cpp
+    src/turbopaco/editor.cpp
     PROPERTIES
     COMPILE_FLAGS
     "${ARTV_PLAIN_COMPILE_OPTIONS}"
     )
 set_source_files_properties(
-    src/lofiverb/processor.cpp
+    src/turbopaco/processor.cpp
     PROPERTIES
     COMPILE_FLAGS
-    "${ARTV_DSP_COMPILE_OPTIONS} ${ARTV_LOFIVERB_COMPILE_OPTIONS}"
+    "${ARTV_DSP_COMPILE_OPTIONS} ${ARTV_TURBOPACO_COMPILE_OPTIONS}"
     )
 target_compile_definitions(
-    lofiverb
+    turbopaco
     PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCER_ENABLE_GPL_MODE=1
-    VERSION_TXT="${LOFIVERB_VERSION}"
-    VERSION_MAJOR=${LOFIVERB_VERSION_MAJOR}
-    VERSION_MINOR=${LOFIVERB_VERSION_MINOR}
-    VERSION_REV=${LOFIVERB_VERSION_REV}
+    VERSION_TXT="${TURBOPACO_VERSION}"
+    VERSION_MAJOR=${TURBOPACO_VERSION_MAJOR}
+    VERSION_MINOR=${TURBOPACO_VERSION_MINOR}
+    VERSION_REV=${TURBOPACO_VERSION_REV}
     )
 target_link_libraries(
-    lofiverb
+    turbopaco
     PUBLIC
     common
     juce::juce_audio_utils
     fonts
     )
 install(
-    TARGETS lofiverb
+    TARGETS turbopaco
     RUNTIME DESTINATION plugins
     LIBRARY DESTINATION plugins
     ARCHIVE DESTINATION plugins

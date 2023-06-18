@@ -1,7 +1,7 @@
 #pragma once
 
-#include "artv-common/dsp/own/fx/lofiverb/algorithm-engine.hpp"
-#include "artv-common/dsp/own/fx/lofiverb/algorithm.hpp"
+#include "artv-common/dsp/own/fx/turbopaco/algorithm-engine.hpp"
+#include "artv-common/dsp/own/fx/turbopaco/algorithm.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/misc/compiler.hpp"
@@ -10,7 +10,7 @@
 #include "artv-common/misc/xspan.hpp"
 #include <type_traits>
 
-namespace artv { namespace detail { namespace lofiverb {
+namespace artv { namespace detail { namespace tpaco {
 
 /* reminder_ sample rates that result in a low number of interpolator/decimator
   tables.
@@ -64,7 +64,7 @@ namespace artv { namespace detail { namespace lofiverb {
 template <delay::data_type Dt>
 class debug : public algorithm {
 private:
-  using engine = detail::lofiverb::algo_engine<debug<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<debug<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -198,4 +198,4 @@ private:
   part_class_array<andy::svf, f32_x2> _eq;
 };
 //------------------------------------------------------------------------------
-}}} // namespace artv::detail::lofiverb
+}}} // namespace artv::detail::tpaco

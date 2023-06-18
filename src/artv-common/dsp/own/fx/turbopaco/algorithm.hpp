@@ -3,14 +3,14 @@
 #include <array>
 #include <type_traits>
 
-#include "artv-common/dsp/own/fx/lofiverb/algorithm-engine.hpp"
+#include "artv-common/dsp/own/fx/turbopaco/algorithm-engine.hpp"
 #include "artv-common/dsp/own/parts/oscillators/lfo.hpp"
 #include "artv-common/misc/compiler.hpp"
 #include "artv-common/misc/fixed_point.hpp"
 #include "artv-common/misc/misc.hpp"
 #include "boost/mp11/algorithm.hpp"
 
-namespace artv { namespace detail { namespace lofiverb {
+namespace artv { namespace detail { namespace tpaco {
 
 // shared data structures and methods for algorithms, a bit free-form/chaotic...
 class algorithm {
@@ -34,11 +34,11 @@ public:
   template <class T>
   using fb_block_arr = std::array<T, max_block_size + 1>;
   //----------------------------------------------------------------------------
-  using fixpt_t = detail::lofiverb::fixpt_t;
+  using fixpt_t = detail::tpaco::fixpt_t;
   //----------------------------------------------------------------------------
-  static constexpr auto blank     = detail::lofiverb::defaulted;
-  static constexpr auto add_to    = detail::lofiverb::add_to;
-  static constexpr auto overwrite = detail::lofiverb::overwrite;
+  static constexpr auto blank     = detail::tpaco::defaulted;
+  static constexpr auto add_to    = detail::tpaco::add_to;
+  static constexpr auto overwrite = detail::tpaco::overwrite;
   //----------------------------------------------------------------------------
   template <uint... Idxs>
   using sl = stage_list<Idxs...>;
@@ -331,4 +331,4 @@ protected:
   //----------------------------------------------------------------------------
 };
 
-}}} // namespace artv::detail::lofiverb
+}}} // namespace artv::detail::tpaco

@@ -1,17 +1,16 @@
 #pragma once
 
-#include "artv-common/dsp/own/fx/lofiverb/algorithm.hpp"
+#include "artv-common/dsp/own/fx/turbopaco/algorithm.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
 
-namespace artv { namespace detail { namespace lofiverb {
+namespace artv { namespace detail { namespace tpaco {
 
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
 class midifex49 : public algorithm {
 private:
-  using engine
-    = detail::lofiverb::algo_engine<midifex49<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<midifex49<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -195,8 +194,7 @@ private:
 template <delay::data_type Dt>
 class midifex50 : public algorithm {
 private:
-  using engine
-    = detail::lofiverb::algo_engine<midifex50<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<midifex50<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -380,8 +378,7 @@ private:
 template <delay::data_type Dt>
 class dre2000a : public algorithm {
 private:
-  using engine
-    = detail::lofiverb::algo_engine<dre2000a<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<dre2000a<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -573,8 +570,7 @@ private:
 template <delay::data_type Dt>
 class dre2000b : public algorithm {
 private:
-  using engine
-    = detail::lofiverb::algo_engine<dre2000b<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<dre2000b<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -769,8 +765,7 @@ private:
 template <delay::data_type Dt>
 class dre2000c : public algorithm {
 private:
-  using engine
-    = detail::lofiverb::algo_engine<dre2000c<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<dre2000c<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -942,8 +937,7 @@ private:
 template <delay::data_type Dt>
 class dre2000d : public algorithm {
 private:
-  using engine
-    = detail::lofiverb::algo_engine<dre2000d<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<dre2000d<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -1116,7 +1110,7 @@ template <delay::data_type Dt>
 class rev5_l_hall : public algorithm {
 private:
   using engine
-    = detail::lofiverb::algo_engine<rev5_l_hall<Dt>, Dt, max_block_size>;
+    = detail::tpaco::algo_engine<rev5_l_hall<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -1385,4 +1379,4 @@ private:
 };
 //------------------------------------------------------------------------------
 
-}}} // namespace artv::detail::lofiverb
+}}} // namespace artv::detail::tpaco

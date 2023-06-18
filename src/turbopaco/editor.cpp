@@ -26,9 +26,9 @@
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/short_ints.hpp"
 
-#include "lofiverb/logo.hpp"
-#include "lofiverb/look_and_feel.hpp"
-#include "lofiverb/parameters.hpp"
+#include "turbopaco/logo.hpp"
+#include "turbopaco/look_and_feel.hpp"
+#include "turbopaco/parameters.hpp"
 
 #define VERSION_INT VERSION_GET (VERSION_MAJOR, VERSION_MINOR, VERSION_REV)
 
@@ -146,7 +146,7 @@ public:
     // init
     _display_value.setFont (juce::Font {lcd_typeface});
     _title.setFont (juce::Font {title_typeface});
-    _title.setText ("LofiVerb", juce::dontSendNotification);
+    _title.setText ("TurboPaco", juce::dontSendNotification);
     _logo = juce::Drawable::createFromImageData (logo_svg, sizeof logo_svg);
 
     register_mouse_events();

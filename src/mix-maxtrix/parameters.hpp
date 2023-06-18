@@ -83,12 +83,12 @@
 #include "artv-common/dsp/own/fx/eq4x.hpp"
 #include "artv-common/dsp/own/fx/filter2x.hpp"
 #include "artv-common/dsp/own/fx/lin_eq4x.hpp"
-#include "artv-common/dsp/own/fx/lofiverb.hpp"
 #include "artv-common/dsp/own/fx/mod.hpp"
 #include "artv-common/dsp/own/fx/phaser.hpp"
 #include "artv-common/dsp/own/fx/pitch_shifter.hpp"
 #include "artv-common/dsp/own/fx/reverb.hpp"
 #include "artv-common/dsp/own/fx/transient_gate.hpp"
+#include "artv-common/dsp/own/fx/turbopaco.hpp"
 #include "artv-common/dsp/own/fx/waveshaper.hpp"
 
 #include "artv-common/dsp/own/fx/sound_delay.hpp"
@@ -7499,129 +7499,135 @@ using mod_params = mp_list<
   mod_oversampling>;
 //------------------------------------------------------------------------------
 parameter_cpp_class_define (
-  lofiverb_algorithm,
+  turbopaco_algorithm,
   n_stereo_busses,
   param_common (
     "Algo",
-    declptr<lofiverb>(),
-    declptr<lofiverb::algorithm_tag>()),
-  lofiverb::get_parameter (lofiverb::algorithm_tag {}),
+    declptr<turbopaco>(),
+    declptr<turbopaco::algorithm_tag>()),
+  turbopaco::get_parameter (turbopaco::algorithm_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_clock,
+  turbopaco_clock,
   n_stereo_busses,
-  param_common ("Clock", declptr<lofiverb>(), declptr<lofiverb::clock_tag>()),
-  lofiverb::get_parameter (lofiverb::clock_tag {}),
+  param_common ("Clock", declptr<turbopaco>(), declptr<turbopaco::clock_tag>()),
+  turbopaco::get_parameter (turbopaco::clock_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_mode,
+  turbopaco_mode,
   n_stereo_busses,
-  param_common ("Mode", declptr<lofiverb>(), declptr<lofiverb::mode_tag>()),
-  lofiverb::get_parameter (lofiverb::mode_tag {}),
+  param_common ("Mode", declptr<turbopaco>(), declptr<turbopaco::mode_tag>()),
+  turbopaco::get_parameter (turbopaco::mode_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_character,
+  turbopaco_character,
   n_stereo_busses,
   param_common (
     "Character",
-    declptr<lofiverb>(),
-    declptr<lofiverb::character_tag>()),
-  lofiverb::get_parameter (lofiverb::character_tag {}),
+    declptr<turbopaco>(),
+    declptr<turbopaco::character_tag>()),
+  turbopaco::get_parameter (turbopaco::character_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_lf,
+  turbopaco_lf,
   n_stereo_busses,
-  param_common ("Lows", declptr<lofiverb>(), declptr<lofiverb::lf_amt_tag>()),
-  lofiverb::get_parameter (lofiverb::lf_amt_tag {}),
+  param_common ("Lows", declptr<turbopaco>(), declptr<turbopaco::lf_amt_tag>()),
+  turbopaco::get_parameter (turbopaco::lf_amt_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_hf,
+  turbopaco_hf,
   n_stereo_busses,
-  param_common ("Highs", declptr<lofiverb>(), declptr<lofiverb::hf_amt_tag>()),
-  lofiverb::get_parameter (lofiverb::hf_amt_tag {}),
+  param_common (
+    "Highs",
+    declptr<turbopaco>(),
+    declptr<turbopaco::hf_amt_tag>()),
+  turbopaco::get_parameter (turbopaco::hf_amt_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_decay,
+  turbopaco_decay,
   n_stereo_busses,
-  param_common ("Decay", declptr<lofiverb>(), declptr<lofiverb::decay_tag>()),
-  lofiverb::get_parameter (lofiverb::decay_tag {}),
+  param_common ("Decay", declptr<turbopaco>(), declptr<turbopaco::decay_tag>()),
+  turbopaco::get_parameter (turbopaco::decay_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_predelay,
+  turbopaco_predelay,
   n_stereo_busses,
   param_common (
     "Predelay",
-    declptr<lofiverb>(),
-    declptr<lofiverb::predelay_tag>()),
-  lofiverb::get_parameter (lofiverb::predelay_tag {}),
+    declptr<turbopaco>(),
+    declptr<turbopaco::predelay_tag>()),
+  turbopaco::get_parameter (turbopaco::predelay_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_operating_range,
+  turbopaco_operating_range,
   n_stereo_busses,
   param_common (
     "Op Range",
-    declptr<lofiverb>(),
-    declptr<lofiverb::clip_level_tag>()),
-  lofiverb::get_parameter (lofiverb::clip_level_tag {}),
+    declptr<turbopaco>(),
+    declptr<turbopaco::clip_level_tag>()),
+  turbopaco::get_parameter (turbopaco::clip_level_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_mod,
+  turbopaco_mod,
   n_stereo_busses,
-  param_common ("Mod", declptr<lofiverb>(), declptr<lofiverb::mod_tag>()),
-  lofiverb::get_parameter (lofiverb::mod_tag {}),
+  param_common ("Mod", declptr<turbopaco>(), declptr<turbopaco::mod_tag>()),
+  turbopaco::get_parameter (turbopaco::mod_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_stereo,
+  turbopaco_stereo,
   n_stereo_busses,
-  param_common ("Stereo", declptr<lofiverb>(), declptr<lofiverb::stereo_tag>()),
-  lofiverb::get_parameter (lofiverb::stereo_tag {}),
+  param_common (
+    "Stereo",
+    declptr<turbopaco>(),
+    declptr<turbopaco::stereo_tag>()),
+  turbopaco::get_parameter (turbopaco::stereo_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_ducking_speed,
+  turbopaco_ducking_speed,
   n_stereo_busses,
   param_common (
     "Duck Spd",
-    declptr<lofiverb>(),
-    declptr<lofiverb::ducking_speed_tag>()),
-  lofiverb::get_parameter (lofiverb::ducking_speed_tag {}),
+    declptr<turbopaco>(),
+    declptr<turbopaco::ducking_speed_tag>()),
+  turbopaco::get_parameter (turbopaco::ducking_speed_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
-  lofiverb_ducking_threshold,
+  turbopaco_ducking_threshold,
   n_stereo_busses,
   param_common (
     "Duck Thres",
-    declptr<lofiverb>(),
-    declptr<lofiverb::ducking_threshold_tag>()),
-  lofiverb::get_parameter (lofiverb::ducking_threshold_tag {}),
+    declptr<turbopaco>(),
+    declptr<turbopaco::ducking_threshold_tag>()),
+  turbopaco::get_parameter (turbopaco::ducking_threshold_tag {}),
   slider_ext);
 
-using lofiverb_params = mp_list<
-  lofiverb_algorithm,
-  lofiverb_predelay,
-  lofiverb_decay,
-  lofiverb_character,
-  lofiverb_stereo,
-  lofiverb_mod,
-  lofiverb_lf,
-  lofiverb_hf,
+using turbopaco_params = mp_list<
+  turbopaco_algorithm,
+  turbopaco_predelay,
+  turbopaco_decay,
+  turbopaco_character,
+  turbopaco_stereo,
+  turbopaco_mod,
+  turbopaco_lf,
+  turbopaco_hf,
 
-  lofiverb_ducking_threshold,
-  lofiverb_ducking_speed,
-  lofiverb_mode,
-  lofiverb_clock,
-  lofiverb_operating_range>;
+  turbopaco_ducking_threshold,
+  turbopaco_ducking_speed,
+  turbopaco_mode,
+  turbopaco_clock,
+  turbopaco_operating_range>;
 //------------------------------------------------------------------------------
 #if 0
 parameter_cpp_class_define (
@@ -7698,7 +7704,7 @@ using all_fx_typelists = mp_list<
   lr_crossv_params,
   wonky_crossv_params,
   lin_iir_crossv_params,
-  lofiverb_params,
+  turbopaco_params,
   diffuse_delay_params>;
 
 static constexpr auto fx_choices

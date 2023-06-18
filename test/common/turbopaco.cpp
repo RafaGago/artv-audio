@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 #include <vector>
 
-#include "artv-common/dsp/own/fx/lofiverb-engine.hpp"
+#include "artv-common/dsp/own/fx/turbopaco-engine.hpp"
 
 namespace artv {
 
@@ -13,15 +13,15 @@ static constexpr uint delay_size
 struct delay_test_spec {
   static constexpr auto get_spec()
   {
-    return make_array<detail::lofiverb::stage_data> (
-      detail::lofiverb::make_block_delay (delay_size, 1));
+    return make_array<detail::turbopaco::stage_data> (
+      detail::turbopaco::make_block_delay (delay_size, 1));
   }
 };
 
 //------------------------------------------------------------------------------
-TEST (lofiverb, block_processed_delays)
+TEST (turbopaco, block_processed_delays)
 {
-  using namespace detail::lofiverb;
+  using namespace detail::turbopaco;
 
   engine<delay_test_spec, delay::data_type::float32, max_block_size_test> e;
 
@@ -83,9 +83,9 @@ TEST (lofiverb, block_processed_delays)
   }
 }
 //------------------------------------------------------------------------------
-TEST (lofiverb, block_processed_delays_witch_shift)
+TEST (turbopaco, block_processed_delays_witch_shift)
 {
-  using namespace detail::lofiverb;
+  using namespace detail::turbopaco;
 
   engine<delay_test_spec, delay::data_type::float32, max_block_size_test> e;
   std::vector<u8>                                                         mem;
@@ -146,9 +146,9 @@ TEST (lofiverb, block_processed_delays_witch_shift)
   }
 }
 //------------------------------------------------------------------------------
-TEST (lofiverb, plain_delays)
+TEST (turbopaco, plain_delays)
 {
-  using namespace detail::lofiverb;
+  using namespace detail::turbopaco;
   engine<delay_test_spec, delay::data_type::float32, max_block_size_test> e;
   std::vector<u8>                                                         mem;
   std::array<float, max_block_size_test>                                  io;

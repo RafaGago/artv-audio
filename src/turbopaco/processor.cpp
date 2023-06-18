@@ -12,7 +12,7 @@
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/short_ints.hpp"
 
-#include "lofiverb/parameters.hpp"
+#include "turbopaco/parameters.hpp"
 
 namespace artv {
 // -----------------------------------------------------------------------------
@@ -45,7 +45,7 @@ public:
     juce::FloatVectorOperations::disableDenormalisedNumberSupport (true);
 
     // read parameters rom apvts
-    mp11::mp_for_each<parameters::lofiverb_parameters> ([=] (auto param) {
+    mp11::mp_for_each<parameters::turbopaco_parameters> ([=] (auto param) {
       using param_type = decltype (param);
       using param_tag  = typename decltype (param_type::common)::dsp_param;
       auto v           = p_refresh (param, 0);
@@ -130,7 +130,7 @@ private:
   static constexpr uint max_blocksize = 64;
   //----------------------------------------------------------------------------
   juce_plugin_context _fx_context;
-  lofiverb            _fx;
+  turbopaco           _fx;
   dry_wet_mixer       _mixer;
   uint                _program {};
 };

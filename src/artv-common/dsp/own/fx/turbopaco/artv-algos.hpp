@@ -2,18 +2,18 @@
 
 #include <type_traits>
 
-#include "artv-common/dsp/own/fx/lofiverb/algorithm.hpp"
+#include "artv-common/dsp/own/fx/turbopaco/algorithm.hpp"
 #include "artv-common/dsp/own/parts/filters/andy_svf.hpp"
 #include "artv-common/dsp/own/parts/parts_to_class.hpp"
 #include "artv-common/misc/primes_table.hpp"
 
-namespace artv { namespace detail { namespace lofiverb {
+namespace artv { namespace detail { namespace tpaco {
 
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
 class abyss : public algorithm {
 private:
-  using engine = detail::lofiverb::algo_engine<abyss<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<abyss<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -243,7 +243,7 @@ private:
 template <delay::data_type Dt>
 class plate1 : public algorithm {
 private:
-  using engine = detail::lofiverb::algo_engine<plate1<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<plate1<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -592,8 +592,7 @@ static constexpr std::array<u8, 32> get_ambience_ffwd_table()
 template <delay::data_type Dt>
 class ambience : public algorithm {
 private:
-  using engine
-    = detail::lofiverb::algo_engine<ambience<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<ambience<Dt>, Dt, max_block_size>;
   static constexpr std::array<u8, 32> ffwd_table {get_ambience_ffwd_table()};
 
 public:
@@ -767,7 +766,7 @@ private:
 template <delay::data_type Dt>
 class palace : public algorithm {
 private:
-  using engine = detail::lofiverb::algo_engine<palace<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<palace<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -991,7 +990,7 @@ private:
 template <delay::data_type Dt>
 class arena : public algorithm {
 private:
-  using engine = detail::lofiverb::algo_engine<arena<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<arena<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -1275,7 +1274,7 @@ private:
 template <delay::data_type Dt>
 class hall : public algorithm {
 private:
-  using engine = detail::lofiverb::algo_engine<hall<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<hall<Dt>, Dt, max_block_size>;
 
   struct stage {
     uint  d1, d2, dd, tap_l, tap_r;
@@ -1626,7 +1625,7 @@ template <delay::data_type Dt>
 class broken_hall : public algorithm {
 private:
   using engine
-    = detail::lofiverb::algo_engine<broken_hall<Dt>, Dt, max_block_size>;
+    = detail::tpaco::algo_engine<broken_hall<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -1929,7 +1928,7 @@ private:
 template <delay::data_type Dt>
 class room : public algorithm {
 private:
-  using engine = detail::lofiverb::algo_engine<room<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<room<Dt>, Dt, max_block_size>;
 
   struct stage {
     uint  d1, d2, dd, tap_l, tap_r;
@@ -2323,8 +2322,7 @@ private:
 template <delay::data_type Dt>
 class chorus_a : public algorithm {
 private:
-  using engine
-    = detail::lofiverb::algo_engine<chorus_a<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<chorus_a<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -2389,6 +2387,10 @@ public:
   {
     using arr = block_arr<sample>;
     arr sig1, sig2, aux1, aux2, aux3, aux4;
+
+    auto l = xspan {sig1.data(), io.size()};
+    auto r = xspan {sig2.data(), io.size()};
+
     for (uint i = 0; i < io.size(); ++i) {
       auto mod = 0.2_r + par.decay[i] * 0.8_r;
       mod *= (1_r - par.mod[i] * 0.7_r);
@@ -2398,16 +2400,12 @@ public:
       aux2[i]  = sample {lfo[1]} * mod;
       aux3[i]  = sample {lfo[2]} * -mod;
       aux4[i]  = sample {lfo[3]} * -mod;
-      sig1[i]  = io[i][0] * 0.5_r;
-      sig2[i]  = io[i][1] * 0.5_r;
+      l[i]     = io[i][0];
+      r[i]     = io[i][1];
     }
-
     auto hi_g
       = load_float<sample> (0.1f + (1.f - upar.hf_amt * upar.hf_amt) * 0.65f);
     auto lo_g = load_float<sample> (0.8f + 0.18f * fastgrowth (upar.lf_amt));
-
-    auto l = xspan {sig1.data(), io.size()};
-    auto r = xspan {sig2.data(), io.size()};
 
     _eng.run (sl<0> {}, l, hi_g);
     _eng.run (sl<1> {}, l, lo_g);
@@ -2460,8 +2458,7 @@ private:
 template <delay::data_type Dt>
 class chorus_b : public algorithm {
 private:
-  using engine
-    = detail::lofiverb::algo_engine<chorus_b<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<chorus_b<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -2595,4 +2592,4 @@ private:
   part_class_array<andy::svf, f32_x2> _eq;
 };
 //------------------------------------------------------------------------------
-}}} // namespace artv::detail::lofiverb
+}}} // namespace artv::detail::tpaco

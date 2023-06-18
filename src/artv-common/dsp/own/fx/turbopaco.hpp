@@ -1,6 +1,6 @@
 #pragma once
 
-// #define LOFIVERB_DEBUG_ALGO 1
+// #define TURBOPACO_DEBUG_ALGO 1
 
 #include <array>
 #include <cmath>
@@ -13,11 +13,11 @@
 #include "artv-common/dsp/own/classes/ducker.hpp"
 #include "artv-common/dsp/own/classes/plugin_context.hpp"
 #include "artv-common/dsp/own/classes/value_smoother.hpp"
-#ifndef LOFIVERB_DEBUG_ALGO
-#include "artv-common/dsp/own/fx/lofiverb/acreil-algos.hpp"
-#include "artv-common/dsp/own/fx/lofiverb/artv-algos.hpp"
+#ifndef TURBOPACO_DEBUG_ALGO
+#include "artv-common/dsp/own/fx/turbopaco/acreil-algos.hpp"
+#include "artv-common/dsp/own/fx/turbopaco/artv-algos.hpp"
 #else
-#include "artv-common/dsp/own/fx/lofiverb/debug-algo.hpp"
+#include "artv-common/dsp/own/fx/turbopaco/debug-algo.hpp"
 #endif
 #include "artv-common/dsp/own/parts/filters/composite/tilt.hpp"
 #include "artv-common/dsp/own/parts/oscillators/lfo.hpp"
@@ -41,7 +41,7 @@ namespace artv {
 // design criteria has been for it to be extremely CPU friendly. Notice: __fp16
 // (half-precision floating point storage) could achieve the same memory savings
 // with more dynamic range. This is still kept as a 16-bit fixed-point reverb.
-class lofiverb {
+class turbopaco {
 public:
   //----------------------------------------------------------------------------
   static constexpr dsp_types dsp_type  = dsp_types::reverb;
@@ -65,7 +65,7 @@ public:
     return choice_param (
       0,
       make_cstr_array (
-#ifndef LOFIVERB_DEBUG_ALGO
+#ifndef TURBOPACO_DEBUG_ALGO
         "Artv Ambience",
         "Artv Room",
         "Artv Hall",
@@ -302,7 +302,7 @@ public:
   //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
-  static constexpr uint max_block_size = detail::lofiverb::max_block_size;
+  static constexpr uint max_block_size = detail::tpaco::max_block_size;
   static constexpr uint n_channels     = 2;
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters;
@@ -311,13 +311,13 @@ private:
   template <class T>
   void process (xspan<std::array<float, 2>> io)
   {
-    using algo = detail::lofiverb::algorithm;
+    using algo = detail::tpaco::algorithm;
     assert (io.size() <= max_block_size);
 
     static constexpr bool is_fixpt_t = std::is_same_v<T, fixpt_t>;
 
-    std::array<f32_x2, max_block_size>                  ducker_gain;
-    detail::lofiverb::algorithm::smoothed_parameters<T> pars;
+    std::array<f32_x2, max_block_size>               ducker_gain;
+    detail::tpaco::algorithm::smoothed_parameters<T> pars;
     bool gating = _param.ducking_speed < 0.f;
 
     auto pre_gain = (1.f / _param.gain);
@@ -491,13 +491,13 @@ private:
   }
   //----------------------------------------------------------------------------
   struct unsmoothed_parameters {
-    u32                                                mode;
-    u32                                                srateid;
-    float                                              gain; // a parameter
-    float                                              predelay;
-    detail::lofiverb::algorithm::unsmoothed_parameters algo;
-    float                                              ducking_threshold;
-    float                                              ducking_speed;
+    u32                                             mode;
+    u32                                             srateid;
+    float                                           gain; // a parameter
+    float                                           predelay;
+    detail::tpaco::algorithm::unsmoothed_parameters algo;
+    float                                           ducking_threshold;
+    float                                           ducking_speed;
   };
   //----------------------------------------------------------------------------
   struct smoothed_parameters {
@@ -508,13 +508,13 @@ private:
     // dry, wet, ducker/gate
   };
   //----------------------------------------------------------------------------
-  using fixpt_t     = detail::lofiverb::fixpt_t;
-  using fixpt_sto16 = detail::lofiverb::fixpt_sto16;
-  using float16     = detail::lofiverb::float16;
+  using fixpt_t     = detail::tpaco::fixpt_t;
+  using fixpt_sto16 = detail::tpaco::fixpt_sto16;
+  using float16     = detail::tpaco::float16;
 
-  static constexpr auto dt_fix16 = detail::lofiverb::delay::data_type::fixpt16;
-  static constexpr auto dt_flt16 = detail::lofiverb::delay::data_type::float16;
-  static constexpr auto dt_flt32 = detail::lofiverb::delay::data_type::float32;
+  static constexpr auto dt_fix16 = detail::tpaco::delay::data_type::fixpt16;
+  static constexpr auto dt_flt16 = detail::tpaco::delay::data_type::float16;
+  static constexpr auto dt_flt32 = detail::tpaco::delay::data_type::float32;
   //----------------------------------------------------------------------------
   unsmoothed_parameters                      _param;
   value_smoother<float, smoothed_parameters> _param_smooth;
@@ -523,62 +523,62 @@ private:
   static_delay_line<float, true, false> _predelay;
 
   using algorithms_type = std::variant<
-#ifndef LOFIVERB_DEBUG_ALGO
-    detail::lofiverb::ambience<dt_fix16>,
-    detail::lofiverb::ambience<dt_flt16>,
-    detail::lofiverb::ambience<dt_flt32>,
-    detail::lofiverb::room<dt_fix16>,
-    detail::lofiverb::room<dt_flt16>,
-    detail::lofiverb::room<dt_flt32>,
-    detail::lofiverb::hall<dt_fix16>,
-    detail::lofiverb::hall<dt_flt16>,
-    detail::lofiverb::hall<dt_flt32>,
-    detail::lofiverb::broken_hall<dt_fix16>,
-    detail::lofiverb::broken_hall<dt_flt16>,
-    detail::lofiverb::broken_hall<dt_flt32>,
-    detail::lofiverb::arena<dt_fix16>,
-    detail::lofiverb::arena<dt_flt16>,
-    detail::lofiverb::arena<dt_flt32>,
-    detail::lofiverb::palace<dt_fix16>,
-    detail::lofiverb::palace<dt_flt16>,
-    detail::lofiverb::palace<dt_flt32>,
-    detail::lofiverb::plate1<dt_fix16>,
-    detail::lofiverb::plate1<dt_flt16>,
-    detail::lofiverb::plate1<dt_flt32>,
-    detail::lofiverb::abyss<dt_fix16>,
-    detail::lofiverb::abyss<dt_flt16>,
-    detail::lofiverb::abyss<dt_flt32>,
-    detail::lofiverb::chorus_a<dt_fix16>,
-    detail::lofiverb::chorus_a<dt_flt16>,
-    detail::lofiverb::chorus_a<dt_flt32>,
-    detail::lofiverb::chorus_b<dt_fix16>,
-    detail::lofiverb::chorus_b<dt_flt16>,
-    detail::lofiverb::chorus_b<dt_flt32>,
-    detail::lofiverb::midifex49<dt_fix16>,
-    detail::lofiverb::midifex49<dt_flt16>,
-    detail::lofiverb::midifex49<dt_flt32>,
-    detail::lofiverb::midifex50<dt_fix16>,
-    detail::lofiverb::midifex50<dt_flt16>,
-    detail::lofiverb::midifex50<dt_flt32>,
-    detail::lofiverb::dre2000a<dt_fix16>,
-    detail::lofiverb::dre2000a<dt_flt16>,
-    detail::lofiverb::dre2000a<dt_flt32>,
-    detail::lofiverb::dre2000b<dt_fix16>,
-    detail::lofiverb::dre2000b<dt_flt16>,
-    detail::lofiverb::dre2000b<dt_flt32>,
-    detail::lofiverb::dre2000c<dt_fix16>,
-    detail::lofiverb::dre2000c<dt_flt16>,
-    detail::lofiverb::dre2000c<dt_flt32>,
-    detail::lofiverb::dre2000d<dt_fix16>,
-    detail::lofiverb::dre2000d<dt_flt16>,
-    detail::lofiverb::dre2000d<dt_flt32>,
-    detail::lofiverb::rev5_l_hall<dt_fix16>,
-    detail::lofiverb::rev5_l_hall<dt_flt16>,
-    detail::lofiverb::rev5_l_hall<dt_flt32>
+#ifndef TURBOPACO_DEBUG_ALGO
+    detail::tpaco::ambience<dt_fix16>,
+    detail::tpaco::ambience<dt_flt16>,
+    detail::tpaco::ambience<dt_flt32>,
+    detail::tpaco::room<dt_fix16>,
+    detail::tpaco::room<dt_flt16>,
+    detail::tpaco::room<dt_flt32>,
+    detail::tpaco::hall<dt_fix16>,
+    detail::tpaco::hall<dt_flt16>,
+    detail::tpaco::hall<dt_flt32>,
+    detail::tpaco::broken_hall<dt_fix16>,
+    detail::tpaco::broken_hall<dt_flt16>,
+    detail::tpaco::broken_hall<dt_flt32>,
+    detail::tpaco::arena<dt_fix16>,
+    detail::tpaco::arena<dt_flt16>,
+    detail::tpaco::arena<dt_flt32>,
+    detail::tpaco::palace<dt_fix16>,
+    detail::tpaco::palace<dt_flt16>,
+    detail::tpaco::palace<dt_flt32>,
+    detail::tpaco::plate1<dt_fix16>,
+    detail::tpaco::plate1<dt_flt16>,
+    detail::tpaco::plate1<dt_flt32>,
+    detail::tpaco::abyss<dt_fix16>,
+    detail::tpaco::abyss<dt_flt16>,
+    detail::tpaco::abyss<dt_flt32>,
+    detail::tpaco::chorus_a<dt_fix16>,
+    detail::tpaco::chorus_a<dt_flt16>,
+    detail::tpaco::chorus_a<dt_flt32>,
+    detail::tpaco::chorus_b<dt_fix16>,
+    detail::tpaco::chorus_b<dt_flt16>,
+    detail::tpaco::chorus_b<dt_flt32>,
+    detail::tpaco::midifex49<dt_fix16>,
+    detail::tpaco::midifex49<dt_flt16>,
+    detail::tpaco::midifex49<dt_flt32>,
+    detail::tpaco::midifex50<dt_fix16>,
+    detail::tpaco::midifex50<dt_flt16>,
+    detail::tpaco::midifex50<dt_flt32>,
+    detail::tpaco::dre2000a<dt_fix16>,
+    detail::tpaco::dre2000a<dt_flt16>,
+    detail::tpaco::dre2000a<dt_flt32>,
+    detail::tpaco::dre2000b<dt_fix16>,
+    detail::tpaco::dre2000b<dt_flt16>,
+    detail::tpaco::dre2000b<dt_flt32>,
+    detail::tpaco::dre2000c<dt_fix16>,
+    detail::tpaco::dre2000c<dt_flt16>,
+    detail::tpaco::dre2000c<dt_flt32>,
+    detail::tpaco::dre2000d<dt_fix16>,
+    detail::tpaco::dre2000d<dt_flt16>,
+    detail::tpaco::dre2000d<dt_flt32>,
+    detail::tpaco::rev5_l_hall<dt_fix16>,
+    detail::tpaco::rev5_l_hall<dt_flt16>,
+    detail::tpaco::rev5_l_hall<dt_flt32>
 #else
-    detail::lofiverb::debug<dt_fix16>,
-    detail::lofiverb::debug<dt_flt16>,
-    detail::lofiverb::debug<dt_flt32>
+    detail::tpaco::debug<dt_fix16>,
+    detail::tpaco::debug<dt_flt16>,
+    detail::tpaco::debug<dt_flt32>
 #endif
     >;
   algorithms_type _algorithms;

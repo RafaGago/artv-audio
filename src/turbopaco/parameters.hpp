@@ -1,7 +1,7 @@
 #pragma once
 
 #include "artv-common/dsp/own/classes/mix.hpp"
-#include "artv-common/dsp/own/fx/lofiverb.hpp"
+#include "artv-common/dsp/own/fx/turbopaco.hpp"
 #include "artv-common/juce/parameters.hpp"
 
 namespace artv { namespace parameters {
@@ -11,51 +11,57 @@ parameter_cpp_class_define (
   1,
   param_common (
     "Algo",
-    declptr<lofiverb>(),
-    declptr<lofiverb::algorithm_tag>()),
-  lofiverb::get_parameter (lofiverb::algorithm_tag {}),
+    declptr<turbopaco>(),
+    declptr<turbopaco::algorithm_tag>()),
+  turbopaco::get_parameter (turbopaco::algorithm_tag {}),
   combobox_ext);
 
 parameter_cpp_class_define (
   mode,
   1,
-  param_common ("Mode", declptr<lofiverb>(), declptr<lofiverb::mode_tag>()),
-  lofiverb::get_parameter (lofiverb::mode_tag {}),
+  param_common ("Mode", declptr<turbopaco>(), declptr<turbopaco::mode_tag>()),
+  turbopaco::get_parameter (turbopaco::mode_tag {}),
   combobox_ext);
 
 parameter_cpp_class_define (
   clock,
   1,
-  param_common ("Clock", declptr<lofiverb>(), declptr<lofiverb::clock_tag>()),
-  lofiverb::get_parameter (lofiverb::clock_tag {}),
+  param_common ("Clock", declptr<turbopaco>(), declptr<turbopaco::clock_tag>()),
+  turbopaco::get_parameter (turbopaco::clock_tag {}),
   combobox_ext);
 
 parameter_cpp_class_define (
   character,
   1,
-  param_common ("???", declptr<lofiverb>(), declptr<lofiverb::character_tag>()),
-  lofiverb::get_parameter (lofiverb::character_tag {}),
+  param_common (
+    "???",
+    declptr<turbopaco>(),
+    declptr<turbopaco::character_tag>()),
+  turbopaco::get_parameter (turbopaco::character_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   lf_amt,
   1,
-  param_common ("Lows", declptr<lofiverb>(), declptr<lofiverb::lf_amt_tag>()),
-  lofiverb::get_parameter (lofiverb::lf_amt_tag {}),
+  param_common ("Lows", declptr<turbopaco>(), declptr<turbopaco::lf_amt_tag>()),
+  turbopaco::get_parameter (turbopaco::lf_amt_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   hf_amt,
   1,
-  param_common ("Highs", declptr<lofiverb>(), declptr<lofiverb::hf_amt_tag>()),
-  lofiverb::get_parameter (lofiverb::hf_amt_tag {}),
+  param_common (
+    "Highs",
+    declptr<turbopaco>(),
+    declptr<turbopaco::hf_amt_tag>()),
+  turbopaco::get_parameter (turbopaco::hf_amt_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   decay,
   1,
-  param_common ("Decay", declptr<lofiverb>(), declptr<lofiverb::decay_tag>()),
-  lofiverb::get_parameter (lofiverb::decay_tag {}),
+  param_common ("Decay", declptr<turbopaco>(), declptr<turbopaco::decay_tag>()),
+  turbopaco::get_parameter (turbopaco::decay_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -63,9 +69,9 @@ parameter_cpp_class_define (
   1,
   param_common (
     "Predelay",
-    declptr<lofiverb>(),
-    declptr<lofiverb::predelay_tag>()),
-  lofiverb::get_parameter (lofiverb::predelay_tag {}),
+    declptr<turbopaco>(),
+    declptr<turbopaco::predelay_tag>()),
+  turbopaco::get_parameter (turbopaco::predelay_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -73,23 +79,26 @@ parameter_cpp_class_define (
   1,
   param_common (
     "Op Range",
-    declptr<lofiverb>(),
-    declptr<lofiverb::clip_level_tag>()),
-  lofiverb::get_parameter (lofiverb::clip_level_tag {}),
+    declptr<turbopaco>(),
+    declptr<turbopaco::clip_level_tag>()),
+  turbopaco::get_parameter (turbopaco::clip_level_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   mod,
   1,
-  param_common ("Mod", declptr<lofiverb>(), declptr<lofiverb::mod_tag>()),
-  lofiverb::get_parameter (lofiverb::mod_tag {}),
+  param_common ("Mod", declptr<turbopaco>(), declptr<turbopaco::mod_tag>()),
+  turbopaco::get_parameter (turbopaco::mod_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
   stereo,
   1,
-  param_common ("Stereo", declptr<lofiverb>(), declptr<lofiverb::stereo_tag>()),
-  lofiverb::get_parameter (lofiverb::stereo_tag {}),
+  param_common (
+    "Stereo",
+    declptr<turbopaco>(),
+    declptr<turbopaco::stereo_tag>()),
+  turbopaco::get_parameter (turbopaco::stereo_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -97,9 +106,9 @@ parameter_cpp_class_define (
   1,
   param_common (
     "Dyn Time",
-    declptr<lofiverb>(),
-    declptr<lofiverb::dyn_speed_tag>()),
-  lofiverb::get_parameter (lofiverb::dyn_speed_tag {}),
+    declptr<turbopaco>(),
+    declptr<turbopaco::dyn_speed_tag>()),
+  turbopaco::get_parameter (turbopaco::dyn_speed_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -107,9 +116,9 @@ parameter_cpp_class_define (
   1,
   param_common (
     "Dyn Thres",
-    declptr<lofiverb>(),
-    declptr<lofiverb::dyn_threshold_tag>()),
-  lofiverb::get_parameter (lofiverb::dyn_threshold_tag {}),
+    declptr<turbopaco>(),
+    declptr<turbopaco::dyn_threshold_tag>()),
+  turbopaco::get_parameter (turbopaco::dyn_threshold_tag {}),
   slider_ext);
 
 parameter_cpp_class_define (
@@ -150,7 +159,7 @@ parameter_cpp_class_define (
   dry_wet_mixer::get_parameter (dry_wet_mixer::wet_pan_tag {}),
   slider_ext);
 
-using lofiverb_parameters = mp_list<
+using turbopaco_parameters = mp_list<
   algorithm,
   predelay,
   clock,
@@ -168,6 +177,6 @@ using lofiverb_parameters = mp_list<
 using mixer_parameters = mp_list<dry, wet, wet_pan>;
 
 using parameters_typelist
-  = mp11::mp_flatten<mp11::mp_list<lofiverb_parameters, mixer_parameters>>;
+  = mp11::mp_flatten<mp11::mp_list<turbopaco_parameters, mixer_parameters>>;
 
 }} // namespace artv::parameters

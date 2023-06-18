@@ -30,7 +30,7 @@
 #include "boost/mp11/algorithm.hpp"
 #include "boost/mp11/list.hpp"
 
-namespace artv { namespace detail { namespace lofiverb {
+namespace artv { namespace detail { namespace tpaco {
 
 //------------------------------------------------------------------------------
 // truncating fixed point type for computation
@@ -47,15 +47,15 @@ static constexpr uint max_block_size = 32;
 //------------------------------------------------------------------------------
 enum class interpolation : u8 { zero_order_hold, linear, thiran };
 
-struct lofiverb_io_tag {};
+struct turbopaco_io_tag {};
 
 struct defaulted_tag {};
 static constexpr defaulted_tag defaulted {};
 
-struct add_to_out_tag : public lofiverb_io_tag {};
+struct add_to_out_tag : public turbopaco_io_tag {};
 static constexpr add_to_out_tag add_to {};
 
-struct overwrite_out_tag : public lofiverb_io_tag {};
+struct overwrite_out_tag : public turbopaco_io_tag {};
 static constexpr overwrite_out_tag overwrite {};
 
 //------------------------------------------------------------------------------
@@ -2031,7 +2031,7 @@ public:
     class Tag,
     class... Ts,
     std::enable_if_t<std::is_base_of_v<
-      lofiverb_io_tag,
+      turbopaco_io_tag,
       std::remove_reference_t<Tag>>>* = nullptr>
   void run (
     stage_list<Idx>,
@@ -2058,7 +2058,7 @@ public:
     class Tag,
     class... Ts,
     std::enable_if_t<std::is_base_of_v<
-      lofiverb_io_tag,
+      turbopaco_io_tag,
       std::remove_reference_t<Tag>>>* = nullptr>
   void run (
     stage_list<Idx>,
@@ -2098,7 +2098,7 @@ public:
     uint Idx,
     class Tag,
     std::enable_if_t<std::is_base_of_v<
-      lofiverb_io_tag,
+      turbopaco_io_tag,
       std::remove_reference_t<Tag>>>* = nullptr>
   void run (stage_list<Idx> l, xspan<value_type> io, Tag t)
   {
@@ -2110,7 +2110,7 @@ public:
     class U,
     class... Ts,
     std::enable_if_t<!std::is_base_of_v<
-      lofiverb_io_tag,
+      turbopaco_io_tag,
       std::remove_reference_t<U>>>* = nullptr>
   void run (stage_list<Idx> l, xspan<value_type> io, U&& arg1, Ts&&... args)
   {
@@ -3024,5 +3024,5 @@ private:
 
   stages_tuple _stages {};
 };
-}}} // namespace artv::detail::lofiverb
+}}} // namespace artv::detail::tpaco
 //------------------------------------------------------------------------------
