@@ -472,6 +472,7 @@ struct slider_ext
 
   add_juce_mouse_callbacks<detail::slider_w_data_entry> slider;
   add_juce_component_callbacks<juce::Label>             label;
+  std::function<void (slider_ext& src)>                 on_change;
 
 private:
   void sliderValueChanged (juce::Slider* ptr) final
@@ -494,6 +495,9 @@ private:
       _paramslider.setValue (slider.getValue(), juce::sendNotificationSync);
     }
     _feedback = false;
+    if (on_change) {
+      on_change (*this);
+    }
   }
 
   void common_init (
@@ -691,6 +695,8 @@ struct combobox_ext
   add_juce_mouse_callbacks<juce::TextButton> prev;
   add_juce_mouse_callbacks<juce::TextButton> next;
 
+  std::function<void (combobox_ext& src)> on_change;
+
 private:
   virtual void comboBoxChanged (juce::ComboBox* ptr) final
   {
@@ -713,6 +719,9 @@ private:
         combo.getSelectedId(), juce::sendNotificationSync);
     }
     _feedback = false;
+    if (on_change) {
+      on_change (*this);
+    }
   }
 
   struct comboitem {

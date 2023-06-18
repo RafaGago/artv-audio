@@ -1,0 +1,185 @@
+//desc: large hall
+slider1:decay_p=0.5<0,1,0.01> Decay
+
+slider3:mod=0.<0,1,0.01> Mod
+slider4:character=0.<0,1,0.01> Character
+
+slider6:hi=1<0,1,0.01> highs
+slider7:lo=1<0,1,0.01> lows
+
+slider9:stereo=1<-1,1, 0.01> Stereo
+slider10:predelay=1<1, 4400, 1> Predelay
+
+slider21:db_wet=0<-40, 12,0.1> Wet dB
+slider20:db_dry=-60<-60, 0,0.1> Dry dB
+
+slider23:offset=0<-100, 100, 1> Offset
+
+import _core.jsfx-inc
+import _easy_allpass_reverb.jsfx-inc
+import _easy_fdn.jsfx-inc
+import _reverb.jsfx-inc
+import _lfo.jsfx-inc
+import _fir.jsfx-inc
+import _filters.jsfx-inc
+
+@init
+
+// SRC stuff -------------------------------------------------------------------
+BYPASS_SRC = 0;
+
+k.src.kaiser_att_db = 210;
+k.src.taps_branch = 32;
+k.src.taps_branch_frac = 16;
+k.src.cutoff = 10500;
+k.src.srate = BYPASS_SRC ? srate : 23400;
+
+src.down.resampler_2c_init(
+  k.src.srate,
+  srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.up.resampler_2c_init(
+  srate,
+  k.src.srate,
+  k.src.taps_branch,
+  k.src.taps_branch_frac,
+  k.src.cutoff,
+  k.src.kaiser_att_db,
+  1
+  );
+
+src.out_q.deque_init(
+  src.up.resampler_2c_max_n_out_samples() * 2
+  );
+
+src.ins.array_init (src.down.resampler_2c_max_n_out_samples() * 2);
+src.outs.array_init (src.up.resampler_2c_max_n_out_samples() * 2);
+
+src.ins.array_clear();
+src.outs.array_clear();
+
+mtxa.array_init (8);
+mtxb.array_init (8);
+
+// TODO how many?
+loop(floor (srate / 44100) * 2,
+  src.out_q.deque_push (0);
+  src.out_q.deque_push (0);
+);
+
+// Actual reverb stuff ---------------------------------------------------------
+n_lfos = 1;
+lfo1.lfo_bank_init (n_lfos, 1);
+lfo1.ret.array_init (n_lfos);
+lfo1.lfo_bank_reset_phase (0);
+
+lfo2.lfo_bank_init (n_lfos, 1);
+lfo2.ret.array_init (n_lfos);
+lfo2.lfo_bank_reset_phase (0);
+
+lfo3.lfo_bank_init (n_lfos, 1);
+lfo3.ret.array_init (n_lfos);
+lfo3.lfo_bank_reset_phase (0);
+
+lfo4.lfo_bank_init (n_lfos, 1);
+lfo4.ret.array_init (n_lfos);
+lfo4.lfo_bank_reset_phase (0);
+
+eq1l.svf_bell (440, 0.28, 2, k.src.srate);
+eq1r.svf_bell (440, 0.28, 2, k.src.srate);
+
+@slider
+
+f1 = decay_p * decay_p;
+f2 = f1 + decay_p;
+fmod = 0.2 + mod * 0.8;
+fmod = fmod * (1 - decay_p * 0.8);
+fmod *= fmod;
+ 
+lfo1.lfo_bank_reset_freq (0, 0.147 + f1 * 0.723, k.src.srate);
+lfo2.lfo_bank_reset_freq (0, 0.131 + f1 * 0.913, k.src.srate);
+lfo3.lfo_bank_reset_freq (0, 0.473 + f2 * 3.763, k.src.srate);
+lfo4.lfo_bank_reset_freq (0, 0.457 + f2 * 3.427, k.src.srate);
+
+dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
+wet_gain = db_to_lin (db_wet);
+
+hi_g = 0.1 + (1 - hi * hi) * 0.65;
+lo_g = 0.8 + 0.18 * fastgrowth(lo);
+
+
+@sample
+// decay = 1;
+
+// Downsampling
+n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
+
+(n_spls_down) ? (
+  lfo1.lfo_bank_tick_sin (lfo1.ret.ptr, 0);
+  lfo2.lfo_bank_tick_sin (lfo2.ret.ptr, 0);
+  lfo3.lfo_bank_tick_sin (lfo3.ret.ptr, 0);
+  lfo4.lfo_bank_tick_sin (lfo4.ret.ptr, 0);
+
+  mod1 = (lfo1.ret.ptr[0] - lfo3.ret.ptr[0]) * 0.5;
+  mod2 = (lfo2.ret.ptr[0] + lfo4.ret.ptr[0]) * 0.5;
+
+  // halving an additional time to leave headroom
+  li = src.ins.ptr[0] * 0.5;
+  ri = src.ins.ptr[1] * 0.5;
+
+  li = fil1.lp (li, hi_g);
+  li = fil2.hp (li, lo_g);
+  ri = fir1.lp (ri, hi_g);
+  ri = fir2.hp (ri, lo_g);
+
+  m = (li + ri) * 0.5;
+
+  m = delay(m, predelay);
+
+  c1 = ap (m, 2331, 0.2 * character, mod1, 407 * fmod);
+  c2 = ap (m, 2341, -0.2 * character, -mod1, 413 * fmod);
+  c3 = ap (m, 1967, -0.15 * character, -mod2, 509 * fmod);
+  c4 = ap (m, 1937, 0.15 * character, mod2, 579 * fmod);
+
+  l = c1 + c3;
+  r = c4 - c2;
+
+  l = ap (l, 173, 0.5 * character);
+  r = ap (r, 177, -0.5 * character);
+
+  // more boilerplate (summing + downsample)
+  easy_ap_next_sample();
+  easy_fdn_next_sample();
+
+  l = r * (1 - abs (stereo)) + l * abs (stereo);
+  stereo < 0 ? (
+    tmp = r;
+    r = l;
+    l = tmp;
+  );
+
+  //l = ap (l, 173, -0.3);
+  //r = ap (r, 177, 0.3);
+
+  l = eq1l.svf_tick (l);
+  r = eq1r.svf_tick (r);
+
+  // Upsampling
+  n_spls_up = src.up.resampler_2c_tick (src.outs.ptr, l, r);
+  i = 0;
+  loop (n_spls_up * 2, // *2 : two channels
+    src.out_q.deque_push (src.outs.ptr[i]);
+    i += 1;
+  );
+);
+
+spl0 *= dry_gain;
+spl1 *= dry_gain;
+spl0 += src.out_q.deque_pop() * wet_gain;
+spl1 += src.out_q.deque_pop() * wet_gain;

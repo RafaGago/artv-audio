@@ -26,6 +26,7 @@
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/short_ints.hpp"
 
+#include "lofiverb/logo.hpp"
 #include "lofiverb/look_and_feel.hpp"
 #include "lofiverb/parameters.hpp"
 
@@ -146,6 +147,7 @@ public:
     _display_value.setFont (juce::Font {lcd_typeface});
     _title.setFont (juce::Font {title_typeface});
     _title.setText ("LofiVerb", juce::dontSendNotification);
+    _logo = juce::Drawable::createFromImageData (logo_svg, sizeof logo_svg);
 
     register_mouse_events();
     // notice: the order in which they are added is the rendering order. This
@@ -155,6 +157,7 @@ public:
     addAndMakeVisible (_display_frame);
     addAndMakeVisible (_display_value);
     addAndMakeVisible (_title);
+    addAndMakeVisible (*_logo);
     for (auto& v : _mainpanels) {
       addAndMakeVisible (v);
     }
@@ -176,6 +179,8 @@ public:
     auto track       = decay_color.brighter (0.8f);
     auto label_txt   = light_grey.brighter (1.8);
     auto outline     = dark_grey; // light_grey.brighter (0.2f);
+
+    _logo->replaceColour (juce::Colours::black, label_txt);
 
     _lf.setColour (juce::PopupMenu::backgroundColourId, light_grey);
     _lf.setColour (juce::PopupMenu::highlightedBackgroundColourId, dark_grey);
@@ -230,6 +235,17 @@ public:
 
     auto& decay = *_params.p_get (parameters::decay {})[0];
     decay.slider.setColour (juce::Slider::thumbColourId, decay_color);
+
+    // changing text on chorus
+    _params.p_get (parameters::algorithm {})[0]->on_change
+      = [this] (combobox_ext& cb) {
+          auto& decay   = *_params.p_get (parameters::decay {})[0];
+          auto& mod     = *_params.p_get (parameters::mod {})[0];
+          auto  nonotif = juce::NotificationType::dontSendNotification;
+          bool  is_cho  = cb.combo.getText().containsIgnoreCase ("chorus");
+          decay.label.setText (is_cho ? "Amt" : "Decay", nonotif);
+          mod.label.setText (is_cho ? "Freq" : "Mod", nonotif);
+        };
 
     // size
     constexpr float ratio  = sizes::total_w_divs / sizes::total_h_divs;
@@ -368,9 +384,13 @@ public:
     //    tf.setHeight ((float) title.getHeight() * 113.25f);
     //    _title.setFont (tf);
 
-    header.removeFromRight (header_margin_w);
-    auto display = header;
+    auto logo = header.removeFromRight (header_margin_w).toFloat();
+    logo.removeFromRight (logo.getWidth() * 0.05f);
+    _logo->setTransformToFit (
+      logo.reduced (logo.getHeight() * 0.13f),
+      juce::RectanglePlacement {juce::RectanglePlacement::Flags::centred});
 
+    auto display = header;
     _display_frame.setBounds (display);
     auto pvfbounds = _display_frame.getBounds().reduced (h_h / 10.f);
 
@@ -626,12 +646,13 @@ private:
 
   editor_apvts_widgets<parameters::parameters_typelist> _params;
 
-  panel                _header;
-  std::array<panel, 7> _mainpanels;
-  panel                _footer;
-  juce::Label          _display_value;
-  juce::Label          _title;
-  juce::TextButton     _display_frame;
+  panel                           _header;
+  std::array<panel, 7>            _mainpanels;
+  panel                           _footer;
+  juce::Label                     _display_value;
+  juce::Label                     _title;
+  std::unique_ptr<juce::Drawable> _logo;
+  juce::TextButton                _display_frame;
   //  std::array<vertical_line, 2>                   _side_lines;
   //  std::array<vertical_line, n_stereo_busses * 2> _fx_lines;
 }; // namespace artv
