@@ -5,8 +5,9 @@ ArtV audio stuff
 
 https://www.kvraudio.com/product/mixmaxtrix-by-artv
 
+-TurboPaco: navigate to "src/turbopaco/README.md"
 
 Building
 ========
 
-See ".github/workflows/cmake.yml". Only GCC and Clang supported.
+See ".github/workflows/cmake.yml". Only Clang supported.

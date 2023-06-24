@@ -1,3 +1,7 @@
+1.10.0
+- Add Turbo Paco.
+- Embed font and some other minor graphic changes.
+
 1.9.1
 - Sonic Enhancer (Liteon): Fix envelope follower tracking on high samplerates.
 - Editor: Remove suffixes/units when editing sliders with the Right Mouse
