@@ -1,4 +1,4 @@
-//desc: large hall
+//desc: comb hall
 slider1:decay_p=0.8<0,1,0.01> Decay
 
 slider3:mod=0.5<0,1,0.01> Mod
@@ -107,9 +107,9 @@ k4 = 0.15 + fg_decay * 0.15 + character * 0.2;
 
 flo = 0.90 + lo * lo * 0.05;
 glo = 0.85 + lo * 0.145;
-fhi1 = 0.9 - hi * hi * 0.4;
-fhi2 = 0.93 - hi * hi * 0.4;
-ghi = 0.65 + hi * 0.35;
+fhi1 = 0.72 - hi * hi * 0.35;
+fhi2 = 0.66 - hi * hi * 0.4;
+ghi = 0.4 + hi * hi * 0.55;
 
 // df = 0.878;
 df = 0.906;

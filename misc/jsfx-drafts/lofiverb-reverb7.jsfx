@@ -1,4 +1,4 @@
-//desc: large hall
+//desc: palace
 slider1:decay_p=0.8<0,1,0.01> Decay
 
 slider3:mod=0.5<0,1,0.01> Mod
@@ -101,8 +101,8 @@ decay = 0.05 + decay * 0.95;
 
 flo = 0.90 + lo * lo * 0.05;
 glo = 0.75 + lo * 0.23;
-fhi = 0.9 - hi * hi * 0.4;
-ghi = 0.7 + 0.06 * decay2 + hi * 0.23;
+fhi = 0.65 - hi * hi * 0.24;
+ghi = 0.65 + 0.06 * decay2 + hi * hi * 0.28;
 
 @sample
 

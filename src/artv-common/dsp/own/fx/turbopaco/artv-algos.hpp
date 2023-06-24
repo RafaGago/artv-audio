@@ -887,8 +887,8 @@ public:
 
     auto flo = load_float<sample> (0.90 + upar.lf_amt * upar.lf_amt * 0.05);
     auto glo = load_float<sample> (0.75 + upar.lf_amt * 0.23);
-    auto fhi = load_float<sample> (0.9 - upar.hf_amt * upar.hf_amt * 0.4);
-    auto ghi = load_float<sample> (0.7 + upar.hf_amt * 0.23);
+    auto fhi = load_float<sample> (0.65 - upar.hf_amt * upar.hf_amt * 0.24);
+    auto ghi = load_float<sample> (0.65 + upar.hf_amt * upar.hf_amt * 0.28);
     // A
     _eng.run (sl<5> {}, loop, lfo1, k1);
     _eng.fetch (sl<6> {}, tmp, 400 - 32);
@@ -989,9 +989,9 @@ private:
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
-class arena : public algorithm {
+class comb_arena : public algorithm {
 private:
-  using engine = detail::tpaco::algo_engine<arena<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<comb_arena<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -1156,9 +1156,10 @@ public:
       sl<6, 12, 18, 24> {}, 0.35f + dec * dec * 4.75f, srate);
     sample flo  = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
     sample glo  = load_float<sample> (0.85f + upar.lf_amt * 0.145f);
-    sample fhi1 = load_float<sample> (0.9f - upar.hf_amt * upar.hf_amt * 0.4f);
-    sample fhi2 = load_float<sample> (0.93f - upar.hf_amt * upar.hf_amt * 0.4f);
-    sample ghi  = load_float<sample> (0.5f + upar.hf_amt * 0.5f);
+    auto   hi   = upar.hf_amt * upar.hf_amt;
+    sample fhi1 = load_float<sample> (0.72f - hi * 0.4f);
+    sample fhi2 = load_float<sample> (0.75f - hi * 0.4f);
+    sample ghi  = load_float<sample> (0.5f + hi * 0.49f);
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
@@ -1437,10 +1438,10 @@ public:
 
     return make_array<stage_data> (
       make_lp (0.15), // 0
-      make_hp (0.99), // 1
+      make_hp (0.985), // 1
       make_ap (73, 0.5), // 2
       make_lp (0.15), // 3
-      make_hp (0.99), // 4
+      make_hp (0.985), // 4
       make_ap (77, -0.5), // 5
 
       make_ap (b1.d1, b1.k1, 23), // 6
@@ -1526,15 +1527,15 @@ public:
     run_cascade<0, 2> (_eng, xspan {l_in.data(), io.size()});
     run_cascade<3, 5> (_eng, xspan {r_in.data(), io.size()});
 
-    auto   lf   = upar.lf_amt;
-    auto   hf   = upar.hf_amt;
+    auto lf = upar.lf_amt;
+    auto hf = upar.hf_amt;
+    hf *= hf;
     sample flo  = load_float<sample> (0.8f + lf * lf * 0.1f);
     sample glo  = load_float<sample> (0.75f + lf * 0.245f);
-    sample fhi1 = load_float<sample> (0.9f - hf * hf * 0.4f);
-    sample fhi2 = load_float<sample> (0.93f - hf * hf * 0.4f);
-    sample fhi3 = load_float<sample> (0.95f - hf * hf * 0.4f);
-    sample ghi  = load_float<sample> (
-      0.85f + hf * 0.1f + as_float (par.decay[0]) * 0.05f);
+    sample fhi1 = load_float<sample> (0.65f - hf * 0.25f);
+    sample fhi2 = load_float<sample> (0.67f - hf * 0.4f);
+    sample fhi3 = load_float<sample> (0.61f - hf * 0.3f);
+    sample ghi  = load_float<sample> (0.25f + hf * 0.75f);
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
@@ -1623,10 +1624,9 @@ private:
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
-class broken_hall : public algorithm {
+class comb_hall : public algorithm {
 private:
-  using engine
-    = detail::tpaco::algo_engine<broken_hall<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<comb_hall<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -1799,9 +1799,10 @@ public:
       sl<4, 10, 16, 22> {}, 0.3f + dec * dec * 4.75f, srate);
     sample flo  = load_float<sample> (0.9f + upar.lf_amt * upar.lf_amt * 0.05f);
     sample glo  = load_float<sample> (0.85f + upar.lf_amt * 0.145f);
-    sample fhi1 = load_float<sample> (0.9f - upar.hf_amt * upar.hf_amt * 0.4f);
-    sample fhi2 = load_float<sample> (0.93f - upar.hf_amt * upar.hf_amt * 0.4f);
-    sample ghi  = load_float<sample> (0.65f + upar.hf_amt * 0.35f);
+    auto   hi   = upar.hf_amt * upar.hf_amt;
+    sample fhi1 = load_float<sample> (0.72f - hi * 0.35f);
+    sample fhi2 = load_float<sample> (0.66f - hi * 0.4f);
+    sample ghi  = load_float<sample> (0.4f + hi * 0.55f);
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
@@ -2213,15 +2214,16 @@ public:
     run_cascade<0, 1> (_eng, xspan {l_in.data(), io.size()});
     run_cascade<2, 3> (_eng, xspan {r_in.data(), io.size()});
 
-    auto   lf   = upar.lf_amt;
-    auto   hf   = upar.hf_amt;
+    auto lf = upar.lf_amt;
+    auto hf = upar.hf_amt;
+    hf *= hf;
     sample flo  = load_float<sample> (0.8f + lf * lf * 0.1f);
     sample glo  = load_float<sample> (0.75f + lf * 0.245f);
-    sample fhi1 = load_float<sample> (0.9f - hf * hf * 0.4f);
-    sample fhi2 = load_float<sample> (0.93f - hf * hf * 0.4f);
-    sample fhi3 = load_float<sample> (0.95f - hf * hf * 0.45f);
+    sample fhi1 = load_float<sample> (0.9f - hf * 0.4f);
+    sample fhi2 = load_float<sample> (0.93f - hf * 0.4f);
+    sample fhi3 = load_float<sample> (0.95f - hf * 0.45f);
     sample ghi  = load_float<sample> (
-      0.85f + hf * 0.1f + as_float (par.decay[0]) * 0.05f);
+      0.6f + hf * 0.35f + as_float (par.decay[0]) * 0.05f);
 
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
