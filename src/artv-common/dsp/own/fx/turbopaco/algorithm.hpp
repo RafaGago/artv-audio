@@ -205,6 +205,66 @@ protected:
   //----------------------------------------------------------------------------
   // reminder, unrolled to avoid unncessary quantization on fixed point
   template <class T>
+  static void hadamard8 (std::array<T*, 8> io, uint block_size)
+  {
+    // these quantizations could use fraction saving too if moved to the
+    // engine...
+    // probably there is a better way to iterate WRT to cache, but on the usages
+    // of this function all pointers on "io" are contiguous.
+    ARTV_LOOP_UNROLL_SIZE_HINT (16)
+    for (uint i = 0; i < block_size; ++i) {
+      // 2x 4-wide unnormalized hadamard
+      auto y1 = io[0][i] - io[1][i];
+      auto y2 = io[0][i] + io[1][i];
+      auto y3 = io[2][i] - io[3][i];
+      auto y4 = io[2][i] + io[3][i];
+
+      io[0][i] = (T) (y1 - y3);
+      io[1][i] = (T) (y2 - y4);
+      io[2][i] = (T) (y1 + y3);
+      io[3][i] = (T) (y2 + y4);
+
+      auto y5 = io[4][i] - io[5][i];
+      auto y6 = io[4][i] + io[5][i];
+      auto y7 = io[6][i] - io[7][i];
+      auto y8 = io[6][i] + io[7][i];
+
+      io[4][i] = (T) (y5 - y7);
+      io[5][i] = (T) (y6 - y8);
+      io[6][i] = (T) (y5 + y7);
+      io[7][i] = (T) (y6 + y8);
+
+      // 1x 8 wide hadamard
+      y1 = io[0][i];
+      y2 = io[1][i];
+      y3 = io[2][i];
+      y4 = io[3][i];
+      y5 = io[4][i];
+      y6 = io[5][i];
+      y7 = io[6][i];
+      y8 = io[7][i];
+
+      io[0][i] = y1 - y5;
+      io[1][i] = y2 - y6;
+      io[2][i] = y3 - y7;
+      io[3][i] = y4 - y8;
+      io[4][i] = y1 + y5;
+      io[5][i] = y2 + y6;
+      io[6][i] = y3 + y7;
+      io[7][i] = y4 + y8;
+    }
+    // normalization
+    for (uint out = 0; out < io.size(); ++out) {
+      T* ptr = io[out];
+      ARTV_LOOP_UNROLL_SIZE_HINT (16)
+      for (uint i = 0; i < block_size; ++i) {
+        ptr *= 0.35355339059327373_r; // 1/sqrt(8)
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  // reminder, unrolled to avoid unncessary quantization on fixed point
+  template <class T>
   static void hadamard4 (std::array<T*, 4> io, uint block_size)
   {
     // these quantizations could use fraction saving too if moved to the
@@ -330,5 +390,4 @@ protected:
   }
   //----------------------------------------------------------------------------
 };
-
 }}} // namespace artv::detail::tpaco

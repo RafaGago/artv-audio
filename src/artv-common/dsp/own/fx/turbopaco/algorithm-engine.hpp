@@ -1784,6 +1784,8 @@ public:
   using algorithm    = Algorithm;
   using spec         = spec_access<Algorithm>;
   //----------------------------------------------------------------------------
+  static constexpr spec get_spec() { return {}; };
+  //----------------------------------------------------------------------------
   static constexpr uint max_block_size = Max_block_size;
   //----------------------------------------------------------------------------
   static constexpr uint get_required_bytes()
