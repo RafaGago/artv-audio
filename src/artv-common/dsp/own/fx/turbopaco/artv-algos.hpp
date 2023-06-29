@@ -765,10 +765,9 @@ private:
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
-class ping_pong_a : public algorithm {
+class echoverb : public algorithm {
 private:
-  using engine
-    = detail::tpaco::algo_engine<ping_pong_a<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<echoverb<Dt>, Dt, max_block_size>;
 
 public:
   //----------------------------------------------------------------------------
@@ -2597,10 +2596,9 @@ private:
 };
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
-class ping_pong_b : public algorithm {
+class ping_pong : public algorithm {
 private:
-  using engine
-    = detail::tpaco::algo_engine<ping_pong_b<Dt>, Dt, max_block_size>;
+  using engine = detail::tpaco::algo_engine<ping_pong<Dt>, Dt, max_block_size>;
 
   struct stage {
     uint  d1, d2, d3, dd1, dd2;
