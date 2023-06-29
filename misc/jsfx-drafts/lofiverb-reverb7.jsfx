@@ -1,4 +1,4 @@
-//desc: ping pong A
+//desc: echo verb
 slider1:decay_p=0.8<0,1,0.01> Decay
 
 slider3:mod=0.5<0,1,0.01> Mod

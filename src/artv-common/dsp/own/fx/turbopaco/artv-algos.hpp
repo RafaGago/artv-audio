@@ -1302,7 +1302,7 @@ public:
     _lfo.set_phase (phase<4> {phase_tag::normalized {}, 0.f, 0.f, 0.f, 0.f});
     _eq.reset_states_cascade();
     _eq.reset_coeffs (
-      vec_set<f32_x2> (360.f),
+      vec_set<f32_x2> (300.f),
       vec_set<f32_x2> (0.48f),
       vec_set<f32_x2> (3.f),
       t_spl,
@@ -1438,11 +1438,11 @@ public:
 
     return make_array<stage_data> (
       make_lp (0.15), // 0
-      make_hp (0.985), // 1
-      make_ap (73, 0.5), // 2
+      make_hp (0.98), // 1
+      make_ap (73, 0.6), // 2
       make_lp (0.15), // 3
-      make_hp (0.985), // 4
-      make_ap (77, -0.5), // 5
+      make_hp (0.98), // 4
+      make_ap (77, -0.6), // 5
 
       make_ap (b1.d1, b1.k1, 23), // 6
       make_ap (b1.d2, b1.k2), // 7
@@ -1486,16 +1486,16 @@ public:
       make_parallel_delay (
         2, b8.dd, b8.tap_l, b8.fac_l, b8.tap_r, b8.fac_r), // 31
 
-      make_ap (b5.d1, b5.k1, -12), // 32
-      make_ap (b5.d2, b5.k2), // 33
+      make_ap (b9.d1, b9.k1, -12), // 32
+      make_ap (b9.d2, b9.k2), // 33
       make_parallel_delay (
-        2, b5.dd, b5.tap_l, b5.fac_l, b5.tap_r, b5.fac_r), // 34
+        2, b9.dd, b9.tap_l, b9.fac_l, b9.tap_r, b9.fac_r), // 34
       make_crossover2(), // 35
 
-      make_ap (b6.d1, b6.k1), // 36
-      make_ap (b6.d2, b6.k2), // 37
+      make_ap (b10.d1, b10.k1), // 36
+      make_ap (b10.d2, b10.k2), // 37
       make_parallel_delay (
-        2, b6.dd, b6.tap_l, b6.fac_l, b6.tap_r, b6.fac_r) // 38
+        2, b10.dd, b10.tap_l, b10.fac_l, b10.tap_r, b10.fac_r) // 38
 
     );
   }
