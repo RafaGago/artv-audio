@@ -123,15 +123,17 @@ public:
   static constexpr auto get_parameter (clock_tag)
   {
     return choice_param (
-      3,
+      5,
       make_cstr_array (
-        "Downclocked 3",
-        "Downclocked 2",
-        "Downclocked 1",
+        "Downclock 5",
+        "Downclock 4",
+        "Downclock 3",
+        "Downclock 2",
+        "Downclock 1",
         "Base Clock",
-        "Overclocked 1",
-        "Overclocked 2",
-        "Overclocked 3"));
+        "Overclock 1",
+        "Overclock 2",
+        "Overclock 3"));
   }
   //----------------------------------------------------------------------------
   struct decay_tag {};

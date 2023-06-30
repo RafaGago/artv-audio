@@ -60,7 +60,8 @@ namespace artv { namespace detail { namespace tpaco {
   67500 75   45
   68400 76   57
 */
-
+// TODO: don't use 23400 as base sample rate anymore. 25600 and 21600 require
+// less sync interpolation tables.
 //------------------------------------------------------------------------------
 template <delay::data_type Dt>
 class debug : public algorithm {
@@ -76,7 +77,8 @@ public:
   //----------------------------------------------------------------------------
   static constexpr auto get_sample_rates()
   {
-    return make_array (10500, 16800, 21000, 23400, 33600, 42000, 50400);
+    return make_array (
+      8400, 10500, 13500, 16800, 21000, 23400, 33600, 42000, 50400);
   }
   //----------------------------------------------------------------------------
   static constexpr uint get_required_bytes()
