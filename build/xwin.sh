@@ -1,30 +1,26 @@
 #!/bin/bash
 
-xwin_version="xwin-0.2.5"
+xwin_version="xwin-0.2.14"
 xwin_arch="x86_64"
 xwin_prefix="unknown-linux-musl"
 xwin_fullname="${xwin_version}-${xwin_arch}-${xwin_prefix}"
 
-wget "https://github.com/Jake-Shadle/xwin/releases/download/0.2.5/${xwin_fullname}.tar.gz"
-
+# Mount a case insensitive filesystem
 mkdir -p ${xwin_version}
-tar -xzvf ${xwin_fullname}.tar.gz -C ${xwin_version} --strip-components=1 "${xwin_fullname}/xwin"
-rm ${xwin_fullname}.tar.gz
+mkdir -p ${xwin_version}.ciopfs.data
+umount ${xwin_version} | true
+ciopfs ${xwin_version}.ciopfs.data ${xwin_version} -o nonempty | exit 1
+# leave a script to remind myself that "ciopfs" has to be mounted before building
+printf "#!/bin/bash\nciopfs ${xwin_version}.ciopfs.data ${xwin_version} -o nonempty\n" > ${xwin_version}.ciopfs.mount.sh
+chmod +x ${xwin_version}.ciopfs.mount.sh
 
+# Get xwin
+if [[ ! -x "${xwin_version}/xwin" ]]; then
+    wget "https://github.com/Jake-Shadle/xwin/releases/download/0.2.14/${xwin_fullname}.tar.gz"
+    tar -xzvf ${xwin_fullname}.tar.gz -C ${xwin_version} --strip-components=1 "${xwin_fullname}/xwin"
+    rm ${xwin_fullname}.tar.gz
+fi
+
+# Pass disable-symlinks, as we use a case insensitive filesystem as the destination
 xwin_files="${PWD}/${xwin_version}/files"
-${xwin_version}/xwin --accept-license --manifest-version 16 splat --include-debug-libs --output ${xwin_files}
-
-## too slow...
-#for file in $(find ${xwin_files} -type f); do
-#    DIR="$(dirname file)"
-#    FILE=$(basename file)
-#    # capitalize first letter
-#    FILE_CAPITAL="$(basename file | tr [:upper:] [:lower:] | sed -e 's|^.|\U&|')"
-#    ln -s "$DIR/$FILE" "$DIR/$FILE_CAPITAL" 2>/dev/null || true
-#done
-
-# Manually fix some symlinks that xwin didn't handle.
-ln -s "${xwin_files}/sdk/include/um/ole2.h" "${xwin_files}/sdk/include/um/Ole2.h"
-ln -s "${xwin_files}/sdk/include/um/dbghelp.h" "${xwin_files}/sdk/include/um/Dbghelp.h"
-ln -s "${xwin_files}/sdk/include/shared/dxgi.h" "${xwin_files}/sdk/include/shared/Dxgi.h"
-ln -s "${xwin_files}/sdk/lib/um/x86_64/dbghelp.lib" "${xwin_files}/sdk/lib/um/x86_64/DbgHelp.lib"
+${xwin_version}/xwin --accept-license --manifest-version 16 --cache-dir ${xwin_version}/xwin-cache  splat --disable-symlinks --include-debug-libs --output ${xwin_files}
