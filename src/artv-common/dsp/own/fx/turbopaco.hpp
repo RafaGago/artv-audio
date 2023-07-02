@@ -107,7 +107,7 @@ public:
   static constexpr auto get_parameter (mode_tag)
   {
     return choice_param (
-      1, make_cstr_array ("16-bit fixed", "16-bit float", "32-bit float"), 16);
+      2, make_cstr_array ("16-bit fixed", "16-bit float", "32-bit float"), 16);
   }
   //----------------------------------------------------------------------------
   struct clock_tag {};
@@ -253,13 +253,23 @@ public:
     _pc                  = &pc;
     _n_processed_samples = 0;
     _srate               = 0; // ensure triggering a resample reset
-    _param.mode
-      = (decltype (_param.mode)) -1ull; // trigger a mode and resampler reset
-    _param.srateid = 3;
+    _param.mode          = 2; // default is algo 0, 32-bit can't be changed
+    _param.srateid       = get_parameter (clock_tag {}).defaultv;
 
+    // avoid variant bugs (Windows) and multiple allocations
+    auto& algo  = _algorithms.emplace<mp11::mp_third<algorithms_type>>();
+    uint  srate = algo.get_sample_rates()[_param.srateid];
+    update_internal_srate (srate, (srate / 20) * 9);
+    algo.reset (_mem_reverb, _t_spl);
     _param_smooth.reset (_t_spl);
-    // set defaults
-    mp11::mp_for_each<parameters> ([&] (auto param) {
+
+    // remove parameters related to resetting the algorithm
+    using defpars = mp11::mp_remove<
+      mp11::mp_remove<mp11::mp_remove<parameters, mode_tag>, algorithm_tag>,
+      clock_tag>;
+
+    // set defaults for non-variant related parameters.
+    mp11::mp_for_each<defpars> ([&] (auto param) {
       set (param, get_parameter (param).min);
       if constexpr (!is_choice<decltype (get_parameter (param))>) {
         set (param, get_parameter (param).max);
@@ -270,6 +280,8 @@ public:
       }
       set (param, get_parameter (param).defaultv);
     });
+
+    _param_smooth.set_all_from_target();
   }
   //----------------------------------------------------------------------------
   template <class T>
@@ -409,22 +421,19 @@ private:
     mp11::mp_for_each<mp11::mp_iota<mp11::mp_size<algorithms_type>>> (
       [&] (auto i) {
         if (_param.mode == i) {
-          using algo = mp11::mp_at_c<algorithms_type, i>;
-          _algorithms.emplace<algo>();
+          using algotype  = mp11::mp_at_c<algorithms_type, i>;
+          algotype& algo  = _algorithms.emplace<algotype>();
+          uint      srate = algo.get_sample_rates()[_param.srateid];
+          if (_srate != srate) {
+            _srate = srate;
+            update_internal_srate (srate, (srate / 20) * 9);
+          }
+          algo.reset (_mem_reverb, _t_spl);
+          update_mod(); // requires reset first
+          update_ducker();
         }
       });
-    std::visit (
-      [&] (auto& algo) {
-        uint srate = algo.get_sample_rates()[_param.srateid];
-        if (_srate != srate) {
-          _srate = srate;
-          update_internal_srate (srate, (srate / 20) * 9);
-        }
-        algo.reset (_mem_reverb, _t_spl);
-      },
-      _algorithms);
     _n_processed_samples = 0; // trigger the control block on first sample
-    update_mod();
   }
   //----------------------------------------------------------------------------
   void update_internal_srate (uint srate, uint fc)
@@ -470,9 +479,6 @@ private:
     _mem_reverb = xspan {_mem};
     _predelay.reset (_mem_reverb.cut_head (predelay_flt).cast<float>(), 2);
     _mem_reverb.cut_head (padding);
-
-    update_mod();
-    update_ducker();
   }
   //----------------------------------------------------------------------------
   void update_ducker()
