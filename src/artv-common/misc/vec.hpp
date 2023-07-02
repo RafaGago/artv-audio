@@ -43,7 +43,9 @@ struct simd_vector_traits {
   static constexpr uint bytes = N * sizeof (T);
 
   // allows aligned loads by casting
-  using type __attribute__ ((vector_size (bytes), __may_alias__)) = T;
+  using type
+    __attribute__ ((vector_size (bytes), __may_alias__, __aligned__ (bytes)))
+    = T;
   // To allow unaligned loads by casting
   using type_u
     __attribute__ ((vector_size (bytes), __may_alias__, __aligned__ (1)))
