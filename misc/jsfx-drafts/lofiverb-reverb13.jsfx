@@ -249,13 +249,13 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   m = (li + ri) * 0.5;
 
   tank = f1.crossv2 (tank, flo, fhi1, glo, ghi);
-  tank = b1.run_block (tank, m, decay, lfov1 * mod_amt, 27);
+  tank = b1.run_block (tank, m, decay, lfov1 * mod_amt, 33);
 
   tank = f2.crossv2 (tank, flo, fhi2, glo, ghi);
-  tank = b2.run_block (tank, li, decay, -lfov1 * mod_amt, 18);
+  tank = b2.run_block (tank, li, decay, -lfov1 * mod_amt, 26);
 
   tank = f3.crossv2 (tank, flo, fhi3, glo, ghi);
-  tank = b3.run_block (tank, ri, decay, lfov2 * mod_amt, 21);
+  tank = b3.run_block (tank, ri, decay, lfov2 * mod_amt, 29);
 
   tank = delay (tank, 52 + 143);
 

@@ -167,9 +167,9 @@ b12.rnd_init(11);
 @slider
 
 lfo1.lfo_bank_reset_freq (0, 1.27 - mod * 0.53, k.src.srate);
-lfo2.lfo_bank_reset_freq (0, 1.51 - mod * 0.43, k.src.srate);
+lfo2.lfo_bank_reset_freq (0, 0.43 + mod * 1.51, k.src.srate);
 lfo3.lfo_bank_reset_freq (0, 1.74 - mod * 0.37, k.src.srate);
-lfo4.lfo_bank_reset_freq (0, 1.84 - mod * 0.31, k.src.srate);
+lfo4.lfo_bank_reset_freq (0, 0.31 + mod * 1.84, k.src.srate);
 
 dry_gain  = (dry_gain == -60) ? 0. : db_to_lin (db_dry);
 wet_gain = db_to_lin (db_wet);
@@ -177,8 +177,8 @@ wet_gain = db_to_lin (db_wet);
 decay = fastgrowth (decay_p);
 decay = 0.4 + decay * 0.59;
 
-//mod_amt = fastgrowth (mod);
-mod_amt = mod;
+mod_amt = fastgrowth (mod);
+//mod_amt = mod;
 
 flo = 0.80 + lo * lo * 0.1;
 glo = 0.75 + lo * 0.245;
@@ -309,12 +309,12 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   m = (li + ri) * 0.5;
   s = (li - ri) * 0.5;
 
-  tank = b1.run_block (tank, m, decay, lfo1.ret.ptr[0] * mod_amt, 23);
+  tank = b1.run_block (tank, m, decay, lfo1.ret.ptr[0] * mod_amt, 28);
   i1 = easyapv_del_idx;
   tank = f1.crossv2 (tank, flo, fhi1, glo, ghi);
   tank = b2.run_block (tank, 0, decay);
   i2 = easyapv_del_idx;
-  tank = b3.run_block (tank, li, decay, lfo2.ret.ptr[0] * mod_amt, 17);
+  tank = b3.run_block (tank, li, decay, lfo2.ret.ptr[0] * mod_amt, 27);
   i3 = easyapv_del_idx;
   tank = b4.run_block (tank, 0, decay);
   i4 = easyapv_del_idx;

@@ -111,6 +111,8 @@ fhi1 = 0.72 - hi * hi * 0.4;
 fhi2 = 0.75 - hi * hi * 0.4;
 ghi = 0.5 + hi * hi * 0.49;
 
+modv = fastgrowth(mod);
+
 @sample
 
 // decay = 1;
@@ -147,10 +149,10 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   r -= delay (v1, 112);
   l += delay (v1, 342, lfo1.ret.ptr[0], 13);
   r += delay (v1, 377, lfo1.ret.ptr[0], 16);
-  l += delay (v1, 412, lfo1.ret.ptr[0] * mod, 77);
-  r -= delay (v1, 410, lfo1.ret.ptr[0] * mod, 88);
-  l += delay (v1, 1112 - 46, lfo1.ret.ptr[0] * mod, 89);
-  r += delay (v1, 1112 - 45, lfo1.ret.ptr[0] * mod, 73);
+  l += delay (v1, 412, lfo1.ret.ptr[0] * modv, 77);
+  r -= delay (v1, 410, lfo1.ret.ptr[0] * modv, 88);
+  l += delay (v1, 1112 - 46, lfo1.ret.ptr[0] * modv, 89);
+  r += delay (v1, 1112 - 45, lfo1.ret.ptr[0] * modv, 73);
 
   v2 = m + fb2;
   fb2 = delay_fb (v2, 1827 + 387, decay, k.src.srate);
@@ -158,12 +160,12 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   fb2 = ap3 (fb2, 772, 666, 535, k1, k2, k3);
   l -= delay (v2, 232);
   r += delay (v2, 230);
-  l += delay (v2, 666, lfo1.ret.ptr[1] * mod, 77);
-  r += delay (v2, 667, lfo1.ret.ptr[1] * mod, 88);
+  l += delay (v2, 666, lfo1.ret.ptr[1] * modv, 77);
+  r += delay (v2, 667, lfo1.ret.ptr[1] * modv, 88);
   l += delay (v2, 812, lfo1.ret.ptr[1], 21);
   r -= delay (v2, 831, lfo1.ret.ptr[1], 15);
-  l -= delay (v2, 1312, lfo1.ret.ptr[1] * mod, 89);
-  r += delay (v2, 1312, lfo1.ret.ptr[1] * mod, 73);
+  l -= delay (v2, 1312, lfo1.ret.ptr[1] * modv, 89);
+  r += delay (v2, 1312, lfo1.ret.ptr[1] * modv, 73);
 
   q1i = easyapv_del_idx;
   v3 = (li + fb3);
@@ -172,10 +174,10 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   fb3 = ap3 (fb3, 672, 526, 425, k1, k2, k3);
   l -= delay (v3, 192);
   r += delay (v3, 196);
-  l -= delay (v3, 376, lfo2.ret.ptr[0] * mod, 77);
-  r += delay (v3, 377, lfo2.ret.ptr[0] * mod, 88);
-  l -= delay (v3, 777, lfo2.ret.ptr[0] * mod, 89);
-  r += delay (v3, 776, lfo2.ret.ptr[0] * mod, 73);
+  l -= delay (v3, 376, lfo2.ret.ptr[0] * modv, 77);
+  r += delay (v3, 377, lfo2.ret.ptr[0] * modv, 88);
+  l -= delay (v3, 777, lfo2.ret.ptr[0] * modv, 89);
+  r += delay (v3, 776, lfo2.ret.ptr[0] * modv, 73);
   l += delay (v3, 1472, lfo2.ret.ptr[0], 17);
   r += delay (v3, 1471, lfo2.ret.ptr[0], 23);
 
@@ -186,10 +188,10 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
   fb4 = ap3 (fb4, 572, 426, 325, k1, k2, k3);
   l -= delay (v4, 377, lfo2.ret.ptr[1], 22);
   r += delay (v4, 376, lfo2.ret.ptr[1], 17);
-  l += delay (v4, 642, lfo2.ret.ptr[1] * mod, 89);
-  r -= delay (v4, 677, lfo2.ret.ptr[1] * mod, 73);
-  l += delay (v4, 992, lfo2.ret.ptr[1] * mod, 77);
-  r += delay (v4, 992, lfo2.ret.ptr[1] * mod, 98);
+  l += delay (v4, 642, lfo2.ret.ptr[1] * modv, 89);
+  r -= delay (v4, 677, lfo2.ret.ptr[1] * modv, 73);
+  l += delay (v4, 992, lfo2.ret.ptr[1] * modv, 77);
+  r += delay (v4, 992, lfo2.ret.ptr[1] * modv, 98);
   l -= delay (v4, 1612);
   r += delay (v4, 1612);
 

@@ -1142,8 +1142,9 @@ public:
       auto lfo      = tick_lfo<sample> (_lfo);
       lfo1[i]       = sample {lfo[0]};
       lfo2[i]       = sample {lfo[2]};
-      lfo1m[i]      = lfo1[i] * par.mod[i];
-      lfo2m[i]      = lfo2[i] * par.mod[i];
+      auto m        = fastgrowth (par.mod[i]);
+      lfo1m[i]      = lfo1[i] * m;
+      lfo2m[i]      = lfo2[i] * m;
       l_in[i]       = io[i][0] * 0.125_r * 0.125_r;
       r_in[i]       = io[i][1] * 0.125_r * 0.125_r;
       k1[i]         = 0.12_r + par.decay[i] * 0.2_r;
@@ -1318,9 +1319,9 @@ public:
   void mod_changed (float mod, float t_spl)
   {
     auto f1 = 1.27f - mod * 0.53f;
-    auto f2 = 1.51f - mod * 0.43f;
+    auto f2 = 0.43f + mod * 1.51f;
     auto f3 = 1.74f - mod * 0.37f;
-    auto f4 = 1.84f - mod * 0.31f;
+    auto f4 = 0.31f + mod * 1.84f;
     _lfo.set_freq (f32_x4 {f1, f2, f3, f4}, t_spl);
   }
   //------------------------------------------------------------------------------
@@ -1450,7 +1451,7 @@ public:
       make_hp (0.98), // 4
       make_ap (77, -0.6), // 5
 
-      make_ap (b1.d1, b1.k1, 23), // 6
+      make_ap (b1.d1, b1.k1, 28), // 6
       make_ap (b1.d2, b1.k2), // 7
       make_parallel_delay (
         2, b1.dd, b1.tap_l, b1.fac_l, b1.tap_r, b1.fac_r), // 8
@@ -1461,7 +1462,7 @@ public:
       make_parallel_delay (
         2, b2.dd, b2.tap_l, b2.fac_l, b2.tap_r, b2.fac_r), // 12
 
-      make_ap (b3.d1, b3.k1, 17), // 13
+      make_ap (b3.d1, b3.k1, 27), // 13
       make_ap (b3.d2, b3.k2), // 14
       make_parallel_delay (
         2, b3.dd, b3.tap_l, b3.fac_l, b3.tap_r, b3.fac_r), // 15
@@ -1521,10 +1522,11 @@ public:
     ARTV_LOOP_UNROLL_SIZE_HINT (16)
     for (uint i = 0; i < io.size(); ++i) {
       auto lfo     = tick_lfo<sample> (_lfo);
-      lfo1[i]      = sample {lfo[0]} * par.mod[i];
-      lfo2[i]      = sample {lfo[1]} * par.mod[i];
-      lfo3[i]      = sample {lfo[2]} * par.mod[i];
-      lfo4[i]      = sample {lfo[3]} * par.mod[i];
+      auto mod     = fastgrowth (par.mod[i]);
+      lfo1[i]      = sample {lfo[0]} * mod;
+      lfo2[i]      = sample {lfo[1]} * mod;
+      lfo3[i]      = sample {lfo[2]} * mod;
+      lfo4[i]      = sample {lfo[3]} * mod;
       l_in[i]      = io[i][0] * 0.125_r * 0.25_r;
       r_in[i]      = io[i][1] * 0.125_r * 0.25_r;
       par.decay[i] = fastgrowth (par.decay[i]);
@@ -1664,7 +1666,7 @@ public:
   void mod_changed (float mod, float t_spl)
   {
     auto f1 = 1.73f - mod * 0.53f;
-    auto f2 = 1.51f - mod * 0.43f;
+    auto f2 = 1.51f - mod * 0.63f;
     _lfo.set_freq (f32_x4 {f1, f1, f2, f2}, t_spl);
   }
   //------------------------------------------------------------------------------
@@ -1696,10 +1698,10 @@ public:
         112, g3, 0,
         342, -g1, 48,
         377, g2, -41,
-        474 - 46, g4, 89,
-        472 - 45, -g4, -73,
-        522, g2, 27,
-        540, -g3, -28
+        474 - 46, g4, (uint) 1.3f * 89,
+        472 - 45, -g4, (uint) 1.3f * -73,
+        522, g2, (uint) 1.3f * 27,
+        540, -g3, -(uint) 1.3f * 28
         ), // 9
       // clang-format on
       make_comb (1053 * sc, 0.f), // 10
@@ -1714,12 +1716,12 @@ public:
         blank,
         170, g2, 0,
         160, -g1, 0,
-        396, -g1, -77,
-        397, g3, 88,
+        396, -g1, (uint) 1.3f * -77,
+        397, g3, (uint) 1.3f * 88,
         438, g3, -16,
         471, -g2, 14,
-        512 - 18, g4, -89,
-        513 - 18, -g4, 73
+        512 - 18, g4, (uint) 1.3f * -89,
+        513 - 18, -g4, (uint) 1.3f * 73
         ), // 15
       // clang-format on
       make_comb (955 * sc, 0.f), // 16
@@ -1734,12 +1736,12 @@ public:
         blank,
         422, -g1, 0,
         415, -g2, 0,
-        646, g1, -57,
-        647, -g2, 58,
+        646, g1, (uint) 1.3f * -57,
+        647, -g2, (uint) 1.3f * 58,
         673, g4, -7,
         671, -g4, 13,
-        858, -g3, -89,
-        836, g3, 73
+        858, -g3, (uint) 1.3f * -89,
+        836, g3, (uint) 1.3f * 73
         ), // 21
       // clang-format on
       make_comb (1433 * sc, 0.f), // 22
@@ -1756,10 +1758,10 @@ public:
         297, -g1, -10,
         776 + 39, g4, 0,
         775 + 39, g4, 0,
-        842, g2, 39,
-        877, g1, -33,
-        1103, -g3, 77,
-        1131, -g3, -98
+        842, g2, (uint) 1.3f * 39,
+        877, g1, (uint) 1.3f * -33,
+        1103, -g3, (uint) 1.3f * 77,
+        1131, -g3, (uint) 1.3f * -98
         ), // 27
       // clang-format on
       make_ap (32, 0., (157 * 3) - 32, interpolation::zero_order_hold), // 28
@@ -2515,10 +2517,10 @@ public:
     return make_array<stage_data> (
       make_lp(), // 0
       make_hp(), // 1
-      make_ap (2331, 0.2, 407), // 2
-      make_ap (2341, -0.2, 413), // 3
-      make_ap (1967, -0.15, 509), // 4
-      make_ap (1937, 0.15, 579), // 5
+      make_ap ((uint) 2331 * 0.4f, 0.2, 407), // 2
+      make_ap ((uint) 2341 * 0.4f, -0.2, 413), // 3
+      make_ap ((uint) 1967 * 0.4f, -0.15, 509), // 4
+      make_ap ((uint) 1937 * 0.4f, 0.15, 579), // 5
       make_ap (173, 0.5), // 6
       make_ap (177, 0.5) // 7
     );
@@ -2690,21 +2692,21 @@ public:
       make_ap (173, 0.5), // 5
 
       make_crossover2(), // 6
-      make_ap (b1.d1, b1.k1, 27), // 7
+      make_ap (b1.d1, b1.k1, 33), // 7
       make_delay (b1.dd1), // 8
       make_ap (b1.d2, b1.k2), // 9
       make_ap (b1.d3, b1.k3), // 10
       make_delay (b1.dd2), // 11
 
       make_crossover2(), // 12
-      make_ap (b2.d1, b2.k1, 18), // 13
+      make_ap (b2.d1, b2.k1, 26), // 13
       make_delay (b2.dd1), // 14
       make_ap (b2.d2, b2.k2), // 15
       make_ap (b2.d3, b2.k3), // 16
       make_delay (b2.dd2), // 17
 
       make_crossover2(), // 18
-      make_ap (b3.d1, b3.k1, 21), // 19
+      make_ap (b3.d1, b3.k1, 29), // 19
       make_delay (b3.dd1), // 20
       make_ap (b3.d2, b3.k2), // 21
       make_ap (b3.d3, b3.k3), // 22

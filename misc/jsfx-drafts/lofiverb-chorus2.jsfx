@@ -142,10 +142,11 @@ n_spls_down = src.down.resampler_2c_tick (src.ins.ptr, spl0, spl1);
 
   m = delay(m, predelay);
 
-  c1 = ap (m, 2331, 0.2 * character, mod1, 407 * fmod);
-  c2 = ap (m, 2341, -0.2 * character, -mod1, 413 * fmod);
-  c3 = ap (m, 1967, -0.15 * character, -mod2, 509 * fmod);
-  c4 = ap (m, 1937, 0.15 * character, mod2, 579 * fmod);
+  f = 0.4;
+  c1 = ap (m, floor (f * 2331), 0.2 * character, mod1, 407 * fmod);
+  c2 = ap (m, floor (f * 2341), -0.2 * character, -mod1, 413 * fmod);
+  c3 = ap (m, floor (f * 1967), -0.15 * character, -mod2, 509 * fmod);
+  c4 = ap (m, floor (f * 1937), 0.15 * character, mod2, 579 * fmod);
 
   l = c1 + c3;
   r = c4 - c2;
