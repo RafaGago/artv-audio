@@ -27,7 +27,6 @@
 #include "artv-common/misc/short_ints.hpp"
 
 #include "turbopaco/logo.hpp"
-#include "turbopaco/look_and_feel.hpp"
 #include "turbopaco/parameters.hpp"
 
 #define VERSION_INT VERSION_GET (VERSION_MAJOR, VERSION_MINOR, VERSION_REV)
@@ -142,6 +141,19 @@ public:
       return f;
     };
     _lf.on_rotary_draw = draw_rotary_1;
+
+    _lf.on_get_combobox_font = [this] (juce::ComboBox& obj) {
+      auto  f = _lf.getComboBoxFont (obj); // call LF V4
+      float h = obj.getTopLevelComponent()->getHeight();
+      f.setHeight (h * 0.2f);
+      return f;
+    };
+
+    _lf.on_get_popup_menu_font = [this]() {
+      auto f = _lf.getPopupMenuFont(); // call LF V4
+      f.setHeight (this->getHeight() * 0.05f);
+      return f;
+    };
 
     // init
     _display_value.setFont (juce::Font {lcd_typeface});

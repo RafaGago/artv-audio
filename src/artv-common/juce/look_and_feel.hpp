@@ -173,11 +173,41 @@ public:
   juce::Font getLabelFont (juce::Label& obj) override
   {
     if (on_get_label_font) {
-      return on_get_label_font (obj);
+      // avoid recursing, the original V4 function can be called on the callback
+      auto fn           = std::move (on_get_label_font);
+      auto ret          = fn (obj);
+      on_get_label_font = std::move (fn);
+      return ret;
     }
     return juce::LookAndFeel_V4::getLabelFont (obj);
   }
   std::function<juce::Font (juce::Label&)> on_get_label_font;
+  // ---------------------------------------------------------------------------
+  juce::Font getComboBoxFont (juce::ComboBox& obj) override
+  {
+    if (on_get_combobox_font) {
+      // avoid recursing, the original V4 function can be called on the callback
+      auto fn              = std::move (on_get_combobox_font);
+      auto ret             = fn (obj);
+      on_get_combobox_font = std::move (fn);
+      return ret;
+    }
+    return juce::LookAndFeel_V4::getComboBoxFont (obj);
+  }
+  std::function<juce::Font (juce::ComboBox&)> on_get_combobox_font;
+  // ---------------------------------------------------------------------------
+  juce::Font getPopupMenuFont() override
+  {
+    if (on_get_popup_menu_font) {
+      // avoid recursing, the original V4 function can be called on the callback
+      auto fn                = std::move (on_get_popup_menu_font);
+      auto ret               = fn();
+      on_get_popup_menu_font = std::move (fn);
+      return ret;
+    }
+    return juce::LookAndFeel_V4::getPopupMenuFont();
+  }
+  std::function<juce::Font()> on_get_popup_menu_font;
   // ---------------------------------------------------------------------------
   void fillTextEditorBackground (
     juce::Graphics&   g,
