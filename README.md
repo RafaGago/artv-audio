@@ -7,6 +7,8 @@ https://www.kvraudio.com/product/mixmaxtrix-by-artv
 
 -TurboPaco: navigate to "src/turbopaco/README.md"
 
+https://www.kvraudio.com/product/turbo-paco-by-artv
+
 Building
 ========
 
