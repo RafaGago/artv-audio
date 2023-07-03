@@ -76,6 +76,10 @@ jobs:
           objcopy --only-keep-debug MixMaxTrix.so MixMaxTrix.vst3.syms
           strip --strip-debug --strip-unneeded MixMaxTrix.so
           cd -
+          cd build-linux/turbopaco_artefacts/Release/VST3/TurboPaco.vst3/Contents/x86_64-linux/
+          objcopy --only-keep-debug TurboPaco.so TurboPaco.vst3.syms
+          strip --strip-debug --strip-unneeded TurboPaco.so
+          cd -
       - name: Test
         working-directory: ${{github.workspace}}/build-linux
         # Execute tests defined by the CMake configuration.

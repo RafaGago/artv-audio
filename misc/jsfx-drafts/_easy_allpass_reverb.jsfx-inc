@@ -314,6 +314,29 @@ function ap2 (in, spls1, spls2, g1, g2, lfo1, maxlfo1, lfo2, maxlfo2)
   x;
 );
 
+// 2 nested allpasses (lattice) with outer modulation and a tail crossover
+function ap2_m1_crossv (in, spls1, spls2, g1, g2, lfo, maxlfo, flo, fhi, glo, ghi)
+  local (yn, u, u1, u2, x, i1, i2, i3, yn1, yn2, yn3) global (easyapv_del*, easyapv_del_idx) (
+  i1 = easyapv_del_idx;
+  i2 = easyapv_del_idx + 1;
+
+  spls1 += lfo * maxlfo;
+  yn1 = easyapv_del.delay_line_thiran1_get (spls1, i1);
+  yn2 = easyapv_del.delay_line_get (spls2, i2);
+
+  u  = in;
+  u += yn1 * g1;
+  x  = yn1 - u * g1;
+  u += yn2 * g2;
+  u1 = yn2 - u * g2;
+  u1 = this.crossv2 (u1, flo, fhi, glo, ghi);
+
+  easyapv_del.delay_line_set (u1, 0, i1);
+  easyapv_del.delay_line_set (u, 0, i2);
+  easyapv_del_idx += 2;
+  x;
+);
+
 
 //  Allpass with 2 nested serial allpasses
 function ap1_2 (in, spls1, spls2, spls3, g1, g2, g3)
