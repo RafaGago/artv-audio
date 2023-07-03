@@ -1,3 +1,7 @@
+* Obsolete, now just using QEMU + recent WinDBG, which is nice enough and not
+  as bloated as installing Visual Studio Community. It has the advantage of
+  being the exact target OS.
+
 Basically from this StackOverflow answer:
 
 https://stackoverflow.com/questions/39938253/how-to-properly-debug-a-cross-compiled-windows-code-on-linux
@@ -32,5 +36,3 @@ JSON for VSCode:
 
         }
 ```
-
-Notice that building with xwin on Debug mode is not possible, as Microsoft doesn't redistribute e.g "msvcrtd.dll".
