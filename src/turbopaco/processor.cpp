@@ -117,6 +117,14 @@ public:
     // return presets[index].name;
   }
   //----------------------------------------------------------------------------
+  bool isBusesLayoutSupported (BusesLayout const& layouts) const override
+  {
+    auto stereo = juce::AudioChannelSet::stereo();
+    auto outset = layouts.getMainOutputChannelSet();
+    auto inset  = layouts.getMainInputChannelSet();
+    return (outset == stereo) && (inset == stereo);
+  }
+  //----------------------------------------------------------------------------
 private:
   //----------------------------------------------------------------------------
   static BusesProperties get_default_bus_properties()
