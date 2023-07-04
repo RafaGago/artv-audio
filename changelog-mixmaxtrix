@@ -1,3 +1,6 @@
+1.10.1
+- Fix version number to report 1.10.1. 1.10.0 was wrongly reporting 1.9.1.
+
 1.10.0
 - Add Turbo Paco.
 - Embed font and some other minor graphic changes.
