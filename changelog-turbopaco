@@ -1,3 +1,7 @@
+1.0.1
+
+- Fix DAW I/O reporting, which caused the plugin to crash on Ardour.
+
 1.0.0
 
 - Initial release

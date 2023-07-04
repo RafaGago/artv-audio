@@ -788,7 +788,7 @@ endif()
 #-- TurboPaco ----------------------------------------------------------------
 set (TURBOPACO_VERSION_MAJOR 1)
 set (TURBOPACO_VERSION_MINOR 0)
-set (TURBOPACO_VERSION_REV 0)
+set (TURBOPACO_VERSION_REV 1)
 set(
 TURBOPACO_VERSION
 "${TURBOPACO_VERSION_MAJOR}.${TURBOPACO_VERSION_MINOR}.${TURBOPACO_VERSION_REV}"
