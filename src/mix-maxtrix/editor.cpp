@@ -1135,8 +1135,11 @@ public:
     juce::String           text;
     juce::Component const* component;
 
-    if (std::holds_alternative<juce::Slider const*> (src)) {
-      auto& slider = *std::get<juce::Slider const*> (src);
+    auto slider_2ptr   = std::get_if<juce::Slider*> (&src);
+    auto button_2ptr   = std::get_if<juce::Button*> (&src);
+    auto combobox_2ptr = std::get_if<juce::ComboBox*> (&src);
+    if (slider_2ptr) {
+      auto& slider = **slider_2ptr;
       component    = &slider;
 
       juce::String value = const_cast<juce::Slider&> (slider).getTextFromValue (
@@ -1151,8 +1154,8 @@ public:
       text += ": " + value.removeCharacters (suffix);
       text = text.trim();
     }
-    else if (std::holds_alternative<juce::Button const*> (src)) {
-      auto& button = *std::get<juce::Button const*> (src);
+    else if (button_2ptr) {
+      auto& button = **button_2ptr;
       component    = &button;
 
       text = button.getName();
@@ -1161,8 +1164,8 @@ public:
         text += button.getToggleState() ? "On" : "Off";
       }
     }
-    else if (std::holds_alternative<juce::ComboBox const*> (src)) {
-      auto& combobox = *std::get<juce::ComboBox const*> (src);
+    else if (combobox_2ptr) {
+      auto& combobox = **combobox_2ptr;
       component      = &combobox;
 
       text = combobox.getName();

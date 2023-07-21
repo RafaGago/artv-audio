@@ -24,9 +24,11 @@ namespace event_common {
 // implicit conversion to base classes.
 using source = std::variant<
   std::monostate,
-  juce::Slider const*,
-  juce::Button const*,
-  juce::ComboBox const*>;
+  juce::Slider*,
+  juce::Button*,
+  juce::ComboBox*,
+  juce::Label*,
+  juce::Drawable*>;
 } // namespace event_common
 // -----------------------------------------------------------------------------
 namespace mouse_event {

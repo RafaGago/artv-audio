@@ -1,6 +1,6 @@
 #pragma once
 
-// #define TURBOPACO_DEBUG_ALGO 1
+#define TURBOPACO_DEBUG_ALGO 1
 
 #include <array>
 #include <cmath>

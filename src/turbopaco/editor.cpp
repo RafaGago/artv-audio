@@ -275,6 +275,9 @@ public:
       height = width / ratio;
     }
     setSize (width, height);
+
+    mouse_event (
+      event_common::source {}, mouse_event::type::exit, mouse_event::data {});
   }
   //----------------------------------------------------------------------------
   struct sizes {
@@ -395,9 +398,9 @@ public:
     //    auto tf = _title.getFont();
     //    tf.setHeight ((float) title.getHeight() * 113.25f);
     //    _title.setFont (tf);
-
     auto logo = header.removeFromRight (header_margin_w).toFloat();
     logo.removeFromRight (logo.getWidth() * 0.05f);
+
     _logo->setTransformToFit (
       logo.reduced (logo.getHeight() * 0.13f),
       juce::RectanglePlacement {juce::RectanglePlacement::Flags::centred});
@@ -563,56 +566,57 @@ public:
 #endif
   //----------------------------------------------------------------------------
   void mouse_event (
-    event_common::source    src,
-    mouse_event::type       event_type,
-    juce::MouseEvent const& event,
-    mouse_event::data       data)
+    event_common::source src,
+    mouse_event::type    event_type,
+    mouse_event::data    data)
   {
-    juce::String           text;
-    juce::Component const* component;
+    juce::String     text;
+    juce::Component* component {};
 
-    if (std::holds_alternative<juce::Slider const*> (src)) {
-      auto& slider = *std::get<juce::Slider const*> (src);
-      component    = &slider;
+    auto slider_2ptr   = std::get_if<juce::Slider*> (&src);
+    auto button_2ptr   = std::get_if<juce::Button*> (&src);
+    auto combobox_2ptr = std::get_if<juce::ComboBox*> (&src);
+    auto label_2ptr    = std::get_if<juce::Label*> (&src);
 
-      juce::String value = const_cast<juce::Slider&> (slider).getTextFromValue (
-        slider.getValue());
-
-      text = slider.getName();
-
-      auto suffix = slider.getTextValueSuffix();
+    if (slider_2ptr) {
+      auto& slider       = **slider_2ptr;
+      component          = &slider;
+      juce::String value = slider.getTextFromValue (slider.getValue());
+      text               = slider.getName();
+      auto suffix        = slider.getTextValueSuffix();
       if (suffix.length() > 0) {
         text += " (" + suffix + ")";
       }
       text += ": " + value.removeCharacters (suffix);
       text = text.trim();
     }
-    else if (std::holds_alternative<juce::Button const*> (src)) {
-      auto& button = *std::get<juce::Button const*> (src);
+    else if (button_2ptr) {
+      auto& button = **button_2ptr;
       component    = &button;
-
-      text = button.getName();
+      text         = button.getName();
       if (!text.endsWith (" Next") && !text.endsWith (" Prev")) {
         text += ": ";
         text += button.getToggleState() ? "On" : "Off";
       }
     }
-    else if (std::holds_alternative<juce::ComboBox const*> (src)) {
-      auto& combobox = *std::get<juce::ComboBox const*> (src);
+    else if (combobox_2ptr) {
+      auto& combobox = **combobox_2ptr;
       component      = &combobox;
-
-      text = combobox.getName();
+      text           = combobox.getName();
       text += ": ";
       text += combobox.getText();
     }
-    else {
-      // what?
-      return;
+    else if (label_2ptr) {
+      auto& label = **label_2ptr;
+      if (&label == &_title) {
+        text = "| Turbo Paco v" VERSION_TXT " |";
+      }
     }
+    else {}
     if (event_type == mouse_event::exit) {
-      text.clear();
+      text = ":)";
     }
-    if (!component->isEnabled()) {
+    if (component && !component->isEnabled()) {
       text = "Disabled";
     }
     _display_value.setText (text, juce::NotificationType::dontSendNotification);
@@ -628,28 +632,29 @@ public:
       for (auto& w : warray) {
         if constexpr (is_slider_ext<type>::value) {
           w->slider.on_mouse_event
-            = std::bind (&editor::mouse_event, this, _1, _2, _3, _4);
+            = std::bind (&editor::mouse_event, this, _1, _2, _4);
         }
         if constexpr (is_button_ext<type>::value) {
           w->button.on_mouse_event
-            = std::bind (&editor::mouse_event, this, _1, _2, _3, _4);
+            = std::bind (&editor::mouse_event, this, _1, _2, _4);
         }
         if constexpr (is_toggle_buttons<type>::value) {
           for (auto& btn : w->buttons) {
             btn.on_mouse_event
-              = std::bind (&editor::mouse_event, this, _1, _2, _3, _4);
+              = std::bind (&editor::mouse_event, this, _1, _2, _4);
           }
         }
         if constexpr (is_combobox_ext<type>::value) {
           w->combo.on_mouse_event
-            = std::bind (&editor::mouse_event, this, _1, _2, _3, _4);
+            = std::bind (&editor::mouse_event, this, _1, _2, _4);
           w->prev.on_mouse_event
-            = std::bind (&editor::mouse_event, this, _1, _2, _3, _4);
+            = std::bind (&editor::mouse_event, this, _1, _2, _4);
           w->next.on_mouse_event
-            = std::bind (&editor::mouse_event, this, _1, _2, _3, _4);
+            = std::bind (&editor::mouse_event, this, _1, _2, _4);
         }
       }
     });
+    _title.on_mouse_event = std::bind (&editor::mouse_event, this, _1, _2, _4);
   }
   //----------------------------------------------------------------------------
 private:
@@ -658,13 +663,13 @@ private:
 
   editor_apvts_widgets<parameters::parameters_typelist> _params;
 
-  panel                           _header;
-  std::array<panel, 7>            _mainpanels;
-  panel                           _footer;
-  juce::Label                     _display_value;
-  juce::Label                     _title;
-  std::unique_ptr<juce::Drawable> _logo;
-  juce::TextButton                _display_frame;
+  panel                                 _header;
+  std::array<panel, 7>                  _mainpanels;
+  panel                                 _footer;
+  juce::Label                           _display_value;
+  add_juce_mouse_callbacks<juce::Label> _title;
+  std::unique_ptr<juce::Drawable>       _logo;
+  juce::TextButton                      _display_frame;
   //  std::array<vertical_line, 2>                   _side_lines;
   //  std::array<vertical_line, n_stereo_busses * 2> _fx_lines;
 }; // namespace artv
