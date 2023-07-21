@@ -1,3 +1,9 @@
+1.0.2
+
+- editor: Print version on name when hovering the mouse.
+- editor: Increase initial size.
+- editor: Use wider dropdown for algorithm.
+
 1.0.1
 
 - Fix DAW I/O reporting, which caused the plugin to crash on Ardour.
