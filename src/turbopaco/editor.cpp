@@ -261,7 +261,7 @@ public:
 
     // size
     constexpr float ratio  = sizes::total_w_divs / sizes::total_h_divs;
-    constexpr float factor = 0.25f;
+    constexpr float factor = 0.33f;
     setResizable (true, true);
     getConstrainer()->setFixedAspectRatio (ratio);
     auto area = juce::Desktop::getInstance()
