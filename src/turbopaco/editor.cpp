@@ -106,55 +106,7 @@ public:
     juce::ValueTree&)
     : AudioProcessorEditor (p), _processor (p)
   {
-    // look and feel stuff
-    _lf.setDefaultSansSerifTypeface (default_typeface);
-    _lf.setDefaultLookAndFeel (&_lf);
-
-    _lf.on_get_label_font = [this] (juce::Label& obj) {
-      auto  f = obj.getFont();
-      float h = obj.getTopLevelComponent()->getHeight();
-
-      if (&obj == &_title) {
-        f.setHeight (h * 0.14f);
-      }
-      else if (&obj == &_display_value) {
-        f.setHeight (h * 0.12f);
-      }
-      else {
-        f.setHeight (h * 0.055f);
-        // there are many labels, so using "container_of" might be bug prone,
-        // brute force instead
-        slider_ext* sl = nullptr;
-        _params.pforeach ([&, this] (auto type, auto& warray) {
-          using T = std::decay_t<decltype (*warray[0])>;
-          if constexpr (std::is_same_v<T, slider_ext>) {
-            if (&obj == &warray[0]->label) {
-              sl = &*warray[0];
-            }
-          }
-        });
-        if (sl) {
-          auto& ed = sl->slider.edit;
-          ed.setFont (f);
-        }
-      }
-      return f;
-    };
-    _lf.on_rotary_draw = draw_rotary_1;
-
-    _lf.on_get_combobox_font = [this] (juce::ComboBox& obj) {
-      auto  f = _lf.getComboBoxFont (obj); // call LF V4
-      float h = obj.getTopLevelComponent()->getHeight();
-      f.setHeight (h * 0.2f);
-      return f;
-    };
-
-    _lf.on_get_popup_menu_font = [this]() {
-      auto f = _lf.getPopupMenuFont(); // call LF V4
-      f.setHeight (this->getHeight() * 0.05f);
-      return f;
-    };
-
+    init_look_and_feel_callbacks();
     // init
     _display_value.setFont (juce::Font {lcd_typeface});
     _title.setFont (juce::Font {title_typeface});
@@ -194,27 +146,29 @@ public:
 
     _logo->replaceColour (juce::Colours::black, label_txt);
 
-    _lf.setColour (juce::PopupMenu::backgroundColourId, light_grey);
-    _lf.setColour (juce::PopupMenu::highlightedBackgroundColourId, dark_grey);
-    _lf.setColour (juce::Label::textColourId, label_txt);
-    _lf.setColour (juce::Slider::trackColourId, track);
-    _lf.setColour (juce::Slider::thumbColourId, knob);
-    _lf.setColour (juce::Slider::backgroundColourId, knob_bg);
+    _lkfeel.setColour (juce::PopupMenu::backgroundColourId, light_grey);
+    _lkfeel.setColour (
+      juce::PopupMenu::highlightedBackgroundColourId, dark_grey);
+    _lkfeel.setColour (juce::Label::textColourId, label_txt);
+    _lkfeel.setColour (juce::Slider::trackColourId, track);
+    _lkfeel.setColour (juce::Slider::thumbColourId, knob);
+    _lkfeel.setColour (juce::Slider::backgroundColourId, knob_bg);
 
-    _lf.setColour (juce::ComboBox::backgroundColourId, light_grey);
-    _lf.setColour (juce::ComboBox::outlineColourId, outline);
-    _lf.setColour (juce::ComboBox::arrowColourId, light_grey);
-    _lf.setColour (juce::ComboBox::textColourId, label_txt);
-    _lf.setColour (juce::PopupMenu::textColourId, label_txt);
-    _lf.setColour (juce::PopupMenu::highlightedTextColourId, label_txt);
-    _lf.setColour (juce::PopupMenu::backgroundColourId, light_grey);
-    _lf.setColour (juce::PopupMenu::highlightedBackgroundColourId, dark_grey);
+    _lkfeel.setColour (juce::ComboBox::backgroundColourId, light_grey);
+    _lkfeel.setColour (juce::ComboBox::outlineColourId, outline);
+    _lkfeel.setColour (juce::ComboBox::arrowColourId, light_grey);
+    _lkfeel.setColour (juce::ComboBox::textColourId, label_txt);
+    _lkfeel.setColour (juce::PopupMenu::textColourId, label_txt);
+    _lkfeel.setColour (juce::PopupMenu::highlightedTextColourId, label_txt);
+    _lkfeel.setColour (juce::PopupMenu::backgroundColourId, light_grey);
+    _lkfeel.setColour (
+      juce::PopupMenu::highlightedBackgroundColourId, dark_grey);
 
-    _lf.setColour (juce::TextButton::buttonColourId, light_grey);
-    _lf.setColour (juce::TextButton::textColourOffId, label_txt);
+    _lkfeel.setColour (juce::TextButton::buttonColourId, light_grey);
+    _lkfeel.setColour (juce::TextButton::textColourOffId, label_txt);
 
-    _lf.setColour (juce::TextEditor::backgroundColourId, light_grey);
-    _lf.setColour (juce::TextEditor::textColourId, label_txt);
+    _lkfeel.setColour (juce::TextEditor::backgroundColourId, light_grey);
+    _lkfeel.setColour (juce::TextEditor::textColourId, label_txt);
 
     // different colors and styles
     set_color (
@@ -657,9 +611,70 @@ public:
     _title.on_mouse_event = std::bind (&editor::mouse_event, this, _1, _2, _4);
   }
   //----------------------------------------------------------------------------
+  void init_look_and_feel_callbacks()
+  {
+    // look and feel stuff
+    _lkfeel.setDefaultSansSerifTypeface (default_typeface);
+    _lkfeel.setDefaultLookAndFeel (&_lkfeel);
+
+    _lkfeel.on_get_label_font = [this] (juce::Label& obj) {
+      auto  f = obj.getFont();
+      float h = obj.getTopLevelComponent()->getHeight();
+
+      if (&obj == &_title) {
+        f.setHeight (h * 0.14f);
+      }
+      else if (&obj == &_display_value) {
+        f.setHeight (h * 0.12f);
+      }
+      else {
+        f.setHeight (h * 0.055f);
+        // there are many labels, so using "container_of" might be bug prone,
+        // brute force instead
+        slider_ext* sl = nullptr;
+        _params.pforeach ([&, this] (auto type, auto& warray) {
+          using T = std::decay_t<decltype (*warray[0])>;
+          if constexpr (std::is_same_v<T, slider_ext>) {
+            if (&obj == &warray[0]->label) {
+              sl = &*warray[0];
+            }
+          }
+        });
+        if (sl) {
+          auto& ed = sl->slider.edit;
+          ed.setFont (f);
+        }
+      }
+      return f;
+    };
+    _lkfeel.on_rotary_draw = draw_rotary_1;
+
+    _lkfeel.on_get_combobox_font = [this] (juce::ComboBox& obj) {
+      auto  f = _lkfeel.getComboBoxFont (obj); // call LF V4
+      float h = obj.getTopLevelComponent()->getHeight();
+      f.setHeight (h * 0.2f);
+      return f;
+    };
+
+    _lkfeel.on_get_popup_menu_font = [this]() {
+      auto f = _lkfeel.getPopupMenuFont(); // call LF V4
+      f.setHeight (this->getHeight() * 0.05f);
+      return f;
+    };
+
+    _lkfeel.on_get_options_for_combobox_popup_menu =
+      [this] (juce::ComboBox& c, juce::Label& l) {
+        auto opts = _lkfeel.getOptionsForComboBoxPopupMenu (c, l); // call LF V4
+        opts      = opts.withMinimumNumColumns (div_ceil (c.getNumItems(), 10));
+        opts.withPreferredPopupDirection (
+          juce::PopupMenu::Options::PopupDirection::upwards);
+        return opts;
+      };
+  }
+  //----------------------------------------------------------------------------
 private:
   juce::AudioProcessor& _processor; // unused
-  saner_look_and_feel   _lf;
+  saner_look_and_feel   _lkfeel;
 
   editor_apvts_widgets<parameters::parameters_typelist> _params;
 

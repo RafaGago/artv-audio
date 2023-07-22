@@ -102,6 +102,23 @@ static void draw_rotary_1 (
 
 // Get rid of inheritance legacy
 class saner_look_and_feel : public juce::LookAndFeel_V4 {
+private:
+  template <class F, class... Ts>
+  auto invoke (F& func, Ts&&... args)
+  {
+    // allow calling the original v4 functions from the callback
+    auto f = std::move (func);
+    if constexpr (std::is_same_v<typename F::result_type, void>) {
+      f (std::forward<Ts> (args)...);
+      func = std::move (f);
+    }
+    else {
+      auto ret = f (std::forward<Ts> (args)...);
+      func     = std::move (f);
+      return ret;
+    }
+  }
+
 public:
   // This class is big, so add methods on an as-needed basis.
   // ---------------------------------------------------------------------------
@@ -117,7 +134,8 @@ public:
     juce::Slider&   s) override
   {
     if (on_rotary_draw) {
-      on_rotary_draw (g, x, y, width, height, pos, start_angle, end_angle, s);
+      invoke (
+        on_rotary_draw, g, x, y, width, height, pos, start_angle, end_angle, s);
     }
     else {
       juce::LookAndFeel_V4::drawRotarySlider (
@@ -149,8 +167,18 @@ public:
     juce::Slider&                   s) override
   {
     if (on_linear_slider_draw) {
-      on_linear_slider_draw (
-        g, x, y, width, height, pos, min_pos, max_pos, style, s);
+      invoke (
+        on_linear_slider_draw,
+        g,
+        x,
+        y,
+        width,
+        height,
+        pos,
+        min_pos,
+        max_pos,
+        style,
+        s);
     }
     else {
       LookAndFeel_V4::drawLinearSlider (
@@ -173,11 +201,7 @@ public:
   juce::Font getLabelFont (juce::Label& obj) override
   {
     if (on_get_label_font) {
-      // avoid recursing, the original V4 function can be called on the callback
-      auto fn           = std::move (on_get_label_font);
-      auto ret          = fn (obj);
-      on_get_label_font = std::move (fn);
-      return ret;
+      return invoke (on_get_label_font, obj);
     }
     return juce::LookAndFeel_V4::getLabelFont (obj);
   }
@@ -186,11 +210,7 @@ public:
   juce::Font getComboBoxFont (juce::ComboBox& obj) override
   {
     if (on_get_combobox_font) {
-      // avoid recursing, the original V4 function can be called on the callback
-      auto fn              = std::move (on_get_combobox_font);
-      auto ret             = fn (obj);
-      on_get_combobox_font = std::move (fn);
-      return ret;
+      return invoke (on_get_combobox_font, obj);
     }
     return juce::LookAndFeel_V4::getComboBoxFont (obj);
   }
@@ -199,15 +219,20 @@ public:
   juce::Font getPopupMenuFont() override
   {
     if (on_get_popup_menu_font) {
-      // avoid recursing, the original V4 function can be called on the callback
-      auto fn                = std::move (on_get_popup_menu_font);
-      auto ret               = fn();
-      on_get_popup_menu_font = std::move (fn);
-      return ret;
+      return invoke (on_get_popup_menu_font);
     }
     return juce::LookAndFeel_V4::getPopupMenuFont();
   }
   std::function<juce::Font()> on_get_popup_menu_font;
+  // ---------------------------------------------------------------------------
+  juce::Font getSidePanelTitleFont (juce::SidePanel& obj) override
+  {
+    if (on_get_side_panel_title_font) {
+      return invoke (on_get_side_panel_title_font, obj);
+    }
+    return juce::LookAndFeel_V4::getSidePanelTitleFont (obj);
+  }
+  std::function<juce::Font (juce::SidePanel& obj)> on_get_side_panel_title_font;
   // ---------------------------------------------------------------------------
   void fillTextEditorBackground (
     juce::Graphics&   g,
@@ -216,7 +241,7 @@ public:
     juce::TextEditor& te) override
   {
     if (on_fill_text_editor_background) {
-      on_fill_text_editor_background (g, width, height, te);
+      invoke (on_fill_text_editor_background, g, width, height, te);
     }
     else {
       return juce::LookAndFeel_V4::fillTextEditorBackground (
@@ -226,7 +251,20 @@ public:
   std::function<void (juce::Graphics&, int, int, juce::TextEditor&)>
     on_fill_text_editor_background;
   // ---------------------------------------------------------------------------
+  juce::PopupMenu::Options getOptionsForComboBoxPopupMenu (
+    juce::ComboBox& cb,
+    juce::Label&    l) override
+  {
+    if (on_get_options_for_combobox_popup_menu) {
+      return invoke (on_get_options_for_combobox_popup_menu, cb, l);
+    }
+    else {
+      return juce::LookAndFeel_V4::getOptionsForComboBoxPopupMenu (cb, l);
+    }
+  }
+  std::function<juce::PopupMenu::Options (juce::ComboBox&, juce::Label&)>
+    on_get_options_for_combobox_popup_menu;
+  // ---------------------------------------------------------------------------
 };
-
 // -----------------------------------------------------------------------------
 } // namespace artv
