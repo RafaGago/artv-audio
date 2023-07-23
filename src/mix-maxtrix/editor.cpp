@@ -16,13 +16,13 @@
 
 #include "artv-common/juce/effect_base.hpp"
 #include "artv-common/juce/gui_util.hpp"
+#include "artv-common/juce/look_and_feel.hpp"
 #include "artv-common/juce/math.hpp"
 #include "artv-common/juce/parameters.hpp"
 #include "artv-common/juce/value_tree_attachments.hpp"
 #include "artv-common/misc/bits.hpp"
 #include "artv-common/misc/short_ints.hpp"
 
-#include "mix-maxtrix/look_and_feel.hpp"
 #include "mix-maxtrix/parameters.hpp"
 
 #define VERSION_INT VERSION_GET (VERSION_MAJOR, VERSION_MINOR, VERSION_REV)
@@ -36,7 +36,7 @@ struct vertical_line : public juce::Component {
   //----------------------------------------------------------------------------
   void paint (juce::Graphics& g) override
   {
-    auto c = findColour (juce::Slider::backgroundColourId).brighter (0.5);
+    auto c = findColour (juce::ComboBox::outlineColourId);
     g.setColour (c);
     auto lb = getLocalBounds();
 
@@ -75,17 +75,18 @@ public:
     xspan<foleys::LevelMeterSource>     meter_srcs)
     : AudioProcessorEditor (p), _processor (p)
   {
-    //        id, juce::Colours::green.brighter (0.2),
-    //        juce::Colours::orange.brighter (0.07),
-    //        juce::Colours::teal,
-    //        juce::Colours::darkgoldenrod,
-    //        juce::Colours::red.brighter (0.4),
-    //        juce::Colours::sienna,
+    using namespace juce;
+    //        id, Colours::green.brighter (0.2),
+    //        Colours::orange.brighter (0.07),
+    //        Colours::teal,
+    //        Colours::darkgoldenrod,
+    //        Colours::red.brighter (0.4),
+    //        Colours::sienna,
 
-    static constexpr uint up    = juce::TextButton::ConnectedOnTop;
-    static constexpr uint down  = juce::TextButton::ConnectedOnBottom;
-    static constexpr uint left  = juce::TextButton::ConnectedOnLeft;
-    static constexpr uint right = juce::TextButton::ConnectedOnRight;
+    static constexpr uint up    = TextButton::ConnectedOnTop;
+    static constexpr uint down  = TextButton::ConnectedOnBottom;
+    static constexpr uint left  = TextButton::ConnectedOnLeft;
+    static constexpr uint right = TextButton::ConnectedOnRight;
 
     for (uint i = 0; i < n_stereo_busses; ++i) {
       _meters[i].setLookAndFeel (&_meters_look_feel[i]);
@@ -96,7 +97,25 @@ public:
     }
     _meter_srcs = meter_srcs;
 
+    init_look_and_feel();
     setLookAndFeel (&_lookfeel);
+
+    auto bg_color = _lookfeel.findColour (ResizableWindow::backgroundColourId);
+    auto text_color = bg_color.brighter (2.6f);
+    auto outlinec   = _lookfeel.findColour (TextButton::buttonColourId);
+
+    _lookfeel.setColour (Label::textColourId, text_color);
+    _lookfeel.setColour (TextButton::textColourOnId, bg_color);
+    _lookfeel.setColour (TextButton::textColourOffId, text_color);
+    _lookfeel.setColour (ComboBox::outlineColourId, bg_color);
+    _lookfeel.setColour (ComboBox::arrowColourId, text_color);
+    _lookfeel.setColour (ComboBox::textColourId, text_color);
+    _lookfeel.setColour (PopupMenu::textColourId, text_color);
+    _lookfeel.setColour (PopupMenu::highlightedTextColourId, text_color);
+    _lookfeel.setColour (
+      PopupMenu::headerTextColourId, text_color.darker (0.2));
+    _lookfeel.setColour (PopupMenu::backgroundColourId, bg_color);
+    _lookfeel.setColour (PopupMenu::highlightedBackgroundColourId, bg_color);
 
     // setting up the dummy lines and group elements
     for (auto& ln : _side_lines) {
@@ -119,10 +138,10 @@ public:
 
     // set slider styles
     _widgets.p_get (parameters::global_volume {})[0]->slider.setSliderStyle (
-      juce::Slider::LinearHorizontal);
+      Slider::LinearHorizontal);
 
     for (auto& s : _widgets.p_get (parameters::volume {})) {
-      s->slider.setSliderStyle (juce::Slider::LinearVertical);
+      s->slider.setSliderStyle (Slider::LinearVertical);
     }
 
     // setting descriptive names to the IO buttons
@@ -159,6 +178,37 @@ public:
     }
 
     auto& mixer_sends = _widgets.p_get (parameters::mixer_sends {});
+    auto  sepcolor    = bg_color.brighter (0.5f);
+    auto& fxparams    = _widgets.p_get (parameters::fx_type {});
+    auto& routing     = _widgets.p_get (parameters::routing {});
+
+    set_color (
+      ComboBox::outlineColourId, sepcolor, mixer_sends[0]->buttons, _about);
+    // fxparams[0]->combo,
+    // fxparams[1]->combo,
+    // fxparams[2]->combo,
+    // fxparams[3]->combo,
+    // fxparams[4]->combo,
+    // fxparams[5]->combo,
+    // fxparams[6]->combo,
+    // fxparams[7]->combo,
+    // routing[0]->combo);
+    set_color (
+      TextButton::buttonColourId, bg_color, mixer_sends[0]->buttons, _about
+      // fxparams[0]->get_buttons(),
+      // fxparams[1]->get_buttons(),
+      // fxparams[2]->get_buttons(),
+      // fxparams[3]->get_buttons(),
+      // fxparams[4]->get_buttons(),
+      // fxparams[5]->get_buttons(),
+      // fxparams[6]->get_buttons(),
+      // fxparams[7]->get_buttons(),
+      // routing[0]->get_buttons()
+    );
+
+    set_color (ComboBox::outlineColourId, sepcolor, _side_lines);
+    set_color (ComboBox::outlineColourId, sepcolor, _fx_lines);
+
     // setting descriptive names to the mixer to mixer send buttons
     for (uint i = 0; i < num_mixer_sends; ++i) {
       // TODO: get {fmt}
@@ -226,8 +276,7 @@ public:
 
         btn.setName (str);
         btn.setClickingTogglesState (true);
-        btn.setToggleState (
-          b == 0, juce::NotificationType::dontSendNotification);
+        btn.setToggleState (b == 0, NotificationType::dontSendNotification);
         btn.onClick  = [=]() { on_fx_type_or_page_change (chnl, b); };
         uint c_right = b < (pb_size - 1) ? right : 0;
         uint c_left  = (b != 0) ? left : 0;
@@ -242,58 +291,58 @@ public:
     // initialize header elements label
     _about.setLookAndFeel (&_lookfeel);
     _parameter_value_frame.setLookAndFeel (&_lookfeel);
+
     _parameter_value.setLookAndFeel (&_lookfeel);
 
     _about.setButtonText ("Help/Credits");
+    _about.setName ("Help/Credits");
     _about.onClick = [=] { this->show_about_popup(); };
 
     addAndMakeVisible (_about);
     addAndMakeVisible (_parameter_value_frame);
     addAndMakeVisible (_parameter_value);
 
-    _parameter_value.setJustificationType (juce::Justification::left);
-    //_parameter_value.setFont (juce::Font {
-    //  juce::Font::getDefaultMonospacedFontName(), 12, juce::Font::bold});
+    _parameter_value.setJustificationType (Justification::left);
+    //_parameter_value.setFont (Font {
+    //  Font::getDefaultMonospacedFontName(), 12, Font::bold});
 
-    auto display_color = juce::Colours::teal;
+    auto display_color = Colours::teal;
 
     set_color (
-      juce::TextButton::buttonColourId,
+      TextButton::buttonColourId,
       display_color.brighter (1.),
       _parameter_value_frame);
 
     set_color (
-      juce::Label::textColourId, display_color.darker (0.7), _parameter_value);
+      Label::textColourId, display_color.darker (0.7), _parameter_value);
 
-    set_color (
-      juce::Label::backgroundColourId, juce::Colour (0), _parameter_value);
+    set_color (Label::backgroundColourId, Colour (0), _parameter_value);
 
 #if 0
     set_color (
-      juce::Label::outlineColourId,
-      juce::Colours::teal.darker (2.),
+      Label::outlineColourId,
+      Colours::teal.darker (2.),
       _parameter_name,
       _parameter_value_frame);
 #endif
     // colors
-    auto ch_color = make_array<juce::Colour> (
-      juce::Colours::teal,
-      juce::Colours::orange.brighter (0.07),
-      juce::Colours::red.brighter (0.4),
-      juce::Colour (0xff00cc99),
-      juce::Colour (0xff0099cc), // 5
-      juce::Colour (0xffff794d),
-      juce::Colour (0xffd22d6f),
-      juce::Colour (0xff9cb946));
+    auto ch_color = make_array<Colour> (
+      Colours::teal,
+      Colours::orange.brighter (0.07),
+      Colours::red.brighter (0.4),
+      Colour (0xff00cc99),
+      Colour (0xff0099cc), // 5
+      Colour (0xffff794d),
+      Colour (0xffd22d6f),
+      Colour (0xff9cb946));
 
     _widgets.pforeach (
       parameters::all_channel_sliders_typelist {},
       [=] (auto type, auto& warray) {
         for (uint i = 0; i < warray.size(); ++i) {
+          warray[i]->slider.setColour (Slider::thumbColourId, ch_color[i]);
           warray[i]->slider.setColour (
-            juce::Slider::thumbColourId, ch_color[i]);
-          warray[i]->slider.setColour (
-            juce::Slider::trackColourId, ch_color[i].brighter (1.5f));
+            Slider::trackColourId, ch_color[i].brighter (1.5f));
         }
       });
 
@@ -301,11 +350,11 @@ public:
     for (auto& arr : _fx_off_sliders) {
       for (slider_ext& s : arr) {
         s.slider.setColour (
-          juce::Slider::thumbColourId,
-          _lookfeel.findColour (juce::Slider::backgroundColourId));
+          Slider::thumbColourId,
+          _lookfeel.findColour (Slider::backgroundColourId));
         s.slider.setColour (
-          juce::Slider::trackColourId,
-          _lookfeel.findColour (juce::Slider::backgroundColourId));
+          Slider::trackColourId,
+          _lookfeel.findColour (Slider::backgroundColourId));
       }
     }
 
@@ -322,25 +371,25 @@ public:
         ch_color[i].brighter (0.8));
       _meters_look_feel[i].setColour (
         foleys::LevelMeter::lmMeterBackgroundColour,
-        _lookfeel.findColour (juce::ResizableWindow::backgroundColourId));
+        _lookfeel.findColour (ResizableWindow::backgroundColourId));
       _meters_look_feel[i].setColour (
         foleys::LevelMeter::lmOutlineColour,
-        _lookfeel.findColour (juce::ResizableWindow::backgroundColourId));
+        _lookfeel.findColour (ResizableWindow::backgroundColourId));
       _meters_look_feel[i].setColour (
         foleys::LevelMeter::lmBackgroundClipColour,
-        _lookfeel.findColour (juce::ResizableWindow::backgroundColourId));
+        _lookfeel.findColour (ResizableWindow::backgroundColourId));
       _meters_look_feel[i].setColour (
         foleys::LevelMeter::lmTicksColour,
-        _lookfeel.findColour (juce::ResizableWindow::backgroundColourId));
+        _lookfeel.findColour (ResizableWindow::backgroundColourId));
       _meters_look_feel[i].setColour (
         foleys::LevelMeter::lmBackgroundColour,
-        _lookfeel.findColour (juce::ResizableWindow::backgroundColourId));
+        _lookfeel.findColour (ResizableWindow::backgroundColourId));
       _meters_look_feel[i].setColour (
         foleys::LevelMeter::lmBackgroundColour,
-        _lookfeel.findColour (juce::ResizableWindow::backgroundColourId));
+        _lookfeel.findColour (ResizableWindow::backgroundColourId));
       _meters_look_feel[i].setColour (
         foleys::LevelMeter::lmMeterOutlineColour,
-        _lookfeel.findColour (juce::ResizableWindow::backgroundColourId));
+        _lookfeel.findColour (ResizableWindow::backgroundColourId));
     }
 
     auto& mutesolo = _widgets.p_get (parameters::mute_solo {});
@@ -353,7 +402,7 @@ public:
     constexpr uint nbuses = n_stereo_busses;
     for (uint i = 0; i < n_stereo_busses; ++i) {
       set_color (
-        juce::TextButton::buttonOnColourId,
+        TextButton::buttonOnColourId,
         ch_color[i].brighter (0.5),
         ins[0]->buttons[i],
         ins[1]->buttons[i],
@@ -376,8 +425,8 @@ public:
         xspan {_page_buttons[i]});
     }
     set_color (
-      juce::TextButton::buttonOnColourId,
-      _lookfeel.findColour (juce::Slider::backgroundColourId).brighter (0.5),
+      TextButton::buttonOnColourId,
+      _lookfeel.findColour (Slider::backgroundColourId).brighter (0.5),
       _widgets.p_get (parameters::mixer_sends {})[0]->buttons);
 
     // radio grouping
@@ -443,8 +492,8 @@ public:
 
     // channel labels
     for (uint i = 0; i < n_stereo_busses; ++i) {
-      juce::Label& lbl = _chnl_names[i];
-      lbl.setJustificationType (juce::Justification::centred);
+      Label& lbl = _chnl_names[i];
+      lbl.setJustificationType (Justification::centred);
       lbl.setLookAndFeel (&_lookfeel);
       lbl.setEditable (true);
       _chnl_name_updates[i].reset (
@@ -458,7 +507,7 @@ public:
 
     setResizable (true, true);
     getConstrainer()->setFixedAspectRatio (ratio);
-    auto area = juce::Desktop::getInstance()
+    auto area = Desktop::getInstance()
                   .getDisplays()
                   .getDisplayForPoint ({0, 0})
                   ->userArea;
@@ -629,41 +678,31 @@ public:
     auto  h_w = ((float) w_units - 2 * sep_w) / (float) sizes::header_w_divs;
 
     // auto  header_w = hw sizes::header_column_divs;
-    auto header = area.removeFromTop (header_h);
-    header.removeFromLeft (sep_w);
-    header.removeFromRight (sep_w);
+    auto header  = area.removeFromTop (header_h);
+    auto columns = get_columns (header);
 
-    _about.setBounds (header.removeFromLeft (h_w * sizes::about_row_divs));
+    _about.setBounds (juce::Rectangle<int> {
+      columns[0].getTopLeft(), columns[1].getBottomRight()});
 
-    header.removeFromLeft (h_w * sizes::header_sep_row_divs);
+    juce::Rectangle<int> pvfbounds {
+      columns[2].getTopLeft(), columns[5].getBottomRight()};
+    _parameter_value_frame.setBounds (pvfbounds);
 
-    _parameter_value_frame.setBounds (
-      header.removeFromLeft (h_w * sizes::parameter_value_row_divs));
-
-    header.removeFromLeft (h_w * sizes::header_sep_row_divs);
-
-    auto pvfbounds = _parameter_value_frame.getBounds().reduced (header_h / 10);
+    pvfbounds = pvfbounds.reduced (header_h / 10);
     // make the font smaller to avoid resizings
     pvfbounds.reduce (0, pvfbounds.getHeight() / 9);
     _parameter_value.setBounds (pvfbounds);
 
-    auto routing = header.removeFromLeft (h_w * sizes::routing_row_divs);
-
     grid (
-      routing,
-      (float) routing.getWidth(),
-      make_array (header_h / 2.f, header_h / 2.f),
+      columns[6],
+      (float) columns[6].getWidth(),
+      make_array (columns[6].getHeight() * 0.5f, columns[6].getHeight() * 0.5f),
       *_widgets.p_get (parameters::routing {})[0]);
 
-    header.removeFromLeft (h_w * sizes::header_sep_row_divs);
-
-    auto main_gain
-      = header.removeFromLeft (h_w * sizes::global_volume_row_divs);
-
     grid (
-      main_gain,
-      (float) main_gain.getWidth(),
-      make_array (header_h / 2.f, header_h / 2.f),
+      columns[7],
+      (float) columns[7].getWidth(),
+      make_array (columns[7].getHeight() * 0.5f, columns[7].getHeight() * 0.5f),
       *_widgets.p_get (parameters::global_volume {})[0]);
 
     area.removeFromTop (sep_h); // separator
@@ -671,7 +710,7 @@ public:
     // input routings
     auto io_h        = sizes::io_btns_row_divs * h;
     auto in_routings = area.removeFromTop (io_h);
-    auto columns     = get_columns (in_routings);
+    columns          = get_columns (in_routings);
 
     for (uint i = 0; i < columns.size(); ++i) {
       auto& in_btns = _widgets.p_get (parameters::in_selection {})[i]->buttons;
@@ -1102,7 +1141,8 @@ public:
       cptr->setEnabled (true);
     }
     for (uint i = 0; i < num_mixer_sends; ++i) {
-      // redraw by fx, as the mixer send diff buttons might be disabled already
+      // redraw by fx, as the mixer send diff buttons might be disabled
+      // already
       on_fx_type_or_page_change (i, -1);
       if (channel_send_always_disabled (i, group_size)) {
         mixer_sends[i]->setEnabled (false);
@@ -1343,6 +1383,95 @@ public:
     }
   }
   //----------------------------------------------------------------------------
+  void init_look_and_feel()
+  {
+    using namespace juce;
+
+    _lookfeel.setColourScheme (_lookfeel.getMidnightColourScheme());
+    _lookfeel.setDefaultLookAndFeel (&_lookfeel);
+
+    _lookfeel.on_get_label_font = [this] (Label& obj) {
+      auto f = _lookfeel.getLabelFont (obj);
+      f.setHeight (0.9f * (float) obj.getHeight());
+      if (
+        obj.getName().isEmpty()
+        && obj.getParentComponent()->getName().equalsIgnoreCase ("effect")) {
+        // Actually JUCE looks and feels are a big mess and combobox related
+        // fonts from the popup menu come as labels.
+        auto fcombo = _lookfeel.getComboBoxFont (
+          _widgets.p_get (parameters::fx_type {})[0]->combo);
+        f.setHeight (fcombo.getHeight());
+      }
+      return f;
+    };
+
+    _lookfeel.on_get_combobox_font = [this] (ComboBox& obj) {
+      auto f = _lookfeel.getComboBoxFont (obj);
+      f.setHeight (0.8f * (float) obj.getHeight());
+      return f;
+    };
+
+    _lookfeel.on_get_popup_menu_font = [this]() {
+      auto fcombo = _lookfeel.getComboBoxFont (
+        _widgets.p_get (parameters::fx_type {})[0]->combo);
+      auto f = _lookfeel.getPopupMenuFont(); // call LF V4
+      f.setHeight (fcombo.getHeight());
+      return f;
+    };
+
+    _lookfeel.on_get_options_for_combobox_popup_menu
+      = [this] (juce::ComboBox& c, juce::Label& l) {
+          auto opts
+            = _lookfeel.getOptionsForComboBoxPopupMenu (c, l); // call LF V4
+          opts = opts.withMinimumNumColumns (div_ceil (c.getNumItems(), 25));
+          opts.withPreferredPopupDirection (
+            juce::PopupMenu::Options::PopupDirection::upwards);
+          return opts;
+        };
+
+    _lookfeel.on_rotary_draw = draw_rotary_1;
+
+    _lookfeel.on_linear_slider_draw
+      = [this] (
+          Graphics&                 g,
+          int                       x,
+          int                       y,
+          int                       width,
+          int                       height,
+          float                     sliderPos,
+          float                     minSliderPos,
+          float                     maxSliderPos,
+          const Slider::SliderStyle style,
+          Slider&                   slider) {
+          // TODO: implement for real.
+          Colour track_color;
+          bool   center_track
+            = slider.getProperties().contains (slider_track_bg_from_center);
+
+          if (center_track) {
+            track_color = slider.findColour (Slider::trackColourId);
+            slider.setColour (
+              Slider::trackColourId,
+              slider.findColour (Slider::backgroundColourId));
+          }
+          _lookfeel.drawLinearSlider (
+            g,
+            x,
+            y,
+            width,
+            height,
+            sliderPos,
+            minSliderPos,
+            maxSliderPos,
+            style,
+            slider);
+
+          if (center_track) {
+            slider.setColour (Slider::trackColourId, track_color);
+          }
+        };
+  }
+  //----------------------------------------------------------------------------
 private:
   static constexpr uint num_fx_params   = 24;
   static constexpr uint num_fx_pages    = 3;
@@ -1350,7 +1479,7 @@ private:
   static constexpr uint num_mixer_sends = n_stereo_busses - 1;
 
   juce::AudioProcessor& _processor; // unused
-  look_and_feel         _lookfeel;
+  saner_look_and_feel   _lookfeel;
 
   editor_apvts_widgets<parameters::parameters_typelist> _widgets;
 

@@ -226,13 +226,14 @@ static constexpr auto array_reinterpret_cast (std::array<T, N>& in)
   return ret;
 }
 //------------------------------------------------------------------------------
-// Apply a function to each parameter on a variadic argument pack
+// Apply a function to each parameter on a variadic argument pack. iterating
+// stuff (could be much smarter iterating containers, but it's not needed now)
 template <class funct>
 static void apply (funct const& f)
 {}
 
 template <class funct, typename T, typename... args>
-static void apply (funct const& f, T& v, args&&... vargs)
+static void apply (funct const& f, T&& v, args&&... vargs)
 {
   f (v);
   apply (f, std::forward<args> (vargs)...);
@@ -245,6 +246,18 @@ static void apply (funct const& f, xspan<T> r, args&&... vargs)
     f (r[i]);
   }
   apply (f, std::forward<args> (vargs)...);
+}
+
+template <class funct, typename T, std::size_t N, typename... args>
+static void apply (funct const& f, std::array<T, N>&& r, args&&... vargs)
+{
+  apply (f, xspan {r}, std::forward<args> (vargs)...);
+}
+
+template <class funct, typename T, std::size_t N, typename... args>
+static void apply (funct const& f, std::array<T, N>& r, args&&... vargs)
+{
+  apply (f, xspan {r}, std::forward<args> (vargs)...);
 }
 //------------------------------------------------------------------------------
 // divide memory on blocks. Invoke a function for each block and one for the

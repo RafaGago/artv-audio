@@ -517,6 +517,7 @@ private:
 
     parent.addAndMakeVisible (slider);
 
+    label.setName (text);
     label.setText (text, juce::dontSendNotification);
     label.setJustificationType (juce::Justification::centred);
     label.setLookAndFeel (&parent.getLookAndFeel());
@@ -686,6 +687,8 @@ struct combobox_ext
   {
     return {&combo, &prev, &next};
   }
+
+  std::array<juce::TextButton*, 2> get_buttons() { return {&prev, &next}; }
 
   // if this is 0, the "grid" function will consume one row for the buttons,
   // otherwise it will place them at the right according to this value. Max =

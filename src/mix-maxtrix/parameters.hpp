@@ -7700,15 +7700,14 @@ using experiments_params
 #define TWEAK_BUILD 0
 
 #if TWEAK_BUILD
-using all_fx_typelists = mp_list<
-  lr_crossv_params,
-  wonky_crossv_params,
-  lin_iir_crossv_params,
-  turbopaco_params,
-  diffuse_delay_params>;
+using all_fx_typelists
+  = mp_list<lr_crossv_params, wonky_crossv_params, lin_iir_crossv_params>;
 
-static constexpr auto fx_choices
-  = make_cstr_array ("none", "LR", "Wonky", "lin IIR", "Verb", "DDlay");
+static constexpr auto fx_choices = make_cstr_array (
+  "-none-",
+  ":Section1 LR",
+  ":Section1 Wonky",
+  ":Section2 lin IIR");
 #else
 // clang-format off
 using all_fx_typelists = mp_list<

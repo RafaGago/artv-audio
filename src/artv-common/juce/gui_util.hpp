@@ -16,8 +16,16 @@ namespace artv {
 template <typename... args>
 static void set_color (int id, juce::Colour color, args&&... components)
 {
-  apply (
-    [=] (juce::Component& comp) { comp.setColour (id, color); },
+  artv::apply (
+    [=] (auto& component) {
+      if constexpr (std::is_pointer_v<
+                      std::remove_reference_t<decltype (component)>>) {
+        component->setColour (id, color);
+      }
+      else {
+        component.setColour (id, color);
+      }
+    },
     std::forward<args> (components)...);
 }
 // -----------------------------------------------------------------------------
