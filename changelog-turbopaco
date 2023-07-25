@@ -1,3 +1,7 @@
+1.10.3
+- turbopaco: Try to avoid peaks on Windows by resetting the full buffer memory
+  on algorithm change.
+
 1.0.2
 
 - editor: Print version on name when hovering the mouse.

@@ -428,6 +428,7 @@ private:
             _srate = srate;
             update_internal_srate (srate, (srate / 20) * 9);
           }
+          xspan_memset(_mem_reverb);
           algo.reset (_mem_reverb, _t_spl);
           update_mod(); // requires reset first
           update_ducker();
