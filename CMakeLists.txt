@@ -11,6 +11,14 @@ option (LINK_TIME_OPTIMIZATION "Enable LTO" OFF) # To save build time turn off
 # trivial with clang-cl and the toolchain file.
 option (ZEN3_BUILD "Build for the developer's DAW machine" OFF)
 #-------------------------------------------------------------------------------
+set (MIXMAXTRIX_VERSION_MAJOR 1)
+set (MIXMAXTRIX_VERSION_MINOR 10)
+set (MIXMAXTRIX_VERSION_REV 3)
+
+set (TURBOPACO_VERSION_MAJOR 1)
+set (TURBOPACO_VERSION_MINOR 0)
+set (TURBOPACO_VERSION_REV 3)
+#-------------------------------------------------------------------------------
 set (PLUGIN_FORMATS "")
 if (BUILD_LV2)
     if (UNIX AND NOT APPLE)
@@ -675,9 +683,6 @@ add_executable(
     )
 target_link_libraries (common-test PUBLIC test mufft-all pffft)
 #-- Mix-maxtrix ----------------------------------------------------------------
-set (MIXMAXTRIX_VERSION_MAJOR 1)
-set (MIXMAXTRIX_VERSION_MINOR 10)
-set (MIXMAXTRIX_VERSION_REV 2)
 set(
     MIXMAXTRIX_VERSION
     "${MIXMAXTRIX_VERSION_MAJOR}.${MIXMAXTRIX_VERSION_MINOR}.${MIXMAXTRIX_VERSION_REV}"
@@ -786,9 +791,6 @@ endif()
 #    )
 #target_link_libraries (MixMaxTrix-headless PRIVATE headless MixMaxTrix)
 #-- TurboPaco ----------------------------------------------------------------
-set (TURBOPACO_VERSION_MAJOR 1)
-set (TURBOPACO_VERSION_MINOR 0)
-set (TURBOPACO_VERSION_REV 2)
 set(
 TURBOPACO_VERSION
 "${TURBOPACO_VERSION_MAJOR}.${TURBOPACO_VERSION_MINOR}.${TURBOPACO_VERSION_REV}"
