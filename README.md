@@ -1,3 +1,9 @@
+Notice
+======
+
+I'm leaving Github. The main official location for this project is now:
+https://codeberg.org/RafaGago/artv-audio
+
 ArtV audio stuff
 ================
 
